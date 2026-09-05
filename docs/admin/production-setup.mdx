@@ -29,9 +29,9 @@ consists of:
 - **Webhook server** (same Spring Boot artifact, `webhook` profile → NATS JetStream)
 - **React webapp** (served via nginx)
 - **PostgreSQL 17–18** is supported; the release Compose stack qualifies and ships **PostgreSQL 18**
-  with `pg_partman` (see [ADR 0038](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0038-postgresql-18-release-baseline.md)).
+  with `pg_partman` (see [ADR 0038](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0038-postgresql-18-release-baseline.md)).
   Vanilla PostgreSQL is not a drop-in for the bundled stack. PostgreSQL 17 remains the minimum.
-- **Hephaestus-native auth** (Spring Security `oauth2Login` federating to GitHub + optional GitLab — gitlab.com or self-hosted — issuing cookie-session JWTs — [ADR 0017](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md))
+- **Hephaestus-native auth** (Spring Security `oauth2Login` federating to GitHub + optional GitLab — gitlab.com or self-hosted — issuing cookie-session JWTs — [ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md))
 
 ## Base environment variables
 

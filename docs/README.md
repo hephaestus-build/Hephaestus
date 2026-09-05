@@ -1,6 +1,6 @@
 # Hephaestus Documentation
 
-[![Documentation Status](https://github.com/ls1intum/Hephaestus/actions/workflows/cd-docs.yml/badge.svg)](https://github.com/ls1intum/Hephaestus/actions/workflows/cd-docs.yml)
+[![Documentation Status](https://github.com/hephaestus-build/Hephaestus/actions/workflows/cd-docs.yml/badge.svg)](https://github.com/hephaestus-build/Hephaestus/actions/workflows/cd-docs.yml)
 
 **Live Site:** [https://docs.hephaestus.build/](https://docs.hephaestus.build/)
 

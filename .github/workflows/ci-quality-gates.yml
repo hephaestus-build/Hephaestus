@@ -234,6 +234,8 @@ jobs:
       checks: write
       pull-requests: write
       statuses: write
+    env:
+      PREVIEW_URL: hephaestus-build-storybook-pr-${{ github.event.number }}.surge.sh
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -286,14 +288,13 @@ jobs:
           github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
           startsWith(steps.chromatic.outputs.storybookUrl, 'http')
         env:
-          PREVIEW_URL: ls1intum-hephaestus-storybook-pr-${{ github.event.number }}.surge.sh
           SURGE_TOKEN: ${{ secrets.SURGE_TOKEN }}
         run: ./node_modules/.bin/surge ./webapp/storybook-static "$PREVIEW_URL" --token "$SURGE_TOKEN"
       - name: Prepare Storybook preview links
         if: steps.storybook_preview.outcome == 'success'
         run: >-
           node scripts/render-preview-comment.ts storybook webapp/storybook-static
-          https://ls1intum-hephaestus-storybook-pr-${{ github.event.number }}.surge.sh
+          "https://$PREVIEW_URL"
           ${{ github.event.pull_request.base.sha }} "$RUNNER_TEMP/storybook-preview.md"
       - name: Publish Storybook preview links
         if: steps.storybook_preview.outcome == 'success'
@@ -307,11 +308,12 @@ jobs:
           (github.event_name != 'pull_request' || steps.storybook_preview.outcome == 'success')
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
+          TARGET_URL: https://${{ env.PREVIEW_URL }}
           CHROMATIC_STORYBOOK_URL: ${{ steps.chromatic.outputs.storybookUrl }}
         with:
           script: |
             const storybookUrl = context.payload.pull_request
-              ? `https://ls1intum-hephaestus-storybook-pr-${context.payload.pull_request.number}.surge.sh`
+              ? process.env.TARGET_URL
               : process.env.CHROMATIC_STORYBOOK_URL;
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,

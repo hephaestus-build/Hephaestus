@@ -11,14 +11,14 @@ does not maintain exhaustive implementation inventories.
 Use the executable sources for exact details:
 
 - [generated database schema](./database-schema.mdx) for tables, columns, keys, and relationships;
-- [the `practices` module](https://github.com/ls1intum/Hephaestus/tree/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/practices)
+- [the `practices` module](https://github.com/hephaestus-build/Hephaestus/tree/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/practices)
   for the domain model;
-- [Liquibase changelogs](https://github.com/ls1intum/Hephaestus/tree/main/server/application/src/main/resources/db/changelog)
+- [Liquibase changelogs](https://github.com/hephaestus-build/Hephaestus/tree/main/server/application/src/main/resources/db/changelog)
   for persisted constraints and indexes;
-- [`openapi.yaml`](https://github.com/ls1intum/Hephaestus/blob/main/server/openapi.yaml) for HTTP projections;
-- [ADR 0021](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0021-observations-feedback-synthesis-seam.md)
+- [`openapi.yaml`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml) for HTTP projections;
+- [ADR 0021](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0021-observations-feedback-synthesis-seam.md)
   and
-  [ADR 0022](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0022-observation-presence-assessment-and-schema-cleanup.md)
+  [ADR 0022](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0022-observation-presence-assessment-and-schema-cleanup.md)
   for design history;
 - [practice feedback language](./practice-feedback-language.md) for user-facing terms.
 
@@ -154,5 +154,5 @@ The persistence model is not an authorization boundary. Controllers define who m
 
 Keep these rules enforceable in controller authorization, repository predicates, DTO shape, and tests.
 Do not add a field matrix here: the
-[OpenAPI specification](https://github.com/ls1intum/Hephaestus/blob/main/server/openapi.yaml) is the
+[OpenAPI specification](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml) is the
 authoritative contract for fields exposed by each endpoint.

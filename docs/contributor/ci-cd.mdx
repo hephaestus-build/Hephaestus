@@ -264,7 +264,7 @@ is no longer the head; the new push starts the next deployment and nothing needs
 
 A preview runs its own PostgreSQL seeded from staging and reads staging's event stream. What is
 switched off in the copy, how sign-in works, and how the sandbox is enforced are in
-[`docker/preview/README.md`](https://github.com/ls1intum/Hephaestus/blob/main/docker/preview/README.md).
+[`docker/preview/README.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/docker/preview/README.md).
 
 Preview controllers run only for pull requests targeting `main`; this keeps privileged
 `pull_request_target` workflows anchored to the protected branch. A stacked layer becomes eligible
@@ -315,9 +315,9 @@ Coolify rejects the event the job fails and `reconcile-previews.yml` retries nig
 the deployment inventory.
 
 Operator configuration, host capacity and secret scopes live in
-[`docker/preview/README.md`](https://github.com/ls1intum/Hephaestus/blob/main/docker/preview/README.md);
+[`docker/preview/README.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/docker/preview/README.md);
 why the label is the authority, and which alternatives were priced and declined, is
-[ADR 0035](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0035-pull-request-previews-are-label-gated.md).
+[ADR 0035](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0035-pull-request-previews-are-label-gated.md).
 
 ## Workflows
 

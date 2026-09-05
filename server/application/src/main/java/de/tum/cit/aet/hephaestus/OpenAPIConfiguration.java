@@ -70,7 +70,7 @@ import org.springframework.data.web.PagedModel;
                         license =
                                 @License(
                                         name = "MIT License",
-                                        url = "https://github.com/ls1intum/Hephaestus/blob/develop/LICENSE")),
+                                        url = "https://github.com/hephaestus-build/Hephaestus/blob/main/LICENSE")),
         tags = {
             @Tag(
                     name = "Practice reviews",

@@ -73,8 +73,8 @@ unless their lifecycles cease to differ.
 
 ## References
 
-- [Issue #1527](https://github.com/ls1intum/Hephaestus/issues/1527) and
-  [PR #1529](https://github.com/ls1intum/Hephaestus/pull/1529) contain the measurements and hosted
+- [Issue #1527](https://github.com/hephaestus-build/Hephaestus/issues/1527) and
+  [PR #1529](https://github.com/hephaestus-build/Hephaestus/pull/1529) contain the measurements and hosted
   observation record.
 - [Maven reactor builds](https://maven.apache.org/guides/mini/guide-multiple-modules.html)
 - [Maven Build Cache concepts](https://maven.apache.org/extensions/maven-build-cache-extension/concepts.html)

@@ -286,10 +286,11 @@ hephaestus:
   sync:
     filters:
       allowed-organizations:
+        - hephaestus-build
         - ls1intum
         - HephaestusTest
       allowed-repositories:
-        - ls1intum/Hephaestus
+        - hephaestus-build/Hephaestus
         - ls1intum/Artemis
         - HephaestusTest/demo-repository
 ```
@@ -331,7 +332,7 @@ This is off by default everywhere except `application-local.yml`/`application-e2
 
 ### Authentication (local)
 
-Authentication is Hephaestus-native (no Keycloak — see [ADR 0017](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md)). The server federates to GitHub (and optionally GitLab — gitlab.com or a self-hosted instance) via Spring Security `oauth2Login`, then issues its own short-lived ES256 cookie-session JWT. The webapp reads `GET /user` and redirects to `/auth/login` — there is no token in the browser.
+Authentication is Hephaestus-native (no Keycloak — see [ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md)). The server federates to GitHub (and optionally GitLab — gitlab.com or a self-hosted instance) via Spring Security `oauth2Login`, then issues its own short-lived ES256 cookie-session JWT. The webapp reads `GET /user` and redirects to `/auth/login` — there is no token in the browser.
 
 #### Configure GitHub login
 

@@ -70,7 +70,7 @@ The durable boundaries, which the implementation may reschedule freely behind:
 
 - **Admission** — the review gate decides whether an occurrence may enqueue work.
 - **Queue and execution** — `agent_job`, described by
-  [ADR 0025](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0025-agent-job-queue-on-postgresql.md).
+  [ADR 0025](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0025-agent-job-queue-on-postgresql.md).
 - **Workspace ABI** — the sandbox receives read-only `inputs/`, disposable `work/`, and returns only
   `out/`. [Agent workspace ABI](agent/workspace-abi.mdx) is the source of truth for paths and exit codes.
 - **Observations** — the agent reports through `report_observation`; server admission validates it, and
@@ -80,7 +80,7 @@ The durable boundaries, which the implementation may reschedule freely behind:
   server admission validates the result without invalidating completed measurement. Admitted feedback,
   server suppressions, replacements, and placements enter the ledger; a model `WITHHOLD` remains only in
   the bounded job output. The seam itself is
-  [ADR 0029](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md).
+  [ADR 0029](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md).
 
 When changing sandbox inputs or outputs: update the owning runtime type or parser first; update the ABI
 page only for a durable ABI change; add a behavioural test at the narrowest owning boundary; regenerate

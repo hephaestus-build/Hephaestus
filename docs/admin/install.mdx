@@ -5,7 +5,7 @@ description: The one supported way to run your own Hephaestus — Docker Compose
 ---
 
 This is the **only supported install path**: the Docker Compose stack in
-[`docker/self-host/`](https://github.com/ls1intum/Hephaestus/tree/main/docker/self-host)
+[`docker/self-host/`](https://github.com/hephaestus-build/Hephaestus/tree/main/docker/self-host)
 on one Linux host. Other setups (own reverse proxy, external database, Kubernetes, Podman)
 can work but are unsupported.
 
@@ -24,7 +24,7 @@ Docker Compose on one Linux host is supported for every 1.x release. **Hephaestu
 Kubernetes only**: it ships one Helm chart, and the Compose stack described here is removed. The 2.0
 release includes a migration guide covering your database, event buffer, and secrets; nothing you
 configure today is lost. See
-[ADR 0041](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md)
+[ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md)
 for the decision and the conditions that would reverse it.
 
 ## Requirements
@@ -53,7 +53,7 @@ hosts, runtimes, and topologies are outside release qualification.
   its heap from its own limit, so lowering the limit lowers the heap with it).
 - These are deployment limits, not a claim that every workload fits. Before raising webhook volume,
   mentor concurrency, or `SANDBOX_MAX_CONCURRENT`, reproduce the release's
-  [Compose capacity qualification](https://github.com/ls1intum/Hephaestus/tree/main/load-tests) on
+  [Compose capacity qualification](https://github.com/hephaestus-build/Hephaestus/tree/main/load-tests) on
   your host shape. A release baseline is valid only when it includes the raw k6 and container-resource
   evidence described there; absent that evidence, keep the conservative defaults above.
 - **AI practice review adds real memory**: each concurrent review sandbox may use up to
@@ -78,12 +78,12 @@ hosts, runtimes, and topologies are outside release qualification.
 ## 1. Get the files
 
 Check out the newest version from the
-[releases page](https://github.com/ls1intum/Hephaestus/releases):
+[releases page](https://github.com/hephaestus-build/Hephaestus/releases):
 
 ```bash
 VERSION=0.76.0   # the release you are installing, without the leading "v"
 sudo git clone --depth 1 --branch "v$VERSION" \
-  https://github.com/ls1intum/Hephaestus.git /opt/hephaestus
+  https://github.com/hephaestus-build/Hephaestus.git /opt/hephaestus
 sudo chown -R "$USER" /opt/hephaestus
 cd /opt/hephaestus
 cd docker/self-host
@@ -204,7 +204,7 @@ HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS=github:@your-github-username
 - Promotion happens **on sign-in**, is idempotent, and never demotes. If you forgot to set
   it, add it and restart — no reinstall needed. There is also a break-glass
   `HEPHAESTUS_AUTH_BOOTSTRAP_TOKEN`; details in the
-  [auth runbook](https://github.com/ls1intum/Hephaestus/blob/main/docs/runbooks/auth-cutover.md#first-instance-admin-bootstrap).
+  [auth runbook](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/runbooks/auth-cutover.md#first-instance-admin-bootstrap).
 
 ## 5. First boot
 
@@ -280,7 +280,7 @@ cd docker/self-host && docker compose --env-file .env --env-file release-lock.en
 
 Compare your `.env` against the new release's `.env.example` for added variables. When a release
 changes the PostgreSQL major version, follow its entry in
-[`MIGRATION.md`](https://github.com/ls1intum/Hephaestus/blob/main/MIGRATION.md) before starting the new
+[`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) before starting the new
 stack.
 
 ## Rollback

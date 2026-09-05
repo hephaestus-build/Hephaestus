@@ -2,6 +2,8 @@ import type * as Preset from "@docusaurus/preset-classic";
 import type { Config, LoadContext, Plugin } from "@docusaurus/types";
 import { themes as prismThemes } from "prism-react-renderer";
 
+const REPO_URL = "https://github.com/hephaestus-build/Hephaestus";
+
 const envBaseUrl = process.env.DOCUSAURUS_BASE_URL;
 
 /*
@@ -46,7 +48,7 @@ const config: Config = {
 
 	url: "https://docs.hephaestus.build",
 	baseUrl,
-	organizationName: "ls1intum",
+	organizationName: "hephaestus-build",
 	projectName: "Hephaestus",
 
 	onBrokenLinks: "throw",
@@ -61,7 +63,7 @@ const config: Config = {
 
 	customFields: {
 		productUrl: "https://hephaestus.build",
-		repoUrl: "https://github.com/ls1intum/Hephaestus",
+		repoUrl: REPO_URL,
 	},
 
 	markdown: {
@@ -102,7 +104,7 @@ const config: Config = {
 				path: "./user",
 				routeBasePath: "user",
 				sidebarPath: "./sidebars.user.ts",
-				editUrl: "https://github.com/ls1intum/Hephaestus/tree/main/docs/",
+				editUrl: `${REPO_URL}/tree/main/docs/`,
 				showLastUpdateAuthor: true,
 				showLastUpdateTime: true,
 			},
@@ -114,7 +116,7 @@ const config: Config = {
 				path: "./contributor",
 				routeBasePath: "contributor",
 				sidebarPath: "./sidebars.contributor.ts",
-				editUrl: "https://github.com/ls1intum/Hephaestus/tree/main/docs/",
+				editUrl: `${REPO_URL}/tree/main/docs/`,
 				showLastUpdateAuthor: true,
 				showLastUpdateTime: true,
 			},
@@ -126,7 +128,7 @@ const config: Config = {
 				path: "./admin",
 				routeBasePath: "admin",
 				sidebarPath: "./sidebars.admin.ts",
-				editUrl: "https://github.com/ls1intum/Hephaestus/tree/main/docs/",
+				editUrl: `${REPO_URL}/tree/main/docs/`,
 				showLastUpdateAuthor: true,
 				showLastUpdateTime: true,
 			},
@@ -165,7 +167,6 @@ const config: Config = {
 				content: "Hephaestus, AI mentor, code review feedback, software engineering practices, TUM",
 			},
 			{ name: "twitter:card", content: "summary_large_image" },
-			{ name: "twitter:site", content: "@ls1intum" },
 			{ name: "twitter:title", content: "Hephaestus Documentation" },
 			{ name: "twitter:description", content: DESCRIPTION },
 		],
@@ -206,7 +207,7 @@ const config: Config = {
 					position: "right",
 				},
 				{
-					href: "https://github.com/ls1intum/Hephaestus",
+					href: REPO_URL,
 					position: "right",
 					className: "navbarGithubLink",
 					"aria-label": "Hephaestus on GitHub",
@@ -229,7 +230,7 @@ const config: Config = {
 						},
 						{
 							label: "Release Notes",
-							href: "https://github.com/ls1intum/Hephaestus/releases",
+							href: `${REPO_URL}/releases`,
 						},
 						{
 							label: "Accessibility",
@@ -250,11 +251,11 @@ const config: Config = {
 						},
 						{
 							label: "Feature Requests",
-							href: "https://github.com/hephaestus-build/Hephaestus/discussions/categories/ideas",
+							href: `${REPO_URL}/discussions/categories/ideas`,
 						},
 						{
 							label: "Bug Tracker",
-							href: "https://github.com/ls1intum/Hephaestus/issues",
+							href: `${REPO_URL}/issues`,
 						},
 					],
 				},
@@ -267,7 +268,7 @@ const config: Config = {
 						},
 						{
 							label: "GitHub Repository",
-							href: "https://github.com/ls1intum/Hephaestus",
+							href: REPO_URL,
 						},
 						{
 							label: "Imprint",
@@ -280,12 +281,11 @@ const config: Config = {
 					],
 				},
 			],
-			copyright: `Built by <a href="https://github.com/ls1intum">AET Team</a> at <a href="https://www.tum.de/en/">TUM</a>. Source on <a href="https://github.com/ls1intum/Hephaestus">GitHub</a>.`,
+			copyright: `Built by <a href="https://github.com/ls1intum">AET Team</a> at <a href="https://www.tum.de/en/">TUM</a>. Source on <a href="${REPO_URL}">GitHub</a>.`,
 		},
 		announcementBar: {
 			id: "pre-1-0",
-			// Raw HTML: Docusaurus neither prefixes this href with the base URL nor reports it to
-			// `onBrokenLinks`, so it has to carry the base URL itself or 404 on every page.
+			// Docusaurus does not base-URL-prefix a raw HTML href or check it via onBrokenLinks — write it absolute.
 			content: `Hephaestus is <strong>pre-1.0</strong>: only the latest release is supported, and a minor release can require action. <a href="${baseUrl}admin/compatibility-policy">Read the compatibility policy</a>.`,
 			isCloseable: true,
 		},

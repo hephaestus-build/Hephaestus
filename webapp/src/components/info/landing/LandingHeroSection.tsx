@@ -273,7 +273,7 @@ export function LandingHeroSection({
 							className="h-11 w-full px-5 shadow-lg shadow-primary/10 sm:w-auto"
 						/>
 						<a
-							href="https://github.com/ls1intum/Hephaestus"
+							href="https://github.com/hephaestus-build/Hephaestus"
 							target="_blank"
 							rel="noopener noreferrer"
 							className={cn(

@@ -140,7 +140,7 @@ controller-layer enforcement only); or
 `tenancy.parse_failure.total` starts non-zero in prod (would mean the regex hits a
 pathological input class worth handling explicitly).
 
-## Update — 2026-08-30 ([issue #1603](https://github.com/ls1intum/Hephaestus/issues/1603))
+## Update — 2026-08-30 ([issue #1603](https://github.com/hephaestus-build/Hephaestus/issues/1603))
 
 `throw` is now the default in every profile. The canary period described above has ended; `log` and
 `off` remain explicit diagnostic overrides and are not production settings. This changes only the

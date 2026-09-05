@@ -6,7 +6,7 @@ description: Trace a persisted practice observation to its review inputs, config
 # Evaluation provenance
 
 This page describes the provenance available for automated practice reviews. The Java model and
-[Liquibase changelogs](https://github.com/ls1intum/Hephaestus/tree/main/server/application/src/main/resources/db/changelog)
+[Liquibase changelogs](https://github.com/hephaestus-build/Hephaestus/tree/main/server/application/src/main/resources/db/changelog)
 own the persisted contract; the [generated database schema](./database-schema.mdx) shows its structure.
 
 ## Review provenance
@@ -45,9 +45,9 @@ delivery-policy outcome, not proof of an external placement or of human exposure
 acted on the feedback.
 
 The Java
-[`FeedbackDeliveryState`](https://github.com/ls1intum/Hephaestus/blob/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/feedback/FeedbackDeliveryState.java)
+[`FeedbackDeliveryState`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/feedback/FeedbackDeliveryState.java)
 and
-[`FeedbackSuppressionReason`](https://github.com/ls1intum/Hephaestus/blob/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/feedback/FeedbackSuppressionReason.java)
+[`FeedbackSuppressionReason`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/feedback/FeedbackSuppressionReason.java)
 types define delivery outcomes and suppression reasons.
 
 ## Evaluation joins
