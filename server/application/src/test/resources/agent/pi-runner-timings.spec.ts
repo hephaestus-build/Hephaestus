@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+	deriveRetryWindow,
 	deriveTimeouts,
 	deriveTurnTiming,
 	deriveWorkstreamBudget,
@@ -14,6 +15,22 @@ void test("review budget reserves fifteen percent for a retry", () => {
 		compositionMs: 0,
 	});
 });
+
+void test("the retry inherits what the initial pass did not spend", () => {
+	const timeouts = deriveTimeouts(900_000);
+	// The initial pass returned after 400s of its 765s slice.
+	assert.equal(deriveRetryWindow(timeouts, 400_000), 500_000);
+	// It used every second it was given: the retry gets exactly its reservation.
+	assert.equal(deriveRetryWindow(timeouts, timeouts.initialMs), timeouts.retryMs);
+	// It overran (a hard abort lands late): the reservation is the floor, never a negative window.
+	assert.equal(deriveRetryWindow(timeouts, 900_000), timeouts.retryMs);
+});
+
+for (const invalid of [-1, Number.NaN]) {
+	void test(`rejects invalid initial elapsed time ${invalid}`, () => {
+		assert.throws(() => deriveRetryWindow(deriveTimeouts(900_000), invalid), /non-negative/);
+	});
+}
 
 void test("a small review never allocates more time than it owns", () => {
 	assert.deepEqual(deriveTimeouts(10_000), {

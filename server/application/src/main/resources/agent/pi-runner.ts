@@ -43,7 +43,12 @@ import {
 	validateFeedbackEvidence,
 } from "./pi-runner-composition.ts";
 import { outputPath } from "./pi-runner-output.ts";
-import { deriveTimeouts, deriveTurnTiming, deriveWorkstreamBudget } from "./pi-runner-timings.ts";
+import {
+	deriveRetryWindow,
+	deriveTimeouts,
+	deriveTurnTiming,
+	deriveWorkstreamBudget,
+} from "./pi-runner-timings.ts";
 import {
 	addAssistantUsage,
 	extractUsageFromSession,
@@ -1901,6 +1906,12 @@ async function main() {
 		`[pi-runner] Retrying ${missingAfterInitial.length} missing practice observer(s): ${missingAfterInitial.join(", ")}`,
 	);
 
+	const retryWindowMs = deriveRetryWindow(
+		{ initialMs: INITIAL_TIMEOUT_MS, retryMs: RETRY_TIMEOUT_MS },
+		initialDurationMs,
+	);
+	console.error(`[pi-runner] Retry window: ${(retryWindowMs / 1000).toFixed(1)}s`);
+
 	const retryAbort = new AbortController();
 	const retryTimer = setTimeout(() => {
 		retryAborted = true;
@@ -1909,7 +1920,7 @@ async function main() {
 		for (const activeSession of activeSessions) {
 			activeSession.dispose();
 		}
-	}, RETRY_TIMEOUT_MS);
+	}, retryWindowMs);
 
 	const retryStartMs = Date.now();
 
@@ -1944,11 +1955,7 @@ async function main() {
 				const unsubscribeRetry = subscribeSession(retrySession, `retry:${group.id}`);
 				activeSessions.add(retrySession);
 				const activeSlots = Math.min(concurrency, retriesRemaining);
-				const retryBudgetMs = deriveWorkstreamBudget(
-					RETRY_TIMEOUT_MS,
-					activeSlots,
-					retriesRemaining,
-				);
+				const retryBudgetMs = deriveWorkstreamBudget(retryWindowMs, activeSlots, retriesRemaining);
 				const retryDeadline = scheduleDeadline(retryBudgetMs, () => {
 					retrySession.dispose();
 				});

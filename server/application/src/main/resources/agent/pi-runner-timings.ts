@@ -13,6 +13,23 @@ export function deriveTimeouts(agentBudgetMs: number, compositionEnabled = false
 	};
 }
 
+/**
+ * The retry's wall clock: whatever is left of the review budget when the initial pass ends, and never
+ * less than the slice the split reserved for it. That reservation guards against an initial pass that
+ * runs long; it is not a cap, because a pass that returned early has not spent the rest and the retry
+ * is the last stage that can still close a practice nobody observed.
+ */
+export function deriveRetryWindow(
+	timeouts: { initialMs: number; retryMs: number },
+	initialElapsedMs: number,
+) {
+	if (!Number.isFinite(initialElapsedMs) || initialElapsedMs < 0) {
+		throw new Error(`initialElapsedMs must be a non-negative number, got: ${initialElapsedMs}`);
+	}
+	const reviewBudgetMs = timeouts.initialMs + timeouts.retryMs;
+	return Math.max(timeouts.retryMs, Math.floor(reviewBudgetMs - initialElapsedMs));
+}
+
 export function deriveTurnTiming(remainingMs: number, remainingTurns: number) {
 	if (!Number.isFinite(remainingMs) || remainingMs < 0) {
 		throw new Error(`remainingMs must be a non-negative number, got: ${remainingMs}`);
