@@ -13,6 +13,10 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 
+import {
+	SANDBOX_RESOURCE_LOADER_OPTIONS,
+	SANDBOX_SETTINGS_MANAGER_OPTIONS,
+} from "./pi-agent-sandbox.ts";
 import { errorText } from "./pi-error-text.ts";
 import { buildGrepTool } from "./pi-grep-tool.ts";
 import {
@@ -1573,18 +1577,14 @@ async function main() {
 	);
 
 	// Pi filters custom tools through this allowlist; omit filesystem mutation tools.
-	// Untrusted on purpose: a trusted project makes the SDK look for `.agents/skills` in every ancestor
-	// of the working directory, up to `/`, and the sandbox lets Node read only /workspace and the SDK
-	// itself (PiRunnerProfile), so that walk dies on the first ancestor with a permission error before
-	// the model is ever called. Nothing project-local is wanted here anyway: every resource this run
-	// uses is injected by the runner, never discovered from the checkout.
-	const settingsManager = SettingsManager.create(CWD, AGENT_DIR, { projectTrusted: false });
+	// pi-agent-sandbox.ts has the rationale for running untrusted; both Pi runners in this image
+	// share it.
+	const settingsManager = SettingsManager.create(CWD, AGENT_DIR, SANDBOX_SETTINGS_MANAGER_OPTIONS);
 	const grepTool = buildGrepTool(CWD);
-	// The only instructions a session carries beyond its prompt are the orchestrator the server staged
-	// in the agent dir. The SDK's own context-file discovery would climb from the working directory
-	// to `/` looking for AGENTS.md and die on the first ancestor the allowlist forbids, and it would
-	// read the reviewed checkout's AGENTS.md as instructions rather than as evidence; so discovery is
-	// off and the staged file is handed over by name. A run without it does not start.
+	// The only instructions a session carries beyond its prompt are the orchestrator the server
+	// staged in the agent dir, handed over by name below; the SDK's own discovery is turned off
+	// (pi-agent-sandbox.ts) and is not the channel a run's instructions arrive on. A run without
+	// this file does not start.
 	const orchestratorPath = `${AGENT_DIR}/AGENTS.md`;
 	const orchestrator = readFileSync(orchestratorPath, "utf8");
 	// One loader per session: a loader owns the extension runtime a session binds its tools into, and
@@ -1594,7 +1594,7 @@ async function main() {
 			cwd: CWD,
 			agentDir: AGENT_DIR ?? getAgentDir(),
 			settingsManager,
-			noContextFiles: true,
+			...SANDBOX_RESOURCE_LOADER_OPTIONS,
 			agentsFilesOverride: () => ({
 				agentsFiles: [{ path: orchestratorPath, content: orchestrator }],
 			}),
