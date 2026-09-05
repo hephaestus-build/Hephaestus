@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -1599,6 +1600,18 @@ class AgentJobExecutorTest extends BaseUnitTest {
     @DisplayName("Poll loop capacity math")
     class PollLoopCapacity {
 
+        /**
+         * The jobs this worker holds are the claim bound, and the only seam that fills the set is a
+         * committed claim — more machinery than a capacity assertion needs.
+         */
+        private Set<UUID> heldJobs() throws Exception {
+            java.lang.reflect.Field field = AgentJobExecutor.class.getDeclaredField("localRunningJobs");
+            field.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Set<UUID> held = (Set<UUID>) requireNonNull(field.get(executor));
+            return held;
+        }
+
         @Test
         @DisplayName("no WorkerCapacityState (worker role config absent) falls back to claimBatchSize")
         void noCapacityStateFallsBackToClaimBatchSize() {
@@ -1634,10 +1647,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     Optional.empty());
             // Mirror the two claimReview() calls above by populating localRunningJobs directly —
             // computeCapacity reads localRunningJobs.size(), not the capacity state's own counter.
-            java.lang.reflect.Field localRunningJobsField = AgentJobExecutor.class.getDeclaredField("localRunningJobs");
-            localRunningJobsField.setAccessible(true);
-            @SuppressWarnings("unchecked")
-            Set<UUID> localRunningJobs = (Set<UUID>) localRunningJobsField.get(executor);
+            Set<UUID> localRunningJobs = heldJobs();
             localRunningJobs.add(UUID.randomUUID());
             localRunningJobs.add(UUID.randomUUID());
 
@@ -1708,9 +1718,9 @@ class AgentJobExecutorTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("capacity is further bounded by the sandbox executor's actual free pool "
-                + "slots — reviewMax alone is not enough, it can exceed the pool size")
-        void capacityIsBoundedBySandboxExecutorFreeSlots() throws Exception {
+        @DisplayName("capacity is further bounded by the sandbox executor's pool size — reviewMax "
+                + "alone is not enough, it can exceed the pool size")
+        void capacityIsBoundedBySandboxExecutorPoolSize() throws Exception {
             org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor realPool =
                     new org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor();
             realPool.setCorePoolSize(1);
@@ -1750,6 +1760,60 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 // Nothing active yet: bounded by the pool's max size (2), not reviewMax (10) or
                 // claimBatchSize (5, AGENT_PROPS's default).
                 assertThat(executor.computeCapacity()).isEqualTo(2);
+            } finally {
+                realPool.shutdown();
+            }
+        }
+
+        @Test
+        @DisplayName("a job this worker already holds occupies a pool slot, whether or not the pool "
+                + "thread has entered it yet")
+        void heldJobsOccupyPoolSlots() throws Exception {
+            org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor realPool =
+                    new org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor();
+            realPool.setCorePoolSize(1);
+            realPool.setMaxPoolSize(2);
+            realPool.setQueueCapacity(0);
+            realPool.initialize();
+            try {
+                de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState capacityState =
+                        new de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState(new WorkerProperties(
+                                "w",
+                                new WorkerProperties.Capacity("10", "1"),
+                                new WorkerProperties.Drain(Duration.ofMinutes(5)),
+                                new WorkerProperties.Heartbeat(Duration.ofSeconds(20)),
+                                new WorkerProperties.Control(
+                                        URI.create("ws://example"), "tok", Duration.ofSeconds(10))));
+
+                executor = new AgentJobExecutor(
+                        AGENT_PROPS,
+                        jobRepository,
+                        bindingRepository,
+                        handlerRegistry,
+                        practiceAgent,
+                        workerJwtIssuer,
+                        sandboxManager,
+                        realPool,
+                        transactionTemplate,
+                        objectMapper,
+                        meterRegistry,
+                        new PracticeReviewRefusalMetrics(meterRegistry),
+                        new AgentJobTelemetry(meterRegistry),
+                        usageRecorder,
+                        llmBudgetService,
+                        NO_LIVE_ADMISSION,
+                        Optional.of(capacityState),
+                        Optional.empty());
+
+                Set<UUID> localRunningJobs = heldJobs();
+
+                // The pool reports no busy thread; the jobs this worker holds are what fills it.
+                localRunningJobs.add(UUID.randomUUID());
+                assertThat(realPool.getActiveCount()).isZero();
+                assertThat(executor.computeCapacity()).isEqualTo(1);
+
+                localRunningJobs.add(UUID.randomUUID());
+                assertThat(executor.computeCapacity()).isZero();
             } finally {
                 realPool.shutdown();
             }

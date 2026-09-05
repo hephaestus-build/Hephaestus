@@ -429,23 +429,25 @@ public class AgentJobExecutor {
     }
 
     /**
-     * The sandbox executor's free slots are the hard bound: worker capacity and pool size are separate
-     * knobs, so a capacity larger than the pool must not claim jobs the pool would then reject.
+     * The sandbox pool's size is the hard bound: worker capacity and pool size are separate knobs, so a
+     * capacity larger than the pool must not claim jobs the pool would then reject. What occupies a slot
+     * is a job this worker holds, not a thread the pool reports busy: the pool hands a task straight to
+     * a thread, so between submit and that thread entering the task it reports the slot idle, and a
+     * claim made on that reading is rejected on submit and requeued for nothing.
      */
     int computeCapacity() {
-        int poolCapacity = capacityState
-                .map(cs -> Math.max(0, cs.reviewMax() - localRunningJobs.size()))
-                .orElse(agentProperties.claimBatchSize());
-        int bounded = Math.min(poolCapacity, agentProperties.claimBatchSize());
-        return Math.min(bounded, sandboxExecutorFreeCapacity());
+        int concurrency = Math.min(
+                capacityState.map(WorkerCapacityState::reviewMax).orElse(Integer.MAX_VALUE),
+                sandboxExecutorConcurrency());
+        int free = concurrency == Integer.MAX_VALUE
+                ? agentProperties.claimBatchSize()
+                : Math.max(0, concurrency - localRunningJobs.size());
+        return Math.min(free, agentProperties.claimBatchSize());
     }
 
     /** Only ever narrows {@link #computeCapacity()}: an unknown executor type imposes no bound. */
-    private int sandboxExecutorFreeCapacity() {
-        if (sandboxExecutor instanceof ThreadPoolTaskExecutor pool) {
-            return Math.max(0, pool.getMaxPoolSize() - pool.getActiveCount());
-        }
-        return Integer.MAX_VALUE;
+    private int sandboxExecutorConcurrency() {
+        return sandboxExecutor instanceof ThreadPoolTaskExecutor pool ? pool.getMaxPoolSize() : Integer.MAX_VALUE;
     }
 
     /**
@@ -484,6 +486,11 @@ public class AgentJobExecutor {
         if (!(attempt instanceof ClaimResult claim)) {
             return false;
         }
+        // Counted after the claim commits, never inside its transaction: a failed commit rolls the row
+        // back to QUEUED and no execution then runs to release the count. Since the count is the hard
+        // claim bound, one leaked entry would retire a slot for this worker's lifetime.
+        localRunningJobs.add(jobId);
+        capacityState.ifPresent(WorkerCapacityState::claimReview);
         dispatchExecution(jobId, claim);
         return true;
     }
@@ -1055,8 +1062,6 @@ public class AgentJobExecutor {
             job.setConfigSnapshot(snapshot.toJson(objectMapper));
             jobRepository.save(job);
 
-            localRunningJobs.add(jobId);
-            capacityState.ifPresent(WorkerCapacityState::claimReview);
             return new ClaimResult(job, snapshot);
         });
     }
