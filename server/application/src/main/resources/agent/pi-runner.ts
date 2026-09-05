@@ -433,7 +433,14 @@ const observationSchema = {
 	required: ["practiceSlug", "summary", "outcome", "evidence", "evidenceRationale"],
 	properties: {
 		practiceSlug: { type: "string", minLength: 1 },
-		summary: { type: "string", minLength: 1, maxLength: 120 },
+		summary: {
+			type: "string",
+			minLength: 1,
+			maxLength: 120,
+			description:
+				"A short phrase naming what you observed, such as 'Debug print left in the request handler'. " +
+				"Never a single word and never the practice's own name.",
+		},
 		outcome: {
 			type: "string",
 			enum: [
