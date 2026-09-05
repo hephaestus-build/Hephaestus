@@ -82,6 +82,36 @@ void test("forks the same persisted checkpoint into independent session branches
 	}
 });
 
+void test("a checkpoint the file does not hold falls back to the entry it does", () => {
+	const root = mkdtempSync(join(tmpdir(), "pi-session-tree-"));
+	try {
+		const sessionDir = join(root, "sessions");
+		const seed = SessionManager.create(root, sessionDir);
+		seed.appendMessage({
+			role: "user",
+			content: [{ type: "text", text: "Gather group evidence" }],
+			timestamp: Date.now(),
+		});
+		const persisted = seed.appendMessage(assistantMessage("Evidence manifest"));
+		const seedSessionFile = seed.getSessionFile();
+		assert.ok(seedSessionFile);
+
+		const forks = forkSessions({
+			seedSessionFile,
+			// An entry id the live session reported and whose write never reached the file.
+			checkpointEntryId: "0badf00d",
+			keys: ["group-a"],
+			sessionDir,
+		});
+
+		const forked = SessionManager.open(forks[0]?.sessionFile ?? "", sessionDir);
+		assert.equal(forked.getLeafId(), persisted);
+		assert.deepEqual(forked.buildSessionContext().messages, seed.buildSessionContext().messages);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 void test("rejects duplicate and empty keys before creating a fork", () => {
 	assert.throws(
 		() =>
