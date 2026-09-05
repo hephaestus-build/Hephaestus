@@ -86,6 +86,25 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReportTheDockerRuntimeSettingAndDetectWhenItIsMissing() {
+        Map<String, Object> properties = role(true, false);
+        assertThat(evaluateReadiness(properties, true))
+                .filteredOn(fact -> fact.id().equals("sandbox.isolation-runtime"))
+                .singleElement()
+                .satisfies(fact -> {
+                    assertThat(fact.subject()).isEqualTo("hephaestus.sandbox.docker.container-runtime");
+                    assertThat(fact.status()).isEqualTo(ConfigurationStatus.SATISFIED);
+                });
+
+        properties.remove("hephaestus.sandbox.docker.container-runtime");
+        assertStatus(
+                evaluateReadiness(properties, true), "sandbox.isolation-runtime", ConfigurationStatus.ACTION_REQUIRED);
+        properties.put("hephaestus.runtime.worker.enabled", false);
+        assertStatus(
+                evaluateReadiness(properties, true), "sandbox.isolation-runtime", ConfigurationStatus.NOT_APPLICABLE);
+    }
+
+    @Test
     void shouldRejectRoleSpecificNegativeCases() {
         Map<String, Object> worker = role(true, false);
         worker.put("hephaestus.sync.nats.enabled", true);
@@ -234,7 +253,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         properties.put("hephaestus.llm.egress.allow-loopback", false);
         properties.put("hephaestus.agent.image.require-digest", true);
         properties.put("hephaestus.agent.image.reference", "ghcr.io/example/agent@sha256:" + "a".repeat(64));
-        properties.put("hephaestus.sandbox.container-runtime", "runsc");
+        properties.put("hephaestus.sandbox.docker.container-runtime", "runsc");
         return properties;
     }
 

@@ -39,8 +39,7 @@ class SandboxContainerManagerTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        properties = new SandboxProperties(
-                "unix:///var/run/docker.sock", false, null, 5, 10, 60, null, null, 209_715_200L, 500_000, null);
+        properties = new SandboxProperties(5, 10, 60, 209_715_200L, 500_000, null);
         executor = Executors.newSingleThreadExecutor();
         manager = new SandboxContainerManager(containerOps, image -> {}, properties, executor, Duration.ofMillis(20));
     }
@@ -103,7 +102,6 @@ class SandboxContainerManagerTest extends BaseUnitTest {
 
         @Test
         void shouldTimeoutAndStop() {
-            // Simulate a container that never exits
             when(containerOps.waitContainer(CONTAINER_ID)).thenAnswer(inv -> {
                 new CountDownLatch(1).await();
                 return new DockerOperations.WaitResult(137);
@@ -133,7 +131,6 @@ class SandboxContainerManagerTest extends BaseUnitTest {
             });
 
             Thread testThread = Thread.currentThread();
-            // Schedule interruption after a short delay
             var interruptor = new Thread(() -> {
                 try {
                     Thread.sleep(100);
@@ -147,7 +144,6 @@ class SandboxContainerManagerTest extends BaseUnitTest {
                     .isInstanceOf(SandboxException.class)
                     .hasMessageContaining("Interrupted");
 
-            // Thread interrupt flag should be restored
             assertThat(Thread.interrupted()).isTrue(); // also clears it
             interruptor.join(1000);
         }
@@ -163,7 +159,6 @@ class SandboxContainerManagerTest extends BaseUnitTest {
             SandboxContainerManager.WaitOutcome outcome =
                     manager.waitForCompletion(CONTAINER_ID, Duration.ofMillis(50));
 
-            // Should return SIGKILL exit code because post-stop wait times out
             assertThat(outcome.timedOut()).isTrue();
             assertThat(outcome.exitCode()).isEqualTo(137);
         }
@@ -179,7 +174,6 @@ class SandboxContainerManagerTest extends BaseUnitTest {
             SandboxContainerManager.WaitOutcome outcome =
                     manager.waitForCompletion(CONTAINER_ID, Duration.ofMillis(50));
 
-            // Should still return timeout result even if stop failed
             assertThat(outcome.timedOut()).isTrue();
         }
     }

@@ -43,7 +43,7 @@ Compose maps `POSTGRES_PASSWORD` to `DATABASE_PASSWORD` and owns the runtime-rol
 | `hephaestus.llm.egress.allow-loopback` | `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK` |
 | `hephaestus.agent.image.require-digest` | `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` |
 | `hephaestus.agent.image.reference` | `HEPHAESTUS_AGENT_IMAGE_REFERENCE` |
-| `hephaestus.sandbox.container-runtime` | `SANDBOX_CONTAINER_RUNTIME` |
+| `hephaestus.sandbox.docker.container-runtime` | `SANDBOX_DOCKER_CONTAINER_RUNTIME` |
 | `hephaestus.sentry.dsn` | `SENTRY_DSN` |
 
 ## Runtime roles
@@ -108,9 +108,43 @@ Worker roles require digest enforcement and a SHA-256-pinned `hephaestus.agent.i
 
 ## Sandbox isolation
 
-Set `SANDBOX_CONTAINER_RUNTIME=runsc` on workers after
+Set `SANDBOX_DOCKER_CONTAINER_RUNTIME=runsc` on workers after
 [installing and configuring gVisor](https://gvisor.dev/docs/user_guide/install/) on the host. This
 recommendation is non-fatal.
+
+### Docker configuration
+
+For the single-host deployment, keep the local Unix socket default. Docker-specific settings under
+`hephaestus.sandbox.docker.*` apply to processes with the worker role enabled.
+The gateway keeps its independent `hephaestus.sandbox.gateway.*` settings; resource limits, capacity
+and workspace transfer limits remain under `hephaestus.sandbox.*`.
+
+| Property under `hephaestus.sandbox.docker` | Environment variable | Default |
+| --- | --- | --- |
+| `host` | `SANDBOX_DOCKER_HOST` | `unix:///var/run/docker.sock` |
+| `tls-verify` | `SANDBOX_DOCKER_TLS_VERIFY` | `false` |
+| `cert-path` | `SANDBOX_DOCKER_CERT_PATH` | unset |
+| `container-runtime` | `SANDBOX_DOCKER_CONTAINER_RUNTIME` | Docker daemon default |
+| `app-server-container-id` | `SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID` | container `HOSTNAME` |
+| `cli` | `SANDBOX_DOCKER_CLI` | `docker` |
+
+Compose forwards these variables to `application-server` and `application-worker`. Leave the
+container-ID override empty so each container uses its own `HOSTNAME` when joining job networks.
+
+Java operations and interactive Docker CLI commands use the same host, TLS and certificate settings.
+Inherited `DOCKER_CONTEXT`, `DOCKER_HOST` and Docker TLS environment variables do not override
+interactive commands. `cli` selects only the executable.
+
+A TCP connection changes how the worker reaches Docker, not where its containers run: the daemon
+must manage the worker container and its sandbox networks. Follow [Docker's mutual-TLS setup](https://docs.docker.com/engine/security/protect-access/).
+Set `SANDBOX_DOCKER_TLS_VERIFY=true` and mount client certificates read-only into each worker-capable
+container using a Compose override. `SANDBOX_DOCKER_CERT_PATH` must name that **container** directory
+containing `ca.pem`, `cert.pem` and `key.pem`; setting a host path in `.env` does not mount it.
+Never mount the Docker socket or client certificates in a sandbox.
+
+Unknown keys under `hephaestus.sandbox.docker`, blank `host` or `cli`, and TLS verification without a
+certificate path prevent worker startup. These checks do not verify daemon connectivity or runtime
+availability. See [runtime roles](./runtime-roles) for the gateway boundary.
 
 ## Optional observability
 

@@ -171,11 +171,11 @@ public final class ConfigurationReadinessEvaluator {
         add(
                 facts,
                 "sandbox.isolation-runtime",
-                "hephaestus.sandbox.container-runtime",
+                "hephaestus.sandbox.docker.container-runtime",
                 roles(ConfigurationRole.WORKER),
                 ConfigurationRequirement.RECOMMENDED,
                 worker,
-                "runsc".equals(property("hephaestus.sandbox.container-runtime")),
+                "runsc".equals(property("hephaestus.sandbox.docker.container-runtime")),
                 "gVisor (runsc) is recommended for stronger agent sandbox isolation.",
                 "sandbox-isolation");
         add(

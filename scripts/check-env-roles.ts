@@ -66,6 +66,11 @@ interface RoleScope {
  */
 const ROLE_SCOPES: readonly RoleScope[] = [
 	{
+		path: "hephaestus.sandbox.docker",
+		role: "worker",
+		why: "DockerSandboxConfiguration registers Docker connection, network and runtime settings only when hephaestus.runtime.worker.enabled is active",
+	},
+	{
 		path: "hephaestus.sandbox.gateway.port",
 		role: "worker",
 		why: "SandboxGatewayConfiguration opens the connector and LlmProxySecurityConfig matches its chains on that port; both are gated on hephaestus.runtime.worker.enabled",

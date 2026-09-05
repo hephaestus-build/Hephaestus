@@ -15,10 +15,15 @@ public class DockerHealthIndicator implements HealthIndicator {
 
     private final SandboxContainerManager containerManager;
     private final SandboxProperties properties;
+    private final DockerSandboxProperties dockerProperties;
 
-    public DockerHealthIndicator(SandboxContainerManager containerManager, SandboxProperties properties) {
+    public DockerHealthIndicator(
+            SandboxContainerManager containerManager,
+            SandboxProperties properties,
+            DockerSandboxProperties dockerProperties) {
         this.containerManager = containerManager;
         this.properties = properties;
+        this.dockerProperties = dockerProperties;
     }
 
     @Override
@@ -28,19 +33,19 @@ public class DockerHealthIndicator implements HealthIndicator {
             if (reachable) {
                 int activeContainers = containerManager.listManagedContainers().size();
                 return Health.up()
-                        .withDetail("dockerHost", properties.dockerHost())
+                        .withDetail("dockerHost", dockerProperties.host())
                         .withDetail("activeContainers", activeContainers)
                         .withDetail("maxConcurrentContainers", properties.maxConcurrentContainers())
                         .build();
             } else {
                 return Health.down()
-                        .withDetail("dockerHost", properties.dockerHost())
+                        .withDetail("dockerHost", dockerProperties.host())
                         .withDetail("error", "Docker daemon not reachable")
                         .build();
             }
         } catch (Exception e) {
             return Health.down()
-                    .withDetail("dockerHost", properties.dockerHost())
+                    .withDetail("dockerHost", dockerProperties.host())
                     .withDetail("error", e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage())
                     .build();
         }

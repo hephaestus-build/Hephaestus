@@ -44,18 +44,16 @@ final class PiProcessHandle {
     }
 
     /**
-     * Spawns {@code docker exec -i -u <containerUser>}. Explicit {@code -u} guards against USER
-     * drift in a future refactor; env keys are pre-validated by
+     * Environment keys are validated by
      * {@link de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec}.
      */
     static PiProcessHandle spawn(
-            String dockerCli,
+            DockerCli dockerCli,
             String containerId,
             String containerUser,
             List<String> command,
             Map<String, String> environment) {
         List<String> argv = new ArrayList<>();
-        argv.add(dockerCli);
         argv.add("exec");
         argv.add("-i"); // never -t: no TTY → no TIOCSTI injection vector
         argv.add("-u");
@@ -67,7 +65,7 @@ final class PiProcessHandle {
         argv.add(containerId);
         argv.addAll(command);
 
-        ProcessBuilder pb = new ProcessBuilder(argv);
+        ProcessBuilder pb = dockerCli.configure(new ProcessBuilder(argv));
         pb.redirectErrorStream(false);
         try {
             Process p = pb.start();
@@ -95,7 +93,6 @@ final class PiProcessHandle {
         return process.isAlive();
     }
 
-    /** Closes the underlying FDs — the only way to unblock a thread parked in write() on Linux. */
     void destroyForcibly() {
         if (process.isAlive()) {
             process.destroyForcibly();
@@ -133,8 +130,6 @@ final class PiProcessHandle {
             stdin.close();
         } catch (IOException ignored) {
         }
-        // Closes the stderr pipe FD on the kernel side — only way to unblock the drainer VT if the
-        // process did not exit and destroyForcibly was a no-op (zombie docker-cli relay).
         try {
             process.getErrorStream().close();
         } catch (IOException ignored) {

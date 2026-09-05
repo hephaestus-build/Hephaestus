@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.ContainerSecurityPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerOperations;
+import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxContainerManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxEnvBlocklist;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxLabels;
@@ -65,7 +66,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
     private final InteractiveSandboxRegistry registry;
     private final InteractiveSandboxMetrics metrics;
     private final ObjectMapper mapper;
-    private final String dockerCli;
+    private final DockerCli dockerCli;
     private final int gatewayPort;
     private final Executor closeExecutor;
     private final MentorProxyCredentialRegistry mentorProxyCredentialRegistry;
@@ -81,7 +82,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             InteractiveSandboxMetrics metrics,
             ObjectMapper mapper,
             Executor closeExecutor,
-            String dockerCli,
+            DockerSandboxProperties dockerProperties,
             int gatewayPort,
             MentorProxyCredentialRegistry mentorProxyCredentialRegistry) {
         this.properties = properties;
@@ -93,7 +94,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
         this.metrics = metrics;
         this.mapper = mapper;
         this.closeExecutor = closeExecutor;
-        this.dockerCli = dockerCli;
+        this.dockerCli = new DockerCli(dockerProperties);
         this.gatewayPort = gatewayPort;
         this.mentorProxyCredentialRegistry = mentorProxyCredentialRegistry;
         java.util.Arrays.setAll(attachLocks, ignored -> new Object());
@@ -108,9 +109,6 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
     }
 
     private AttachedSandbox attachLocked(InteractiveSandboxSpec spec) {
-        // Per-workspace gating happens upstream in MentorChatController via
-        // WorkspaceFeatures.mentorEnabled — there is no deployment-wide mentor enable flag.
-
         InteractiveSandboxRuntimeKey runtimeKey = runtimeKey(spec);
         DockerAttachedSandboxAdapter existing = registry.findLive(spec.userId(), spec.workspaceId());
         if (existing != null) {
@@ -200,21 +198,22 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
                 throw e;
             }
 
-            // Build + await first frame BEFORE register: a stillborn runner never becomes visible.
+            // Register only after the runner emits its first frame.
             sandbox = buildSandbox(spec, runtimeKey, containerId, networkId, process);
             sandbox.start();
 
             Duration firstFrameTimeout = Duration.ofSeconds(properties.attachFirstFrameTimeoutSeconds());
+            boolean firstFrameReceived;
             try {
-                if (!sandbox.awaitFirstFrame(firstFrameTimeout)) {
-                    metrics.attachFailureFirstFrameTimeout.increment();
-                    throw new InteractiveSandboxException(
-                            "Runner did not emit first frame within " + firstFrameTimeout.toSeconds() + "s");
-                }
+                firstFrameReceived = sandbox.awaitFirstFrame(firstFrameTimeout);
             } catch (InteractiveSandboxException terminated) {
-                // Distinct from timeout: pump/writer terminated before any frame.
                 metrics.attachFailureFirstFrameFailed.increment();
                 throw terminated;
+            }
+            if (!firstFrameReceived) {
+                metrics.attachFailureFirstFrameTimeout.increment();
+                throw new InteractiveSandboxException(
+                        "Runner did not emit first frame within " + firstFrameTimeout.toSeconds() + "s");
             }
 
             InteractiveSandboxRegistry.RegistrationOutcome outcome = registry.tryRegister(sandbox);
@@ -223,8 +222,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
                     log.debug("Concurrent attach lost the race; returning existing sandbox");
                     DockerAttachedSandboxAdapter winner = registry.findLive(spec.userId(), spec.workspaceId());
                     if (winner != null) {
-                        // Loser leaks container/network/process/pump/writer VTs unless we tear it down.
-                        // Fire-and-forget: don't block the caller for grace+5s.
+                        // Close the losing sandbox without delaying the winner's attachment.
                         sandbox.terminate(EvictionReason.ERROR);
                         if (!winner.hasRuntimeKey(runtimeKey)) {
                             throw new InteractiveSandboxException(
@@ -369,7 +367,8 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
     private static final int PREP_DRAIN_CAP_BYTES = 16 * 1024;
 
     private void runExec(String containerId, String user, String script, String description) {
-        ProcessBuilder pb = new ProcessBuilder(dockerCli, "exec", "-u", user, containerId, "sh", "-c", script);
+        ProcessBuilder pb =
+                dockerCli.configure(new ProcessBuilder("exec", "-u", user, containerId, "sh", "-c", script));
         pb.redirectErrorStream(true);
         Process p;
         try {
@@ -378,8 +377,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             metrics.attachFailureOther.increment();
             throw new InteractiveSandboxException(description + " failed: " + e.getMessage(), e);
         }
-        // Bounded drain — a misbehaving exec emitting a megabyte of stdout would otherwise OOM
-        // the app-server. We only need a short preview for the error message.
+        // Retain only a bounded diagnostic preview while draining the subprocess output.
         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(PREP_DRAIN_CAP_BYTES);
         Thread drainer = Thread.ofVirtual().start(() -> {
             try (var in = p.getInputStream()) {

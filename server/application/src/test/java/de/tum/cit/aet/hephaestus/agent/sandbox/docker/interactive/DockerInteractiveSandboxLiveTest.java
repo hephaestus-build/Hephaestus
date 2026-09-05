@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.ContainerSecurityPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerClientOperations;
+import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxContainerManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxLabels;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxNetworkManager;
@@ -54,12 +55,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/** Live integration tests — boots real Docker. Run with {@code -Pgroups=live} or {@code live-tests}. */
+/** Runs interactive sessions against a real Docker daemon. */
 @LiveDockerTest
 @Tag("live")
 class DockerInteractiveSandboxLiveTest {
@@ -70,8 +73,7 @@ class DockerInteractiveSandboxLiveTest {
         return value;
     }
 
-    /** The image under test. A release-channel tag would test some other release's image (ADR 0031);
-     * point this at a locally built agent image, or export the reference a deployment would use. */
+    // Use the image built from this checkout, not a release-channel tag (ADR 0031).
     private static final String AGENT_PI_IMAGE =
             System.getenv().getOrDefault("HEPHAESTUS_AGENT_IMAGE_REFERENCE", "ghcr.io/hephaestus-build/agent-pi:dev");
 
@@ -99,8 +101,9 @@ class DockerInteractiveSandboxLiveTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        SandboxProperties sandboxProperties = new SandboxProperties(
-                "unix:///var/run/docker.sock", false, null, 5, 10, 60, null, null, 209_715_200L, 500_000, null);
+        SandboxProperties sandboxProperties = new SandboxProperties(5, 10, 60, 209_715_200L, 500_000, null);
+        var dockerProperties =
+                new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "docker");
         // Tight TTL so idle eviction tests don't have to wait minutes.
         InteractiveSandboxProperties interactiveProperties = new InteractiveSandboxProperties(
                 /* idleTtlSeconds */ 2,
@@ -124,9 +127,9 @@ class DockerInteractiveSandboxLiveTest {
         dockerOps = new DockerClientOperations(dockerClient, dockerClient);
         dockerWaitExecutor = Executors.newCachedThreadPool();
         containerManager = new SandboxContainerManager(dockerOps, image -> {}, sandboxProperties, dockerWaitExecutor);
-        networkManager = new SandboxNetworkManager(dockerOps, sandboxProperties);
+        networkManager = new SandboxNetworkManager(dockerOps, dockerProperties);
         workspaceManager = new SandboxWorkspaceManager(dockerOps);
-        securityPolicy = new ContainerSecurityPolicy(sandboxProperties, null);
+        securityPolicy = new ContainerSecurityPolicy(dockerProperties, null);
         meterRegistry = new SimpleMeterRegistry();
         metrics = new InteractiveSandboxMetrics(meterRegistry);
         watchdog = new StdinWriteWatchdog();
@@ -143,7 +146,7 @@ class DockerInteractiveSandboxLiveTest {
                 metrics,
                 MAPPER,
                 dockerWaitExecutor,
-                "docker",
+                dockerProperties,
                 8080,
                 proxyCredentialRegistry);
 
@@ -541,18 +544,19 @@ class DockerInteractiveSandboxLiveTest {
     @Nested
     class AttachFailureModes {
 
-        @Test
-        void runnerCrashesBeforeFirstFrame() {
+        @ParameterizedTest
+        @CsvSource({"exit 1, 1.0, 0.0", "sleep 60, 0.0, 1.0"})
+        void shouldClassifyFirstFrameFailureWithoutDoubleCounting(
+                String script, double expectedFailures, double expectedTimeouts) {
             double timeoutBefore = metrics.attachFailureFirstFrameTimeout.count();
             double failedBefore = metrics.attachFailureFirstFrameFailed.count();
-            // sh -c 'exit 1' instead of the JSONL runner: pump sees EOF before any frame.
-            InteractiveSandboxSpec base = buildSpec("u_crash", "w_crash");
+            InteractiveSandboxSpec base = buildSpec("u_first_frame", "w_first_frame");
             InteractiveSandboxSpec brokenSpec = new InteractiveSandboxSpec(
                     base.sessionId(),
                     base.userId(),
                     base.workspaceId(),
                     base.image(),
-                    List.of("sh", "-c", "exit 1"),
+                    List.of("sh", "-c", script),
                     base.environment(),
                     base.networkPolicy(),
                     base.resourceLimits(),
@@ -561,11 +565,10 @@ class DockerInteractiveSandboxLiveTest {
                     base.volumeMounts());
             Assertions.assertThatThrownBy(() -> adapter.attach(brokenSpec))
                     .isInstanceOf(InteractiveSandboxException.class);
-            // Must distinguish runner-crash from flow-control timeout for dashboards.
             assertThat(metrics.attachFailureFirstFrameFailed.count() - failedBefore)
-                    .isEqualTo(1.0);
+                    .isEqualTo(expectedFailures);
             assertThat(metrics.attachFailureFirstFrameTimeout.count() - timeoutBefore)
-                    .isZero();
+                    .isEqualTo(expectedTimeouts);
         }
     }
 
