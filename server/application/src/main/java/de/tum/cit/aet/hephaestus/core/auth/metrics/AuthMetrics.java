@@ -180,4 +180,17 @@ public class AuthMetrics {
     public void recordAuditWriteFailed() {
         auditWriteFailed.increment();
     }
+
+    /**
+     * Count one instance-admin action refused for want of a recent sign-in. {@code action} is the audit
+     * event type, a fixed enum, so cardinality stays bounded. A steady low rate is the gate working as
+     * designed — administrators are prompted; only a spike on one action is worth looking at.
+     */
+    public void recordStepUpDenied(String action) {
+        Counter.builder(CoreMetrics.AUTH_STEP_UP_DENIED)
+                .description("Instance-admin actions refused for want of a recent sign-in, tagged by action.")
+                .tag("action", action)
+                .register(registry)
+                .increment();
+    }
 }

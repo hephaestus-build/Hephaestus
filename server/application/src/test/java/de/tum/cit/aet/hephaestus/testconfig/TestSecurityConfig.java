@@ -40,6 +40,12 @@ public class TestSecurityConfig {
      * - "mock-jwt-token-for-admin-user" -> admin user
      * - "mock-jwt-token-for-test-user" -> test user
      * - any other token -> defaults to testuser
+     *
+     * <p>Every mock session carries {@code auth_time = now}: a mock token stands for a browser that just
+     * completed the OAuth dance, so it satisfies the recent-sign-in gate the same way a real one would.
+     * The gate's negatives are proven against the real issuer and decoder in {@code StepUpGateIntegrationTest},
+     * and {@code RecentSignInByDefaultArchTest} is what fails when a new admin mutation forgets the gate —
+     * neither depends on this decoder.
      */
     @Bean
     @Primary
@@ -58,6 +64,7 @@ public class TestSecurityConfig {
                         .claim("jti", IMPERSONATION_JTI)
                         .claim("roles", Arrays.asList("app_admin"))
                         .claim("act", Map.of("sub", "2"))
+                        .claim("auth_time", Instant.now().getEpochSecond())
                         .issuedAt(Instant.now())
                         .expiresAt(Instant.now().plusSeconds(3600))
                         .build();
@@ -72,6 +79,7 @@ public class TestSecurityConfig {
                         .claim("iss", "https://test-issuer")
                         .claim("aud", "test-audience")
                         .claim("jti", NUMERIC_JTI)
+                        .claim("auth_time", Instant.now().getEpochSecond())
                         .issuedAt(Instant.now())
                         .expiresAt(Instant.now().plusSeconds(3600))
                         .build();
@@ -91,6 +99,7 @@ public class TestSecurityConfig {
                         .claim("iss", "https://test-issuer")
                         .claim("aud", "test-audience")
                         .claim("roles", Arrays.asList("mentor_access", "app_admin"))
+                        .claim("auth_time", Instant.now().getEpochSecond())
                         .issuedAt(Instant.now())
                         .expiresAt(Instant.now().plusSeconds(3600))
                         .build();
@@ -126,6 +135,8 @@ public class TestSecurityConfig {
             claims.put("preferred_username", username);
             claims.put("iss", "https://test-issuer");
             claims.put("aud", "test-audience");
+
+            claims.put("auth_time", Instant.now().getEpochSecond());
 
             // Flat `roles` claim — same shape the Hephaestus issuer emits (ADR 0017).
             if (roles.length > 0) {

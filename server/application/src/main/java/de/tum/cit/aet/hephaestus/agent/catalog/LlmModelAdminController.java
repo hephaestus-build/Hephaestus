@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -35,6 +36,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 @RestController
 @RequestMapping("/admin/llm")
 @Tag(name = "Admin LLM", description = "Instance-admin LLM connection and settings management")
+@RecentSignInExempt(reason = "curates the model catalog and its prices; the credentials live on the connection")
 @PreAuthorize("hasAuthority('app_admin')")
 @ConditionalOnServerRole
 @RequiredArgsConstructor

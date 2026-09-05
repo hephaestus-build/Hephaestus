@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.CreateSurveyDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackItemDTO;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/admin/product-feedback")
+@RecentSignInExempt(reason = "creates a survey; grants no access and stores no credential")
 @PreAuthorize("hasAuthority('app_admin')")
 @RequiredArgsConstructor
 public class FeedbackAdminController {

@@ -7,10 +7,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.CookieBearerTokenResolver;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.RevocationAwareJwtDecoder;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
+import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import jakarta.servlet.http.Cookie;
 import java.security.SecureRandom;
@@ -20,8 +19,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.web.servlet.view.RedirectView;
 
 /**
@@ -33,8 +30,7 @@ import org.springframework.web.servlet.view.RedirectView;
 class AuthBeginControllerLinkTest extends BaseUnitTest {
 
     private LoginProviderService loginProviderService;
-    private CookieBearerTokenResolver bearerTokenResolver;
-    private RevocationAwareJwtDecoder jwtDecoder;
+    private IdentityLinkAuthentication identityLinkAuthentication;
     private AuthIntentCookie authIntentCookie;
     private AuthBeginController controller;
 
@@ -43,8 +39,7 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
         loginProviderService = mock(LoginProviderService.class);
         when(loginProviderService.findEnabled(any()))
                 .thenReturn(Optional.of(providerRow("github", LoginProvider.ProviderType.GITHUB)));
-        bearerTokenResolver = mock(CookieBearerTokenResolver.class);
-        jwtDecoder = mock(RevocationAwareJwtDecoder.class);
+        identityLinkAuthentication = mock(IdentityLinkAuthentication.class);
         byte[] key = new byte[32];
         new SecureRandom().nextBytes(key);
         authIntentCookie = new AuthIntentCookie(key);
@@ -55,8 +50,7 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
         return new AuthBeginController(
                 loginProviderService,
                 authIntentCookie,
-                bearerTokenResolver,
-                jwtDecoder,
+                identityLinkAuthentication,
                 AuthPropertiesFixture.withApiBasePath(apiBasePath));
     }
 
@@ -67,14 +61,6 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
         provider.setBaseUrl("https://example.com");
         provider.setEnabled(true);
         return provider;
-    }
-
-    private static Jwt jwtForAccount(String sub) {
-        return Jwt.withTokenValue("t")
-                .header("alg", "ES256")
-                .subject(sub)
-                .claim("scope", "x")
-                .build();
     }
 
     private AuthIntentCookie.@Nullable Intent readIntent(MockHttpServletResponse res) {
@@ -89,8 +75,7 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
 
     @Test
     void link_withValidSession_stampsLinkingAccountId() {
-        when(bearerTokenResolver.resolve(any())).thenReturn("token");
-        when(jwtDecoder.decode("token")).thenReturn(jwtForAccount("42"));
+        when(identityLinkAuthentication.resolveAuthenticatedAccountId(any())).thenReturn(42L);
         MockHttpServletResponse res = new MockHttpServletResponse();
 
         RedirectView view = controller.begin("github", null, "/settings", "link", new MockHttpServletRequest(), res);
@@ -104,7 +89,7 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
 
     @Test
     void link_unauthenticated_rejectedWithNoIntentCookie() {
-        when(bearerTokenResolver.resolve(any())).thenReturn(null);
+        when(identityLinkAuthentication.resolveAuthenticatedAccountId(any())).thenReturn(null);
         MockHttpServletResponse res = new MockHttpServletResponse();
 
         RedirectView view = controller.begin("github", null, "/settings", "link", new MockHttpServletRequest(), res);
@@ -114,15 +99,16 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
     }
 
     @Test
-    void link_revokedToken_rejected() {
-        when(bearerTokenResolver.resolve(any())).thenReturn("token");
-        when(jwtDecoder.decode("token")).thenThrow(new JwtException("revoked"));
+    void link_withStaleSignIn_asksToConfirmAccessAndWritesNoIntent() {
+        when(identityLinkAuthentication.resolveAuthenticatedAccountId(any()))
+                .thenThrow(new StepUpRequiredException(java.time.Duration.ofMinutes(5)));
         MockHttpServletResponse res = new MockHttpServletResponse();
 
         RedirectView view = controller.begin("github", null, "/settings", "link", new MockHttpServletRequest(), res);
 
-        assertThat(view.getUrl()).isEqualTo("/auth/error?code=link_requires_auth");
-        assertThat(res.getCookie(AuthIntentCookie.COOKIE_NAME)).isNull();
+        assertThat(view.getUrl()).isEqualTo("/auth/error?code=step_up_required");
+        // No dance was started, so no intent may survive to be redeemed by a later callback.
+        assertThat(readIntent(res)).isNull();
     }
 
     @Test
@@ -147,7 +133,7 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
 
         assertThat(view.getUrl()).isEqualTo("/auth/error?code=link_requires_auth");
         assertThat(res.getCookie(AuthIntentCookie.COOKIE_NAME)).isNull();
-        verifyNoInteractions(jwtDecoder);
+        verifyNoInteractions(identityLinkAuthentication);
     }
 
     @Test
@@ -162,15 +148,14 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
 
         assertThat(view.getUrl()).isEqualTo("/auth/error?code=link_requires_auth");
         assertThat(res.getCookie(AuthIntentCookie.COOKIE_NAME)).isNull();
-        verifyNoInteractions(jwtDecoder);
+        verifyNoInteractions(identityLinkAuthentication);
     }
 
     @Test
     void outlineLinkMode_withValidSession_proceedsToInit() {
         when(loginProviderService.findEnabled("outline"))
                 .thenReturn(Optional.of(providerRow("outline", LoginProvider.ProviderType.OUTLINE)));
-        when(bearerTokenResolver.resolve(any())).thenReturn("token");
-        when(jwtDecoder.decode("token")).thenReturn(jwtForAccount("42"));
+        when(identityLinkAuthentication.resolveAuthenticatedAccountId(any())).thenReturn(42L);
         MockHttpServletResponse res = new MockHttpServletResponse();
 
         RedirectView view = controller.begin("outline", null, "/settings", "link", new MockHttpServletRequest(), res);
@@ -192,7 +177,7 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
         AuthIntentCookie.Intent intent = readIntent(res);
         org.junit.jupiter.api.Assertions.assertNotNull(intent);
         assertThat(intent.mode()).isEqualTo(AuthIntentCookie.Intent.Mode.LOGIN);
-        verifyNoInteractions(jwtDecoder);
+        verifyNoInteractions(identityLinkAuthentication);
     }
 
     @Test

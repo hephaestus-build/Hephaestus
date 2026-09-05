@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipal;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import jakarta.servlet.http.Cookie;
 import java.time.Clock;
@@ -59,6 +60,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
     private JwtPrincipalFactory principalFactory;
     private AuthIntentCookie authIntentCookie;
     private AuthEventWriter authEventWriter;
+    private IdentityLinkAuthentication identityLinkAuthentication;
     private HephaestusAuthSuccessHandler handler;
 
     @BeforeEach
@@ -68,6 +70,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
         principalFactory = mock(JwtPrincipalFactory.class);
         authIntentCookie = mock(AuthIntentCookie.class);
         authEventWriter = mock(AuthEventWriter.class);
+        identityLinkAuthentication = mock(IdentityLinkAuthentication.class);
         AuthProperties authProperties = mock(AuthProperties.class);
         lenient().when(authProperties.cookieName()).thenReturn(COOKIE_NAME);
         lenient().when(authProperties.sessionMaxLifetime()).thenReturn(Duration.ofHours(12));
@@ -80,6 +83,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
                 authIntentCookie,
                 authProperties,
                 new AuthEventLogger(authEventWriter),
+                identityLinkAuthentication,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 /* webappBaseUrl */ "");
     }
@@ -106,7 +110,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
         handler.onAuthenticationSuccess(githubRequest(), response, oauthToken("sub-1"));
 
-        verify(jwtIssuer, never()).issue(any(), any(), any(), any(), any());
+        verify(jwtIssuer, never()).issue(any(), any(), any());
         assertThat(response.getCookie(COOKIE_NAME)).isNull();
         assertThat(response.getRedirectedUrl()).isEqualTo("/auth/error?code=account_inactive");
         // A refused login must NOT be audited as a successful LOGIN.
@@ -120,7 +124,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
         when(authIntentCookie.read(any())).thenReturn(AuthIntentCookie.Intent.login(null, "/teams"));
         JwtPrincipal principal = mock(JwtPrincipal.class);
         when(principalFactory.forAccount(account)).thenReturn(principal);
-        when(jwtIssuer.issue(any(), any(), any(), any(), any()))
+        when(jwtIssuer.issue(any(), any(), any()))
                 .thenReturn(new HephaestusJwtIssuer.Token("minted-jwt", UUID.randomUUID(), NOW.plusSeconds(900)));
 
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -149,7 +153,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
         Account account = account(Account.Status.ACTIVE);
         when(provisioningService.resolveOrProvision(any(), any(), any(), any())).thenReturn(provision(account, true));
         when(principalFactory.forAccount(account)).thenReturn(mock(JwtPrincipal.class));
-        when(jwtIssuer.issue(any(), any(), any(), any(), any()))
+        when(jwtIssuer.issue(any(), any(), any()))
                 .thenReturn(new HephaestusJwtIssuer.Token("minted-jwt", UUID.randomUUID(), NOW.plusSeconds(900)));
 
         handler.onAuthenticationSuccess(githubRequest(), new MockHttpServletResponse(), oauthToken("sub-1"));
@@ -161,6 +165,59 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
     }
 
     @Test
+    void linkModeAttachesTheIdentityWithoutMintingAFreshSession() throws Exception {
+        Account account = account(Account.Status.ACTIVE);
+        when(provisioningService.resolveOrProvision(any(), any(), any(), any())).thenReturn(provision(account, true));
+        when(authIntentCookie.read(any())).thenReturn(AuthIntentCookie.Intent.link(42L, "/settings"));
+        when(identityLinkAuthentication.resolveAuthenticatedAccountId(any())).thenReturn(42L);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        handler.onAuthenticationSuccess(githubRequest(), response, oauthToken("sub-1"));
+
+        // Linking is not a sign-in: no new cookie, so neither the session ceiling nor auth_time moves.
+        verify(jwtIssuer, never()).issue(any(), any(), any());
+        assertThat(response.getCookie(COOKIE_NAME)).isNull();
+        assertThat(response.getRedirectedUrl()).isEqualTo("/settings");
+        ArgumentCaptor<AuthEventData> event = ArgumentCaptor.forClass(AuthEventData.class);
+        verify(authEventWriter).write(event.capture());
+        assertThat(event.getValue().type()).isEqualTo(AuthEvent.EventType.IDENTITY_LINKED);
+        assertThat(event.getValue().result()).isEqualTo(AuthEvent.Result.SUCCESS);
+    }
+
+    @Test
+    void linkModeIsRefusedWhenTheCallbackLandsOnADifferentAccount() throws Exception {
+        when(authIntentCookie.read(any())).thenReturn(AuthIntentCookie.Intent.link(42L, "/settings"));
+        when(identityLinkAuthentication.resolveAuthenticatedAccountId(any())).thenReturn(99L);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        handler.onAuthenticationSuccess(githubRequest(), response, oauthToken("sub-1"));
+
+        // The identity must never be attached to whichever session happens to hold the browser now.
+        verify(provisioningService, never()).resolveOrProvision(any(), any(), any(), any());
+        assertThat(response.getCookie(COOKIE_NAME)).isNull();
+        assertThat(response.getRedirectedUrl()).isEqualTo("/auth/error?code=link_requires_auth");
+        ArgumentCaptor<AuthEventData> event = ArgumentCaptor.forClass(AuthEventData.class);
+        verify(authEventWriter).write(event.capture());
+        assertThat(event.getValue().type()).isEqualTo(AuthEvent.EventType.IDENTITY_LINKED);
+        assertThat(event.getValue().result()).isEqualTo(AuthEvent.Result.FAILURE);
+        assertThat(event.getValue().failureReason()).isEqualTo("link_requires_auth");
+    }
+
+    @Test
+    void linkModeAsksForAFreshSignInWhenTheSessionIsStale() throws Exception {
+        when(authIntentCookie.read(any())).thenReturn(AuthIntentCookie.Intent.link(42L, "/settings"));
+        when(identityLinkAuthentication.resolveAuthenticatedAccountId(any()))
+                .thenThrow(new StepUpRequiredException(Duration.ofMinutes(5)));
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        handler.onAuthenticationSuccess(githubRequest(), response, oauthToken("sub-1"));
+
+        verify(provisioningService, never()).resolveOrProvision(any(), any(), any(), any());
+        assertThat(response.getCookie(COOKIE_NAME)).isNull();
+        assertThat(response.getRedirectedUrl()).isEqualTo("/auth/error?code=step_up_required");
+    }
+
+    @Test
     void identityAlreadyLinkedElsewhereRedirectsToAuthErrorWithoutCookie() throws Exception {
         when(provisioningService.resolveOrProvision(any(), any(), any(), any()))
                 .thenThrow(new AccountLinkConflictException("github", "5898705", 5L));
@@ -168,7 +225,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
         handler.onAuthenticationSuccess(githubRequest(), response, oauthToken("5898705"));
 
-        verify(jwtIssuer, never()).issue(any(), any(), any(), any(), any());
+        verify(jwtIssuer, never()).issue(any(), any(), any());
         assertThat(response.getCookie(COOKIE_NAME)).isNull();
         assertThat(response.getRedirectedUrl()).isEqualTo("/auth/error?code=identity_already_linked");
         verify(authEventWriter, never()).write(any());
@@ -182,7 +239,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
         handler.onAuthenticationSuccess(githubRequest(), response, oauthToken("U123"));
 
-        verify(jwtIssuer, never()).issue(any(), any(), any(), any(), any());
+        verify(jwtIssuer, never()).issue(any(), any(), any());
         assertThat(response.getCookie(COOKIE_NAME)).isNull();
         assertThat(response.getRedirectedUrl()).isEqualTo("/auth/error?code=link_requires_auth");
         verify(authEventWriter, never()).write(any());
@@ -199,7 +256,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
         handler.onAuthenticationSuccess(githubRequest(), response, nonOauth);
 
         verify(provisioningService, never()).resolveOrProvision(any(), any(), any(), any());
-        verify(jwtIssuer, never()).issue(any(), any(), any(), any(), any());
+        verify(jwtIssuer, never()).issue(any(), any(), any());
         assertThat(response.getCookie(COOKIE_NAME)).isNull();
         assertThat(response.getRedirectedUrl()).isEqualTo("/auth/error?code=unexpected_auth_type");
     }
