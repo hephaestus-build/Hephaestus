@@ -1,11 +1,11 @@
 /**
- * The commit whose published images a pull request aliases for every component its diff left alone.
+ * The commit whose published images a run aliases for every component its diff left alone.
  *
- * A pull request based on the default branch aliases from its own base, whose images that branch's
- * own run published. A layer of a stacked pull request is based on another branch's head, which
- * published nothing and belongs to no merged pull request, so the chain of bases is walked until a
- * commit the default branch contains. A run that reaches none has nothing to alias and builds every
- * image itself.
+ * A run based on the default branch aliases from its own base, whose images that branch's own run
+ * published. A layer of a stacked pull request is based on another branch's head, which published
+ * nothing and belongs to no merged pull request, so the chain of bases is walked until a commit the
+ * default branch contains. A run that reaches none has nothing to alias and builds every image
+ * itself.
  */
 import { appendFile } from "node:fs/promises";
 

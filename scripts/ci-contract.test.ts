@@ -678,6 +678,49 @@ void describe("CI contract", () => {
 		assert.match(reporter, /core\.setFailed/);
 	});
 
+	void test("a merge group selects its jobs by the paths its own diff touches", async () => {
+		const source = await readFile(".github/workflows/cicd.yml", "utf8");
+		const workflow = parseDocument(source);
+
+		// `!= 'pull_request'` reads every other event as "run everything", so it opts each new event
+		// into the whole workflow. The ban cannot cover `detect-changes`, which holds the two outputs
+		// that do test the event, so the decision every filtered job reads is pinned on its own.
+		assert.doesNotMatch(
+			source.replace(job(source, "detect-changes"), ""),
+			/github\.event_name != 'pull_request'/,
+		);
+		assert.match(
+			String(workflow.getIn(["jobs", "detect-changes", "outputs", "unfiltered"])),
+			/^\$\{\{ github\.event_name == 'push' \|\| github\.event_name == 'workflow_dispatch' }}$/,
+		);
+
+		// Asserted on the condition, not the whole job: a `with:` input the condition never reads
+		// must not satisfy it.
+		for (const name of [
+			"workflow-lint",
+			"zizmor",
+			"Quality",
+			"Build",
+			"Security",
+			"Test",
+			"Docker",
+		])
+			assert.match(
+				String(workflow.getIn(["jobs", name, "if"])),
+				/needs\.detect-changes\.outputs\.unfiltered == 'true'/,
+				`${name} does not read the path-selection decision`,
+			);
+
+		assert.doesNotMatch(
+			String(workflow.getIn(["jobs", "detect-changes", "outputs", "all-images"])),
+			/event_name/,
+		);
+		// The caller owns which commit a run is a diff from; `ci-build.yml` derives nothing from
+		// the event.
+		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
+		assert.doesNotMatch(build, /github\.event\.pull_request\.base\.sha/);
+	});
+
 	void test("decides an image's architectures once, for every image the run builds", async () => {
 		const source = await readFile(".github/workflows/cicd.yml", "utf8");
 		const caller = job(source, "Docker");
@@ -785,10 +828,14 @@ void describe("CI contract", () => {
 		const orchestrator = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		// One decision, taken where the run can see whose repository the head branch is on. A fork's
 		// GITHUB_TOKEN is read-only, so a publishing build there fails on its first write.
+		assert.match(
+			String(orchestrator.getIn(["jobs", "detect-changes", "outputs", "publishable"])),
+			/^\$\{\{ github\.event_name != 'pull_request' \|\| github\.event\.pull_request\.head\.repo\.full_name == github\.repository }}$/,
+		);
 		for (const caller of ["Build", "Docker"])
 			assert.match(
 				String(orchestrator.getIn(["jobs", caller, "with", "publish"])),
-				/^\$\{\{ github\.event_name != 'pull_request' \|\| github\.event\.pull_request\.head\.repo\.full_name == github\.repository }}$/,
+				/^\$\{\{ needs\.detect-changes\.outputs\.publishable == 'true' }}$/,
 			);
 
 		const reusable = parseDocument(
@@ -907,8 +954,11 @@ void describe("CI contract", () => {
 		const orchestrator = parseDocument(source);
 		const condition = String(orchestrator.getIn(["jobs", "Supported-host-smoke", "if"]));
 		// A fork publishes no images, so there is nothing for this job to pull.
-		assert.match(condition, /github\.event_name == 'pull_request'/);
-		assert.match(condition, /head\.repo\.full_name == github\.repository/);
+		assert.match(condition, /needs\.detect-changes\.outputs\.previews == 'true'/);
+		assert.match(
+			String(orchestrator.getIn(["jobs", "detect-changes", "outputs", "previews"])),
+			/github\.event_name == 'pull_request' && github\.event\.pull_request\.head\.repo\.full_name == github\.repository/,
+		);
 		assert.match(condition, /needs\.detect-changes\.outputs\.supported-host-smoke == 'true'/);
 
 		const smoke = job(source, "Supported-host-smoke");
@@ -1360,24 +1410,39 @@ void describe("CI contract", () => {
 		// wrote this head and has published nothing yet when the alias runs. So the version branch
 		// publishes every release image itself, under every event, exactly as its dispatch run did.
 		const complete = String(workflow.getIn([...detection, "outputs", "all-images"]));
-		const completeShape =
-			/^\$\{\{ github\.event_name != '(\w+)' \|\| steps\.version_branch\.outputs\.version-branch == 'true' \|\| steps\.alias_base\.outputs\.commit == '' }}$/.exec(
-				complete,
-			);
-		assert.ok(completeShape, `this test cannot evaluate \`${complete}\``);
+		assert.match(
+			complete,
+			/^\$\{\{ steps\.alias_base\.outputs\.commit == '' \|\| steps\.version_branch\.outputs\.version-branch == 'true' }}$/,
+		);
+		// A run builds every image when it resolved no commit to alias from, so which events can
+		// resolve one is read from the resolver's own condition rather than restated here.
+		const steps = workflow.getIn([...detection, "steps"]);
+		assert.ok(isSeq(steps));
+		const resolver = steps.items.find(
+			(candidate) => isMap(candidate) && candidate.get("id") === "alias_base",
+		);
+		assert.ok(isMap(resolver));
+		// The resolver calls the API, and a merge group's failed run drops its pull requests from the
+		// queue without failing a check on them. An unresolved base is already the safe answer.
+		assert.equal(resolver.get("continue-on-error"), true);
+		const resolves = String(resolver.get("if"));
+		const aliasing = [...resolves.matchAll(/github\.event_name == '(\w+)'/g)].map((match) =>
+			String(match[1]),
+		);
+		assert.equal(aliasing.length, 2, `this test cannot evaluate \`${resolves}\``);
 		const buildsEveryImage = (
 			event: string,
 			onVersionBranch: boolean,
 			nothingToAlias = false,
-		): boolean => event !== completeShape[1] || onVersionBranch || nothingToAlias;
+		): boolean => !aliasing.includes(event) || nothingToAlias || onVersionBranch;
 		for (const event of events)
 			assert.ok(
 				buildsEveryImage(event, true),
 				`a ${event} run on the Version PR's branch must publish every release image itself`,
 			);
 		assert.deepEqual(
-			events.map((event) => buildsEveryImage(event, false)),
-			[false, true, true, true],
+			Object.fromEntries(events.map((event) => [event, buildsEveryImage(event, false)])),
+			{ pull_request: false, merge_group: false, workflow_dispatch: true, push: true },
 		);
 		// The other run with nothing to alias: a pull request whose chain of bases reaches no
 		// published commit builds the whole set rather than failing to alias one.

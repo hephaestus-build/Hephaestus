@@ -82,6 +82,22 @@ workflows run again for the merge group, which includes the current base and que
 the pull request. Each required context is bound to the GitHub Actions integration rather than
 accepting a same-named external status.
 
+A merge group is a diff, so it selects its jobs from the paths it touches —
+[Path filters](#path-filters). It has no preview, so `Build` and `Docker` are filtered there too.
+`any-code` is the union of the source filters and reaches `docs/**` through the tooling filter, so a
+documentation-only group still starts `Quality`, `Security`, `Build` and `Docker` even where the
+jobs inside them skip. To find out why a leg did not run, read the `CI Status Gate` summary, which
+lists every leg including the skipped ones, and the `Detect changes` log, which records the filters
+the diff matched.
+
+A required context may be filtered because a ruleset accepts a skipped check as satisfied; the check
+still reports `skipped`, not `success`. A workflow that never triggers reports nothing at all, and a
+required context left pending blocks the queue for good — `merge_group` supports no `paths:` filter
+in any case, so the filtering lives in each job's `if`. The queue builds up to
+`max_entries_to_build: 3` groups speculatively, a repository-ruleset field rather than a file here,
+and each group costs a whole `CI/CD` run, so a job added to `cicd.yml` is paid for once per group in
+flight.
+
 A failed merge group drops its pull requests from the queue without failing any check on them, so
 CI updates a comment on the pull request named by the merge group's head ref with the run link. It
 does not requeue automatically: the result does not say whether the failure was transient or
@@ -378,8 +394,11 @@ action directly rather than checking out the repository only to reach a wrapper.
 
 ## Path filters
 
-`detect-changes` in `cicd.yml` selects legs from the changed paths. Same-repository pull requests run
-`Build` and `Docker` regardless of paths, because previews need every image at the head SHA.
+`detect-changes` in `cicd.yml` selects legs from the changed paths on the two events that are a
+diff: a pull request against its base, and a merge group against `merge_group.base_sha..head_sha`. A
+push to `main` and a dispatch validate a whole commit and run every leg, which `detect-changes`
+publishes as `unfiltered`. Same-repository pull requests also run `Build` and `Docker` regardless of
+paths, because previews need every image at the head SHA; no other event has a preview.
 
 | Selects | Paths |
 | --- | --- |
@@ -460,9 +479,10 @@ reaches no such commit builds every image itself. `detect-changes` resolves that
   so the matrix value never appears in a `run:` script. `fail-fast: false` lets both shards report,
   and `CI Status Gate` requires the aggregate `Test` result. Locally the tier runs whole.
 - Pull requests and merge groups build `linux/amd64`; pushes to `main`, and every run on the Version
-  PR's branch, build both architectures. A pull request also builds only the images its diff touched
-  and aliases the rest, while the Version PR's branch builds all of them. `detect-changes` decides
-  both once, as `single-arch` and `all-images`, and hands them to every image build in the run.
+  PR's branch, build both architectures. A pull request and a merge group each also build only the
+  images their own diff touched and alias the rest, while the Version PR's branch builds all of
+  them. `detect-changes` decides both once, as `single-arch` and `all-images`, and hands them to
+  every image build in the run.
 - The `Quality` matrix uses `fail-fast: false`; the image matrix in `reusable-docker-build.yml` uses
   `fail-fast: true`.
 - Pull-request runs cancel superseded runs; `release.yml` never cancels.
