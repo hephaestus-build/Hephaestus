@@ -188,6 +188,7 @@ hephaestus:
         issuer: ${HEPHAESTUS_AUTH_ISSUER:http://localhost:8080}
         audience: ${HEPHAESTUS_AUTH_AUDIENCE:hephaestus-spa}
         access-ttl: ${HEPHAESTUS_AUTH_ACCESS_TTL:15m}
+        step-up-max-age: ${HEPHAESTUS_AUTH_STEP_UP_MAX_AGE:5m}
         cookie-name: ${HEPHAESTUS_AUTH_COOKIE_NAME:__Host-HEPHAESTUS_AT}
         state-cookie-key: ${HEPHAESTUS_AUTH_STATE_COOKIE_KEY:}
         # Instance login providers seeded into the login_provider store on first boot, keyed by a stable

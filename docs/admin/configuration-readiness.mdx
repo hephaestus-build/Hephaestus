@@ -96,6 +96,19 @@ GitHub or GitLab sign-in provider in the database-backed provider catalogue. Env
 entries are seeds, not the readiness authority. Slack and Outline are link-only providers and do not
 satisfy sign-in readiness. Worker and webhook roles do not load login providers.
 
+### Recent sign-in for sensitive actions
+
+Changing an account's role, forcing an account out of all its sessions, starting an impersonation,
+changing a login provider, registering an LLM connection, and linking an identity all require a
+sign-in from the last few minutes. `HEPHAESTUS_AUTH_STEP_UP_MAX_AGE` sets that window; it defaults to
+`5m` and must be a positive duration shorter than the absolute session lifetime, or the gate can
+never bind.
+
+Confirming access uses a provider the account is already linked to. This is a local confirmation, not
+multi-factor authentication: an identity provider that still holds a session may complete it without
+asking for anything, so enforce MFA at the provider. A refused action is not replayed once access is
+confirmed — review it and submit it again.
+
 ## LLM proxy
 
 Worker roles must leave `hephaestus.llm.egress.allow-loopback=false`. Provider credentials and model

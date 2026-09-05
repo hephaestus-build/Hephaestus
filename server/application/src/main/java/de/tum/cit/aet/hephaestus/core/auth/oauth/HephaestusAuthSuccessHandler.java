@@ -6,12 +6,15 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
+import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Clock;
+import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,6 +43,7 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
     private final AuthIntentCookie authIntentCookie;
     private final AuthProperties authProperties;
     private final AuthEventLogger authEventLogger;
+    private final IdentityLinkAuthentication identityLinkAuthentication;
     private final Clock clock;
 
     /**
@@ -56,6 +60,7 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
             AuthIntentCookie authIntentCookie,
             AuthProperties authProperties,
             AuthEventLogger authEventLogger,
+            IdentityLinkAuthentication identityLinkAuthentication,
             Clock clock,
             @Value("${hephaestus.webapp.url:}") String webappBaseUrl) {
         this.provisioningService = provisioningService;
@@ -64,6 +69,7 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
         this.authIntentCookie = authIntentCookie;
         this.authProperties = authProperties;
         this.authEventLogger = authEventLogger;
+        this.identityLinkAuthentication = identityLinkAuthentication;
         this.clock = clock;
         this.appBaseUrl = stripTrailingSlash(webappBaseUrl);
         setAlwaysUseDefaultTargetUrl(false);
@@ -99,6 +105,29 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
         AuthIntentCookie.Intent intent = authIntentCookie.read(request);
         authIntentCookie.clear(response);
 
+        // The IdP round-trip can outlive — or be replaced by — the session that authorized the linking,
+        // so the authority to attach an identity is re-checked here rather than trusted from the cookie
+        // that carried the intent out.
+        if (intent != null && intent.mode() == AuthIntentCookie.Intent.Mode.LINK) {
+            Long linkingAccountId;
+            try {
+                linkingAccountId = identityLinkAuthentication.resolveAuthenticatedAccountId(request);
+            } catch (StepUpRequiredException e) {
+                redirectToApp(request, response, "/auth/error?code=step_up_required");
+                return;
+            }
+            if (linkingAccountId == null || !linkingAccountId.equals(intent.linkingAccountId())) {
+                authEventLogger
+                        .event(AuthEvent.EventType.IDENTITY_LINKED, AuthEvent.Result.FAILURE)
+                        .account(intent.linkingAccountId())
+                        .actingAccount(linkingAccountId)
+                        .failureReason("link_requires_auth")
+                        .record();
+                redirectToApp(request, response, "/auth/error?code=link_requires_auth");
+                return;
+            }
+        }
+
         AccountProvisioningService.ProvisionResult provisioned;
         try {
             provisioned = provisioningService.resolveOrProvision(registrationId, subject, principal, intent);
@@ -127,17 +156,22 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
             return;
         }
 
-        HephaestusJwtIssuer.Token issued = jwtIssuer.issue(
-                principalFactory.forAccount(account),
-                /* impersonator */ null,
-                /* impersonationExpiresAt */ null,
-                // Absolute session ceiling, stamped once at login and carried through every refresh.
-                clock.instant().plus(authProperties.sessionMaxLifetime()),
-                request);
-        setAccessCookie(
-                response,
-                issued.value(),
-                issued.expiresAt().getEpochSecond() - clock.instant().getEpochSecond());
+        // Attaching an identity to a session that is already signed in is not a sign-in: minting a token
+        // here would reset both the absolute session ceiling and auth_time, so linking would become a way
+        // to renew the very freshness the step-up gate reads.
+        if (intent == null || intent.mode() != AuthIntentCookie.Intent.Mode.LINK) {
+            Instant now = clock.instant();
+            HephaestusJwtIssuer.Token issued = jwtIssuer.issue(
+                    principalFactory.forAccount(account),
+                    // Absolute session ceiling, stamped once at login and carried through every refresh,
+                    // alongside the auth_time this login establishes.
+                    TokenConstraints.session(now.plus(authProperties.sessionMaxLifetime()), now),
+                    request);
+            setAccessCookie(
+                    response,
+                    issued.value(),
+                    issued.expiresAt().getEpochSecond() - clock.instant().getEpochSecond());
+        }
 
         // Audit the completed authentication, symmetric with AuthSessionService's LOGOUT. IDENTITY_LINKED
         // only when a NEW identity was actually attached to an existing account (per the provisioning

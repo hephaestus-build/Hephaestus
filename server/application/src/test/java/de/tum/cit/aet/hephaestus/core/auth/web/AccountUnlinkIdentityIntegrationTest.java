@@ -9,10 +9,12 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -225,7 +227,9 @@ class AccountUnlinkIdentityIntegrationTest extends RealAuthIntegrationTest {
     }
 
     private String tokenFor(Account account) {
-        return jwtIssuer.issue(principalFactory.forAccount(account), null, null).value();
+        return jwtIssuer
+                .issue(principalFactory.forAccount(account), TokenConstraints.session(null, Instant.now()), null)
+                .value();
     }
 
     private static long persistedId(@Nullable Long id) {

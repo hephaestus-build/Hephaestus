@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth.web;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.auth.AccountService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -60,6 +61,7 @@ public class AccountAdminController {
 
     @PatchMapping("/{id}")
     @Operation(summary = "Update an account's app role", operationId = "adminUpdateUser")
+    @RequiresRecentSignIn
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "APP_ROLE_CHANGED")
     public ResponseEntity<AdminAccountViewDTO> update(
             @PathVariable Long id, @Valid @RequestBody UpdateAccountRequestDTO body) {
@@ -71,6 +73,7 @@ public class AccountAdminController {
     @Operation(
             summary = "Force sign-out: revoke all of an account's active sessions",
             operationId = "adminRevokeUserSessions")
+    @RequiresRecentSignIn
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "JWT_REVOKED")
     public ResponseEntity<RevokeSessionsResultDTO> revokeSessions(@PathVariable Long id) {
         int revoked = accountService.adminRevokeAllSessions(id, CurrentAccount.requireId());

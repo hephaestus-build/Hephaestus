@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -55,7 +56,7 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
     void userExposesAccessTokenExpiry() {
         Account account = accountRepository.save(new Account("Expiry Eddie"));
         String token = jwtIssuer
-                .issue(principalFactory.forAccount(account), null, null)
+                .issue(principalFactory.forAccount(account), TokenConstraints.session(null, null), null)
                 .value();
 
         webTestClient
@@ -74,7 +75,7 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
     void refreshRotatesTheSessionAndKeepsAppRequestsWorkingAcrossManyCycles() {
         Account account = accountRepository.save(new Account("Rolling Rosa"));
         String current = jwtIssuer
-                .issue(principalFactory.forAccount(account), null, null)
+                .issue(principalFactory.forAccount(account), TokenConstraints.session(null, null), null)
                 .value();
         String csrf = fetchCsrfToken();
 
@@ -102,7 +103,10 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
         // A 2-minute absolute session ceiling — well under the 15-min access TTL, so it binds.
         long ceiling = java.time.Instant.now().getEpochSecond() + 120;
         String token = jwtIssuer
-                .issue(principalFactory.forAccount(account), null, null, java.time.Instant.ofEpochSecond(ceiling), null)
+                .issue(
+                        principalFactory.forAccount(account),
+                        TokenConstraints.session(java.time.Instant.ofEpochSecond(ceiling), null),
+                        null)
                 .value();
 
         // The access expiry is capped at the session ceiling, NOT now + accessTtl (15 min).

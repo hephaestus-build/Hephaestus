@@ -40,6 +40,13 @@ const ERROR_COPY: Record<string, { title: string; description: string }> = {
 		description:
 			"Open Hephaestus, sign in with GitHub or GitLab, then connect Slack or Outline from Settings.",
 	},
+	step_up_required: {
+		// The session is valid and the account is right; only its age is the problem, so this must not
+		// read as a rejected identity.
+		title: "Confirm access before linking that account",
+		description:
+			"Linking an identity needs a recent sign-in. Sign in again with an identity already linked to your account, then link from Settings.",
+	},
 	unknown_provider: {
 		title: "Provider is not configured",
 		description:

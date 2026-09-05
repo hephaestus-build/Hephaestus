@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.settings;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -34,6 +35,8 @@ import org.springframework.web.bind.annotation.RestController;
 @WorkspaceAgnostic("Instance-wide operator settings — deliberately cross-tenant, app_admin only")
 @RequestMapping("/admin/settings")
 @Tag(name = "Instance Settings", description = "Instance-wide operator settings")
+@RecentSignInExempt(
+        reason = "silent mode is the instance emergency brake; a sign-in prompt would delay stopping delivery")
 @PreAuthorize("hasAuthority('app_admin')")
 public class InstanceSettingsAdminController {
 

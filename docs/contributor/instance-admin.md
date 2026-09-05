@@ -69,6 +69,46 @@ re-review is recorded without changing or superseding the last delivered one.
 OAuth/token lifecycle operations, webhook registration, and operator alerts remain available while
 Silent Mode is engaged.
 
+## Recent sign-in gate
+
+An instance-admin action that changes who can reach what — an app-role change, force sign-out,
+beginning an impersonation, any login-provider mutation, registering or removing an LLM connection —
+runs only for a caller whose last completed sign-in is younger than
+`hephaestus.auth.step-up-max-age` (`HEPHAESTUS_AUTH_STEP_UP_MAX_AGE`, default 5m). Attaching a new
+identity to an account is gated the same way, for every user, because a new link is a permanent
+second way in.
+
+The sign-in time travels as the standard `auth_time` claim, stamped once by the login that completed
+the OAuth dance and copied verbatim by every rotation, so the silent keep-alive can never make a
+session look freshly signed in. `SecurityConfig` turns it into Spring Security's
+`FactorGrantedAuthority` for the authorization-code factor, and
+[`AllRequiredFactorsAuthorizationManager`](https://docs.spring.io/spring-security/reference/servlet/authentication/mfa.html)
+compares it against the window. That comparison treats anything not yet expired as valid, so a
+session stamped by a pod whose clock leads the enforcing pod's is still fresh — a local clock skew
+must never tell an administrator who just signed in to sign in again.
+
+Declaring the requirement is `@RequiresRecentSignIn` on the handler; declining it is
+`@RecentSignInExempt(reason = …)` on the handler or its controller. `RecentSignInByDefaultArchTest`
+fails the build when an instance-admin mutation carries neither, so a new administrative action
+cannot ship without a recorded decision — the same shape `AuditByDefaultArchTest` gives the audit
+trail. The refusal is recorded on the `auth_event` type the handler already declares for `@Audited`,
+as a `FAILURE` naming the account whose session was refused, and counted as
+`auth.step_up.denied{action}`.
+
+### What it does and does not stop
+
+It bounds a **hijacked admin session**: a stolen cookie is only dangerous for the length of the
+window, and every attempt it makes is on the trail. It does not stop an attacker who can drive the
+browser (XSS, a compromised machine, a session held open alongside the operator's) — they can
+complete the confirmation too. It is **not a second factor**: Hephaestus holds no local credential,
+so an existing GitHub or GitLab session may satisfy it without any challenge, and MFA stays the
+identity provider's responsibility (ADR 0017). It does not stop a malicious administrator, who is
+authorised for the action; that is what the audit trail is for.
+
+A refused action is never replayed after the confirmation. The SPA reopens the action so the
+operator reviews it and submits it again — a queued privileged write is exactly what an attacker
+would want the confirmation to unlock.
+
 ## Impersonation time-box
 
 `begin` stamps an absolute ceiling `imp_exp` (`hephaestus.auth.impersonation-max-lifetime`, default
@@ -109,9 +149,6 @@ the flag existed all read `false`.
 
 ## Deferred / follow-up
 
-- **Step-up re-auth gate** for impersonate-begin + role-change. Hephaestus owns no first factor for
-  GitHub (plain OAuth2, no `prompt=login`), so a local fresh-re-auth gate is a deliberate-second-step
-  / audit control, not a true second factor. Deferred to a focused PR.
 - **`APP_AUDITOR`** read-only tier: not built. A single-operator instance has no second audience for
   it, and the enum + authority design does not stand in the way of adding one.
 LLM governance is not on this list — it is built. An instance admin registers connections and models

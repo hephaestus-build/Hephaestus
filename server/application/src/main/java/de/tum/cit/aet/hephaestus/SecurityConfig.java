@@ -11,12 +11,14 @@ import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
 import de.tum.cit.aet.hephaestus.feature.FeatureFlag;
 import de.tum.cit.aet.hephaestus.observability.ReplicaIdentityFilter;
 import de.tum.cit.aet.hephaestus.observability.RequestCorrelationFilter;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -32,6 +34,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.FactorGrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -91,12 +94,32 @@ public class SecurityConfig {
             // Flat `roles` claim on the Hephaestus-issued JWT (ADR 0017). The role strings
             // ("admin", "mentor_access", …) map 1:1 to granted authorities consumed by @PreAuthorize.
             final var roles = Optional.ofNullable((List<String>) claims.get("roles"));
-            return roles.map(List::stream)
+            Stream<GrantedAuthority> granted = roles.map(List::stream)
                     .orElse(Stream.empty())
                     .map(SimpleGrantedAuthority::new)
-                    .map(GrantedAuthority.class::cast)
+                    .map(GrantedAuthority.class::cast);
+            return Stream.concat(granted, signInFactor(claims.get("auth_time")).stream())
                     .toList();
         };
+    }
+
+    /**
+     * The session's {@code auth_time} as Spring Security's authorization-code factor, so a freshness
+     * requirement can be declared with the framework's own {@code requireFactor(…).validDuration(…)}
+     * rather than compared by hand. GitHub and GitLab authorization-code logins are the only factor this
+     * instance has; a token minted without {@code auth_time} carries no factor and is treated as stale.
+     */
+    private static Optional<GrantedAuthority> signInFactor(@Nullable Object authTime) {
+        Instant issuedAt =
+                switch (authTime) {
+                    case Instant instant -> instant;
+                    case Number epochSeconds -> Instant.ofEpochSecond(epochSeconds.longValue());
+                    case null, default -> null;
+                };
+        return Optional.ofNullable(issuedAt)
+                .map(at -> FactorGrantedAuthority.withAuthority(FactorGrantedAuthority.AUTHORIZATION_CODE_AUTHORITY)
+                        .issuedAt(at)
+                        .build());
     }
 
     @Bean

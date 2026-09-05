@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.time.Instant;
 import org.jspecify.annotations.Nullable;
@@ -135,7 +136,8 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
 
     private IssuedAccount issueRealTokenForNewAccount(String displayName) {
         Account account = accountRepository.save(new Account(displayName));
-        HephaestusJwtIssuer.Token token = jwtIssuer.issue(principalFactory.forAccount(account), null, null);
+        HephaestusJwtIssuer.Token token = jwtIssuer.issue(
+                principalFactory.forAccount(account), TokenConstraints.session(null, Instant.now()), null);
         return new IssuedAccount(token.value(), persistedId(account.getId()));
     }
 
