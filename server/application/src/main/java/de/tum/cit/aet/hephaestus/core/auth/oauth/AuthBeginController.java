@@ -1,10 +1,9 @@
 package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.CookieBearerTokenResolver;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.RevocationAwareJwtDecoder;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
+import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,9 +16,6 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -44,8 +40,7 @@ public class AuthBeginController {
 
     private final LoginProviderService loginProviderService;
     private final AuthIntentCookie authIntentCookie;
-    private final CookieBearerTokenResolver bearerTokenResolver;
-    private final JwtDecoder jwtDecoder;
+    private final IdentityLinkAuthentication identityLinkAuthentication;
 
     /** Proxy-stripped API prefix re-added to the init redirect — see {@code AuthProperties#apiBasePath}. */
     private final String apiBasePath;
@@ -53,13 +48,11 @@ public class AuthBeginController {
     public AuthBeginController(
             LoginProviderService loginProviderService,
             AuthIntentCookie authIntentCookie,
-            CookieBearerTokenResolver bearerTokenResolver,
-            RevocationAwareJwtDecoder jwtDecoder,
+            IdentityLinkAuthentication identityLinkAuthentication,
             AuthProperties authProperties) {
         this.loginProviderService = loginProviderService;
         this.authIntentCookie = authIntentCookie;
-        this.bearerTokenResolver = bearerTokenResolver;
-        this.jwtDecoder = jwtDecoder;
+        this.identityLinkAuthentication = identityLinkAuthentication;
         this.apiBasePath = authProperties.apiBasePath();
     }
 
@@ -94,11 +87,17 @@ public class AuthBeginController {
         if (linkMode) {
             // Link mode MUST be initiated by an already-authenticated user (secure account linking:
             // never auto-link to an unauthenticated context — that is the pre-account-takeover bug).
-            // The login chain is stateless and permitAll, so no SecurityContext exists here; we validate
-            // the access cookie ourselves with the SAME primitives the resource-server chain uses
-            // (CookieBearerTokenResolver -> RevocationAwareJwtDecoder), then bind sub = accountId so
-            // AccountProvisioningService attaches the new identity to THIS account.
-            Long currentAccountId = resolveAuthenticatedAccountId(request);
+            // The resolved sub is bound into the sealed intent so AccountProvisioningService attaches
+            // the new identity to THIS account.
+            Long currentAccountId;
+            try {
+                currentAccountId = identityLinkAuthentication.resolveAuthenticatedAccountId(request);
+            } catch (StepUpRequiredException e) {
+                // The dance has not started yet, so there is nothing to resume: send the browser to the
+                // SPA's confirmation copy instead of an OAuth redirect it would have to unwind.
+                authIntentCookie.clear(response);
+                return new RedirectView("/auth/error?code=" + StepUpRequiredException.CODE, false);
+            }
             if (currentAccountId == null) {
                 log.warn("auth.begin: link mode rejected — no valid session");
                 return new RedirectView("/auth/error?code=link_requires_auth", false);
@@ -114,25 +113,5 @@ public class AuthBeginController {
         // not the SPA. (The /auth/error targets above are SPA routes at the origin root, so they keep none.)
         String urlEncodedRegistration = URLEncoder.encode(registrationId, StandardCharsets.UTF_8);
         return new RedirectView(apiBasePath + OAUTH_INIT_PATH + urlEncodedRegistration, false);
-    }
-
-    /**
-     * The current account id from the access cookie, validated through the same decoder the
-     * resource-server chain uses (signature + exp/iss/aud + revocation). Returns {@code null} when
-     * there is no cookie/header token or the token is invalid/revoked — link mode then fails closed.
-     */
-    @Nullable
-    private Long resolveAuthenticatedAccountId(HttpServletRequest request) {
-        String token = bearerTokenResolver.resolve(request);
-        if (token == null || token.isBlank()) {
-            return null;
-        }
-        try {
-            Jwt jwt = jwtDecoder.decode(token);
-            return Long.parseLong(jwt.getSubject());
-        } catch (JwtException | NumberFormatException ex) {
-            log.warn("auth.begin: link-mode token rejected: {}", ex.getMessage());
-            return null;
-        }
     }
 }

@@ -16,6 +16,7 @@ import type { AdminAccountView } from "@/api/types.gen";
 import { AdminUsersTable } from "@/components/admin/users/AdminUsersTable";
 import { ChangeRoleDialog } from "@/components/admin/users/ChangeRoleDialog";
 import { ImpersonateDialog } from "@/components/admin/users/ImpersonateDialog";
+import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { PageHeader } from "@/components/core/PageHeader";
 import { PageLayout } from "@/components/core/PageLayout";
 import {
@@ -30,10 +31,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { loadedPages } from "@/integrations/tanstack-query/spring-page";
 import { instanceAdminHead } from "@/lib/page-title";
-import { problemDetailOf } from "@/lib/problem-detail";
+import { problemDetailOf, type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
 
 const PAGE_SIZE = 25;
 
@@ -89,6 +91,24 @@ function AdminUsersPage() {
 			queryKey: adminListUsersQueryKey({ query: { size: PAGE_SIZE } }),
 		});
 
+	const [challenge, setChallenge] = useState<StepUpChallenge | undefined>(undefined);
+	const confirmAccess = useConfirmAccess(challenge !== undefined);
+
+	/**
+	 * A refusal that asks for a fresh sign-in replaces the dialog the action was started from, so the
+	 * ask never lands on top of a second modal focus trap. It reports `true` when it took the error,
+	 * leaving the caller to handle the refusals an operator can actually read.
+	 */
+	const openConfirmAccess = (error: unknown): boolean => {
+		const stepUp = stepUpChallengeOf(error);
+		if (!stepUp) return false;
+		setRoleTarget(null);
+		setImpersonateTarget(null);
+		setSignOutTarget(null);
+		setChallenge(stepUp);
+		return true;
+	};
+
 	const updateRole = useMutation({
 		...adminUpdateUserMutation(),
 		onSuccess: async (_data, variables) => {
@@ -96,10 +116,12 @@ function AdminUsersPage() {
 			toast.success(`Role updated to ${variables.body.appRole}.`);
 			setRoleTarget(null);
 		},
+		onError: openConfirmAccess,
 	});
 
 	const impersonate = useMutation({
 		...impersonateMutation(),
+		onError: openConfirmAccess,
 	});
 
 	const forceSignOut = useMutation({
@@ -114,6 +136,7 @@ function AdminUsersPage() {
 			setSignOutTarget(null);
 		},
 		onError: (error) => {
+			if (openConfirmAccess(error)) return;
 			toast.error(problemDetailOf(error, "Couldn't sign the user out."));
 			setSignOutTarget(null);
 		},
@@ -225,6 +248,19 @@ function AdminUsersPage() {
 					}
 				}}
 				onConfirm={handleConfirmImpersonate}
+			/>
+
+			<ConfirmAccessDialog
+				open={challenge !== undefined}
+				onOpenChange={(open) => {
+					if (!open) setChallenge(undefined);
+				}}
+				maxAgeSeconds={challenge?.maxAgeSeconds}
+				providers={confirmAccess.providers}
+				loading={confirmAccess.loading}
+				error={confirmAccess.error}
+				onRetry={confirmAccess.retry}
+				onSignIn={confirmAccess.signIn}
 			/>
 
 			<AlertDialog

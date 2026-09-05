@@ -151,4 +151,39 @@ describe("instance AI models route", () => {
 		releaseSlowSharing?.();
 		await waitFor(() => expect(sharingCalls).toBe(1));
 	});
+
+	it("asks for a fresh sign-in instead of reporting a refused connection as a failure", async () => {
+		mockPage();
+		server.use(
+			http.post("*/admin/llm/connections", () =>
+				HttpResponse.json(
+					{ status: 403, code: "step_up_required", maxAgeSeconds: 300 },
+					{ status: 403 },
+				),
+			),
+			// The instance also offers GitHub, but this account has only ever signed in with GitLab.
+			http.get("*/user/identities", () =>
+				HttpResponse.json([{ id: 2, providerType: "GITLAB", username: "ada" }]),
+			),
+		);
+
+		await renderModelsRoute();
+
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Add connection" }, ROUTE_RENDER_WAIT),
+		);
+		const form = await screen.findByRole("dialog", { name: "Add connection" });
+		fireEvent.change(within(form).getByLabelText("Display name"), {
+			target: { value: "Production OpenAI" },
+		});
+		fireEvent.click(within(form).getByRole("button", { name: "Save inactive connection" }));
+
+		const ask = await screen.findByRole("dialog", { name: "Confirm access" });
+		expect(ask.textContent).toContain("sign-in from the last 5 minutes");
+		expect(screen.getByRole("button", { name: "Continue with GitLab" })).not.toBeNull();
+		// Signing in with GitHub here would resolve a different account and end this session.
+		expect(screen.queryByRole("button", { name: "Continue with GitHub" })).toBeNull();
+		// The ask replaces the form it came from rather than stacking on top of it.
+		expect(screen.queryByRole("dialog", { name: "Add connection" })).toBeNull();
+	});
 });

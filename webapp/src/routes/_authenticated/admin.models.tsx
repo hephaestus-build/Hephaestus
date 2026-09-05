@@ -37,11 +37,13 @@ import { AdminLlmModelAccessDialog } from "@/components/admin/llm/AdminLlmModelA
 import { AdminLlmModelFormDialog } from "@/components/admin/llm/AdminLlmModelFormDialog";
 import { AdminLlmModelsSection } from "@/components/admin/llm/AdminLlmModelsSection";
 import { InstanceLlmSettingsCard } from "@/components/admin/llm/InstanceLlmSettingsCard";
+import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/core/PageHeader";
 import { PageLayout } from "@/components/core/PageLayout";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { filedUnder, pathNumber, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import {
 	type AdminLlmModelSaveBody,
@@ -49,7 +51,7 @@ import {
 	saveAdminLlmModelSafely,
 } from "@/lib/admin-llm-model-save";
 import { instanceAdminHead } from "@/lib/page-title";
-import { problemDetailOf } from "@/lib/problem-detail";
+import { problemDetailOf, type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
 
 export const Route = createFileRoute("/_authenticated/admin/models")({
 	head: instanceAdminHead("AI models"),
@@ -103,6 +105,24 @@ function AdminLlmPage() {
 	const invalidateModels = () =>
 		queryClient.invalidateQueries({ queryKey: adminListLlmModelsQueryKey() });
 
+	const [challenge, setChallenge] = useState<StepUpChallenge | undefined>(undefined);
+	const confirmAccess = useConfirmAccess(challenge !== undefined);
+
+	/**
+	 * A refusal that asks for a fresh sign-in is not a failure the operator can read and act on, so
+	 * it opens the ask instead of a toast — and it replaces the connection form rather than stacking
+	 * a second focus trap on top of it.
+	 */
+	const reportConnectionError = (error: unknown, title: string) => {
+		const stepUp = stepUpChallengeOf(error);
+		if (stepUp) {
+			setConnectionDialogOpen(false);
+			setChallenge(stepUp);
+			return;
+		}
+		toast.error(title, { description: problemDetailOf(error) });
+	};
+
 	const createConnection = useMutation({
 		...adminCreateLlmConnectionMutation(),
 		onSuccess: (created) => {
@@ -116,8 +136,7 @@ function AdminLlmPage() {
 			);
 			toast.success("Connection added");
 		},
-		onError: (error) =>
-			toast.error("Couldn't add the connection", { description: problemDetailOf(error) }),
+		onError: (error) => reportConnectionError(error, "Couldn't add the connection"),
 	});
 
 	const updateConnection = useMutation({
@@ -127,8 +146,7 @@ function AdminLlmPage() {
 			setConnectionDialogOpen(false);
 			toast.success("Connection updated");
 		},
-		onError: (error) =>
-			toast.error("Couldn't update the connection", { description: problemDetailOf(error) }),
+		onError: (error) => reportConnectionError(error, "Couldn't update the connection"),
 	});
 
 	const deleteConnection = useMutation({
@@ -138,8 +156,7 @@ function AdminLlmPage() {
 			if (variables.path.id === selectedConnectionId) setSelectedConnectionId(null);
 			toast.success("Connection deleted");
 		},
-		onError: (error) =>
-			toast.error("Couldn't delete the connection", { description: problemDetailOf(error) }),
+		onError: (error) => reportConnectionError(error, "Couldn't delete the connection"),
 	});
 
 	const mutatingConnectionIds = usePendingMutationIds(CONNECTION_WRITE_MUTATION_KEY, (variables) =>
@@ -401,6 +418,19 @@ function AdminLlmPage() {
 						},
 					);
 				}}
+			/>
+
+			<ConfirmAccessDialog
+				open={challenge !== undefined}
+				onOpenChange={(open) => {
+					if (!open) setChallenge(undefined);
+				}}
+				maxAgeSeconds={challenge?.maxAgeSeconds}
+				providers={confirmAccess.providers}
+				loading={confirmAccess.loading}
+				error={confirmAccess.error}
+				onRetry={confirmAccess.retry}
+				onSignIn={confirmAccess.signIn}
 			/>
 		</PageLayout>
 	);

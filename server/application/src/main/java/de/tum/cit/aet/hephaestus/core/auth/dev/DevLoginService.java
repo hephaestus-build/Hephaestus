@@ -6,10 +6,12 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Locale;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
@@ -117,11 +119,10 @@ public class DevLoginService {
         // Parity with the OAuth success path: stamp the same absolute session ceiling so a dev session
         // can't be silently kept alive past sessionMaxLifetime by the rolling refresh (OWASP absolute
         // timeout). Reuses the identical issuer seam, so the token stays issued_jwt-backed and revocable.
+        Instant now = clock.instant();
         return jwtIssuer.issue(
                 principalFactory.forAccountId(Objects.requireNonNull(account.getId())),
-                /* impersonator */ null,
-                /* impersonationExpiresAt */ null,
-                clock.instant().plus(sessionMaxLifetime),
+                TokenConstraints.session(now.plus(sessionMaxLifetime), now),
                 request);
     }
 }

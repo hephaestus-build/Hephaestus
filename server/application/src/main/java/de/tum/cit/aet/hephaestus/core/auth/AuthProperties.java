@@ -69,6 +69,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *                        enforced on every {@code POST /auth/refresh} rotation (the silent-refresh
  *                        keep-alive cannot extend an impersonation past it). See
  *                        {@code docs/contributor/instance-admin.md}.
+ * @param stepUpMaxAge    How recently the caller must have signed in for a high-risk instance-admin
+ *                        action ({@code auth_time} vs now). A token minted without {@code auth_time}
+ *                        never satisfies it. See {@code docs/contributor/instance-admin.md} for what
+ *                        the gate does and does not stop.
  * @param sessionMaxLifetime Absolute ceiling on an ordinary session ({@code session_exp}), set at login
  *                        and carried unchanged through every silent refresh. The access token's
  *                        {@code exp} is capped at {@code min(now + accessTtl, session_exp)}, so the
@@ -102,6 +106,7 @@ public record AuthProperties(
         @DefaultValue("") String bootstrapToken,
         @DefaultValue("1h") Duration impersonationMaxLifetime,
         @DefaultValue("12h") Duration sessionMaxLifetime,
+        @DefaultValue("5m") Duration stepUpMaxAge,
         @DefaultValue("false") boolean devLoginEnabled,
         @DefaultValue("true") boolean cookieSecure) {
     /**

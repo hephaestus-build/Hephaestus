@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
@@ -82,10 +83,17 @@ public class ImpersonationService {
      * Begin impersonating {@code targetAccountId} as {@code operatorAccountId}. The operator
      * MUST be an {@code APP_ADMIN} (the controller enforces this via method security too;
      * we re-check here as defence in depth). A {@code reason} is mandatory and audited.
+     *
+     * @param operatorAuthTime the operator's {@code auth_time}, stamped onto the impersonation token so
+     *                         exiting returns to a session as old as the one that began it.
      */
     @Transactional
     public Result begin(
-            Long operatorAccountId, Long targetAccountId, String reason, @Nullable HttpServletRequest request) {
+            Long operatorAccountId,
+            Long targetAccountId,
+            String reason,
+            @Nullable Instant operatorAuthTime,
+            @Nullable HttpServletRequest request) {
         if (reason == null || reason.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "impersonation reason is required");
         }
@@ -115,8 +123,10 @@ public class ImpersonationService {
         // the operator. Issued via the principal factory so preferred_username = target login.
         // imp_exp stamps the absolute time-box so silent refresh can't renew it indefinitely.
         Instant impersonationExpiresAt = clock.instant().plus(properties.impersonationMaxLifetime());
-        HephaestusJwtIssuer.Token token =
-                jwtIssuer.issue(principalFactory.forAccount(target), operator.getId(), impersonationExpiresAt, request);
+        HephaestusJwtIssuer.Token token = jwtIssuer.issue(
+                principalFactory.forAccount(target),
+                TokenConstraints.impersonation(operatorAccountId, impersonationExpiresAt, null, operatorAuthTime),
+                request);
 
         authEventLogger
                 .event(AuthEvent.EventType.IMPERSONATION_BEGIN, AuthEvent.Result.SUCCESS)
@@ -136,10 +146,16 @@ public class ImpersonationService {
      */
     @Transactional
     public Result exit(
-            Long operatorAccountId, Long targetAccountId, UUID currentJti, @Nullable HttpServletRequest request) {
+            Long operatorAccountId,
+            Long targetAccountId,
+            UUID currentJti,
+            @Nullable Instant operatorAuthTime,
+            @Nullable HttpServletRequest request) {
         issuedJwtRepository.revoke(currentJti, clock.instant(), IssuedJwt.RevokedReason.IMPERSONATION_EXIT);
-        HephaestusJwtIssuer.Token token =
-                jwtIssuer.issue(principalFactory.forAccountId(operatorAccountId), null, request);
+        HephaestusJwtIssuer.Token token = jwtIssuer.issue(
+                principalFactory.forAccountId(operatorAccountId),
+                TokenConstraints.session(null, operatorAuthTime),
+                request);
 
         authEventLogger
                 .event(AuthEvent.EventType.IMPERSONATION_END, AuthEvent.Result.SUCCESS)

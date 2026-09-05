@@ -163,6 +163,21 @@ public final class CurrentAccount {
         return null;
     }
 
+    /**
+     * When the account last completed an interactive sign-in ({@code auth_time}), or {@code null} when
+     * the token predates the claim. Absence is not authority: a caller with no {@code auth_time} never
+     * satisfies a recent-sign-in requirement.
+     */
+    @Nullable
+    public static Instant authTime() {
+        Jwt jwt = jwtOrNull();
+        if (jwt == null) {
+            return null;
+        }
+        Object authTime = jwt.getClaim("auth_time");
+        return authTime instanceof Number seconds ? Instant.ofEpochSecond(seconds.longValue()) : null;
+    }
+
     private static Jwt requireJwt() {
         Jwt jwt = jwtOrNull();
         if (jwt == null) {

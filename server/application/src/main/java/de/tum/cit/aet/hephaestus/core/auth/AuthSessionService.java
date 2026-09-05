@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt.RevokedReason;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.micrometer.core.instrument.Timer;
@@ -73,23 +74,12 @@ public class AuthSessionService {
         clearCookie(response);
     }
 
-    /**
-     * The token constraints carried from the presenting token into the re-minted one: the
-     * impersonation pair ({@code act} / {@code imp_exp}) and the absolute session ceiling
-     * ({@code session_exp}). Bundled so {@link #refresh} stays within the parameter-object limit; the
-     * controller reads them off {@code CurrentAccount}.
-     */
-    public record RefreshContext(
-            @Nullable Long impersonatorId,
-            @Nullable Instant impersonationExpiresAt,
-            @Nullable Instant sessionExpiresAt) {}
-
     /** Rotate: revoke the presenting token, mint a fresh one (preserving impersonation), set cookie. */
     @Transactional
     public void refresh(
             Long accountId,
             UUID jti,
-            RefreshContext context,
+            TokenConstraints context,
             HttpServletRequest request,
             HttpServletResponse response) {
         Long impersonatorId = context.impersonatorId();
@@ -124,7 +114,9 @@ public class AuthSessionService {
                 // Ordinary (non-impersonation) rotation — carry the absolute session ceiling forward so
                 // the rotated token is re-capped at it (OWASP absolute timeout; impersonation uses imp_exp).
                 token = jwtIssuer.issue(
-                        principalFactory.forAccountId(accountId), null, null, sessionExpiresAt, request);
+                        principalFactory.forAccountId(accountId),
+                        TokenConstraints.session(sessionExpiresAt, context.authTime()),
+                        request);
                 authEventLogger
                         .event(AuthEvent.EventType.TOKEN_REFRESH, AuthEvent.Result.SUCCESS)
                         .account(accountId)
@@ -132,7 +124,10 @@ public class AuthSessionService {
             } else if (impersonationExpired(impersonationExpiresAt)) {
                 // Impersonation time-box reached: auto-exit to the operator (mint an operator token
                 // with NO act claim) rather than renewing the impersonation forever via silent refresh.
-                token = jwtIssuer.issue(principalFactory.forAccountId(impersonatorId), null, request);
+                token = jwtIssuer.issue(
+                        principalFactory.forAccountId(impersonatorId),
+                        TokenConstraints.session(sessionExpiresAt, context.authTime()),
+                        request);
                 authEventLogger
                         .event(AuthEvent.EventType.IMPERSONATION_END, AuthEvent.Result.SUCCESS)
                         .account(accountId)
@@ -142,7 +137,10 @@ public class AuthSessionService {
             } else {
                 // Impersonation rotation: re-cap the new token at the same imp_exp ceiling.
                 token = jwtIssuer.issue(
-                        principalFactory.forAccountId(accountId), impersonatorId, impersonationExpiresAt, request);
+                        principalFactory.forAccountId(accountId),
+                        new TokenConstraints(
+                                impersonatorId, impersonationExpiresAt, sessionExpiresAt, context.authTime()),
+                        request);
                 authEventLogger
                         .event(AuthEvent.EventType.TOKEN_REFRESH, AuthEvent.Result.SUCCESS)
                         .account(accountId)
