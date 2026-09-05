@@ -104,6 +104,15 @@ it. Rootless Podman with Quadlet would close the remaining gap and is not attemp
 
 An operator must disable the timer before hand-patching a host, or the next tick reverts the fix.
 
+A host following commits does not move its database image on every apply. Every commit rebuilds the
+PostgreSQL image, so the channel pins a new digest for it each time and applying that would recreate
+the container and drop every connection to it; the host keeps the digest it last applied while
+`docker/postgres` is unchanged between the applied commit and the one being applied. That digest was
+named and signed by the channel that first applied it, so nothing runs that a channel signature never
+covered — but for that one image the `deploy-state` history records what a host was offered rather
+than what it runs, and the host's own lock under `release-locks/` is what says which. Releases are
+unaffected: a release is applied exactly as its signed lock names it.
+
 Preview environments are unaffected. They are ephemeral, per-pull-request, and managed by Coolify on
 the staging host; the reconciler owns only the Compose projects it is configured for, so the two
 manage disjoint resources.

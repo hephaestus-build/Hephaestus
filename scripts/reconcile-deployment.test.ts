@@ -11,6 +11,8 @@ import {
 	adoptTooling,
 	appliedCommit,
 	carriesToolingLink,
+	carryPostgresImage,
+	commitImages,
 	commitLockEnvironment,
 	ensureReleaseTree,
 	decide,
@@ -273,6 +275,110 @@ await test("an environment following the branch reports the commit it runs", () 
 		rendered.indexOf("HEPHAESTUS_IMAGE_ALPINE") < rendered.indexOf("HEPHAESTUS_IMAGE_WEBAPP"),
 	);
 	assert.ok(rendered.endsWith("\n"));
+});
+
+await test("a host following commits moves its database only when the image's inputs did", () => {
+	// Every commit of the default branch rebuilds the PostgreSQL image, so two consecutive channels
+	// name two digests for it; Compose recreates a container whose image changed, and the database
+	// coming back means every connection pool and review in flight is lost.
+	const running = `ghcr.io/o/postgres@sha256:${"a".repeat(64)}`;
+	const rebuilt = `ghcr.io/o/postgres@sha256:${"b".repeat(64)}`;
+	const channel = { ...images, HEPHAESTUS_IMAGE_POSTGRES: rebuilt };
+	const appliedLock = commitLockEnvironment("d".repeat(40), {
+		...images,
+		HEPHAESTUS_IMAGE_POSTGRES: running,
+	});
+	const kept = carryPostgresImage(channel, appliedLock, false);
+	assert.deepEqual(kept, { ...images, HEPHAESTUS_IMAGE_POSTGRES: running });
+	// The lock the host then renders names what it keeps, so the app stack passes the lock guard
+	// with the same pin — and the same Compose configuration — as before.
+	assert.deepEqual(unlockedImages([running], commitLockEnvironment(commit, kept)), []);
+
+	// A change under the image's inputs is applied, and so is the channel's pin on a host that has
+	// no record of what it ran, or one whose record is not a digest.
+	assert.deepEqual(carryPostgresImage(channel, appliedLock, true), channel);
+	assert.deepEqual(carryPostgresImage(channel, undefined, false), channel);
+	assert.deepEqual(
+		carryPostgresImage(channel, "HEPHAESTUS_IMAGE_POSTGRES=ghcr.io/o/postgres:main\n", false),
+		channel,
+	);
+	assert.deepEqual(carryPostgresImage(images, appliedLock, false), images);
+	// A channel that moves the image to another repository is naming a different image.
+	assert.deepEqual(
+		carryPostgresImage(
+			{
+				...images,
+				HEPHAESTUS_IMAGE_POSTGRES: `ghcr.io/elsewhere/postgres@sha256:${"b".repeat(64)}`,
+			},
+			appliedLock,
+			false,
+		),
+		{ ...images, HEPHAESTUS_IMAGE_POSTGRES: `ghcr.io/elsewhere/postgres@sha256:${"b".repeat(64)}` },
+	);
+});
+
+await test("the database image is kept while git says its tree stands still", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "reconcile-images-"));
+	try {
+		const checkout = join(directory, "checkout");
+		await mkdir(join(checkout, "docker", "postgres"), { recursive: true });
+		const git = (...args: string[]): string =>
+			execFileSync("git", args, {
+				cwd: checkout,
+				encoding: "utf8",
+				env: environmentForGitFixture(),
+			}).trim();
+		git("init", "--quiet", "--initial-branch=main");
+		git("config", "user.email", "host@example.invalid");
+		git("config", "user.name", "host");
+		const commitAll = (message: string): string => {
+			git("add", "--all");
+			git("commit", "--quiet", "-m", message);
+			return git("rev-parse", "HEAD");
+		};
+		const dockerfile = join(checkout, "docker", "postgres", "Dockerfile");
+		await writeFile(dockerfile, "FROM postgres:18\n");
+		await writeFile(join(checkout, "compose.yaml"), "services: {}\n");
+		const first = commitAll("first");
+		await writeFile(join(checkout, "compose.yaml"), "services: {app: {}}\n");
+		const unrelated = commitAll("a commit that leaves the image alone");
+		await writeFile(dockerfile, "FROM postgres:19\n");
+		const rebuild = commitAll("a commit that rebuilds the image");
+
+		const running = `ghcr.io/o/postgres@sha256:${"a".repeat(64)}`;
+		const channel = {
+			...images,
+			HEPHAESTUS_IMAGE_POSTGRES: `ghcr.io/o/postgres@sha256:${"b".repeat(64)}`,
+		};
+		const lockDirectory = join(directory, "release-locks");
+		await mkdir(lockDirectory);
+		await writeFile(
+			join(lockDirectory, `${first}.env`),
+			commitLockEnvironment(first, { ...images, HEPHAESTUS_IMAGE_POSTGRES: running }),
+		);
+		const ran = { release: first, channelCommit: "e".repeat(40), appliedAt: applied.appliedAt };
+
+		assert.deepEqual(await commitImages(checkout, lockDirectory, ran, unrelated, channel), {
+			...images,
+			HEPHAESTUS_IMAGE_POSTGRES: running,
+		});
+		// The image's tree moved, so the channel's pin is applied — and so it is when the host cannot
+		// order the two commits at all, or has never applied anything.
+		assert.deepEqual(await commitImages(checkout, lockDirectory, ran, rebuild, channel), channel);
+		assert.deepEqual(
+			await commitImages(checkout, lockDirectory, ran, "f".repeat(40), channel),
+			channel,
+		);
+		assert.deepEqual(
+			await commitImages(checkout, lockDirectory, undefined, unrelated, channel),
+			channel,
+		);
+		// A host whose lock for the applied release is gone has no record of what it runs.
+		await rm(join(lockDirectory, `${first}.env`));
+		assert.deepEqual(await commitImages(checkout, lockDirectory, ran, unrelated, channel), channel);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
 });
 
 await test("a build that finishes late cannot put staging back on an older commit", () => {

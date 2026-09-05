@@ -169,6 +169,17 @@ Re-promoting reapplies Compose configuration; it does not restore arbitrary cont
 The reconciler refuses a release checkout with modified tracked files.
 :::
 
+### What restarts the database
+
+An apply recreates a container whose image or Compose definition changed, and recreating PostgreSQL
+drops every connection to it for as long as the application services take to stop and come back.
+Every commit of the default branch rebuilds the PostgreSQL image, so on a host following commits the
+reconciler keeps the PostgreSQL image it already runs and applies the rest of the channel; the
+database restarts only when the commit changes what that image is built from (`docker/postgres/`),
+when the `postgres` service in `docker/compose.app.yaml` changes, or when the host has no record of
+the image it runs. A release is applied exactly as its signed lock names it, so a release that
+rebuilt the image restarts the database.
+
 ## Watching it
 
 Set `HEPHAESTUS_METRICS_FILE` to a `.prom` file in an existing node_exporter textfile collector
