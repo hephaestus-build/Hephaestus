@@ -18,7 +18,7 @@
 			"description": "Source contract used to interpret every source state in this manifest."
 		},
 		"catalogDigest": {
-			"const": "978097f57047bb716457e8b3c44115ef0bb55602dbce4f1a15900a40d70a39b8",
+			"const": "df44eb8884ed8bd60f60984d0d9c9c76c76543a096449530514a85d6a66e12b6",
 			"description": "SHA-256 digest of the exact source catalog used by the runtime."
 		},
 		"artifactKind": {
@@ -207,6 +207,22 @@
 						"type": "object",
 						"properties": {
 							"kind": {
+								"const": "scm.pull-request.commits",
+								"type": "string"
+							}
+						},
+						"required": [
+							"kind"
+						]
+					},
+					"minContains": 0,
+					"maxContains": 1
+				},
+				{
+					"contains": {
+						"type": "object",
+						"properties": {
+							"kind": {
 								"const": "workspace.project-inventory",
 								"type": "string"
 							}
@@ -277,6 +293,7 @@
 						"scm.linked-work-items",
 						"scm.review-threads",
 						"scm.general-review-comments",
+						"scm.pull-request.commits",
 						"workspace.project-inventory",
 						"outline.documents",
 						"hephaestus.observation-history",
@@ -552,8 +569,8 @@
 			"then": {
 				"properties": {
 					"sources": {
-						"minItems": 11,
-						"maxItems": 11,
+						"minItems": 12,
+						"maxItems": 12,
 						"allOf": [
 							{
 								"contains": {
@@ -639,6 +656,19 @@
 									"properties": {
 										"kind": {
 											"const": "scm.general-review-comments"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "scm.pull-request.commits"
 										}
 									},
 									"required": [

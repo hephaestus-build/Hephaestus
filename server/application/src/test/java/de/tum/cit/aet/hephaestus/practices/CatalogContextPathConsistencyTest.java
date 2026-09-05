@@ -37,6 +37,7 @@ class CatalogContextPathConsistencyTest extends BaseUnitTest {
             "review_threads.json", // ReviewThreadContentSource — review-decision/thread rows
             "general_comments.json", // GeneralReviewCommentContentSource — conversation-tab (non-inline) MR review
             // notes
+            "commits.json", // PullRequestCommitContentSource — the pull request's commits through commit_pull_request
             "project_inventory.json", // WorkspaceInventoryContentSource.OUTPUT_FILE — whole-project issue/PR index
             "conversation_thread.json", // ConversationThreadContentSource — the ordered human turns of one settled
             // Slack thread
