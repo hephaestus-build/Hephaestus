@@ -1,9 +1,11 @@
 package de.tum.cit.aet.hephaestus.workspace.context;
 
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
+import de.tum.cit.aet.hephaestus.core.auth.spi.WorkspaceElevationAudit;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
+import de.tum.cit.aet.hephaestus.core.security.WorkspaceElevationContext;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -66,6 +68,7 @@ public class WorkspaceContextFilter implements Filter {
     private final WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository;
     private final ConnectionService connectionService;
     private final ObjectMapper objectMapper;
+    private final WorkspaceElevationAudit elevationAudit;
 
     public WorkspaceContextFilter(
             WorkspaceRepository workspaceRepository,
@@ -74,7 +77,8 @@ public class WorkspaceContextFilter implements Filter {
             WorkspaceMembershipAutoSeeder membershipAutoSeeder,
             WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository,
             ConnectionService connectionService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            WorkspaceElevationAudit elevationAudit) {
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.currentAccountUsers = currentAccountUsers;
@@ -82,6 +86,7 @@ public class WorkspaceContextFilter implements Filter {
         this.workspaceSlugHistoryRepository = workspaceSlugHistoryRepository;
         this.connectionService = connectionService;
         this.objectMapper = objectMapper;
+        this.elevationAudit = elevationAudit;
     }
 
     @Override
@@ -170,6 +175,11 @@ public class WorkspaceContextFilter implements Filter {
                         SecurityUtils.getCurrentAccountId().orElse(null),
                         safeSlug);
                 roles = Set.of(WorkspaceRole.ADMIN);
+                // The single source of truth both audit trails read, so an action taken on this request
+                // is tagged the same way whichever viewer an operator opens.
+                WorkspaceElevationContext.set(workspace.getId());
+                SecurityUtils.getCurrentAccountId()
+                        .ifPresent(accountId -> elevationAudit.recordElevatedAccess(accountId, workspace.getId()));
             }
 
             boolean isPublicRead = Boolean.TRUE.equals(workspace.getIsPubliclyViewable()) && isReadRequest;
@@ -217,6 +227,7 @@ public class WorkspaceContextFilter implements Filter {
         } finally {
             // Always clear context to prevent leaks
             WorkspaceContextHolder.clearContext();
+            WorkspaceElevationContext.clear();
             CurrentScmIdentityHolder.clear();
         }
     }

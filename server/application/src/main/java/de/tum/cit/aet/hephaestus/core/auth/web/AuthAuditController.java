@@ -81,6 +81,9 @@ public class AuthAuditController {
             @NonNull Instant occurredAt,
             @NonNull String eventType,
             @NonNull String result,
+            // @NonNull so springdoc marks it required and the client types it `boolean`: the column is
+            // NOT NULL, and an optional flag would make every reader write `e.elevated… && …`.
+            @NonNull boolean elevatedViaInstanceAdmin,
             @Nullable Long accountId,
             @Nullable Long actingAccountId,
             // Resolved identities for accountId / actingAccountId (null when the account no longer exists);
@@ -116,9 +119,11 @@ public class AuthAuditController {
         AuthAuditService.AuditPage data = authAuditService.list(filter.toFilter(), PageRequest.of(0, EXPORT_MAX_ROWS));
         var identities = data.identities();
         StringBuilder csv = new StringBuilder();
-        csv.append(
-                "occurred_at_utc,event_type,result,account_id,account_name,account_email,"
-                        + "acting_account_id,actor_name,actor_email,failure_reason,workspace_id,ip_address,user_agent,details\n");
+        // A new column is APPENDED, never inserted: an operator's parser keyed on column order keeps
+        // working, and one keyed on the header picks the new column up.
+        csv.append("occurred_at_utc,event_type,result,account_id,account_name,account_email,"
+                + "acting_account_id,actor_name,actor_email,failure_reason,workspace_id,ip_address,user_agent,details,"
+                + "elevated_via_instance_admin\n");
         for (AuthEvent e : data.events().getContent()) {
             AuthAuditService.AccountRef account = AuthAuditService.refOf(e.getAccountId(), identities);
             AuthAuditService.AccountRef actor = AuthAuditService.refOf(e.getActingAccountId(), identities);
@@ -137,7 +142,8 @@ public class AuthAuditController {
                     str(e.getWorkspaceId()),
                     e.getIpInet(),
                     e.getUserAgent(),
-                    e.getDetails());
+                    e.getDetails(),
+                    Boolean.toString(e.isElevatedViaInstanceAdmin()));
         }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"audit-log.csv\"")
@@ -179,6 +185,7 @@ public class AuthAuditController {
                 e.getId().getOccurredAt(),
                 e.getEventType().name(),
                 e.getResult().name(),
+                e.isElevatedViaInstanceAdmin(),
                 e.getAccountId(),
                 e.getActingAccountId(),
                 toRef(AuthAuditService.refOf(e.getAccountId(), identities)),

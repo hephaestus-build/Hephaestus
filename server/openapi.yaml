@@ -211,6 +211,7 @@ paths:
             - EXPORT_REQUESTED
             - APP_ROLE_CHANGED
             - RESEARCH_CONSENT_REVOKED
+            - WORKSPACE_ELEVATION
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -293,6 +294,7 @@ paths:
             - EXPORT_REQUESTED
             - APP_ROLE_CHANGED
             - RESEARCH_CONSENT_REVOKED
+            - WORKSPACE_ELEVATION
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -8305,6 +8307,8 @@ components:
           $ref: "#/components/schemas/AccountRef"
         details:
           type: string
+        elevatedViaInstanceAdmin:
+          type: boolean
         eventType:
           type: string
         failureReason:
@@ -8325,6 +8329,7 @@ components:
           type: integer
           format: int64
       required:
+      - elevatedViaInstanceAdmin
       - eventType
       - id
       - occurredAt
@@ -8785,6 +8790,10 @@ components:
           description: dot-paths that differ between <code>oldValue</code> and <code>newValue</code>
           items:
             type: string
+        elevatedViaInstanceAdmin:
+          type: boolean
+          description: whether the actor reached this workspace by instance-admin
+            elevation
         entityId:
           type: string
         entityType:
@@ -8826,6 +8835,8 @@ components:
         workspaceId:
           type: integer
           format: int64
+      required:
+      - elevatedViaInstanceAdmin
     ConfigurationFact:
       type: object
       properties:

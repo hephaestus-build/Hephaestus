@@ -14,8 +14,9 @@ deployment — distinct from a **workspace admin**, whose powers are scoped to a
 - The issuer mints the namespaced **`app_admin`** granted authority for such accounts
   (`JwtPrincipalFactory`). This is deliberately distinct from the per-workspace `admin` role, which
   is membership-derived and never appears in the JWT. `SecurityUtils.isSuperAdmin()` reads
-  `app_admin` and auto-elevates an instance admin to workspace-admin level **only for workspaces they
-  belong to**.
+  `app_admin`, and `WorkspaceContextFilter` grants an instance admin `WorkspaceRole.ADMIN` in **any
+  active workspace, membership or not** — deliberately `ADMIN` and never `OWNER`, because ownership
+  is a member-granted role. That access is recorded: see [Elevated workspace access](#elevated-workspace-access).
 - The authority comes **only** from `appRole` — `JwtPrincipalFactory` strips any reserved authority
   (`app_admin`/`admin`) that might arrive via a grantable `account_feature` row, so an
   `/admin/users`-granted flag can never escalate to instance admin.
@@ -42,7 +43,7 @@ All under `/admin`, all gated by `hasAuthority('app_admin')`:
 | `PATCH /admin/users/{id}` (`adminUpdateUser`) | Change an account's app role (last-admin guard; can't self-demote) |
 | `DELETE /admin/users/{id}/sessions` (`adminRevokeUserSessions`) | **Force sign-out**: revoke all of an account's active sessions. Because an impersonation token carries the target's account id as its subject, this also ends any in-flight impersonation **of** that account. Audited as `JWT_REVOKED`. |
 | `POST /auth/impersonate` (`impersonate`) | Begin impersonating an account (mandatory reason; no self / no admin→admin; read-only by default via `ImpersonationGuard`) |
-| `GET /admin/workspaces` (`adminListWorkspaces`) | **Metadata-only** overview of every workspace (slug, status, provider, owner login, member count, created-at). Cross-tenant via `@WorkspaceAgnostic`; **no tenant content** — reaching content is the audited impersonation path. |
+| `GET /admin/workspaces` (`adminListWorkspaces`) | **Metadata-only** overview of every workspace (slug, status, provider, owner login, member count, created-at). Cross-tenant via `@WorkspaceAgnostic`; this endpoint itself returns **no tenant content**. Content is reached either by impersonating a member or by opening the workspace directly under [elevated access](#elevated-workspace-access); both are audited, and they are different things. |
 | `GET /admin/audit` (`adminListAuthEvents`) | Read-only viewer over the append-only `auth_event` log (logins, impersonation, role changes, deletions). Paged, newest-first, filterable by event type; surfaces the `(account_id, acting_account_id)` pair so impersonated actions stay attributable. |
 | `GET /admin/config-audit` (`adminListConfigAuditEvents`) | Read-only viewer over `config_audit_event` — who changed which workspace setting, when, and from what to what. Rows are immutable inside the retention window (DB trigger); `ConfigAuditRetentionJob` is the only way one leaves. |
 | `/admin/llm/connections*` (`adminListLlmConnections`, `adminCreateLlmConnection`, `adminGetLlmConnection`, `adminUpdateLlmConnection`, `adminDeleteLlmConnection`, `adminProbeLlmConnection`, `adminProbeLlmConnectionDraft`) | The instance LLM connection catalog. Routing identity (base URL, wire API, auth mode) is immutable after create; probe tests a saved or draft connection before anything is enabled. |
@@ -76,14 +77,41 @@ Silent Mode is engaged.
 alive across access-token expiry (`use-session-keep-alive.ts`, mounted from `main.tsx`), so an
 impersonation ends at the ceiling rather than at `accessTtl`.
 
+## Elevated workspace access
+
+An instance admin who is not a member of a workspace still reaches it as a workspace admin, and both
+audit trails say so.
+
+`WorkspaceContextFilter` takes that decision once per request. On the non-member branch it records
+the workspace in `WorkspaceElevationContext` — a request-local `ThreadLocal`, cleared in the same
+`finally` that clears the workspace context, and deliberately not inheritable, so a task handed to a
+background executor starts unelevated. Everything downstream reads the flag from there rather than
+from an argument, for the reason `ConfigAuditActor` gives about actor attribution: a producer can
+neither forget it nor assert one it did not earn.
+
+- `auth_event` gains a **`WORKSPACE_ELEVATION`** row. It marks an access *window*, not a request:
+  `WorkspaceElevationAuditAdapter` de-duplicates per `(account, workspace)` for 15 minutes in a
+  bounded per-process cache, so browsing one workspace does not bury the impersonation and
+  role-change events the viewer exists for. The cache is claimed only after a row is actually
+  written, and eviction or a second replica may add a duplicate marker — over-reporting a window is
+  harmless, losing one is not.
+- `config_audit_event` gains **`elevated_via_instance_admin`** per row, resolved for that row's own
+  `workspaceId`, so an instance-scoped change with no workspace is never mis-tagged. Configuration
+  changes are not de-duplicated; every one carries its own bit.
+
+Both admin consoles surface it, and `GET /admin/audit/export` carries it as the **last** CSV column
+so a parser keyed on column order keeps working.
+
+Two things the flag does not mean. Impersonation is not elevation — it is attributable through the
+`(account_id, acting_account_id)` pair, and an impersonated session that is also elevated carries
+both. And `false` means "no elevation recorded", not "the actor was a member": rows written before
+the flag existed all read `false`.
+
 ## Deferred / follow-up
 
 - **Step-up re-auth gate** for impersonate-begin + role-change. Hephaestus owns no first factor for
   GitHub (plain OAuth2, no `prompt=login`), so a local fresh-re-auth gate is a deliberate-second-step
   / audit control, not a true second factor. Deferred to a focused PR.
-- **Elevation tagging** (`elevated_via_instance_admin`): make an instance admin's cross-workspace
-  access distinguishable in the audit trail. Needs a new `auth_event` type (a CHECK-constraint
-  migration) + a log-volume decision — its own slice.
 - **`APP_AUDITOR`** read-only tier: not built. A single-operator instance has no second audience for
   it, and the enum + authority design does not stand in the way of adding one.
 LLM governance is not on this list — it is built. An instance admin registers connections and models

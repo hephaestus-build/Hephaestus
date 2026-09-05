@@ -2,6 +2,7 @@ import { ScrollText } from "lucide-react";
 import { useState } from "react";
 
 import type { AuthEventView } from "@/api/types.gen";
+import { ElevationBadge } from "@/components/admin/audit-shared/ElevationBadge";
 import { FilterLink } from "@/components/admin/audit-shared/FilterLink";
 import { refLabel } from "@/components/admin/audit-shared/ref-label";
 import { TableRowsSkeleton } from "@/components/admin/integrations/TableRowsSkeleton";
@@ -151,6 +152,7 @@ export function AdminAuditTable({
 											/>
 											{screenReaderPrefix && <span className="sr-only">{screenReaderPrefix}</span>}
 											<span className="text-sm">{eventLabel(e.eventType)}</span>
+											<ElevationBadge elevated={e.elevatedViaInstanceAdmin} />
 										</span>
 									</TableCell>
 									<TableCell>

@@ -7,6 +7,9 @@ import org.jspecify.annotations.Nullable;
  * keeps {@link AuthEvent#create} and {@link AuthEventWriter#write} under the 6-parameter
  * limit. Request-derived metadata (ip, user agent, id, timestamp) is supplied separately
  * by the writer.
+ *
+ * @param elevatedViaInstanceAdmin resolved by {@link AuthEventLogger.Draft#record()} from the
+ *     request's security context; not something a caller may set
  */
 public record AuthEventData(
         AuthEvent.EventType type,
@@ -17,4 +20,5 @@ public record AuthEventData(
         @Nullable Long gitProviderId,
         @Nullable Long workspaceId,
         @Nullable Long identityLinkId,
-        @Nullable String details) {}
+        @Nullable String details,
+        boolean elevatedViaInstanceAdmin) {}

@@ -132,6 +132,7 @@ erDiagram
         INET ip_inet
         VARCHAR(512) user_agent
         JSONB details
+        BOOLEAN elevated_via_instance_admin "NOT NULL"
     }
 
     AuthRateLimitBucket {
@@ -214,6 +215,7 @@ erDiagram
         ARRAY changed_keys "NOT NULL"
         JSONB old_value
         JSONB new_value
+        BOOLEAN elevated_via_instance_admin "NOT NULL"
     }
 
     Connection {

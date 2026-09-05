@@ -45,7 +45,7 @@ class ConfigAuditRecorder implements ConfigAuditPort {
         repository.save(ConfigAuditEvent.create(
                 clock.instant(),
                 entry.workspaceId(),
-                ConfigAuditActor.fromSecurityContext(),
+                ConfigAuditActor.fromSecurityContext(entry.workspaceId()),
                 entry.entityType(),
                 entry.entityId(),
                 action,

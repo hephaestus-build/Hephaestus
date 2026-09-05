@@ -5,6 +5,7 @@ export type AuditSeverity = "error" | "warning" | "info";
 
 const HIGH_RISK_EVENTS = new Set([
 	"IMPERSONATION_BEGIN",
+	"WORKSPACE_ELEVATION",
 	"APP_ROLE_CHANGED",
 	"ACCOUNT_DELETED",
 	"JWT_REVOKED",
@@ -35,6 +36,7 @@ export const EVENT_TYPE_LABELS: Record<AuthEventType, string> = {
 	EXPORT_REQUESTED: "Data export requested",
 	APP_ROLE_CHANGED: "Instance role changed",
 	RESEARCH_CONSENT_REVOKED: "Research consent revoked",
+	WORKSPACE_ELEVATION: "Workspace reached as instance admin",
 	LLM_CONNECTION_CREATED: "Provider connected",
 	LLM_CONNECTION_UPDATED: "Provider updated",
 	LLM_CONNECTION_DELETED: "Provider removed",
