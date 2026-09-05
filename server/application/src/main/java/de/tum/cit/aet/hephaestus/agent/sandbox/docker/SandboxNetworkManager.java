@@ -53,6 +53,7 @@ public class SandboxNetworkManager {
     public String createJobNetwork(UUID jobId, boolean allowInternet) {
         String networkName = NETWORK_PREFIX + jobId;
         boolean internal = !allowInternet;
+        removeLeftoverNetwork(networkName);
         String networkId = networkOps.createNetwork(networkName, internal);
         log.info("Created job network: name={}, internal={}, networkId={}", networkName, internal, networkId);
         return networkId;
@@ -77,6 +78,29 @@ public class SandboxNetworkManager {
         String ip = networkOps.connectToNetwork(networkId, containerId);
         log.info("Connected app-server to network {}: containerId={}, ip={}", networkId, containerId, ip);
         return ip;
+    }
+
+    /**
+     * A network under this job's own name is left from an earlier run of this same job, and nothing
+     * else reclaims it: Docker refuses the duplicate name, and the reconciler spares a network whose
+     * job is still queued — which a job retrying on that very conflict is. An attempt that was
+     * requeued as orphaned can still be running on a worker whose heartbeat only lapsed, but that
+     * attempt is superseded already, and Docker refuses to remove a network a running container
+     * holds, so this fails loudly rather than pulling the network out from under it.
+     */
+    private void removeLeftoverNetwork(String networkName) {
+        for (DockerOperations.NetworkInfo leftover : networkOps.listNetworksByName(networkName)) {
+            if (!networkName.equals(leftover.name())) {
+                continue; // the daemon's name filter is not exact; only this exact name is ours to remove
+            }
+            log.warn("Removing the network an interrupted run left behind: name={}, id={}", networkName, leftover.id());
+            try {
+                disconnectAppServer(leftover.id());
+            } catch (RuntimeException e) {
+                log.debug("Could not disconnect app-server from {}: {}", networkName, e.getMessage());
+            }
+            networkOps.removeNetwork(leftover.id());
+        }
     }
 
     /** Disconnect the app-server from a job network. Idempotent — no-op if already disconnected. */
