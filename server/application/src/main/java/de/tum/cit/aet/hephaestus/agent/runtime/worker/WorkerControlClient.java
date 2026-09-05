@@ -203,7 +203,7 @@ public class WorkerControlClient {
         }
     }
 
-    private void handleInbound(WorkerControlFrame frame) {
+    void handleInbound(WorkerControlFrame frame) {
         try {
             switch (frame) {
                 case WorkerWelcome welcome -> {
@@ -225,8 +225,10 @@ public class WorkerControlClient {
                     forceReconnect("server-requested:" + r.reason());
                 }
                 case CancelJob c -> handleCancelJob(c);
-                // Hub never originates these — log once and ignore (protocol violation by the hub).
-                case Heartbeat h -> warnSourceMismatch(h);
+                // Empty on purpose. Arrival is the whole signal — see Heartbeat — and the transport
+                // stamped lastInboundAt before dispatch, so there is nothing left to do here.
+                case Heartbeat ignored -> {}
+                // The hub never originates these — log and ignore (protocol violation by the hub).
                 case WorkerHello h -> warnSourceMismatch(h);
                 case CapacityReport r -> warnSourceMismatch(r);
             }
