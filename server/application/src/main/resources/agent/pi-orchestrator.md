@@ -439,6 +439,8 @@ Use `report_observation` — it is the only output contract. The tool schema is 
 
 Each call contains `practiceSlug`, a neutral `summary`, one exact `outcome`, exact `evidence`, and an
 `evidenceRationale` that explains how the evidence warrants the outcome without advice or hidden chain-of-thought.
+The `summary` is read on the developer's practice page above the practice's own name and with no evidence beside
+it, so write a short phrase naming what you saw there, not the practice's name again.
 
 - A `BEHAVIOR_PRESENT_*` or `BEHAVIOR_ABSENT_*` outcome makes a semantic claim and carries its assessment and,
   for BAD, severity in one value. Target-behaviour absence is an assessed outcome, never a decline.

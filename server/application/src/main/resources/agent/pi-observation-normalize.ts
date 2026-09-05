@@ -434,6 +434,13 @@ export function normalizeObservation(observation: unknown): NormalizedObservatio
 	const { presence, assessment, severity } = parseOutcome(outcome);
 	if (!practiceSlug) throw new Error("practiceSlug is required");
 	if (!title) throw new Error("summary is required");
+	// The summary is what the developer reads on their practice page, above the practice's own name and
+	// with no evidence beside it, so a single word there ("Test") names nothing the practice did not.
+	if (!/\S\s+\S/.test(title))
+		throw new Error(
+			"summary must say what was observed as a short phrase, not one word — e.g. " +
+				"'Debug print left in the request handler'",
+		);
 	if (!reasoning) throw new Error("evidenceRationale is required");
 	const externalEvidence: Record<string, unknown> = isRecord(observation.evidence)
 		? observation.evidence

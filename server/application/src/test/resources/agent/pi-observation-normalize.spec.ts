@@ -198,6 +198,15 @@ void test("dedupe key uses the normalized hyphenated slug", () => {
 	assert.equal(a, b, "underscored and upper-hyphenated slugs must dedupe to the same key");
 });
 
+void test("a one-word summary is refused, because it names nothing on the practice page", () => {
+	assert.throws(() => normalizeObservation(baseObservation({ title: "Test" })), /short phrase/);
+	assert.throws(
+		() => normalizeObservation(baseObservation({ title: "  Duplication  " })),
+		/short phrase/,
+	);
+	assert.equal(normalizeObservation(baseObservation({ title: "No tests" })).summary, "No tests");
+});
+
 void test("genuinely invalid enum still rejected after normalization", () => {
 	const invalid = baseObservation();
 	invalid.outcome = "MAYBE";
