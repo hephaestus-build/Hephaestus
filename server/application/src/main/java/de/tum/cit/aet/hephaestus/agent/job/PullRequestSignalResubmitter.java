@@ -9,12 +9,15 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.PendingSignalResubmitte
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -40,16 +43,19 @@ public class PullRequestSignalResubmitter implements PendingSignalResubmitter {
     private final PullRequestRepository pullRequestRepository;
     private final PracticeReviewDetectionGate practiceReviewDetectionGate;
     private final SignalRecorder signalRecorder;
+    private final PullRequestReviewRepository reviewRepository;
 
     public PullRequestSignalResubmitter(
             AgentJobService agentJobService,
             PullRequestRepository pullRequestRepository,
             PracticeReviewDetectionGate practiceReviewDetectionGate,
-            SignalRecorder signalRecorder) {
+            SignalRecorder signalRecorder,
+            PullRequestReviewRepository reviewRepository) {
         this.agentJobService = agentJobService;
         this.pullRequestRepository = pullRequestRepository;
         this.practiceReviewDetectionGate = practiceReviewDetectionGate;
         this.signalRecorder = signalRecorder;
+        this.reviewRepository = reviewRepository;
     }
 
     @Override
@@ -78,27 +84,59 @@ public class PullRequestSignalResubmitter implements PendingSignalResubmitter {
             return;
         }
 
-        switch (practiceReviewDetectionGate.evaluate(pr, key.signalName(), TriggerMode.AUTO)) {
+        // The subject of a submitted-review occasion is the reviewer, and the only thing that still knows
+        // which review that was is the occasion's own revision: the pull request has since moved on and
+        // its author is a different person.
+        ScmEventPayload.@Nullable ReviewData reviewData = null;
+        if (key.signalName().equals(ScmSignals.PULL_REQUEST_REVIEWED)) {
+            reviewData = key.revision()
+                    .eventId()
+                    .flatMap(reviewId -> reviewRepository.findByIdAndPullRequestId(reviewId, pr.getId()))
+                    .flatMap(ScmEventPayload.ReviewData::from)
+                    .orElse(null);
+            if (reviewData == null) {
+                log.debug("Pending signal's review no longer belongs to its pull request: prId={}", pr.getId());
+                signalRecorder.markRefused(key, SignalStateReason.ARTIFACT_GONE);
+                return;
+            }
+            if (reviewData.authorId() == null) {
+                log.debug("Pending signal's review has no linked reviewer: reviewId={}", reviewData.id());
+                signalRecorder.markRefused(key, SignalStateReason.SUBJECT_UNLINKED);
+                return;
+            }
+        }
+
+        GateDecision decision = reviewData == null
+                ? practiceReviewDetectionGate.evaluate(pr, key.signalName(), TriggerMode.AUTO)
+                : practiceReviewDetectionGate.evaluate(
+                        pr, key.signalName(), TriggerMode.AUTO, new ReviewSubject(reviewData.authorId(), true));
+        switch (decision) {
             case GateDecision.Skip skip -> {
                 log.debug("Pending signal now skipped by practice gate: prId={}, reason={}", pr.getId(), skip.reason());
                 signalRecorder.markRefused(key, skip.resolvedSignalReason());
             }
-            case GateDecision.Detect detect ->
-                agentJobService.submit(
-                        detect.workspace().getId(),
-                        AgentJobType.PULL_REQUEST_REVIEW,
-                        new PullRequestReviewSubmissionRequest(
-                                ScmEventPayload.PullRequestData.from(pr),
+            case GateDecision.Detect detect -> {
+                ScmEventPayload.PullRequestData prData = ScmEventPayload.PullRequestData.from(pr);
+                PullRequestReviewSubmissionRequest request = reviewData == null
+                        ? new PullRequestReviewSubmissionRequest(
+                                prData, pr.getHeadRefName(), pr.getHeadRefOid(), pr.getBaseRefName(), key.signalName())
+                        : PullRequestReviewSubmissionRequest.forSubmittedReview(
+                                prData,
                                 pr.getHeadRefName(),
                                 pr.getHeadRefOid(),
                                 pr.getBaseRefName(),
                                 key.signalName(),
-                                // Carried from the ledger row rather than defaulted: a re-offered signal keeps the
-                                // population it was discovered for, so a campaign's budget-deferred tail cannot land
-                                // in the live series hours after the campaign paused.
-                                SignalOrigins.observationOriginOf(signal.getDiscoveredVia())),
+                                reviewData);
+                agentJobService.submit(
+                        detect.workspace().getId(),
+                        AgentJobType.PULL_REQUEST_REVIEW,
+                        // Carried from the ledger row rather than defaulted: a re-offered signal keeps the
+                        // population it was discovered for, so a campaign's budget-deferred tail cannot land
+                        // in the live series hours after the campaign paused.
+                        request.withOrigin(SignalOrigins.observationOriginOf(signal.getDiscoveredVia())),
                         key,
                         detect);
+            }
         }
     }
 }

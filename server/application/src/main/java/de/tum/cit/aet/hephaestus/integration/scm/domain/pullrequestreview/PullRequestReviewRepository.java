@@ -26,6 +26,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 @WorkspaceAgnostic("Reviews scoped through pull_request_id -> repository.workspace_id")
 public interface PullRequestReviewRepository extends JpaRepository<PullRequestReview, Long> {
+    Optional<PullRequestReview> findByIdAndPullRequestId(Long id, Long pullRequestId);
+
     Optional<PullRequestReview> findByNativeIdAndProviderId(Long nativeId, Long providerId);
 
     List<PullRequestReview> findAllByPullRequestIdAndProviderId(Long pullRequestId, Long providerId);

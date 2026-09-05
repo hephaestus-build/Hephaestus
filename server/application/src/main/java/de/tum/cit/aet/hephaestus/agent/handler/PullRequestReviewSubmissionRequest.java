@@ -74,6 +74,12 @@ public record PullRequestReviewSubmissionRequest(
         this(pullRequest, headRefName, headRefOid, baseRefName, null, null, null, null);
     }
 
+    /** The same request filed under a named population; {@code null} falls back to the origin rule above. */
+    public PullRequestReviewSubmissionRequest withOrigin(@Nullable ObservationOrigin origin) {
+        return new PullRequestReviewSubmissionRequest(
+                pullRequest, headRefName, headRefOid, baseRefName, triggerSignal, origin, reviewId, aboutUserId);
+    }
+
     public static PullRequestReviewSubmissionRequest forSubmittedReview(
             ScmEventPayload.PullRequestData pullRequest,
             String headRefName,

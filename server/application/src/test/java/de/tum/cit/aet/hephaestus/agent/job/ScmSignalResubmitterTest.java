@@ -1,9 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
@@ -12,13 +14,18 @@ import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewSubmissionReques
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRevision;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
@@ -30,6 +37,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 
 @Tag("unit")
@@ -37,12 +45,17 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
 
     private static final long WORKSPACE_ID = 7L;
     private static final long ARTIFACT_ID = 41L;
+    private static final long REVIEW_ID = 99L;
+    private static final long REVIEWER_ID = 123L;
 
     @Mock
     private AgentJobService agentJobService;
 
     @Mock
     private PullRequestRepository pullRequestRepository;
+
+    @Mock
+    private PullRequestReviewRepository reviewRepository;
 
     @Mock
     private IssueRepository issueRepository;
@@ -73,7 +86,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         ArtifactSignal signal = signal(ScmSignals.PULL_REQUEST_OPENED.value());
         when(pullRequestRepository.findByIdWithAllForGate(ARTIFACT_ID)).thenReturn(Optional.of(pullRequest));
 
-        new PullRequestSignalResubmitter(agentJobService, pullRequestRepository, gate, signalRecorder).resubmit(signal);
+        pullRequestResubmitter().resubmit(signal);
 
         verify(signalRecorder).markRefused(signal.key(), SignalStateReason.ARTIFACT_NOT_VISIBLE);
         verify(gate, never()).evaluate(any(), any(), any());
@@ -103,7 +116,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         when(gate.evaluate(pullRequest, ScmSignals.PULL_REQUEST_OPENED, TriggerMode.AUTO))
                 .thenReturn(detection);
 
-        new PullRequestSignalResubmitter(agentJobService, pullRequestRepository, gate, signalRecorder).resubmit(signal);
+        pullRequestResubmitter().resubmit(signal);
 
         verify(agentJobService)
                 .submit(
@@ -146,6 +159,69 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         verify(agentJobService, never()).submit(any(), any(), any(), any(), any());
     }
 
+    @Test
+    void shouldKeepTheReviewerAsTheSubjectOfARetriedSubmittedReviewOccasion() {
+        PullRequest pullRequest = pullRequest();
+        ArtifactSignal signal = signal(ScmSignals.PULL_REQUEST_REVIEWED.value());
+        signal.setRevision(SignalRevision.ofEventId(REVIEW_ID).value());
+        when(pullRequestRepository.findByIdWithAllForGate(ARTIFACT_ID)).thenReturn(Optional.of(pullRequest));
+        when(reviewRepository.findByIdAndPullRequestId(REVIEW_ID, ARTIFACT_ID)).thenReturn(Optional.of(review()));
+        GateDecision.Detect detection = detection();
+        when(gate.evaluate(
+                        pullRequest,
+                        ScmSignals.PULL_REQUEST_REVIEWED,
+                        TriggerMode.AUTO,
+                        new ReviewSubject(REVIEWER_ID, true)))
+                .thenReturn(detection);
+
+        pullRequestResubmitter().resubmit(signal);
+
+        var request = ArgumentCaptor.forClass(PullRequestReviewSubmissionRequest.class);
+        verify(agentJobService)
+                .submit(
+                        eq(WORKSPACE_ID),
+                        eq(AgentJobType.PULL_REQUEST_REVIEW),
+                        request.capture(),
+                        eq(signal.key()),
+                        eq(detection));
+        assertThat(request.getValue().reviewId()).isEqualTo(REVIEW_ID);
+        assertThat(request.getValue().aboutUserId()).isEqualTo(REVIEWER_ID);
+        verify(signalRecorder, never()).markRefused(any(), any());
+    }
+
+    @Test
+    void shouldRetireASubmittedReviewOccasionWhoseReviewNoLongerBelongsToItsPullRequest() {
+        ArtifactSignal signal = signal(ScmSignals.PULL_REQUEST_REVIEWED.value());
+        signal.setRevision(SignalRevision.ofEventId(REVIEW_ID).value());
+        when(pullRequestRepository.findByIdWithAllForGate(ARTIFACT_ID)).thenReturn(Optional.of(pullRequest()));
+        when(reviewRepository.findByIdAndPullRequestId(REVIEW_ID, ARTIFACT_ID)).thenReturn(Optional.empty());
+
+        pullRequestResubmitter().resubmit(signal);
+
+        verify(signalRecorder).markRefused(signal.key(), SignalStateReason.ARTIFACT_GONE);
+        verifyNoInteractions(gate, agentJobService);
+    }
+
+    @Test
+    void shouldHoldASubmittedReviewOccasionWhoseReviewerIsNotLinkedYet() {
+        ArtifactSignal signal = signal(ScmSignals.PULL_REQUEST_REVIEWED.value());
+        signal.setRevision(SignalRevision.ofEventId(REVIEW_ID).value());
+        PullRequestReview review = review();
+        review.setAuthor(null);
+        when(pullRequestRepository.findByIdWithAllForGate(ARTIFACT_ID)).thenReturn(Optional.of(pullRequest()));
+        when(reviewRepository.findByIdAndPullRequestId(REVIEW_ID, ARTIFACT_ID)).thenReturn(Optional.of(review));
+
+        pullRequestResubmitter().resubmit(signal);
+
+        verify(signalRecorder).markRefused(signal.key(), SignalStateReason.SUBJECT_UNLINKED);
+        verifyNoInteractions(gate, agentJobService);
+    }
+
+    private PullRequestSignalResubmitter pullRequestResubmitter() {
+        return new PullRequestSignalResubmitter(
+                agentJobService, pullRequestRepository, gate, signalRecorder, reviewRepository);
+    }
+
     private GateDecision.Detect detection() {
         return new GateDecision.Detect(workspace, List.of(), 1, TriggerMode.AUTO);
     }
@@ -170,6 +246,17 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         pullRequest.setHeadRefOid("abc123");
         pullRequest.setBaseRefName("main");
         return pullRequest;
+    }
+
+    private PullRequestReview review() {
+        User reviewer = new User();
+        reviewer.setId(REVIEWER_ID);
+        PullRequestReview review = new PullRequestReview();
+        review.setId(REVIEW_ID);
+        review.setPullRequest(pullRequest());
+        review.setAuthor(reviewer);
+        review.setState(PullRequestReview.State.APPROVED);
+        return review;
     }
 
     private Issue issue() {
