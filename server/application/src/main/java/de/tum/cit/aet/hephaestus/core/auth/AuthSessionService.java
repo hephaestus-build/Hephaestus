@@ -18,8 +18,10 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -74,6 +76,14 @@ public class AuthSessionService {
         clearCookie(response);
     }
 
+    /**
+     * How long before {@code imp_exp} a rotation already exits. A token minted at the deadline would be
+     * born expired, so the operator would be signed out instead of returned to their own session. Keep
+     * this at or above the SPA's {@code REFRESH_SKEW_MS} in {@code use-session-keep-alive.ts}, which
+     * decides when that rotation happens.
+     */
+    private static final Duration IMPERSONATION_EXIT_SKEW = Duration.ofSeconds(60);
+
     /** Rotate: revoke the presenting token, mint a fresh one (preserving impersonation), set cookie. */
     @Transactional
     public void refresh(
@@ -109,6 +119,22 @@ public class AuthSessionService {
                 clearCookie(response);
                 return;
             }
+            // The absolute session ceiling is the one deadline a rolling refresh must not be able to
+            // step over, so it is enforced here rather than only re-stamped onto the new token. A token
+            // that carries no ceiling at all predates the ceiling and is ended rather than renewed.
+            if (sessionExpiresAt == null || !clock.instant().isBefore(sessionExpiresAt)) {
+                metrics.recordRefreshResult(AuthMetrics.RefreshResult.NOOP);
+                clearCookie(response);
+                return;
+            }
+            // An impersonation is only ever as legitimate as the operator behind it. Suspending or
+            // demoting an operator revokes their own sessions, but the impersonation token's subject is
+            // the target, so it survives that sweep — this is where it ends.
+            if (impersonatorId != null && !isActiveInstanceAdmin(impersonatorId)) {
+                metrics.recordRefreshResult(AuthMetrics.RefreshResult.SUSPENDED);
+                clearCookie(response);
+                return;
+            }
             HephaestusJwtIssuer.Token token;
             if (impersonatorId == null) {
                 // Ordinary (non-impersonation) rotation — carry the absolute session ceiling forward so
@@ -121,9 +147,12 @@ public class AuthSessionService {
                         .event(AuthEvent.EventType.TOKEN_REFRESH, AuthEvent.Result.SUCCESS)
                         .account(accountId)
                         .record();
-            } else if (impersonationExpired(impersonationExpiresAt)) {
+            } else if (impersonationExpired(impersonationExpiresAt) || isAppAdmin(account)) {
                 // Impersonation time-box reached: auto-exit to the operator (mint an operator token
                 // with NO act claim) rather than renewing the impersonation forever via silent refresh.
+                // A target promoted to APP_ADMIN mid-session exits the same way: begin refuses
+                // admin-to-admin impersonation, and a rotation must not be a way around that refusal.
+                String exitReason = isAppAdmin(account) ? "TARGET_PROMOTED" : "EXPIRED";
                 token = jwtIssuer.issue(
                         principalFactory.forAccountId(impersonatorId),
                         TokenConstraints.session(sessionExpiresAt, context.authTime()),
@@ -132,10 +161,12 @@ public class AuthSessionService {
                         .event(AuthEvent.EventType.IMPERSONATION_END, AuthEvent.Result.SUCCESS)
                         .account(accountId)
                         .actingAccount(impersonatorId)
-                        .details("{\"reason\":\"EXPIRED\"}")
+                        .details("{\"reason\":\"" + exitReason + "\"}")
                         .record();
+                metrics.recordImpersonationAutoExit(exitReason.toLowerCase(Locale.ROOT));
             } else {
-                // Impersonation rotation: re-cap the new token at the same imp_exp ceiling.
+                // Impersonation rotation: re-cap the new token at the same imp_exp ceiling, and carry the
+                // operator's session ceiling so impersonating cannot outlive the session that began it.
                 token = jwtIssuer.issue(
                         principalFactory.forAccountId(accountId),
                         new TokenConstraints(
@@ -144,6 +175,7 @@ public class AuthSessionService {
                 authEventLogger
                         .event(AuthEvent.EventType.TOKEN_REFRESH, AuthEvent.Result.SUCCESS)
                         .account(accountId)
+                        .actingAccount(impersonatorId)
                         .record();
             }
             setCookie(response, token);
@@ -172,12 +204,22 @@ public class AuthSessionService {
     }
 
     /**
-     * Whether an impersonation session has hit its absolute time-box. A missing ceiling is treated as
-     * expired (fail-safe: a legacy impersonation token without {@code imp_exp} auto-exits on its next
-     * refresh rather than living forever).
+     * Whether an impersonation session has reached — or is within {@link #IMPERSONATION_EXIT_SKEW} of —
+     * its absolute time-box. A missing ceiling is treated as expired (fail-safe: a legacy impersonation
+     * token without {@code imp_exp} auto-exits on its next refresh rather than living forever).
      */
     private boolean impersonationExpired(@Nullable Instant impersonationExpiresAt) {
-        return impersonationExpiresAt == null || !clock.instant().isBefore(impersonationExpiresAt);
+        return impersonationExpiresAt == null
+                || !clock.instant().plus(IMPERSONATION_EXIT_SKEW).isBefore(impersonationExpiresAt);
+    }
+
+    private static boolean isAppAdmin(Account account) {
+        return account.getAppRole() == Account.AppRole.APP_ADMIN;
+    }
+
+    private boolean isActiveInstanceAdmin(Long accountId) {
+        Account operator = accountRepository.findById(accountId).orElse(null);
+        return operator != null && operator.getStatus() == Account.Status.ACTIVE && isAppAdmin(operator);
     }
 
     /** Active (non-revoked, non-expired) sessions for an account. */

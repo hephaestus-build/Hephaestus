@@ -109,6 +109,15 @@ multi-factor authentication: an identity provider that still holds a session may
 asking for anything, so enforce MFA at the provider. A refused action is not replayed once access is
 confirmed — review it and submit it again.
 
+### Session and impersonation deadlines
+
+A session ends at `hephaestus.auth.session-max-lifetime` (default `12h`) no matter how active it is;
+renewing an access token rolls within that deadline and never past it. An impersonation ends at
+`hephaestus.auth.impersonation-max-lifetime` (default `1h`), or sooner — when the operator's own
+session ends, when the operator stops being an instance admin, or when the account being impersonated
+is promoted to instance admin. Each of these returns the operator to their own session and records an
+`IMPERSONATION_END` entry in the audit viewer; none of them requires anyone to sign in again.
+
 ## LLM proxy
 
 Worker roles must leave `hephaestus.llm.egress.allow-loopback=false`. Provider credentials and model

@@ -112,10 +112,32 @@ would want the confirmation to unlock.
 ## Impersonation time-box
 
 `begin` stamps an absolute ceiling `imp_exp` (`hephaestus.auth.impersonation-max-lifetime`, default
-1h); the issuer caps each token's `exp` at `min(now + accessTtl, imp_exp)`, and `refresh` drops the
-`act` claim (auto-exit) once it passes. `imp_exp` is the binding limit: the webapp keeps the session
-alive across access-token expiry (`use-session-keep-alive.ts`, mounted from `main.tsx`), so an
-impersonation ends at the ceiling rather than at `accessTtl`.
+1h); the issuer caps each token's `exp` at `min(now + accessTtl, imp_exp, session_exp)`, and
+`refresh` drops the `act` claim (auto-exit) once it passes. `imp_exp` is the binding limit: the webapp
+keeps the session alive across access-token expiry (`use-session-keep-alive.ts`, mounted from
+`main.tsx`), so an impersonation ends at the ceiling rather than at `accessTtl`.
+
+Rotation is where an impersonation ends, so `refresh` is where the rest of the bounds live:
+
+- **A minute before the ceiling**, not at it. A token minted at `imp_exp` would be born expired, so
+  the operator would be signed out rather than returned to their own session. The window is
+  `IMPERSONATION_EXIT_SKEW` and must stay at or above the SPA's `REFRESH_SKEW_MS`, which decides when
+  the rotation happens at all.
+- **The operator's own session bounds it.** `begin` carries the operator's `session_exp` onto the
+  impersonation token and `refresh` refuses to rotate past it, so acting as someone else can never
+  outlive the session that started it. A token with no ceiling at all predates the ceiling and is
+  ended rather than renewed.
+- **The operator must still be one.** Demoting or suspending an operator revokes their own sessions,
+  but an impersonation token's subject is the *target*, so it survives that sweep; `refresh` re-reads
+  the operator and ends the session when they are no longer an active instance admin.
+- **A target promoted mid-session exits.** `begin` refuses admin-to-admin impersonation, and a
+  rotation must not be a way around that refusal; the auto-exit is audited with reason
+  `TARGET_PROMOTED` rather than `EXPIRED`.
+
+Both auto-exits are audited as `IMPERSONATION_END` with the `(target, operator)` pair and counted as
+`auth.impersonation.auto_exit{reason}`. Exiting by hand refuses (401) when the impersonation was
+already ended by any of these paths, rather than minting a session something else deliberately
+closed.
 
 ## Elevated workspace access
 

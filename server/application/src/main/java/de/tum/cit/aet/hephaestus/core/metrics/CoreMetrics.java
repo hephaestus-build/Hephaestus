@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.metrics;
 public final class CoreMetrics {
 
     public static final String AUTH_AUDIT_WRITE_FAILED = "auth.audit.write_failed";
+    public static final String AUTH_IMPERSONATION_AUTO_EXIT = "auth.impersonation.auto_exit";
     public static final String AUTH_ISSUED_JWT_PRUNED = "auth.issued_jwt.pruned";
     public static final String AUTH_LOGIN = "auth.login";
     public static final String AUTH_RATELIMIT_BACKEND_ERROR = "auth.ratelimit.backend_error";
