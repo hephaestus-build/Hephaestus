@@ -674,8 +674,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             var decision = new GateDecision.Detect(savedWorkspace, List.of(), 1, TriggerMode.AUTO);
             when(gate.evaluate(any(), eq(ScmSignals.PULL_REQUEST_OPENED), eq(TriggerMode.AUTO)))
                     .thenReturn(decision);
-            transactionTemplate.executeWithoutResult(status ->
-                    new PullRequestSignalResubmitter(jobs, pullRequestRepository, gate, signalRecorder).resubmit(held));
+            transactionTemplate.executeWithoutResult(status -> new PullRequestSignalResubmitter(
+                            jobs, pullRequestRepository, gate, signalRecorder, reviewRepository)
+                    .resubmit(held));
 
             var request = ArgumentCaptor.forClass(PullRequestReviewSubmissionRequest.class);
             verify(jobs)

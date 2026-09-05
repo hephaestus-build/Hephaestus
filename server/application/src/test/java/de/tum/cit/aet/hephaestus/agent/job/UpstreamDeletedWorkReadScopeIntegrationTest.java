@@ -314,7 +314,10 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
         var decision = new GateDecision.Detect(workspace, List.of(), 1, TriggerMode.AUTO);
         when(detectionGate.evaluate(any(), eq(ScmSignals.PULL_REQUEST_OPENED), eq(TriggerMode.AUTO)))
                 .thenReturn(decision);
-        resubmit(new PullRequestSignalResubmitter(jobs, pullRequestRepository, detectionGate, signalRecorder), held);
+        resubmit(
+                new PullRequestSignalResubmitter(
+                        jobs, pullRequestRepository, detectionGate, signalRecorder, reviewRepository),
+                held);
 
         var request = ArgumentCaptor.forClass(PullRequestReviewSubmissionRequest.class);
         verify(jobs)
