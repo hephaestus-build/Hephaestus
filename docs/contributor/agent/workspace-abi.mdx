@@ -123,7 +123,7 @@ worker filesystem.
 
 | Code | Meaning |
 |------|---------|
-| 0    | Success — `out/result.json` is complete, whether from the first attempt, the recovery retry, or reconstruction from persisted tool state |
+| 0    | Success — `out/result.json` is complete, from the first attempt or from the recovery retry |
 | 1    | No complete review output after the initial attempt *and* the recovery retry |
 | 2    | Fatal runner error — an unhandled rejection or uncaught exception. Debug and usage files are persisted first |
 | 3    | Watchdog hard-kill (budget + grace exceeded); writes `out/watchdog-killed.json` first |

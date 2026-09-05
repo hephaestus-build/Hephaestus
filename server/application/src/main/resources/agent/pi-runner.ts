@@ -483,77 +483,12 @@ function persistReviewState() {
 	);
 }
 
-const OUTCOME_VALUES = observationSchema.properties.outcome.enum;
-
-/** Validates the model-authored wire shape before normalization. */
-function isValidObservation(candidate: unknown): boolean {
-	if (!isRecord(candidate)) return false;
-	if (typeof candidate.practiceSlug !== "string" || !candidate.practiceSlug.trim()) return false;
-	if (typeof candidate.summary !== "string" || !candidate.summary.trim()) return false;
-	if (typeof candidate.outcome !== "string") return false;
-	return OUTCOME_VALUES.some((outcome) => outcome === candidate.outcome);
-}
-
-interface ObservationsPayload {
-	observations: unknown[];
-}
-
-function isValidObservationsPayload(payload: unknown): payload is ObservationsPayload {
-	return (
-		isRecord(payload) &&
-		Array.isArray(payload.observations) &&
-		payload.observations.length > 0 &&
-		payload.observations.every(isValidObservation)
-	);
-}
-
-const CONTROL_CHARACTER_ESCAPES = new Map([
-	["\n", "\\n"],
-	["\r", "\\r"],
-	["\t", "\\t"],
-]);
-const LAST_CONTROL_CODE_POINT = 0x1f;
-const DELETE_CODE_POINT = 0x7f;
-
-function lenientJsonParse(text: string): unknown {
-	try {
-		return parseJson(text);
-	} catch {
-		// Retry after escaping raw control characters.
-	}
-	let cleaned = "";
-	for (const character of text) {
-		const codePoint = character.codePointAt(0) ?? 0;
-		if (codePoint > LAST_CONTROL_CODE_POINT && codePoint !== DELETE_CODE_POINT) {
-			cleaned += character;
-			continue;
-		}
-		cleaned += CONTROL_CHARACTER_ESCAPES.get(character) ?? "";
-	}
-	return parseJson(cleaned);
-}
-
-function checkResultFile(): boolean {
-	if (!existsSync(RESULT_PATH)) return false;
-	try {
-		const data = lenientJsonParse(readFileSync(RESULT_PATH, "utf8"));
-		if (!isValidObservationsPayload(data)) {
-			const observations = isRecord(data) ? jsonArray(data.observations) : [];
-			const validCount = observations.filter(isValidObservation).length;
-			console.error(
-				`[pi-runner] result.json validation failed: observations=${observations.length}, valid=${validCount}`,
-			);
-			return false;
-		}
-		const normalized = data.observations.map(normalizeAndValidateObservation);
-		writeFileSync(RESULT_PATH, JSON.stringify({ observations: normalized }, null, 2));
-		return true;
-	} catch (e) {
-		console.error(`[pi-runner] result.json parse error: ${errorText(e)}`);
-		return false;
-	}
-}
-
+/**
+ * Writes the collected result, and is the only thing that writes it: a review session is opened with
+ * `read`, `grep` and `report_observation` and no tool that writes a file, so an observation reaches
+ * this runner through the tool or not at all. What lands here is therefore already normalised and
+ * already validated, by the same call that recorded it.
+ */
 function maybeWriteResultFile(): boolean {
 	if (reviewState.observations.length === 0) return false;
 	writeFileSync(RESULT_PATH, JSON.stringify({ observations: reviewState.observations }, null, 2));
@@ -562,12 +497,6 @@ function maybeWriteResultFile(): boolean {
 
 function hasPersistedReviewState(): boolean {
 	return reviewState.observations.length > 0;
-}
-
-function resolveResultFile(): "agent" | "tool-state" | null {
-	if (checkResultFile()) return "agent";
-	if (maybeWriteResultFile()) return "tool-state";
-	return null;
 }
 
 function appendObservations(observations: unknown[]): {
@@ -1877,19 +1806,14 @@ async function main() {
 		`[pi-runner] Initial: ${(initialDurationMs / 1000).toFixed(1)}s, calls=${initialUsage.totalCalls}, softTimeout=${softTimeoutFired}, hardAbort=${hardAborted}, resultFile=${existsSync(RESULT_PATH)}, reviewState=${hasPersistedReviewState()}`,
 	);
 
-	const resultFileSource = resolveResultFile();
+	const resultFileWritten = maybeWriteResultFile();
 	const missingAfterInitial = missingPracticeSlugs(
 		allSlugs,
 		reviewState.observations.map((item) => item.practiceSlug),
 	);
 	if (missingAfterInitial.length === 0) logPracticeCoverage();
 
-	if (resultFileSource === "agent" && missingAfterInitial.length === 0) {
-		console.error(`[pi-runner] SUCCESS: result.json valid after initial run`);
-		await completeWithAdmittedComposition();
-		process.exit(0);
-	}
-	if (resultFileSource === "tool-state" && missingAfterInitial.length === 0) {
+	if (resultFileWritten && missingAfterInitial.length === 0) {
 		console.error(
 			`[pi-runner] SUCCESS: composed result.json from persisted tool state after initial run`,
 		);
@@ -2010,14 +1934,6 @@ async function main() {
 		process.exit(1);
 	}
 
-	if (checkResultFile()) {
-		console.error(`[pi-runner] SUCCESS: result.json valid after retry`);
-		await completeWithAdmittedComposition();
-		process.exit(0);
-	}
-
-	// As in resolveResultFile(): what maybeWriteResultFile() writes is already normalised and validated,
-	// and re-reading it through checkResultFile() could only reject a measurement already admitted.
 	if (maybeWriteResultFile()) {
 		console.error(
 			`[pi-runner] SUCCESS: composed result.json from persisted tool state after retry`,
