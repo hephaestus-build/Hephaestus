@@ -100,6 +100,15 @@ public record SignalRevision(String value) {
         return new SignalRevision(RevisionScheme.EVENT_ID.prefix() + eventId);
     }
 
+    /** The event {@link #ofEventId} encoded here, or empty when another scheme minted this revision. */
+    public Optional<Long> eventId() {
+        if (scheme().orElse(null) != RevisionScheme.EVENT_ID) {
+            return Optional.empty();
+        }
+        return Optional.of(
+                Long.parseLong(value.substring(RevisionScheme.EVENT_ID.prefix().length())));
+    }
+
     /** The scheme that produced this revision, read back off its prefix. */
     public Optional<RevisionScheme> scheme() {
         for (RevisionScheme scheme : RevisionScheme.values()) {
