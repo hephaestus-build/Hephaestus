@@ -6,7 +6,7 @@ import { parseDocument } from "yaml";
 
 import { releaseSignerIdentity, releaseSignerRepository } from "./lib/release-signer.ts";
 import { SMOKE_HOSTNAME } from "./prepare-host-smoke-env.ts";
-import { parseStacks } from "./reconcile-deployment.ts";
+import { parseStacks, POSTGRES_IMAGE_INPUTS } from "./reconcile-deployment.ts";
 
 const release = readFileSync(".github/workflows/release.yml", "utf8");
 const deployment = readFileSync(".github/workflows/deploy-locked-compose.yml", "utf8");
@@ -152,6 +152,16 @@ await test("every promotion decision is taken by the script that owns it", () =>
 	assert.doesNotMatch(reconciler, /join\(releaseTree, "scripts\/prepare-release-lock\.ts"\)/);
 	// Run through the tooling link, argv[1] and import.meta.filename differ; only import.meta.main holds.
 	assert.match(reconciler, /^if \(import\.meta\.main\) \{/m);
+});
+
+await test("the reconciler and CI agree on what the PostgreSQL image is built from", () => {
+	// A host keeps its database image while this tree is unchanged, so the tree it watches has to be
+	// the one CI treats as the image's own inputs; widening the filter without widening the constant
+	// would leave a rebuilt image unapplied.
+	const cicd = readFileSync(".github/workflows/cicd.yml", "utf8");
+	const filter = /^ +postgres-image:\n((?: +- .*\n)+)/m.exec(cicd)?.[1];
+	assert.ok(filter, "detect-changes must declare the postgres-image filter");
+	assert.equal(filter.trim(), `- '${POSTGRES_IMAGE_INPUTS}/**'`);
 });
 
 await test("derives the canonical signer identity and refuses missing CI identity", () => {
