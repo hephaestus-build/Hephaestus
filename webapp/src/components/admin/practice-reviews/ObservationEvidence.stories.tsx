@@ -58,6 +58,10 @@ const CITATION_BY_KIND: Record<string, { path: string; quote: string }> = {
 		path: "Review by @grace",
 		quote: "Approving once the terminology sweep lands.",
 	},
+	"scm.pull-request.commits": {
+		path: "Commit 3f2a9c1",
+		quote: "Rename the route to observations and keep the old path redirecting",
+	},
 	"workspace.project-inventory": {
 		path: "webapp",
 		quote: "React 19, TanStack Router, Tailwind 4, Vitest, Storybook 10.",

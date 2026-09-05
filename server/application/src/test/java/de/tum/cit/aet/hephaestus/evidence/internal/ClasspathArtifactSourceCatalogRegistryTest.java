@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.evidence.PrivacyClass;
+import de.tum.cit.aet.hephaestus.evidence.RequiredCaptureQuality;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -30,7 +31,7 @@ import tools.jackson.databind.json.JsonMapper;
 class ClasspathArtifactSourceCatalogRegistryTest {
 
     private static final String VERSION_1_CATALOG_SHA256 =
-            "978097f57047bb716457e8b3c44115ef0bb55602dbce4f1a15900a40d70a39b8";
+            "df44eb8884ed8bd60f60984d0d9c9c76c76543a096449530514a85d6a66e12b6";
 
     private final JsonMapper objectMapper = JsonMapper.builder().build();
 
@@ -40,7 +41,7 @@ class ClasspathArtifactSourceCatalogRegistryTest {
 
         assertThat(registry.current().version()).isEqualTo(new SourceContractVersion("1.0.0"));
         assertThat(registry.catalogDigest()).isEqualTo(VERSION_1_CATALOG_SHA256);
-        assertThat(registry.current().sources()).hasSize(15);
+        assertThat(registry.current().sources()).hasSize(16);
         assertThat(registry.requireSourcesFor(new SourceContractVersion("1.0.0"), "scm.pull_request"))
                 .contains(new SourceKind("scm.repository.tree"), new SourceKind("scm.pull-request.diff"));
         var repositoryTree =
@@ -48,6 +49,11 @@ class ClasspathArtifactSourceCatalogRegistryTest {
         assertThat(repositoryTree.displayName()).isEqualTo("Repository files");
         assertThat(repositoryTree.completenessPolicy().supportsPartial()).isTrue();
         assertThat(repositoryTree.completenessPolicy().supportsEmpty()).isTrue();
+        // No pull request has zero commits, so an empty commit capture is a mirror gap and readiness
+        // must refuse the practices that read it rather than let a model judge commits it cannot see.
+        var commits =
+                registry.requireSource(new SourceContractVersion("1.0.0"), new SourceKind("scm.pull-request.commits"));
+        assertThat(commits.requiredQuality()).isEqualTo(RequiredCaptureQuality.COMPLETE_AND_NON_EMPTY);
     }
 
     @Test

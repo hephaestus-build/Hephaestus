@@ -387,6 +387,41 @@
 			]
 		},
 		{
+			"kind": "scm.pull-request.commits",
+			"displayName": "Commits",
+			"description": "The commits the pull request carries: each one's subject, body, timestamps, size, and how it was made.",
+			"selectionScope": "Up to the first 200 commits linked to one pull request, oldest authored first. Beyond that limit the capture is reported as PARTIAL. Per-commit diffs are not included. No pull request has zero commits, so an empty capture is the mirror not having linked them yet, and a practice that reads this source is refused rather than asked to judge commits it cannot see.",
+			"artifactKinds": [
+				"scm.pull_request"
+			],
+			"defaultRequirement": false,
+			"authority": "SYNCHRONIZED_MIRROR",
+			"identity": {
+				"mode": "NOT_APPLICABLE"
+			},
+			"completeness": {
+				"supportsComplete": true,
+				"supportsPartial": true,
+				"supportsEmpty": true
+			},
+			"requiredQuality": "COMPLETE_AND_NON_EMPTY",
+			"privacyClass": "PERSONAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-scm-pull-request-commits-automated-review",
+				"use-scm-pull-request-commits-feedback-delivery",
+				"use-scm-pull-request-commits-mentor-context",
+				"use-scm-pull-request-commits-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		},
+		{
 			"kind": "workspace.project-inventory",
 			"displayName": "Related workspace work",
 			"description": "Other work items in the same workspace, supplied so a change can be read against related work.",

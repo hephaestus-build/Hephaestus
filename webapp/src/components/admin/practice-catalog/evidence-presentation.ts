@@ -69,6 +69,7 @@ const SOURCE_FAMILIES: Record<string, EvidenceSourceFamily> = {
 	"scm.pull-request.comments": "work",
 	"scm.review-threads": "work",
 	"scm.general-review-comments": "work",
+	"scm.pull-request.commits": "work",
 	"scm.issue.core": "work",
 	"scm.issue.comments": "work",
 	"slack.conversation.thread": "work",

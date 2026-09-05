@@ -18,9 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Workspace-agnostic: commits are scoped through {@code repository_id} (a
  * {@link de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository} belongs to exactly
- * one workspace), not via a direct {@code workspace_id} column. All custom queries take
- * a {@code repositoryId} parameter; Hibernate-emitted entity load/save SQL is allowed by
- * the PK-only DML carve-out in {@code WorkspaceStatementInspector}.
+ * one workspace), not via a direct {@code workspace_id} column. Every custom query takes a
+ * {@code repositoryId} parameter, except {@link #findByAssociatedPullRequestId}, which scopes through
+ * the pull request id (a pull request belongs to exactly one repository); Hibernate-emitted entity
+ * load/save SQL is allowed by the PK-only DML carve-out in {@code WorkspaceStatementInspector}.
  */
 @Repository
 @WorkspaceAgnostic("Commits scoped through repository_id -> repository.workspace_id")
@@ -350,6 +351,19 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
         """)
     List<Commit> findTopNByAuthorIdOrderByAuthoredAtDesc(
             @Param("authorId") @Nullable Long authorId, @Param("asOf") Instant asOf, Pageable pageable);
+
+    /**
+     * A pull request's commits through {@code commit_pull_request}, oldest authored first with the SHA as the
+     * tiebreak so two commits authored in the same second stage in the same order on every review. Used by the
+     * practice-review commit source.
+     */
+    @Query("""
+        SELECT c FROM Commit c
+        JOIN c.associatedPullRequests p
+        WHERE p.id = :pullRequestId
+        ORDER BY c.authoredAt ASC, c.sha ASC
+        """)
+    List<Commit> findByAssociatedPullRequestId(@Param("pullRequestId") Long pullRequestId, Pageable pageable);
 
     /** Commit by id with file changes eagerly loaded. Used by the CrossBoundary achievement evaluator. */
     @Query("""

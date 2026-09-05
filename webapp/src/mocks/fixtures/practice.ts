@@ -256,6 +256,17 @@ export const mockPracticeDefinitionOptions = {
 					supportsExhaustiveEvidence: true,
 				},
 				{
+					sourceKind: "scm.pull-request.commits",
+					displayName: "Commits",
+					description:
+						"The commits the pull request carries: each one's subject, body, timestamps, size, and how it was made.",
+					selectionScope:
+						"Up to the first 200 commits linked to one pull request, oldest authored first. Beyond that limit the capture is reported as PARTIAL. Per-commit diffs are not included. No pull request has zero commits, so an empty capture is the mirror not having linked them yet, and a practice that reads this source is refused rather than asked to judge commits it cannot see.",
+					privacyClass: "PERSONAL",
+					requiredQuality: "COMPLETE_AND_NON_EMPTY",
+					supportsExhaustiveEvidence: true,
+				},
+				{
 					sourceKind: "scm.repository.tree",
 					displayName: "Repository files",
 					description:

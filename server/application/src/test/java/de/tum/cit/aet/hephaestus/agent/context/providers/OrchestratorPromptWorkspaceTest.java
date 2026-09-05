@@ -40,6 +40,7 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
             SandboxLayout.CONTEXT_PREFIX + "context-map.md",
             SandboxLayout.CONTEXT_PREFIX + ReviewThreadContentSource.FILE_NAME,
             SandboxLayout.CONTEXT_PREFIX + GeneralReviewCommentContentSource.FILE_NAME,
+            SandboxLayout.CONTEXT_PREFIX + PullRequestCommitContentSource.FILE_NAME,
             LinkedWorkItemContentSource.OUTPUT_FILE,
             // Issue
             SandboxLayout.CONTEXT_PREFIX + "issue_summary.md",
