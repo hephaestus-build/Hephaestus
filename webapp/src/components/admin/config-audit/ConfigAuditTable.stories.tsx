@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import type { ConfigAuditEntryView } from "@/api/types.gen";
+import { expectSettledVisible } from "@/test/overlay";
 
 import { ConfigAuditTable } from "./ConfigAuditTable";
 
@@ -203,7 +204,7 @@ export const ElevatedRowDetail: Story = {
 		await userEvent.click(details);
 		const dialog = within(await screen.findByRole("dialog"));
 		dialog.getByText("Access");
-		await expect(dialog.getByText(/not a member of/i)).toBeVisible();
+		await expectSettledVisible(dialog.getByText(/not a member of/i));
 	},
 };
 
