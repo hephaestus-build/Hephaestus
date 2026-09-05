@@ -127,6 +127,25 @@ class SignalGrammarTest extends BaseUnitTest {
             assertThat(SignalRevision.ofContentDigest("a", "b").value().length())
                     .isLessThanOrEqualTo(128);
         }
+
+        @Test
+        void shouldReadBackTheEventIdItWasMintedFrom() {
+            assertThat(SignalRevision.ofEventId(42L).eventId()).contains(42L);
+        }
+
+        @Test
+        void shouldReportNoEventIdForAnotherScheme() {
+            assertThat(SignalRevision.ofHeadCommit("abc123").eventId()).isEmpty();
+        }
+
+        @Test
+        void shouldReportNoEventIdRatherThanThrowForAPersistedRowTheConstructorNoLongerWrites() {
+            // The column only enforces the grammar, not the per-scheme suffix, so a row written before
+            // eventId() existed — or edited by hand — can carry a non-numeric tail under this prefix.
+            SignalRevision fromColumn = new SignalRevision("event~not-a-number");
+
+            assertThat(fromColumn.eventId()).isEmpty();
+        }
     }
 
     @Nested
