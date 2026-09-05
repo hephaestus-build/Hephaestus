@@ -79,9 +79,17 @@ final class SecretDiffScanner {
     /** Documentation example keys that are intentionally public. */
     private static final List<String> DOC_EXAMPLE_KEYS = List.of("AKIAIOSFODNN7EXAMPLE", "sk-test_example");
 
-    /** Paths whose hits are downgraded to non-blocking (test/example/doc fixtures). */
+    /**
+     * Paths whose hits are downgraded to non-blocking (test/example/doc fixtures). The singular
+     * {@code example}/{@code sample} counts only as the first segment: deeper in a path it names a
+     * package rather than a directory of samples, and {@code com/example} is the placeholder group every
+     * JVM project generator writes, so a credential in that tree is application code with a credential in
+     * it. The plural still matches at any depth, where it is a samples directory even when it sits inside
+     * a workspace package ({@code packages/sdk/examples/}).
+     */
     private static final Pattern LOW_SIGNAL_PATH =
-            Pattern.compile("(?i)(?:^|/)(?:tests?|spec|specs|fixtures?|__tests__|__mocks__|examples?|samples?|docs?)/"
+            Pattern.compile("(?i)(?:^|/)(?:tests?|spec|specs|fixtures?|__tests__|__mocks__|docs?|examples|samples)/"
+                    + "|^(?:example|sample)/"
                     + "|\\.(?:example|sample|md)$|(?:^|/)\\.env\\.example$");
 
     /**
