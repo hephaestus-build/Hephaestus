@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.ContainerSecurityPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerClientOperations;
+import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxContainerManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxLabels;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxNetworkManager;
@@ -99,8 +100,9 @@ class DockerInteractiveSandboxLiveTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        SandboxProperties sandboxProperties = new SandboxProperties(
-                "unix:///var/run/docker.sock", false, null, 5, 10, 60, null, null, 209_715_200L, 500_000, null);
+        SandboxProperties sandboxProperties = new SandboxProperties(5, 10, 60, 209_715_200L, 500_000, null);
+        var dockerProperties =
+                new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "docker");
         // Tight TTL so idle eviction tests don't have to wait minutes.
         InteractiveSandboxProperties interactiveProperties = new InteractiveSandboxProperties(
                 /* idleTtlSeconds */ 2,
@@ -124,9 +126,9 @@ class DockerInteractiveSandboxLiveTest {
         dockerOps = new DockerClientOperations(dockerClient, dockerClient);
         dockerWaitExecutor = Executors.newCachedThreadPool();
         containerManager = new SandboxContainerManager(dockerOps, image -> {}, sandboxProperties, dockerWaitExecutor);
-        networkManager = new SandboxNetworkManager(dockerOps, sandboxProperties);
+        networkManager = new SandboxNetworkManager(dockerOps, dockerProperties);
         workspaceManager = new SandboxWorkspaceManager(dockerOps);
-        securityPolicy = new ContainerSecurityPolicy(sandboxProperties, null);
+        securityPolicy = new ContainerSecurityPolicy(dockerProperties, null);
         meterRegistry = new SimpleMeterRegistry();
         metrics = new InteractiveSandboxMetrics(meterRegistry);
         watchdog = new StdinWriteWatchdog();
@@ -143,7 +145,7 @@ class DockerInteractiveSandboxLiveTest {
                 metrics,
                 MAPPER,
                 dockerWaitExecutor,
-                "docker",
+                dockerProperties,
                 8080,
                 proxyCredentialRegistry);
 

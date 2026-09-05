@@ -39,8 +39,7 @@ class SandboxContainerManagerTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        properties = new SandboxProperties(
-                "unix:///var/run/docker.sock", false, null, 5, 10, 60, null, null, 209_715_200L, 500_000, null);
+        properties = new SandboxProperties(5, 10, 60, 209_715_200L, 500_000, null);
         executor = Executors.newSingleThreadExecutor();
         manager = new SandboxContainerManager(containerOps, image -> {}, properties, executor, Duration.ofMillis(20));
     }

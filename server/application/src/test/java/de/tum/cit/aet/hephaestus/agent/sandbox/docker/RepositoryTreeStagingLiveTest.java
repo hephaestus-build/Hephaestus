@@ -75,8 +75,9 @@ class RepositoryTreeStagingLiveTest {
 
     @BeforeEach
     void setUp() {
-        SandboxProperties properties = new SandboxProperties(
-                "unix:///var/run/docker.sock", false, null, 5, 10, 300, null, null, 209_715_200L, 500_000, null);
+        SandboxProperties properties = new SandboxProperties(5, 10, 300, 209_715_200L, 500_000, null);
+        var dockerProperties =
+                new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "docker");
         var dockerClient = DockerClientImpl.getInstance(
                 DefaultDockerClientConfig.createDefaultConfigBuilder().build(),
                 new ApacheDockerHttpClient.Builder()
@@ -85,12 +86,12 @@ class RepositoryTreeStagingLiveTest {
         DockerClientOperations dockerOps = new DockerClientOperations(dockerClient, dockerClient);
         dockerWaitExecutor = Executors.newCachedThreadPool();
         containerManager = new SandboxContainerManager(dockerOps, image -> {}, properties, dockerWaitExecutor);
-        networkManager = new SandboxNetworkManager(dockerOps, properties);
+        networkManager = new SandboxNetworkManager(dockerOps, dockerProperties);
         sandboxAdapter = new DockerSandboxAdapter(
                 networkManager,
                 new SandboxWorkspaceManager(dockerOps),
                 containerManager,
-                new ContainerSecurityPolicy(properties, null),
+                new ContainerSecurityPolicy(dockerProperties, null),
                 8080,
                 new SimpleMeterRegistry());
     }

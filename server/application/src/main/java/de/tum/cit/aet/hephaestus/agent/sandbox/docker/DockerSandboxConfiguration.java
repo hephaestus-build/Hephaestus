@@ -31,7 +31,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -54,7 +53,11 @@ import tools.jackson.databind.ObjectMapper;
 @Configuration
 @ConditionalOnProperty(name = RuntimeRole.WORKER_PROPERTY, havingValue = "true", matchIfMissing = true)
 @ConditionalOnClass(DockerClient.class)
-@EnableConfigurationProperties({SandboxProperties.class, InteractiveSandboxProperties.class})
+@EnableConfigurationProperties({
+    SandboxProperties.class,
+    DockerSandboxProperties.class,
+    InteractiveSandboxProperties.class
+})
 public class DockerSandboxConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(DockerSandboxConfiguration.class);
@@ -83,26 +86,28 @@ public class DockerSandboxConfiguration {
 
     /** Calls whose response body is the stream. One wait per container, and nothing else. */
     @Bean(name = "dockerStreamingClient", destroyMethod = "close")
-    public DockerClient dockerStreamingClient(SandboxProperties properties) {
+    public DockerClient dockerStreamingClient(SandboxProperties properties, DockerSandboxProperties dockerProperties) {
         return buildClient(
-                properties, HTTP_STREAMING_RESPONSE_TIMEOUT, properties.maxConcurrentContainers(), "streaming");
+                dockerProperties, HTTP_STREAMING_RESPONSE_TIMEOUT, properties.maxConcurrentContainers(), "streaming");
     }
 
     @Bean(destroyMethod = "close")
-    public DockerClient dockerClient(SandboxProperties properties) {
+    public DockerClient dockerClient(SandboxProperties properties, DockerSandboxProperties dockerProperties) {
         return buildClient(
-                properties,
+                dockerProperties,
                 HTTP_RESPONSE_TIMEOUT,
                 properties.maxConcurrentContainers() * RPC_CONNECTIONS_PER_CONTAINER,
                 "rpc");
     }
 
     private DockerClient buildClient(
-            SandboxProperties properties, Duration responseTimeout, int maxConnections, String kind) {
-        var configBuilder = DefaultDockerClientConfig.createDefaultConfigBuilder()
-                .withDockerHost(properties.dockerHost())
+            DockerSandboxProperties properties, Duration responseTimeout, int maxConnections, String kind) {
+        // A bare Builder, not createDefaultConfigBuilder(): the latter seeds itself from
+        // DOCKER_HOST/DOCKER_TLS_VERIFY/DOCKER_CERT_PATH/DOCKER_CONTEXT before these three
+        // overrides land, so an ambient value would win for any field we don't set here.
+        var configBuilder = new DefaultDockerClientConfig.Builder()
+                .withDockerHost(properties.host())
                 .withDockerTlsVerify(properties.tlsVerify());
-
         if (properties.certPath() != null) {
             configBuilder.withDockerCertPath(properties.certPath());
         }
@@ -121,7 +126,7 @@ public class DockerSandboxConfiguration {
         log.info(
                 "Docker sandbox client configured: kind={}, host={}, tlsVerify={}, responseTimeout={}, maxConnections={}",
                 kind,
-                properties.dockerHost(),
+                properties.host(),
                 properties.tlsVerify(),
                 responseTimeout,
                 maxConnections);
@@ -136,13 +141,13 @@ public class DockerSandboxConfiguration {
     }
 
     @Bean
-    public ContainerSecurityPolicy containerSecurityPolicy(SandboxProperties properties) {
+    public ContainerSecurityPolicy containerSecurityPolicy(DockerSandboxProperties properties) {
         String seccompJson = loadSeccompProfile("sandbox/agent-seccomp-profile.json");
         return new ContainerSecurityPolicy(properties, seccompJson);
     }
 
     @Bean
-    public SandboxNetworkManager sandboxNetworkManager(DockerClientOperations ops, SandboxProperties properties) {
+    public SandboxNetworkManager sandboxNetworkManager(DockerClientOperations ops, DockerSandboxProperties properties) {
         return new SandboxNetworkManager(ops, properties);
     }
 
@@ -221,8 +226,10 @@ public class DockerSandboxConfiguration {
 
     @Bean
     public DockerHealthIndicator dockerHealthIndicator(
-            SandboxContainerManager containerManager, SandboxProperties properties) {
-        return new DockerHealthIndicator(containerManager, properties);
+            SandboxContainerManager containerManager,
+            SandboxProperties properties,
+            DockerSandboxProperties dockerProperties) {
+        return new DockerHealthIndicator(containerManager, properties, dockerProperties);
     }
 
     // Interactive (mentor) sandbox — sibling of SandboxManager.
@@ -260,7 +267,7 @@ public class DockerSandboxConfiguration {
             // Shared platform-thread executor (declared above for the sync sandbox); the interactive
             // adapter runs runClose() here too — docker-java sync calls pin virtual carriers on JDK 21.
             ExecutorService dockerWaitExecutor,
-            @Value("${hephaestus.mentor.docker-cli:docker}") String dockerCli,
+            DockerSandboxProperties dockerProperties,
             SandboxGatewayProperties gatewayProperties,
             MentorProxyCredentialRegistry mentorProxyCredentialRegistry) {
         return new DockerInteractiveSandboxAdapter(
@@ -273,7 +280,7 @@ public class DockerSandboxConfiguration {
                 metrics,
                 mapper,
                 dockerWaitExecutor,
-                dockerCli,
+                dockerProperties,
                 gatewayProperties.port(),
                 mentorProxyCredentialRegistry);
     }

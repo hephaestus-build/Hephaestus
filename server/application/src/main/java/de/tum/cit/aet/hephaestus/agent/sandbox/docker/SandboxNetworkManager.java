@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -24,13 +23,13 @@ public class SandboxNetworkManager {
     static final String NETWORK_PREFIX = "agent-net-";
 
     private final DockerNetworkOperations networkOps;
-    private final SandboxProperties properties;
+    private final DockerSandboxProperties properties;
     private final Supplier<String> hostnameSupplier;
 
     /** Resolved once at startup; cached for the lifetime of the bean. */
     private volatile @Nullable String appServerContainerId;
 
-    public SandboxNetworkManager(DockerNetworkOperations networkOps, SandboxProperties properties) {
+    public SandboxNetworkManager(DockerNetworkOperations networkOps, DockerSandboxProperties properties) {
         this(networkOps, properties, () -> System.getenv("HOSTNAME"));
     }
 
@@ -38,7 +37,7 @@ public class SandboxNetworkManager {
      * @param hostnameSupplier provides the container HOSTNAME fallback (testable seam)
      */
     SandboxNetworkManager(
-            DockerNetworkOperations networkOps, SandboxProperties properties, Supplier<String> hostnameSupplier) {
+            DockerNetworkOperations networkOps, DockerSandboxProperties properties, Supplier<String> hostnameSupplier) {
         this.networkOps = networkOps;
         this.properties = properties;
         this.hostnameSupplier = hostnameSupplier;
@@ -72,7 +71,7 @@ public class SandboxNetworkManager {
         if (containerId == null || containerId.isBlank()) {
             log.warn("Cannot determine app-server container ID — app server is likely running on the host, "
                     + "not in Docker. Agent containers will use host.docker.internal to reach the LLM proxy. "
-                    + "Set hephaestus.sandbox.app-server-container-id to suppress this warning.");
+                    + "Set hephaestus.sandbox.docker.app-server-container-id to suppress this warning.");
             return null;
         }
         String ip = networkOps.connectToNetwork(networkId, containerId);

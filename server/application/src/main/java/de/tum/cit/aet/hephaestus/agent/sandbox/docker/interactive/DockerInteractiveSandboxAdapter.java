@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.ContainerSecurityPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerOperations;
+import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxContainerManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxEnvBlocklist;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxLabels;
@@ -65,7 +66,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
     private final InteractiveSandboxRegistry registry;
     private final InteractiveSandboxMetrics metrics;
     private final ObjectMapper mapper;
-    private final String dockerCli;
+    private final DockerCli dockerCli;
     private final int gatewayPort;
     private final Executor closeExecutor;
     private final MentorProxyCredentialRegistry mentorProxyCredentialRegistry;
@@ -81,7 +82,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             InteractiveSandboxMetrics metrics,
             ObjectMapper mapper,
             Executor closeExecutor,
-            String dockerCli,
+            DockerSandboxProperties dockerProperties,
             int gatewayPort,
             MentorProxyCredentialRegistry mentorProxyCredentialRegistry) {
         this.properties = properties;
@@ -93,7 +94,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
         this.metrics = metrics;
         this.mapper = mapper;
         this.closeExecutor = closeExecutor;
-        this.dockerCli = dockerCli;
+        this.dockerCli = new DockerCli(dockerProperties);
         this.gatewayPort = gatewayPort;
         this.mentorProxyCredentialRegistry = mentorProxyCredentialRegistry;
         java.util.Arrays.setAll(attachLocks, ignored -> new Object());
@@ -369,7 +370,8 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
     private static final int PREP_DRAIN_CAP_BYTES = 16 * 1024;
 
     private void runExec(String containerId, String user, String script, String description) {
-        ProcessBuilder pb = new ProcessBuilder(dockerCli, "exec", "-u", user, containerId, "sh", "-c", script);
+        ProcessBuilder pb =
+                dockerCli.configure(new ProcessBuilder("exec", "-u", user, containerId, "sh", "-c", script));
         pb.redirectErrorStream(true);
         Process p;
         try {

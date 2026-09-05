@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
@@ -35,6 +34,9 @@ import org.jspecify.annotations.Nullable;
  * because the agent process writes to {@code /workspace} at runtime, and {@code docker cp} injects
  * files there before container start. Compensating controls: no-new-privileges, non-root user,
  * dropped capabilities, noexec tmpfs, seccomp.
+ *
+ * <p>Deployment requirements for the Docker host running this policy's containers are documented in
+ * {@code docs/admin/threat-model.mdx} and {@code docs/admin/configuration-readiness.mdx}.
  */
 public class ContainerSecurityPolicy {
 
@@ -58,14 +60,14 @@ public class ContainerSecurityPolicy {
             // runtime
             );
 
-    private final SandboxProperties properties;
+    private final DockerSandboxProperties properties;
     private final @Nullable String seccompProfileJson;
 
     /**
-     * @param properties sandbox configuration
+     * @param properties Docker sandbox configuration
      * @param seccompProfileJson pre-loaded seccomp JSON string (null if no profile)
      */
-    public ContainerSecurityPolicy(SandboxProperties properties, @Nullable String seccompProfileJson) {
+    public ContainerSecurityPolicy(DockerSandboxProperties properties, @Nullable String seccompProfileJson) {
         this.properties = properties;
         this.seccompProfileJson = seccompProfileJson;
     }
@@ -93,7 +95,7 @@ public class ContainerSecurityPolicy {
             securityOpts.add("seccomp=" + seccompProfileJson);
         }
 
-        // DNS: block all DNS when internet is disabled (prevents DNS exfiltration)
+        // DNS: block all DNS when internet is disabled (prevents DNS exfiltration, CVE-2024-29018)
         List<String> dns = new ArrayList<>();
         if (networkPolicy == null || !networkPolicy.internetAccess()) {
             dns.add("0.0.0.0");
