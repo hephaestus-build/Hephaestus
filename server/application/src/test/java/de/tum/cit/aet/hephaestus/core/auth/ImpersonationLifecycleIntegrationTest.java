@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.RevocationAwareJwtDecoder;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.time.Duration;
 import java.time.Instant;
@@ -93,7 +94,10 @@ class ImpersonationLifecycleIntegrationTest extends RealAuthIntegrationTest {
         // must end the impersonation instead of renewing it.
         Instant nearCeiling = Instant.now().plus(Duration.ofSeconds(45)).truncatedTo(ChronoUnit.SECONDS);
         String impersonationToken = jwtIssuer
-                .issue(principalFactory.forAccount(target), id(operator), nearCeiling, sessionCeiling, null)
+                .issue(
+                        principalFactory.forAccount(target),
+                        TokenConstraints.impersonation(id(operator), nearCeiling, sessionCeiling, null),
+                        null)
                 .value();
 
         Jwt exited = jwtDecoder.decode(refresh(impersonationToken));
@@ -141,9 +145,8 @@ class ImpersonationLifecycleIntegrationTest extends RealAuthIntegrationTest {
         String uncappedImpersonation = jwtIssuer
                 .issue(
                         principalFactory.forAccount(target),
-                        id(operator),
-                        Instant.now().plus(Duration.ofMinutes(30)),
-                        null,
+                        TokenConstraints.impersonation(
+                                id(operator), Instant.now().plus(Duration.ofMinutes(30)), null, null),
                         null)
                 .value();
 
@@ -164,9 +167,13 @@ class ImpersonationLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .toList();
     }
 
+    /** Carries a fresh {@code auth_time}: beginning an impersonation is gated on a recent sign-in. */
     private String operatorToken(Account operator, Instant sessionExpiresAt) {
         return jwtIssuer
-                .issue(principalFactory.forAccount(operator), null, null, sessionExpiresAt, null)
+                .issue(
+                        principalFactory.forAccount(operator),
+                        TokenConstraints.session(sessionExpiresAt, Instant.now()),
+                        null)
                 .value();
     }
 

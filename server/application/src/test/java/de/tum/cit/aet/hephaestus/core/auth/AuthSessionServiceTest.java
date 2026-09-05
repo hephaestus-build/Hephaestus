@@ -256,7 +256,8 @@ class AuthSessionServiceTest extends BaseUnitTest {
                 mock(HttpServletRequest.class),
                 new MockHttpServletResponse());
 
-        verify(jwtIssuer).issue(any(), eq(TokenConstraints.session(SESSION_CEILING, AUTH_TIME)), any(HttpServletRequest.class));
+        verify(jwtIssuer)
+                .issue(any(), eq(TokenConstraints.session(SESSION_CEILING, AUTH_TIME)), any(HttpServletRequest.class));
         AuthEventData event = capturedEvent();
         assertThat(event.type()).isEqualTo(AuthEvent.EventType.IMPERSONATION_END);
         assertThat(event.details()).contains("TARGET_PROMOTED");
@@ -329,7 +330,8 @@ class AuthSessionServiceTest extends BaseUnitTest {
                 mock(HttpServletRequest.class),
                 new MockHttpServletResponse());
 
-        verify(jwtIssuer).issue(any(), eq(TokenConstraints.session(SESSION_CEILING, AUTH_TIME)), any(HttpServletRequest.class));
+        verify(jwtIssuer)
+                .issue(any(), eq(TokenConstraints.session(SESSION_CEILING, AUTH_TIME)), any(HttpServletRequest.class));
         assertThat(capturedEvent().details()).contains("EXPIRED");
     }
 

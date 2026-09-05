@@ -130,7 +130,7 @@ public class ImpersonationService {
         HephaestusJwtIssuer.Token token = jwtIssuer.issue(
                 principalFactory.forAccount(target),
                 TokenConstraints.impersonation(
-                        operator.getId(), impersonationExpiresAt, operatorSessionExpiresAt, operatorAuthTime),
+                        operatorAccountId, impersonationExpiresAt, operatorSessionExpiresAt, operatorAuthTime),
                 request);
 
         authEventLogger

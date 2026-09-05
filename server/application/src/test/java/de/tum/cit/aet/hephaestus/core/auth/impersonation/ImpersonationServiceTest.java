@@ -125,7 +125,8 @@ class ImpersonationServiceTest extends BaseUnitTest {
     void begin_whenOperatorNotAdmin_forbidden() {
         when(accountRepository.findById(1L)).thenReturn(Optional.of(account(1L, Account.AppRole.USER)));
 
-        assertThatThrownBy(() -> service.begin(1L, 2L, "support", OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null))
+        assertThatThrownBy(
+                        () -> service.begin(1L, 2L, "support", OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
                         .isEqualTo(HttpStatus.FORBIDDEN));
@@ -138,7 +139,8 @@ class ImpersonationServiceTest extends BaseUnitTest {
     void begin_whenSelfImpersonation_badRequest() {
         when(accountRepository.findById(1L)).thenReturn(Optional.of(account(1L, Account.AppRole.APP_ADMIN)));
 
-        assertThatThrownBy(() -> service.begin(1L, 1L, "support", OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null))
+        assertThatThrownBy(
+                        () -> service.begin(1L, 1L, "support", OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
                         .isEqualTo(HttpStatus.BAD_REQUEST));
@@ -152,7 +154,8 @@ class ImpersonationServiceTest extends BaseUnitTest {
         when(accountRepository.findById(1L)).thenReturn(Optional.of(account(1L, Account.AppRole.APP_ADMIN)));
         when(accountRepository.findById(2L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.begin(1L, 2L, "support", OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null))
+        assertThatThrownBy(
+                        () -> service.begin(1L, 2L, "support", OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
                         .isEqualTo(HttpStatus.NOT_FOUND));
@@ -166,7 +169,8 @@ class ImpersonationServiceTest extends BaseUnitTest {
         when(accountRepository.findById(1L)).thenReturn(Optional.of(account(1L, Account.AppRole.APP_ADMIN)));
         when(accountRepository.findById(2L)).thenReturn(Optional.of(account(2L, Account.AppRole.APP_ADMIN)));
 
-        assertThatThrownBy(() -> service.begin(1L, 2L, "support", OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null))
+        assertThatThrownBy(
+                        () -> service.begin(1L, 2L, "support", OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
                         .isEqualTo(HttpStatus.FORBIDDEN));
