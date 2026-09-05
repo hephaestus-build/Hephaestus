@@ -177,6 +177,11 @@ host is noisy — and mind the name: the JVM binds
 (`docker/compose.app.yaml` translates them); set them on a K8s or systemd deployment and they are
 silently ignored.
 
+Review capacity is also capped by `SANDBOX_MAX_CONCURRENT`: a worker never claims more reviews at
+once than the host lets it start sandboxes for. The single-host self-hosted Compose file sets that to
+1, so raising review capacity there changes nothing until you raise the sandbox limit too — with the
+RAM to match (see the [Install guide](./install)).
+
 The app pod signs worker tokens from a key *ring*, not a single value:
 `hephaestus.worker.hub.token.keys[0].kid` + `.private-key` and
 `hephaestus.worker.hub.token.active-kid`. Indexed list binding has no single env-var form, so
