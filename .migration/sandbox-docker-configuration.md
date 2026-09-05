@@ -1,7 +1,8 @@
 #### 🔴 Rename Docker sandbox settings
 
 Update custom application YAML, Spring property overrides, environment files and Compose overrides
-before upgrading. Removed names are not aliases and may be ignored by Spring, leaving defaults in use.
+before upgrading. Removed names are not aliases: a worker-role process refuses to start while any of
+them is still set, naming the one it found and the replacement to use.
 The shipped single-host deployment still uses the local Docker socket and gateway port `8081`.
 
 | Old Spring property | Replacement |

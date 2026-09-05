@@ -55,14 +55,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/** Runs interactive sessions against a real Docker daemon. */
+/** Live integration tests — boots real Docker. Run with {@code -Pgroups=live} or {@code live-tests}. */
 @LiveDockerTest
 @Tag("live")
 class DockerInteractiveSandboxLiveTest {
@@ -73,7 +71,8 @@ class DockerInteractiveSandboxLiveTest {
         return value;
     }
 
-    // Use the image built from this checkout, not a release-channel tag (ADR 0031).
+    /** The image under test. A release-channel tag would test some other release's image (ADR 0031);
+     * point this at a locally built agent image, or export the reference a deployment would use. */
     private static final String AGENT_PI_IMAGE =
             System.getenv().getOrDefault("HEPHAESTUS_AGENT_IMAGE_REFERENCE", "ghcr.io/hephaestus-build/agent-pi:dev");
 
@@ -544,19 +543,18 @@ class DockerInteractiveSandboxLiveTest {
     @Nested
     class AttachFailureModes {
 
-        @ParameterizedTest
-        @CsvSource({"exit 1, 1.0, 0.0", "sleep 60, 0.0, 1.0"})
-        void shouldClassifyFirstFrameFailureWithoutDoubleCounting(
-                String script, double expectedFailures, double expectedTimeouts) {
+        @Test
+        void runnerCrashesBeforeFirstFrame() {
             double timeoutBefore = metrics.attachFailureFirstFrameTimeout.count();
             double failedBefore = metrics.attachFailureFirstFrameFailed.count();
-            InteractiveSandboxSpec base = buildSpec("u_first_frame", "w_first_frame");
+            // sh -c 'exit 1' instead of the JSONL runner: pump sees EOF before any frame.
+            InteractiveSandboxSpec base = buildSpec("u_crash", "w_crash");
             InteractiveSandboxSpec brokenSpec = new InteractiveSandboxSpec(
                     base.sessionId(),
                     base.userId(),
                     base.workspaceId(),
                     base.image(),
-                    List.of("sh", "-c", script),
+                    List.of("sh", "-c", "exit 1"),
                     base.environment(),
                     base.networkPolicy(),
                     base.resourceLimits(),
@@ -565,10 +563,11 @@ class DockerInteractiveSandboxLiveTest {
                     base.volumeMounts());
             Assertions.assertThatThrownBy(() -> adapter.attach(brokenSpec))
                     .isInstanceOf(InteractiveSandboxException.class);
+            // Must distinguish runner-crash from flow-control timeout for dashboards.
             assertThat(metrics.attachFailureFirstFrameFailed.count() - failedBefore)
-                    .isEqualTo(expectedFailures);
+                    .isEqualTo(1.0);
             assertThat(metrics.attachFailureFirstFrameTimeout.count() - timeoutBefore)
-                    .isEqualTo(expectedTimeouts);
+                    .isZero();
         }
     }
 

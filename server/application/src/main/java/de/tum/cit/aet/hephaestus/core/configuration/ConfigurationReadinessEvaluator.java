@@ -23,6 +23,23 @@ public final class ConfigurationReadinessEvaluator {
     static final String DOC = "https://docs.hephaestus.build/admin/configuration-readiness";
     private static final Pattern DIGEST = Pattern.compile("^[a-z0-9][a-z0-9._/:\\-]*@sha256:[a-f0-9]{64}$");
 
+    /** Spring property paths the Docker sandbox rename retired; none has a compatibility alias. */
+    private static final List<String> LEGACY_SANDBOX_PROPERTIES = List.of(
+            "hephaestus.sandbox.docker-host",
+            "hephaestus.sandbox.tls-verify",
+            "hephaestus.sandbox.cert-path",
+            "hephaestus.sandbox.container-runtime",
+            "hephaestus.sandbox.app-server-container-id",
+            "hephaestus.mentor.docker-cli");
+
+    /**
+     * Environment variable names the rename retired. Unlike {@link #LEGACY_SANDBOX_PROPERTIES},
+     * these do not share a prefix with their replacement, so Spring's relaxed binding cannot find
+     * them under the new property path — they must be checked by their literal name.
+     */
+    private static final List<String> LEGACY_SANDBOX_ENVIRONMENT_VARIABLES =
+            List.of("SANDBOX_TLS_VERIFY", "SANDBOX_CONTAINER_RUNTIME");
+
     private final Environment environment;
 
     public ConfigurationReadinessEvaluator(Environment environment) {
@@ -178,6 +195,19 @@ public final class ConfigurationReadinessEvaluator {
                 "runsc".equals(property("hephaestus.sandbox.docker.container-runtime")),
                 "gVisor (runsc) is recommended for stronger agent sandbox isolation.",
                 "sandbox-isolation");
+        String legacySandboxKey = firstConfiguredLegacySandboxKey();
+        add(
+                facts,
+                "sandbox.docker-legacy-configuration",
+                legacySandboxKey == null ? "hephaestus.sandbox.docker.*" : legacySandboxKey,
+                roles(ConfigurationRole.WORKER),
+                ConfigurationRequirement.REQUIRED,
+                worker,
+                legacySandboxKey == null,
+                legacySandboxKey == null
+                        ? "Docker sandbox settings live under hephaestus.sandbox.docker.*."
+                        : "\"" + legacySandboxKey + "\" moved under hephaestus.sandbox.docker.* and is no longer read.",
+                "docker-configuration");
         add(
                 facts,
                 "observability.sentry",
@@ -298,6 +328,16 @@ public final class ConfigurationReadinessEvaluator {
         if ("true".equalsIgnoreCase(value)) return new BooleanSetting(true, true);
         if ("false".equalsIgnoreCase(value)) return new BooleanSetting(true, false);
         return new BooleanSetting(false, false);
+    }
+
+    private @Nullable String firstConfiguredLegacySandboxKey() {
+        for (String key : LEGACY_SANDBOX_PROPERTIES) {
+            if (environment.containsProperty(key)) return key;
+        }
+        for (String key : LEGACY_SANDBOX_ENVIRONMENT_VARIABLES) {
+            if (environment.containsProperty(key)) return key;
+        }
+        return null;
     }
 
     private boolean validFalse(String key, boolean fallback) {

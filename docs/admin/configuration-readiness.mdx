@@ -146,6 +146,15 @@ Unknown keys under `hephaestus.sandbox.docker`, blank `host` or `cli`, and TLS v
 certificate path prevent worker startup. These checks do not verify daemon connectivity or runtime
 availability. See [runtime roles](./runtime-roles) for the gateway boundary.
 
+Harden the Docker host itself; the application cannot enforce these from inside a container. The
+supported host matrix's [Docker Engine version](./install#supported-host-matrix) already closes
+CVE-2024-29018's DNS-exfiltration path; in addition:
+
+- Block the cloud metadata endpoint on the host: `iptables -I DOCKER-USER -d 169.254.0.0/16 -j DROP`.
+- Recommended: front the daemon socket with a proxy such as Tecnativa's `docker-socket-proxy`
+  configured with `EXEC=0`.
+- Recommended: `userns-remap=default` in `/etc/docker/daemon.json`.
+
 ## Optional observability
 
 Sentry is optional. When configured, `hephaestus.sentry.dsn` must use HTTPS. The fact is classified

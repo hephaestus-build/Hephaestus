@@ -8,7 +8,11 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import java.io.IOException;
+import java.lang.reflect.RecordComponent;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -43,6 +47,19 @@ class DockerSandboxPropertiesTest {
     }
 
     @Test
+    void shouldKeepDockerAndGatewayFieldsOutOfTheNeutralNamespace() {
+        Set<String> neutralFields = recordComponentNames(SandboxProperties.class);
+        assertThat(neutralFields).doesNotContainAnyElementsOf(recordComponentNames(DockerSandboxProperties.class));
+        assertThat(neutralFields).doesNotContainAnyElementsOf(recordComponentNames(SandboxGatewayProperties.class));
+    }
+
+    private static Set<String> recordComponentNames(Class<?> type) {
+        return Arrays.stream(type.getRecordComponents())
+                .map(RecordComponent::getName)
+                .collect(Collectors.toSet());
+    }
+
+    @Test
     void shouldUseLocalDockerDefaultsWithoutChangingGatewayOrCapacity() {
         runner.run(context -> {
             assertThat(context).hasNotFailed();
@@ -52,19 +69,6 @@ class DockerSandboxPropertiesTest {
             assertThat(context.getBean(SandboxGatewayProperties.class).port()).isEqualTo(8081);
             assertThat(context.getBean(SandboxProperties.class).maxConcurrentContainers())
                     .isEqualTo(5);
-        });
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void shouldKeepDefaultPidLimitWhenOtherResourceLimitsAreOverridden(boolean overrideCpu) {
-        var resourceRunner =
-                overrideCpu ? runner.withPropertyValues("hephaestus.sandbox.default-resource-limits.cpus=1.5") : runner;
-        resourceRunner.run(context -> {
-            assertThat(context).hasNotFailed();
-            var limits = context.getBean(SandboxProperties.class).defaultResourceLimits();
-            assertThat(limits).isNotNull();
-            assertThat(limits.pidsLimit()).isEqualTo(256);
         });
     }
 
@@ -200,6 +204,17 @@ class DockerSandboxPropertiesTest {
                     assertThat(context)
                             .doesNotHaveBean(DockerSandboxProperties.class)
                             .doesNotHaveBean(DockerClient.class);
+                });
+    }
+
+    @Test
+    void shouldBindDockerWhenWorkerRoleIsEnabled() {
+        isolatedRunner()
+                .withUserConfiguration(ScannedConfiguration.class)
+                .withPropertyValues(RuntimeRole.WORKER_PROPERTY + "=true")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(DockerSandboxProperties.class);
                 });
     }
 

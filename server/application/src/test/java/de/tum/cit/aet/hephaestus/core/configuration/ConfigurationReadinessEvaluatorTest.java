@@ -105,6 +105,33 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRejectARemovedSandboxPropertyName() {
+        Map<String, Object> properties = role(true, false);
+        assertStatus(
+                evaluateReadiness(properties, true),
+                "sandbox.docker-legacy-configuration",
+                ConfigurationStatus.SATISFIED);
+
+        properties.put("hephaestus.sandbox.container-runtime", "runsc");
+        List<ConfigurationFactDTO> facts = evaluateReadiness(properties, true);
+        assertStatus(facts, "sandbox.docker-legacy-configuration", ConfigurationStatus.ACTION_REQUIRED);
+        assertThat(facts)
+                .filteredOn(fact -> fact.id().equals("sandbox.docker-legacy-configuration"))
+                .singleElement()
+                .satisfies(fact -> assertThat(fact.subject()).isEqualTo("hephaestus.sandbox.container-runtime"));
+    }
+
+    @Test
+    void shouldRejectARemovedSandboxEnvironmentVariableName() {
+        Map<String, Object> properties = role(true, false);
+        properties.put("SANDBOX_TLS_VERIFY", "true");
+        assertStatus(
+                evaluateReadiness(properties, true),
+                "sandbox.docker-legacy-configuration",
+                ConfigurationStatus.ACTION_REQUIRED);
+    }
+
+    @Test
     void shouldRejectRoleSpecificNegativeCases() {
         Map<String, Object> worker = role(true, false);
         worker.put("hephaestus.sync.nats.enabled", true);

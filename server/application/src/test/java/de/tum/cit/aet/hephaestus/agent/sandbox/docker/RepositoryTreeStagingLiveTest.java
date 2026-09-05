@@ -35,17 +35,27 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.testcontainers.DockerClientFactory;
 
-/** Verifies staged file contents and large directory trees inside real sandbox containers. */
+/**
+ * Proves against a real Docker daemon that content staged by path arrives in the sandbox intact, at
+ * sizes no in-memory staging path could carry.
+ *
+ * <p>The unit tests assert what goes into the tar. This asserts what the agent can actually read,
+ * which is the only claim that matters to a review: a practice cannot judge evidence the container
+ * never received.
+ */
 @LiveDockerTest
 @Tag("live")
 class RepositoryTreeStagingLiveTest {
 
+    /** One blob far past anything a heap-bound stager could hold. */
     private static final int LARGE_FILE_MB = 64;
 
-    // Use the image built from this checkout, not a release-channel tag (ADR 0031).
+    /** The image under test. A release-channel tag would test some other release's image (ADR 0031);
+     * point this at a locally built agent image, or export the reference a deployment would use. */
     private static final String AGENT_IMAGE =
             System.getenv().getOrDefault("HEPHAESTUS_AGENT_IMAGE_REFERENCE", "ghcr.io/hephaestus-build/agent-pi:dev");
 
+    /** A tree large enough that any per-file ceiling would have to reject it. */
     private static final int TREE_FILE_COUNT = 25_000;
 
     private DockerSandboxAdapter sandboxAdapter;

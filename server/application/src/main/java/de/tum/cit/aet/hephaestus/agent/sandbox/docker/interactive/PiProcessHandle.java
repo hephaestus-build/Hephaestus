@@ -44,7 +44,8 @@ final class PiProcessHandle {
     }
 
     /**
-     * Environment keys are validated by
+     * Spawns {@code docker exec -i -u <containerUser>}. Explicit {@code -u} guards against USER
+     * drift in a future refactor; env keys are pre-validated by
      * {@link de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec}.
      */
     static PiProcessHandle spawn(
@@ -93,6 +94,7 @@ final class PiProcessHandle {
         return process.isAlive();
     }
 
+    /** Closes the underlying FDs — the only way to unblock a thread parked in write() on Linux. */
     void destroyForcibly() {
         if (process.isAlive()) {
             process.destroyForcibly();
@@ -130,6 +132,8 @@ final class PiProcessHandle {
             stdin.close();
         } catch (IOException ignored) {
         }
+        // Closes the stderr pipe FD on the kernel side — only way to unblock the drainer VT if the
+        // process did not exit and destroyForcibly was a no-op (zombie docker-cli relay).
         try {
             process.getErrorStream().close();
         } catch (IOException ignored) {

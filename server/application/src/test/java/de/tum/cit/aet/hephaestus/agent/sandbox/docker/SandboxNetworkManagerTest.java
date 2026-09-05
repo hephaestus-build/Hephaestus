@@ -127,6 +127,7 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
             mgr.connectAppServer(NETWORK_ID);
             mgr.connectAppServer(NETWORK_ID);
 
+            // Supplier should only be invoked once — second call uses cached value
             assertThat(callCount.get()).isEqualTo(1);
         }
     }
@@ -148,6 +149,7 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
                     new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "docker");
             SandboxNetworkManager mgr = new SandboxNetworkManager(networkOps, propsNoId, () -> null);
 
+            // Should not throw — silently skips disconnect
             mgr.disconnectAppServer(NETWORK_ID);
 
             verify(networkOps, Mockito.never()).disconnectFromNetwork(anyString(), anyString());

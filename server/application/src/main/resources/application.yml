@@ -479,11 +479,14 @@ hephaestus:
 
 
     sandbox:
+        # The LLM proxy controller/security chain follows the worker/sandbox capability. It serves
+        # both queued jobs and interactive mentor sandboxes, so AGENT_ENABLED must not gate it.
         docker:
             host: ${SANDBOX_DOCKER_HOST:unix:///var/run/docker.sock}
             tls-verify: ${SANDBOX_DOCKER_TLS_VERIFY:false}
             cert-path: ${SANDBOX_DOCKER_CERT_PATH:}
             app-server-container-id: ${SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID:}
+            # OCI runtime: null=runc (default), "runsc"=gVisor (recommended for production)
             container-runtime: ${SANDBOX_DOCKER_CONTAINER_RUNTIME:}
             cli: ${SANDBOX_DOCKER_CLI:docker}
         max-concurrent-containers: ${SANDBOX_MAX_CONCURRENT:5}

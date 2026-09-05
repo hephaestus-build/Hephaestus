@@ -41,6 +41,15 @@ import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import tools.jackson.databind.ObjectMapper;
 
+/**
+ * Spring configuration for the Docker sandbox subsystem.
+ *
+ * <p>The Docker sandbox <em>is</em> the worker capability (ADR 0005), so it is gated solely on the
+ * worker role ({@link RuntimeRole#WORKER_PROPERTY}, {@code matchIfMissing=true} → present in the
+ * single-JVM monolith). A non-worker pod (e.g. a webhook-only container) leaves the gate {@code
+ * false} and these beans never wire. All sandbox beans are declared as {@code @Bean} methods so
+ * they are only created when the role is active — no component-scanning surprises.
+ */
 @Configuration
 @ConditionalOnProperty(name = RuntimeRole.WORKER_PROPERTY, havingValue = "true", matchIfMissing = true)
 @ConditionalOnClass(DockerClient.class)
@@ -59,13 +68,19 @@ public class DockerSandboxConfiguration {
     private static final Duration HTTP_CONNECTION_TIMEOUT = Duration.ofSeconds(5);
 
     /**
-     * Socket idle timeout, not a total request deadline. Each RPC operation owns its deadline.
+     * Idle timeout, not a deadline: Apache installs responseTimeout as the socket timeout for the
+     * whole exchange, so it bounds the gap between reads and a call that keeps producing bytes runs
+     * as long as it likes. Every RPC call carries its own budget, so this only has to reclaim the
+     * connection when the daemon goes silent — generous enough that a slow image layer or a large
+     * archive upload never trips it.
      */
     static final Duration HTTP_RESPONSE_TIMEOUT = Duration.ofMinutes(30);
 
     /**
-     * Docker wait sends no bytes until exit, so its idle timeout must exceed the container runtime.
-     * A finite socket timeout bounds reads that thread interruption cannot cancel.
+     * `docker wait` sends nothing until the container exits, so for it the idle timeout is a ceiling
+     * on the container's life. Sitting above {@link ResourceLimits#MAX_RUNTIME} it can never cut a
+     * legitimate wait short, while still reclaiming a connection the daemon has abandoned —
+     * docker-java's reader thread only ever gets an interrupt, which a blocking read ignores.
      */
     static final Duration HTTP_STREAMING_RESPONSE_TIMEOUT = ResourceLimits.MAX_RUNTIME.plusMinutes(10);
 
@@ -87,11 +102,15 @@ public class DockerSandboxConfiguration {
 
     private DockerClient buildClient(
             DockerSandboxProperties properties, Duration responseTimeout, int maxConnections, String kind) {
-        // A null path lets docker-java re-enable TLS from an ambient Docker context.
-        var configBuilder = DefaultDockerClientConfig.createDefaultConfigBuilder()
+        // A bare Builder, not createDefaultConfigBuilder(): the latter seeds itself from
+        // DOCKER_HOST/DOCKER_TLS_VERIFY/DOCKER_CERT_PATH/DOCKER_CONTEXT before these three
+        // overrides land, so an ambient value would win for any field we don't set here.
+        var configBuilder = new DefaultDockerClientConfig.Builder()
                 .withDockerHost(properties.host())
-                .withDockerTlsVerify(properties.tlsVerify())
-                .withDockerCertPath(properties.certPath() == null ? "" : properties.certPath());
+                .withDockerTlsVerify(properties.tlsVerify());
+        if (properties.certPath() != null) {
+            configBuilder.withDockerCertPath(properties.certPath());
+        }
 
         var config = configBuilder.build();
 
@@ -143,7 +162,10 @@ public class DockerSandboxConfiguration {
     }
 
     /**
-     * Platform threads keep docker-java's synchronized blocking I/O off Java 21 virtual carriers.
+     * Dedicated platform thread pool for Docker blocking wait operations.
+     *
+     * <p>docker-java's Apache HttpClient5 has {@code synchronized} blocks that pin virtual threads in
+     * Java 21, causing cascading failures. A dedicated bounded pool of platform threads avoids this.
      */
     @Bean(destroyMethod = "shutdownNow")
     public ExecutorService dockerWaitExecutor(SandboxProperties properties) {
@@ -210,6 +232,8 @@ public class DockerSandboxConfiguration {
         return new DockerHealthIndicator(containerManager, properties, dockerProperties);
     }
 
+    // Interactive (mentor) sandbox — sibling of SandboxManager.
+
     @Bean
     public InteractiveSandboxMetrics interactiveSandboxMetrics(MeterRegistry meterRegistry) {
         return new InteractiveSandboxMetrics(meterRegistry);
@@ -240,6 +264,8 @@ public class DockerSandboxConfiguration {
             InteractiveSandboxRegistry registry,
             InteractiveSandboxMetrics metrics,
             ObjectMapper mapper,
+            // Shared platform-thread executor (declared above for the sync sandbox); the interactive
+            // adapter runs runClose() here too — docker-java sync calls pin virtual carriers on JDK 21.
             ExecutorService dockerWaitExecutor,
             DockerSandboxProperties dockerProperties,
             SandboxGatewayProperties gatewayProperties,
@@ -260,7 +286,11 @@ public class DockerSandboxConfiguration {
     }
 
     /**
-     * Direct handoff rejects excess work so the caller can release its claim for a later poll.
+     * Bounded platform thread pool for sandbox Docker operations.
+     *
+     * <p>Uses direct handoff ({@code queueCapacity=0}) so that when all threads are occupied,
+     * submissions are rejected immediately. That rejection is the backpressure: the claim is undone
+     * and the row goes back to QUEUED for a later poll.
      */
     @Bean(name = "sandboxExecutor")
     public AsyncTaskExecutor sandboxExecutor(SandboxProperties properties) {
@@ -278,6 +308,18 @@ public class DockerSandboxConfiguration {
         return executor;
     }
 
+    // Internal helpers
+
+    /**
+     * Load a seccomp profile from the classpath once at startup.
+     *
+     * <p>Fails hard if the resource is missing — a missing seccomp profile would silently degrade
+     * container security, which is unacceptable.
+     *
+     * @param resourcePath classpath resource path
+     * @return the JSON string
+     * @throws SandboxException if the resource is missing or unreadable
+     */
     private String loadSeccompProfile(String resourcePath) {
         try {
             var resource = new ClassPathResource(resourcePath);

@@ -7,7 +7,16 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Creates per-job networks and attaches the gateway container for sandbox access. */
+/**
+ * Manages per-job Docker networks for sandbox isolation.
+ *
+ * <p>For {@code allowInternet=false}: creates an {@code --internal} network with zero external
+ * connectivity. The app-server container is multi-homed onto the network so agent containers can
+ * reach the LLM proxy.
+ *
+ * <p>For {@code allowInternet=true}: creates a normal bridge network. The app-server is still
+ * connected to provide LLM proxy access.
+ */
 public class SandboxNetworkManager {
 
     private static final Logger log = LoggerFactory.getLogger(SandboxNetworkManager.class);
@@ -17,12 +26,16 @@ public class SandboxNetworkManager {
     private final DockerSandboxProperties properties;
     private final Supplier<String> hostnameSupplier;
 
+    /** Resolved once at startup; cached for the lifetime of the bean. */
     private volatile @Nullable String appServerContainerId;
 
     public SandboxNetworkManager(DockerNetworkOperations networkOps, DockerSandboxProperties properties) {
         this(networkOps, properties, () -> System.getenv("HOSTNAME"));
     }
 
+    /**
+     * @param hostnameSupplier provides the container HOSTNAME fallback (testable seam)
+     */
     SandboxNetworkManager(
             DockerNetworkOperations networkOps, DockerSandboxProperties properties, Supplier<String> hostnameSupplier) {
         this.networkOps = networkOps;
@@ -30,6 +43,13 @@ public class SandboxNetworkManager {
         this.hostnameSupplier = hostnameSupplier;
     }
 
+    /**
+     * Create an isolated network for a job.
+     *
+     * @param jobId unique job identifier (used in network name)
+     * @param allowInternet if false, network is {@code --internal} (no external access)
+     * @return the Docker network ID
+     */
     public String createJobNetwork(UUID jobId, boolean allowInternet) {
         String networkName = NETWORK_PREFIX + jobId;
         boolean internal = !allowInternet;
@@ -38,7 +58,14 @@ public class SandboxNetworkManager {
         return networkId;
     }
 
-    /** Returns the gateway container's IP on this network, or null if its ID is unavailable. */
+    /**
+     * Connect the app-server container to a job network and return its IP.
+     *
+     * <p>The agent container uses this IP as the LLM proxy endpoint.
+     *
+     * @param networkId the network to connect to
+     * @return the app-server's IP address on the network
+     */
     public @Nullable String connectAppServer(String networkId) {
         String containerId = resolveAppServerContainerId();
         if (containerId == null || containerId.isBlank()) {
@@ -61,10 +88,12 @@ public class SandboxNetworkManager {
         networkOps.disconnectFromNetwork(networkId, containerId);
     }
 
+    /** Remove a job network. */
     public void removeNetwork(String networkId) {
         networkOps.removeNetwork(networkId);
     }
 
+    /** List orphaned job networks (matching the agent-net-* prefix). */
     public List<DockerOperations.NetworkInfo> listOrphanedNetworks() {
         return networkOps.listNetworksByName(NETWORK_PREFIX);
     }
@@ -88,7 +117,7 @@ public class SandboxNetworkManager {
         if (id != null) {
             return id;
         }
-        // Docker defaults HOSTNAME to the container short ID.
+        // Fall back to HOSTNAME env var — Docker sets this to the container short ID
         return hostnameSupplier.get();
     }
 }

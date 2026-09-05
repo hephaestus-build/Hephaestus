@@ -109,6 +109,9 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
     }
 
     private AttachedSandbox attachLocked(InteractiveSandboxSpec spec) {
+        // Per-workspace gating happens upstream in MentorChatController via
+        // WorkspaceFeatures.mentorEnabled — there is no deployment-wide mentor enable flag.
+
         InteractiveSandboxRuntimeKey runtimeKey = runtimeKey(spec);
         DockerAttachedSandboxAdapter existing = registry.findLive(spec.userId(), spec.workspaceId());
         if (existing != null) {
@@ -198,22 +201,21 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
                 throw e;
             }
 
-            // Register only after the runner emits its first frame.
+            // Build + await first frame BEFORE register: a stillborn runner never becomes visible.
             sandbox = buildSandbox(spec, runtimeKey, containerId, networkId, process);
             sandbox.start();
 
             Duration firstFrameTimeout = Duration.ofSeconds(properties.attachFirstFrameTimeoutSeconds());
-            boolean firstFrameReceived;
             try {
-                firstFrameReceived = sandbox.awaitFirstFrame(firstFrameTimeout);
+                if (!sandbox.awaitFirstFrame(firstFrameTimeout)) {
+                    metrics.attachFailureFirstFrameTimeout.increment();
+                    throw new InteractiveSandboxException(
+                            "Runner did not emit first frame within " + firstFrameTimeout.toSeconds() + "s");
+                }
             } catch (InteractiveSandboxException terminated) {
+                // Distinct from timeout: pump/writer terminated before any frame.
                 metrics.attachFailureFirstFrameFailed.increment();
                 throw terminated;
-            }
-            if (!firstFrameReceived) {
-                metrics.attachFailureFirstFrameTimeout.increment();
-                throw new InteractiveSandboxException(
-                        "Runner did not emit first frame within " + firstFrameTimeout.toSeconds() + "s");
             }
 
             InteractiveSandboxRegistry.RegistrationOutcome outcome = registry.tryRegister(sandbox);
@@ -222,7 +224,8 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
                     log.debug("Concurrent attach lost the race; returning existing sandbox");
                     DockerAttachedSandboxAdapter winner = registry.findLive(spec.userId(), spec.workspaceId());
                     if (winner != null) {
-                        // Close the losing sandbox without delaying the winner's attachment.
+                        // Loser leaks container/network/process/pump/writer VTs unless we tear it down.
+                        // Fire-and-forget: don't block the caller for grace+5s.
                         sandbox.terminate(EvictionReason.ERROR);
                         if (!winner.hasRuntimeKey(runtimeKey)) {
                             throw new InteractiveSandboxException(
@@ -377,7 +380,8 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             metrics.attachFailureOther.increment();
             throw new InteractiveSandboxException(description + " failed: " + e.getMessage(), e);
         }
-        // Retain only a bounded diagnostic preview while draining the subprocess output.
+        // Bounded drain — a misbehaving exec emitting a megabyte of stdout would otherwise OOM
+        // the app-server. We only need a short preview for the error message.
         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(PREP_DRAIN_CAP_BYTES);
         Thread drainer = Thread.ofVirtual().start(() -> {
             try (var in = p.getInputStream()) {

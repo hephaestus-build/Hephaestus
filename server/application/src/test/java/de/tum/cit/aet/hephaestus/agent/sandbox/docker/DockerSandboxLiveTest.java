@@ -32,7 +32,14 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.DockerClientFactory;
 
-/** Runs sandbox lifecycle tests against a real Docker daemon. */
+/**
+ * Integration tests for the Docker sandbox manager using a real Docker daemon.
+ *
+ * <p>These tests require Docker to be available on the machine. They are excluded from the default
+ * test suite (tagged {@code "live"}) and run with {@code -Dgroups=live}.
+ *
+ * <p>Each test creates real containers that are cleaned up in {@code @AfterEach}.
+ */
 @LiveDockerTest
 @Tag("live")
 class DockerSandboxLiveTest {
