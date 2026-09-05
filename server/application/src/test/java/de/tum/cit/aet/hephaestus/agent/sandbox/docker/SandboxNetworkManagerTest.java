@@ -1,11 +1,14 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import java.util.UUID;
@@ -49,6 +52,50 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
 
             assertThat(networkId).isEqualTo(NETWORK_ID);
             verify(networkOps).createNetwork("agent-net-" + JOB_ID, true);
+        }
+
+        @Test
+        @DisplayName("a network an interrupted run left under this job's name is removed, not fought over")
+        void shouldReplaceLeftoverNetworkOfTheSameJob() {
+            String networkName = "agent-net-" + JOB_ID;
+            when(networkOps.listNetworksByName(networkName))
+                    .thenReturn(List.of(new DockerOperations.NetworkInfo("stale-net", networkName)));
+            when(networkOps.createNetwork(anyString(), eq(true))).thenReturn(NETWORK_ID);
+
+            assertThat(manager.createJobNetwork(JOB_ID, false)).isEqualTo(NETWORK_ID);
+
+            verify(networkOps).disconnectFromNetwork("stale-net", "app-server-id");
+            verify(networkOps).removeNetwork("stale-net");
+            verify(networkOps).createNetwork(networkName, true);
+        }
+
+        @Test
+        @DisplayName("a leftover network that will not go is reported, not worked around")
+        void shouldFailWhenLeftoverNetworkCannotBeRemoved() {
+            String networkName = "agent-net-" + JOB_ID;
+            when(networkOps.listNetworksByName(networkName))
+                    .thenReturn(List.of(new DockerOperations.NetworkInfo("stale-net", networkName)));
+            Mockito.doThrow(new SandboxInfrastructureException("network has active endpoints"))
+                    .when(networkOps)
+                    .removeNetwork("stale-net");
+
+            assertThatThrownBy(() -> manager.createJobNetwork(JOB_ID, false))
+                    .isInstanceOf(SandboxInfrastructureException.class);
+
+            verify(networkOps, Mockito.never()).createNetwork(anyString(), Mockito.anyBoolean());
+        }
+
+        @Test
+        @DisplayName("another job's network is left alone even when the daemon returns it")
+        void shouldLeaveOtherJobsNetworksAlone() {
+            String networkName = "agent-net-" + JOB_ID;
+            when(networkOps.listNetworksByName(networkName))
+                    .thenReturn(List.of(new DockerOperations.NetworkInfo("other-net", networkName + "-suffix")));
+            when(networkOps.createNetwork(anyString(), eq(true))).thenReturn(NETWORK_ID);
+
+            assertThat(manager.createJobNetwork(JOB_ID, false)).isEqualTo(NETWORK_ID);
+
+            verify(networkOps, Mockito.never()).removeNetwork(anyString());
         }
 
         @Test
