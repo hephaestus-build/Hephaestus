@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { isRecord } from "@/lib/is-record";
 
 /**
@@ -24,6 +26,28 @@ export function problemDetailOf(
 		}
 	}
 	return fallback;
+}
+
+/**
+ * The refusal that asks for a fresh sign-in, as the server states it in the RFC 9457 body. The
+ * thrown value is untyped, so it is validated rather than read: a `code` the SPA does not know is
+ * not a challenge it can answer.
+ *
+ * A window it cannot phrase is dropped rather than failing the parse — the ask is still true
+ * without a number, and refusing the whole challenge would leave the reader with a wall and no
+ * explanation.
+ */
+const stepUpChallengeSchema = z.object({
+	code: z.literal("step_up_required"),
+	maxAgeSeconds: z.int().positive().optional().catch(undefined),
+});
+
+export type StepUpChallenge = z.infer<typeof stepUpChallengeSchema>;
+
+/** The challenge a refusal carries, or `undefined` when the refusal is any other kind. */
+export function stepUpChallengeOf(err: unknown): StepUpChallenge | undefined {
+	const parsed = stepUpChallengeSchema.safeParse(err);
+	return parsed.success ? parsed.data : undefined;
 }
 
 /**

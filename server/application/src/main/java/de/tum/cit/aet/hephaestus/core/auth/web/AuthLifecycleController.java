@@ -2,8 +2,10 @@ package de.tum.cit.aet.hephaestus.core.auth.web;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.auth.AuthSessionService;
 import de.tum.cit.aet.hephaestus.core.auth.impersonation.ImpersonationService;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -58,10 +60,11 @@ public class AuthLifecycleController {
         sessionService.refresh(
                 CurrentAccount.requireId(),
                 CurrentAccount.requireJti(),
-                new AuthSessionService.RefreshContext(
+                new TokenConstraints(
                         CurrentAccount.impersonatorId(),
                         CurrentAccount.impersonationExpiresAt(),
-                        CurrentAccount.sessionExpiresAt()),
+                        CurrentAccount.sessionExpiresAt(),
+                        CurrentAccount.authTime()),
                 request,
                 response);
         return ResponseEntity.noContent().build();
@@ -70,11 +73,12 @@ public class AuthLifecycleController {
     @PostMapping("/impersonate")
     @PreAuthorize("hasAuthority('app_admin')")
     @Operation(summary = "Begin impersonating another account", operationId = "impersonate")
+    @RequiresRecentSignIn
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "IMPERSONATION_BEGIN")
     public ResponseEntity<Void> impersonate(
             @Valid @RequestBody ImpersonateRequestDTO body, HttpServletRequest request, HttpServletResponse response) {
-        ImpersonationService.Result result =
-                impersonationService.begin(CurrentAccount.requireId(), body.targetAccountId(), body.reason(), request);
+        ImpersonationService.Result result = impersonationService.begin(
+                CurrentAccount.requireId(), body.targetAccountId(), body.reason(), CurrentAccount.authTime(), request);
         sessionService.setCookie(response, result.token());
         return ResponseEntity.noContent().build();
     }
@@ -88,7 +92,11 @@ public class AuthLifecycleController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "not currently impersonating");
         }
         ImpersonationService.Result result = impersonationService.exit(
-                impersonatorId, CurrentAccount.requireId(), CurrentAccount.requireJti(), request);
+                impersonatorId,
+                CurrentAccount.requireId(),
+                CurrentAccount.requireJti(),
+                CurrentAccount.authTime(),
+                request);
         sessionService.setCookie(response, result.token());
         return ResponseEntity.noContent().build();
     }

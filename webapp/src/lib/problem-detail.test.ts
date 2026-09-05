@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { problemDetailOf, problemStatusOf } from "./problem-detail";
+import { problemDetailOf, problemStatusOf, stepUpChallengeOf } from "./problem-detail";
 
 describe("problemDetailOf", () => {
 	it("prefers RFC 9457 `detail` over everything else", () => {
@@ -64,6 +64,42 @@ describe("problemDetailOf", () => {
 			"An unexpected error occurred. Please try again.",
 		);
 		expect(problemDetailOf(42)).toBe("An unexpected error occurred. Please try again.");
+	});
+});
+
+// The challenge decides whether the UI asks for a sign-in at all, so an unrecognised refusal must
+// never parse as one: an OAuth round trip that changes nothing is worse than the refusal.
+describe("stepUpChallengeOf", () => {
+	it("reads the challenge and its window off the refusal body", () => {
+		expect(
+			stepUpChallengeOf({ status: 403, code: "step_up_required", maxAgeSeconds: 300 }),
+		).toStrictEqual({ code: "step_up_required", maxAgeSeconds: 300 });
+	});
+
+	it("keeps the challenge when the server names no window", () => {
+		expect(stepUpChallengeOf({ status: 403, code: "step_up_required" })).toStrictEqual({
+			code: "step_up_required",
+		});
+	});
+
+	it("ignores a refusal coded as something else", () => {
+		expect(stepUpChallengeOf({ status: 409, code: "last_admin" })).toBeUndefined();
+		expect(stepUpChallengeOf({ status: 403, detail: "Forbidden" })).toBeUndefined();
+	});
+
+	it("drops a window it could not phrase and still asks", () => {
+		for (const maxAgeSeconds of ["300", -1, 0, 12.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+			const challenge = stepUpChallengeOf({ code: "step_up_required", maxAgeSeconds });
+			expect(challenge?.code).toBe("step_up_required");
+			expect(challenge?.maxAgeSeconds).toBeUndefined();
+		}
+	});
+
+	it("is safe on the shapes a failed request can throw", () => {
+		expect(stepUpChallengeOf(null)).toBeUndefined();
+		expect(stepUpChallengeOf(undefined)).toBeUndefined();
+		expect(stepUpChallengeOf("step_up_required")).toBeUndefined();
+		expect(stepUpChallengeOf(new TypeError("Failed to fetch"))).toBeUndefined();
 	});
 });
 

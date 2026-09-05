@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/admin/llm/settings")
 @Tag(name = "Admin LLM", description = "Instance-admin LLM connection and settings management")
+@RecentSignInExempt(reason = "sets instance LLM defaults; grants no access and stores no credential")
 @PreAuthorize("hasAuthority('app_admin')")
 @ConditionalOnServerRole
 @RequiredArgsConstructor

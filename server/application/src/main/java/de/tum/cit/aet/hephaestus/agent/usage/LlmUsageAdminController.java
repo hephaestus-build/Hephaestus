@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.usage;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/admin")
 @Tag(name = "Admin", description = "Instance-admin account management")
+@RecentSignInExempt(reason = "sets a spending budget; grants no access and stores no credential")
 @PreAuthorize("hasAuthority('app_admin')")
 @ConditionalOnServerRole
 @Validated

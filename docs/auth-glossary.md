@@ -52,6 +52,7 @@ Strict subset of standard OIDC ID-Token claims:
 | `act` | object | Only present when impersonating. Per RFC 8693 — `{ "sub": "<impersonator_account_id>" }`. |
 | `imp_exp` | Unix seconds | Only present when impersonating: when the impersonation itself expires. |
 | `session_exp` | Unix seconds | When the session, as opposed to this access token, expires. |
+| `auth_time` | Unix seconds | Standard OIDC claim: when the account last completed an interactive sign-in here. Stamped at login and copied unchanged through refresh and impersonation, so it measures the age of the sign-in and not of the token. Read by the [recent sign-in gate](./contributor/instance-admin.md#recent-sign-in-gate); it is not evidence that an upstream credential was entered. |
 
 `HephaestusJwtIssuer` is the one place these are written; read it rather than this table when the two
 disagree.
