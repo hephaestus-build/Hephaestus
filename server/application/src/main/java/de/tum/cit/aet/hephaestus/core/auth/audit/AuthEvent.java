@@ -13,6 +13,7 @@ import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
@@ -99,6 +100,17 @@ public class AuthEvent {
     @Nullable
     private String details;
 
+    /**
+     * Whether the request that produced this event reached its workspace on instance-admin authority
+     * rather than membership. Derived by {@link AuthEventLogger} from
+     * {@code WorkspaceElevationContext}, never supplied by the producer. {@code false} on every row
+     * written before elevation was recorded, so a false here is "not known to be elevated", not
+     * "known to be a member".
+     */
+    @ColumnDefault("false")
+    @Column(name = "elevated_via_instance_admin", nullable = false)
+    private boolean elevatedViaInstanceAdmin;
+
     public enum EventType {
         LOGIN,
         LOGIN_FAILED,
@@ -113,6 +125,9 @@ public class AuthEvent {
         EXPORT_REQUESTED,
         APP_ROLE_CHANGED,
         RESEARCH_CONSENT_REVOKED,
+        // An instance admin reached a workspace they are not a member of. One marker per access
+        // window, not per request — see WorkspaceElevationAuditAdapter.
+        WORKSPACE_ELEVATION,
         // Instance LLM catalog: GLOBAL, so the workspace-scoped config trail cannot carry it.
         LLM_CONNECTION_CREATED,
         LLM_CONNECTION_UPDATED,
@@ -157,6 +172,7 @@ public class AuthEvent {
         e.ipInet = ipInet;
         e.userAgent = userAgent;
         e.details = data.details();
+        e.elevatedViaInstanceAdmin = data.elevatedViaInstanceAdmin();
         return e;
     }
 

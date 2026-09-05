@@ -8,6 +8,7 @@ import { ConfigAuditDetailSheet } from "./ConfigAuditDetailSheet";
 
 const baseEntry: ConfigAuditEntryView = {
 	id: 91,
+	elevatedViaInstanceAdmin: false,
 	occurredAt: new Date("2026-07-24T09:14:32Z"),
 	action: "UPDATED",
 	entityType: "AGENT_BINDING",
@@ -76,6 +77,15 @@ export const Created: Story = {
 export const Deleted: Story = {
 	args: {
 		entry: { ...baseEntry, action: "DELETED", newValue: undefined, changedKeys: undefined },
+	},
+};
+
+export const ElevatedAccess: Story = {
+	args: { entry: { ...baseEntry, elevatedViaInstanceAdmin: true } },
+	play: async () => {
+		const body = within(document.body);
+		await expectSettledVisible(await body.findByText("Access"));
+		await expectSettledVisible(await body.findByText(/not a member of/i));
 	},
 };
 

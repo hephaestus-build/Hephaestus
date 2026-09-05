@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
@@ -62,6 +63,17 @@ public class ConfigAuditEvent {
     @Column(name = "acting_account_id")
     @Nullable
     private Long actingAccountId;
+
+    /**
+     * Whether the actor reached this row's workspace on instance-admin authority rather than
+     * membership. Resolved by {@link ConfigAuditActor} from the same request-local decision the
+     * {@code auth_event} trail reads, so the two viewers cannot disagree about one action.
+     * {@code false} on every row written before elevation was recorded, so a false here is "not known
+     * to be elevated", not "known to be a member".
+     */
+    @ColumnDefault("false")
+    @Column(name = "elevated_via_instance_admin", nullable = false)
+    private boolean elevatedViaInstanceAdmin;
 
     @Convert(converter = ConfigAuditEntityTypeConverter.class)
     @Column(name = "entity_type", nullable = false, length = 48)
@@ -112,6 +124,7 @@ public class ConfigAuditEvent {
         e.actorKind = actor.kind();
         e.actorAccountId = actor.accountId();
         e.actingAccountId = actor.actingAccountId();
+        e.elevatedViaInstanceAdmin = actor.elevatedViaInstanceAdmin();
         e.entityType = entityType;
         e.entityId = entityId;
         e.action = action;

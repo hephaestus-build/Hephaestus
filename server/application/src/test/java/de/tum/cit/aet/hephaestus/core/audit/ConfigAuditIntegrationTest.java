@@ -8,6 +8,13 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditAction;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditActorKind;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
+import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeDTO;
@@ -18,13 +25,16 @@ import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +42,9 @@ import org.springframework.transaction.annotation.Transactional;
  * End-to-end coverage of the config audit trail: that producers actually write rows, that the rows
  * say the right thing, and that a workspace admin can never read another workspace's history.
  */
+// Without the sequence, every auth_event write is swallowed and the elevation assertions below pass
+// vacuously — see the script's own comment.
+@Sql("/db/auth-event-sequence.sql")
 class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
@@ -39,6 +52,15 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private ConfigAuditEventRepository configAuditEventRepository;
+
+    @Autowired
+    private AccountRepository accountRepository;
+
+    @Autowired
+    private IdentityLinkRepository identityLinkRepository;
+
+    @Autowired
+    private AuthEventRepository authEventRepository;
 
     @Autowired
     private EntityManager entityManager;
@@ -68,6 +90,46 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
         // signed-in admin did this. The id stays null because the test harness mints a non-numeric
         // subject; production subjects are always the account id.
         assertThat(row.getActorKind()).isEqualTo(ConfigAuditActorKind.USER);
+        assertThat(row.isElevatedViaInstanceAdmin()).isFalse();
+    }
+
+    @Test
+    void shouldTagBothLedgersWhenAnInstanceAdminReachesAWorkspaceTheyAreNotAMemberOf() {
+        Workspace workspace = setupWorkspace("audit-elevated");
+        Account admin = persistAccount("Elevation operator");
+        long adminId = persistedId(admin);
+
+        patchPracticeReviewAs(workspace, token(adminId), Map.of("cooldownMinutes", 47));
+
+        ConfigAuditEvent row = reviewSettingsRowFor(workspace);
+        assertThat(row.getActorAccountId()).isEqualTo(adminId);
+        assertThat(row.isElevatedViaInstanceAdmin()).isTrue();
+        // One marker for the access window, not one per request, although the patch is two requests.
+        assertThat(elevationEventsFor(adminId)).singleElement().satisfies(event -> {
+            assertThat(event.getWorkspaceId()).isEqualTo(workspace.getId());
+            assertThat(event.isElevatedViaInstanceAdmin()).isTrue();
+        });
+    }
+
+    @Test
+    void shouldTagNeitherLedgerWhenTheSameChangeIsMadeByAWorkspaceMember() {
+        Workspace workspace = setupWorkspace("audit-member");
+        User member = persistUser("audit-member-admin");
+        ensureWorkspaceMembership(workspace, member, WorkspaceMembership.WorkspaceRole.ADMIN);
+        Account account = persistAccount("Workspace member");
+        linkIdentity(account, member);
+        long accountId = persistedId(account);
+
+        patchPracticeReviewAs(workspace, token(accountId), Map.of("cooldownMinutes", 48));
+
+        ConfigAuditEvent row = reviewSettingsRowFor(workspace);
+        assertThat(row.getActorAccountId()).isEqualTo(accountId);
+        // The token carries app_admin exactly as the elevated case does; only the membership differs,
+        // so this proves the filter's own branch condition and not merely a token's authorities.
+        assertThat(row.isElevatedViaInstanceAdmin()).isFalse();
+        assertThat(elevationEventsFor(accountId))
+                .as("no elevation marker for the account this test signed in as")
+                .isEmpty();
     }
 
     @Test
@@ -469,24 +531,28 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private void patchPracticeReview(Workspace workspace, Map<String, Object> body) {
+        patchPracticeReviewAs(workspace, TestAuthUtils.getCurrentUserToken(), body);
+    }
+
+    private void patchPracticeReviewAs(Workspace workspace, String token, Map<String, Object> body) {
         String slug = workspace.getWorkspaceSlug();
         String version = webTestClient
                 .get()
                 .uri("/workspaces/{slug}/practices/review-settings", slug)
-                .headers(TestAuthUtils.withCurrentUser())
+                .headers(headers -> headers.setBearerAuth(token))
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .returnResult(String.class)
                 .getResponseHeaders()
                 .getETag();
-        String etag = java.util.Objects.requireNonNull(version, "the settings endpoint always answers with an ETag");
+        String etag = Objects.requireNonNull(version, "the settings endpoint always answers with an ETag");
 
         webTestClient
                 .patch()
                 .uri("/workspaces/{slug}/practices/review-settings", slug)
                 .headers(headers -> {
-                    TestAuthUtils.withCurrentUser().accept(headers);
+                    headers.setBearerAuth(token);
                     headers.setIfMatch(etag);
                 })
                 .contentType(MediaType.APPLICATION_JSON)
@@ -494,6 +560,50 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .exchange()
                 .expectStatus()
                 .isOk();
+    }
+
+    /** Authenticates as one specific account id — the JWT subject the native-auth filters read. */
+    private static String token(long accountId) {
+        return "mock-jwt-sub-" + accountId;
+    }
+
+    private Account persistAccount(String displayName) {
+        Account account = new Account(displayName);
+        account.setAppRole(Account.AppRole.APP_ADMIN);
+        account.setStatus(Account.Status.ACTIVE);
+        return accountRepository.save(account);
+    }
+
+    /** Wires an account to an SCM actor, which is what turns a workspace membership into roles. */
+    private void linkIdentity(Account account, User actor) {
+        IdentityProvider provider = ensureGitHubProvider();
+        IdentityLink link = new IdentityLink();
+        link.setAccount(account);
+        link.setProviderId(Objects.requireNonNull(provider.getId()));
+        link.setSubject(String.valueOf(actor.getNativeId()));
+        link.setUsernameAtSignup(actor.getLogin());
+        link.setExternalActorId(actor.getId());
+        identityLinkRepository.save(link);
+    }
+
+    private ConfigAuditEvent reviewSettingsRowFor(Workspace workspace) {
+        return configAuditEventRepository.findAll().stream()
+                .filter(e -> workspace.getId().equals(e.getWorkspaceId())
+                        && e.getEntityType() == ConfigAuditEntityType.PRACTICE_REVIEW_SETTINGS)
+                .reduce((first, second) -> {
+                    throw new AssertionError("the patch wrote more than one review-settings row");
+                })
+                .orElseThrow(() -> new AssertionError("the patch wrote no review-settings row"));
+    }
+
+    private List<AuthEvent> elevationEventsFor(long accountId) {
+        return authEventRepository.findByAccountSince(accountId, Instant.EPOCH).stream()
+                .filter(event -> event.getEventType() == AuthEvent.EventType.WORKSPACE_ELEVATION)
+                .toList();
+    }
+
+    private static long persistedId(Account account) {
+        return Objects.requireNonNull(account.getId(), "the account must be persisted");
     }
 
     /** A second producer, of a different entity type and action, so the filter matrix proves each predicate narrows. */

@@ -7,6 +7,7 @@ import { ConfigAuditTable } from "./ConfigAuditTable";
 
 const impersonatedUpdate: ConfigAuditEntryView = {
 	id: 3,
+	elevatedViaInstanceAdmin: false,
 	occurredAt: new Date("2026-07-10T09:50:00Z"),
 	actorKind: "IMPERSONATED",
 	actorAccountId: 42,
@@ -24,6 +25,7 @@ const impersonatedUpdate: ConfigAuditEntryView = {
 
 const systemCreate: ConfigAuditEntryView = {
 	id: 1,
+	elevatedViaInstanceAdmin: false,
 	occurredAt: new Date("2026-07-10T09:00:00Z"),
 	actorKind: "SYSTEM",
 	entityType: "PRACTICE_REVIEW_SETTINGS",
@@ -34,9 +36,27 @@ const systemCreate: ConfigAuditEntryView = {
 	workspaceId: 12,
 };
 
+/** An instance admin changing a setting in a workspace they are not a member of. */
+const elevatedUpdate: ConfigAuditEntryView = {
+	id: 5,
+	elevatedViaInstanceAdmin: true,
+	occurredAt: new Date("2026-07-10T10:20:00Z"),
+	actorKind: "USER",
+	actorAccountId: 7,
+	actor: { id: 7, displayName: "Grace Hopper", email: "grace@example.com" },
+	entityType: "PRACTICE_REVIEW_SETTINGS",
+	entityId: "12",
+	action: "UPDATED",
+	changedKeys: ["cooldownMinutes"],
+	oldValue: '{"cooldownMinutes":30}',
+	newValue: '{"cooldownMinutes":47}',
+	workspaceId: 12,
+};
+
 const entries: ConfigAuditEntryView[] = [
 	{
 		id: 4,
+		elevatedViaInstanceAdmin: false,
 		occurredAt: new Date("2026-07-10T10:05:00Z"),
 		actorKind: "USER",
 		actorAccountId: 7,
@@ -52,6 +72,7 @@ const entries: ConfigAuditEntryView[] = [
 	impersonatedUpdate,
 	{
 		id: 2,
+		elevatedViaInstanceAdmin: false,
 		occurredAt: new Date("2026-07-10T09:30:00Z"),
 		actorKind: "USER",
 		actorAccountId: 7,
@@ -155,6 +176,34 @@ export const LoadMore: Story = {
 	args: { hasNextPage: true, isFetchingNextPage: true },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: /Load more/i })).toBeDisabled();
+	},
+};
+
+export const ElevatedAccess: Story = {
+	args: { entries: [elevatedUpdate] },
+	play: async ({ canvas }) => {
+		canvas.getByText("Grace Hopper");
+		await expect(canvas.getByText("Elevated")).toBeVisible();
+	},
+};
+
+export const MemberChangeIsNotBadged: Story = {
+	args: { entries: [{ ...elevatedUpdate, elevatedViaInstanceAdmin: false }] },
+	play: async ({ canvas }) => {
+		canvas.getByText("Grace Hopper");
+		await expect(canvas.queryByText("Elevated")).toBeNull();
+	},
+};
+
+export const ElevatedRowDetail: Story = {
+	args: { entries: [elevatedUpdate] },
+	play: async ({ canvas }) => {
+		const [details] = canvas.getAllByRole("button", { name: /View details/i });
+		if (!details) throw new Error("The table rendered no rows to open");
+		await userEvent.click(details);
+		const dialog = within(await screen.findByRole("dialog"));
+		dialog.getByText("Access");
+		await expect(dialog.getByText(/not a member of/i)).toBeVisible();
 	},
 };
 

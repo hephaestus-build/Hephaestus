@@ -34,7 +34,7 @@ class AuthEventWriterTest extends BaseUnitTest {
                 repository, sequence, metrics, Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC));
 
         AuthEventData data = new AuthEventData(
-                AuthEvent.EventType.LOGIN, AuthEvent.Result.SUCCESS, 1L, null, null, null, null, null, null);
+                AuthEvent.EventType.LOGIN, AuthEvent.Result.SUCCESS, 1L, null, null, null, null, null, null, false);
 
         // The swallow invariant: the request must not see the audit failure.
         assertThatCode(() -> writer.write(data)).doesNotThrowAnyException();

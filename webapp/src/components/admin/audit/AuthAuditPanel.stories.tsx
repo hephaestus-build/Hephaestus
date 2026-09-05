@@ -8,6 +8,7 @@ import { AuthAuditPanel } from "./AuthAuditPanel";
 
 const failedLogin: AuthEventView = {
 	id: 2,
+	elevatedViaInstanceAdmin: false,
 	eventType: "LOGIN_FAILED",
 	result: "FAILURE",
 	failureReason: "Bad credentials",
@@ -20,6 +21,7 @@ const failedLogin: AuthEventView = {
 const events: AuthEventView[] = [
 	{
 		id: 3,
+		elevatedViaInstanceAdmin: false,
 		eventType: "LOGIN",
 		result: "SUCCESS",
 		occurredAt: new Date("2026-07-24T09:14:32Z"),
@@ -31,6 +33,7 @@ const events: AuthEventView[] = [
 	failedLogin,
 	{
 		id: 1,
+		elevatedViaInstanceAdmin: false,
 		eventType: "APP_ROLE_CHANGED",
 		result: "SUCCESS",
 		occurredAt: new Date("2026-07-23T17:40:00Z"),

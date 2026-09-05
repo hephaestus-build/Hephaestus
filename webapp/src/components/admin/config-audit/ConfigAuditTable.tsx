@@ -2,6 +2,7 @@ import { Bot, History, UserCog } from "lucide-react";
 import { useState } from "react";
 
 import type { ConfigAuditEntryView } from "@/api/types.gen";
+import { ElevationBadge } from "@/components/admin/audit-shared/ElevationBadge";
 import { FilterLink } from "@/components/admin/audit-shared/FilterLink";
 import { TableRowsSkeleton } from "@/components/admin/integrations/TableRowsSkeleton";
 import { RelativeTime } from "@/components/common/RelativeTime";
@@ -172,8 +173,9 @@ export function ConfigAuditTable({
 										</TableCell>
 									)}
 									<TableCell className="max-w-[14rem]">
-										<span className="block truncate">
+										<span className="flex min-w-0 items-center gap-1.5">
 											<ActorCell actor={actor} onFilterActor={onFilterActor} />
+											<ElevationBadge elevated={entry.elevatedViaInstanceAdmin} />
 										</span>
 										<span className="block truncate text-xs text-muted-foreground" title={summary}>
 											{summary}

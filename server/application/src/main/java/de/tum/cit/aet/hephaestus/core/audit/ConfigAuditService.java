@@ -69,6 +69,7 @@ class ConfigAuditService implements ConfigAuditQuery {
                 e.getEntityId(),
                 e.getAction(),
                 e.getActorKind(),
+                e.isElevatedViaInstanceAdmin(),
                 e.getActorAccountId(),
                 e.getActingAccountId(),
                 refOf(e.getActorAccountId(), identities),

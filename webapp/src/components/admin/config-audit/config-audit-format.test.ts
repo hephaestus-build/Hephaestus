@@ -19,6 +19,7 @@ function entry(over: Partial<ConfigAuditEntryView>): ConfigAuditEntryView {
 		id: 1,
 		occurredAt: new Date("2026-07-10T10:00:00Z"),
 		actorKind: "USER",
+		elevatedViaInstanceAdmin: false,
 		action: "UPDATED",
 		entityType: "PRACTICE_REVIEW_SETTINGS",
 		entityId: "5",
