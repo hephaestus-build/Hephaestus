@@ -41,6 +41,10 @@ on:
         required: false
         type: string
         default: "false"
+      postgres_base_sha:
+        description: "Commit whose published PostgreSQL image the database legs reuse"
+        required: true
+        type: string
       server_image_changed:
         description: "Whether the application-server image inputs changed"
         required: false
@@ -140,20 +144,17 @@ jobs:
             echo "| API specs sync | :x: Out of sync | \`vp run generate:api\` |" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
+      - uses: ./.github/actions/postgres-image
+        if: always()
+        with:
+          base-sha: ${{ inputs.postgres_base_sha }}
+          image-changed: ${{ inputs.postgres_image_changed }}
+          tag: hephaestus-postgres:ci
       - name: Migration chain, schema drift and ERD
         id: schema
         continue-on-error: true
         if: always()
-        env:
-          INPUTS_POSTGRES_IMAGE_CHANGED: ${{ inputs.postgres_image_changed }}
         run: |
-          # The base image may still be publishing; build the same Dockerfile as fallback.
-          if [[ "${INPUTS_POSTGRES_IMAGE_CHANGED}" == "true" ]] ||
-            ! docker pull ghcr.io/hephaestus-build/postgres:${{ github.event.pull_request.base.sha || github.sha }}; then
-            docker build -t hephaestus-postgres:ci docker/postgres
-          else
-            docker tag ghcr.io/hephaestus-build/postgres:${{ github.event.pull_request.base.sha || github.sha }} hephaestus-postgres:ci
-          fi
           docker run -d --name postgres-db \
             -e POSTGRES_DB=hephaestus -e POSTGRES_PASSWORD=root -e POSTGRES_USER=root \
             -p 5432:5432 hephaestus-postgres:ci
@@ -221,17 +222,13 @@ jobs:
       - uses: ./.github/actions/restore-server-build
         with:
           artifact: ${{ env.SERVER_BUILD_ARTIFACT }}
+      - uses: ./.github/actions/postgres-image
+        with:
+          base-sha: ${{ inputs.postgres_base_sha }}
+          image-changed: ${{ inputs.postgres_image_changed }}
+          tag: hephaestus-postgres:ci
       - name: Run database contract tests and the major-upgrade drill
-        env:
-          INPUTS_POSTGRES_IMAGE_CHANGED: ${{ inputs.postgres_image_changed }}
         run: |
-          # The base image may still be publishing; build the same Dockerfile as fallback.
-          if [[ "${INPUTS_POSTGRES_IMAGE_CHANGED}" == "true" ]] ||
-            ! docker pull ghcr.io/hephaestus-build/postgres:${{ github.event.pull_request.base.sha || github.sha }}; then
-            docker build -t hephaestus-postgres:ci docker/postgres
-          else
-            docker tag ghcr.io/hephaestus-build/postgres:${{ github.event.pull_request.base.sha || github.sha }} hephaestus-postgres:ci
-          fi
           docker run -d --name postgres-db \
             -e POSTGRES_DB=hephaestus -e POSTGRES_PASSWORD=root -e POSTGRES_USER=root \
             -p 5432:5432 hephaestus-postgres:ci
@@ -280,15 +277,14 @@ jobs:
         with:
           name: ${{ env.SERVER_BUILD_ARTIFACT }}
           path: server
+      # `server/compose.yaml` resolves the database by the `dev` tag, so that is the name it needs.
+      - uses: ./.github/actions/postgres-image
+        with:
+          base-sha: ${{ inputs.postgres_base_sha }}
+          image-changed: ${{ inputs.postgres_image_changed }}
+          tag: ghcr.io/hephaestus-build/postgres:dev
       - name: Run end-to-end tests against the built server
         run: |
-          # The base image may still be publishing; build the same Dockerfile as fallback.
-          if [[ "${INPUTS_POSTGRES_IMAGE_CHANGED}" == "true" ]] ||
-            ! docker pull ghcr.io/hephaestus-build/postgres:${{ github.event.pull_request.base.sha || github.sha }}; then
-            docker build -t ghcr.io/hephaestus-build/postgres:dev docker/postgres
-          else
-            docker tag ghcr.io/hephaestus-build/postgres:${{ github.event.pull_request.base.sha || github.sha }} ghcr.io/hephaestus-build/postgres:dev
-          fi
           docker compose -f server/compose.yaml up -d --wait --no-build postgres
           cleanup() {
             if [[ -n "${SERVER_PID:-}" ]]; then
@@ -319,8 +315,6 @@ jobs:
           docker compose -f server/compose.yaml exec -T postgres \
             psql -v ON_ERROR_STOP=1 -U root -d hephaestus < webapp/e2e/seed.sql
           timeout --kill-after=30s 10m vp run --filter webapp test:e2e
-        env:
-          INPUTS_POSTGRES_IMAGE_CHANGED: ${{ inputs.postgres_image_changed }}
       - name: Upload diagnostics
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

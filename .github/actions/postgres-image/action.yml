@@ -1,0 +1,39 @@
+name: Resolve the PostgreSQL image
+description: >-
+  Makes the PostgreSQL image the database legs run available under a local tag, by pulling the one
+  published for a commit or by building the same Dockerfile.
+inputs:
+  base-sha:
+    description: >-
+      The commit whose published image to reuse. A run resolves the commit it is a diff from, which
+      is the caller's to know.
+    required: true
+  image-changed:
+    description: >-
+      Whether this run changed the image's own inputs, in which case the published one is stale and
+      the Dockerfile is built instead.
+    required: false
+    default: "false"
+  tag:
+    description: The local tag the resolved image is made available under.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Resolve the PostgreSQL image
+      shell: bash
+      env:
+        BASE_SHA: ${{ inputs.base-sha }}
+        IMAGE_CHANGED: ${{ inputs.image-changed }}
+        TAG: ${{ inputs.tag }}
+      # A published image is a pull rather than an install of pg_partman over the same base, so it
+      # is worth reaching for; the base commit's own run may not have finished publishing it yet,
+      # and a run whose diff reaches no published commit at all has nothing to pull.
+      run: |
+        set -euo pipefail
+        source="ghcr.io/hephaestus-build/postgres:$BASE_SHA"
+        if [ "$IMAGE_CHANGED" = "true" ] || ! docker pull "$source"; then
+          docker build -t "$TAG" docker/postgres
+        else
+          docker tag "$source" "$TAG"
+        fi
