@@ -71,4 +71,5 @@ rationale and its withheld `WorkerAuthProvider` SPI, and the Revisit trigger's f
 ADR 0041 withdraws the BYO remote-worker purpose, so no BYO-runner auth model will surface.
 A driver only launches, observes, kills, removes and lists; the workspace moves as one tar and
 sandboxes take no host mounts, so the first non-`HostPathMount` consumer this ADR was reserving the
-seal for will not arrive.
+seal for will not arrive. No `VolumeMount` type exists; `SandboxSpec.volumeMounts` is the
+`Map<String, String>` of option 3.

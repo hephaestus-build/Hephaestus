@@ -1,17 +1,7 @@
 # ADR 0009: Worker runtime substrate + WSS-over-443 control channel
 
-**Status:** Accepted (amended 2026-07-21 — drain requeues instead of cancelling, #1368 fix wave; 2026-09-03 #1719 — see the update below)
+**Status:** Accepted (amended 2026-07-21 #1368, 2026-09-03 #1719 and 2026-09-05 — see the updates below)
 **Date:** 2026-05-21
-
-> **Amendment (2026-07-21):** `AgentJobExecutor#cancelInFlight` (referenced in the Drain row below)
-> originally wrote a terminal `CANCELLED` for every in-flight job on drain, contradicting the
-> operator docs (`docs/admin/runtime-roles.mdx`), which always described drain as jobs "returning to
-> the queue... bounded by `AGENT_MAX_RETRIES`". It now attempts a worker-fenced requeue
-> (`RUNNING → QUEUED`, retry-capped — the same CAS `AgentJobZombieSweeper` uses for orphan recovery)
-> first, for both `DRAIN_GRACEFUL` and the `timeout=0` `DRAIN_IMMEDIATE` case; only a job that has
-> already exhausted its retry budget, or lost the fence to a concurrent user-cancel, falls back to a
-> worker-fenced terminal cancel. `agent_job.cancellation_reason` is still populated on that fallback
-> path (unchanged: `DRAIN_GRACEFUL` / `DRAIN_IMMEDIATE` / `USER` / `TIMEOUT`).
 
 ## Context
 
@@ -41,8 +31,7 @@ WSS over TLS-443 with sealed-record JSON frames, gated by `runtime.worker.enable
 | Audit | New `agent_job.cancellation_reason` column for drain-initiated cancels (`DRAIN_GRACEFUL` / `DRAIN_IMMEDIATE` / `USER` / `TIMEOUT`). No separate phase-log table. |
 
 `AgentJobExecutor` exposes three orthogonal methods — `stopAcceptingNewJobs()` /
-`awaitInFlight(Duration)` / `cancelInFlight(reason)` — composed by the drain coordinator. The
-previous `@PreDestroy` never awaited the sandbox executor (latent bug); this fixes it.
+`awaitInFlight(Duration)` / `cancelInFlight(reason)` — composed by the drain coordinator.
 
 ## Considered options
 
@@ -76,8 +65,25 @@ previous `@PreDestroy` never awaited the sandbox executor (latent bug); this fix
 - Adaptive concurrency rules — static config is the contract.
 - Worker-side observability: `worker_*` Prometheus catalog ships, no golden-file pinning yet.
 
+## Update — 2026-07-21 (issue #1368)
+
+Supersedes the Drain row of § Decision on what `cancelInFlight(reason)` does to an in-flight job.
+It first attempts a worker-fenced requeue (`RUNNING → QUEUED`, retry-capped — the same CAS
+`AgentJobZombieSweeper` uses for orphan recovery), for both `DRAIN_GRACEFUL` and the `timeout=0`
+`DRAIN_IMMEDIATE` case; only a job that has already exhausted its retry budget, or lost the fence to
+a concurrent user-cancel, falls back to a worker-fenced terminal cancel, which populates
+`agent_job.cancellation_reason` as the Audit row says. This is the drain `docs/admin/runtime-roles.mdx`
+describes: jobs return to the queue, bounded by `AGENT_MAX_RETRIES`.
+
 ## Update — 2026-09-03 (issue #1719)
 
 [ADR 0041](0041-compose-1x-kubernetes-2.md) supersedes the Context's remote-worker premise; the
 Decision's control channel and its drain semantics stand. Sandbox data-plane traffic uses the
 worker's Sandbox Gateway port, not WSS.
+
+## Update — 2026-09-05 (frame types named above never shipped)
+
+Corrects three names above. `WorkerControlFrame` permits `WorkerHello`, `WorkerWelcome`,
+`Heartbeat`, `CapacityReport`, `ForceReconnect` and `CancelJob`, not the mentor session quartet the
+Protocol row of § Decision lists; the `HubSessionInbox` bridge of § Consequences and the
+`WorkerControlPublisher` seam of § Considered options exist nowhere in the repository.

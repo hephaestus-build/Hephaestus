@@ -1,6 +1,6 @@
 ---
 title: End-to-end testing
-description: How the Playwright suite is structured and how to run it locally.
+description: Running the live practice-review path end to end locally, and the Playwright browser suite.
 ---
 
 # Live practice-review E2E
@@ -81,7 +81,7 @@ requires the appropriate group role and license.
 The agent runs in a Docker sandbox (`ghcr.io/hephaestus-build/agent-pi`) and calls the LLM through
 the in-app proxy, so provider keys never enter the sandbox. Host-run E2E uses a non-internal Docker
 network (`allowInternet=true`) so the sandbox can reach that proxy through `host.docker.internal`.
-Feedback is posted back to the MR, and the observations behind it are shown under the workspace's **Practices → Runs** view.
+Feedback is posted back to the MR, and the observations behind it are shown under the workspace's **Practices → Practice reviews** view.
 
 Live runner JUnit tests call the upstream provider directly. They do not cover application proxying,
 budget admission, durable usage accounting, sandbox execution, or SCM delivery.

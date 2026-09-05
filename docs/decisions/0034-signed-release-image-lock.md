@@ -1,6 +1,6 @@
 # ADR 0034: Production consumes one signed release image lock
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-09-03 #1719 and 2026-09-05 — see the updates below)
 **Date:** 2026-08-28
 **Supersedes:** [ADR 0031](0031-agent-image-follows-the-deployments-own-tag.md)
 
@@ -50,3 +50,11 @@ Agent Sandbox CRD and controller image digests; the chart, CRD, and images used 
 and rollback all come from that lock. ADR 0034's signer identity, signature validation, immutable
 publication, and no-rebuild rollback rules apply unchanged. Compose and the Docker driver are absent
 from the 2.0 inventory rather than retained as exclusions.
+
+## Update — 2026-09-05 (ADR 0037)
+
+Supersedes the operator toolchain in § Consequences.
+[ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) replaced Bun with the Node.js
+version the repository pins, and `prepare-release-lock.ts` reaches for the GitHub CLI only inside
+GitHub Actions — an operator's run fetches over HTTP. Preparing self-hosted deployment inputs
+therefore needs Cosign and that Node.js version, and no GitHub CLI.

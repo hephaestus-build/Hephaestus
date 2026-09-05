@@ -3,20 +3,19 @@ title: Unified integration migration
 description: The one-off cutover to the unified integration framework, kept for deployments that predate it.
 ---
 
-# Migration guide — Unified integration framework (#1198 / PR #1306)
+# Migration guide — Unified integration framework
 
-Actionable, post-merge migration steps for operators upgrading from pre-#1198 releases to the unified
+Migration steps for operators upgrading from a release that predates the unified
 `integration/{core,scm}` framework. Steps marked **VERIFIED** were exercised at runtime against a
 fresh database and a live GitHub App; steps marked **MANUAL** require an operator
 action that cannot be automated by the deploy.
 
-**Read [§5](#5-scm-disconnect-now-erases-the-mirror-behaviour-change) before
-disconnecting anything.** A later release made SCM disconnect and workspace purge erase the mirrored
-data; it is irreversible.
+**Read [§5](#5-scm-disconnect-erases-the-mirror) before disconnecting anything.** SCM disconnect and
+workspace purge erase the mirrored data; it is irreversible.
 
 ## What changed (operator-relevant)
 
-- `gitprovider/**` → `integration/{core,scm}/**`; per-provider credentials now live in a single
+- `gitprovider/**` → `integration/{core,scm}/**`; per-provider credentials live in a single
   encrypted `connection` table (one row per workspace × kind × instance), replacing the
   `workspace.installation_id / personal_access_token / git_provider_mode / gitlab_* / slack_* /
   leaderboard_notification_*` columns.
@@ -35,7 +34,7 @@ credentials and the app fails fast in `prod` if they are missing:
 | Variable | Purpose | Notes |
 |---|---|---|
 | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` | AES-256-GCM key for credentials at rest | **Exactly 32 chars.** Required in `prod` (fail-fast). Keep it stable — rotating it requires re-encrypting all `connection` rows. |
-| `WEBHOOK_SECRET` | Inbound webhook HMAC/token verification | Already required pre-#1198. Also backs OAuth-state HMAC unless `HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET` is set. In non-`prod` an ephemeral secret is auto-generated (a WARN is logged) so local dev boots without it. |
+| `WEBHOOK_SECRET` | Inbound webhook HMAC/token verification | Unchanged from earlier releases. Also backs OAuth-state HMAC unless `HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET` is set. In non-`prod` an ephemeral secret is auto-generated (a WARN is logged) so local dev boots without it. |
 | `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID` / `_CLIENT_SECRET` / `_REDIRECT_URI` / `_SIGNING_SECRET` | Slack per-workspace OAuth install plus Events API/interactivity verification | The signing secret is required on the webhook-server when Slack is enabled. |
 
 GitHub App (`GH_APP_ID`, `GH_APP_PRIVATE_KEY`) and GitLab (`hephaestus.integration.gitlab.*`)
@@ -79,14 +78,10 @@ scheduled sync backfills anything missed.
 4. Verify: a workspace's connection is `ACTIVE`, a manual sync pulls data, and a test webhook is
    received (`/actuator/health` on the webhook-server pod).
 
-## 5. SCM disconnect now erases the mirror (behaviour change)
+## 5. SCM disconnect erases the mirror
 
-**This is destructive and has no undo.** It landed after #1198 and applies to any operator upgrading
-past that release.
-
-Previously, disconnecting a GitHub or GitLab connection left every mirrored row in PostgreSQL, and
-purging a workspace cleared only its monitors and local clones. Now both actions run the same
-erasure:
+**This is destructive and has no undo.** Disconnecting a GitHub or GitLab connection and purging a
+workspace run the same erasure:
 
 - Mirrored repositories and everything cascading from them (issues, pull/merge requests, reviews,
   review threads and comments, discussions, labels, milestones, collaborators) are **hard-deleted**,
@@ -103,7 +98,7 @@ erasure:
 Consequences for operators:
 
 - **Reconnecting is a fresh initial sync, not a restore.** Anything the vendor no longer has is
-  gone. This matches the Slack and Outline behaviour, which have always erased on disconnect.
+  gone. This matches the Slack and Outline behaviour, which erase on disconnect.
 - **Do not use disconnect as a way to rotate credentials.** Re-enter the credential on the existing
   connection instead.
 - Disconnect is refused with a retryable `409` while a sync job is in flight, so the erase never
@@ -121,5 +116,4 @@ for the full model and [Integration sync lifecycle](./sync-lifecycle.md) for per
 - **No JetStream DLQ** (ADR 0013 — by design).
 
 > Live webhook delivery, GitLab, Slack OAuth, and LLM-review paths need a public tunnel + live
-> OAuth apps to exercise. Use the steps above plus the service `AGENTS.md` runbooks to validate
-> them in a staging environment.
+> OAuth apps to exercise. Use the steps above to validate them in a staging environment.

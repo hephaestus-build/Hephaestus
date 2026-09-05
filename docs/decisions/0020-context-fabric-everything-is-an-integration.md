@@ -1,4 +1,4 @@
-# ADR 0020: Context Fabric — everything is an integration, only practice-detection and mentor are native
+# ADR 0020: Context Fabric — everything is an integration, only practice review and mentor are native
 
 **Status:** Accepted (amended 2026-08-04, 2026-08-30 and 2026-09-03 — see the updates below)
 **Date:** 2026-06-12
@@ -7,11 +7,11 @@
 
 ## Context
 
-The practice-detection agent reviews a change from a materialised context directory
+The practice-review agent reviews a change from a materialised context directory
 (`context/target/*`) built by the `ContentSource` SPI (`agent.context`, ADR 0007).
 A directory that holds only what the diff and the PR row carry (`metadata.json`,
 `diff.patch`, `diff_summary.md`, `comments.json`) makes a large fraction of mentor
-lessons **context-blind** misses rather than detection misses: the signal lives in
+lessons **context-blind** misses rather than review misses: the signal lives in
 another artifact the agent never saw. Three sharp examples:
 
 - A change that `Closes #N` could not be judged against #N's acceptance criteria,
@@ -26,7 +26,7 @@ The deeper reframe behind the fix: the SCM is not special. An issue body, a bran
 graph, a test-target inventory, an Outline doc, a Slack thread — these are all the same
 shape of thing: **external content, fetched on demand, projected into the agent's
 context with provenance**. The only genuinely *native* capabilities Hephaestus owns are
-**practice-detection** and **mentor**; everything that feeds them is an integration. We
+**practice review** and **mentor**; everything that feeds them is an integration. We
 call the substrate that makes any such content addressable, tenant-safe, and cacheable
 the **Context Fabric**.
 
@@ -75,7 +75,7 @@ The Context Fabric is defined by the following decisions. Most are **target stat
    assertion — the exact failure mode the linked-work-item provider guards against by
    never asserting an unmet criterion.
 6. **Capability registry.** A connector declares which Kinds and which capabilities
-   (feedback channel, finding channel, content fetch, link assertion) it supports; the
+   (feedback channel, observation channel, content fetch, link assertion) it supports; the
    builder gates work on the declaration rather than on `instanceof`. This is the
    generalisation of ADR 0015's manifest-gated SPI.
 7. **Telescope manifest, not a cage.** Projected content is **hints + provenance, never
@@ -134,9 +134,9 @@ The shape above is not invented; three independent industry families converge on
   on-disk hash store is authoritative — the precise inversion we must not ship. Hence
   decision §2 calls it a CAS. (Databricks medallion architecture guidance.)
 
-## What this PR ships (the first slice — honest scope)
+## Shipped slice
 
-This PR does **not** build the `Connector` SPI, the CAS, the `entity_node`/`entity_edge`
+This slice does **not** build the `Connector` SPI, the CAS, the `entity_node`/`entity_edge`
 graph, RLS, or `workspace_binding`. It ships the **smallest useful slice of the Fabric on
 the seam that already exists** — the `ContentSource` SPI from ADR 0007 — proving the
 reframe end-to-end before paying for the migration:
@@ -151,7 +151,7 @@ reframe end-to-end before paying for the migration:
     `GitRepositoryManager.walkCommits` / `GitDiffOperations.resolveDiffRange`.
   - `test_presence.json` — `repoHasTestTarget` from a bounded, contents-free
     `Files.walk` of the clone (path strings only, capped).
-- **Consuming practices** that turn those files into formative feedback (this PR):
+- **Consuming practices** that turn those files into formative feedback:
   - `honours-linked-issue-acceptance-criteria` (goal `review-ready-work`) — consumes
     `linked_work_items.json` + `diff.patch`; asks which of `#N`'s criteria are done vs
     deferred; **never asserts an AC is unmet** from code it cannot verify.
@@ -162,7 +162,7 @@ reframe end-to-end before paying for the migration:
     mostly-MINOR team-wide standing nudge, not a per-MR blocker.
 - **Delivery leak-guard wiring** (the integrator edits): the three new files are added to
   `PullRequestReviewHandler.ALLOWED_INTERNAL_CONTEXT_PATHS` and the two new metadata-level
-  slugs to `METADATA_LEVEL_PRACTICES`, so a finding grounded in a cross-context file
+  slugs to `METADATA_LEVEL_PRACTICES`, so an observation grounded in a cross-context file
   survives `filterByDiffScope` instead of being dropped as out-of-diff-scope.
 
 The audience tag, `consistencyToken`, split-confidence edges, RLS, and the
@@ -180,7 +180,7 @@ future connector slots in with no restructuring:
   `bulk/{connectorId}/{externalId}` (the git clone is `bulk/scm/{repoId}`), `cas/{ab}/{rest}`
   (`ContentAddressedStore` — sha-256, two-char fan-out, build-on-miss, atomic writes, striped
   locks, mark-and-sweep GC), `derived/`, and `jobs/{jobId}/` for replay. `GitRepositoryManager`
-  now routes its clone path through `FabricLayout.bulkArtifact`; a clone is a rebuildable cache so
+  routes its clone path through `FabricLayout.bulkArtifact`; a clone is a rebuildable cache so
   the move needs no data migration.
 - **Sandbox view = the telescope (§7).** The repo mounts at `/workspace/blobs/scm/repo` (one
   namespace among future `blobs/slack`, `blobs/outline`) with a back-compat `repo → blobs/scm/repo`
@@ -208,9 +208,9 @@ Positive:
   seam that already exists — zero schema migration, zero new SPI.
 - Each provider is best-effort and each practice is NA-safe: a workspace with git
   disabled, no linked issue, or no test target simply gets silence, never a spurious
-  finding or a failed job.
+  observation or a failed job.
 - The reframe is validated cheaply: if cross-context providers + consuming practices pay
-  off here, the `Connector`/CAS/RLS migration is justified; if not, we have spent one PR,
+  off here, the `Connector`/CAS/RLS migration is justified; if not, we have spent one slice,
   not an epic.
 
 Neutral / negative:
@@ -235,14 +235,14 @@ capability registry; (2) CAS for the on-disk cache (generalising the git clone);
 PROV-O vocabulary + lazy non-lossy conformance; (5) audience + `consistencyToken` on every
 projected fact; (6) fail-CLOSED tenancy (flip ADR 0004 to THROW + add Postgres RLS); (7)
 `workspace_binding` de-spine of projection config. Each lands as its own PR with its own
-ADR delta; none blocks the slice this PR ships.
+ADR delta; none blocks the shipped slice.
 
 ## Revisit trigger
 
 - A second non-SCM connector (Outline doc, Slack thread) needs to project content — the
   forcing function to promote `ContentSource` to the `Connector` superset (§3) rather
   than adding a fourth ad-hoc provider.
-- A cross-context link needs to be *asserted* (not just hinted) into a finding — the
+- A cross-context link needs to be *asserted* (not just hinted) into an observation — the
   forcing function for `entity_node`/`entity_edge` with split confidence (§5).
 - A projected fact needs to be reviewer-scoped (visible to a maintainer but not the
   author) — the forcing function for the audience tag (§8); until then the leak-guard
@@ -281,7 +281,7 @@ including the industry triangulation that produced this shape — the reasoning 
   catalog, not a five-Kind entity taxonomy. PROV-DM remains the reference for explicit
   entity/activity/provenance; the closed-vocabulary role went to the catalog.
 - **§5 `entity_node`/`entity_edge` with split confidence → still open.** No node/edge graph shipped.
-  Citations bind a finding to a declared, available source and exact artifact instead.
+  Citations bind an observation to a declared, available source and exact artifact instead.
 - **§7 telescope manifest → holds, and hardened.** The sandbox sees only materialized files beneath
   `/workspace/inputs`; handlers add no host mounts. A repository tree, when explicitly selected by an
   evidence plan, is copied into `inputs/sources/scm/repo/` and inventoried like any other source. The
@@ -299,13 +299,13 @@ A practice revision declares required and optional source kinds. The runtime rec
 manifest and a per-automated-review readiness report. If required evidence is unavailable, stale,
 incomplete, redacted or denied, that practice is marked **not ready** with typed evidence reasons. If
 no practice remains ready, the job completes with `INSUFFICIENT_EVIDENCE` **without starting the
-detector** — it never manufactures a semantic `NOT_APPLICABLE` result. This is the substantive
+agent** — it never manufactures a semantic `NOT_APPLICABLE` result. This is the substantive
 consequence of the ADR's original complaint that "an empty result is ambiguous": empty, missing,
 stale, partial, redacted, failed and ablated inputs are now distinguishable from one another.
 
 The contract applies to practice reviews. Mentor conversation context is governed by the mentor
 consent and integration contracts and cannot be cited as practice-review evidence; reusing a mentor
-input for detection means first making it a catalogued source kind.
+input for a practice review means first making it a catalogued source kind.
 
 ### Filesystem layout (finalises §1/§2)
 
@@ -342,11 +342,11 @@ version.
 
 ### Provenance and delivery
 
-Artifacts are addressed by SHA-256, and a citation binds a finding to a declared, available source and
-an exact artifact; diff citations additionally bind file, side and line range. Deterministic secret
+Artifacts are addressed by SHA-256, and a citation binds an observation to a declared, available source
+and an exact artifact; diff citations additionally bind file, side and line range. Deterministic secret
 scanning validates a transient line digest but removes that digest before persistence, retaining only
 redacted location evidence. This proves source *attribution*, not causal isolation inside a shared
-model invocation — the runtime still rejects any finding that cites a source outside its practice
+model invocation — the runtime still rejects any observation that cites a source outside its practice
 declaration.
 
 ### Added consequences
@@ -356,8 +356,8 @@ declaration.
 - Source-contract changes require explicit version migration and mark dependent claims stale.
 - The CAS and replay cache have bounded residual windows; immediate selective erasure would require
   reference-aware collection and remains a deployment approval consideration.
-- `branches-from-the-integration-branch`, listed among the consuming practices in "What this PR
-  ships" above, has since been withdrawn from the catalog. The other two remain.
+- `branches-from-the-integration-branch`, listed among the consuming practices in § Shipped slice
+  above, is withdrawn from the catalog. The other two remain.
 
 ### Added evidence
 

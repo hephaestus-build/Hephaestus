@@ -2,7 +2,7 @@
 id: coding-guidelines
 sidebar_position: 6
 title: Coding & Design Guidelines
-description: Shared principles for the React client and the Spring Boot server (which hosts the in-process Pi mentor agent and the inbound webhook receiver).
+description: Shared principles for the React client and the Spring Boot server.
 ---
 
 These guidelines keep every service aligned. Keep changes focused. Mention any deviation in your pull request. Raise follow-up issues when you discover gaps.
@@ -35,8 +35,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 - Fetch data by spreading generated `...Options()` helpers into `useQuery` or `useMutation`. The helpers provide typing, query keys, and retry defaults. A hand-written query key is a lint error (`hephaestus/no-manual-query-key`), because it stops matching the generated one silently.
 - Invalidate caches with the generated `...QueryKey()` helpers or the same keys passed to `useQuery`. Use optimistic updates only when the UI must respond instantly, such as mentor chat streaming.
 - Subscribe to Zustand stores with selectors (`useDocumentsStore((state) => state.documents[id])`). Keep store actions pure.
-- Respect React Compiler requirements. No conditional hooks. No prop mutation. Because the compiler memoises for you, `useMemo`, `useCallback` and `memo` cannot be imported from `react`, and neither can `forwardRef` — React 19 passes `ref` as an ordinary prop.
-- Keep render deterministic. Reading the wall clock or the RNG while rendering is a lint error (`hephaestus/no-nondeterministic-render`); component code takes the time from `@/components/common/use-now` and stories from `@/components/common/story-clock`.
+- The React Compiler rules and the clock rules are `webapp/AGENTS.md` § React Compiler and § The time of day; both are enforced by lint.
 - Stay inside the `--color-*` token scale declared in `src/styles.css`. Reach for shadcn/ui primitives before adding new component libraries. `@apply` lives in `styles.css` for base and wrapper rules, not in components.
 - Co-locate `*.stories.tsx` files. Show the states the component can actually reach, with realistic data. Run `vp run --filter webapp chromatic:ci` whenever stories change.
 - Defer analytics work to effects that run after paint.
@@ -69,10 +68,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 
 ### Null safety
 
-- Add a JSpecify `@NullMarked` `package-info.java` to every handwritten Java package.
-- Bare types are non-null. Use `@Nullable` only when absence is part of the contract. On API DTOs, use explicit `@NonNull` for components that must be `required` in OpenAPI.
-- Type-use annotations describe exactly what is nullable: `List<@Nullable String>` permits null elements; `String @Nullable []` permits a null array reference.
-- Fix NullAway errors at the contract or implementation boundary. Suppressions and classes without an explicit null-marking scope fail the quality gate.
+- `server/AGENTS.md` § Null-safety owns the NullAway policy. On API DTOs, use explicit `@NonNull` for components that must be `required` in OpenAPI.
 - Run `vp run gate:java-nullness` for the policy check and `cd server && ./mvnw test-compile -DskipTests` for compiler analysis.
 
 ### Safe workflows
@@ -88,32 +84,25 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 
 ## Webhook receiver (`server/.../integration/core/webhook/`)
 
+- `server/AGENTS.md` § Webhook receiver owns the layout, the role gate, the subject grammar, the
+  ArchUnit guards and the JaCoCo floors.
 - The provider-specific verifiers and subject parsers are Spring-free and live with their provider,
-  under `integration/scm/github/webhook/` and `integration/scm/gitlab/webhook/`; `integration/core/webhook/`
-  holds the shared ingress — the controller, the ingest pipeline, the JetStream publisher and its
-  bootstrap. All are exercised by JUnit unit tests plus parameterised tests over the captured fixtures in
+  under `integration/scm/github/webhook/` and `integration/scm/gitlab/webhook/`. All are exercised by
+  JUnit unit tests plus parameterised tests over the captured fixtures in
   `server/application/src/test/resources/{github,gitlab}/`.
-- HMAC verification: `MessageDigest.isEqual` (constant-time, length-tolerant); hex via
-  `java.util.HexFormat.of()` only — enforced by ArchUnit (`HexEncodingArchTest`). Case-folding
-  uses `Locale.ROOT` everywhere — enforced by `LocaleSafetyArchTest`.
-- Spring beans (controllers, `JetStreamPublisher`, `WebhookJetStreamBootstrap`, health, lifecycle) gated by
-  `RuntimeRole.WEBHOOK_PROPERTY`. Production runs them in the dedicated `webhook-server`
-  container (`SPRING_PROFILES_ACTIVE=prod,webhook`) for restart independence — see ADR 0008.
-- Configuration is shared with auto-registration: `core.webhook.WebhookProperties` bound to
-  `hephaestus.webhook.*`. The webhook packages carry per-package JaCoCo branch floors, declared in
-  `server/application/pom.xml`; read them there rather than from a copy.
+- HMAC verification uses `MessageDigest.isEqual` (constant-time, length-tolerant).
 
 ## Docs site (`/docs`)
 
 - Docusaurus 3 powers the documentation. Install dependencies with `vp install` and run
   `vp run docs:dev` from the repository root to preview.
-- Keep front matter fields (`id`, `title`, `sidebar_position`) unique. Update `sidebars.*.ts` when adding new pages.
+- Keep the front matter `id` and `title` unique, and add every new page to `sidebars.*.ts` — the sidebars are explicit.
 - Use MDX components from `docs/src/components/**` to keep styling consistent.
 - Run `vp run docs:build` before committing structural changes to confirm the static export succeeds.
 
 ## Database and migrations
 
-- Liquibase `<changeSet>`s (schema deltas — not release changesets) live in `server/application/src/main/resources/db/changelog/`. A schema change also needs a release changeset — see `AGENTS.md` § Changesets (release notes).
+- Liquibase `<changeSet>`s (schema deltas — not release changesets) live in `server/application/src/main/resources/db/changelog/`. A schema change also needs a release changeset — `.changeset/README.md`.
 - Prefer `renameColumn` or `modifyDataType` when evolving schemas so data survives deployments.
 - Add indexes before backfilling large tables. Profile long migrations locally.
 - After schema updates, regenerate the ERD and run server tests that touch the affected tables.
@@ -122,7 +111,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 
 - Sentry is configured in both the webapp and the application server. Capture exceptions with context tags instead of console logs.
 - Store shared secrets in LastPass and load them via `.env` or the respective `application-*.yml` files. Never commit real secrets.
-- Rotate API keys when you onboard new external services. Document the process in the runbooks under `docs/admin`.
+- Rotate API keys when you onboard new external services. Document the process in `docs/runbooks/`.
 - Sanitise logged user data. Log IDs rather than emails.
 
 ## Performance reminders

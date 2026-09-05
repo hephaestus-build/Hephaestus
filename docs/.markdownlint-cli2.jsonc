@@ -2,7 +2,7 @@
 //
 // This file holds BOTH the scope (`globs`/`ignores`) and the rules (`config`), because
 // markdownlint-cli2 does not support `.markdownlintignore` (see its README, "not supported"),
-// and a scope split across package.json and a dotfile is how `decisions/` went unlinted.
+// and a scope split across package.json and a dotfile leaves a directory unlinted unnoticed.
 //
 // Every rule turned off below states why it is wrong for this tree, not merely how loud it is.
 // Violation counts are deliberately absent: they rot within a release. To see what one costs, set
@@ -16,7 +16,7 @@
 {
 	"$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint-cli2/main/schema/markdownlint-cli2-config-schema.json",
 
-	// `decisions/` (33 ADRs) and `runbooks/` are mounted by no Docusaurus plugin, so the site
+	// `decisions/` (every ADR) and `runbooks/` are mounted by no Docusaurus plugin, so the site
 	// build never compiles them and never link-checks them — the linter is their only gate.
 	"globs": ["**/*.md", "**/*.mdx", "../load-tests/**/*.md"],
 	"ignores": ["node_modules", "build", ".docusaurus"],
