@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -80,6 +81,18 @@ public class GitRepositoryManager {
 
     /** The walk stopped at {@code hephaestus.git.tree-max-total-size}; the rest was never read. */
     public static final String TREE_LIMITATION_TOTAL_SIZE = "TOTAL_SIZE_LIMIT_REACHED";
+
+    /** A blob whose bytes are not text; the walk continued. Nothing a review can read or quote. */
+    public static final String TREE_LIMITATION_BINARY = "BINARY_FILE_EXCLUDED";
+
+    /**
+     * How much of a blob decides whether it is text, and the rule: a NUL byte in the opening bytes.
+     * This is git's own heuristic, and it is the one that matters here — the size budget is what the
+     * review's surrounding-code context is bought with, and a screenshot spends it without adding a
+     * line anyone can read. On one large repository the documentation images alone exhausted the whole
+     * budget before the walk reached a single source file.
+     */
+    private static final int BINARY_SNIFF_BYTES = 8000;
 
     private final GitRepositoryProperties properties;
     private final GitRepositoryLockManager lockManager;
@@ -854,9 +867,20 @@ public class GitRepositoryManager {
                                 break;
                             }
                             Path target = stagingDir.resolve(sourcePath);
-                            Files.createDirectories(target.getParent());
-                            try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(target))) {
-                                reader.open(blobId, Constants.OBJ_BLOB).copyTo(out);
+                            // The decision comes before the file exists: a repository of images would
+                            // otherwise write and delete every one of them against the staging volume.
+                            try (InputStream blob =
+                                    reader.open(blobId, Constants.OBJ_BLOB).openStream()) {
+                                byte[] head = blob.readNBytes(BINARY_SNIFF_BYTES);
+                                if (looksBinary(head)) {
+                                    limitations.add(TREE_LIMITATION_BINARY);
+                                    continue;
+                                }
+                                Files.createDirectories(target.getParent());
+                                try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(target))) {
+                                    out.write(head);
+                                    blob.transferTo(out);
+                                }
                             }
                             totalBytes += Files.size(target);
                             result.put(sourcePath, target);
@@ -893,6 +917,16 @@ public class GitRepositoryManager {
         } catch (IOException e) {
             log.warn("Could not delete staging directory {}", root, e);
         }
+    }
+
+    /** Git's rule: a blob is binary when a NUL byte appears in its opening bytes. */
+    private static boolean looksBinary(byte[] head) {
+        for (byte b : head) {
+            if (b == 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean unsafeWorkspacePath(String path) {
