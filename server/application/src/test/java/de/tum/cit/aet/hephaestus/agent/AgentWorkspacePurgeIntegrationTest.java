@@ -95,7 +95,7 @@ class AgentWorkspacePurgeIntegrationTest extends BaseIntegrationTest {
 
         lifecycleService.purgeWorkspace(purgedWorkspace.getWorkspaceSlug());
 
-        assertThat(jobRepository.findByWorkspaceId(purgedWorkspace.getId(), Pageable.unpaged()))
+        assertThat(jobRepository.findListRows(purgedWorkspace.getId(), null, Pageable.unpaged()))
                 .isEmpty();
         assertThat(bindingRepository.findByWorkspaceId(purgedWorkspace.getId())).isEmpty();
         assertThat(modelRepository.findByWorkspaceId(purgedWorkspace.getId())).isEmpty();
