@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet author="hephaestus" id="1788679885460-1">
+        <preConditions onFail="MARK_RAN" onFailMessage="signal states already admit DEFERRED">
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM pg_constraint
+                WHERE conname = 'ck_artifact_signal_state'
+                  AND conrelid = 'artifact_signal'::regclass
+                  AND pg_get_constraintdef(oid) LIKE '%DEFERRED%'
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Admit the state a signal waits in for a coalescing sweep. The state existed in the
+            application before it existed here, so every deferred signal was refused by the database
+            and its message was retried until the consumer dropped it as poison, losing the occasion.
+        </comment>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE artifact_signal DROP CONSTRAINT IF EXISTS ck_artifact_signal_state;
+            ALTER TABLE artifact_signal ADD CONSTRAINT ck_artifact_signal_state
+                CHECK (state IN ('RECORDED','DEFERRED','TRIGGERED','SUPPRESSED','PENDING','LAPSED'));
+        ]]></sql>
+        <rollback><![CDATA[
+            -- Narrowing the vocabulary makes these rows unrepresentable, and a deferred signal is one
+            -- still waiting to be decided: returning it to RECORDED is what it was before the sweep
+            -- claimed it, so the reaper offers it again rather than losing the occurrence.
+            UPDATE artifact_signal SET state = 'RECORDED' WHERE state = 'DEFERRED';
+            ALTER TABLE artifact_signal DROP CONSTRAINT IF EXISTS ck_artifact_signal_state;
+            ALTER TABLE artifact_signal ADD CONSTRAINT ck_artifact_signal_state
+                CHECK (state IN ('RECORDED','TRIGGERED','SUPPRESSED','PENDING','LAPSED'));
+        ]]></rollback>
+    </changeSet>
+</databaseChangeLog>
