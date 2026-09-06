@@ -1980,6 +1980,41 @@ void test("the Scorecard ratchet runs on every event that can move a score, outs
 	}
 });
 
+/**
+ * A workflow whose newest run on `main` simply replaces the one before it, so cancelling the older
+ * run loses nothing a later job reads.
+ */
+const REPLACEABLE_MAIN_RUNS: Record<string, string> = {
+	".github/workflows/cd-docs.yml": "The site the last deploy published is the site.",
+};
+
+// Every other run on `main` is the only one its commit will ever get, and something downstream reads
+// the record it leaves: a cancelled CodeQL analysis is a commit Scorecard counts as unscanned, and a
+// cancelled ratchet is a merge nobody checked. Two merges a minute apart are enough to lose one.
+void test("a workflow triggered by main does not cancel the run main is judged by", async () => {
+	const sources = await workflowSources();
+	const offenders: string[] = [];
+	for (const [file, source] of sources) {
+		const branches = parseDocument(source).getIn(["on", "push", "branches"]);
+		if (!isSeq(branches) || !branches.items.some((item) => isScalar(item) && item.value === "main"))
+			continue;
+		if (
+			parseDocument(source).getIn(["concurrency", "cancel-in-progress"]) === true &&
+			!Object.hasOwn(REPLACEABLE_MAIN_RUNS, file)
+		)
+			offenders.push(file);
+	}
+	assert.deepEqual(offenders, [], "these cancel a run on main that nothing else will repeat");
+	for (const [file, reason] of Object.entries(REPLACEABLE_MAIN_RUNS)) {
+		assert.ok(reason.trim(), `${file} must say why its run is replaceable`);
+		assert.equal(
+			parseDocument(sources.get(file) ?? "").getIn(["concurrency", "cancel-in-progress"]),
+			true,
+			`${file} no longer cancels, so it no longer needs an exception`,
+		);
+	}
+});
+
 // A toolchain claim is a job: every leg of the task graph is one matrix entry of one job, the Vite+
 // shell and the hook dispatcher run on Windows as one of them, and the documented first command of
 // a contributor runs from a clone that has nothing but the launcher.
