@@ -857,24 +857,26 @@ public class GitRepositoryManager {
                                 log.debug("Skipping oversized file: path={}, size={}", sourcePath, blobSize);
                                 continue;
                             }
-                            if (totalBytes + blobSize > maxTotalBytes) {
-                                limitations.add(TREE_LIMITATION_TOTAL_SIZE);
-                                log.warn(
-                                        "Repository tree hit the total-size bound; snapshot is partial: repoId={}, commit={}, maxTotalBytes={}",
-                                        repositoryId,
-                                        commitSha,
-                                        maxTotalBytes);
-                                break;
-                            }
                             Path target = stagingDir.resolve(sourcePath);
-                            // The decision comes before the file exists: a repository of images would
-                            // otherwise write and delete every one of them against the staging volume.
+                            // Read before either decision below: what a blob is decides whether it is
+                            // staged at all, and a blob nobody stages must not be what ends the walk.
+                            // The bytes are held until the size decision is made, so a repository of
+                            // images never writes and deletes one of them against the staging volume.
                             try (InputStream blob =
                                     reader.open(blobId, Constants.OBJ_BLOB).openStream()) {
                                 byte[] head = blob.readNBytes(BINARY_SNIFF_BYTES);
                                 if (looksBinary(head)) {
                                     limitations.add(TREE_LIMITATION_BINARY);
                                     continue;
+                                }
+                                if (totalBytes + blobSize > maxTotalBytes) {
+                                    limitations.add(TREE_LIMITATION_TOTAL_SIZE);
+                                    log.warn(
+                                            "Repository tree hit the total-size bound; snapshot is partial: repoId={}, commit={}, maxTotalBytes={}",
+                                            repositoryId,
+                                            commitSha,
+                                            maxTotalBytes);
+                                    break;
                                 }
                                 Files.createDirectories(target.getParent());
                                 try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(target))) {

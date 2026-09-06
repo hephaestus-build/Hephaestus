@@ -288,10 +288,12 @@ shows the changed lines and not the code they call into, so a reviewer restricte
 surrounding contract or abstains. The tree is contextual rather than required deliberately: a deployment that
 keeps no working copy, or a repository not yet mirrored, loses the surrounding code and still gets the review.
 
-What the tree stages is source text. A blob whose opening bytes contain a NUL is not staged, and the
-capture says so — nothing a review can read or quote comes out of an image, an archive or a compiled
-artifact, and the size bound is what the surrounding code is bought with. One repository's
-documentation screenshots spent the whole bound before the walk reached a single source file.
+What the tree stages is meant to be source text. A blob whose opening bytes contain a NUL — git's own
+test for binary content — is neither staged nor counted against the bound, and the capture records the
+exclusion. The bound is what the surrounding code is bought with, and an image, an archive or a
+compiled artifact spends it without adding a line anyone can quote; one repository's documentation
+screenshots spent the whole bound before the walk reached a single source file. The test is a
+heuristic, so a binary format with no NUL in its opening bytes is still staged.
 
 `automatedReview` is explicitly relative to Hephaestus, the pinned source contract, the declared bindings, and
 the governed integrations. It does not claim that a practice is universally observable. A developer, peer, or human mentor may have different context for a particular practice. This contract makes no claim that human review is always possible.

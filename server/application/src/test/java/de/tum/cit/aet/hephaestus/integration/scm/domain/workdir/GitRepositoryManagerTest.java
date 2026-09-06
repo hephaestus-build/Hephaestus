@@ -672,37 +672,36 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("a screenshot does not spend the budget the surrounding source is bought with")
+        @DisplayName("a screenshot neither spends the budget nor ends the walk the source is waiting in")
         void shouldStageSourceRatherThanBinaries() throws Exception {
-            manager = createManager(true);
+            // A budget two thirds the size of the image: staging the image would leave nothing for the
+            // text that follows it, so what survives here is exactly what the exclusion buys.
+            manager = createManager(true, 20_000, DataSize.ofKilobytes(70), DataSize.ofKilobytes(70));
             try (Git sourceGit = createSourceRepo()) {
-                // Sorted before the source file, as a documentation image is in a real repository, and
-                // large enough that staging it would leave nothing for what follows.
-                Path image = sourceRepoPath.resolve("docs-screenshot.png");
+                // Sorted before the text, as a documentation image is in a real repository.
                 byte[] png = new byte[64 * 1024];
                 png[0] = (byte) 0x89;
                 png[1] = 'P';
                 png[2] = 'N';
                 png[3] = 'G';
                 png[8] = 0; // the NUL that makes it binary
-                Files.write(image, png);
-                Path source = sourceRepoPath.resolve("service.java");
-                Files.writeString(source, "class Service {}\n");
+                Files.write(sourceRepoPath.resolve("a-screenshot.png"), png);
+                Files.writeString(sourceRepoPath.resolve("b-filler.txt"), "x".repeat(40 * 1024));
+                Files.writeString(sourceRepoPath.resolve("c-service.java"), "class Service {}\n");
                 sourceGit.add().addFilepattern(".").call();
-                sourceGit
-                        .commit()
-                        .setSign(false)
-                        .setMessage("Add documentation image and source")
-                        .setAuthor(new PersonIdent("Test Author", "author@test.com"))
-                        .setCommitter(new PersonIdent("Test Committer", "committer@test.com"))
-                        .call();
-                String headSha = sourceGit.log().call().iterator().next().getName();
+                String sha = commit(sourceGit, "Add a documentation image ahead of the source");
+
                 manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
 
-                try (var snapshot = manager.readTreeSnapshot(1L, headSha)) {
-                    assertThat(snapshot.files()).containsKey("service.java").doesNotContainKey("docs-screenshot.png");
-                    // The manifest still says what the review could not have been shown.
-                    assertThat(snapshot.limitations()).contains(GitRepositoryManager.TREE_LIMITATION_BINARY);
+                try (var snapshot = manager.readTreeSnapshot(1L, sha)) {
+                    assertThat(snapshot.files())
+                            .containsKeys("b-filler.txt", "c-service.java")
+                            .doesNotContainKey("a-screenshot.png");
+                    // The manifest still says what the review could not have been shown, and the walk
+                    // reached the end of the tree rather than stopping at a file it never staged.
+                    assertThat(snapshot.limitations())
+                            .contains(GitRepositoryManager.TREE_LIMITATION_BINARY)
+                            .doesNotContain(GitRepositoryManager.TREE_LIMITATION_TOTAL_SIZE);
                 }
             }
         }
