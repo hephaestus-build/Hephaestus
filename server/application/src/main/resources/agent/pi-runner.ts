@@ -20,7 +20,7 @@ import {
 import { errorText } from "./pi-error-text.ts";
 import { buildGrepTool } from "./pi-grep-tool.ts";
 import {
-	citationMatchesArtifact,
+	describeCitationMismatch,
 	dedupeKeyForObservation,
 	isRecord,
 	type NormalizedObservation,
@@ -572,11 +572,12 @@ function normalizeAndValidateObservation(rawObservation: unknown): NormalizedObs
 	validateInapplicabilityScope(observation, availableSourceKinds);
 	for (const citation of observation.evidence.citations) {
 		const content = readFileSync(`${CWD}/${citation.artifactPath}`, "utf8");
-		if (!citationMatchesArtifact(citation, content)) {
+		const mismatch = describeCitationMismatch(citation, content);
+		if (mismatch !== null) {
 			throw new Error(
 				`citation does not match ${citation.path}:${citation.startLine}-${citation.endLine} ` +
-					`(${citation.side ?? "text"}) in '${citation.artifactPath}'; copy the exact artifact text ` +
-					`and, for a diff, use its [L<n>] coordinates and OLD/NEW side`,
+					`(${citation.side ?? "text"}) in '${citation.artifactPath}': ${mismatch}. Copy the exact ` +
+					`artifact text and, for a diff, use its [L<n>] coordinates and OLD/NEW side`,
 			);
 		}
 	}

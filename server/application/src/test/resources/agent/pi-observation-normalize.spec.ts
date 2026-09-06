@@ -6,6 +6,7 @@ import {
 	ASSESSMENT_VALUES,
 	carriesValence,
 	citationMatchesArtifact,
+	describeCitationMismatch,
 	dedupeKeyForObservation,
 	describeVocabulary,
 	type NormalizedCitation,
@@ -288,6 +289,29 @@ void test("diff citations bind the quote to the claimed file and line", () => {
 	assert.equal(citationMatchesArtifact({ ...citation, path: "src/Other.java" }, diff), false);
 	assert.equal(citationMatchesArtifact({ ...citation, startLine: 11 }, diff), false);
 	assert.equal(citationMatchesArtifact({ ...citation, endLine: 12 }, diff), false);
+});
+
+void test("a refused citation says which of the coordinate, the side and the text was wrong", () => {
+	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
+	const diff =
+		"diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] + insecure();\n";
+
+	assert.equal(describeCitationMismatch(citation, diff), null);
+	// The coordinate is not in the diff at all.
+	assert.match(
+		describeCitationMismatch({ ...citation, startLine: 11, endLine: 11 }, diff) ?? "",
+		/no \[L11] on the NEW side of src\/Auth\.java/,
+	);
+	// The coordinate is there and says something else, so the refusal shows both.
+	assert.match(
+		describeCitationMismatch({ ...citation, quote: "+ secure();" }, diff) ?? "",
+		/\[L10] reads "\+ insecure\(\);", not "\+ secure\(\);"/,
+	);
+	// The quote and the line span disagree.
+	assert.match(
+		describeCitationMismatch({ ...citation, endLine: 12 }, diff) ?? "",
+		/quote is 1 line\(s\) and the citation covers 3/,
+	);
 });
 
 void test("removed-line citations use old-side coordinates", () => {
