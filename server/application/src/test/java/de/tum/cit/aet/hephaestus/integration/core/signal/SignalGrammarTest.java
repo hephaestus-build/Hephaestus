@@ -146,6 +146,14 @@ class SignalGrammarTest extends BaseUnitTest {
 
             assertThat(fromColumn.eventId()).isEmpty();
         }
+
+        @Test
+        void shouldReportNoEventIdForAPersistedRowCarryingAnIdOfEventIdNeverMints() {
+            // ofEventId(long) only ever mints a positive id, but the grammar admits '-' and '0', so a
+            // hand-edited or pre-validation row can carry a suffix this scheme's constructor never wrote.
+            assertThat(new SignalRevision("event~0").eventId()).isEmpty();
+            assertThat(new SignalRevision("event~-1").eventId()).isEmpty();
+        }
     }
 
     @Nested

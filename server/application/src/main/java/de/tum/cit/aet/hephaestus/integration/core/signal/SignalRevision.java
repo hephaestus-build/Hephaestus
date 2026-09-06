@@ -109,8 +109,9 @@ public record SignalRevision(String value) {
             return Optional.empty();
         }
         try {
-            return Optional.of(Long.parseLong(
-                    value.substring(RevisionScheme.EVENT_ID.prefix().length())));
+            long eventId = Long.parseLong(
+                    value.substring(RevisionScheme.EVENT_ID.prefix().length()));
+            return eventId > 0 ? Optional.of(eventId) : Optional.empty();
         } catch (NumberFormatException e) {
             return Optional.empty();
         }
