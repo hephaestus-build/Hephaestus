@@ -4,59 +4,87 @@
 	"checks": [
 		{
 			"name": "Binary-Artifacts",
-			"score": 10
+			"score": 10,
+			"scoredOver": "configuration",
+			"reason": "Executables committed to the tree as it stands."
 		},
 		{
 			"name": "CI-Tests",
-			"score": 10
+			"score": 10,
+			"scoredOver": "history",
+			"reason": "The share of the ~30 most recent commits a CI system reported a result on."
 		},
 		{
 			"name": "Code-Review",
-			"score": 10
+			"score": 10,
+			"scoredOver": "history",
+			"reason": "The share of the ~30 most recent commits that carry an approval."
 		},
 		{
 			"name": "Dangerous-Workflow",
-			"score": 10
+			"score": 10,
+			"scoredOver": "configuration",
+			"reason": "Dangerous patterns in the workflow files as they stand."
 		},
 		{
 			"name": "Dependency-Update-Tool",
-			"score": 10
+			"score": 10,
+			"scoredOver": "configuration",
+			"reason": "Whether an update tool is configured in the tree."
 		},
 		{
 			"name": "License",
-			"score": 10
+			"score": 10,
+			"scoredOver": "configuration",
+			"reason": "Whether a recognised license file is present."
 		},
 		{
 			"name": "Maintained",
-			"score": 10
+			"score": 10,
+			"scoredOver": "history",
+			"reason": "Commit and issue activity over the previous 90 days."
 		},
 		{
 			"name": "Pinned-Dependencies",
-			"score": 10
+			"score": 10,
+			"scoredOver": "configuration",
+			"reason": "Whether every dependency the tree declares is pinned."
 		},
 		{
 			"name": "SAST",
-			"score": 10
+			"score": 10,
+			"scoredOver": "history",
+			"reason": "The share of the ~30 most recent merged pull requests a SAST tool ran on."
 		},
 		{
 			"name": "Security-Policy",
-			"score": 10
+			"score": 10,
+			"scoredOver": "configuration",
+			"reason": "Whether the committed security policy is present and specific."
 		},
 		{
 			"name": "Token-Permissions",
-			"score": 10
+			"score": 10,
+			"scoredOver": "configuration",
+			"reason": "The permissions the workflow files grant."
 		},
 		{
 			"name": "Vulnerabilities",
-			"score": 10
+			"score": 10,
+			"scoredOver": "configuration",
+			"reason": "Advisories open against the dependencies the checkout resolves."
 		},
 		{
 			"name": "Signed-Releases",
-			"score": 8
+			"score": 8,
+			"scoredOver": "history",
+			"reason": "The share of the 30 most recent releases whose artifacts are signed."
 		},
 		{
 			"name": "Branch-Protection",
-			"score": 4
+			"score": 4,
+			"scoredOver": "configuration",
+			"reason": "The protection rules the default and release branches carry."
 		},
 		{
 			"name": "Contributors",

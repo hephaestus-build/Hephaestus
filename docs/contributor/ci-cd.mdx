@@ -142,7 +142,7 @@ changesets rather than adding one. [Release management](./release-management.mdx
 | Image vulnerability policy | image build and release | blocks fixable high or critical findings | build summary and release evidence |
 | Weekly image rescans | `rescan-main-images.yml`, `rescan-release-images.yml` | the `main` rescan upserts one tracking issue; the release rescan fails and comments on the vulnerability response issue | issues and run artifacts |
 | OpenSSF Scorecard | `main` pushes, branch-protection changes, and weekly; never on pull requests | reports | code scanning and a run artifact |
-| Scorecard ratchet | the same events, plus on demand | fails when an enforced check scores below `security/scorecard-baseline.json` | job summary and a run artifact |
+| Scorecard ratchet | the same events, plus on demand | fails when a check scores below `security/scorecard-baseline.json`; on a push, only for the checks that commit decides | job summary and a run artifact |
 | Renovate | configured schedule and vulnerability alerts | pull requests require normal review and CI | dependency dashboard |
 
 One check owns the dependency verdict: the dependency vulnerability gate in `ci-security-scan.yml`,
@@ -202,17 +202,35 @@ advanced → Disable CodeQL**, not something a workflow file can do.
 
 ### Scorecard baseline
 
-`security/scorecard-baseline.json` owns the minimum every enforced Scorecard check must hold and the
-four exclusions, each with its reason. Checks are compared one at a time, so an improvement cannot
-offset a regression, and a check the baseline does not name is not enforced. Lowering a minimum also
-edits the map in `scripts/check-scorecard.test.ts`, so the change is visible in the pull request that
-makes it.
+`security/scorecard-baseline.json` owns the minimum every enforced Scorecard check must hold, the
+four exclusions with their reasons, and what each enforced check is scored over. Checks are compared
+one at a time, so an improvement cannot offset a regression, and a check the baseline does not name
+is not enforced. Lowering a minimum also edits the map in `scripts/check-scorecard.test.ts`, so the
+change is visible in the pull request that makes it.
+
+`scoredOver` is `configuration` when [Scorecard](https://github.com/ossf/scorecard/blob/main/docs/checks.md)
+computes the score from the repository as it stands — its files, its workflows, its branch rules —
+and `history` when it computes it over a window: SAST and Code-Review over the ~30 most recent merged
+pull requests and commits, CI-Tests over the ~30 most recent commits, Signed-Releases over the 30
+most recent releases, Maintained over the previous 90 days. Every enforced check carries one and a
+one-line reason, and an enforced check without one fails the script, so a check added to the baseline
+is classified deliberately rather than by default.
+
+That classification decides who a regression is charged to. On a `push` the ratchet fails only for a
+`configuration` check, because the commit just pushed is what set the repository's configuration; a
+`history` check is written to the job summary and the run stays green, since no single commit can
+move an aggregate over the last thirty and failing `main` for one would redden every merge until the
+window rolls past. On `schedule`, `workflow_dispatch` and `branch_protection_rule` every check fails,
+because those runs ask again after the window has had time to recover and a score still below the
+baseline is a trend, not a merge. Run outside Actions, with no `GITHUB_EVENT_NAME`, the script
+enforces everything.
 
 `scripts/check-scorecard.ts` reads the posture OpenSSF publishes for this repository — the latest
-published assessment, not necessarily the current commit — and fails on a regression, a missing
-enforced check, evidence that predates the baseline or is more than eight days old, and on an API or
-parsing failure. `scorecard-ratchet.yml` runs it on `main` pushes, branch-protection changes, weekly
-and on demand, and keeps the fetched assessment as an artifact. It is a workflow of its own because
+published assessment, not necessarily the current commit — and fails on a regression it charges to
+the event, a missing enforced check, evidence that predates the baseline or is more than eight days
+old, and on an API or parsing failure. `scorecard-ratchet.yml` runs it on `main` pushes,
+branch-protection changes, weekly and on demand, and keeps the fetched assessment as an artifact.
+It is a workflow of its own because
 [OpenSSF restricts the publishing job](https://github.com/ossf/scorecard-action#workflow-restrictions)
 to allowlisted actions. Reproduce it with `node scripts/check-scorecard.ts`, or
 `node --test scripts/check-scorecard.test.ts` without network access.
@@ -344,7 +362,7 @@ why the label is the authority, and which alternatives were priced and declined,
 | `rescan-release-images.yml` | Weekly, manual | Rescans the latest published release's images and reports drift on the vulnerability response issue |
 | `ci-profile.yml` | Weekly, manual | Profiles server integration tests and Spring contexts |
 | `ci-server-clean-reference.yml` | Weekly, manual | Records cold server phases and compares generated JARs |
-| `scorecard-ratchet.yml` | Push to main, branch-protection change, weekly, manual | Fails when a Scorecard check drops below the committed baseline |
+| `scorecard-ratchet.yml` | Push to main, branch-protection change, weekly, manual | Fails when a Scorecard check drops below the committed baseline; a push fails only for the checks its own commit decides |
 | `deploy-preview.yml` | `preview` label added, or a push, reopen or ready-for-review on a labelled PR | Waits for this commit's attested CI images, deploys them, and registers the native GitHub deployment |
 | `cleanup-preview.yml` | Label removed, PR closed or drafted | Removes and verifies resources, then retains a cleanup tombstone |
 | `reconcile-previews.yml` | Nightly, manual | Re-sends teardown for any preview environment whose pull request is closed, drafted or unlabelled |
@@ -488,6 +506,12 @@ reaches no such commit builds every image itself. `detect-changes` resolves that
 - The `Quality` matrix uses `fail-fast: false`; the image matrix in `reusable-docker-build.yml` uses
   `fail-fast: true`.
 - Pull-request runs cancel superseded runs; `release.yml` never cancels.
+- A run on `main` that leaves a per-commit record — `codeql.yml`, `semgrep.yml`, `scorecard.yml`,
+  `scorecard-ratchet.yml` — is never cancelled, because it is the only run that commit will get and
+  its absence is what a later score reads as a gap. Those workflows write
+  `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}`, and `scripts/ci-contract.test.ts`
+  holds every `main` push to it; a workflow whose newest run simply replaces the last, such as the
+  docs deploy, is named there as the exception.
 
 ## Monitoring CI
 
