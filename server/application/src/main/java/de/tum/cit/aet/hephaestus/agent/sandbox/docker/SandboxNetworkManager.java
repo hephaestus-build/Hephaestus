@@ -53,6 +53,7 @@ public class SandboxNetworkManager {
     public String createJobNetwork(UUID jobId, boolean allowInternet) {
         String networkName = NETWORK_PREFIX + jobId;
         boolean internal = !allowInternet;
+        removeLeftoverNetwork(networkName);
         String networkId = networkOps.createNetwork(networkName, internal);
         log.info("Created job network: name={}, internal={}, networkId={}", networkName, internal, networkId);
         return networkId;
@@ -79,6 +80,32 @@ public class SandboxNetworkManager {
         return ip;
     }
 
+    /**
+     * A network under this job's own name is left from an earlier run of this same job, and nothing
+     * else reclaims it: Docker refuses the duplicate name, and the reconciler spares a network whose
+     * job is still queued — which a job retrying on that very conflict is. An attempt that was
+     * requeued as orphaned can still be running on a worker whose heartbeat only lapsed, but that
+     * attempt is superseded already, and Docker refuses to remove a network a running container
+     * holds, so this fails loudly rather than pulling the network out from under it.
+     */
+    private void removeLeftoverNetwork(String networkName) {
+        List<DockerOperations.NetworkInfo> candidates;
+        try {
+            candidates = networkOps.listNetworksByName(networkName);
+        } catch (RuntimeException e) {
+            // A probe that cannot answer is not a leftover, and createNetwork still refuses a duplicate name.
+            log.debug("Could not check for a leftover network {}: {}", networkName, e.getMessage());
+            return;
+        }
+        for (DockerOperations.NetworkInfo leftover : candidates) {
+            if (!networkName.equals(leftover.name())) {
+                continue; // the daemon's name filter is not exact; only this exact name is ours to remove
+            }
+            log.warn("Removing the network an interrupted run left behind: name={}, id={}", networkName, leftover.id());
+            forceRemoveNetwork(leftover.id(), networkName);
+        }
+    }
+
     /** Disconnect the app-server from a job network. Idempotent — no-op if already disconnected. */
     public void disconnectAppServer(String networkId) {
         String containerId = resolveAppServerContainerId();
@@ -90,6 +117,23 @@ public class SandboxNetworkManager {
 
     /** Remove a job network. */
     public void removeNetwork(String networkId) {
+        networkOps.removeNetwork(networkId);
+    }
+
+    /**
+     * Remove a job network whose app-server connection may have outlived its run: Docker refuses to
+     * remove a network a container is still attached to, and a run that never cleaned up left the
+     * app-server on it. A disconnect that fails is not worth stopping for — the removal reports what
+     * the daemon actually refuses.
+     *
+     * @param name the network name, for the log line only
+     */
+    public void forceRemoveNetwork(String networkId, String name) {
+        try {
+            disconnectAppServer(networkId);
+        } catch (RuntimeException e) {
+            log.debug("Could not disconnect app-server from {}: {}", name, e.getMessage());
+        }
         networkOps.removeNetwork(networkId);
     }
 
