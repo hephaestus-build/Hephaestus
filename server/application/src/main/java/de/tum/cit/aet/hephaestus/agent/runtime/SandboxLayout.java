@@ -141,6 +141,15 @@ public final class SandboxLayout {
     /** Exit code emitted by the Pi runner on envelope/image drift (unsupported {@code schemaVersion} or {@code kind}). */
     public static final int EXIT_ENVELOPE_MISMATCH = 42;
 
+    /**
+     * Exit code emitted by the Pi runner when the review finished but the call admitting it never
+     * reached this server — the sandbox holds the app server's address as it was when the container
+     * started, so a server that came back somewhere else is unreachable for the rest of the run. The
+     * work is requeued rather than ended, since the same review against a reachable server is the
+     * outcome that was wanted.
+     */
+    public static final int EXIT_SERVER_UNREACHABLE = 75;
+
     /** OCI label declaring the agent image runtime contract. */
     public static final String RUNTIME_CONTRACT_LABEL = "hephaestus.agent.runtime-contract";
 
