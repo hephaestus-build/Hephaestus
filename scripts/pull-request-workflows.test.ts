@@ -95,3 +95,53 @@ void test("title preflight loads without dependencies and validates the current 
 	assert.match(String(explanation.get("run")), /> "\$RUNNER_TEMP\/title-error\.md"/);
 	assert.equal(comment.getIn(["with", "path"]), `\${{ runner.temp }}/title-error.md`);
 });
+
+void test("the attribution gate reads the pull request body, not the commits", async (t) => {
+	const steps = await stepsIn(".github/workflows/pull-request.yml", [
+		"jobs",
+		"verify-commit-identity",
+		"steps",
+	]);
+	const attribution = steps.find((step) => step.get("id") === "attribution");
+	assert.ok(attribution);
+	const script = String(attribution.getIn(["with", "script"]));
+	// `Co-authored-by:` is git's own way to record who or what worked on a commit, so only the
+	// prose a reader weighs the change by is refused; a commit walk here would widen that back.
+	assert.doesNotMatch(script, /\bcommits\b/);
+
+	const temp = await mkdtemp(join(tmpdir(), "attribution-"));
+	t.after(() => rm(temp, { recursive: true, force: true }));
+	const cases = [
+		// A pull request opened with no description at all: `body` is null, not an empty string.
+		[null, true],
+		["Removes the flaky wait.\n\nCo-authored-by: Jane Doe <jane@example.com>", true],
+		["🤖 Generated with [Claude Code](https://claude.com/claude-code)", false],
+		["Claude-Session: https://claude.ai/code/session_01", false],
+	] as const;
+	for (const [body, clean] of cases) {
+		const result = spawnSync(
+			process.execPath,
+			[
+				"--input-type=module",
+				"-e",
+				`
+			const { createRequire } = await import("node:module");
+			const require = createRequire(${JSON.stringify(join(temp, "harness.js"))});
+			const context = { payload: { pull_request: { body: ${JSON.stringify(body)} } } };
+			const core = { setFailed() { process.exitCode = 1; } };
+			await (async () => {
+			${script}
+			})();
+		`,
+			],
+			{ encoding: "utf8", env: { ...process.env, RUNNER_TEMP: temp } },
+		);
+		assert.equal(result.status, clean ? 0 : 1, `${String(body)}: ${result.stderr}`);
+		assert.equal(result.stderr, "", String(body));
+	}
+
+	// The one remedy the gate has: a commit is never the thing to rewrite.
+	const comment = await readFile(join(temp, "attribution-comment.md"), "utf8");
+	assert.match(comment, /Edit the description/);
+	assert.doesNotMatch(comment, /rebase|amend/);
+});

@@ -46,7 +46,7 @@ git rebase --exec 'git commit --amend --no-edit -S' origin/main
 
 ### Compliance
 
-A commit message and a pull request body carry no model, agent, harness or tool attribution — `AGENTS.md` § Pull requests has the rule and `pull-request.yml`'s `Verify commit identity` job checks for it. A human co-author stays welcome under the same `Co-authored-by:` trailer.
+A pull request title or body carries no model, agent, harness or tool attribution — `AGENTS.md` § Pull requests has the rule and `pull-request.yml`'s `Verify commit identity` job checks the body for it. A commit trailer is different: `Co-authored-by:` is git's own way to record who or what worked on a commit, so crediting a tool there is fine, and a human co-author is welcome under the same trailer.
 
 Contributions that do not adhere to these guidelines will be rejected. We align with [GitHub Acceptable Use Policies](https://docs.github.com/en/site-policy/acceptable-use-policies).
 

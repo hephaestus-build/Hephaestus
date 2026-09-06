@@ -1,9 +1,10 @@
 /**
- * Marks left by an AI coding tool that signed its own commit, trailer or pull request
- * description — never a human co-author, who is welcome under the same `Co-authored-by:`
- * trailer. `AGENTS.md` § Pull requests forbids all of these; `pull-request.yml`'s
- * `verify-commit-identity` job refuses them on every commit message and the pull request
- * body, and `verify-changesets.ts` refuses the `Claude-Session` shape in a changeset summary.
+ * Marks left by an AI coding tool in prose a reader weighs the change by — never a human
+ * co-author, who is welcome under the same `Co-authored-by:` trailer. `AGENTS.md` § Pull requests
+ * forbids these in a pull request title or body; `pull-request.yml`'s `verify-commit-identity` job
+ * refuses them in the body, and `verify-changesets.ts` refuses the `Claude-Session` shape in a
+ * changeset summary. A commit trailer is deliberately outside all of it: `Co-authored-by:` is git's
+ * own way to record who or what worked on a commit, and crediting a tool there is allowed.
  *
  * The workflow step has no checkout (`docs/contributor/ci-cd.mdx` explains why), so it cannot
  * import this module; its inline patterns are hand-kept equal to the ones below, which is what
