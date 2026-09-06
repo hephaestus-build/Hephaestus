@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.core.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -10,6 +9,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import javax.sql.DataSource;
 import liquibase.integration.spring.SpringLiquibase;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -21,12 +22,31 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * The shape this repairs no longer exists in the schema, so the fixture builds the legacy tables the
  * way the release that shipped them did. What is asserted is the state changeset
  * {@code mentor-1071-drop-chat-message-part} demands before it will drop the table.
+ *
+ * <p>On a database of its own, never the shared one: the fixture owns tables named after real ones
+ * and drops them between cases, which against the migrated schema every other integration test reads
+ * would be destructive.
  */
 @Tag("integration")
 class ChatMessagePartUpgradeRepairIntegrationTest {
 
     private final ChatMessagePartUpgradeRepair repair = new ChatMessagePartUpgradeRepair();
-    private final PostgreSQLContainer<?> postgres = PostgreSQLTestContainer.getInstance();
+
+    @SuppressWarnings("resource")
+    private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18")
+            .withDatabaseName("chat_parts_repair")
+            .withUsername("test")
+            .withPassword("test");
+
+    @BeforeAll
+    static void startDatabase() {
+        postgres.start();
+    }
+
+    @AfterAll
+    static void stopDatabase() {
+        postgres.stop();
+    }
 
     private Connection open() throws SQLException {
         return DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
