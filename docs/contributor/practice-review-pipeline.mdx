@@ -162,7 +162,7 @@ based on newly queued snapshots, not every transition or provider timestamps.
 Each artifact's queued rows are locked and eligibility is rechecked in the settlement transaction, which
 also re-resolves the issue's workspace: a repository re-keyed to a different workspace inside the queue's
 window (§ re-keying,
-[ADR 0024](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md))
+[ADR 0024](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md))
 settles as `SUPPRESSED / OUT_OF_REVIEW_SCOPE` rather than under the workspace that recorded it. Submission
 and settlement commit together; a rollback leaves the occasions available. Locks cover the whole group
 because [skipping individual locked rows](https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE)
