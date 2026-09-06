@@ -25,10 +25,24 @@ public final class LiquibaseCheckConstraints {
 
     private static final Pattern INCLUDE = Pattern.compile("<include\\s+file=\"([^\"]+)\"");
 
-    private static final Pattern QUOTED = Pattern.compile("'([A-Z_]+)'");
+    /** Not just {@code [A-Z_]}: a constrained column may hold lower-case or dotted values. */
+    private static final Pattern QUOTED = Pattern.compile("'([^']+)'");
 
-    /** A rollback restates the definition it undoes, and an update never applies one. */
-    private static final Pattern ROLLBACK = Pattern.compile("<rollback\\b.*?</rollback>", Pattern.DOTALL);
+    /**
+     * The comma-separated literals an {@code IN} takes, and nothing after them. A CHECK may go on past
+     * the list — {@code ck_feedback_dispatch_destination} follows its {@code IN} with a conjunct that
+     * compares the same column against a literal — and a group that ran to the closing parentheses
+     * would read that literal as an admitted value.
+     */
+    private static final String VALUE_LIST = "'[^']+'(?:\\s*,\\s*'[^']+')*";
+
+    /**
+     * A rollback restates the definition it undoes, and an update never applies one. The empty form
+     * closes itself, and it has to be matched first: read only as an opening tag it would swallow every
+     * changeset between one of those and the next real {@code </rollback>}.
+     */
+    private static final Pattern ROLLBACK =
+            Pattern.compile("<rollback\\b[^>]*/>|<rollback\\b[^>]*>.*?</rollback>", Pattern.DOTALL);
 
     private LiquibaseCheckConstraints() {}
 
@@ -41,10 +55,12 @@ public final class LiquibaseCheckConstraints {
      * @return the admitted values, or an empty set when no changelog defines the constraint
      */
     public static Set<String> admittedValues(String constraintName, String columnName) throws IOException {
+        // ADD is optional: a constraint may be named inside the CREATE TABLE that introduced its column
+        // rather than added afterwards, and both spellings reach a database the same way.
         Pattern check = Pattern.compile(
-                "ADD\\s+CONSTRAINT\\s+" + Pattern.quote(constraintName) + "\\s+CHECK\\s*\\(\\s*"
+                "(?:ADD\\s+)?CONSTRAINT\\s+" + Pattern.quote(constraintName) + "\\s+CHECK\\s*\\(\\s*"
                         + Pattern.quote(columnName)
-                        + "\\s+IN\\s*\\((.*?)\\)\\s*\\)",
+                        + "\\s+IN\\s*\\(\\s*(" + VALUE_LIST + ")\\s*\\)",
                 Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
         String master = Files.readString(MASTER, StandardCharsets.UTF_8);
         Matcher include = INCLUDE.matcher(master);
