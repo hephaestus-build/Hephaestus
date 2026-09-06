@@ -65,7 +65,7 @@ published.
 | Docker → Webapp, Agent: Pi, Postgres (pg_partman), Tag unchanged images | Dockerfile images; aliases for unchanged ones | — |
 | Supported-host boot smoke | `docker/self-host/setup.sh`, then PostgreSQL, NATS and the application server from this run's own images, waiting for the application to report healthy | — |
 | Actionlint, Zizmor | workflow lint with ShellCheck warnings; Zizmor at medium confidence | — |
-| PR → Verify commit identity | every commit's primary author resolves to a GitHub account, and that account is the pull request's author; a `Bot` author is matched against its `[bot]` account | — |
+| PR → Verify commit identity | every commit's primary author resolves to a GitHub account, and that account is the pull request's author; a `Bot` author is matched against its `[bot]` account; no commit message or the pull request body names a model, agent, harness or tool | — |
 
 The four quality legs are one matrix job, one entry per leg of the task graph. Each runs
 `vp run ci:<leg>`, then pipes `vp run --last-details` through `scripts/report-task-run.ts`: every
