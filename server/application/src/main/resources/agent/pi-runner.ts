@@ -743,6 +743,19 @@ const ENVELOPE_MISMATCH_EXIT = 42;
  * server the next sandbox can reach rather than recorded as a review that produced nothing.
  */
 const SERVER_UNREACHABLE_EXIT = 75;
+/**
+ * No practice was reached, and every model call this run made failed. That is the same kind of fact
+ * as an unreachable server — nothing about the reviewed work was measured, and nothing was learned
+ * that a second attempt would repeat — so the server queues the review again rather than recording it
+ * as one that found nothing.
+ */
+const PROVIDER_UNREACHABLE_EXIT = 76;
+
+/**
+ * The session labels whose turns are the ones that record observations — the per-practice observers
+ * and their retry lane. A practice is reached from one of these or not at all.
+ */
+const RECORDING_LANE = /^(observer|retry):/;
 const SUPPORTED_SCHEMA_VERSION = 1;
 const SUPPORTED_KIND = "practice_review";
 const TASK_PATH = `${CWD}/task.json`;
@@ -1736,6 +1749,7 @@ async function main() {
 		: null;
 	const events: { type: string; timestamp: number }[] = [];
 	const streamUsage = newUsageLedger();
+	let providerFailures = 0;
 	const subscribeSession = (
 		trackedSession: AgentSession,
 		label: string,
@@ -1755,6 +1769,11 @@ async function main() {
 			}
 			if (event.type === "auto_retry_end" && !event.success) {
 				const finalError = event.finalError ?? "no error given";
+				// A call the provider never answered, after the SDK spent its whole budget on it. Only the
+				// lanes that record observations are counted: reconnaissance and composition can fail
+				// without costing a practice, and what this number decides is whether a review that
+				// recorded nothing was cut off or simply had nothing to record.
+				if (RECORDING_LANE.test(label)) providerFailures++;
 				console.error(
 					`[pi-runner] ${label} provider call failed for good after ${event.attempt} retries: ${finalError}`,
 				);
@@ -2186,6 +2205,13 @@ async function main() {
 		process.exit(0);
 	}
 
+	if (providerFailures > 0) {
+		console.error(
+			`[pi-runner] UNREACHABLE: this review reached no practice, and ${providerFailures} model call(s) ` +
+				`went unanswered — the provider, not the work, is what this run could not read`,
+		);
+		process.exit(PROVIDER_UNREACHABLE_EXIT);
+	}
 	console.error(`[pi-runner] FAILED: this review reached no practice at all`);
 	process.exit(1);
 }

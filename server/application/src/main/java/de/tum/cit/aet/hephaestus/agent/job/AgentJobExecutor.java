@@ -619,17 +619,19 @@ public class AgentJobExecutor {
             SandboxResult result = sandboxManager.execute(sandboxSpec);
             AgentResult agentResult = practiceAgent.parseResult(result);
 
-            // The review itself succeeded and only the call carrying it home did not arrive, so there is
-            // nothing to deliver and nothing to learn from ending it here: the sandbox holds an address
-            // the server has since moved away from, which no further attempt inside that container can
-            // reach. Another attempt runs the same review against a server it can reach. Past the retry
-            // cap this falls through and terminalizes exactly as it did before.
-            if (result.exitCode() == SandboxLayout.EXIT_SERVER_UNREACHABLE
-                    && requeueForAnotherAttempt(jobId, job, "server-unreachable", true, result.logs())) {
+            // Two exits say the run could not reach something it needed, rather than anything about the
+            // reviewed work: the review finished and could not admit it, because the sandbox holds an
+            // address the server has since moved away from; or no practice was reached at all because
+            // every model call went unanswered. Neither leaves anything to deliver, and neither is a
+            // fact a second attempt would repeat. Past the retry cap both fall through and terminalize
+            // exactly as they did before.
+            String unreachable = unreachableReason(result.exitCode());
+            if (unreachable != null && requeueForAnotherAttempt(jobId, job, unreachable, true, result.logs())) {
                 metricOutcome = "REQUEUED";
                 log.warn(
-                        "Requeuing job {}: the review finished but could not reach this server to admit its observations (attempt {})",
+                        "Requeuing job {} ({}): nothing it measured can be delivered from here (attempt {})",
                         jobId,
+                        unreachable,
                         job.getRetryCount() + 1);
                 return;
             }
@@ -948,6 +950,20 @@ public class AgentJobExecutor {
      */
     static boolean isRetryableInfraFailure(Exception e) {
         return e instanceof SandboxInfrastructureException || e instanceof IOException;
+    }
+
+    /**
+     * Which unreachable service this exit names, or null when the exit says something about the work.
+     * The name is what the usage ledger records the attempt under.
+     */
+    private static @Nullable String unreachableReason(int exitCode) {
+        if (exitCode == SandboxLayout.EXIT_SERVER_UNREACHABLE) {
+            return "server-unreachable";
+        }
+        if (exitCode == SandboxLayout.EXIT_PROVIDER_UNREACHABLE) {
+            return "provider-unreachable";
+        }
+        return null;
     }
 
     /**
