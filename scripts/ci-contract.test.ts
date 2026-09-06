@@ -240,7 +240,11 @@ function runScript(workflow: Document, jobPath: string[], name: string): string 
 async function runStep(
 	shell: string,
 	environment: Record<string, string> = {},
-): Promise<{ readonly failed: boolean; readonly outputs: Record<string, string> }> {
+): Promise<{
+	readonly failed: boolean;
+	readonly outputs: Record<string, string>;
+	readonly diagnosis: string;
+}> {
 	const outputFile = path.join(await mkdtemp(path.join(tmpdir(), "ci-contract-")), "output");
 	await writeFile(outputFile, "");
 	const run = spawnSync("bash", ["--noprofile", "--norc", "-e", "-c", shell], {
@@ -252,8 +256,32 @@ async function runStep(
 		.split("\n")
 		.filter((line) => line.length > 0)
 		.map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)] as const);
-	return { failed: run.status !== 0, outputs: Object.fromEntries(outputs) };
+	return {
+		failed: run.status !== 0,
+		outputs: Object.fromEntries(outputs),
+		// What the shell said, for the assertion to carry. A step's own message is the difference
+		// between a failure somebody can fix and `true !== false` on a machine they do not have.
+		diagnosis: `exit ${run.status}\n${run.stderr.trim()}`.trim(),
+	};
 }
+
+/**
+ * Whether this machine's bash is the one the runner's steps are written for. GitHub's runners give a
+ * step bash 4 or later; macOS ships 3.2, which has no `mapfile`, so a step that reads a command's
+ * output into an array fails there for a reason that says nothing about the workflow.
+ */
+function bashRunsRunnerSteps(): boolean {
+	const probe = spawnSync("bash", ["--noprofile", "--norc", "-c", "mapfile -t _ < /dev/null"], {
+		encoding: "utf8",
+	});
+	return probe.error === undefined && probe.status === 0;
+}
+
+const runnerBashOnly = {
+	skip: bashRunsRunnerSteps()
+		? false
+		: "this bash has no mapfile; runner steps need bash 4 or later",
+};
 
 /**
  * Substitutes the workflow expressions a step's shell reads, as the runner substitutes them: by
@@ -878,43 +906,47 @@ void describe("CI contract", () => {
 		assert.match(String(docker.getIn(["jobs", "tag-unchanged-images", "if"])), /inputs\.publish/);
 	});
 
-	void test("a fork's buildpack build produces an image without contacting the registry", async () => {
-		const reusable = parseDocument(
-			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
-		);
-		const shell = runScript(reusable, ["jobs", "build"], "Build with Buildpacks and CDS");
-		const directory = await mkdtemp(path.join(tmpdir(), "buildpacks-"));
-		await writeFile(path.join(directory, "hephaestus-application-1.0.0.jar"), "");
-		const calls = path.join(directory, "calls");
-		for (const tool of ["pack", "docker"]) {
-			const stub = path.join(directory, tool);
-			await writeFile(
-				stub,
-				`#!/bin/sh\necho "${tool} $*" >> "${calls}"\n[ "$1" = image ] && echo sha256:stub\nexit 0\n`,
+	void test(
+		"a fork's buildpack build produces an image without contacting the registry",
+		runnerBashOnly,
+		async () => {
+			const reusable = parseDocument(
+				await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 			);
-			await chmod(stub, 0o755);
-		}
-		const environment = {
-			APPLICATION_DIRECTORY: directory,
-			GITHUB_RUN_ID: "1",
-			INPUT_IMAGE_NAME: "hephaestus-build/application-server",
-			INPUT_REGISTRY: "ghcr.io",
-			MATRIX_PLATFORM: "linux/amd64",
-			PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
-			PLATFORM_PAIR: "linux-amd64",
-			PROJECT_DESCRIPTOR: "project.toml",
-			RUN_IMAGE: "paketobuildpacks/run",
-		};
+			const shell = runScript(reusable, ["jobs", "build"], "Build with Buildpacks and CDS");
+			const directory = await mkdtemp(path.join(tmpdir(), "buildpacks-"));
+			await writeFile(path.join(directory, "hephaestus-application-1.0.0.jar"), "");
+			const calls = path.join(directory, "calls");
+			for (const tool of ["pack", "docker"]) {
+				const stub = path.join(directory, tool);
+				await writeFile(
+					stub,
+					`#!/bin/sh\necho "${tool} $*" >> "${calls}"\n[ "$1" = image ] && echo sha256:stub\nexit 0\n`,
+				);
+				await chmod(stub, 0o755);
+			}
+			const environment = {
+				APPLICATION_DIRECTORY: directory,
+				GITHUB_RUN_ID: "1",
+				INPUT_IMAGE_NAME: "hephaestus-build/application-server",
+				INPUT_REGISTRY: "ghcr.io",
+				MATRIX_PLATFORM: "linux/amd64",
+				PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+				PLATFORM_PAIR: "linux-amd64",
+				PROJECT_DESCRIPTOR: "project.toml",
+				RUN_IMAGE: "paketobuildpacks/run",
+			};
 
-		const local = await runStep(shell, { ...environment, PUBLISH: "false" });
-		assert.equal(local.failed, false);
-		// The digest is the daemon's image ID: a local build has no registry to read a manifest back
-		// from, and the step must still tell its caller what it produced.
-		assert.match(local.outputs["digest"] ?? "", /^sha256:/);
-		const invoked = await readFile(calls, "utf8");
-		assert.doesNotMatch(invoked, /--publish/);
-		assert.match(invoked, /^pack build .*--trust-builder/m);
-	});
+			const local = await runStep(shell, { ...environment, PUBLISH: "false" });
+			assert.equal(local.failed, false, local.diagnosis);
+			// The digest is the daemon's image ID: a local build has no registry to read a manifest back
+			// from, and the step must still tell its caller what it produced.
+			assert.match(local.outputs["digest"] ?? "", /^sha256:/);
+			const invoked = await readFile(calls, "utf8");
+			assert.doesNotMatch(invoked, /--publish/);
+			assert.match(invoked, /^pack build .*--trust-builder/m);
+		},
+	);
 
 	void test("every job that boots the supported installation authenticates to the registry", async () => {
 		// `packages: read` is inert without a login, and the boot's first pull is where that shows.
@@ -1351,10 +1383,14 @@ void describe("CI contract", () => {
 			}),
 		);
 		const evaluate = runScript(workflow, gate, "Evaluate CI results");
-		const verdict = async (results: Record<string, string>, onVersionBranch: boolean) =>
-			runStep(
+		// Narrowed to what the verdict is: the step's own diagnosis is for a failure to carry, not
+		// something an expected verdict should have to spell out.
+		const verdict = async (results: Record<string, string>, onVersionBranch: boolean) => {
+			const run = await runStep(
 				render(evaluate, { ...green, ...results }, { "version-branch": String(onVersionBranch) }),
 			);
+			return { failed: run.failed, outputs: run.outputs };
+		};
 		const passes = { failed: false, outputs: { status: "success" } };
 
 		// An ordinary pull request legitimately skips the preflight, and blocking one would block
