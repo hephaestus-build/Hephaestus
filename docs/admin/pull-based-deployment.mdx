@@ -33,9 +33,10 @@ do not order manual transitions between releases and commits; choose those targe
 | `freeze` | holds the environment where it is, for an incident |
 
 Staging can follow successful builds of `main` instead of releases. Its channel names a full
-`commit` SHA instead of `release`, plus an `images` map of digest-pinned references. The promotion
-workflow verifies first-party image provenance against that source commit before signing the channel.
-Upstream image pins come from that commit's inventory.
+`commit` SHA instead of `release`, plus an `images` map of digest-pinned references and a
+`refreshDatabaseImage` flag (see [What restarts the database](#what-restarts-the-database)). The
+promotion workflow verifies first-party image provenance against that source commit before signing
+the channel. Upstream image pins come from that commit's inventory.
 
 Automatic promotions check the latest channel while holding the promotion lock. A frozen channel,
 an already-promoted commit, or an older completed build leaves the channel unchanged, including
@@ -157,6 +158,7 @@ ingress, omit `proxy` and use `core app`.
 | Hold an environment | Promote with **freeze** |
 | Resume a held environment | Manually promote the desired release or commit with **freeze** cleared |
 | Reapply Compose configuration | Promote the release or commit the host already runs |
+| Move a following host onto the commit's database image | Promote the commit with **refresh-database-image** |
 | Prevent new reconciliation runs | `sudo systemctl disable --now hephaestus-reconcile.timer` |
 | See what a host runs | `cat /var/lib/hephaestus/applied.json` |
 
@@ -173,12 +175,25 @@ The reconciler refuses a release checkout with modified tracked files.
 
 An apply recreates a container whose image or Compose definition changed, and recreating PostgreSQL
 drops every connection to it for as long as the application services take to stop and come back.
-Every commit of the default branch rebuilds the PostgreSQL image, so on a host following commits the
-reconciler keeps the PostgreSQL image it already runs and applies the rest of the channel; the
-database restarts only when the commit changes what that image is built from (`docker/postgres/`),
-when the `postgres` service in `docker/compose.app.yaml` changes, or when the host has no record of
-the image it runs. A release is applied exactly as its signed lock names it, so a release that
-rebuilt the image restarts the database.
+Every commit of the default branch rebuilds the PostgreSQL image — the rebuild is what carries
+Debian's security updates into it — so a host following commits is offered a new digest on every
+apply. Taking each one would restart the database several times a day, so the reconciler keeps the
+image it already runs and applies the rest of the channel.
+
+On such a host the database restarts when:
+
+- the commit changes what the image is built from — `docker/postgres/`, or the workflows that build
+  it;
+- the first commit of a later day is applied, so the security updates in that day's rebuild land
+  within a day of the push that built them;
+- the `postgres` service in `docker/compose.app.yaml` changes;
+- the host has no usable record of the image it runs — no applied commit, no lock for it, or a
+  checkout that cannot resolve the two commits;
+- you promote with **refresh-database-image**, which takes that commit's image once. The next
+  automatic promotion goes back to carrying it.
+
+A release is applied exactly as its signed lock names it, so a release that rebuilt the image
+restarts the database.
 
 ## Watching it
 

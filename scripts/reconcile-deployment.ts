@@ -50,6 +50,8 @@ export interface Channel {
 	images?: Readonly<Record<string, string>>;
 	allowRollback?: boolean;
 	freeze?: boolean;
+	/** Take this channel's PostgreSQL pin now instead of the one the host carries. */
+	refreshDatabaseImage?: boolean;
 }
 
 export interface AppliedState {
@@ -99,6 +101,10 @@ export function parseChannel(value: unknown): Channel {
 	const record = asRecord(value, "channel");
 	const allowRollback = optionalBoolean(record.allowRollback, "channel.allowRollback");
 	const freeze = optionalBoolean(record.freeze, "channel.freeze");
+	const refreshDatabaseImage = optionalBoolean(
+		record.refreshDatabaseImage,
+		"channel.refreshDatabaseImage",
+	);
 
 	if (record.commit !== undefined) {
 		if (record.release !== undefined)
@@ -106,7 +112,13 @@ export function parseChannel(value: unknown): Channel {
 		const commit = asString(record.commit, "channel.commit");
 		if (!isCommit(commit))
 			throw new Error(`channel.commit must be a full 40-character commit, not ${commit}`);
-		return { release: commit, images: parseImages(record.images), allowRollback, freeze };
+		return {
+			release: commit,
+			images: parseImages(record.images),
+			allowRollback,
+			freeze,
+			refreshDatabaseImage,
+		};
 	}
 
 	const release = asString(record.release, "channel.release");
@@ -118,8 +130,15 @@ export function parseChannel(value: unknown): Channel {
 /** The channel file the promotion signs, in the shape `parseChannel` reads back. */
 export function serializeChannel(channel: Channel): string {
 	const { release, images, allowRollback = false, freeze = false } = channel;
+	// Only a commit channel carries an image pin, so only it can be asked to stop carrying one.
 	const record = images
-		? { commit: release, images, allowRollback, freeze }
+		? {
+				commit: release,
+				images,
+				allowRollback,
+				freeze,
+				refreshDatabaseImage: channel.refreshDatabaseImage ?? false,
+			}
 		: { release, allowRollback, freeze };
 	return `${JSON.stringify(record, null, "\t")}\n`;
 }
@@ -265,7 +284,7 @@ function lockValues(lockEnv: string, key: string): string[] {
 	return lockEnv
 		.split("\n")
 		.filter((line) => line.startsWith(`${key}=`))
-		.map((line) => line.slice(key.length + 1));
+		.map((line) => line.slice(key.length + 1).trim());
 }
 
 export function lockedReleaseCommit(lockEnv: string): string {
@@ -277,27 +296,32 @@ export function lockedReleaseCommit(lockEnv: string): string {
 
 const POSTGRES_IMAGE = "HEPHAESTUS_IMAGE_POSTGRES";
 
-/** The PostgreSQL image's build context and Dockerfile; CI's `postgres-image` filter is that tree. */
-export const POSTGRES_IMAGE_INPUTS = "docker/postgres";
+/**
+ * The paths whose change makes CI rebuild the PostgreSQL image, as `cicd.yml` names them; one test
+ * holds the two lists together. CI rebuilds on more than these — see `commitImages`.
+ */
+export const POSTGRES_IMAGE_INPUTS = [
+	"docker/postgres/**",
+	".github/workflows/ci-docker-build.yml",
+	".github/workflows/reusable-docker-build.yml",
+] as const;
 
 /**
  * The images a commit channel runs on this host: the channel's, except that PostgreSQL stays at the
- * pin the host last applied while the image's own inputs are unchanged.
+ * pin the host last applied unless `rebuilt` says to take the channel's.
  *
- * Every push to the default branch rebuilds the PostgreSQL image — `docker/postgres/Dockerfile` says
- * why — so a commit channel names a new digest for it on every commit. Compose recreates a container
- * whose image changed, and a recreated database drops every connection pool and kills the reviews in
- * flight. A host following commits therefore moves PostgreSQL only when what it is built from moved.
- * A release is applied as signed: its lock is the artifact its evidence describes, and a rebuilt
- * image is part of it.
+ * A commit channel names a new PostgreSQL digest on every commit — `docker/postgres/Dockerfile` says
+ * why the image is rebuilt that often — and Compose recreates a container whose image changed, which
+ * drops every connection pool and kills the practice reviews in flight. A release is applied as
+ * signed: its lock is the artifact its evidence describes, so this never touches one.
  */
 export function carryPostgresImage(
 	images: Readonly<Record<string, string>>,
 	appliedLockEnv: string | undefined,
-	inputsChanged: boolean,
+	rebuilt: boolean,
 ): Readonly<Record<string, string>> {
 	const pinned = images[POSTGRES_IMAGE];
-	if (inputsChanged || appliedLockEnv === undefined || pinned === undefined) return images;
+	if (rebuilt || appliedLockEnv === undefined || pinned === undefined) return images;
 	const [kept, ...rest] = lockValues(appliedLockEnv, POSTGRES_IMAGE);
 	if (kept === undefined || rest.length > 0 || !IMAGE_DIGEST.test(kept)) return images;
 	// The digest is kept, never the repository it sits in: a channel naming the image somewhere else
@@ -561,6 +585,7 @@ async function main(): Promise<void> {
 			applied,
 			releaseCommit,
 			channel.images,
+			channel.refreshDatabaseImage,
 		);
 		await writeFile(lockFile, commitLockEnvironment(decision.release, images), { mode: 0o600 });
 	} else {
@@ -665,10 +690,44 @@ async function main(): Promise<void> {
 	await followTooling(config, releaseTree);
 }
 
+const DAY_SECONDS = 24 * 60 * 60;
+
+/**
+ * Whether the two commits carry committer dates in the same UTC day. Bucketing the commits rather
+ * than reading a clock keeps the answer the same on every tick and on every host, so a run that is
+ * retried does not decide differently from the one before it. A commit the checkout does not have
+ * answers no, which is the direction that applies the channel.
+ */
+async function sameDay(checkout: string, previous: string, target: string): Promise<boolean> {
+	let stamps: number[];
+	try {
+		stamps = (
+			await output("git", ["show", "--no-patch", "--format=%ct", previous, target], {
+				cwd: checkout,
+			})
+		)
+			.trim()
+			.split("\n")
+			.map(Number);
+	} catch {
+		return false;
+	}
+	const [before, after] = stamps;
+	if (stamps.length !== 2 || before === undefined || after === undefined) return false;
+	if (!Number.isSafeInteger(before) || !Number.isSafeInteger(after)) return false;
+	return Math.floor(before / DAY_SECONDS) === Math.floor(after / DAY_SECONDS);
+}
+
 /**
  * `carryPostgresImage` with what this host knows: the lock it wrote for the applied release, which
- * is its own record of the pins it verified and ran, and git's word on whether the PostgreSQL
- * image's inputs changed between the applied commit and the one being applied.
+ * is its own record of the pins it verified and ran, and git's word on the two commits.
+ *
+ * CI rebuilds the PostgreSQL image whenever `POSTGRES_IMAGE_INPUTS` changed, and on top of that
+ * unconditionally for every push to the default branch. The host takes the first rebuild the commit
+ * it is applying earned, and the unconditional one once a day rather than on every apply — so the
+ * `apt-get upgrade` the image exists to run reaches a following host within a day of the push that
+ * built it, instead of the host freezing on one digest between changes to the image's own tree.
+ * `refresh` is the operator asking for the channel's pin before either of those says so.
  */
 export async function commitImages(
 	checkout: string,
@@ -676,8 +735,9 @@ export async function commitImages(
 	applied: AppliedState | undefined,
 	releaseCommit: string,
 	images: Readonly<Record<string, string>>,
+	refresh = false,
 ): Promise<Readonly<Record<string, string>>> {
-	if (applied === undefined) return images;
+	if (applied === undefined || refresh) return images;
 	const previous = appliedCommit(applied);
 	if (previous === undefined) return images;
 	let appliedLockEnv: string | undefined;
@@ -686,15 +746,16 @@ export async function commitImages(
 	} catch (error) {
 		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
 	}
-	// `--quiet` exits 0 only when nothing under the path differs. A commit the checkout does not have
+	// `--quiet` exits 0 only when nothing under the paths differs. A commit the checkout does not have
 	// fails it too, and that reads as changed: when the host cannot tell, it runs what the channel
 	// names rather than keep an image on a guess.
 	const unchanged = await succeeds(
 		"git",
-		["diff", "--quiet", previous, releaseCommit, "--", POSTGRES_IMAGE_INPUTS],
+		["diff", "--quiet", previous, releaseCommit, "--", ...POSTGRES_IMAGE_INPUTS],
 		{ cwd: checkout },
 	);
-	return carryPostgresImage(images, appliedLockEnv, !unchanged);
+	const rebuilt = !unchanged || !(await sameDay(checkout, previous, releaseCommit));
+	return carryPostgresImage(images, appliedLockEnv, rebuilt);
 }
 
 /**

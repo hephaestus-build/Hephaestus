@@ -4,6 +4,7 @@ import { test } from "node:test";
 
 import { parseDocument } from "yaml";
 
+import { asArray, asRecord, asString, asStringArray, at } from "./lib/json.ts";
 import { releaseSignerIdentity, releaseSignerRepository } from "./lib/release-signer.ts";
 import { SMOKE_HOSTNAME } from "./prepare-host-smoke-env.ts";
 import { parseStacks, POSTGRES_IMAGE_INPUTS } from "./reconcile-deployment.ts";
@@ -154,14 +155,58 @@ await test("every promotion decision is taken by the script that owns it", () =>
 	assert.match(reconciler, /^if \(import\.meta\.main\) \{/m);
 });
 
-await test("the reconciler and CI agree on what the PostgreSQL image is built from", () => {
-	// A host keeps its database image while this tree is unchanged, so the tree it watches has to be
-	// the one CI treats as the image's own inputs; widening the filter without widening the constant
-	// would leave a rebuilt image unapplied.
-	const cicd = readFileSync(".github/workflows/cicd.yml", "utf8");
-	const filter = /^ +postgres-image:\n((?: +- .*\n)+)/m.exec(cicd)?.[1];
-	assert.ok(filter, "detect-changes must declare the postgres-image filter");
-	assert.equal(filter.trim(), `- '${POSTGRES_IMAGE_INPUTS}/**'`);
+function referenced(expression: string, pattern: RegExp): string[] {
+	return [...expression.matchAll(pattern)].flatMap(([, name]) =>
+		name === undefined ? [] : [name],
+	);
+}
+
+/**
+ * What makes `cicd.yml` rebuild the published PostgreSQL image, split into the path globs the change
+ * filters behind it name and the outputs that decide a rebuild without reading a diff at all.
+ */
+function postgresRebuildTriggers(): { paths: string[]; unconditional: string[] } {
+	const workflow: unknown = parseDocument(
+		readFileSync(".github/workflows/cicd.yml", "utf8"),
+	).toJS();
+	const detect = asRecord(at(workflow, ["jobs", "detect-changes"], "cicd.yml"), "detect-changes");
+	const outputs = asRecord(detect.outputs, "detect-changes.outputs");
+	const step = asArray(detect.steps, "detect-changes.steps")
+		.map((value, index) => asRecord(value, `detect-changes.steps[${index}]`))
+		.find((candidate) => candidate.id === "filter");
+	if (step === undefined) throw new Error("detect-changes declares no `filter` step");
+	// dorny/paths-filter takes its filters as YAML inside a string, so they parse in a second pass.
+	const filters = asRecord(
+		parseDocument(
+			asString(asRecord(step.with, "the filter step").filters, "the filter step's filters"),
+		).toJS(),
+		"the change filters",
+	);
+	const condition = asString(
+		at(workflow, ["jobs", "Docker", "with", "postgres_image_changed"], "cicd.yml"),
+		"Docker's postgres_image_changed input",
+	);
+
+	const paths = new Set<string>();
+	const unconditional = new Set<string>();
+	for (const name of referenced(condition, /needs\.detect-changes\.outputs\.([\w-]+)/g)) {
+		const expression = asString(outputs[name], `detect-changes.outputs.${name}`);
+		const behind = referenced(expression, /steps\.filter\.outputs\.([\w-]+)/g);
+		if (behind.length === 0) unconditional.add(name);
+		for (const filter of behind)
+			for (const glob of asStringArray(filters[filter], `the ${filter} filter`)) paths.add(glob);
+	}
+	return { paths: [...paths], unconditional: [...unconditional].toSorted() };
+}
+
+await test("a host following commits watches every path CI rebuilds the database image for", () => {
+	const { paths, unconditional } = postgresRebuildTriggers();
+	// A path CI rebuilds for that the host does not diff is a rebuilt image the host never applies.
+	assert.deepEqual([...paths].toSorted(), [...POSTGRES_IMAGE_INPUTS].toSorted());
+	// What is left decides a rebuild without reading the diff, so the host cannot answer it from the
+	// two commits; it takes those rebuilds on a day's cadence instead. A new entry here is a decision
+	// about `commitImages`, not a list to extend.
+	assert.deepEqual(unconditional, ["all-images"]);
 });
 
 await test("derives the canonical signer identity and refuses missing CI identity", () => {

@@ -5,7 +5,7 @@ import { resolvePromotion, type PromotionSources } from "./resolve-promotion.ts"
 
 const commit = "a".repeat(40);
 const images = { HEPHAESTUS_IMAGE_WEBAPP: `ghcr.io/o/webapp@sha256:${"1".repeat(64)}` };
-const request = { allowRollback: false, freeze: false };
+const request = { allowRollback: false, freeze: false, refreshDatabaseImage: false };
 const never = (what: string) => (): Promise<never> =>
 	Promise.reject(new Error(`${what} must not be consulted`));
 const sources: PromotionSources = {
@@ -51,7 +51,16 @@ await test("a commit of the default branch is promoted with the digests its buil
 					images: (at) => Promise.resolve(at === commit ? images : {}),
 				},
 			),
-			{ channel: { release: commit, images, allowRollback: true, freeze: false }, version: commit },
+			{
+				channel: {
+					release: commit,
+					images,
+					allowRollback: true,
+					freeze: false,
+					refreshDatabaseImage: false,
+				},
+				version: commit,
+			},
 		);
 		assert.deepEqual(compared, [`${commit}...main`]);
 	}
@@ -86,4 +95,35 @@ await test("a promotion names exactly one target, and a commit is named whole", 
 			resolvePromotion({ ...request, commit: short }, sources),
 			/full commit SHA/,
 		);
+});
+
+await test("only a commit channel can be asked to take the database image it names", async () => {
+	assert.deepEqual(
+		await resolvePromotion(
+			{ ...request, commit, refreshDatabaseImage: true },
+			{
+				...sources,
+				compare: () => Promise.resolve("identical"),
+				images: () => Promise.resolve(images),
+			},
+		),
+		{
+			channel: {
+				release: commit,
+				images,
+				allowRollback: false,
+				freeze: false,
+				refreshDatabaseImage: true,
+			},
+			version: commit,
+		},
+	);
+	// A release runs the images its evidence describes, so it carries nothing to refresh.
+	await assert.rejects(
+		resolvePromotion(
+			{ ...request, release: "v1.2.3", refreshDatabaseImage: true },
+			{ ...sources, isDraft: () => Promise.resolve(false) },
+		),
+		/applies to a commit, not to a release/,
+	);
 });
