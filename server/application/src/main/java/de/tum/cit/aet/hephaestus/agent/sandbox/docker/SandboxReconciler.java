@@ -229,18 +229,7 @@ public class SandboxReconciler {
                     UUID jobId = UUID.fromString(jobIdStr);
                     if (!activeJobIds.contains(jobId) && !inUse.contains(jobId)) {
                         log.warn("Removing orphaned network: id={}, name={}", network.id(), name);
-                        // Disconnect app-server before removing — Docker refuses to remove
-                        // networks with connected containers. Normal cleanup may have failed
-                        // to disconnect (the exact scenario reconciliation handles).
-                        try {
-                            networkManager.disconnectAppServer(network.id());
-                        } catch (Exception disconnectEx) {
-                            log.debug(
-                                    "Could not disconnect app-server from orphaned network {}: {}",
-                                    name,
-                                    disconnectEx.getMessage());
-                        }
-                        networkManager.removeNetwork(network.id());
+                        networkManager.forceRemoveNetwork(network.id(), name);
                         orphanedNetworks.increment();
                     }
                 } catch (IllegalArgumentException e) {

@@ -110,7 +110,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
             reconciler.onStartup();
 
             verify(containerManager).forceRemove("orphaned-ctr");
-            verify(networkManager).removeNetwork("net-1");
+            verify(networkManager).forceRemoveNetwork("net-1", "agent-net-" + orphanedJobId);
         }
 
         @Test
@@ -202,7 +202,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
 
             reconciler.periodicReconciliation();
 
-            verify(networkManager).removeNetwork(networkId);
+            verify(networkManager).forceRemoveNetwork(networkId, "agent-net-" + orphanedJobId);
             assertThat(meterRegistry
                             .counter("sandbox.reconciler.orphaned", "resource", "network")
                             .count())
@@ -243,7 +243,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
 
             reconciler.periodicReconciliation();
 
-            verify(networkManager, never()).removeNetwork(any());
+            verify(networkManager, never()).forceRemoveNetwork(any(), any());
             assertThat(meterRegistry
                             .counter("sandbox.reconciler.sweeps", "outcome", "skipped")
                             .count())
@@ -267,8 +267,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
             reconciler.periodicReconciliation();
 
             verify(containerManager, never()).forceRemove(any());
-            verify(networkManager, never()).disconnectAppServer(any());
-            verify(networkManager, never()).removeNetwork(any());
+            verify(networkManager, never()).forceRemoveNetwork(any(), any());
             assertThat(meterRegistry
                             .counter("sandbox.reconciler.sweeps", "outcome", "skipped")
                             .count())
@@ -323,8 +322,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
 
             reconciler.periodicReconciliation();
 
-            verify(networkManager, never()).disconnectAppServer(any());
-            verify(networkManager, never()).removeNetwork(any());
+            verify(networkManager, never()).forceRemoveNetwork(any(), any());
         }
 
         @Test
@@ -339,7 +337,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
 
             reconciler.periodicReconciliation();
 
-            verify(networkManager, never()).removeNetwork(any());
+            verify(networkManager, never()).forceRemoveNetwork(any(), any());
         }
 
         @Test
@@ -356,7 +354,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
 
             reconciler.periodicReconciliation();
 
-            verify(networkManager, never()).removeNetwork(any());
+            verify(networkManager, never()).forceRemoveNetwork(any(), any());
         }
 
         @Test
