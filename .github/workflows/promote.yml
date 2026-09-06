@@ -31,6 +31,10 @@ on:
         description: Hold the environment where it is and ignore this release
         type: boolean
         default: false
+      refresh-database-image:
+        description: Recreate the database on the commit's PostgreSQL image instead of the carried one
+        type: boolean
+        default: false
 permissions: {}
 
 concurrency:
@@ -115,6 +119,7 @@ jobs:
           COMMIT: ${{ inputs.commit }}
           ALLOW_ROLLBACK: ${{ inputs.allow-rollback || false }}
           FREEZE: ${{ inputs.freeze || false }}
+          REFRESH_DATABASE_IMAGE: ${{ inputs.refresh-database-image || false }}
           HOSTNAME: ${{ vars.APP_HOSTNAME }}
         run: node scripts/resolve-promotion.ts
 

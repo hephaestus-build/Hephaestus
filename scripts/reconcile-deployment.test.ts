@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
+import { parseDocument } from "yaml";
+
 import { environmentForGitFixture, GIT_REPOSITORY_VARIABLES } from "./lib/git-environment.ts";
-import { parseJson } from "./lib/json.ts";
+import { at, parseJson } from "./lib/json.ts";
 import {
 	adoptTooling,
 	appliedCommit,
@@ -212,6 +215,7 @@ await test("a channel may follow the default branch by naming a commit and what 
 		images,
 		allowRollback: false,
 		freeze: false,
+		refreshDatabaseImage: false,
 	});
 });
 
@@ -277,12 +281,10 @@ await test("an environment following the branch reports the commit it runs", () 
 	assert.ok(rendered.endsWith("\n"));
 });
 
-await test("a host following commits moves its database only when the image's inputs did", () => {
-	// Every commit of the default branch rebuilds the PostgreSQL image, so two consecutive channels
-	// name two digests for it; Compose recreates a container whose image changed, and the database
-	// coming back means every connection pool and review in flight is lost.
-	const running = `ghcr.io/o/postgres@sha256:${"a".repeat(64)}`;
-	const rebuilt = `ghcr.io/o/postgres@sha256:${"b".repeat(64)}`;
+const running = `ghcr.io/o/postgres@sha256:${"a".repeat(64)}`;
+const rebuilt = `ghcr.io/o/postgres@sha256:${"b".repeat(64)}`;
+
+await test("a host following commits keeps the database pin it applied until the image is rebuilt", () => {
 	const channel = { ...images, HEPHAESTUS_IMAGE_POSTGRES: rebuilt };
 	const appliedLock = commitLockEnvironment("d".repeat(40), {
 		...images,
@@ -294,8 +296,6 @@ await test("a host following commits moves its database only when the image's in
 	// with the same pin — and the same Compose configuration — as before.
 	assert.deepEqual(unlockedImages([running], commitLockEnvironment(commit, kept)), []);
 
-	// A change under the image's inputs is applied, and so is the channel's pin on a host that has
-	// no record of what it ran, or one whose record is not a digest.
 	assert.deepEqual(carryPostgresImage(channel, appliedLock, true), channel);
 	assert.deepEqual(carryPostgresImage(channel, undefined, false), channel);
 	assert.deepEqual(
@@ -315,56 +315,85 @@ await test("a host following commits moves its database only when the image's in
 		),
 		{ ...images, HEPHAESTUS_IMAGE_POSTGRES: `ghcr.io/elsewhere/postgres@sha256:${"b".repeat(64)}` },
 	);
+	// A lock a host wrote with CRLF line endings still names the pin it wrote.
+	assert.deepEqual(carryPostgresImage(channel, `HEPHAESTUS_IMAGE_POSTGRES=${running}\r\n`, false), {
+		...images,
+		HEPHAESTUS_IMAGE_POSTGRES: running,
+	});
 });
 
-await test("the database image is kept while git says its tree stands still", async () => {
+await test("the `postgres` service takes the carried pin and nothing else the commit decides", () => {
+	// Carrying one lock value only leaves the container alone if that value is the whole of what the
+	// commit puts into the service; a label or an environment entry rendered from the lock would
+	// recreate it anyway.
+	const stack: unknown = parseDocument(readFileSync("docker/compose.app.yaml", "utf8")).toJS();
+	const service = at(stack, ["services", "postgres"], "docker/compose.app.yaml");
+	// `$$` is Compose's escape for a literal `$`, so only a single one interpolates.
+	const interpolated = new Set(
+		[...JSON.stringify(service).matchAll(/(?<!\$)\$\{(\w+)/g)].map(([, name]) => name),
+	);
+	assert.deepEqual([...interpolated], ["HEPHAESTUS_IMAGE_POSTGRES"]);
+});
+
+await test("the database image is kept while git says nothing rebuilt it that day", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "reconcile-images-"));
 	try {
 		const checkout = join(directory, "checkout");
 		await mkdir(join(checkout, "docker", "postgres"), { recursive: true });
-		const git = (...args: string[]): string =>
+		await mkdir(join(checkout, ".github", "workflows"), { recursive: true });
+		const git = (date: string, ...args: string[]): string =>
 			execFileSync("git", args, {
 				cwd: checkout,
 				encoding: "utf8",
-				env: environmentForGitFixture(),
+				env: environmentForGitFixture({ GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date }),
 			}).trim();
-		git("init", "--quiet", "--initial-branch=main");
-		git("config", "user.email", "host@example.invalid");
-		git("config", "user.name", "host");
-		const commitAll = (message: string): string => {
-			git("add", "--all");
-			git("commit", "--quiet", "-m", message);
-			return git("rev-parse", "HEAD");
+		const day = "2026-09-03T12:00:00+0000";
+		git(day, "init", "--quiet", "--initial-branch=main");
+		git(day, "config", "user.email", "host@example.invalid");
+		git(day, "config", "user.name", "host");
+		const commitAll = (message: string, date = day): string => {
+			git(date, "add", "--all");
+			git(date, "commit", "--quiet", "-m", message);
+			return git(date, "rev-parse", "HEAD");
 		};
 		const dockerfile = join(checkout, "docker", "postgres", "Dockerfile");
+		const buildWorkflow = join(checkout, ".github", "workflows", "reusable-docker-build.yml");
 		await writeFile(dockerfile, "FROM postgres:18\n");
+		await writeFile(buildWorkflow, "on: workflow_call\n");
 		await writeFile(join(checkout, "compose.yaml"), "services: {}\n");
 		const first = commitAll("first");
 		await writeFile(join(checkout, "compose.yaml"), "services: {app: {}}\n");
 		const unrelated = commitAll("a commit that leaves the image alone");
+		await writeFile(join(checkout, "compose.yaml"), "services: {app: {ports: []}}\n");
+		const nextDay = commitAll("the first commit of the next day", "2026-09-04T09:00:00+0000");
 		await writeFile(dockerfile, "FROM postgres:19\n");
 		const rebuild = commitAll("a commit that rebuilds the image");
+		await writeFile(buildWorkflow, "on: workflow_call\n# and a build argument\n");
+		const rebuiltByWorkflow = commitAll("a commit that changes how the image is built");
 
-		const running = `ghcr.io/o/postgres@sha256:${"a".repeat(64)}`;
-		const channel = {
-			...images,
-			HEPHAESTUS_IMAGE_POSTGRES: `ghcr.io/o/postgres@sha256:${"b".repeat(64)}`,
-		};
+		const channel = { ...images, HEPHAESTUS_IMAGE_POSTGRES: rebuilt };
+		const carried = { ...images, HEPHAESTUS_IMAGE_POSTGRES: running };
 		const lockDirectory = join(directory, "release-locks");
 		await mkdir(lockDirectory);
-		await writeFile(
-			join(lockDirectory, `${first}.env`),
-			commitLockEnvironment(first, { ...images, HEPHAESTUS_IMAGE_POSTGRES: running }),
-		);
+		await writeFile(join(lockDirectory, `${first}.env`), commitLockEnvironment(first, carried));
 		const ran = { release: first, channelCommit: "e".repeat(40), appliedAt: applied.appliedAt };
 
-		assert.deepEqual(await commitImages(checkout, lockDirectory, ran, unrelated, channel), {
-			...images,
-			HEPHAESTUS_IMAGE_POSTGRES: running,
-		});
-		// The image's tree moved, so the channel's pin is applied — and so it is when the host cannot
-		// order the two commits at all, or has never applied anything.
+		assert.deepEqual(await commitImages(checkout, lockDirectory, ran, unrelated, channel), carried);
+		// CI rebuilds the image for either tree, so a host that watched only one would run neither
+		// rebuild; the day after, it takes the rebuild every push earns whatever the diff says.
 		assert.deepEqual(await commitImages(checkout, lockDirectory, ran, rebuild, channel), channel);
+		assert.deepEqual(
+			await commitImages(checkout, lockDirectory, ran, rebuiltByWorkflow, channel),
+			channel,
+		);
+		assert.deepEqual(await commitImages(checkout, lockDirectory, ran, nextDay, channel), channel);
+		// The operator asked for the channel's pin, so the day and the diff decide nothing.
+		assert.deepEqual(
+			await commitImages(checkout, lockDirectory, ran, unrelated, channel, true),
+			channel,
+		);
+		// The channel's pin is applied when the host cannot order the two commits at all, or has
+		// never applied anything.
 		assert.deepEqual(
 			await commitImages(checkout, lockDirectory, ran, "f".repeat(40), channel),
 			channel,
