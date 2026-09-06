@@ -1717,14 +1717,36 @@ async function main() {
 			if (event.type === "tool_execution_start") {
 				console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
 			}
+			// The SDK rides out a retryable provider failure on its own. A run that took longer, or that
+			// gave up after several of these, says so here rather than looking like an idle session.
+			if (event.type === "auto_retry_start") {
+				console.error(
+					`[pi-runner] ${label} provider call failed, retrying in ${event.delayMs}ms ` +
+						`(attempt ${event.attempt}/${event.maxAttempts}): ${event.errorMessage}`,
+				);
+			}
+			if (event.type === "auto_retry_end" && !event.success) {
+				const finalError = event.finalError ?? "no error given";
+				console.error(
+					`[pi-runner] ${label} provider call failed for good after ${event.attempt} retries: ${finalError}`,
+				);
+			}
 			if (event.type === "message_end" && event.message.role === "assistant") {
 				addAssistantUsage(streamUsage, event.message);
 				const stopReason = event.message.stopReason;
 				const types = listOrEmpty(event.message.content).map((c) => c.type);
 				const toolCalls = types.filter((t) => t === "toolCall").length;
+				// A turn that ended in an error or ran out of room said why, and without it the
+				// transcript shows a session that simply stopped answering — the one thing a reader
+				// cannot diagnose afterwards.
+				const rawStopReason = event.message.rawStopReason;
+				const failure =
+					stopReason === "error" || stopReason === "length"
+						? `, error=${event.message.errorMessage ?? "none given"}${rawStopReason ? `, rawStopReason=${rawStopReason}` : ""}`
+						: "";
 				console.error(
 					`[pi-runner] ${label} assistant msg: stopReason=${stopReason}, toolCalls=${toolCalls}, ` +
-						`types=[${types.join(",")}]`,
+						`types=[${types.join(",")}]${failure}`,
 				);
 				// How much of the window this turn's prompt occupied. A turn that was aborted or that
 				// failed carries whatever counts the provider had sent before it stopped, which describes
