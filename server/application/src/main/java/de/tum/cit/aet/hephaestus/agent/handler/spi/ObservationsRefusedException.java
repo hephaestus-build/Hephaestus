@@ -6,8 +6,8 @@ package de.tum.cit.aet.hephaestus.agent.handler.spi;
  * failure of the machinery around it, so the sandbox is told so and stops rather than repeating the
  * submission against a server that will refuse it again for the same reason.
  *
- * @param reasonCode a stable, lowercase name for the refusal, for metrics and logs — never the
- *     message, which names one job
+ * <p>The reason code is a stable, lowercase name for the refusal, for metrics and logs — never the
+ * message, which names one job.
  */
 public class ObservationsRefusedException extends JobDeliveryException {
 
