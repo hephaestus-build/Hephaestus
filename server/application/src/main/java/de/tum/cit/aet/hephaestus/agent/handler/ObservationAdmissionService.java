@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -21,6 +22,9 @@ import tools.jackson.databind.node.ObjectNode;
 public class ObservationAdmissionService {
 
     public static final String DIGEST_METADATA_KEY = "observation_admission_digest";
+
+    /** Where a refusal's reason is kept, so the run says what happened to it after the sandbox is gone. */
+    public static final String REFUSAL_METADATA_KEY = "observation_admission_refusal";
 
     static void requireMatchingCompositionDigest(AgentJob job) {
         String admitted = job.getMetadata() == null
@@ -86,6 +90,26 @@ public class ObservationAdmissionService {
                 job,
                 digest,
                 observations.findByAgentJobId(jobId, job.getWorkspace().getId()));
+    }
+
+    /**
+     * Records why this review's observations were refused, in its own transaction: the admission that
+     * refused them rolls back, and the reason must outlive that rollback — it is all the practice page
+     * and the administration surface have to explain a run that recorded nothing.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordRefusal(UUID jobId, String reasonCode, String reason) {
+        jobs.findById(jobId).ifPresent(job -> {
+            ObjectNode metadata = job.getMetadata() instanceof ObjectNode object
+                    ? (ObjectNode) object.deepCopy()
+                    : mapper.createObjectNode();
+            ObjectNode refusal = mapper.createObjectNode();
+            refusal.put("reasonCode", reasonCode);
+            refusal.put("reason", reason);
+            metadata.set(REFUSAL_METADATA_KEY, refusal);
+            job.setMetadata(metadata);
+            jobs.save(job);
+        });
     }
 
     private byte[] serializedPayload(JsonNode submitted) {
