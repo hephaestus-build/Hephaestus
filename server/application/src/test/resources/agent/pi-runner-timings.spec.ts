@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+	armRetryWindow,
 	deriveReconBudget,
+	deriveRetryWindow,
 	deriveTimeouts,
 	deriveTurnTiming,
 	deriveWorkstreamBudget,
@@ -28,6 +30,56 @@ void test("the shared reconnaissance gets a turn's worth of time, not a share of
 	for (const invalid of [0, -1, Number.NaN]) {
 		assert.throws(() => deriveReconBudget(invalid), /positive number/);
 	}
+});
+
+void test("the retry inherits what the initial pass did not spend", () => {
+	const timeouts = deriveTimeouts(900_000);
+	// The initial pass returned after 400s of its 765s slice, with the process budget untouched.
+	assert.equal(deriveRetryWindow(timeouts, 400_000, 900_000), 500_000);
+	// It used every second it was given: the retry gets exactly its reservation.
+	assert.equal(deriveRetryWindow(timeouts, timeouts.initialMs, 135_000), timeouts.retryMs);
+	// It overran (a hard abort lands late): the reservation is the floor, never a negative window.
+	assert.equal(deriveRetryWindow(timeouts, 900_000, 0), timeouts.retryMs);
+});
+
+void test("the retry leaves composition its slice of what the process has left", () => {
+	const timeouts = deriveTimeouts(1_740_000, true);
+	// 18s of SDK and model runtime setup ran before the first pass, which returned after 736s of its
+	// own slice. 743s of review budget are unspent, but only 725s of them can be spent here without
+	// pushing composition past the watchdog.
+	assert.equal(deriveRetryWindow(timeouts, 736_000, 1_740_000 - 754_000), 725_000);
+});
+
+void test("the retry's abort fires on the window it was given, not on the reserved slice", (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const timeouts = deriveTimeouts(900_000);
+	let aborted = false;
+	const retry = armRetryWindow(timeouts, 400_000, 900_000, () => {
+		aborted = true;
+	});
+
+	assert.equal(retry.windowMs, 500_000);
+	t.mock.timers.tick(timeouts.retryMs);
+	assert.equal(aborted, false);
+	t.mock.timers.tick(retry.windowMs - timeouts.retryMs);
+	assert.equal(aborted, true);
+	clearTimeout(retry.timer);
+});
+
+for (const invalid of [-1, Number.NaN]) {
+	void test(`rejects invalid initial elapsed time ${invalid}`, () => {
+		assert.throws(
+			() => deriveRetryWindow(deriveTimeouts(900_000), invalid, 900_000),
+			/initialElapsedMs must be a non-negative/,
+		);
+	});
+}
+
+void test("rejects a stage timeout that cannot be spent", () => {
+	assert.throws(
+		() => deriveRetryWindow({ initialMs: 100, retryMs: -1, compositionMs: 0 }, 0, 100),
+		/retryMs must be a non-negative/,
+	);
 });
 
 void test("a small review never allocates more time than it owns", () => {

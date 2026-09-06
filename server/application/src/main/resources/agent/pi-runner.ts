@@ -48,6 +48,7 @@ import {
 } from "./pi-runner-composition.ts";
 import { outputPath } from "./pi-runner-output.ts";
 import {
+	armRetryWindow,
 	deriveReconBudget,
 	deriveTimeouts,
 	deriveTurnTiming,
@@ -204,11 +205,19 @@ const AGENT_DIR = process.env.PI_CODING_AGENT_DIR;
 if (!AGENT_DIR) {
 	throw new Error("PI_CODING_AGENT_DIR env var is required");
 }
+const TIMEOUTS = deriveTimeouts(
+	AGENT_BUDGET_MS,
+	existsSync(`${CWD}/inputs/feedback-composition.json`),
+);
 const {
 	initialMs: INITIAL_TIMEOUT_MS,
 	retryMs: RETRY_TIMEOUT_MS,
 	compositionMs: COMPOSITION_TIMEOUT_MS,
-} = deriveTimeouts(AGENT_BUDGET_MS, existsSync(`${CWD}/inputs/feedback-composition.json`));
+} = TIMEOUTS;
+
+// The instant the watchdog below counts from. Every stage deadline starts later than this, so it is
+// the only reading against which the process budget means anything.
+const PROCESS_START_MS = Date.now();
 
 setTimeout(() => {
 	console.error(`[pi-runner] Watchdog: ${AGENT_BUDGET_MS + 30_000}ms elapsed, hard-exiting`);
@@ -1840,14 +1849,20 @@ async function main() {
 	);
 
 	const retryAbort = new AbortController();
-	const retryTimer = setTimeout(() => {
-		retryAborted = true;
-		retryAbort.abort();
-		console.error(`[pi-runner] Retry hard timeout — aborting`);
-		for (const activeSession of activeSessions) {
-			activeSession.dispose();
-		}
-	}, RETRY_TIMEOUT_MS);
+	const retry = armRetryWindow(
+		TIMEOUTS,
+		initialDurationMs,
+		AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS),
+		() => {
+			retryAborted = true;
+			retryAbort.abort();
+			console.error(`[pi-runner] Retry hard timeout — aborting`);
+			for (const activeSession of activeSessions) {
+				activeSession.dispose();
+			}
+		},
+	);
+	console.error(`[pi-runner] Retry window: ${(retry.windowMs / 1000).toFixed(1)}s`);
 
 	const retryStartMs = Date.now();
 
@@ -1882,11 +1897,7 @@ async function main() {
 				const unsubscribeRetry = subscribeSession(retrySession, `retry:${group.id}`);
 				activeSessions.add(retrySession);
 				const activeSlots = Math.min(concurrency, retriesRemaining);
-				const retryBudgetMs = deriveWorkstreamBudget(
-					RETRY_TIMEOUT_MS,
-					activeSlots,
-					retriesRemaining,
-				);
+				const retryBudgetMs = deriveWorkstreamBudget(retry.windowMs, activeSlots, retriesRemaining);
 				const retryDeadline = scheduleDeadline(retryBudgetMs, () => {
 					retrySession.dispose();
 				});
@@ -1913,7 +1924,7 @@ async function main() {
 			retryAbort.signal,
 		);
 	} finally {
-		clearTimeout(retryTimer);
+		clearTimeout(retry.timer);
 	}
 
 	const retryDurationMs = Date.now() - retryStartMs;
