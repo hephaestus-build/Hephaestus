@@ -5,6 +5,7 @@ import {
 	type Channel,
 	type ComposedFeedbackEnvelope,
 	type ComposedFeedbackUnit,
+	notReachedNote,
 	undeliverableUnits,
 	validateFeedbackEvidence,
 } from "../../../main/resources/agent/pi-runner-composition.ts";
@@ -87,4 +88,18 @@ void test("one feedback intervention may synthesize related practice observation
 		validateFeedbackEvidence("review-loop", ["missing"], practices) ?? "",
 		/does not name an admitted observation/,
 	);
+});
+
+void test("a review that reached every practice says nothing about coverage", () => {
+	assert.equal(notReachedNote([]), "");
+});
+
+void test("a review names the practices it never settled and forbids a verdict on them", () => {
+	const one = notReachedNote(["ships-tests-with-the-change"]);
+	assert.match(one, /one of its practices: ships-tests-with-the-change\./);
+	assert.match(one, /Say nothing about them, for or against/);
+	assert.match(one, /do not describe this review as complete/);
+
+	const many = notReachedNote(["ships-tests-with-the-change", "describe-what-and-why"]);
+	assert.match(many, /2 of its practices: ships-tests-with-the-change, describe-what-and-why\./);
 });

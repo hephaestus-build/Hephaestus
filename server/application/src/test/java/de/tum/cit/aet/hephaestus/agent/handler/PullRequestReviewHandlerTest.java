@@ -571,6 +571,77 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             verify(deliveryService).deliver(eq(job), any());
         }
 
+        /** A job past admission, carrying the coverage ledger its run wrote. */
+        private AgentJob jobAwaitingDelivery(int eligible, int evaluated) {
+            ObjectNode metadata = sampleJobMetadata();
+            metadata.put(ObservationAdmissionService.DIGEST_METADATA_KEY, "digest-1");
+            AgentJob job = jobWithMetadata(metadata);
+            ObjectNode output = objectMapper.createObjectNode();
+            output.putObject("feedback").put("admissionDigest", "digest-1");
+            ObjectNode coverage = output.putObject("practiceCoverage");
+            coverage.put("eligible", eligible);
+            coverage.put("evaluated", evaluated);
+            job.setOutput(output);
+            return job;
+        }
+
+        private void observed(AgentJob job, Practice practice, Assessment assessment) {
+            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(java.util.List.of(practice));
+            var observation = org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.model.Observation.class);
+            lenient().when(observation.getPractice()).thenReturn(practice);
+            lenient().when(observation.getSummary()).thenReturn("What the review saw");
+            lenient()
+                    .when(observation.getPresence())
+                    .thenReturn(assessment == Assessment.BAD ? Presence.ABSENT : Presence.PRESENT);
+            lenient().when(observation.getAssessment()).thenReturn(assessment);
+            lenient()
+                    .when(observation.getSeverity())
+                    .thenReturn(assessment == Assessment.BAD ? Severity.MAJOR : Severity.INFO);
+            lenient().when(observation.getEvidenceRationale()).thenReturn("The evidence warrants it.");
+            lenient().when(observation.getOccurrenceKey()).thenReturn("occ-" + practice.getSlug());
+            lenient().when(observation.getRecurrenceKey()).thenReturn("rk-" + practice.getSlug());
+            when(observationRepository.findByAgentJobId(
+                            job.getId(), job.getWorkspace().getId()))
+                    .thenReturn(java.util.List.of(observation));
+        }
+
+        @Test
+        void shouldWithholdAnAllClearWhenTheReviewDidNotReachEveryPractice() {
+            AgentJob job = jobAwaitingDelivery(2, 1);
+            observed(
+                    job,
+                    createPractice("pr-description-quality", "PR Description Quality", "criteria"),
+                    Assessment.GOOD);
+
+            handler.deliver(job);
+
+            verify(feedbackService, never()).deliverFeedback(any(), any(), any());
+            verify(feedbackService, never()).recordProposal(any(), any(), any());
+        }
+
+        @Test
+        void shouldStillReportWhatAPartialReviewFound() {
+            AgentJob job = jobAwaitingDelivery(2, 1);
+            observed(job, createPractice("error-handling", "Error Handling", "criteria"), Assessment.BAD);
+
+            handler.deliver(job);
+
+            verify(feedbackService).deliverFeedback(eq(job), any(), any());
+        }
+
+        @Test
+        void shouldPostAnAllClearWhenTheReviewReachedEveryPractice() {
+            AgentJob job = jobAwaitingDelivery(2, 2);
+            observed(
+                    job,
+                    createPractice("pr-description-quality", "PR Description Quality", "criteria"),
+                    Assessment.GOOD);
+
+            handler.deliver(job);
+
+            verify(feedbackService).deliverFeedback(eq(job), any(), any());
+        }
+
         @Test
         void throwsWhenNoValidObservations() {
             AgentJob job = jobWithOutput("{\"observations\":[]}");

@@ -251,8 +251,17 @@ public class IssueReviewHandler implements JobTypeHandler {
         Map<String, String> why = practiceCatalogInjector.whyBySlug(job.getWorkspace(), ArtifactKinds.ISSUE);
         List<ComposedFeedbackUnit> units = compositionResultParser.parse(job.getOutput(), FeedbackChannel.IN_CONTEXT);
         String lead = compositionResultParser.lead(job.getOutput());
+        // Everything either surface would compose from: both render an all-clear when no problem
+        // survives the gates, so the coverage question is asked once, over the union.
+        List<PracticeDetectionResultParser.ValidatedObservation> composable = java.util.stream.Stream.concat(
+                        proposals.stream(), loudEnough.stream())
+                .toList();
+        if (ReviewCoverage.withholdsAllClear(job.getOutput(), composable)) {
+            log.info("Withholding an all-clear from a review that did not reach every practice: jobId={}", job.getId());
+            return;
+        }
         if (!proposals.isEmpty()) {
-            Set<String> included = java.util.stream.Stream.concat(proposals.stream(), loudEnough.stream())
+            Set<String> included = composable.stream()
                     .map(PracticeDetectionResultParser.ValidatedObservation::occurrenceKey)
                     .collect(java.util.stream.Collectors.toUnmodifiableSet());
             List<PracticeDetectionResultParser.ValidatedObservation> reviewPackage = observations.stream()
