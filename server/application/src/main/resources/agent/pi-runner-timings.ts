@@ -31,6 +31,56 @@ export function deriveReconBudget(initialMs: number) {
 	return Math.min(240_000, Math.max(floorMs, Math.floor(initialMs * 0.1)));
 }
 
+export interface StageTimeouts {
+	initialMs: number;
+	retryMs: number;
+	compositionMs: number;
+}
+
+/**
+ * The retry's wall clock: whatever is left of the review budget when the initial pass ends, and never
+ * less than the slice the split reserved for it. That reservation guards against an initial pass that
+ * runs long; it is not a cap, because a pass that returned early has not spent the rest and the retry
+ * is the last stage that can still close a practice nobody observed.
+ *
+ * <p>What is left of the process bounds it from above. The review budget is measured from the first
+ * pass, the process budget from module load, and the watchdog's grace is all that covers the two
+ * stretches inside neither: the SDK and model runtime the run builds before the first pass, and the
+ * composition session it builds after the last one. So the retry stops early enough to leave
+ * composition its own slice of what remains.
+ */
+export function deriveRetryWindow(
+	timeouts: StageTimeouts,
+	initialElapsedMs: number,
+	remainingProcessMs: number,
+) {
+	for (const [name, value] of Object.entries({ ...timeouts, initialElapsedMs })) {
+		if (!Number.isFinite(value) || value < 0) {
+			throw new Error(`${name} must be a non-negative number, got: ${value}`);
+		}
+	}
+	// remainingProcessMs is the one argument that may be negative: a process already past its budget
+	// has a negative remainder, and the reservation below is what keeps that from arming a timer in
+	// the past.
+	const unspentReviewMs = timeouts.initialMs + timeouts.retryMs - initialElapsedMs;
+	const beforeCompositionMs = remainingProcessMs - timeouts.compositionMs;
+	return Math.max(timeouts.retryMs, Math.floor(Math.min(unspentReviewMs, beforeCompositionMs)));
+}
+
+/**
+ * Arms the retry's hard stop on the window it derives, so the window the sessions are budgeted
+ * against and the window the abort fires on are one number.
+ */
+export function armRetryWindow(
+	timeouts: StageTimeouts,
+	initialElapsedMs: number,
+	remainingProcessMs: number,
+	onExpire: () => void,
+) {
+	const windowMs = deriveRetryWindow(timeouts, initialElapsedMs, remainingProcessMs);
+	return { windowMs, timer: setTimeout(onExpire, windowMs) };
+}
+
 export function deriveTurnTiming(remainingMs: number, remainingTurns: number) {
 	if (!Number.isFinite(remainingMs) || remainingMs < 0) {
 		throw new Error(`remainingMs must be a non-negative number, got: ${remainingMs}`);
