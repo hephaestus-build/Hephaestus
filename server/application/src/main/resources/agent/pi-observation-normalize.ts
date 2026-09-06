@@ -647,12 +647,29 @@ function foldConfusables(text: string): string {
 	return out;
 }
 
+/** How much of a diff line a refusal quotes back; enough to see the difference, not the whole line. */
+const MISMATCH_EXCERPT_CHARS = 160;
+
+/** Whether an observation's citation is really in the artifact it names. */
 export function citationMatchesArtifact(citation: NormalizedCitation, content: string): boolean {
+	return describeCitationMismatch(citation, content) === null;
+}
+
+/**
+ * Why a citation does not match, in one phrase, or null when it does. A refusal that only says "does
+ * not match" leaves the session guessing at which of the coordinate, the side and the text was wrong,
+ * and leaves a reader of the transcript guessing at the same thing. The rule itself is unchanged:
+ * every quote is still read out of the artifact it names.
+ */
+export function describeCitationMismatch(
+	citation: NormalizedCitation,
+	content: string,
+): string | null {
 	if (citation.sourceKind !== "scm.pull-request.diff") {
-		return (
+		const found =
 			content.includes(citation.quote) ||
-			foldConfusables(content).includes(foldConfusables(citation.quote))
-		);
+			foldConfusables(content).includes(foldConfusables(citation.quote));
+		return found ? null : "that text is not in the artifact";
 	}
 	let oldPath: string | null = null;
 	let newPath: string | null = null;
@@ -678,11 +695,28 @@ export function citationMatchesArtifact(citation: NormalizedCitation, content: s
 		}
 	}
 	const quoteLines = citation.quote.split("\n");
-	if (quoteLines.length !== citation.endLine - citation.startLine + 1) return false;
-	return quoteLines.every((quoteLine, index) => {
-		const diffLine = citedLines.get(citation.startLine + index);
-		return diffLine === quoteLine || diffLine?.slice(1) === quoteLine;
-	});
+	const citedLineCount = citation.endLine - citation.startLine + 1;
+	if (quoteLines.length !== citedLineCount) {
+		return `the quote is ${quoteLines.length} line(s) and the citation covers ${citedLineCount}`;
+	}
+	for (const [index, quoteLine] of quoteLines.entries()) {
+		const lineNumber = citation.startLine + index;
+		const diffLine = citedLines.get(lineNumber);
+		if (diffLine === undefined) {
+			return `the diff has no [L${lineNumber}] on the ${citation.side ?? "NEW"} side of ${citation.path}`;
+		}
+		if (diffLine !== quoteLine && diffLine.slice(1) !== quoteLine) {
+			return `[L${lineNumber}] reads ${excerpt(diffLine)}, not ${excerpt(quoteLine)}`;
+		}
+	}
+	return null;
+}
+
+/** One line as evidence in a refusal: quoted, and cut where a reader has already seen the difference. */
+function excerpt(line: string): string {
+	const cut =
+		line.length > MISMATCH_EXCERPT_CHARS ? `${line.slice(0, MISMATCH_EXCERPT_CHARS)}…` : line;
+	return JSON.stringify(cut);
 }
 
 function diffPath(rawPath: string): string | null {
