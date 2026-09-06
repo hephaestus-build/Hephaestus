@@ -640,8 +640,46 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> admit(job, rawOutput))
                     .isInstanceOf(JobDeliveryException.class)
-                    .hasMessageContaining("stale/empty diff");
+                    .hasMessageContaining("answered without reading the change");
             verifyNoInteractions(deliveryService);
+        }
+
+        @Test
+        void admitsWhenNothingDecidedButAnObservationQuotesTheDiff() {
+            String rawOutput = """
+                {
+                  "observations": [{
+                    "practiceSlug": "pr-description-quality",
+                    "summary": "Not applicable here",
+                    "presence": "NOT_APPLICABLE",
+                    "evidenceRationale": "The practice has no subject in this change.",
+                    "evidence": {
+                      "citations": [{
+                        "sourceKind": "scm.pull-request.diff",
+                        "artifactPath": "inputs/context/diff.patch",
+                        "path": "Sources/Auth.swift",
+                        "side": "NEW",
+                        "startLine": 1,
+                        "endLine": 1,
+                        "quote": "+changed"
+                      }],
+                      "inapplicability": { "reason": "No relevant subject exists." }
+                    }
+                  }]
+                }
+                """;
+            AgentJob job = jobWithMetadata(sampleJobMetadata());
+            ObjectNode output = objectMapper.createObjectNode();
+            output.put("rawOutput", rawOutput);
+            job.setOutput(output);
+            stubDiff(
+                    "diff --git a/Sources/Auth.swift b/Sources/Auth.swift\n+++ b/Sources/Auth.swift\n@@ -1 +1 @@\n+changed\n");
+            when(deliveryService.deliver(eq(job), any()))
+                    .thenAnswer(inv -> new DeliveryResult(1, 0, false, inv.getArgument(1)));
+
+            admit(job, rawOutput);
+
+            verify(deliveryService).deliver(eq(job), any());
         }
 
         @Test
