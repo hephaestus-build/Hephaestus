@@ -593,6 +593,37 @@ interface ReportObservationDetails {
 	remainingPractices?: string[];
 }
 
+const MAX_REFUSAL_LOG_CHARS = 500;
+
+/**
+ * Names a refused observation in the log as well as to the session.
+ *
+ * The session is told either way — that is how it corrects itself and tries again — but nothing was
+ * written for the reader, so a review whose every recording was refused read exactly like one that
+ * never recorded: the same tool lines, then an empty result.
+ *
+ * A reason can quote a model-authored field, and only the tail of a container's log is kept, so an
+ * unreasonable one is cut here rather than left to evict the transcript it is there to explain.
+ */
+function logRefusal(params: unknown, reason: string): void {
+	const slug =
+		isRecord(params) && typeof params.practiceSlug === "string" ? params.practiceSlug : "unknown";
+	const line = `[pi-runner] observation refused for ${slug}: ${reason}`;
+	console.error(
+		line.length > MAX_REFUSAL_LOG_CHARS ? `${line.slice(0, MAX_REFUSAL_LOG_CHARS)}…` : line,
+	);
+}
+
+/** Logs a refusal thrown by one step, and hands the session the same error it would have seen. */
+function refusing<T>(params: unknown, step: () => T): T {
+	try {
+		return step();
+	} catch (error) {
+		logRefusal(params, errorText(error));
+		throw error;
+	}
+}
+
 function buildReportObservationTool(allowedPracticeSlugs?: readonly string[]) {
 	const allowed = allowedPracticeSlugs ? new Set(allowedPracticeSlugs) : null;
 	const scopedObservationSchema = allowedPracticeSlugs
@@ -611,30 +642,27 @@ function buildReportObservationTool(allowedPracticeSlugs?: readonly string[]) {
 			"Persist exactly one structured observation immediately so it survives retries and timeouts. Call this as soon as one observation is ready. Do not wait to batch observations.",
 		parameters: scopedObservationSchema,
 		execute: (_toolCallId, params): Promise<AgentToolResult<ReportObservationDetails>> => {
+			// Every branch below that declines to record logs the same reason it hands to the session.
 			if (measurementClosed) {
+				const text = "Measurement is closed; this turn may only compose feedback.";
+				logRefusal(params, text);
 				return Promise.resolve({
-					content: [
-						{
-							type: "text",
-							text: "Measurement is closed; this turn may only compose feedback.",
-						},
-					],
+					content: [{ type: "text", text }],
 					details: { inserted: 0, measurementClosed: true },
 				});
 			}
-			const normalized = normalizeObservation(params);
+			const normalized = refusing(params, () => normalizeObservation(params));
 			if (allowed && !allowed.has(normalized.practiceSlug)) {
+				const text = `This observer is scoped to ${[...allowed].join(", ")}, not '${normalized.practiceSlug}'.`;
+				logRefusal(params, text);
 				return Promise.resolve({
-					content: [
-						{
-							type: "text",
-							text: `This observer is scoped to ${[...allowed].join(", ")}, not '${normalized.practiceSlug}'.`,
-						},
-					],
+					content: [{ type: "text", text }],
 					details: { inserted: 0, remainingPractices: [...allowed] },
 				});
 			}
-			const { inserted, duplicates, negatives } = appendObservations([params]);
+			const { inserted, duplicates, negatives } = refusing(params, () =>
+				appendObservations([params]),
+			);
 			const observed = new Set(reviewState.observations.map((item) => item.practiceSlug));
 			const remainingPractices = allowed
 				? [...allowed].filter((practiceSlug) => !observed.has(practiceSlug))
