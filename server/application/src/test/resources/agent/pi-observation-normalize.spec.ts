@@ -291,6 +291,21 @@ void test("diff citations bind the quote to the claimed file and line", () => {
 	assert.equal(citationMatchesArtifact({ ...citation, endLine: 12 }, diff), false);
 });
 
+void test("a quote may carry the coordinate the diff printed in front of it", () => {
+	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
+	const diff =
+		"diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] + insecure();\n";
+
+	// What the observer actually read, copied back whole. The commonest refusal on staging.
+	assert.equal(describeCitationMismatch({ ...citation, quote: "[L10] + insecure();" }, diff), null);
+	// The coordinate still has to be the one being matched, so a quote cannot claim a line it did
+	// not read — even when that line's text is in the diff somewhere else.
+	assert.match(
+		describeCitationMismatch({ ...citation, quote: "[L11] + insecure();" }, diff) ?? "",
+		/\[L10] reads/,
+	);
+});
+
 void test("a refused citation says which of the coordinate, the side and the text was wrong", () => {
 	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
 	const diff =

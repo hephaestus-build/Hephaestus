@@ -705,11 +705,23 @@ export function describeCitationMismatch(
 		if (diffLine === undefined) {
 			return `the diff has no [L${lineNumber}] on the ${citation.side ?? "NEW"} side of ${citation.path}`;
 		}
-		if (diffLine !== quoteLine && diffLine.slice(1) !== quoteLine) {
+		const quoted = withoutOwnCoordinate(quoteLine, lineNumber);
+		if (diffLine !== quoted && diffLine.slice(1) !== quoted) {
 			return `[L${lineNumber}] reads ${excerpt(diffLine)}, not ${excerpt(quoteLine)}`;
 		}
 	}
 	return null;
+}
+
+/**
+ * The line as the artifact shows it, when the quote copied the coordinate the artifact prints in
+ * front of it. Reading a diff line as `[L39] +public class Foo {` and quoting it back whole is the
+ * commonest refusal there is, and it proves the same thing an unprefixed quote proves: the coordinate
+ * has to be the one being matched, so a quote cannot claim a line it did not read.
+ */
+function withoutOwnCoordinate(quoteLine: string, lineNumber: number): string {
+	const [, quotedNumber, quotedText] = quoteLine.match(/^\[L(\d+)] (.*)$/) ?? [];
+	return quotedText !== undefined && quotedNumber === String(lineNumber) ? quotedText : quoteLine;
 }
 
 /** One line as evidence in a refusal: quoted, and cut where a reader has already seen the difference. */
