@@ -750,6 +750,12 @@ const SERVER_UNREACHABLE_EXIT = 75;
  * as one that found nothing.
  */
 const PROVIDER_UNREACHABLE_EXIT = 76;
+
+/**
+ * The session labels whose turns are the ones that record observations — the per-practice observers
+ * and their retry lane. A practice is reached from one of these or not at all.
+ */
+const RECORDING_LANE = /^(observer|retry):/;
 const SUPPORTED_SCHEMA_VERSION = 1;
 const SUPPORTED_KIND = "practice_review";
 const TASK_PATH = `${CWD}/task.json`;
@@ -1763,10 +1769,11 @@ async function main() {
 			}
 			if (event.type === "auto_retry_end" && !event.success) {
 				const finalError = event.finalError ?? "no error given";
-				// A call the provider never answered, after the SDK spent its whole budget on it. Counted
-				// because a review that reached no practice needs to say whether it was never told
-				// anything or measured nothing.
-				providerFailures++;
+				// A call the provider never answered, after the SDK spent its whole budget on it. Only the
+				// lanes that record observations are counted: reconnaissance and composition can fail
+				// without costing a practice, and what this number decides is whether a review that
+				// recorded nothing was cut off or simply had nothing to record.
+				if (RECORDING_LANE.test(label)) providerFailures++;
 				console.error(
 					`[pi-runner] ${label} provider call failed for good after ${event.attempt} retries: ${finalError}`,
 				);
