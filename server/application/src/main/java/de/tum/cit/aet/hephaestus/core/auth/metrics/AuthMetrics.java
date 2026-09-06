@@ -193,4 +193,18 @@ public class AuthMetrics {
                 .register(registry)
                 .increment();
     }
+
+    /**
+     * Count one impersonation ended by a rotation rather than by the operator. {@code reason} is a fixed
+     * set ({@code expired}, {@code target_promoted}), so cardinality stays bounded. A rising
+     * {@code target_promoted} rate is worth looking at: it means operators are promoting the accounts
+     * they are impersonating.
+     */
+    public void recordImpersonationAutoExit(String reason) {
+        Counter.builder(CoreMetrics.AUTH_IMPERSONATION_AUTO_EXIT)
+                .description("Impersonations ended by a token rotation, tagged by reason.")
+                .tag("reason", reason)
+                .register(registry)
+                .increment();
+    }
 }

@@ -10,6 +10,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -101,6 +102,10 @@ public class HephaestusJwtIssuer {
         if (sessionExpiresAt != null && sessionExpiresAt.isBefore(expiresAt)) {
             expiresAt = sessionExpiresAt;
         }
+        // JWT deadlines are serialized as whole seconds, so the wire token expires at the truncated
+        // instant. issued_jwt keeps the untruncated one, and its active-token check would then answer
+        // "still valid" for the fraction of a second the presented token is already expired.
+        expiresAt = expiresAt.truncatedTo(ChronoUnit.SECONDS);
         UUID jti = UUID.randomUUID();
         JWK signingKey = keyService.currentSigningKey();
         JwtClaimsSet.Builder claims = JwtClaimsSet.builder()

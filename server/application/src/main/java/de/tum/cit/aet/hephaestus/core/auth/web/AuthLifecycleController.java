@@ -78,7 +78,12 @@ public class AuthLifecycleController {
     public ResponseEntity<Void> impersonate(
             @Valid @RequestBody ImpersonateRequestDTO body, HttpServletRequest request, HttpServletResponse response) {
         ImpersonationService.Result result = impersonationService.begin(
-                CurrentAccount.requireId(), body.targetAccountId(), body.reason(), CurrentAccount.authTime(), request);
+                CurrentAccount.requireId(),
+                body.targetAccountId(),
+                body.reason(),
+                CurrentAccount.authTime(),
+                CurrentAccount.sessionExpiresAt(),
+                request);
         sessionService.setCookie(response, result.token());
         return ResponseEntity.noContent().build();
     }
@@ -96,6 +101,7 @@ public class AuthLifecycleController {
                 CurrentAccount.requireId(),
                 CurrentAccount.requireJti(),
                 CurrentAccount.authTime(),
+                CurrentAccount.sessionExpiresAt(),
                 request);
         sessionService.setCookie(response, result.token());
         return ResponseEntity.noContent().build();

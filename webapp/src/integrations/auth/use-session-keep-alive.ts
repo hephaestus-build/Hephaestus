@@ -22,7 +22,12 @@ import { refreshAccessToken } from "./session-refresh";
  * @see https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
  */
 
-/** Renew this long before expiry so a request never races a just-lapsed token. */
+/**
+ * Renew this long before expiry so a request never races a just-lapsed token. It is also the window
+ * in which the server ends an impersonation instead of rotating it (`IMPERSONATION_EXIT_SKEW` in
+ * `AuthSessionService`): shortening this one without shortening that one leaves an impersonation
+ * whose last rotation mints a token that is already expired.
+ */
 const REFRESH_SKEW_MS = 60_000;
 /** Coalesce activity bookkeeping so the listeners are effectively free on a busy page. */
 const ACTIVITY_THROTTLE_MS = 10_000;

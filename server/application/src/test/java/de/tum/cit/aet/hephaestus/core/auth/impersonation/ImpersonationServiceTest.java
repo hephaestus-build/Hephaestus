@@ -51,6 +51,9 @@ class ImpersonationServiceTest extends BaseUnitTest {
     /** The operator's sign-in, which entering and leaving impersonation must both carry unchanged. */
     private static final Instant OPERATOR_AUTH_TIME = Instant.parse("2025-12-31T23:58:00Z");
 
+    /** The operator's absolute session deadline; both ends of an impersonation are bounded by it. */
+    private static final Instant OPERATOR_SESSION_EXPIRES_AT = Instant.parse("2026-01-01T12:00:00Z");
+
     @Mock
     private AccountRepository accountRepository;
 
@@ -107,7 +110,7 @@ class ImpersonationServiceTest extends BaseUnitTest {
 
         // A reason laden with characters that the old escape() missed: newline, tab, quote, backslash.
         String nastyReason = "line1\nline2\twith \"quotes\" and a \\ backslash";
-        service.begin(1L, 2L, nastyReason, OPERATOR_AUTH_TIME, null);
+        service.begin(1L, 2L, nastyReason, OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null);
 
         ArgumentCaptor<AuthEventData> captor = ArgumentCaptor.forClass(AuthEventData.class);
         verify(authEventWriter).write(captor.capture());
@@ -122,7 +125,8 @@ class ImpersonationServiceTest extends BaseUnitTest {
     void begin_whenOperatorNotAdmin_forbidden() {
         when(accountRepository.findById(1L)).thenReturn(Optional.of(account(1L, Account.AppRole.USER)));
 
-        assertThatThrownBy(() -> service.begin(1L, 2L, "support", OPERATOR_AUTH_TIME, null))
+        assertThatThrownBy(
+                        () -> service.begin(1L, 2L, "support", OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
                         .isEqualTo(HttpStatus.FORBIDDEN));
@@ -135,7 +139,8 @@ class ImpersonationServiceTest extends BaseUnitTest {
     void begin_whenSelfImpersonation_badRequest() {
         when(accountRepository.findById(1L)).thenReturn(Optional.of(account(1L, Account.AppRole.APP_ADMIN)));
 
-        assertThatThrownBy(() -> service.begin(1L, 1L, "support", OPERATOR_AUTH_TIME, null))
+        assertThatThrownBy(
+                        () -> service.begin(1L, 1L, "support", OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
                         .isEqualTo(HttpStatus.BAD_REQUEST));
@@ -149,7 +154,8 @@ class ImpersonationServiceTest extends BaseUnitTest {
         when(accountRepository.findById(1L)).thenReturn(Optional.of(account(1L, Account.AppRole.APP_ADMIN)));
         when(accountRepository.findById(2L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.begin(1L, 2L, "support", OPERATOR_AUTH_TIME, null))
+        assertThatThrownBy(
+                        () -> service.begin(1L, 2L, "support", OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
                         .isEqualTo(HttpStatus.NOT_FOUND));
@@ -163,7 +169,8 @@ class ImpersonationServiceTest extends BaseUnitTest {
         when(accountRepository.findById(1L)).thenReturn(Optional.of(account(1L, Account.AppRole.APP_ADMIN)));
         when(accountRepository.findById(2L)).thenReturn(Optional.of(account(2L, Account.AppRole.APP_ADMIN)));
 
-        assertThatThrownBy(() -> service.begin(1L, 2L, "support", OPERATOR_AUTH_TIME, null))
+        assertThatThrownBy(
+                        () -> service.begin(1L, 2L, "support", OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
                         .isEqualTo(HttpStatus.FORBIDDEN));
@@ -184,18 +191,23 @@ class ImpersonationServiceTest extends BaseUnitTest {
                 .thenReturn(
                         new HephaestusJwtIssuer.Token("tok", UUID.randomUUID(), Instant.parse("2026-01-01T00:15:00Z")));
 
-        ImpersonationService.Result result = service.begin(1L, 2L, "support", OPERATOR_AUTH_TIME, null);
+        ImpersonationService.Result result =
+                service.begin(1L, 2L, "support", OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null);
 
         assertThat(result.targetAccountId()).isEqualTo(2L);
         assertThat(result.actingAccountId()).isEqualTo(1L);
         // act-claim contract plus the time-box: the OPERATOR is the impersonator, imp_exp is
-        // now + impersonationMaxLifetime (1h from the fixed clock), and the operator's own auth_time
-        // rides along so exiting does not look like a fresh sign-in.
+        // now + impersonationMaxLifetime (1h from the fixed clock), the operator's own auth_time
+        // rides along so exiting does not look like a fresh sign-in, and the operator's session
+        // ceiling is carried so impersonating cannot outlive the session that started it.
         verify(jwtIssuer)
                 .issue(
                         any(),
                         eq(TokenConstraints.impersonation(
-                                1L, Instant.parse("2026-01-01T01:00:00Z"), null, OPERATOR_AUTH_TIME)),
+                                1L,
+                                Instant.parse("2026-01-01T01:00:00Z"),
+                                OPERATOR_SESSION_EXPIRES_AT,
+                                OPERATOR_AUTH_TIME)),
                         any());
 
         ArgumentCaptor<AuthEventData> captor = ArgumentCaptor.forClass(AuthEventData.class);
@@ -208,19 +220,72 @@ class ImpersonationServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void begin_whenTheOperatorSessionHasLapsed_unauthorized() {
+        assertThatThrownBy(() -> service.begin(
+                        1L, 2L, "support", OPERATOR_AUTH_TIME, Instant.parse("2025-12-31T23:59:00Z"), null))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+
+        // An operator whose own session is over cannot start acting as somebody else.
+        verify(jwtIssuer, never()).issue(any(), any(), any());
+        verify(authEventWriter, never()).write(any());
+    }
+
+    @Test
+    void exit_whenTheImpersonationWasAlreadyEnded_unauthorized() {
+        UUID impersonationJti = UUID.randomUUID();
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(account(1L, Account.AppRole.APP_ADMIN)));
+        when(issuedJwtRepository.revoke(eq(impersonationJti), any(), eq(IssuedJwt.RevokedReason.IMPERSONATION_EXIT)))
+                .thenReturn(0);
+
+        assertThatThrownBy(() ->
+                        service.exit(1L, 2L, impersonationJti, OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+
+        // A force sign-out or an auto-exit already closed this session; exiting must not reopen one.
+        verify(jwtIssuer, never()).issue(any(), any(), any());
+    }
+
+    @Test
+    void exit_whenTheOperatorIsNoLongerAnAdmin_unauthorized() {
+        UUID impersonationJti = UUID.randomUUID();
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(account(1L, Account.AppRole.USER)));
+
+        assertThatThrownBy(() ->
+                        service.exit(1L, 2L, impersonationJti, OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+
+        // A demoted operator must not be able to manually exit into an ordinary token either — the same
+        // gate refresh applies before it will rotate this pair.
+        verify(jwtIssuer, never()).issue(any(), any(), any());
+        verify(issuedJwtRepository, never()).revoke(any(), any(), any());
+    }
+
+    @Test
     void exit_revokesImpersonationJtiAndMintsOperatorToken() {
         UUID impersonationJti = UUID.randomUUID();
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(account(1L, Account.AppRole.APP_ADMIN)));
         when(principalFactory.forAccountId(1L))
                 .thenReturn(new JwtPrincipal(1L, "operator", "Operator", Set.of("admin")));
+        when(issuedJwtRepository.revoke(eq(impersonationJti), any(), eq(IssuedJwt.RevokedReason.IMPERSONATION_EXIT)))
+                .thenReturn(1);
         when(jwtIssuer.issue(any(), any(), any()))
                 .thenReturn(new HephaestusJwtIssuer.Token(
                         "op-tok", UUID.randomUUID(), Instant.parse("2026-01-01T00:15:00Z")));
 
-        ImpersonationService.Result result = service.exit(1L, 2L, impersonationJti, OPERATOR_AUTH_TIME, null);
+        ImpersonationService.Result result =
+                service.exit(1L, 2L, impersonationJti, OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null);
 
         verify(issuedJwtRepository).revoke(eq(impersonationJti), any(), eq(IssuedJwt.RevokedReason.IMPERSONATION_EXIT));
-        // No act claim on the operator token, and the operator's sign-in age is unchanged by the exit.
-        verify(jwtIssuer).issue(any(), eq(TokenConstraints.session(null, OPERATOR_AUTH_TIME)), any());
+        // No act claim on the operator token, the operator's sign-in age is unchanged by the exit, and
+        // the operator's own session ceiling is carried onto the returned-to token.
+        verify(jwtIssuer)
+                .issue(any(), eq(TokenConstraints.session(OPERATOR_SESSION_EXPIRES_AT, OPERATOR_AUTH_TIME)), any());
         assertThat(result.targetAccountId()).isEqualTo(1L);
         assertThat(result.actingAccountId()).isNull();
 

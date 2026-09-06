@@ -9,6 +9,8 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -74,8 +76,12 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
     @Test
     void refreshRotatesTheSessionAndKeepsAppRequestsWorkingAcrossManyCycles() {
         Account account = accountRepository.save(new Account("Rolling Rosa"));
+        // Every real login stamps the absolute ceiling; a rotation is only allowed to roll within it.
         String current = jwtIssuer
-                .issue(principalFactory.forAccount(account), TokenConstraints.session(null, null), null)
+                .issue(
+                        principalFactory.forAccount(account),
+                        TokenConstraints.session(Instant.now().plus(Duration.ofHours(12)), null),
+                        null)
                 .value();
         String csrf = fetchCsrfToken();
 
@@ -101,11 +107,11 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
     void theAbsoluteSessionCeilingCapsTheTokenAndSurvivesRefresh() {
         Account account = accountRepository.save(new Account("Capped Cathy"));
         // A 2-minute absolute session ceiling — well under the 15-min access TTL, so it binds.
-        long ceiling = java.time.Instant.now().getEpochSecond() + 120;
+        long ceiling = Instant.now().getEpochSecond() + 120;
         String token = jwtIssuer
                 .issue(
                         principalFactory.forAccount(account),
-                        TokenConstraints.session(java.time.Instant.ofEpochSecond(ceiling), null),
+                        TokenConstraints.session(Instant.ofEpochSecond(ceiling), null),
                         null)
                 .value();
 
