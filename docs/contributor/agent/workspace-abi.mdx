@@ -128,9 +128,18 @@ worker filesystem.
 | 2    | Fatal runner error — an unhandled rejection or uncaught exception. Debug and usage files are persisted first |
 | 3    | Watchdog hard-kill (budget + grace exceeded); writes `out/watchdog-killed.json` first |
 | 42   | Envelope mismatch (unsupported `schemaVersion` or unknown `kind`) — image/server drift |
+| 75   | The review finished, but the call admitting its observations never reached the server |
 
-`137` is a container SIGKILL from the runtime, not a runner code. The server treats `0` as success and
-`42` as drift; every other non-zero code is a generic failure.
+`137` is a container SIGKILL from the runtime, not a runner code. The server treats `0` as success,
+`42` as drift and `75` as an attempt to repeat; every other non-zero code is a generic failure.
+
+A sandbox reaches the server at the address the app server held when the container started, so a
+server that came back somewhere else — a deploy, a restart that moved the container — is unreachable
+for the rest of that run, whatever the runner's own retries do. The server answers `75` by queueing
+the work for another attempt with a rotated token and the usual backoff, keeping the finished
+attempt's transcript on the row; past the retry cap it terminalizes like any other non-zero exit. A
+job whose observations did reach the server — the admission committed and only its answer was lost —
+is never repeated: a second payload against a digest the job already carries is refused.
 
 ## Versioning policy
 

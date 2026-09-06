@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
+import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
@@ -618,6 +619,22 @@ public class AgentJobExecutor {
             SandboxResult result = sandboxManager.execute(sandboxSpec);
             AgentResult agentResult = practiceAgent.parseResult(result);
 
+            // The review itself succeeded and only the call carrying it home did not arrive, so there is
+            // nothing to deliver and nothing to learn from ending it here: the sandbox holds an address
+            // the server has since moved away from, which no further attempt inside that container can
+            // reach. Another attempt runs the same review against a server it can reach. Past the retry
+            // cap this falls through and terminalizes exactly as it did before.
+            if (result.exitCode() == SandboxLayout.EXIT_SERVER_UNREACHABLE
+                    && !observationsAlreadyAdmitted(jobId)
+                    && requeueForAnotherAttempt(jobId, job, "server-unreachable", true, result.logs())) {
+                metricOutcome = "REQUEUED";
+                log.warn(
+                        "Requeuing job {}: the review finished but could not reach this server to admit its observations (attempt {})",
+                        jobId,
+                        job.getRetryCount() + 1);
+                return;
+            }
+
             JobTypeHandler handler = handlerRegistry.getHandler(job.getJobType());
             AgentJobStatus terminalStatus = completeJob(jobId, agentResult, result, handler, job);
             metricOutcome = terminalStatus != null ? terminalStatus.name() : "unknown";
@@ -904,20 +921,7 @@ public class AgentJobExecutor {
 
         if (workerId != null && isRetryableInfraFailure(e)) {
             int currentRetryCount = job.getRetryCount();
-            Integer updated = transactionTemplate.execute(status -> {
-                // BEFORE requeuing: the requeue zeroes the accumulators, so a later read bills zero.
-                AgentJobLlmUsage retryCounts = sandboxExecutionStarted
-                        ? jobRepository.findLlmUsageById(jobId).orElse(null)
-                        : null;
-                int rows = requeueOrphanWithRotation(jobId, workerId, currentRetryCount);
-                if (rows > 0 && sandboxExecutionStarted) {
-                    billTerminatedJob(
-                            job, "infra-failure retry (attempt " + (currentRetryCount + 1) + ")", retryCounts);
-                }
-                return rows;
-            });
-            if (updated != null && updated > 0) {
-                infraRetryRequeued.increment();
+            if (requeueForAnotherAttempt(jobId, job, "infra-failure", sandboxExecutionStarted, null)) {
                 log.warn(
                         "Requeuing job {} after classified sandbox-infrastructure failure (attempt {}): {}",
                         jobId,
@@ -945,6 +949,63 @@ public class AgentJobExecutor {
      */
     static boolean isRetryableInfraFailure(Exception e) {
         return e instanceof SandboxInfrastructureException || e instanceof IOException;
+    }
+
+    /**
+     * Whether this job's observations reached the server after all — the admission committed and only
+     * its answer was lost. Repeating the review would submit a different payload against the digest the
+     * job already carries, which the admission refuses, so an attempt that got this far is finished
+     * even though its runner could not tell.
+     */
+    private boolean observationsAlreadyAdmitted(UUID jobId) {
+        return jobRepository
+                .findById(jobId)
+                .map(AgentJob::getMetadata)
+                .map(metadata -> !metadata.path(ObservationAdmissionService.DIGEST_METADATA_KEY)
+                        .asString()
+                        .isBlank())
+                .orElse(false);
+    }
+
+    /**
+     * Hands the job back to the queue for another attempt, billing what this attempt already spent.
+     * The usage read happens inside the same transaction and before the requeue, which zeroes the
+     * accumulators — a later read would bill zero.
+     *
+     * @param transcript this attempt's container log, kept on the row so the next reader can still see
+     *     why the attempt was given up on; the following attempt's terminal write replaces it
+     * @param bill whether provider work happened at all — nothing accrues before the sandbox starts
+     * @return whether the job is queued again; false means the retry cap is spent or the fence is
+     *     lost, and the caller owns the terminal outcome
+     */
+    private boolean requeueForAnotherAttempt(
+            UUID jobId, AgentJob job, String reason, boolean bill, @Nullable String transcript) {
+        if (workerId == null) {
+            return false;
+        }
+        int currentRetryCount = job.getRetryCount();
+        Integer updated = transactionTemplate.execute(status -> {
+            AgentJobLlmUsage retryCounts =
+                    bill ? jobRepository.findLlmUsageById(jobId).orElse(null) : null;
+            int rows = requeueOrphanWithRotation(jobId, workerId, currentRetryCount);
+            if (rows == 0) {
+                // The fence is lost: this row belongs to another attempt now, and nothing this one has
+                // to say about itself may be written over it.
+                return 0;
+            }
+            if (bill) {
+                billTerminatedJob(job, reason + " retry (attempt " + (currentRetryCount + 1) + ")", retryCounts);
+            }
+            if (transcript != null) {
+                jobRepository.findById(jobId).ifPresent(requeued -> requeued.setContainerLogs(transcript));
+            }
+            return rows;
+        });
+        if (updated == null || updated == 0) {
+            return false;
+        }
+        infraRetryRequeued.increment();
+        return true;
     }
 
     /**

@@ -736,6 +736,12 @@ const PERSIST_DISCIPLINE =
 	`Use tools only from this point onward. Do not write planning prose or plain-text commentary.`;
 
 const ENVELOPE_MISMATCH_EXIT = 42;
+/**
+ * The review is finished and only the call carrying it home did not arrive. The server keeps the
+ * work queued for another attempt when it sees this, so the measurement is repeated against a
+ * server the next sandbox can reach rather than recorded as a review that produced nothing.
+ */
+const SERVER_UNREACHABLE_EXIT = 75;
 const SUPPORTED_SCHEMA_VERSION = 1;
 const SUPPORTED_KIND = "practice_review";
 const TASK_PATH = `${CWD}/task.json`;
@@ -2158,5 +2164,8 @@ main().catch((err: unknown) => {
 	console.error(`[pi-runner] FATAL: ${errorText(err)}\n${err instanceof Error ? err.stack : ""}`);
 	persistRunnerDebug();
 	persistUsage();
-	process.exit(2);
+	// A server this container never reached is not a defect in the review, and the attempts above have
+	// already ridden out the failures that clear in place. Saying so distinctly is what lets the server
+	// try the same work again instead of ending it.
+	process.exit(err instanceof AdmissionUnreachable ? SERVER_UNREACHABLE_EXIT : 2);
 });

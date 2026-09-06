@@ -42,6 +42,10 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
                 .contains("ENVELOPE_MISMATCH_EXIT = " + SandboxLayout.EXIT_ENVELOPE_MISMATCH);
 
         assertThat(body)
+                .as("runner pins SERVER_UNREACHABLE_EXIT to SandboxLayout.EXIT_SERVER_UNREACHABLE")
+                .contains("SERVER_UNREACHABLE_EXIT = " + SandboxLayout.EXIT_SERVER_UNREACHABLE);
+
+        assertThat(body)
                 .as("runner writes its output under SandboxLayout.OUTPUT_PATH")
                 .contains(SandboxLayout.OUTPUT_PATH.substring(SandboxLayout.WORKSPACE_ROOT.length()));
 
