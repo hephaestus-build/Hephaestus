@@ -291,6 +291,48 @@ void test("diff citations bind the quote to the claimed file and line", () => {
 	assert.equal(citationMatchesArtifact({ ...citation, endLine: 12 }, diff), false);
 });
 
+void test("a quote may drop the diff's marker and the indentation in front of the code", () => {
+	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
+	const diff =
+		"diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] +    insecure();\n";
+
+	// The code as a reader would write it down, without the marker or the diff's indentation.
+	assert.equal(describeCitationMismatch({ ...citation, quote: "insecure();" }, diff), null);
+	assert.equal(describeCitationMismatch({ ...citation, quote: "+    insecure();" }, diff), null);
+	// Different text at that coordinate is still refused, trimmed or not.
+	assert.match(
+		describeCitationMismatch({ ...citation, quote: "secure();" }, diff) ?? "",
+		/\[L10] reads/,
+	);
+
+	// Code that begins with the same character the diff uses as a marker keeps it.
+	const flagDiff =
+		"diff --git a/run.sh b/run.sh\n+++ b/run.sh\n@@ -10 +10 @@\n[L10] +    -flag --now\n";
+	assert.equal(
+		describeCitationMismatch({ ...citation, path: "run.sh", quote: "-flag --now" }, flagDiff),
+		null,
+	);
+	assert.equal(
+		describeCitationMismatch({ ...citation, path: "run.sh", quote: "+    -flag --now" }, flagDiff),
+		null,
+	);
+});
+
+void test("a quote from the other side of the change is refused, however it is written", () => {
+	const citation: NormalizedCitation = {
+		...onlyCitation(normalizeObservation(baseObservation()).evidence.citations),
+		side: "NEW",
+		startLine: 47,
+		endLine: 47,
+		quote: '-@RequestMapping({ "api/legacy/" })',
+	};
+	const diff =
+		"--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -47 +47 @@\n" +
+		'[L47] -@RequestMapping({ "api/legacy/" })\n[L47] +@RequestMapping("api/passkeys/")\n';
+
+	assert.match(describeCitationMismatch(citation, diff) ?? "", /\[L47] reads/);
+});
+
 void test("a quote may carry the coordinate the diff printed in front of it", () => {
 	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
 	const diff =
