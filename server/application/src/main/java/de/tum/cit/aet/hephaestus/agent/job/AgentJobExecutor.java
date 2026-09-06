@@ -109,7 +109,6 @@ public class AgentJobExecutor {
     private static final String MDC_JOB_ID = StructuredLogKeys.JOB_ID;
     private static final String MDC_JOB_TYPE = "agent.jobType";
     private static final int MAX_ERROR_MESSAGE_LENGTH = 4000;
-    private static final int MAX_CONTAINER_LOGS_CHARS = 65536; // 64KB
     // How long a claim-blocked job waits before the poll loop re-evaluates the cap.
     private static final Duration BUDGET_HOLD_INTERVAL = Duration.ofHours(1);
     // Measured from submission, not from when the hold started: what goes stale is the work the job
@@ -1255,12 +1254,12 @@ public class AgentJobExecutor {
 
             freshJob.setOutput(objectMapper.valueToTree(agentResult.output()));
             freshJob.setExitCode(sandboxResult.exitCode());
+            // The whole transcript, not its ending. It is the only account of what a review did — which
+            // practices it settled, what it was refused and why, where its time went — and a review that
+            // is not doing what it should is diagnosed from the part that a tail drops. Collection has
+            // already bounded it, and the retention sweep clears it on its own schedule.
             if (sandboxResult.logs() != null && !sandboxResult.logs().isBlank()) {
-                String logs = sandboxResult.logs();
-                freshJob.setContainerLogs(
-                        logs.length() > MAX_CONTAINER_LOGS_CHARS
-                                ? logs.substring(logs.length() - MAX_CONTAINER_LOGS_CHARS)
-                                : logs);
+                freshJob.setContainerLogs(sandboxResult.logs());
             }
             if (terminalStatus == AgentJobStatus.COMPLETED) {
                 freshJob.setDeliveryStatus(DeliveryStatus.PENDING);

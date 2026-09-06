@@ -154,7 +154,9 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             verify(containerManager).startContainer(CONTAINER_ID);
             verify(containerManager).waitForCompletion(eq(CONTAINER_ID), any());
             verify(workspaceManager).collectOutput(CONTAINER_ID, "/workspace/out");
-            verify(containerManager).getLogs(CONTAINER_ID, 500);
+            // 0 is every line: a Docker tail is applied by the daemon, so a persisted transcript that
+            // asked for one would arrive already missing its beginning.
+            verify(containerManager).getLogs(CONTAINER_ID, 0);
 
             verify(containerManager).forceRemove(CONTAINER_ID);
             verify(networkManager).disconnectAppServer(NETWORK_ID);
@@ -545,7 +547,8 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     .isInstanceOf(SandboxException.class)
                     .hasMessageContaining("Docker daemon lost");
 
-            // 500 mirrors DockerSandboxAdapter.LOG_TAIL_LINES; a truncated tail is no diagnostics at all.
+            // 500 mirrors DockerSandboxAdapter.ERROR_ECHO_TAIL_LINES: this echo only reaches the log, cut
+            // to 32 KB, so it reads a tail rather than the whole stream.
             InOrder inOrder = inOrder(containerManager);
             inOrder.verify(containerManager).getLogs(CONTAINER_ID, 500);
             inOrder.verify(containerManager).forceRemove(CONTAINER_ID);
