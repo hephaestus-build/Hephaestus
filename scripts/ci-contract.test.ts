@@ -261,7 +261,7 @@ async function runStep(
 		outputs: Object.fromEntries(outputs),
 		// What the shell said, for the assertion to carry. A step's own message is the difference
 		// between a failure somebody can fix and `true !== false` on a machine they do not have.
-		diagnosis: `exit ${run.status}\n${run.stderr?.trim() ?? ""}`.trim(),
+		diagnosis: `exit ${run.status}\n${run.stderr.trim()}`.trim(),
 	};
 }
 
