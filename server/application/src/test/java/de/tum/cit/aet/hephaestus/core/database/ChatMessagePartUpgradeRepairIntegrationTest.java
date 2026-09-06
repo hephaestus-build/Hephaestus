@@ -106,6 +106,52 @@ class ChatMessagePartUpgradeRepairIntegrationTest {
     }
 
     @Test
+    @DisplayName("rows the backfill does not copy are kept, so the guard stops the upgrade")
+    void keepsRowsTheBackfillCannotCopy() throws SQLException {
+        try (Connection connection = open();
+                Statement statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE chat_message (id UUID PRIMARY KEY, parts JSONB)");
+            statement.execute("CREATE TABLE chat_message_part (message_id UUID NOT NULL, order_index INT NOT NULL,"
+                    + " content JSONB, original_type VARCHAR(64), type VARCHAR(32) NOT NULL)");
+            // Copied: an empty message whose group the backfill reconstructs.
+            statement.execute("INSERT INTO chat_message (id, parts) VALUES"
+                    + " ('11111111-1111-1111-1111-111111111111', '[]'::jsonb)");
+            // Not copied: the backfill only writes a message whose parts are still empty.
+            statement.execute("INSERT INTO chat_message (id, parts) VALUES"
+                    + " ('22222222-2222-2222-2222-222222222222', '[{\"type\":\"text\",\"text\":\"kept\"}]')");
+            statement.execute(
+                    "INSERT INTO chat_message_part (message_id, order_index, content, original_type, type) VALUES"
+                            + " ('11111111-1111-1111-1111-111111111111', 0, '{\"text\":\"copied\"}', NULL, 'TEXT'),"
+                            + " ('22222222-2222-2222-2222-222222222222', 0, '{\"text\":\"other\"}', NULL, 'TEXT'),"
+                            // Not copied: no chat_message carries this id, and the legacy table has no
+                            // foreign key that would have prevented it.
+                            + " ('33333333-3333-3333-3333-333333333333', 0, '{\"text\":\"orphan\"}', NULL, 'TEXT')");
+        }
+
+        runRepair();
+
+        try (Connection connection = open();
+                Statement statement = connection.createStatement()) {
+            // Only the group that is now demonstrably on its message is gone. Deleting either of the
+            // others would have destroyed the sole copy of that history.
+            try (ResultSet rows = statement.executeQuery(
+                    "SELECT message_id::text FROM chat_message_part ORDER BY message_id")) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getString(1)).isEqualTo("22222222-2222-2222-2222-222222222222");
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getString(1)).isEqualTo("33333333-3333-3333-3333-333333333333");
+                assertThat(rows.next()).isFalse();
+            }
+            // The message that already had parts keeps the ones it had.
+            try (ResultSet rows = statement.executeQuery("SELECT parts::text FROM chat_message WHERE id ="
+                    + " '22222222-2222-2222-2222-222222222222'")) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getString(1)).contains("kept").doesNotContain("other");
+            }
+        }
+    }
+
+    @Test
     @DisplayName("an installation without the legacy table is untouched")
     void doesNothingWhenThereIsNoLegacyTable() throws SQLException {
         try (Connection connection = open();

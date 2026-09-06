@@ -61,6 +61,34 @@ class ChatMessagePartUpgradeRepair implements BeanPostProcessor {
                AND (m.parts IS NULL OR m.parts = '[]'::jsonb)
             """;
 
+    /**
+     * Removes only the rows whose reconstruction is demonstrably already on the message: the group's
+     * computed array has to equal what {@code chat_message.parts} now holds. A group whose message no
+     * longer exists, or whose message carries something else, is left where it is — the backfill did
+     * not copy it, and the changelog's guard then stops the upgrade rather than letting this delete
+     * history nobody has a second copy of.
+     */
+    private static final String DELETE_REPRESENTED_PARTS =
+            """
+            DELETE FROM chat_message_part p
+             USING (
+                    SELECT g.message_id,
+                           jsonb_agg(
+                               COALESCE(g.content, '{}'::jsonb)
+                                   || jsonb_build_object(
+                                       'type',
+                                       COALESCE(g.original_type, REPLACE(LOWER(g.type), '_', '-'))
+                                   )
+                               ORDER BY g.order_index
+                           ) AS parts_array
+                      FROM chat_message_part g
+                     GROUP BY g.message_id
+                   ) sub
+                   JOIN chat_message m ON m.id = sub.message_id
+             WHERE p.message_id = sub.message_id
+               AND m.parts = sub.parts_array
+            """;
+
     @Override
     public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
         if (bean instanceof SpringLiquibase liquibase) {
@@ -80,16 +108,32 @@ class ChatMessagePartUpgradeRepair implements BeanPostProcessor {
             }
             statement.execute(ADD_PARTS_COLUMN);
             int reconstructed = statement.executeUpdate(BACKFILL_PARTS);
-            int removed = statement.executeUpdate("DELETE FROM chat_message_part");
-            log.warn(
-                    "Repaired the mentor chat-parts upgrade before Liquibase: reconstructed {} message(s) "
-                            + "and cleared {} legacy part row(s) the drop guard would have refused to pass.",
-                    reconstructed,
-                    removed);
+            int removed = statement.executeUpdate(DELETE_REPRESENTED_PARTS);
+            long remaining = countRemainingParts(statement);
+            if (remaining == 0) {
+                log.warn(
+                        "Repaired the mentor chat-parts upgrade before Liquibase: reconstructed {} message(s) "
+                                + "and cleared {} legacy part row(s) the drop guard would have refused to pass.",
+                        reconstructed,
+                        removed);
+            } else {
+                log.error(
+                        "The mentor chat-parts upgrade cannot be prepared: {} legacy part row(s) are not "
+                                + "represented on any message — they belong to a message that no longer exists, or "
+                                + "to one that already carries different parts. They are left untouched and the "
+                                + "migration will stop rather than discard them.",
+                        remaining);
+            }
         } catch (SQLException e) {
             // Loud, but never fatal: an installation this does not apply to must still boot, and the
             // changelog's own guard remains the backstop for one this failed to prepare.
             log.error("Could not prepare the mentor chat-parts upgrade; Liquibase will report what it finds", e);
+        }
+    }
+
+    private static long countRemainingParts(Statement statement) throws SQLException {
+        try (var rows = statement.executeQuery("SELECT count(*) FROM chat_message_part")) {
+            return rows.next() ? rows.getLong(1) : 0L;
         }
     }
 
