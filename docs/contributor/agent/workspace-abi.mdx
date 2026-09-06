@@ -139,7 +139,9 @@ for the rest of that run, whatever the runner's own retries do. The server answe
 the work for another attempt with a rotated token and the usual backoff, keeping the finished
 attempt's transcript on the row; past the retry cap it terminalizes like any other non-zero exit. A
 job whose observations did reach the server — the admission committed and only its answer was lost —
-is never repeated: a second payload against a digest the job already carries is refused.
+is never repeated: a second payload against a digest the job already carries is refused. That decision
+is taken under the row lock the admission itself takes, and governs every requeue, including the one a
+classified infrastructure failure asks for.
 
 ## Versioning policy
 

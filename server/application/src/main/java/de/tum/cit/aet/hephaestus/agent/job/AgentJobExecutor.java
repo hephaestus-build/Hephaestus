@@ -625,7 +625,6 @@ public class AgentJobExecutor {
             // reach. Another attempt runs the same review against a server it can reach. Past the retry
             // cap this falls through and terminalizes exactly as it did before.
             if (result.exitCode() == SandboxLayout.EXIT_SERVER_UNREACHABLE
-                    && !observationsAlreadyAdmitted(jobId)
                     && requeueForAnotherAttempt(jobId, job, "server-unreachable", true, result.logs())) {
                 metricOutcome = "REQUEUED";
                 log.warn(
@@ -957,14 +956,12 @@ public class AgentJobExecutor {
      * job already carries, which the admission refuses, so an attempt that got this far is finished
      * even though its runner could not tell.
      */
-    private boolean observationsAlreadyAdmitted(UUID jobId) {
-        return jobRepository
-                .findById(jobId)
-                .map(AgentJob::getMetadata)
-                .map(metadata -> !metadata.path(ObservationAdmissionService.DIGEST_METADATA_KEY)
-                        .asString()
-                        .isBlank())
-                .orElse(false);
+    private static boolean observationsAdmitted(AgentJob job) {
+        JsonNode metadata = job.getMetadata();
+        return metadata != null
+                && !metadata.path(ObservationAdmissionService.DIGEST_METADATA_KEY)
+                        .asString("")
+                        .isBlank();
     }
 
     /**
@@ -985,6 +982,17 @@ public class AgentJobExecutor {
         }
         int currentRetryCount = job.getRetryCount();
         Integer updated = transactionTemplate.execute(status -> {
+            // Under the same row lock the admission takes, so the two decisions serialize: a review
+            // whose observations reached the server is finished, whatever its sandbox went on to do.
+            // Running it again would submit a different payload against the digest the job already
+            // carries, which the admission refuses — a second attempt could only lose what the first
+            // recorded.
+            AgentJob locked =
+                    jobRepository.findByIdWithWorkspaceForUpdate(jobId).orElse(null);
+            if (locked != null && observationsAdmitted(locked)) {
+                log.info("Not requeuing job {}: its observations already reached this server", jobId);
+                return 0;
+            }
             AgentJobLlmUsage retryCounts =
                     bill ? jobRepository.findLlmUsageById(jobId).orElse(null) : null;
             int rows = requeueOrphanWithRotation(jobId, workerId, currentRetryCount);

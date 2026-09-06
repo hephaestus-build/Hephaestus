@@ -1190,6 +1190,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
             AgentJob admittedJob = freshJob();
             admittedJob.setMetadata(
                     objectMapper.createObjectNode().put(ObservationAdmissionService.DIGEST_METADATA_KEY, "abc123"));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(admittedJob));
             when(jobRepository.findById(any(UUID.class))).thenReturn(Optional.of(admittedJob));
             when(jobRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
             when(jobRepository.transitionStatusOwnedBy(any(), any(), any(), any(), any(), any()))
@@ -1264,6 +1265,63 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             eq("Container exited with code " + SandboxLayout.EXIT_SERVER_UNREACHABLE),
                             eq(Set.of(AgentJobStatus.RUNNING)),
                             eq("unreachable-worker"));
+        }
+
+        @Test
+        @DisplayName("an infra failure after the observations were admitted fails terminally instead of repeating")
+        void infraFailureDoesNotRepeatAnAdmittedReview() {
+            executor = new AgentJobExecutor(
+                    AGENT_PROPS,
+                    jobRepository,
+                    bindingRepository,
+                    handlerRegistry,
+                    practiceAgent,
+                    workerJwtIssuer,
+                    sandboxManager,
+                    sandboxExecutor,
+                    transactionTemplate,
+                    objectMapper,
+                    meterRegistry,
+                    new PracticeReviewRefusalMetrics(meterRegistry),
+                    new AgentJobTelemetry(meterRegistry),
+                    usageRecorder,
+                    llmBudgetService,
+                    NO_LIVE_ADMISSION,
+                    Optional.empty(),
+                    Optional.of(workerProps("infra-retry-worker")));
+            when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
+                    .thenReturn(Optional.of(job));
+            when(bindingRepository.findByWorkspaceIdAndPurpose(99L, AgentPurpose.PRACTICE_REVIEW))
+                    .thenReturn(Optional.of(binding));
+            when(jobRepository.countByWorkspaceIdAndPurposeAndStatusIn(
+                            eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
+                    .thenReturn(0L);
+            when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            AgentJob admittedJob = freshJob();
+            admittedJob.setMetadata(
+                    objectMapper.createObjectNode().put(ObservationAdmissionService.DIGEST_METADATA_KEY, "abc123"));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(admittedJob));
+            when(jobRepository.transitionStatusOwnedBy(any(), any(), any(), any(), any(), any()))
+                    .thenReturn(1);
+
+            setupFullExecutionWithException(
+                    new de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException(
+                            "output collection failed"));
+
+            executor.processJob(jobId);
+
+            // The observations are on record; a second attempt would submit a different payload against
+            // the digest this job already carries, and the admission refuses that.
+            verify(jobRepository, never()).requeueOrphan(any(), any(), anyInt(), any(), any(), any());
+            verify(jobRepository)
+                    .transitionStatusOwnedBy(
+                            eq(jobId),
+                            eq(AgentJobStatus.FAILED),
+                            any(),
+                            any(),
+                            eq(Set.of(AgentJobStatus.RUNNING)),
+                            eq("infra-retry-worker"));
         }
 
         @Test
