@@ -1510,6 +1510,21 @@ const ADMISSION_ATTEMPTS = 4;
  */
 const ADMISSION_ATTEMPT_TIMEOUT_MS = 5_000;
 
+/**
+ * What the server said about an answer it refused, as text a reader can act on. A body that cannot be
+ * read is not worth failing over twice: the status alone still says a refusal happened.
+ */
+async function answerText(response: Response): Promise<string> {
+	try {
+		const body = await response.text();
+		const problem: unknown = body.trim().startsWith("{") ? parseJson(body) : null;
+		const detail = isRecord(problem) ? problem.detail : null;
+		return typeof detail === "string" && detail.length > 0 ? detail : body.slice(0, 500);
+	} catch {
+		return "the server gave no readable reason";
+	}
+}
+
 /** One admission attempt: the answer it returns is the parsed body, unvalidated. */
 async function postAdmission(): Promise<unknown> {
 	let response: Response;
@@ -1534,7 +1549,13 @@ async function postAdmission(): Promise<unknown> {
 	if (isRetryableStatus(response.status)) {
 		throw new AdmissionUnreachable(`observation admission failed: HTTP ${response.status}`);
 	}
-	if (!response.ok) throw new Error(`observation admission failed: HTTP ${response.status}`);
+	if (!response.ok) {
+		// The server has decided, and it said why. Asking again puts the same question, so the run ends
+		// here — with the reason in the transcript, which is the only place a reader can find it.
+		throw new Error(
+			`observation admission was refused: HTTP ${response.status} — ${await answerText(response)}`,
+		);
+	}
 	try {
 		return await response.json();
 	} catch (error) {

@@ -5,7 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageSourceType;
+import de.tum.cit.aet.hephaestus.integration.core.signal.PracticeReviewRefusalMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
@@ -20,7 +23,9 @@ import tools.jackson.databind.node.ObjectNode;
 class ObservationAdmissionControllerTest {
 
     private final ObservationAdmissionService service = mock(ObservationAdmissionService.class);
-    private final ObservationAdmissionController controller = new ObservationAdmissionController(service);
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final ObservationAdmissionController controller =
+            new ObservationAdmissionController(service, new PracticeReviewRefusalMetrics(meterRegistry));
     private final JsonMapper mapper = JsonMapper.builder().build();
 
     @Test
@@ -40,6 +45,28 @@ class ObservationAdmissionControllerTest {
 
         assertThat(actual).isSameAs(response);
         verify(service).admit(id, validRequest().path("observations"));
+    }
+
+    @Test
+    void aRefusedReviewIsAnsweredAsADecisionAndCounted() {
+        UUID id = UUID.randomUUID();
+        when(service.admit(eq(id), any()))
+                .thenThrow(new ObservationsRefusedException(
+                        "did_not_read_the_diff", "No observation decided anything or quoted the diff"));
+
+        assertThatThrownBy(() -> controller.admit(validRequest(), authentication(LlmUsageSourceType.AGENT_JOB, id)))
+                .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                    // Not 5xx: a 5xx is what the sandbox repeats, and repeating puts the same question.
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+                    assertThat(e.getReason()).contains("quoted the diff");
+                });
+        assertThat(meterRegistry
+                        .counter("practice.review.refused", "phase", "execution", "reason", "did_not_read_the_diff")
+                        .count())
+                .isEqualTo(1d);
+        // The sandbox is gone once it reads this answer, so the reason has to outlive it on the job.
+        verify(service)
+                .recordRefusal(id, "did_not_read_the_diff", "No observation decided anything or quoted the diff");
     }
 
     @Test
