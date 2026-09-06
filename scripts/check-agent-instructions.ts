@@ -207,6 +207,13 @@ const INTENTIONALLY_MISSING_PATHS = [
 
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/;
 const PACKAGE_SHAPED = /-(?:cli|config|core|js|node|package|plugin|react|sdk|test|ts)$/;
+/**
+ * A settings path this product owns, which the release notes name whenever one is renamed —
+ * `hephaestus.mentor.docker-cli` reads as a package to the shape test above, and blocked a release
+ * for it. An npm name reaches two dots about as often as a Spring property reaches none, so the
+ * dotted depth is what separates them; a declared dependency is still recognised as itself.
+ */
+const SETTINGS_PATH = /^[a-z0-9-]+(?:\.[a-z0-9-]+){2,}$/;
 const FILE_SHAPED = /\.(?:java|js|jsonc?|mdx?|mjs|sh|ts|tsx|xml|ya?ml)$/;
 const exists = (repo: Repo, path: string): boolean =>
 	repo.present.has(path) || repo.paths.some((present) => present.startsWith(`${path}/`));
@@ -240,7 +247,9 @@ function declaredPackages(repo: Repo): ReadonlySet<string> {
 
 const looksLikePackage = (value: string, packages: ReadonlySet<string>): boolean =>
 	PACKAGE_NAME.test(value) &&
-	(value.startsWith("@") || packages.has(value) || PACKAGE_SHAPED.test(value));
+	(value.startsWith("@") ||
+		packages.has(value) ||
+		(PACKAGE_SHAPED.test(value) && !SETTINGS_PATH.test(value)));
 
 function looksLikePath(value: string, roots: ReadonlySet<string>): boolean {
 	if (value.startsWith("@") || value.startsWith("~/") || value.includes(":")) return false;
