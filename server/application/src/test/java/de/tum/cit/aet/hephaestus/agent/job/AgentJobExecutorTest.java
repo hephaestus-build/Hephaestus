@@ -1149,6 +1149,60 @@ class AgentJobExecutorTest extends BaseUnitTest {
         }
 
         @Test
+        @DisplayName("a review that reached no practice because the provider never answered is run again (exit 76)")
+        void unansweredProviderIsRequeued() {
+            executor = new AgentJobExecutor(
+                    AGENT_PROPS,
+                    jobRepository,
+                    bindingRepository,
+                    handlerRegistry,
+                    practiceAgent,
+                    workerJwtIssuer,
+                    sandboxManager,
+                    sandboxExecutor,
+                    transactionTemplate,
+                    objectMapper,
+                    meterRegistry,
+                    new PracticeReviewRefusalMetrics(meterRegistry),
+                    new AgentJobTelemetry(meterRegistry),
+                    usageRecorder,
+                    llmBudgetService,
+                    NO_LIVE_ADMISSION,
+                    Optional.empty(),
+                    Optional.of(workerProps("unreachable-worker")));
+            when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
+                    .thenReturn(Optional.of(job));
+            when(bindingRepository.findByWorkspaceIdAndPurpose(99L, AgentPurpose.PRACTICE_REVIEW))
+                    .thenReturn(Optional.of(binding));
+            when(jobRepository.countByWorkspaceIdAndPurposeAndStatusIn(
+                            eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
+                    .thenReturn(0L);
+            when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(jobRepository.requeueOrphan(
+                            eq(jobId), eq("unreachable-worker"), eq(AGENT_PROPS.maxRetries()), any(), any(), any()))
+                    .thenReturn(1);
+
+            String transcript = "[pi-runner] UNREACHABLE: this review reached no practice, and 4 model call(s)"
+                    + " went unanswered";
+            JobTypeHandler handler = setupFullExecution(new SandboxResult(
+                    SandboxLayout.EXIT_PROVIDER_UNREACHABLE, Map.of(), transcript, false, Duration.ofMinutes(11)));
+            AgentJob runningJob = freshJob();
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(runningJob));
+            when(jobRepository.findById(any(UUID.class))).thenReturn(Optional.of(runningJob));
+
+            executor.processJob(jobId);
+
+            verify(jobRepository)
+                    .requeueOrphan(
+                            eq(jobId), eq("unreachable-worker"), eq(AGENT_PROPS.maxRetries()), any(), any(), any());
+            // Nothing was measured, so there is nothing to deliver and no terminal state to record.
+            assertThat(runningJob.getContainerLogs()).isEqualTo(transcript);
+            verify(handler, never()).deliver(any());
+            verify(jobRepository, never()).transitionStatus(any(), any(), any(), any(), any());
+            verify(jobRepository, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
         @DisplayName("a review whose observations did reach the server is NOT run again (exit 75, digest on the row)")
         void unreachableServerDoesNotRepeatAnAdmittedReview() {
             executor = new AgentJobExecutor(

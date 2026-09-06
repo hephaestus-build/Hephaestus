@@ -129,9 +129,10 @@ worker filesystem.
 | 3    | Watchdog hard-kill (budget + grace exceeded); writes `out/watchdog-killed.json` first |
 | 42   | Envelope mismatch (unsupported `schemaVersion` or unknown `kind`) — image/server drift |
 | 75   | The review finished, but the call admitting its observations never reached the server |
+| 76   | No practice was reached, and every model call the run made went unanswered |
 
 `137` is a container SIGKILL from the runtime, not a runner code. The server treats `0` as success,
-`42` as drift and `75` as an attempt to repeat; every other non-zero code is a generic failure.
+`42` as drift, and `75` and `76` as attempts to repeat; every other non-zero code is a generic failure.
 
 A sandbox reaches the server at the address the app server held when the container started, so a
 server that came back somewhere else — a deploy, a restart that moved the container — is unreachable
@@ -142,6 +143,11 @@ job whose observations did reach the server — the admission committed and only
 is never repeated: a second payload against a digest the job already carries is refused. That decision
 is taken under the row lock the admission itself takes, and governs every requeue, including the one a
 classified infrastructure failure asks for.
+
+`76` says the same thing about the other end of the run. A review that reached no practice because
+every model call went unanswered measured nothing, so there is nothing to record about the work and
+nothing a second attempt would repeat; the runner counts the calls the provider never answered and
+names them in the transcript, and the server queues the work again on the same terms as `75`.
 
 ## Versioning policy
 

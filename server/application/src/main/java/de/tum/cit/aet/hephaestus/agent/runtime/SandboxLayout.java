@@ -150,6 +150,13 @@ public final class SandboxLayout {
      */
     public static final int EXIT_SERVER_UNREACHABLE = 75;
 
+    /**
+     * Exit code emitted by the Pi runner when it reached no practice and every model call it made went
+     * unanswered. Nothing about the reviewed work was measured, so there is nothing to record and
+     * nothing a second attempt would repeat — the work is requeued, like an unreachable server.
+     */
+    public static final int EXIT_PROVIDER_UNREACHABLE = 76;
+
     /** OCI label declaring the agent image runtime contract. */
     public static final String RUNTIME_CONTRACT_LABEL = "hephaestus.agent.runtime-contract";
 
