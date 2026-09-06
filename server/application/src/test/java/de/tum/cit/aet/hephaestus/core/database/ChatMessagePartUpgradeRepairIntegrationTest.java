@@ -134,8 +134,8 @@ class ChatMessagePartUpgradeRepairIntegrationTest {
                 Statement statement = connection.createStatement()) {
             // Only the group that is now demonstrably on its message is gone. Deleting either of the
             // others would have destroyed the sole copy of that history.
-            try (ResultSet rows = statement.executeQuery(
-                    "SELECT message_id::text FROM chat_message_part ORDER BY message_id")) {
+            try (ResultSet rows =
+                    statement.executeQuery("SELECT message_id::text FROM chat_message_part ORDER BY message_id")) {
                 assertThat(rows.next()).isTrue();
                 assertThat(rows.getString(1)).isEqualTo("22222222-2222-2222-2222-222222222222");
                 assertThat(rows.next()).isTrue();
@@ -143,8 +143,8 @@ class ChatMessagePartUpgradeRepairIntegrationTest {
                 assertThat(rows.next()).isFalse();
             }
             // The message that already had parts keeps the ones it had.
-            try (ResultSet rows = statement.executeQuery("SELECT parts::text FROM chat_message WHERE id = 
-                    + " '22222222-2222-2222-2222-222222222222'")) {
+            try (ResultSet rows = statement.executeQuery(
+                    "SELECT parts::text FROM chat_message WHERE id = '22222222-2222-2222-2222-222222222222'")) {
                 assertThat(rows.next()).isTrue();
                 assertThat(rows.getString(1)).contains("kept").doesNotContain("other");
             }

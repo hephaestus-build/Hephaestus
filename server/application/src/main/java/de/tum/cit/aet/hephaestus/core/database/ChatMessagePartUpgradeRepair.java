@@ -68,8 +68,7 @@ class ChatMessagePartUpgradeRepair implements BeanPostProcessor {
      * not copy it, and the changelog's guard then stops the upgrade rather than letting this delete
      * history nobody has a second copy of.
      */
-    private static final String DELETE_REPRESENTED_PARTS =
-            """
+    private static final String DELETE_REPRESENTED_PARTS = """
             DELETE FROM chat_message_part p
              USING (
                     SELECT g.message_id,
