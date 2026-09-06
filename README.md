@@ -86,7 +86,7 @@ The feedback is advisory: it does not approve a change for merge or grade anyone
 - **Run your own deployment.** One 64-bit Linux host, 4 vCPUs / 8 GB RAM / 40 GB SSD recommended:
 
   ```bash
-  VERSION=0.76.0   # the release you are installing, without the leading "v"
+  VERSION=0.77.0   # the release you are installing, without the leading "v"
   sudo git clone --depth 1 --branch "v$VERSION" https://github.com/hephaestus-build/Hephaestus.git /opt/hephaestus
   sudo chown -R "$USER" /opt/hephaestus
   cd /opt/hephaestus/docker/self-host
