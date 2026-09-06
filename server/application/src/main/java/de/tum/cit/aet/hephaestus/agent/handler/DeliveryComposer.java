@@ -47,7 +47,8 @@ class DeliveryComposer {
         return path.startsWith(REPO_MOUNT_RELATIVE) ? path.substring(REPO_MOUNT_RELATIVE.length()) : path;
     }
 
-    private static boolean isProblem(ValidatedObservation f) {
+    /** Package-private: {@link ReviewCoverage} reads it so the two cannot disagree on what a problem is. */
+    static boolean isProblem(ValidatedObservation f) {
         return f.assessment() == Assessment.BAD;
     }
 

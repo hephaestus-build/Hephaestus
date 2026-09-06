@@ -31,6 +31,21 @@ export interface ComposedFeedbackEnvelope {
 	lead?: string | null;
 }
 
+/**
+ * What the composer is told about the practices the review never settled. It is not a finding and it
+ * is not a clean bill: the developer's page records them as unevaluated, and anything written about
+ * them would be a verdict the review cannot support.
+ */
+export function notReachedNote(notReached: readonly string[]): string {
+	if (notReached.length === 0) return "";
+	const subject =
+		notReached.length === 1 ? "one of its practices" : `${notReached.length} of its practices`;
+	return (
+		`\nThis review did not settle ${subject}: ${notReached.join(", ")}. ` +
+		`Say nothing about them, for or against, and do not describe this review as complete.\n\n`
+	);
+}
+
 export function validateFeedbackEvidence(
 	primaryPractice: string,
 	basedOn: readonly string[],

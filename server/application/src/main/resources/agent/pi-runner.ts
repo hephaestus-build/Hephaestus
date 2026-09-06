@@ -43,6 +43,7 @@ import {
 	type ComposedFeedbackEnvelope,
 	type ComposedFeedbackUnit,
 	type PreparedFeedbackTarget,
+	notReachedNote,
 	undeliverableUnits,
 	validateFeedbackEvidence,
 } from "./pi-runner-composition.ts";
@@ -1419,6 +1420,7 @@ function normalizeQuotedText(value: string): string {
 function buildCompositionTurn(
 	request: CompositionRequest,
 	observations: readonly AdmittedObservation[],
+	notReached: readonly string[] = [],
 ): string {
 	const lanes = CHANNELS.filter((channel) => request.channels[channel].enabled)
 		.map((channel) => `${channel} (at most ${request.channels[channel].maxUnits})`)
@@ -1430,6 +1432,7 @@ function buildCompositionTurn(
 	const placementNote = request.channels.IN_CONTEXT.enabled
 		? ` IN_CONTEXT placements available here: ${request.inContextPlacementKinds.join(", ")}.`
 		: "";
+	const coverageNote = notReachedNote(notReached);
 	return (
 		`## This turn\n` +
 		`The review just finished. Its ${observations.length} measurement(s) are in ` +
@@ -1437,7 +1440,7 @@ function buildCompositionTurn(
 		`therefore carry a note on the work. Read that file first, then the history.\n\n` +
 		`Lanes open this turn: ${lanes}.${closedNote}${placementNote}` +
 		`\nA pattern claim needs at least ${request.minDistinctArtifacts} distinct pieces of work.\n\n` +
-		`Persist each unit with report_feedback as soon as it is ready, and call report_summary once for ` +
+		`${coverageNote}Persist each unit with report_feedback as soon as it is ready, and call report_summary once for ` +
 		`how the review opens. Writing nothing on a lane is a correct and common outcome; say in one line ` +
 		`why, and stop.`
 	);
@@ -1657,7 +1660,11 @@ async function main() {
 			events.push({ type: `${label}:${event.type}`, timestamp: Date.now() });
 		});
 
-	async function completeWithAdmittedComposition() {
+	/**
+	 * @param notReached the practices this review never settled, named for the composer so nothing it
+	 *   writes reads as a verdict on them
+	 */
+	async function completeWithAdmittedComposition(notReached: readonly string[]) {
 		measurementClosed = true;
 		await admitObservations();
 		const parsed = parseJson(readFileSync(RESULT_PATH, "utf8"));
@@ -1691,7 +1698,7 @@ async function main() {
 		try {
 			await Promise.race([
 				composerSession.prompt(
-					`${instructions}\n\n${buildCompositionTurn(compositionRequest, admittedObservations)}`,
+					`${instructions}\n\n${buildCompositionTurn(compositionRequest, admittedObservations, notReached)}`,
 				),
 				compositionDeadline.elapsed,
 			]);
@@ -1897,7 +1904,7 @@ async function main() {
 		console.error(
 			`[pi-runner] SUCCESS: composed result.json from persisted tool state after initial run`,
 		);
-		await completeWithAdmittedComposition();
+		await completeWithAdmittedComposition([]);
 		process.exit(0);
 	}
 
@@ -2013,24 +2020,28 @@ async function main() {
 		reviewState.observations.map((item) => item.practiceSlug),
 	);
 	logPracticeCoverage();
+	// A practice nobody reached is recorded as unevaluated and reported as such, not turned into a
+	// reason to throw away the practices that were reached. Every observation here was quoted and
+	// validated when it was recorded, and the coverage ledger already carries what is missing, so the
+	// honest outcome is a review that says what it looked at. A review that reached nothing at all has
+	// nothing to say and remains a failure.
 	if (missingAfterRetry.length > 0) {
 		console.error(
-			`[pi-runner] FAILED: ${missingAfterRetry.length} practice observer(s) still missing after retry: ${missingAfterRetry.join(", ")}`,
+			`[pi-runner] PARTIAL: ${missingAfterRetry.length} of ${allSlugs.length} practice(s) not reached: ${missingAfterRetry.join(", ")}`,
 		);
-		process.exit(1);
 	}
 
 	if (maybeWriteResultFile()) {
 		console.error(
-			`[pi-runner] SUCCESS: composed result.json from persisted tool state after retry`,
+			missingAfterRetry.length > 0
+				? `[pi-runner] SUCCESS: composed result.json from the practices this review reached`
+				: `[pi-runner] SUCCESS: composed result.json from persisted tool state after retry`,
 		);
-		await completeWithAdmittedComposition();
+		await completeWithAdmittedComposition(missingAfterRetry);
 		process.exit(0);
 	}
 
-	console.error(
-		`[pi-runner] FAILED: no complete persisted review output after initial attempt + recovery retry`,
-	);
+	console.error(`[pi-runner] FAILED: this review reached no practice at all`);
 	process.exit(1);
 }
 
