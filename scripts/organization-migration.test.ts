@@ -16,7 +16,6 @@ const SKIPPED_EXTENSIONS = new Set([
 	".jpeg",
 	".gif",
 	".ico",
-	".svg",
 	".woff",
 	".woff2",
 	".ttf",
