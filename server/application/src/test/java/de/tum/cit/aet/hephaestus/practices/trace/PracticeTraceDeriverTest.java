@@ -77,6 +77,46 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
         }
 
         @Test
+        @DisplayName("a review still under way is not an all-clear, however ready the practice was")
+        void doesNotReportAnAllClearWhileTheReviewIsStillRunning() {
+            var running = new ReviewOutcome(
+                    ReviewRunState.IN_PROGRESS,
+                    false,
+                    AT,
+                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null)),
+                    Map.of());
+
+            var entry = only(
+                    practice(PracticeAutonomy.AUTOMATIC, READY),
+                    List.of(triggered(READY, RUN)),
+                    Map.of(RUN, running),
+                    Map.of());
+
+            // Readiness is written before the sandbox starts, so it says nothing about what was assessed.
+            assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.RUNNING);
+        }
+
+        @Test
+        @DisplayName("a review that died is not an all-clear either")
+        void doesNotReportAnAllClearForAReviewThatFailed() {
+            var failed = new ReviewOutcome(
+                    ReviewRunState.FAILED,
+                    false,
+                    AT,
+                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null)),
+                    Map.of());
+
+            var entry = only(
+                    practice(PracticeAutonomy.AUTOMATIC, READY),
+                    List.of(triggered(READY, RUN)),
+                    Map.of(RUN, failed),
+                    Map.of());
+
+            assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.FAILED);
+            assertThat(entry.explanation()).contains("did not finish");
+        }
+
+        @Test
         void keepsMeasurementAndDeliveryOnSeparateAxes() {
             var entry = only(
                     practice(PracticeAutonomy.HUMAN_APPROVAL, READY),

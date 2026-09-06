@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.PracticeCoverageOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.PracticeReadinessOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.ReviewOutcome;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.ReviewRunState;
 import de.tum.cit.aet.hephaestus.practices.trace.TraceInputs.PracticeOutput;
 import de.tum.cit.aet.hephaestus.practices.trace.TraceInputs.SignalOccurrence;
 import de.tum.cit.aet.hephaestus.practices.trace.TraceInputs.TracedPractice;
@@ -90,6 +91,13 @@ final class PracticeTraceDeriver {
         for (SignalOccurrence occurrence : matched) {
             ReviewOutcome review = occurrence.reviewId() == null ? null : reviews.get(occurrence.reviewId());
             if (review == null) {
+                continue;
+            }
+            // Readiness is recorded before the sandbox starts, so a review that is still running or that
+            // never finished carries one too. Answering from it would tell a developer their practice was
+            // assessed and clean while the review was still under way, or after it had died — the run's
+            // own state is the only thing that makes an all-clear a statement about their work.
+            if (review.state() != ReviewRunState.COMPLETED) {
                 continue;
             }
             PracticeReadinessOutcome readiness =
