@@ -41,6 +41,12 @@ public class PiRuntimeFactory {
      */
     static final long MIN_BUDGET_MS = (TIMEOUT_BUFFER_SECONDS - 1) * 1000L;
 
+    /** Turns the SDK repeats before a provider failure ends the session that hit it. */
+    private static final int RETRY_MAX_ATTEMPTS = 5;
+
+    /** Wait before the first repeat; each further attempt doubles it. */
+    private static final int RETRY_BASE_DELAY_MS = 4000;
+
     static final String AGENT_RESOURCE_PREFIX = "agent/";
 
     private final ObjectMapper objectMapper;
@@ -158,6 +164,16 @@ public class PiRuntimeFactory {
         compaction.put("enabled", true);
         compaction.put("reserveTokens", 16384);
         settings.put("compaction", compaction);
+        // A provider that answers "overloaded" is answered by waiting. The SDK's own default gives up
+        // after 2+4+8 seconds, which ended whole practice lanes here while the review still had most of
+        // its budget left, and a lane that dies takes its practice out of the review's coverage. Five
+        // attempts four seconds apart, doubling, ride out just over two minutes of provider trouble,
+        // and a review that spends that on every turn still ends inside its own watchdog.
+        Map<String, Object> retry = new LinkedHashMap<>();
+        retry.put("enabled", true);
+        retry.put("maxRetries", RETRY_MAX_ATTEMPTS);
+        retry.put("baseDelayMs", RETRY_BASE_DELAY_MS);
+        settings.put("retry", retry);
         try {
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(settings);
         } catch (JacksonException e) {

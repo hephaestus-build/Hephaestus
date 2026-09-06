@@ -167,6 +167,23 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
             assertThat(root.path("compaction").path("enabled").asBoolean()).isTrue();
             assertThat(root.path("compaction").path("reserveTokens").asInt()).isEqualTo(16384);
         }
+
+        @Test
+        @DisplayName("a session waits out a provider blip rather than ending on the SDK's 14-second default")
+        void ridesOutAProviderBlip() throws Exception {
+            byte[] json = factory.buildPiSettingsJson(null);
+            JsonNode root = objectMapper.readTree(new String(json, StandardCharsets.UTF_8));
+            assertThat(root.path("retry").path("enabled").asBoolean()).isTrue();
+            int attempts = root.path("retry").path("maxRetries").asInt();
+            int baseDelayMs = root.path("retry").path("baseDelayMs").asInt();
+            // What the settings buy, in seconds of provider trouble: the doubling waits before each
+            // repeat. Two minutes is the floor this exists for; the review's own budget is the ceiling.
+            long ridesOutMs = 0;
+            for (int attempt = 1; attempt <= attempts; attempt++) {
+                ridesOutMs += (long) baseDelayMs << (attempt - 1);
+            }
+            assertThat(ridesOutMs).isBetween(120_000L, 600_000L);
+        }
     }
 
     @Nested
