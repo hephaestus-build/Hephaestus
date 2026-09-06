@@ -35,7 +35,7 @@ or multi-host deployment must mount the same durable read-write filesystem on ev
 cross-process locks, atomic rename, and access controls suitable for source content.
 
 [ADR 0039](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0039-git-and-postgresql-own-evidence.md)
-defines the accepted 1.0 replacement; current releases still require this mount.
+records the decision to replace this mount; current releases still require it.
 
 Source authorization is not a deployment toggle. The shipped artifact-source contract fixes which governed
 sources each purpose may use; integrations only determine which authorized sources are available. See
@@ -168,7 +168,5 @@ behaviors matter independently of their exact defaults:
 
 ## Rollback
 
-Before upgrading, create and verify a database snapshot as described in
-[Backup and restore](./backup-restore.mdx). To return to the previous release after this migration, stop all
-Hephaestus roles, restore the snapshot, then deploy the previous version. Do not run the previous version
-against the migrated schema.
+Back up before upgrading, and return to a previous release only by restoring a compatible backup —
+[Install § Rollback](./install.mdx#rollback).

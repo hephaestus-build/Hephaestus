@@ -89,7 +89,7 @@ committed mirror state at admission; work deleted during capture or delivery bel
 refusal policy.
 
 The occurrence ledger has no pruning job; capacity planning must treat it as append-only. Retry and lapse
-thresholds are documented in the admin guide.
+thresholds are `hephaestus.signal-ledger.pending-retry-after` and `pending-lapse-after`.
 
 ### Issue lifecycle occasions
 
@@ -105,8 +105,8 @@ The snapshot is the title, body, native type, labels, assignees, milestone, stat
 fields the issue evidence a bundled practice reads is built from. Labels and assignees are sorted while the
 digest is built, so provider ordering does not change the revision.
 
-Only `scm.issue.updated` keys on the whole snapshot. The other two deliberately do not, because a recurring
-backfill sweep re-derives their keys from the artifact as it stands: an opening keys on the prose and a
+Only `scm.issue.updated` keys on the whole snapshot. The other two deliberately do not, because a past-work
+campaign or a recurring sweep re-derives their keys from the artifact as it stands: an opening keys on the prose and a
 close on the moment it closed, so triage between two sweeps moves neither and buys no second review.
 
 Unlike a merged pull request, a closed issue is not in a state it cannot leave. Keying the close on its
@@ -149,8 +149,8 @@ adapter therefore does not advertise live type-change reviews. A type set on Git
 snapshot through the mirror, so it lands in the digest of whichever later `update` happens to fire.
 
 Every practice bound to `scm.issue.updated` is reevaluated. Practice bindings declare occasions and evidence
-sources, not dependencies on individual issue fields. Reevaluating the bounded issue evidence avoids
-retaining observations whose inputs changed without introducing a second dependency model.
+sources, not dependencies on individual issue fields, so there is no second, per-field dependency model
+to keep in step with the snapshot.
 
 #### Durable update coalescing
 
@@ -196,7 +196,7 @@ carries one entry per staged file and a TOASTed `jsonb` has no partial read.
 
 An observation is one practice's answer about one piece of work, written once and immutable. It carries a
 `Presence` — `PRESENT`, `ABSENT`, `NOT_APPLICABLE` or `INCONCLUSIVE` — and, only when the presence carries
-valence, an assessment. Admission removes assessment from an `INCONCLUSIVE` observation, so a detector that
+valence, an assessment. Admission removes assessment from an `INCONCLUSIVE` observation, so a measurement that
 hedges cannot attach an unearned strength to the series.
 
 The glossary defines what each presence claims and what `NOT_APPLICABLE` has to carry to be allowed to claim
@@ -207,13 +207,13 @@ And the `NOT_APPLICABLE` grounding rule is enforced twice, in the in-sandbox nor
 server-side delivery, for the same reason the citation and recorded-search rules are — the sandbox guard runs
 inside the thing it is checking.
 
-Identity is assigned at persistence, not by the detector: an occurrence key dedupes within a run
+Identity is assigned at persistence, not in the sandbox: an occurrence key dedupes within a run
 (`insertIfAbsent`, `ON CONFLICT DO NOTHING`), and a recurrence key hashes the locus so the same observation
 is recognisable across runs.
 
 **An observation carries `evidenceRationale` and no advice.** `evidenceRationale` is the measurement's own
 justification — *"the change adds a tax-exempt branch, and no test file in this diff calls `total`"* —
-and it is the only prose the observation carries anywhere. The detector emits no next step: there is no
+and it is the only prose the observation carries anywhere. The measurement emits no next step: there is no
 `guidance` field on the tool, on the parsed observation, or on the ledger. Advice is a property of a
 *delivery* (ADR 0021, ADR 0022), and the stage that decides deliveries is the subject of the next
 section.
@@ -305,7 +305,8 @@ all delivery gates; the model never writes the feedback ledger directly.
 
 ### Channels are distinct interventions
 
-The channel contract is defined in the
+What each channel is and where it lands is defined in the
+[practice feedback language](./practice-feedback-language.md); which level each one is, in the
 [practice review glossary](./practice-review-glossary.mdx#the-three-channels-are-three-levels). The
 composition turn must not render one advice string three ways:
 
@@ -332,8 +333,8 @@ is dropped and logged without failing the completed measurement.
   `{ observationId, citationIndex }`, and the server resolves the file, side, and line from that
   observation's citation. `placement.kind: "ARTIFACT"` carries no coordinates and stays in the summary.
   Both forms require a current admitted observation of the same practice.
-- **No invented supersession target.** `action: "SUPERSEDE"` must name a `threadKey` that was staged in
-  `prepared.json`.
+- **No invented supersession target.** `action: "SUPERSEDE"` must name, in `supersedesThreadKey`, a
+  `threadKey` that was staged in `prepared.json`.
 - **No second unit on the same lane about the same practice.** One unit per `(channel,
 practiceSlug)`; the rest are dropped.
 
@@ -391,7 +392,8 @@ The trace separates two axes on purpose, and reading it wrongly is the fastest w
 workspace:
 
 - **`outcome` is about the measurement**, and is one of these values: `REVIEWED`, `RUNNING`,
-  `PENDING`, `SKIPPED`, `NOT_ASSESSABLE`, `TURNED_OFF`, `NOT_OCCASIONED`, `DORMANT`, `LAPSED`, `FAILED`.
+  `PENDING`, `SKIPPED`, `NOT_REACHED`, `NOT_ASSESSABLE`, `TURNED_OFF`, `NOT_OCCASIONED`, `DORMANT`,
+  `LAPSED`, `FAILED`.
 - **`observationCount`, `deliveredCount` and `withheldReasons` are about the intervention.**
 
 At `HUMAN_APPROVAL`, `REVIEWED` and a positive observation count describe the measurement; the proposal's
@@ -400,7 +402,7 @@ not represent a pending human decision as suppression: it is an actionable workf
 
 The precedence rule is not "configuration beats mechanics" — it is **what a run recorded beats what today's
 configuration implies.** A verdict a run wrote against this practice by name (`REVIEWED`, `SKIPPED`,
-`NOT_ASSESSABLE`) is returned even after the practice is switched off, because it happened. `TURNED_OFF`
+`NOT_REACHED`, `NOT_ASSESSABLE`) is returned even after the practice is switched off, because it happened. `TURNED_OFF`
 comes next, and therefore outranks everything merely re-derived from the occurrence ledger — `FAILED`,
 `LAPSED`, `PENDING` — so a practice the workspace switched off reads as switched off rather than as broken.
 A new outcome has to be placed on the right side of that line, not ranked against the others by severity.

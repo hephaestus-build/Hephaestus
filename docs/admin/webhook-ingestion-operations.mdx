@@ -249,12 +249,13 @@ first poll.
 
 **Compose does not recreate NATS when only its config changes.** The broker's configuration is a
 Compose `configs:` block whose content renders to a bind-mounted file. Changing the content does not
-change the container's spec. The release deployment therefore recreates NATS before checking the
-complete topology. For a manual configuration change, run:
+change the container's spec, so after a configuration change recreate the broker yourself, from the
+directory the reference stack is deployed from:
 
 ```bash
-docker compose -f compose.core.yaml up -d --force-recreate nats-server
-docker exec core-nats-server-1 cat /etc/nats/nats-server.conf   # confirm the value you set
+dc() { docker compose --env-file .env --env-file release-lock.env -p hephaestus-core -f compose.core.yaml "$@"; }
+dc up -d --force-recreate nats-server
+dc exec nats-server cat /etc/nats/nats-server.conf   # confirm the value you set
 ```
 
 Recreating the broker is safe for stored messages — JetStream data lives in the volume — but

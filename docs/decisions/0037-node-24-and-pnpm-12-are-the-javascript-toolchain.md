@@ -1,11 +1,9 @@
 # ADR 0037: Node.js 24 and pnpm 12 are the JavaScript toolchain
 
-## Status
-
-Accepted. Supersedes [ADR 0033](0033-bun-is-the-javascript-runtime-and-package-manager.md).
-Complements [ADR 0036](0036-agent-runtime-runs-on-node-24.md), which moved the sandbox runtime first.
-Complemented by [ADR 0040](0040-vite-plus-is-the-command-surface.md), which makes Vite+ (`vp`) the
-command surface on top of this toolchain.
+**Status:** Accepted (amended 2026-09-03 — see the update below)
+**Date:** 2026-08-30
+**Supersedes:** [ADR 0033](0033-bun-is-the-javascript-runtime-and-package-manager.md)
+**Builds on:** [ADR 0036](0036-agent-runtime-runs-on-node-24.md), which moved the sandbox runtime first
 
 ## Context
 
@@ -47,3 +45,9 @@ rollback line is an exact pnpm 11 pin rather than a partial toolchain rollback.
 - [pnpm 12 compatibility discussion](https://github.com/orgs/pnpm/discussions/11292)
 - [Corepack distribution ends before Node.js 25](https://github.com/nodejs/corepack#default-installs)
 - [Node.js release schedule](https://github.com/nodejs/Release#release-schedule)
+
+## Update — 2026-09-03 (ADR 0040)
+
+[ADR 0040](0040-vite-plus-is-the-command-surface.md) supersedes the "one command surface" of
+§ Consequences: Vite+ (`vp`) is the command surface, and pnpm stays the package manager behind
+`vp install`. The runtime pin, lockfile and install policy decided here are unchanged.

@@ -92,7 +92,7 @@ Checklist for a new read path:
 
 - **List endpoint** — assert A's collection under A's slug never contains B's rows (`length()` + value, not just "my row is present").
 - **Detail endpoint (anti-IDOR)** — assert B's entity id through A's slug returns `404`, and pair it with a positive control (A's own id returns `2xx`) so the `404` can't pass against a broken endpoint.
-- **Query keyed on anything but `workspace_id`** (an org login, a login string, an external native id) is a red flag — scope by `workspace_id`, or add the provider/workspace predicate, before shipping. The `#1372` leaks (leaderboard roster by org-login, team lists by org-string) were exactly this shape.
+- **Query keyed on anything but `workspace_id`** (an org login, a login string, an external native id) is a red flag — scope by `workspace_id`, or add the provider/workspace predicate, before shipping.
 - **`@WorkspaceAgnostic` repository?** The SQL statement inspector is **off** for it, so the integration test is the only automated guard — do not skip it.
 
 The `hephaestus.tenancy.enforcement: throw` setting in `application-test.yml` fails any test that reads a `workspace_id`-bearing table without a `workspace_id` predicate — a free safety net, but it cannot see `@WorkspaceAgnostic` queries or string-keyed scoping, which is why the HTTP-level assertions still matter.
@@ -196,7 +196,7 @@ The `live-tests` profile tells Maven to run only tests tagged with `@Tag("live")
 
 **Live tests never run during normal CI.** They are excluded from the other tiers by tag filtering in the Surefire and Failsafe plugins.
 
-The run takes roughly two minutes and prints the GitHub artefacts it provisions. Clean-up is handled automatically, but if a failure interrupts execution you can safely delete any `hephaestus-it-*` repositories, milestones, or teams that remain in the sandbox.
+The run prints the GitHub artefacts it provisions. Clean-up is handled automatically, but if a failure interrupts execution you can safely delete any `hephaestus-it-*` repositories, milestones, or teams that remain in the sandbox.
 
 ### Authoring new GitHub sync tests
 

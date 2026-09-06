@@ -59,10 +59,9 @@ hosts, runtimes, and topologies are outside release qualification.
 - **AI practice review adds real memory**: each concurrent review sandbox may use up to
   4 GiB. The default caps it at 1 concurrent sandbox; raise
   `SANDBOX_MAX_CONCURRENT` only with RAM to match.
-- Container defaults are 4 CPUs / 512 PIDs for the application server and worker, and 2 CPUs / 256
-  PIDs for the webhook server. Override them with the corresponding `APPLICATION_SERVER_*`,
-  `APPLICATION_WORKER_*`, or `WEBHOOK_SERVER_*` limit variables. Keep PID limits on roles with Docker
-  access.
+- Container defaults are 4 CPUs / 512 PIDs for the application server and 2 CPUs / 256 PIDs for
+  the webhook server. Override them with the corresponding `APPLICATION_SERVER_*` or
+  `WEBHOOK_SERVER_*` limit variables. Keep PID limits on roles with Docker access.
 - `HIKARI_MAXIMUM_POOL_SIZE` defaults to 20. Provision at least that value multiplied by the total JVM
   replica count, plus capacity for migrations and operator access.
 - A host in the supported matrix, plus `git` and `openssl`.
@@ -71,9 +70,9 @@ hosts, runtimes, and topologies are outside release qualification.
 - Outbound HTTPS to `ghcr.io` and `docker.io` for images, `github.com` and `api.github.com` for the
   release lock, and `fulcio.sigstore.dev`, `rekor.sigstore.dev`, and `tuf-repo-cdn.sigstore.dev` for
   keyless signature verification.
-- The [Node.js](https://nodejs.org/en/download) version pinned in `package.json#devEngines.runtime`,
-  [GitHub CLI](https://cli.github.com/) authenticated with `gh auth login`, and
-  [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) for release-lock verification.
+- The [Node.js](https://nodejs.org/en/download) version pinned in `package.json#devEngines.runtime`
+  and [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) for release-lock
+  verification.
 
 ## 1. Get the files
 

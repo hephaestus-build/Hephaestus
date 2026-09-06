@@ -83,7 +83,7 @@ erasure can never implement the drift path.
 There is no entity-level soft-delete filter: which reads honour a tombstone, and which keep returning
 the row because they record something that happened, is decided surface by surface in
 [ADR 0024](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md)
-§ Update — 2026-09-03 (issue #1404): which reads honour a drift tombstone.
+under *Which reads honour a drift tombstone*.
 
 ### Erasure is orphan-guarded
 
@@ -137,7 +137,7 @@ connection by the sync-job pruner. Global identity rows (`user`, `organization`,
 | --- | --- |
 | Job types and what each implies | `integration.core.sync.SyncJobType` |
 | Per-integration job bodies | `…{github,gitlab,slack,outline}…IntegrationSyncRunner` |
-| Deletion sweeps | `GitHubDeletionSweepService`, `GitLabDeletionSweepService`, `OutlineDocumentSyncService#tombstoneVanished` |
+| Deletion sweeps | `GitHubDeletionSweepService`, `GitLabDeletionSweepService`, `OutlineMirrorRetentionService#tombstoneVanished` |
 | SCM erasure | `workspace.ScmWorkspaceContentEraser`, `workspace.adapter.ScmWorkspacePurgeAdapter` |
 | Slack / Outline erasure | `SlackWorkspaceContentEraser`, `OutlineConnectionStrategy#revoke`, `OutlineWorkspacePurgeAdapter` |
 | Monitor identity healing | `BackfillStateProvider#reconcileSyncTargetIdentity` / `#reconcileSyncTargetsForRepository` |

@@ -13,7 +13,7 @@ Hephaestus ships **one JAR** that boots in any of three runtime roles. The same 
 | Worker | `hephaestus.runtime.worker.enabled` | `true` |
 | Webhook | `hephaestus.runtime.webhook.enabled` | `true` |
 
-All three default-on means `vp run dev:server` starts a working monolith.
+All three default-on means a JAR started with no profile overlay boots a working monolith.
 
 ## Boot log
 
@@ -95,10 +95,11 @@ active. The two env-var flags in particular default `false` on **every** role un
 the variable — no profile turns work on for you.
 
 `Needs user-auth wiring` is **not** in that group — its cells read `yes | no | no` because it really
-does differ by role. The whole `core.auth` module carries `@ConditionalOnServerRole`, so setting
+does differ by role. User authentication exists only with the server role, so setting
 `hephaestus.runtime.server.enabled=false` drops it; the `worker` overlay additionally excludes
-`OAuth2ResourceServerAutoConfiguration` outright, so a worker-only pod never depends on user-auth
-wiring at boot. The `webhook` overlay does not carry that exclusion and relies on the role gate alone.
+Spring's OAuth2 resource-server autoconfiguration outright, so a worker-only pod never depends on
+user-auth wiring at boot. The `webhook` overlay does not carry that exclusion and relies on the role
+gate alone.
 
 There is no `hephaestus.sandbox.enabled`, and an arch test forbids introducing one: the Docker
 sandbox *is* the worker capability, so it follows `hephaestus.runtime.worker.enabled`. Reading the
@@ -123,15 +124,12 @@ file sets the env var the base default leaves off:
 `hephaestus.agent.enabled` (`AGENT_ENABLED`) gates three things that must agree, or a split
 deployment silently does half its job. They do **not** share a gate:
 
-- **Submission** (`AgentJobEventListener` / `IssueAgentJobEventListener` / `BotCommandProcessor`,
-  which turn PR/issue/bot events into `agent_job` rows) needs only this flag. It wires on *any* pod
-  where the flag is `true`, including a `prod,worker` pod — a worker with the flag on submits as well
-  as executes.
-- **Orphan recovery** (`AgentJobZombieSweeper`, which reclaims a dead worker's stuck jobs) needs this
-  flag **and** the server role (`@ConditionalOnServerRole`), so it does not double-run on a
-  dedicated worker pod.
-- **Execution** (`AgentJobExecutor`, the poll loop that claims and runs jobs) needs this flag **and**
-  the worker role.
+- **Submission** (turning pull request, issue and bot-command events into queued jobs) needs only
+  this flag. It wires on *any* pod where the flag is `true`, including a `prod,worker` pod — a worker
+  with the flag on submits as well as executes.
+- **Orphan recovery** (reclaiming a dead worker's stuck jobs) needs this flag **and** the server
+  role, so it does not double-run on a dedicated worker pod.
+- **Execution** (the poll loop that claims and runs jobs) needs this flag **and** the worker role.
 
 `AGENT_ENABLED` is `false` on every role until you set it, however the pod is started. Set it to
 `true` on **every** pod that needs any of the three — in the split-pod topology that is both

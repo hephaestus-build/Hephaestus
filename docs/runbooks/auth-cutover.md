@@ -5,7 +5,7 @@ Operational guide for shipping and operating the auth replacement (ADR 0017). Re
 
 ## Pre-launch checklist
 
-- [ ] `HEPHAESTUS_AUTH_ISSUER` set to the public origin (`https://hephaestus.aet.cit.tum.de`).
+- [ ] `HEPHAESTUS_AUTH_ISSUER` set to the public origin (`https://hephaestus.build`).
 - [ ] `HEPHAESTUS_AUTH_STATE_COOKIE_KEY` set to a base64-encoded 32-byte value (NOT blank —
       blank falls back to an ephemeral per-boot key and abandons in-flight logins on restart).
 - [ ] `hephaestus.security.encryption-key` set to a 32-character value (already required for
@@ -103,18 +103,17 @@ activity history therefore carry over automatically.
 
 The Liquibase migration was validated against Postgres 16 in both directions: a **fresh** apply
 (`db/master.xml`, `prod` context — all auth tables + the `auth_event` RANGE partitions seeded) and an
-**upgrade** from the current `main` schema (apply `main` → then this branch). This branch adds exactly
-**one** new changelog on top of `main` — `1780825201546_changelog.xml` (the consolidated auth
-changelog) — and reuses `main`'s integration changelog (`1780313973588`) unchanged, so the upgrade
-applies cleanly: the only new changesets are this branch's own, and there are no duplicate
-`DATABASECHANGELOG` rows.
+**upgrade** from the pre-cutover `main` schema. The cutover adds exactly **one** changelog —
+`1780825201546_changelog.xml` (the consolidated auth changelog) — and reuses the integration changelog
+(`1780313973588`) unchanged, so the upgrade applies cleanly with no duplicate `DATABASECHANGELOG` rows.
 
 ## JWK rotation
 
 - **Rotation is not implemented.** There is no `rotate()` method, no admin endpoint, and no
-  scheduled task; the schema supports two active keys but nothing populates the second. The only
-  supported recovery is the "lost key" path below (clear `jwt_signing_key`, restart, everyone
-  re-authenticates). Treat zero-downtime rotation as an open item, not an operational procedure.
+  scheduled task; one active key signs every token, and re-keying means deploying with a fresh key
+  while the old row keeps verifying until it is retired by hand. The only supported recovery is the
+  "lost key" path below (clear `jwt_signing_key`, restart, everyone re-authenticates). Treat
+  zero-downtime rotation as an open item, not an operational procedure.
 - Each pod reloads its JWK cache from the DB at most once per minute, so after a rotation other
   pods pick up the new key within that TTL (a token signed by the still-valid previous key keeps
   verifying meanwhile). A NATS `auth.signing-key.rotated` push to make the cross-pod refresh
@@ -150,7 +149,7 @@ applies cleanly: the only new changesets are this branch's own, and there are no
 
 ## Known follow-ups (not blocking launch)
 
-Shipped in this PR: Bucket4j rate limits, the 48-hour soft-delete + hard-delete sweep, security
+Shipped with the cutover: Bucket4j rate limits, the 48-hour soft-delete + hard-delete sweep, security
 headers (CSP report-only), at-rest sealing of the JWT signing key, and the per-request
 negative-cache revocation check. Still tracked as named follow-up issues in ADR 0017: cross-pod NATS propagation for
 revocation and JWK rotation, flipping CSP from report-only to enforce, the `JwtClaimsLogScrubber`

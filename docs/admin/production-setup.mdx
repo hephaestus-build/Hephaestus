@@ -25,7 +25,7 @@ the protected secrets managed by TUM.
 The reference stack (not the self-host one — that stack is [listed on the install page](./install))
 consists of:
 
-- **Application server** (Spring Boot, runs the Pi mentor agent in-process)
+- **Application server** (Spring Boot; also hosts the interactive mentor sandboxes and the LLM proxy)
 - **Webhook server** (same Spring Boot artifact, `webhook` profile → NATS JetStream)
 - **React webapp** (served via nginx)
 - **PostgreSQL 17–18** is supported; the release Compose stack qualifies and ships **PostgreSQL 18**
@@ -77,10 +77,6 @@ Actions reserves the `GITHUB_` prefix, so Compose maps them to the server's
 no effect, and the provider is skipped with no sign-in button to show for it.
 :::
 
-Set `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` before deploying the unified integration
-framework. Existing installations may initially copy `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`; rotate to
-an independent key after the deployment succeeds.
-
 ### Slack app configuration
 
 After creating the app, upload
@@ -114,8 +110,7 @@ If you run the webhook receiver on a separate public host, route only `/webhooks
 (`/oauth/callback/slack`, `/auth/login`, `/oauth2/authorization/*`, `/login/oauth2/code/slack`, with the same
 public prefix if you use one) must reach the application-server role.
 
-The bot token scope set (`SlackConnectionStrategy.DEFAULT_SCOPES`) stays minimal — every scope maps to a
-feature the code exercises:
+The bot token scope set stays minimal — every scope maps to a feature the code exercises:
 
 | Scope | Feature |
 | --- | --- |
@@ -348,9 +343,7 @@ obligation. Only what is different about the multi-file stack is listed here.
 1. **Provision infrastructure:** Ensure PostgreSQL, NATS, and storage volumes are ready. (The
    self-host stack brings its own; this one does not.)
 2. **Configure the environment:** Copy `docker/.env.example` to `docker/.env` and fill it in per
-   [Install § 2](./install#2-configure-env) plus the three reference-only variables above. Note
-   `server/.env` is the local-development file used by `vp run dev:server` — no Compose service reads
-   it.
+   [Install § 2](./install#2-configure-env) plus the three reference-only variables above.
 3. **Bootstrap secrets:** Load those variables into your secret manager or the `.env` files consumed
    by Docker/Kubernetes.
 4. **Deploy services:** Each file is its own Compose project, so each needs its own `-p` and its own
@@ -381,9 +374,8 @@ obligation. Only what is different about the multi-file stack is listed here.
      admin endpoints for workspaces they are a member of (auto-elevated to workspace ADMIN there).
    - A test webhook from GitHub or GitLab reaches the ingest pipeline.
    - Before testing GitLab practice review, confirm `GITLAB_ENABLED`, `GITLAB_WORKSPACE_CREATION`,
-     `AGENT_ENABLED`, `GIT_CHECKOUT_ENABLED` and `NATS_ENABLED` (needed for sync/webhook ingest, not
-     the agent job queue) are all present in the deployed environment — this is the bundle a preview
-     environment most often lacks.
+     `AGENT_ENABLED`, `GIT_CHECKOUT_ENABLED` and `NATS_ENABLED` are all present in the deployed
+     environment — this is the bundle a preview environment most often lacks.
    - `/imprint` and `/privacy` do not show the red "not configured" banner. See
      [Legal Pages](./legal-pages).
 
@@ -401,7 +393,7 @@ This allows platform administrators to troubleshoot and manage workspaces where 
 ## Operational tips
 
 - Monitor services with the central Prometheus/Loki stack; ensure trace IDs appear in logs.
-- Schedule regular backups for PostgreSQL (it now holds auth state — accounts, identity links, sessions — in addition to application data).
+- Schedule regular backups for PostgreSQL (it holds auth state — accounts, identity links, sessions — in addition to application data).
 - Review weekly leaderboard Slack posts to ensure the automation is active.
 - A preview deployment only represents the GitLab practice-review rollout if it is wired with the same GitLab IdP, sandbox, git-checkout, and agent-job-queue settings. Verify a rollout on staging, not on a preview.
 

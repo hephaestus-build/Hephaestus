@@ -41,8 +41,8 @@ epic; a third role is anticipated but deferred.
 Option 1. `core.runtime.RuntimeRole` defines the property keys:
 
 - `hephaestus.runtime.worker.enabled` (default true; **wired**) — gates the worker chain
-  via `DockerSandboxConfiguration` and the agent NATS pull consumer (both as of this ADR; see the
-  2026-07-21 and 2026-07-22 updates for what carries the gate today)
+  via `DockerSandboxConfiguration` and the agent NATS pull consumer (superseded by the 2026-07-21
+  and 2026-07-22 updates below)
 - `hephaestus.runtime.server.enabled` (default true; **reserved**) — placeholder constant
   for the future server-only role. Not wired in this epic: the server-side bean chain
   (HTTP API, sync NATS, mentor SSE, scheduled tasks, agent dispatch) still loads
@@ -59,8 +59,7 @@ this epic; the third role lands when restart independence becomes a hard require
 - Zero env vars → full monolith boots.
 - Worker-only deploy is feasible today by setting `hephaestus.runtime.worker.enabled=false`
   on the server pod — the Docker sandbox + agent NATS pull consumer drop out. The
-  server JAR remains bit-identical. **This consequence no longer holds as written — see the
-  2026-07-22 update below before setting that flag on an application-server pod.**
+  server JAR remains bit-identical. **Superseded by the 2026-07-22 update below.**
 - True server-only mode (HTTP API + sync NATS only) requires the reserved
   `server.enabled` flag to be wired in a follow-up; this epic establishes the
   property-key contract but defers the implementation.
@@ -144,8 +143,8 @@ webhook streams (ADR 0008) was delivered to `application-server`, which runs wit
 `hephaestus.runtime.webhook.enabled=false`: the bound and its documented recovery procedure were both
 inert.
 
-**Decision.** `scripts/check-env-roles.ts` fails the build on three shapes of the same defect, and
-its own header carries the full set the gate has grown since:
+**Decision.** `scripts/check-env-roles.ts` fails the build on three shapes of the same defect; its
+header is the one home for the full set it checks:
 
 | Failure | What it catches |
 |---|---|

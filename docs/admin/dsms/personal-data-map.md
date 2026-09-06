@@ -43,8 +43,7 @@ affected-row counter; the names, labels and cardinality guarantee are in the
 [observability contract](../observability.mdx). Alert configuration remains deployment-owned: alert
 on `outcome="failure"`, on `outcome="incomplete"` — a retention pass that ran out of its time budget
 with expired rows still in place — and on a missing successful daily `llm_usage_retention` run for
-more than 48 hours. Broader alert routing is tracked in
-[#1369](https://github.com/hephaestus-build/Hephaestus/issues/1369).
+more than 48 hours.
 
 Review this map with the [record of processing](./record-of-processing.md),
 [artifact-source governance](./artifact-source-governance.md), and the public privacy statement.

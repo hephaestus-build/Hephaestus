@@ -12,7 +12,7 @@ If your deployment is reachable to end users and `/imprint` or `/privacy` still 
 
 ## Operator obligations
 
-Regardless of where you get the source code, **the operator of a running Hephaestus instance is the controller** for the personal data processed by that instance within the meaning of Art. 4(7) GDPR, and the **content provider** within the meaning of § 5 DDG (Digitale-Dienste-Gesetz). Neither obligation can be satisfied by linking to the upstream `hephaestus.aet.cit.tum.de` pages, and neither obligation can be delegated to the Hephaestus project.
+Regardless of where you get the source code, **the operator of a running Hephaestus instance is the controller** for the personal data processed by that instance within the meaning of Art. 4(7) GDPR, and the **content provider** within the meaning of § 5 DDG (Digitale-Dienste-Gesetz). Neither obligation can be satisfied by linking to the upstream `hephaestus.build` pages, and neither obligation can be delegated to the Hephaestus project.
 
 Practically, every running deployment must publish:
 
@@ -35,7 +35,7 @@ At page load, the webapp fetches the relevant Markdown file in this priority ord
 
 ## Choosing a configuration mode
 
-### Mode A — Bundled profile (operators of `hephaestus.aet.cit.tum.de`)
+### Mode A — Bundled profile (operators of `hephaestus.build`)
 
 If your deployment is the canonical TUM / AET deployment, set `LEGAL_PROFILE=tumaet` in your environment. No other configuration is needed — the `tumaet` profile is baked into the webapp image and contains the audited texts matching the [DSMS record](./dsms) on file at TUM.
 

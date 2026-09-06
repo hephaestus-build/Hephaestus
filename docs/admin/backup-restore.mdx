@@ -40,7 +40,7 @@ On a fresh host, complete install steps 1–2 first, restoring the saved `.env` 
 cd /opt/hephaestus/docker/self-host
 dc() { docker compose --env-file .env --env-file release-lock.env "$@"; }
 dc up -d postgres
-dc stop application-server application-worker webhook-server 2>/dev/null || true
+dc stop application-server webhook-server
 
 test -s hephaestus-YYYY-MM-DD.dump
 dc exec -T postgres pg_restore --list < hephaestus-YYYY-MM-DD.dump >/dev/null
@@ -77,7 +77,7 @@ custom-format dump:
 ```bash
 cd /opt/hephaestus/docker/self-host
 dc() { docker compose --env-file .env --env-file release-lock.env "$@"; }
-dc stop application-server application-worker webhook-server
+dc stop application-server webhook-server
 dc exec -T postgres pg_dump -U root -Fc hephaestus > /var/tmp/hephaestus-pg17.dump
 test -s /var/tmp/hephaestus-pg17.dump
 dc exec -T postgres pg_restore --list < /var/tmp/hephaestus-pg17.dump >/dev/null
@@ -156,10 +156,8 @@ against the PostgreSQL 18 database.
   auto-seeded and everyone re-logs-in. No data loss beyond sessions.
 - **NATS JetStream:** the stream on `nats-data` may hold events the restored database has
   already processed (or never saw). Webhook ingest deduplicates by delivery id and
-  idempotency keys, so replays are absorbed on ingest; the end-to-end redelivery-safety
-  drill (including whether to reset consumers after a restore) is part of
-  [#1370](https://github.com/hephaestus-build/Hephaestus/issues/1370). The conservative option
-  after a restore from an old backup: `docker compose down`,
-  `docker volume rm hephaestus_nats-data`, `docker compose up -d` — events in the gap are
-  re-fetched by the scheduled sync.
+  idempotency keys, so replays are absorbed on ingest. The conservative option after a restore
+  from an old backup: `dc down`, `docker volume rm <project>_nats-data` (named like the
+  `_postgresql-data` volume above), `dc up -d` — events in the gap are re-fetched by the
+  scheduled sync.
 - **Restore into an older app version:** don't. Restore with the same signed release lock the backup was taken from, then upgrade.
