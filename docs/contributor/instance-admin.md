@@ -113,7 +113,8 @@ would want the confirmation to unlock.
 
 `begin` stamps an absolute ceiling `imp_exp` (`hephaestus.auth.impersonation-max-lifetime`, default
 1h); the issuer caps each token's `exp` at `min(now + accessTtl, imp_exp, session_exp)`, and
-`refresh` drops the `act` claim (auto-exit) once it passes. `imp_exp` is the binding limit: the webapp
+`refresh` drops the `act` claim (auto-exit) when the exit-skew window before it is reached, not only
+once it has fully passed — see below. `imp_exp` is the binding limit: the webapp
 keeps the session alive across access-token expiry (`use-session-keep-alive.ts`, mounted from
 `main.tsx`), so an impersonation ends at the ceiling rather than at `accessTtl`.
 

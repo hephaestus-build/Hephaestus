@@ -158,6 +158,13 @@ public class ImpersonationService {
             @Nullable Instant operatorSessionExpiresAt,
             @Nullable HttpServletRequest request) {
         requireLiveSession(operatorSessionExpiresAt);
+        // Suspending or demoting an operator revokes their own sessions, but the impersonation token's
+        // subject is the target, so a manual exit is a second way back to an operator identity that no
+        // longer holds it — the same gate refresh applies before it will rotate this pair.
+        if (!isActiveInstanceAdmin(operatorAccountId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED, "operator is no longer an active instance admin");
+        }
         // The conditional revoke affects 0 rows when this jti was already ended — by a concurrent exit,
         // a force sign-out, or the auto-exit on refresh. Minting an operator token anyway would hand
         // back a session that something else deliberately closed.
@@ -191,6 +198,13 @@ public class ImpersonationService {
         if (operatorSessionExpiresAt == null || !clock.instant().isBefore(operatorSessionExpiresAt)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "operator session has expired");
         }
+    }
+
+    private boolean isActiveInstanceAdmin(Long accountId) {
+        Account operator = accountRepository.findById(accountId).orElse(null);
+        return operator != null
+                && operator.getStatus() == Account.Status.ACTIVE
+                && operator.getAppRole() == Account.AppRole.APP_ADMIN;
     }
 
     /**

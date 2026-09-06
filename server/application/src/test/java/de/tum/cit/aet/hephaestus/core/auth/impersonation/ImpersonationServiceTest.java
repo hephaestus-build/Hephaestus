@@ -235,6 +235,7 @@ class ImpersonationServiceTest extends BaseUnitTest {
     @Test
     void exit_whenTheImpersonationWasAlreadyEnded_unauthorized() {
         UUID impersonationJti = UUID.randomUUID();
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(account(1L, Account.AppRole.APP_ADMIN)));
         when(issuedJwtRepository.revoke(eq(impersonationJti), any(), eq(IssuedJwt.RevokedReason.IMPERSONATION_EXIT)))
                 .thenReturn(0);
 
@@ -249,8 +250,26 @@ class ImpersonationServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void exit_whenTheOperatorIsNoLongerAnAdmin_unauthorized() {
+        UUID impersonationJti = UUID.randomUUID();
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(account(1L, Account.AppRole.USER)));
+
+        assertThatThrownBy(() ->
+                        service.exit(1L, 2L, impersonationJti, OPERATOR_AUTH_TIME, OPERATOR_SESSION_EXPIRES_AT, null))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+
+        // A demoted operator must not be able to manually exit into an ordinary token either — the same
+        // gate refresh applies before it will rotate this pair.
+        verify(jwtIssuer, never()).issue(any(), any(), any());
+        verify(issuedJwtRepository, never()).revoke(any(), any(), any());
+    }
+
+    @Test
     void exit_revokesImpersonationJtiAndMintsOperatorToken() {
         UUID impersonationJti = UUID.randomUUID();
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(account(1L, Account.AppRole.APP_ADMIN)));
         when(principalFactory.forAccountId(1L))
                 .thenReturn(new JwtPrincipal(1L, "operator", "Operator", Set.of("admin")));
         when(issuedJwtRepository.revoke(eq(impersonationJti), any(), eq(IssuedJwt.RevokedReason.IMPERSONATION_EXIT)))
