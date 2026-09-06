@@ -48,6 +48,11 @@ import {
 } from "./pi-runner-composition.ts";
 import { outputPath } from "./pi-runner-output.ts";
 import {
+	createRecordingPace,
+	promptTokens,
+	type RecordingPace,
+} from "./pi-runner-recording-pace.ts";
+import {
 	armRetryWindow,
 	deriveReconBudget,
 	deriveTimeouts,
@@ -1493,6 +1498,17 @@ function scheduleDeadline(timeoutMs: number, onTimeout: () => void) {
 	return { elapsed, timer, state };
 }
 
+/**
+ * Ends a session for good. A steer still queued when a session is disposed is not dropped: the SDK
+ * keeps it on the agent and starts a fresh run to deliver it, so a nudge that arrived just as a
+ * deadline did would spend the budget that deadline just took away. Clearing the queue first is what
+ * the SDK's own interactive mode does before it aborts.
+ */
+function stopSession(session: AgentSession) {
+	session.clearQueue();
+	session.dispose();
+}
+
 function scheduleTurnTimers(
 	session: AgentSession,
 	turnNumber: number,
@@ -1519,7 +1535,7 @@ function scheduleTurnTimers(
 		console.error(
 			`[pi-runner] turn ${turnNumber}/${turnCount} exhausted its fair share — aborting this turn`,
 		);
-		session.dispose();
+		stopSession(session);
 	});
 	return { softTimer, hardTimer: hard.timer, hardDeadline: hard.elapsed, state };
 }
@@ -1571,8 +1587,16 @@ async function main() {
 	}
 	const model = modelRuntime.getModel("hephaestus", providerConfig.modelId);
 	if (!model) throw new Error(`Hephaestus model was not registered: ${providerConfig.modelId}`);
+	// The window a session is paced against is the registered model's own, which is where the
+	// workspace's declared window and the runner's default for a model that declares none already
+	// meet. It is also the window the SDK compacts against, so pacing and compaction cannot disagree.
+	const contextWindow = model.contextWindow;
 	console.error(
-		`[pi-runner] registered hephaestus provider: apiProtocol=${providerConfig.apiProtocol} model=${providerConfig.modelId}`,
+		// The window is logged because everything downstream is measured against it: a workspace that
+		// declares it wrong says so in the first lines of every transcript, rather than only in the
+		// shape of the reviews it produces.
+		`[pi-runner] registered hephaestus provider: apiProtocol=${providerConfig.apiProtocol} ` +
+			`model=${providerConfig.modelId} contextWindow=${contextWindow}`,
 	);
 
 	const compositionRequest = loadCompositionRequest();
@@ -1586,7 +1610,11 @@ async function main() {
 		: null;
 	const events: { type: string; timestamp: number }[] = [];
 	const streamUsage = newUsageLedger();
-	const subscribeSession = (trackedSession: AgentSession, label: string) =>
+	const subscribeSession = (
+		trackedSession: AgentSession,
+		label: string,
+		pace: RecordingPace | null = null,
+	) =>
 		trackedSession.subscribe((event: AgentSessionEvent) => {
 			if (event.type === "tool_execution_start") {
 				console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
@@ -1600,6 +1628,31 @@ async function main() {
 					`[pi-runner] ${label} assistant msg: stopReason=${stopReason}, toolCalls=${toolCalls}, ` +
 						`types=[${types.join(",")}]`,
 				);
+				// How much of the window this turn's prompt occupied. A turn that was aborted or that
+				// failed carries whatever counts the provider had sent before it stopped, which describes
+				// no prompt the model answered; the SDK leaves those out of its own context maths too.
+				const settled = stopReason !== "aborted" && stopReason !== "error";
+				const reached =
+					pace === null || !settled
+						? null
+						: pace.checkpointReached(promptTokens(event.message.usage));
+				if (reached !== null) {
+					console.error(
+						`[pi-runner] ${label}: ${Math.round(reached * 100)}% of its context spent — asking it to record`,
+					);
+					// Neither an order to stop reading nor a licence to keep reading, because this can
+					// arrive alongside the fair-share nudge above. The orchestrator's READ-BEFORE-NA gate
+					// makes reading the whole diff a precondition of half the answers, so a session pushed
+					// to settle a practice early settles it on evidence it cannot quote — which is the
+					// failure this whole pipeline exists to prevent.
+					trackedSession
+						.steer(
+							`You have spent ${Math.round(reached * 100)}% of your context. Record now every practice your ` +
+								`evidence already settles, one report_observation call per practice. Record nothing for a ` +
+								`practice you cannot yet quote the deciding evidence for. ${PERSIST_DISCIPLINE}`,
+						)
+						.catch((err) => console.error(`[pi-runner] steer failed: ${errorText(err)}`));
+				}
 			}
 			events.push({ type: `${label}:${event.type}`, timestamp: Date.now() });
 		});
@@ -1633,7 +1686,7 @@ async function main() {
 			console.error(
 				`[pi-runner] Composition timeout — preserving observations and composed units so far`,
 			);
-			composerSession.dispose();
+			stopSession(composerSession);
 		});
 		try {
 			await Promise.race([
@@ -1648,7 +1701,7 @@ async function main() {
 		}
 		persistComposedFeedback();
 		const combinedUsage = extractUsageFromSession(composerSession.state, streamUsage);
-		composerSession.dispose();
+		stopSession(composerSession);
 		accumulateUsage(prevUsage, combinedUsage);
 		prevUsage = combinedUsage;
 		persistUsage();
@@ -1663,7 +1716,7 @@ async function main() {
 		hardAbort.abort();
 		console.error(`[pi-runner] Hard timeout — aborting ${activeSessions.size} active session(s)`);
 		for (const activeSession of activeSessions) {
-			activeSession.dispose();
+			stopSession(activeSession);
 		}
 	}, INITIAL_TIMEOUT_MS);
 
@@ -1704,7 +1757,7 @@ async function main() {
 		const unsubscribeRecon = subscribeSession(reconSession, "recon:shared");
 		activeSessions.add(reconSession);
 		const reconBudgetMs = deriveReconBudget(INITIAL_TIMEOUT_MS);
-		const reconDeadline = scheduleDeadline(reconBudgetMs, () => reconSession.dispose());
+		const reconDeadline = scheduleDeadline(reconBudgetMs, () => stopSession(reconSession));
 		try {
 			const groupScope = tree.groups
 				.map((group) => `${group.id} [${group.practiceSlugs.join(", ")}]`)
@@ -1734,7 +1787,7 @@ async function main() {
 			clearTimeout(reconDeadline.timer);
 			activeSessions.delete(reconSession);
 			unsubscribeRecon();
-			reconSession.dispose();
+			stopSession(reconSession);
 		}
 	}
 
@@ -1760,7 +1813,11 @@ async function main() {
 					modelRuntime,
 					model,
 				});
-				const unsubscribeObserver = subscribeSession(observerSession, `observer:${group.id}`);
+				const unsubscribeObserver = subscribeSession(
+					observerSession,
+					`observer:${group.id}`,
+					createRecordingPace(contextWindow, seedFile !== undefined),
+				);
 				activeSessions.add(observerSession);
 				const remainingMs = Math.max(1, reviewDeadline - Date.now());
 				const activeSlots = Math.min(concurrency, remainingGroups);
@@ -1797,7 +1854,7 @@ async function main() {
 					clearTimeout(timers.hardTimer);
 					activeSessions.delete(observerSession);
 					unsubscribeObserver();
-					observerSession.dispose();
+					stopSession(observerSession);
 					remainingGroups--;
 				}
 			},
@@ -1858,7 +1915,7 @@ async function main() {
 			retryAbort.abort();
 			console.error(`[pi-runner] Retry hard timeout — aborting`);
 			for (const activeSession of activeSessions) {
-				activeSession.dispose();
+				stopSession(activeSession);
 			}
 		},
 	);
@@ -1894,12 +1951,16 @@ async function main() {
 					modelRuntime,
 					model,
 				});
-				const unsubscribeRetry = subscribeSession(retrySession, `retry:${group.id}`);
+				const unsubscribeRetry = subscribeSession(
+					retrySession,
+					`retry:${group.id}`,
+					createRecordingPace(contextWindow, priorSessionFile !== undefined),
+				);
 				activeSessions.add(retrySession);
 				const activeSlots = Math.min(concurrency, retriesRemaining);
 				const retryBudgetMs = deriveWorkstreamBudget(retry.windowMs, activeSlots, retriesRemaining);
 				const retryDeadline = scheduleDeadline(retryBudgetMs, () => {
-					retrySession.dispose();
+					stopSession(retrySession);
 				});
 				try {
 					await Promise.race([
@@ -1917,7 +1978,7 @@ async function main() {
 					clearTimeout(retryDeadline.timer);
 					activeSessions.delete(retrySession);
 					unsubscribeRetry();
-					retrySession.dispose();
+					stopSession(retrySession);
 					retriesRemaining--;
 				}
 			},
