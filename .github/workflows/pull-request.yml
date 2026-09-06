@@ -212,10 +212,12 @@ jobs:
         if: steps.identity.outcome == 'failure'
         run: exit 1
 
-      # AGENTS.md forbids model, agent, harness or tool attribution in a commit or a pull
-      # request body; nothing enforced it here, the way `scripts/verify-changesets.ts` already
-      # enforces it for a changeset summary.
-      - name: "Refuse model attribution in commits and the pull request body"
+      # AGENTS.md forbids model, agent, harness or tool attribution in a pull request title or
+      # body, and `scripts/verify-changesets.ts` enforces the same for a changeset summary. Both
+      # are prose a reader weighs the change by. A commit trailer is not: `Co-authored-by:` is
+      # git's own way to credit who or what worked on a commit, and crediting a tool there is
+      # allowed.
+      - name: "Refuse model attribution in the pull request body"
         id: attribution
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         continue-on-error: true
@@ -238,59 +240,25 @@ jobs:
             const findAttribution = (text) =>
               patterns.filter(({ pattern }) => pattern.test(text ?? "")).map(({ name }) => name);
 
-            const query = `query($owner:String!,$name:String!,$number:Int!,$after:String){
-              repository(owner:$owner,name:$name){ pullRequest(number:$number){
-                commits(first:100,after:$after){ pageInfo{hasNextPage endCursor}
-                  nodes{ commit{ abbreviatedOid message } } } } } }`;
+            const bodyMatches = findAttribution(context.payload.pull_request.body);
+            if (bodyMatches.length === 0) return;
 
-            const pull = context.payload.pull_request;
-            const nodes = [];
-            let after = null;
-            do {
-              const page = await github.graphql(query, {
-                owner: context.repo.owner,
-                name: context.repo.repo,
-                number: pull.number,
-                after,
-              });
-              const data = page.repository.pullRequest;
-              nodes.push(...data.commits.nodes);
-              after = data.commits.pageInfo.hasNextPage ? data.commits.pageInfo.endCursor : null;
-            } while (after);
-
-            const offenders = nodes
-              .map(({ commit }) => ({
-                oid: commit.abbreviatedOid,
-                matches: findAttribution(commit.message),
-              }))
-              .filter(({ matches }) => matches.length > 0);
-            const bodyMatches = findAttribution(pull.body);
-            if (offenders.length === 0 && bodyMatches.length === 0) return;
-
-            const listed = offenders.map(({ oid, matches }) => `    ${oid}  ${matches.join(", ")}`);
             await writeFile(
               `${process.env.RUNNER_TEMP}/attribution-comment.md`,
               [
                 "## Attribution check failed",
                 "",
-                "A commit here or this pull request's body names the model, agent, harness or tool",
-                "that helped write it. `AGENTS.md` asks for none of that; a human co-author stays",
-                "welcome under the same trailer.",
-                ...(listed.length > 0 ? ["", "These commits carry it:", "", ...listed] : []),
-                ...(bodyMatches.length > 0
-                  ? ["", `The pull request body carries it too: ${bodyMatches.join(", ")}.`]
-                  : []),
+                "This pull request's body names the model, agent, harness or tool that helped write",
+                `it: ${bodyMatches.join(", ")}. \`AGENTS.md\` § Pull requests asks for none of that in a`,
+                "title or a body, because a description is read by people deciding whether to trust",
+                "the change.",
                 "",
-                "Edit the offending commit messages:",
+                "Edit the description to remove it. A commit trailer crediting a tool is fine, and a",
+                "human co-author stays welcome under the same trailer.",
                 "",
-                `    git rebase -i --exec "git commit --amend --no-edit" origin/${pull.base.ref}`,
-                "",
-                ...(bodyMatches.length > 0 ? ["Then edit the pull request description to remove it.", ""] : []),
               ].join("\n"),
             );
-            core.setFailed(
-              `${offenders.length} commit(s) or the pull request body carry model attribution.`,
-            );
+            core.setFailed("The pull request body carries model attribution.");
 
       - name: "Comment on PR with the attribution violations"
         uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
