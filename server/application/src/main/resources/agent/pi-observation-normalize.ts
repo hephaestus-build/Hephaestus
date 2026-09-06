@@ -705,12 +705,33 @@ export function describeCitationMismatch(
 		if (diffLine === undefined) {
 			return `the diff has no [L${lineNumber}] on the ${citation.side ?? "NEW"} side of ${citation.path}`;
 		}
-		const quoted = withoutOwnCoordinate(quoteLine, lineNumber);
-		if (diffLine !== quoted && diffLine.slice(1) !== quoted) {
+		if (!quotesDiffLine(diffLine, withoutOwnCoordinate(quoteLine, lineNumber))) {
 			return `[L${lineNumber}] reads ${excerpt(diffLine)}, not ${excerpt(quoteLine)}`;
 		}
 	}
 	return null;
+}
+
+/**
+ * Whether a quote is the diff line it claims — as displayed, without the +/- marker, or without the
+ * indentation the diff shows in front of the code. What a citation proves is that the observer read
+ * the line at that coordinate on that side, and the coordinate has already pinned which line is being
+ * compared: two lines cannot be confused by trimming, because only one is ever a candidate. A quote
+ * whose text differs, or that belongs to the other side of the change, still fails.
+ */
+function quotesDiffLine(diffLine: string, quoted: string): boolean {
+	if (diffLine === quoted || diffLine.slice(1) === quoted) {
+		return true;
+	}
+	const shown = diffLine.slice(1).trimStart();
+	return shown.length > 0 && shown === withoutMarker(quoted).trimStart();
+}
+
+/** A quote that dropped the diff's own +/- or context marker along with the indentation. */
+function withoutMarker(quoted: string): string {
+	return quoted.startsWith("+") || quoted.startsWith("-") || quoted.startsWith(" ")
+		? quoted.slice(1)
+		: quoted;
 }
 
 /**
