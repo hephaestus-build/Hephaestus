@@ -15,7 +15,11 @@ permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A superseded analysis of a branch is wasted work, but on the default branch it is the only
+  # analysis that commit will ever get: cancelling it leaves the tip unanalysed, the SAST score drops
+  # and the scorecard ratchet fails on a main nobody broke. Two merges landing within a minute of each
+  # other is enough to trigger it.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   analyze:

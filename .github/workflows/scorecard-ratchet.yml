@@ -14,7 +14,9 @@ permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # The verdict on the tip of the default branch is the one that has to exist: cancelling it leaves
+  # a merge unratcheted, which is the state this job is here to notice.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   ratchet:
