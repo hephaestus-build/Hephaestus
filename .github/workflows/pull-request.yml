@@ -212,6 +212,104 @@ jobs:
         if: steps.identity.outcome == 'failure'
         run: exit 1
 
+      # AGENTS.md forbids model, agent, harness or tool attribution in a commit or a pull
+      # request body; nothing enforced it here, the way `scripts/verify-changesets.ts` already
+      # enforces it for a changeset summary.
+      - name: "Refuse model attribution in commits and the pull request body"
+        id: attribution
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        continue-on-error: true
+        with:
+          script: |
+            const { writeFile } = require("node:fs/promises");
+
+            // Kept equal to `scripts/lib/model-attribution.ts` by
+            // `scripts/model-attribution.test.ts`; this job has no checkout to import it from.
+            const patterns = [
+              {
+                name: "a Co-Authored-By trailer naming a model or tool",
+                pattern:
+                  /^co-authored-by:.*(?:claude|codex|copilot|gpt|openai|anthropic|gemini|cursor|noreply@anthropic\.com)/im,
+              },
+              { name: "a Claude-Session trailer", pattern: /^claude-session:/im },
+              { name: 'a "Generated with" marker', pattern: /generated with/i },
+              { name: "a claude.ai/code or session link", pattern: /claude\.ai\/(?:code|session)/i },
+            ];
+            const findAttribution = (text) =>
+              patterns.filter(({ pattern }) => pattern.test(text ?? "")).map(({ name }) => name);
+
+            const query = `query($owner:String!,$name:String!,$number:Int!,$after:String){
+              repository(owner:$owner,name:$name){ pullRequest(number:$number){
+                commits(first:100,after:$after){ pageInfo{hasNextPage endCursor}
+                  nodes{ commit{ abbreviatedOid message } } } } } }`;
+
+            const pull = context.payload.pull_request;
+            const nodes = [];
+            let after = null;
+            do {
+              const page = await github.graphql(query, {
+                owner: context.repo.owner,
+                name: context.repo.repo,
+                number: pull.number,
+                after,
+              });
+              const data = page.repository.pullRequest;
+              nodes.push(...data.commits.nodes);
+              after = data.commits.pageInfo.hasNextPage ? data.commits.pageInfo.endCursor : null;
+            } while (after);
+
+            const offenders = nodes
+              .map(({ commit }) => ({
+                oid: commit.abbreviatedOid,
+                matches: findAttribution(commit.message),
+              }))
+              .filter(({ matches }) => matches.length > 0);
+            const bodyMatches = findAttribution(pull.body);
+            if (offenders.length === 0 && bodyMatches.length === 0) return;
+
+            const listed = offenders.map(({ oid, matches }) => `    ${oid}  ${matches.join(", ")}`);
+            await writeFile(
+              `${process.env.RUNNER_TEMP}/attribution-comment.md`,
+              [
+                "## Attribution check failed",
+                "",
+                "A commit here or this pull request's body names the model, agent, harness or tool",
+                "that helped write it. `AGENTS.md` asks for none of that; a human co-author stays",
+                "welcome under the same trailer.",
+                ...(listed.length > 0 ? ["", "These commits carry it:", "", ...listed] : []),
+                ...(bodyMatches.length > 0
+                  ? ["", `The pull request body carries it too: ${bodyMatches.join(", ")}.`]
+                  : []),
+                "",
+                "Edit the offending commit messages:",
+                "",
+                `    git rebase -i --exec "git commit --amend --no-edit" origin/${pull.base.ref}`,
+                "",
+                ...(bodyMatches.length > 0 ? ["Then edit the pull request description to remove it.", ""] : []),
+              ].join("\n"),
+            );
+            core.setFailed(
+              `${offenders.length} commit(s) or the pull request body carry model attribution.`,
+            );
+
+      - name: "Comment on PR with the attribution violations"
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        if: steps.attribution.outcome == 'failure'
+        with:
+          header: pr-attribution-error
+          path: ${{ runner.temp }}/attribution-comment.md
+
+      - name: "Remove attribution error comment on success"
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        if: steps.attribution.outcome == 'success'
+        with:
+          header: pr-attribution-error
+          delete: true
+
+      - name: "Fail workflow if the attribution check failed"
+        if: steps.attribution.outcome == 'failure'
+        run: exit 1
+
   assign-author:
     name: "Assign author"
     timeout-minutes: 5
