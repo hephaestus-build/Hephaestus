@@ -356,21 +356,26 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                         ? scanForSecrets(unifiedDiff)
                         : List.of();
 
-        // A run that decided nothing at all over a non-empty diff is the stale-diff signature. Both
-        // valence-free presences count here: an empty diff yields NOT_APPLICABLE, a truncated one yields
-        // INCONCLUSIVE, and the harness fault is identical either way.
+        // What is left to catch is a review that answered without reading the change. The file count
+        // above and the patch staged for the run are the same bytes — the evidence snapshot is built
+        // from the very map that becomes the sandbox's input files — so an empty patch cannot coexist
+        // with a non-empty file count, and a stale one is stale on both sides and invisible from here.
+        // A diff citation is the one thing that cannot be produced without the patch: the runner
+        // re-reads every citation out of the artifact it names (citationMatchesArtifact in
+        // pi-observation-normalize.ts) and rejects the observation when the quote is not there.
+        // Both valence-free presences count as deciding nothing — NOT_APPLICABLE and INCONCLUSIVE
+        // differ in what the run could tell, not in whether it settled anything.
         boolean nothingDecided =
                 parsed.validObservations().stream().noneMatch(f -> f.presence().carriesValence());
-        if (nothingDecided && secretObservations.isEmpty()) {
-            boolean hasDiffContent = !diffFiles.isEmpty();
-            if (hasDiffContent) {
-                throw new JobDeliveryException(
-                        "No observation decided anything (all NOT_APPLICABLE/INCONCLUSIVE) but the diff contains "
-                                + diffFiles.size()
-                                + " files — likely a stale/empty diff was provided to the agent. "
-                                + "Refusing to deliver. jobId="
-                                + job.getId());
-            }
+        if (nothingDecided
+                && secretObservations.isEmpty()
+                && !diffFiles.isEmpty()
+                && !readTheDiff(parsed.validObservations())) {
+            throw new JobDeliveryException("No observation decided anything or quoted the diff, and the diff contains "
+                    + diffFiles.size()
+                    + " files — the review answered without reading the change. "
+                    + "Refusing to deliver. jobId="
+                    + job.getId());
         }
 
         var scopedObservations = new ArrayList<>(filterByDiffScope(parsed.validObservations(), diffFiles));
@@ -584,6 +589,40 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         }
         return paths;
     }
+
+    /**
+     * Whether any observation cites the pull request's own diff. The runner admits a citation only after
+     * finding its quote at the coordinates it names inside the staged artifact, so this is a report about
+     * bytes that were read rather than a claim the model makes about itself.
+     */
+    static boolean readTheDiff(List<PracticeDetectionResultParser.ValidatedObservation> observations) {
+        for (var observation : observations) {
+            JsonNode evidence = observation.evidence();
+            if (evidence == null) {
+                continue;
+            }
+            for (JsonNode citation : evidence.path("citations")) {
+                if (DIFF_SOURCE_KIND.equals(citation.path("sourceKind").asString())) {
+                    return true;
+                }
+            }
+            // A practice whose subject lives in the metadata rather than the code answers without a
+            // diff citation, and its warrant is where it names the diff among the sources it walked.
+            // The model writes that list, so it is weaker than a quote — which is why it only widens a
+            // refusal, and never stands in for the evidence an observation itself owes.
+            for (String warrant : List.of("search", "inapplicability", "undecidability")) {
+                for (JsonNode consulted : evidence.path(warrant).path("consulted")) {
+                    if (DIFF_SOURCE_KIND.equals(consulted.asString())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /** The staged artifact a review reads the change from. */
+    private static final String DIFF_SOURCE_KIND = "scm.pull-request.diff";
 
     static List<PracticeDetectionResultParser.ValidatedObservation> filterByDiffScope(
             List<PracticeDetectionResultParser.ValidatedObservation> observations, Set<String> diffFiles) {
