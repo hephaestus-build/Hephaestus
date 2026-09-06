@@ -104,6 +104,17 @@ reconcile:
 | `WEBHOOK_SECRET` | what the providers were registered to sign with |
 | `HEPHAESTUS_AUTH_STATE_COOKIE_KEY` | optional; a new one only invalidates sign-ins that are in flight at the moment of the switch |
 
+A host that also brings its own edge keeps its certificates in the `proxy_letsencrypt` volume. Copy
+the previous deployment's `acme.json` into it before the first reconcile, or Traefik issues the
+certificates again on first start:
+
+```bash
+sudo docker volume create proxy_letsencrypt
+sudo cp <previous>/letsencrypt/acme.json \
+  /var/lib/docker/volumes/proxy_letsencrypt/_data/acme.json
+sudo chmod 600 /var/lib/docker/volumes/proxy_letsencrypt/_data/acme.json
+```
+
 The pull-based stacks use the bundled database with its fixed credentials, so there is no
 database password to carry. On the Compose installer, `docker/self-host/setup.sh` refuses to
 generate an encryption key while the volume `hephaestus_postgresql-data` exists, and stops rather
