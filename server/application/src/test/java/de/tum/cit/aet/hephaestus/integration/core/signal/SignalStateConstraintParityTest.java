@@ -15,8 +15,11 @@ import org.junit.jupiter.api.Test;
  * {@code artifact_signal.state} is constrained at the database by {@code ck_artifact_signal_state},
  * and a {@link SignalState} the constraint does not admit is rejected on write. The consumer retries
  * the message until it gives up and drops it, so the occurrence it carried is never reviewed and the
- * ledger keeps no record that it arrived. No other tier sees it: the suite builds its schema with
- * {@code ddl-auto: create} and applies no changelog.
+ * ledger keeps no record that it arrived. Every other tier builds its schema with
+ * {@code ddl-auto: create} and applies no changelog, so none of them sees the constraint at all;
+ * {@link SignalStateConstraintIntegrationTest} migrates a real database and asserts the same parity
+ * against what the chain actually produces, and this one answers in the unit suite instead of the
+ * database job.
  */
 @Tag("unit")
 class SignalStateConstraintParityTest {
