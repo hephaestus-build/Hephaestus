@@ -22,7 +22,8 @@ public record AgentJobDTO(
         @Schema(description = "Job metadata (routing/display info)") @Nullable
         Object metadata,
 
-        @Schema(description = "Job output (agent results)") Object output,
+        @Schema(description = "Job output (agent results)") @Nullable
+        Object output,
 
         @NonNull
         @Schema(
@@ -45,14 +46,16 @@ public record AgentJobDTO(
         @Nullable
         String model,
 
-        @Schema(description = "Container exit code") Integer exitCode,
+        @Schema(description = "Container exit code") @Nullable
+        Integer exitCode,
 
-        @Schema(description = "Human-readable error message")
+        @Schema(description = "Human-readable error message") @Nullable
         String errorMessage,
 
         @Schema(
                 description =
                         "Delivery status: null = not applicable, PENDING = awaiting delivery, DELIVERED = posted, FAILED = delivery error")
+        @Nullable
         DeliveryStatus deliveryStatus,
 
         @Schema(description = "Git provider comment/note ID for posted feedback") @Nullable
@@ -79,10 +82,10 @@ public record AgentJobDTO(
         @NonNull @Schema(description = "Timestamp when the job was created")
         Instant createdAt,
 
-        @Schema(description = "Timestamp when the job started running")
+        @Schema(description = "Timestamp when the job started running") @Nullable
         Instant startedAt,
 
-        @Schema(description = "Timestamp when the job completed")
+        @Schema(description = "Timestamp when the job completed") @Nullable
         Instant completedAt,
 
         @Schema(description = "LLM model used (e.g. gpt-5.4-mini, openai/gpt-oss-120b)") @Nullable

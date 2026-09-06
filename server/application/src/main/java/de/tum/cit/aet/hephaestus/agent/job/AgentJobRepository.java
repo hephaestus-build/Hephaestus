@@ -762,14 +762,18 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     interface AgentJobListRow extends ReviewRunTargetRow {
         AgentJobStatus getStatus();
 
+        @Nullable
         JsonNode getOutput();
 
         JsonNode getConfigSnapshot();
 
+        @Nullable
         Integer getExitCode();
 
+        @Nullable
         String getErrorMessage();
 
+        @Nullable
         DeliveryStatus getDeliveryStatus();
 
         @Nullable
@@ -784,8 +788,10 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
 
         Instant getCreatedAt();
 
+        @Nullable
         Instant getStartedAt();
 
+        @Nullable
         Instant getCompletedAt();
 
         @Nullable
