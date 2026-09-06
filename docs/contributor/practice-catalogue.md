@@ -116,7 +116,7 @@ such as whether a developer understood a trade-off discussed privately with a me
 The instance tables store only decisions that differ from the bundled catalog: a customized
 definition, inclusion policy, accepted bundled digest, or position. No override row means the
 bundled definition and order apply. See
-[ADR 0028](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0028-source-synced-practice-catalog.md)
+[ADR 0028](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0028-source-synced-practice-catalog.md)
 for the architectural decision.
 
 ## Workspace adoption lifecycle
@@ -128,7 +128,7 @@ for the architectural decision.
 - **Automatic installation is keyed on the installation record, not on age.** At startup, a workspace
   with no `practice_catalog_installation` row receives the whole effective catalogue once. Recording
   that row is what makes a workspace start empty, and only workspaces created through the workspace
-  API record it today — see [#1362](https://github.com/ls1intum/Hephaestus/issues/1362).
+  API record it today — see [#1362](https://github.com/hephaestus-build/Hephaestus/issues/1362).
 - **Adoption is deliberate.** Workspace administrators can show the instance library alongside their
   workspace configuration, inspect a complete effective definition, and add either one practice or all
   available practices in a group as independent copies. Group adoption is one transaction. Both flows

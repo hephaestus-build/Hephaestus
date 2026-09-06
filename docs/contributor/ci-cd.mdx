@@ -264,7 +264,7 @@ is no longer the head; the new push starts the next deployment and nothing needs
 
 A preview runs its own PostgreSQL seeded from staging and reads staging's event stream. What is
 switched off in the copy, how sign-in works, and how the sandbox is enforced are in
-[`docker/preview/README.md`](https://github.com/ls1intum/Hephaestus/blob/main/docker/preview/README.md).
+[`docker/preview/README.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/docker/preview/README.md).
 
 Preview controllers run only for pull requests targeting `main`; this keeps privileged
 `pull_request_target` workflows anchored to the protected branch. A stacked layer becomes eligible
@@ -276,7 +276,7 @@ Accounts, workspaces, reviewed work, observations, feedback and the AI catalogs'
 there to read, model prices, grants and bindings included, and each connection keeps the state it
 had on staging. What the clone is stripped of, and what the seed loader verifies before it lets the
 preview boot, is
-[`docker/preview/README.md` § Security boundary](https://github.com/ls1intum/Hephaestus/blob/main/docker/preview/README.md#security-boundary).
+[`docker/preview/README.md` § Security boundary](https://github.com/hephaestus-build/Hephaestus/blob/main/docker/preview/README.md#security-boundary).
 
 None of staging's provider credentials are among what it keeps, so a preview reaches no model and no
 provider on staging's account. To give one AI access, add a **preview-only provider key** through
@@ -315,9 +315,9 @@ Coolify rejects the event the job fails and `reconcile-previews.yml` retries nig
 the deployment inventory.
 
 Operator configuration, host capacity and secret scopes live in
-[`docker/preview/README.md`](https://github.com/ls1intum/Hephaestus/blob/main/docker/preview/README.md);
+[`docker/preview/README.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/docker/preview/README.md);
 why the label is the authority, and which alternatives were priced and declined, is
-[ADR 0035](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0035-pull-request-previews-are-label-gated.md).
+[ADR 0035](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0035-pull-request-previews-are-label-gated.md).
 
 ## Workflows
 

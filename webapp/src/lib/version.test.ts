@@ -8,7 +8,7 @@ describe("resolveHeaderBadge", () => {
 		expect(badge).toStrictEqual({
 			kind: "release",
 			label: "v0.73.2",
-			href: "https://github.com/ls1intum/Hephaestus/releases/tag/v0.73.2",
+			href: "https://github.com/hephaestus-build/Hephaestus/releases/tag/v0.73.2",
 			tooltip: "View release notes",
 			ariaLabel: "View release v0.73.2",
 		});

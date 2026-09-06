@@ -21,7 +21,7 @@ deployment — distinct from a **workspace admin**, whose powers are scoped to a
   (`app_admin`/`admin`) that might arrive via a grantable `account_feature` row, so an
   `/admin/users`-granted flag can never escalate to instance admin.
 - First-admin bootstrap (no DB seed required) is covered separately in the
-  [auth-cutover runbook](https://github.com/ls1intum/Hephaestus/blob/main/docs/runbooks/auth-cutover.md#first-instance-admin-bootstrap).
+  [auth-cutover runbook](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/runbooks/auth-cutover.md#first-instance-admin-bootstrap).
 
 ## The shell
 
@@ -179,5 +179,5 @@ under `/admin/llm/*`, prices them, and grants them to workspaces; a workspace ma
 connection when instance settings permit it. Usage is metered into `llm_usage_event` and capped by two
 independent monthly budgets — the instance's cap on shared-model spend and the workspace's cap on its
 own provider — which are never summed.
-[ADR 0026](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0026-per-purpose-agent-bindings-and-llm-governance.md)
+[ADR 0026](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0026-per-purpose-agent-bindings-and-llm-governance.md)
 records the decision.

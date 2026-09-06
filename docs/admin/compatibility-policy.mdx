@@ -7,8 +7,8 @@ description: What a Hephaestus version number promises — the public contract, 
 Hephaestus follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). This page defines what
 that version number promises to you as an operator: which surfaces are covered, what an upgrade commits you
 to, and which versions we support. Release contents are documented in the
-[CHANGELOG](https://github.com/ls1intum/Hephaestus/blob/main/CHANGELOG.md) and on
-[GitHub Releases](https://github.com/ls1intum/Hephaestus/releases).
+[CHANGELOG](https://github.com/hephaestus-build/Hephaestus/blob/main/CHANGELOG.md) and on
+[GitHub Releases](https://github.com/hephaestus-build/Hephaestus/releases).
 
 ## The public contract
 
@@ -20,7 +20,7 @@ Semantic versioning applies to the surfaces an operator or API consumer depends 
 | **Runtime prerequisites** | The minimum PostgreSQL major version, the required outbound network destinations, and any required external services. Adding one is a breaking change. |
 | **Configuration keys** | Environment variables and `hephaestus.*` properties documented in the [Install](./install.mdx) guide (base install) and [Integrations & Reference Deployment](./production-setup.mdx) (per-integration bundles). Renames and removals are breaking changes. |
 | **Docker Compose interface** | Service names, image names, the signed release-lock contract, and required environment variables of the published compose files — the self-hosted stack (`docker/self-host/compose.yaml`, see the [Install guide](./install.mdx)) and the reference deployment (`docker/compose.app.yaml`, `docker/compose.core.yaml`, `docker/compose.proxy.yaml`). |
-| **REST API** | The endpoints described by the published [OpenAPI specification](https://github.com/ls1intum/Hephaestus/blob/main/server/openapi.yaml). |
+| **REST API** | The endpoints described by the published [OpenAPI specification](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml). |
 
 Everything else — Java and TypeScript internals, the database schema itself (as opposed to the migration
 chain), undocumented endpoints, UI layout — may change in any release without notice.
@@ -29,7 +29,7 @@ chain), undocumented endpoints, UI layout — may change in any release without 
 
 | Bump | Meaning |
 | --- | --- |
-| **Major** (`X`.y.z) | You must act before or during the upgrade — a required new config key, a removed or renamed one, a manual or destructive migration, or a dropped API. The release notes say what to do; [`MIGRATION.md`](https://github.com/ls1intum/Hephaestus/blob/main/MIGRATION.md) has the details. |
+| **Major** (`X`.y.z) | You must act before or during the upgrade — a required new config key, a removed or renamed one, a manual or destructive migration, or a dropped API. The release notes say what to do; [`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) has the details. |
 | **Minor** (x.`Y`.z) | New functionality; upgrade needs no action. May include new *optional* config keys. |
 | **Patch** (x.y.`Z`) | Bug and security fixes; upgrade needs no action. |
 

@@ -96,9 +96,9 @@ deployment obligations. A source allowed in an internal mirror is not thereby al
 
 ## Source catalog (`1.0.0`)
 
-The machine-readable [catalog](https://github.com/ls1intum/Hephaestus/blob/main/server/application/src/main/resources/contracts/artifact-source/1.0.0/catalog.json),
+The machine-readable [catalog](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/artifact-source/1.0.0/catalog.json),
 its adjacent JSON Schemas, and the checks in
-[`gate:contracts`](https://github.com/ls1intum/Hephaestus/blob/main/scripts/validate-artifact-source-contracts.ts)
+[`gate:contracts`](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/validate-artifact-source-contracts.ts)
 jointly define conformance. Schema validation alone is insufficient because standard JSON Schema `uniqueItems`
 compares whole values rather than a selected identity property, so the script also rejects duplicate source
 kinds and holds each schema's pinned `catalogDigest` to the catalog's actual hash. The cross-resource rules

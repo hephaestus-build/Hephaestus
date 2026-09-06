@@ -15,7 +15,7 @@ one unreadable manifest stops collection. Split roles consequently require a sha
 
 This contradicts ADR 0020's SQL-authority rule, gives one capture independent retention clocks, and
 makes erasure depend on a filesystem scan. Issue
-[#1427](https://github.com/ls1intum/Hephaestus/issues/1427) defined the required evidence invariants
+[#1427](https://github.com/hephaestus-build/Hephaestus/issues/1427) defined the required evidence invariants
 without selecting storage; this ADR selects it for 1.0.
 
 ## Decision drivers
@@ -45,7 +45,7 @@ without selecting storage; this ADR selects it for 1.0.
   commit, tree, and blob objects; PostgreSQL owns the object-ID reference and its liveness.
 - PostgreSQL owns manifests, evidence references, retention and erasure state, and bounded bytes
   captured through APIs, including pull-request data, comments, Slack threads, and Outline documents.
-  Payloads use inline `bytea`, extending [#1103](https://github.com/ls1intum/Hephaestus/issues/1103).
+  Payloads use inline `bytea`, extending [#1103](https://github.com/hephaestus-build/Hephaestus/issues/1103).
 - Commit object IDs and SHA-256 payload digests are the only evidence identities. Paths, URLs,
   repository IDs, source kinds, and provider types cannot participate in identity. Typed provenance
   and sandbox-relative locations may accompany a digest only as tenant-scoped metadata required to
@@ -115,7 +115,7 @@ any API-payload limits use source-specific names, reject oversize input before p
 rejected-size and stored-size measurements. TOAST does not relax those limits.
 
 For 1.0, a full clone has no promisor dependency for retained evidence. This supersedes
-[#1102](https://github.com/ls1intum/Hephaestus/issues/1102)'s locked `--filter=blob:none` choice for the
+[#1102](https://github.com/hephaestus-build/Hephaestus/issues/1102)'s locked `--filter=blob:none` choice for the
 evidence path. Partial clone may return in v2 only after an offline test proves every object reachable
 from every live keep-ref remains locally available after restart and eviction consults SQL liveness.
 

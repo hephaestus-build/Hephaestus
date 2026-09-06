@@ -158,7 +158,7 @@ against the PostgreSQL 18 database.
   already processed (or never saw). Webhook ingest deduplicates by delivery id and
   idempotency keys, so replays are absorbed on ingest; the end-to-end redelivery-safety
   drill (including whether to reset consumers after a restore) is part of
-  [#1370](https://github.com/ls1intum/Hephaestus/issues/1370). The conservative option
+  [#1370](https://github.com/hephaestus-build/Hephaestus/issues/1370). The conservative option
   after a restore from an old backup: `docker compose down`,
   `docker volume rm hephaestus_nats-data`, `docker compose up -d` — events in the gap are
   re-fetched by the scheduled sync.

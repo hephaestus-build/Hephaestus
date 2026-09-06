@@ -413,5 +413,5 @@ Any of these says one of the six decisions above was wrong:
 
 The metric roster, the destructive-update decision table and the recovery procedure for a wedged
 broker are published for self-hosters at
-[Webhook ingestion operations](https://ls1intum.github.io/Hephaestus/admin/webhook-ingestion-operations).
+[Webhook ingestion operations](https://docs.hephaestus.build/admin/webhook-ingestion-operations).
 This ADR records why; that page records what to do.

@@ -6,7 +6,7 @@ description: How repository activity is ingested, backfilled and kept current.
 # Integration sync lifecycle
 
 What each integration actually does at every phase of its life, from first connect to erasure.
-Companion to [ADR 0024](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md),
+Companion to [ADR 0024](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md),
 which records *why* the two deletion semantics are separate.
 
 ## The cohesive principle
@@ -82,7 +82,7 @@ erasure can never implement the drift path.
 
 There is no entity-level soft-delete filter: which reads honour a tombstone, and which keep returning
 the row because they record something that happened, is decided surface by surface in
-[ADR 0024](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md)
+[ADR 0024](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md)
 § Update — 2026-09-03 (issue #1404): which reads honour a drift tombstone.
 
 ### Erasure is orphan-guarded

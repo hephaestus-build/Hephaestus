@@ -62,7 +62,7 @@ public class ContributorService {
 
         try {
             Map<Long, ContributorDTO> uniqueContributors = new LinkedHashMap<>();
-            collectContributorsForRepository("ls1intum", "Hephaestus", uniqueContributors);
+            collectContributorsForRepository("hephaestus-build", "Hephaestus", uniqueContributors);
             return sortContributors(uniqueContributors);
         } catch (WebClientResponseException e) {
             log.error("HTTP error fetching global contributors: {} - {}", e.getStatusCode(), e.getMessage(), e);

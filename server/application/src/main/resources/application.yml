@@ -401,10 +401,10 @@ hephaestus:
             redirect:
                 ttl-days: 30
         default:
-            login: ${GITHUB_PAT_LOGIN:ls1intum}
+            login: ${GITHUB_PAT_LOGIN:hephaestus-build}
             token: ${GITHUB_PAT:}
             repositories-to-monitor:
-                - ls1intum/Hephaestus
+                - hephaestus-build/Hephaestus
                 - ls1intum/Artemis
         init-gitlab-default: ${GITLAB_WORKSPACE_INIT_DEFAULT:false}
         gitlab-default:
@@ -648,10 +648,7 @@ hephaestus:
     # ═══════════════════════════════════════════════════════════════════════════
     # CONTRIBUTORS (Hephaestus meta — who built the app)
     # ═══════════════════════════════════════════════════════════════════════════
-    # Token used by ContributorService to fetch the ls1intum/Hephaestus contributor
-    # graph. Detached from `hephaestus.integration.github` so SCM-integration code no longer
-    # carries an unrelated PAT. Defaults to the legacy GH_AUTH_TOKEN env var so
-    # existing deployments keep working without touching their secrets stores.
+    # Separate prefix so SCM-integration code never carries this PAT. Blank disables contributor credits.
     contributors:
         github:
             auth-token: ${GH_AUTH_TOKEN:}

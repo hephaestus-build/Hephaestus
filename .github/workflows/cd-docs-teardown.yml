@@ -13,8 +13,8 @@ jobs:
     timeout-minutes: 10
     runs-on: ubuntu-latest
     env:
-      PREVIEW_URL: ls1intum-hephaestus-docs-pr-${{ github.event.number }}.surge.sh
-      STORYBOOK_PREVIEW_URL: ls1intum-hephaestus-storybook-pr-${{ github.event.number }}.surge.sh
+      PREVIEW_URL: hephaestus-build-docs-pr-${{ github.event.number }}.surge.sh
+      STORYBOOK_PREVIEW_URL: hephaestus-build-storybook-pr-${{ github.event.number }}.surge.sh
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -17,7 +17,7 @@ info:
     Amounts are USD throughout — the ledger, the caps and the gates all meter in USD, and the currency is therefore part of the field name (`...Usd`) rather than a per-amount field. Where a response also carries `FxRateInfo`, that is a display-only estimate in a second currency and is never an input to a budget decision.
   license:
     name: MIT License
-    url: https://github.com/ls1intum/Hephaestus/blob/develop/LICENSE
+    url: https://github.com/hephaestus-build/Hephaestus/blob/main/LICENSE
   title: Hephaestus API
   version: 0.0.0-development
 servers:

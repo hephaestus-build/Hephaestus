@@ -129,7 +129,7 @@ refill, or an ordinary sync — without the work occurring again.
 `ARTIFACT_GONE` is terminal: the work is missing or unreviewable, or a person requested a review while
 it was tombstoned. `ARTIFACT_NOT_VISIBLE` holds automatic occasions for a reversible mirror tombstone,
 including live events and pending retries. Ordinary sync can restore the row
-([ADR 0024](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md)).
+([ADR 0024](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md)).
 A manual request is not retried after restoration; the person can request another review.
 
 `COALESCED` means an issue-update snapshot was displaced before admission. It is suppressed, not pending:
@@ -291,7 +291,7 @@ A practice review does two things, in two model turns, and the words for them ar
 the words. The test is whether the sentence can be checked against the artifact: if you can settle it by
 reading the work, it is measurement, and if you can only settle it by watching what the person does next,
 it is intervention. The seam is
-[ADR 0029](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md);
+[ADR 0029](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md);
 how it runs is in the [practice review pipeline](./practice-review-pipeline.mdx#measurement-and-intervention).
 
 | Term                       | Plain meaning                                                                                                                                                                                                                                        | Do not use for this concept                                |
@@ -339,7 +339,7 @@ wrong. Do not write *profile* for `IN_APP` — **Profile** is the workspace-read
 `/w/{workspaceSlug}/user/{username}` — and
 do not write *reflection* either: it named what the developer was meant to do rather than where the
 message lands, and it is the name this lane was renamed away from
-([ADR 0029](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md)).
+([ADR 0029](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md)).
 Do not write *conversation* for `IN_CHAT`: `chat.conversation_thread` is a kind of work Hephaestus
 *reviews*, not a place it delivers to. And do not describe `IN_CHAT` as a prepared reply; what is stored
 is notes to the mentor, not words to speak.

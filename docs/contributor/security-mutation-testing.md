@@ -40,7 +40,7 @@ affected server CODEOWNERS review any accepted classification.
 - Remove unwired code instead of building mutation tests around it.
 - Treat technical and incomplete statuses as an invalid run, never as killed mutations.
 
-[Issue #1498](https://github.com/ls1intum/Hephaestus/issues/1498) records the suite's evaluation and
+[Issue #1498](https://github.com/hephaestus-build/Hephaestus/issues/1498) records the suite's evaluation and
 the decision to keep it non-required and advisory.
 
 ## Further reading

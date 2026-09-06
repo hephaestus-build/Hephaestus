@@ -26,15 +26,15 @@ Who gets practice review is **not** among them. There is no instance-wide popula
 turns itself on, and decides its own coverage.
 
 See the
-[server configuration](https://github.com/ls1intum/Hephaestus/blob/main/server/application/src/main/resources/application.yml)
-and [reference Compose files](https://github.com/ls1intum/Hephaestus/tree/main/docker) before changing an
+[server configuration](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/application.yml)
+and [reference Compose files](https://github.com/hephaestus-build/Hephaestus/tree/main/docker) before changing an
 environment variable. Unknown or unforwarded variables do not configure the application.
 
 Repository checkouts, replay metadata, and content-addressed evidence share the fabric root. A split
 or multi-host deployment must mount the same durable read-write filesystem on every server and worker, with
 cross-process locks, atomic rename, and access controls suitable for source content.
 
-[ADR 0039](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0039-git-and-postgresql-own-evidence.md)
+[ADR 0039](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0039-git-and-postgresql-own-evidence.md)
 defines the accepted 1.0 replacement; current releases still require this mount.
 
 Source authorization is not a deployment toggle. The shipped artifact-source contract fixes which governed

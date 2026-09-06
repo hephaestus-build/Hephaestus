@@ -109,7 +109,7 @@ Consequences for operators:
 - Disconnect is refused with a retryable `409` while a sync job is in flight, so the erase never
   races a writer.
 
-See [ADR 0024](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md)
+See [ADR 0024](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md)
 for the full model and [Integration sync lifecycle](./sync-lifecycle.md) for per-integration detail.
 
 ## 6. Explicitly NOT in this migration (so you don't wait for them)

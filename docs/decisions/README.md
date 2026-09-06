@@ -31,7 +31,7 @@ Two rules follow, and CI enforces the second one:
 2. **A published page links here by absolute GitHub URL, never a relative path.** A relative
    `../decisions/…` link from `docs/user/`, `docs/contributor/` or `docs/admin/` resolves to
    nothing on the site, and `onBrokenMarkdownLinks: 'throw'` fails the docs build. Use
-   `https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/<file>.md`. Relative links
+   `https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/<file>.md`. Relative links
    *between* files in this tree are fine — they are only ever read on GitHub.
 
 An operator-facing fact must not live only here. If a runbook step is something a self-hoster has to

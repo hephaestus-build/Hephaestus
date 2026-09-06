@@ -86,7 +86,7 @@ cannot enforce, so do not use the level as the name.
 `IN_APP` is the code noun — the enum constant and the `chk_feedback_channel` value. Do not call it a
 *profile* or *reflection* channel: those words name a different surface or an outcome the system cannot
 observe.
-[ADR 0029](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md)
+[ADR 0029](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md)
 records the naming
 decision. On an operator surface, the place reads **On their practice pages**.
 

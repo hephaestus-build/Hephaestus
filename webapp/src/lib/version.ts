@@ -1,4 +1,4 @@
-const REPO_URL = "https://github.com/ls1intum/Hephaestus";
+const REPO_URL = "https://github.com/hephaestus-build/Hephaestus";
 const SEMVER = /^\d+\.\d+\.\d+$/;
 
 export type EnvironmentTone = "staging" | "preview" | "local";
