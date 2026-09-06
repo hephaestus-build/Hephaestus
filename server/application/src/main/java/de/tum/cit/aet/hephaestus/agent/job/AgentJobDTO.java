@@ -144,6 +144,42 @@ public record AgentJobDTO(
     }
 
     /**
+     * The listing's row, which carries every column this record renders and no transcript — the one
+     * thing an entity page would have read per row and thrown away.
+     */
+    public static AgentJobDTO from(AgentJobRepository.AgentJobListRow row) {
+        JsonNode snapshot = row.getConfigSnapshot();
+        return new AgentJobDTO(
+                row.getId(),
+                row.getJobType(),
+                row.getStatus(),
+                ReviewRunTargetDTO.from(row),
+                row.getMetadata(),
+                row.getOutput(),
+                ReviewRunOutcome.fromJobOutput(row.getOutput()),
+                redactInstanceBaseUrl(snapshot),
+                snapshotString(snapshot, "upstreamModelId"),
+                row.getExitCode(),
+                row.getErrorMessage(),
+                row.getDeliveryStatus(),
+                row.getDeliveryCommentId(),
+                row.getRetryCount(),
+                row.getAvailableAt(),
+                row.getHoldReason(),
+                row.getCreatedAt(),
+                row.getStartedAt(),
+                row.getCompletedAt(),
+                row.getLlmModel(),
+                row.getLlmModelVersion(),
+                row.getLlmTotalCalls(),
+                row.getLlmTotalInputTokens(),
+                row.getLlmTotalOutputTokens(),
+                row.getLlmTotalReasoningTokens(),
+                row.getLlmCacheReadTokens(),
+                row.getLlmCacheWriteTokens());
+    }
+
+    /**
      * The audience here is a workspace admin, who may see the full {@code baseUrl} only of a
      * {@code WORKSPACE}-scoped connection they configured themselves. Anything else — an INSTANCE
      * connection, or a scope-less snapshot from a rolling upgrade — is cut back to {@code scheme://host}

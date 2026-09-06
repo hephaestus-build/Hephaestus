@@ -185,9 +185,9 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
 
         transactions.executeWithoutResult(status -> coalescer.drain(workspace.getId(), current.artifactId(), NOW));
 
-        assertThat(jobs.findByWorkspaceId(workspace.getId(), Pageable.unpaged()))
+        assertThat(jobs.findListRows(workspace.getId(), null, Pageable.unpaged()))
                 .isEmpty();
-        assertThat(jobs.findByWorkspaceId(other.getId(), Pageable.unpaged())).isEmpty();
+        assertThat(jobs.findListRows(other.getId(), null, Pageable.unpaged())).isEmpty();
         assertThat(signals.findForArtifact(workspace.getId(), ScmSignals.ISSUE.value(), current.artifactId()))
                 .hasSize(2)
                 .allSatisfy(signal -> {
@@ -203,7 +203,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
 
         transactions.executeWithoutResult(status -> coalescer.drain(workspace.getId(), current.artifactId(), NOW));
 
-        assertThat(jobs.findByWorkspaceId(workspace.getId(), Pageable.unpaged()))
+        assertThat(jobs.findListRows(workspace.getId(), null, Pageable.unpaged()))
                 .isEmpty();
         assertThat(signals.findForArtifact(workspace.getId(), ScmSignals.ISSUE.value(), current.artifactId()))
                 .hasSize(2)
@@ -217,14 +217,14 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
     void shouldRollBackTheWholeBurstWhenSettlementFailsAfterSubmissionReturns(CapturedOutput output) {
         assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
                     coalescer.drain(workspace.getId(), current.artifactId(), NOW);
-                    assertThat(jobs.findByWorkspaceId(workspace.getId(), Pageable.unpaged()))
+                    assertThat(jobs.findListRows(workspace.getId(), null, Pageable.unpaged()))
                             .hasSize(1);
                     throw new IllegalStateException("Settlement failed after admission");
                 }))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Settlement failed after admission");
         assertThat(output).doesNotContain("agent.job.queued");
-        assertThat(jobs.findByWorkspaceId(workspace.getId(), Pageable.unpaged()))
+        assertThat(jobs.findListRows(workspace.getId(), null, Pageable.unpaged()))
                 .isEmpty();
 
         assertThat(signals.findForArtifact(workspace.getId(), ScmSignals.ISSUE.value(), current.artifactId()))
@@ -238,7 +238,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
         transactions.executeWithoutResult(status -> coalescer.drain(workspace.getId(), current.artifactId(), NOW));
         transactions.executeWithoutResult(status -> coalescer.drain(workspace.getId(), current.artifactId(), NOW));
         assertThat(output).containsOnlyOnce("agent.job.queued");
-        assertThat(jobs.findByWorkspaceId(workspace.getId(), Pageable.unpaged()))
+        assertThat(jobs.findListRows(workspace.getId(), null, Pageable.unpaged()))
                 .singleElement()
                 .satisfies(job -> assertThat(signals.findForArtifact(
                                 workspace.getId(), ScmSignals.ISSUE.value(), current.artifactId()))
