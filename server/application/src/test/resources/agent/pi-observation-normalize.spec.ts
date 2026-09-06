@@ -304,6 +304,18 @@ void test("a quote may drop the diff's marker and the indentation in front of th
 		describeCitationMismatch({ ...citation, quote: "secure();" }, diff) ?? "",
 		/\[L10] reads/,
 	);
+
+	// Code that begins with the same character the diff uses as a marker keeps it.
+	const flagDiff =
+		"diff --git a/run.sh b/run.sh\n+++ b/run.sh\n@@ -10 +10 @@\n[L10] +    -flag --now\n";
+	assert.equal(
+		describeCitationMismatch({ ...citation, path: "run.sh", quote: "-flag --now" }, flagDiff),
+		null,
+	);
+	assert.equal(
+		describeCitationMismatch({ ...citation, path: "run.sh", quote: "+    -flag --now" }, flagDiff),
+		null,
+	);
 });
 
 void test("a quote from the other side of the change is refused, however it is written", () => {

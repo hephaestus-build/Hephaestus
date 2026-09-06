@@ -724,7 +724,13 @@ function quotesDiffLine(diffLine: string, quoted: string): boolean {
 		return true;
 	}
 	const shown = diffLine.slice(1).trimStart();
-	return shown.length > 0 && shown === withoutMarker(quoted).trimStart();
+	if (shown.length === 0) {
+		return false;
+	}
+	// As written first, so a line of code that begins with a `-` or a `+` keeps it; only then as a
+	// quote that dropped the diff's own marker along with the indentation.
+	const trimmed = quoted.trimStart();
+	return shown === trimmed || shown === withoutMarker(trimmed).trimStart();
 }
 
 /** A quote that dropped the diff's own +/- or context marker along with the indentation. */
