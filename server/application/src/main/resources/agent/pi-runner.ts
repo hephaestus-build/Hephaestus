@@ -52,6 +52,7 @@ import {
 	promptTokens,
 	type RecordingPace,
 } from "./pi-runner-recording-pace.ts";
+import { isRetryableStatus, retrying } from "./pi-runner-retry.ts";
 import {
 	armRetryWindow,
 	deriveReconBudget,
@@ -1443,18 +1444,84 @@ function buildCompositionTurn(
 	);
 }
 
-async function admitObservations() {
-	const response = await fetch(`${process.env.LLM_PROXY_URL}/admit-observations`, {
-		method: "POST",
-		headers: {
-			authorization: `Bearer ${process.env.LLM_PROXY_TOKEN}`,
-			"content-type": "application/json",
-			...(process.env.TRACEPARENT ? { traceparent: process.env.TRACEPARENT } : {}),
-		},
-		body: JSON.stringify({ schemaVersion: 1, observations: reviewState.observations }),
-	});
+/** A transport failure or a server that is not answering yet; a refusal is a decision, not a blip. */
+class AdmissionUnreachable extends Error {}
+
+/** The cause behind a wrapped error, in parentheses, or nothing when the error carries none. */
+function causeText(error: unknown): string {
+	return error instanceof Error && error.cause !== undefined ? ` (${errorText(error.cause)})` : "";
+}
+
+/**
+ * What a blip costs. The proxy address is the app server's IP as it was when this container started,
+ * so a server that came back somewhere else is not something waiting can reach — and a deployment
+ * outlasts any wait that fits here anyway, its healthcheck allowing itself 90s to come up. These
+ * attempts buy the failures that clear in place: a reset connection, a socket refused while the
+ * process is coming back. Their 15s is already half the watchdog's grace, which still has to cover
+ * the composer session this run builds next.
+ */
+const ADMISSION_ATTEMPTS = 4;
+
+/**
+ * How long one attempt may take before it counts as not arriving. A server that closes the socket
+ * fails immediately; one that goes silent without closing it would otherwise hold the attempt for
+ * Node's own five-minute default, and the watchdog would end the run before a second attempt existed.
+ *
+ * Four attempts at five seconds, waiting one second then doubling, is at most 27 seconds — inside the
+ * 30 seconds of grace the watchdog leaves after the budget. A slow answer that is really coming is
+ * retried rather than lost: the same observations replay against the digest the server already holds.
+ */
+const ADMISSION_ATTEMPT_TIMEOUT_MS = 5_000;
+
+/** One admission attempt: the answer it returns is the parsed body, unvalidated. */
+async function postAdmission(): Promise<unknown> {
+	let response: Response;
+	try {
+		response = await fetch(`${process.env.LLM_PROXY_URL}/admit-observations`, {
+			method: "POST",
+			signal: AbortSignal.timeout(ADMISSION_ATTEMPT_TIMEOUT_MS),
+			headers: {
+				authorization: `Bearer ${process.env.LLM_PROXY_TOKEN}`,
+				"content-type": "application/json",
+				...(process.env.TRACEPARENT ? { traceparent: process.env.TRACEPARENT } : {}),
+			},
+			body: JSON.stringify({ schemaVersion: 1, observations: reviewState.observations }),
+		});
+	} catch (error) {
+		// Node reports every transport failure as `TypeError: fetch failed`; only the cause says which
+		// one it was, and a report that has just the message cannot tell a restart from a wrong URL.
+		throw new AdmissionUnreachable(
+			`observation admission could not be sent: ${errorText(error)}${causeText(error)}`,
+		);
+	}
+	if (isRetryableStatus(response.status)) {
+		throw new AdmissionUnreachable(`observation admission failed: HTTP ${response.status}`);
+	}
 	if (!response.ok) throw new Error(`observation admission failed: HTTP ${response.status}`);
-	const admitted: unknown = await response.json();
+	try {
+		return await response.json();
+	} catch (error) {
+		// A server that dies while writing its answer ends the body mid-stream. The admission may well
+		// have been recorded; asking again replays it rather than admitting it twice.
+		throw new AdmissionUnreachable(
+			`observation admission answer was cut short: ${errorText(error)}${causeText(error)}`,
+		);
+	}
+}
+
+async function admitObservations() {
+	// The measurement is finished by the time this runs and exists nowhere else, so the one call that
+	// carries it out of the sandbox is worth repeating when it did not arrive. Repeating it is safe:
+	// the payload is frozen once the measurement is closed, and the server replays an identical one.
+	const admitted: unknown = await retrying(
+		postAdmission,
+		(error) => error instanceof AdmissionUnreachable,
+		{ attempts: ADMISSION_ATTEMPTS },
+		(attempt, error, delayMs) =>
+			console.error(
+				`[pi-runner] admission attempt ${attempt}/${ADMISSION_ATTEMPTS} did not arrive (${errorText(error)}); retrying in ${delayMs}ms`,
+			),
+	);
 	if (
 		!isRecord(admitted) ||
 		admitted.schemaVersion !== 1 ||
