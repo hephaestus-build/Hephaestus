@@ -366,29 +366,32 @@ class DeliveryComposerTest extends BaseUnitTest {
         DeliveryContent result = DeliveryComposer.compose(observations);
 
         assertThat(result).isNotNull();
-        assertThat(result.mrNote()).contains("Reviewed against the active practices");
+        // Each observation says what it observed, so each earns a bullet; none of it is praise.
+        assertThat(result.mrNote()).contains("Error state handling").contains("View decomposition");
         assertThat(result.mrNote()).doesNotContain("stood out");
         assertThat(result.diffNotes()).isEmpty();
     }
 
     @Test
-    void compose_withAllPositiveAndReasoning_listsEvidenceAnchoredObservations() {
-        ValidatedObservation withReasoning = new ValidatedObservation(
+    void compose_withAllPositive_bulletsSayWhatWasObservedNotHowItWasChecked() {
+        ValidatedObservation observed = new ValidatedObservation(
                 "error-state-handling",
-                "Error state handling (positive)",
+                "Network errors are surfaced to the user via an alert",
                 Presence.PRESENT,
                 Assessment.GOOD,
                 Severity.INFO,
                 null,
-                "Network errors are surfaced to the user via an alert.");
+                // The warrant is written for whoever audits the review: first person, about the search.
+                "I walked every added subscribe block and followed each error callback to its sink.");
 
-        DeliveryContent result = DeliveryComposer.compose(List.of(withReasoning));
+        DeliveryContent result = DeliveryComposer.compose(List.of(observed));
 
         assertThat(result).isNotNull();
         assertThat(result.mrNote())
                 .contains("What's working well here")
                 .contains("Error state handling")
                 .contains("Network errors are surfaced")
+                .doesNotContain("I walked")
                 .doesNotContain("No issues found");
         assertThat(result.diffNotes()).isEmpty();
     }
@@ -768,7 +771,8 @@ class DeliveryComposerTest extends BaseUnitTest {
     void compose_noIssuesNote_skipsObservationWhoseReasoningScrubsToBlank() {
         ValidatedObservation scrubbed = new ValidatedObservation(
                 "issue-has-checkable-outcome",
-                "Checkable outcome",
+                // Grading vocabulary rather than an observation: scrubbed to nothing for a developer.
+                "The practice requires a checkable outcome for a POSITIVE observation",
                 Presence.PRESENT,
                 Assessment.GOOD,
                 Severity.INFO,
@@ -776,12 +780,12 @@ class DeliveryComposerTest extends BaseUnitTest {
                 "The practice requires a checkable outcome for a POSITIVE observation.");
         ValidatedObservation real = new ValidatedObservation(
                 "issue-scoped-to-single-concern",
-                "Single concern",
+                "The issue describes one deliverable and stays within that single concern",
                 Presence.PRESENT,
                 Assessment.GOOD,
                 Severity.INFO,
                 null,
-                "The issue describes one deliverable and stays within that single concern.");
+                "Its body names one outcome and the diff touches only that area.");
 
         DeliveryContent dc = DeliveryComposer.compose(List.of(scrubbed, real), ArtifactKinds.ISSUE);
 
@@ -795,7 +799,8 @@ class DeliveryComposerTest extends BaseUnitTest {
     void compose_noIssuesNote_allReasoningScrubbed_fallsBackToNothingToChange() {
         ValidatedObservation scrubbed = new ValidatedObservation(
                 "issue-has-checkable-outcome",
-                "Checkable outcome",
+                // Grading vocabulary rather than an observation: scrubbed to nothing for a developer.
+                "The practice requires a checkable outcome for a POSITIVE observation",
                 Presence.PRESENT,
                 Assessment.GOOD,
                 Severity.INFO,
