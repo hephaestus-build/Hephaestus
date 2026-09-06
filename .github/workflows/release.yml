@@ -8,11 +8,12 @@ on:
     types: [completed]
     branches: [main]
 
-# Serialize promotion of the moving series and latest tags.
-concurrency:
-  group: release
-  cancel-in-progress: false
-
+# Serialising the whole run would put the production approval inside the lock: `deploy-production`
+# waits for a required reviewer, and a release nobody approves then holds the group for as long as
+# the approval is outstanding — every later release queues behind it and never starts a job. One
+# unapproved deploy stalled every release for two days that way, invisibly, because a run waiting on
+# an environment does not appear in the default run listing. The lock therefore sits on the jobs it
+# is actually for: promotion of the moving series and latest tags.
 permissions: {}
 
 jobs:
@@ -80,6 +81,10 @@ jobs:
   tag-images:
     needs: release
     if: needs.release.outputs.released == 'true'
+    # Moves `X.Y`, `latest` and the version tags; two releases must never interleave here.
+    concurrency:
+      group: release-promotion
+      cancel-in-progress: false
     timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
@@ -400,6 +405,10 @@ jobs:
   publish-release:
     needs: [release, tag-images, upgrade-test, supported-host-smoke]
     if: needs.release.outputs.released == 'true'
+    # Same lock as the tag moves: publication is the other half of that promotion.
+    concurrency:
+      group: release-promotion
+      cancel-in-progress: false
     timeout-minutes: 20
     runs-on: ubuntu-latest
     permissions:
