@@ -143,7 +143,7 @@ class ChatMessagePartUpgradeRepairIntegrationTest {
                 assertThat(rows.next()).isFalse();
             }
             // The message that already had parts keeps the ones it had.
-            try (ResultSet rows = statement.executeQuery("SELECT parts::text FROM chat_message WHERE id ="
+            try (ResultSet rows = statement.executeQuery("SELECT parts::text FROM chat_message WHERE id = 
                     + " '22222222-2222-2222-2222-222222222222'")) {
                 assertThat(rows.next()).isTrue();
                 assertThat(rows.getString(1)).contains("kept").doesNotContain("other");
