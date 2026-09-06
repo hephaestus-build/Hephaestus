@@ -12,6 +12,37 @@ export interface ForkSessionsOptions {
 	sessionDir?: string;
 }
 
+export interface ReconnaissanceSeed {
+	seedSessionFile: string;
+	checkpointEntryId: string;
+}
+
+/**
+ * What the shared reconnaissance leaves for the groups to branch from.
+ *
+ * <p>A disposed session still answers getLeafId(), and the SDK holds a session's entries back until
+ * its first assistant message, so a budget that ran out names an entry the file never received. It
+ * has to be told from an answer here, or it reads as a session-storage error against that entry
+ * further down.
+ */
+export function reconnaissanceSeed(
+	sessionManager: SessionManager,
+	deadline: { expired: boolean },
+	budgetMs: number,
+): ReconnaissanceSeed {
+	if (deadline.expired) {
+		throw new Error(
+			`Shared reconnaissance did not answer within ${Math.round(budgetMs / 1000)}s, so each group reads for itself`,
+		);
+	}
+	const checkpointEntryId = sessionManager.getLeafId();
+	const seedSessionFile = sessionManager.getSessionFile();
+	if (!checkpointEntryId || !seedSessionFile) {
+		throw new Error("Shared reconnaissance produced no persistent checkpoint");
+	}
+	return { seedSessionFile, checkpointEntryId };
+}
+
 export function forkSessions({
 	seedSessionFile,
 	checkpointEntryId,
