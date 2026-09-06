@@ -8,7 +8,8 @@ import java.util.Map;
  *
  * @param exitCode container exit code (0 = success, 137 = OOM-killed, etc.)
  * @param outputFiles files collected from the container's output path (relative path → content)
- * @param logs last N lines of container stdout/stderr (captured before removal)
+ * @param logs container stdout and stderr, captured before removal; whole unless the run outgrew what
+ *     the collector holds, in which case it names how much of its middle is missing
  * @param timedOut whether the container was killed due to exceeding {@link
  *     ResourceLimits#maxRuntime()}
  * @param duration wall-clock execution time (container start to exit)

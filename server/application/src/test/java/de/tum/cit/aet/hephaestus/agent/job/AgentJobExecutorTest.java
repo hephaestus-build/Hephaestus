@@ -816,6 +816,33 @@ class AgentJobExecutorTest extends BaseUnitTest {
         }
 
         @Test
+        @DisplayName("a transcript far larger than the old 64 KB cut reaches the row whole")
+        void shouldStoreTheWholeTranscriptWhenItIsLargerThanTheOldCut() {
+            when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
+                    .thenReturn(Optional.of(job));
+            when(bindingRepository.findByWorkspaceIdAndPurpose(99L, AgentPurpose.PRACTICE_REVIEW))
+                    .thenReturn(Optional.of(binding));
+            when(jobRepository.countByWorkspaceIdAndPurposeAndStatusIn(
+                            eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
+                    .thenReturn(0L);
+            when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            String transcript =
+                    "BEGINNING: what this review was asked\n" + "x".repeat(200_000) + "\nENDING: how it went";
+            setupFullExecution(new SandboxResult(0, Map.of(), transcript, false, Duration.ofMinutes(2)));
+
+            AgentJob freshJob = freshJob();
+            when(jobRepository.findById(any(UUID.class))).thenReturn(Optional.of(freshJob));
+            when(jobRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(jobRepository.transitionStatus(any(), eq(AgentJobStatus.COMPLETED), any(), any(), any()))
+                    .thenReturn(1);
+
+            executor.processJob(jobId);
+
+            assertThat(freshJob.getContainerLogs()).isEqualTo(transcript);
+        }
+
+        @Test
         void shouldMarkFailedWithAnErrorMessageNamingTheExitCode() {
             when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
                     .thenReturn(Optional.of(job));

@@ -42,11 +42,13 @@ public class DockerClientOperations
     static final Duration IMAGE_PULL_TIMEOUT = Duration.ofMinutes(5);
 
     /**
-     * Maximum log output to collect from a container (prevents OOM from runaway output). This is
-     * the <em>collection</em> limit; see {@link DockerSandboxAdapter#MAX_LOG_EVENT_BYTES} for the
-     * downstream <em>emission</em> limit (32 KB) applied when logging captured output.
+     * How much of a container's output is held in memory before its middle is dropped, split evenly
+     * between the beginning and the ending. A review's transcript is the only account of what it did,
+     * so the whole of it is kept unless a run is large enough to threaten the collecting process; see
+     * {@link DockerSandboxAdapter#MAX_LOG_EVENT_CHARS} for the separate limit on what is echoed to the
+     * application's own log.
      */
-    static final int MAX_LOG_BYTES = 1024 * 1024; // 1 MB
+    static final int MAX_LOG_CHARS = 8 * 1024 * 1024; // 8 MB
 
     private final DockerClient dockerClient;
 
@@ -291,21 +293,22 @@ public class DockerClientOperations
 
     @Override
     public String getLogs(String containerId, int tailLines) {
-        // Best-effort log collection: timeout and errors return partial/empty data.
+        // Best-effort log collection: an error returns nothing, and a timeout says so in the transcript.
         try {
-            // StringBuffer is thread-safe: onNext is called from a Docker callback thread
-            StringBuffer logs = new StringBuffer();
+            // Synchronised inside: onNext is called from a Docker callback thread.
+            BoundedTranscript logs = new BoundedTranscript(MAX_LOG_CHARS / 2, MAX_LOG_CHARS / 2);
             var callback = new ResultCallback.Adapter<Frame>() {
                 @Override
                 public void onNext(Frame frame) {
-                    if (frame != null && frame.getPayload() != null && logs.length() < MAX_LOG_BYTES) {
+                    if (frame != null && frame.getPayload() != null) {
                         logs.append(new String(frame.getPayload(), StandardCharsets.UTF_8));
                     }
                 }
             };
 
+            boolean complete;
             try {
-                dockerClient
+                complete = dockerClient
                         .logContainerCmd(containerId)
                         .withStdOut(true)
                         .withStdErr(true)
@@ -315,6 +318,12 @@ public class DockerClientOperations
                         .awaitCompletion(LOG_COLLECTION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             } finally {
                 callback.close();
+            }
+            if (!complete) {
+                // Say so in the transcript itself: a reader who cannot tell a short run from an
+                // abandoned collection cannot trust either.
+                logs.append("\n[hephaestus] Log collection stopped after " + LOG_COLLECTION_TIMEOUT_SECONDS
+                        + " seconds; this transcript ends early.\n");
             }
 
             return logs.toString();

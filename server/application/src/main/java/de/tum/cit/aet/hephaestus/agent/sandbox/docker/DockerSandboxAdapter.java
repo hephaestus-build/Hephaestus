@@ -38,7 +38,16 @@ public class DockerSandboxAdapter implements SandboxManager {
     private static final Logger log = LoggerFactory.getLogger(DockerSandboxAdapter.class);
     private static final String CONTAINER_USER = "1000:1000";
     private static final String CONTAINER_HOSTNAME = "agent";
-    private static final int LOG_TAIL_LINES = 500;
+    /**
+     * Docker's tail is applied by the daemon, before anything here sees a line, so the persisted
+     * transcript asks for every line: a tail would drop the beginning — what the run was asked and what
+     * it read — and leave nothing downstream able to put it back.
+     */
+    private static final int WHOLE_TRANSCRIPT = 0;
+
+    /** The error-path echo is cut to {@link #MAX_LOG_EVENT_CHARS} before it is logged, so it reads a tail. */
+    private static final int ERROR_ECHO_TAIL_LINES = 500;
+
     private static final String PROXY_URL_PLACEHOLDER = "{appServerIp}";
 
     private static final String MDC_JOB_ID = "sandbox.jobId";
@@ -46,7 +55,7 @@ public class DockerSandboxAdapter implements SandboxManager {
 
     /**
      * Limits each diagnostic event so a large container log cannot overflow the aggregator. This is the
-     * <em>emission</em> limit; {@link DockerClientOperations#MAX_LOG_BYTES} is the upstream
+     * <em>emission</em> limit; {@link DockerClientOperations#MAX_LOG_CHARS} is the upstream
      * <em>collection</em> limit.
      */
     private static final int MAX_LOG_EVENT_CHARS = 32 * 1024;
@@ -233,7 +242,7 @@ public class DockerSandboxAdapter implements SandboxManager {
                 outputFiles = Map.of();
             }
 
-            String logs = containerManager.getLogs(containerId, LOG_TAIL_LINES);
+            String logs = containerManager.getLogs(containerId, WHOLE_TRANSCRIPT);
 
             if (waitOutcome.timedOut()) {
                 executionsTimedOut.increment();
@@ -378,7 +387,7 @@ public class DockerSandboxAdapter implements SandboxManager {
             return;
         }
         try {
-            String logs = containerManager.getLogs(containerId, LOG_TAIL_LINES);
+            String logs = containerManager.getLogs(containerId, ERROR_ECHO_TAIL_LINES);
             if (logs != null && !logs.isEmpty()) {
                 String truncated = logs.length() > MAX_LOG_EVENT_CHARS
                         ? logs.substring(0, MAX_LOG_EVENT_CHARS) + "\n... [truncated, "
