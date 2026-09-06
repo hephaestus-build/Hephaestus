@@ -47,14 +47,19 @@ import {
 	validateFeedbackEvidence,
 } from "./pi-runner-composition.ts";
 import { outputPath } from "./pi-runner-output.ts";
-import { deriveTimeouts, deriveTurnTiming, deriveWorkstreamBudget } from "./pi-runner-timings.ts";
+import {
+	deriveReconBudget,
+	deriveTimeouts,
+	deriveTurnTiming,
+	deriveWorkstreamBudget,
+} from "./pi-runner-timings.ts";
 import {
 	addAssistantUsage,
 	extractUsageFromSession,
 	newUsageLedger,
 	type UsageReport,
 } from "./pi-runner-usage.ts";
-import { forkSessions } from "./pi-session-tree.ts";
+import { forkSessions, reconnaissanceSeed } from "./pi-session-tree.ts";
 
 // ── Reading what other processes wrote ───────────────────────────────────────
 // Everything this runner is handed — the task envelope, the manifest, the practice index, the
@@ -1465,14 +1470,18 @@ let retryAborted = false;
 
 function scheduleDeadline(timeoutMs: number, onTimeout: () => void) {
 	let release = () => {};
+	// Racing `elapsed` says the wait is over, not why: the caller reads this to tell an answer from a
+	// budget that ran out.
+	const state = { expired: false };
 	const elapsed = new Promise<void>((resolve) => {
 		release = resolve;
 	});
 	const timer = setTimeout(() => {
+		state.expired = true;
 		onTimeout();
 		release();
 	}, timeoutMs);
-	return { elapsed, timer };
+	return { elapsed, timer, state };
 }
 
 function scheduleTurnTimers(
@@ -1685,10 +1694,7 @@ async function main() {
 		});
 		const unsubscribeRecon = subscribeSession(reconSession, "recon:shared");
 		activeSessions.add(reconSession);
-		const reconBudgetMs = Math.min(
-			180_000,
-			Math.max(45_000, Math.floor(INITIAL_TIMEOUT_MS * 0.05)),
-		);
+		const reconBudgetMs = deriveReconBudget(INITIAL_TIMEOUT_MS);
 		const reconDeadline = scheduleDeadline(reconBudgetMs, () => reconSession.dispose());
 		try {
 			const groupScope = tree.groups
@@ -1700,10 +1706,11 @@ async function main() {
 				),
 				reconDeadline.elapsed,
 			]);
-			const checkpointEntryId = reconSession.sessionManager.getLeafId();
-			const seedSessionFile = reconSession.sessionManager.getSessionFile();
-			if (!checkpointEntryId || !seedSessionFile)
-				throw new Error("shared reconnaissance produced no persistent checkpoint");
+			const { seedSessionFile, checkpointEntryId } = reconnaissanceSeed(
+				reconSession.sessionManager,
+				reconDeadline.state,
+				reconBudgetMs,
+			);
 			for (const fork of forkSessions({
 				seedSessionFile,
 				checkpointEntryId,

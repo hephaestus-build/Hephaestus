@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 
-import { forkSessions } from "../../../main/resources/agent/pi-session-tree.ts";
+import { forkSessions, reconnaissanceSeed } from "../../../main/resources/agent/pi-session-tree.ts";
 
 function assistantMessage(text: string) {
 	return {
@@ -80,6 +80,47 @@ void test("forks the same persisted checkpoint into independent session branches
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
+});
+
+void test("a reconnaissance that ran out of budget is not a seed", () => {
+	const root = mkdtempSync(join(tmpdir(), "pi-session-tree-"));
+	try {
+		const sessionDir = join(root, "sessions");
+		const recon = SessionManager.create(root, sessionDir);
+		recon.appendMessage({
+			role: "user",
+			content: [{ type: "text", text: "Build one factual reconnaissance map" }],
+			timestamp: Date.now(),
+		});
+		// A disposed session reports this leaf either way; only the deadline knows the write behind it
+		// never landed.
+		const checkpointEntryId = recon.appendMessage(assistantMessage("Reconnaissance map"));
+		const seedSessionFile = recon.getSessionFile();
+		assert.ok(seedSessionFile);
+
+		assert.throws(
+			() => reconnaissanceSeed(recon, { expired: true }, 120_000),
+			/did not answer within 120s/,
+		);
+		assert.deepEqual(reconnaissanceSeed(recon, { expired: false }, 120_000), {
+			seedSessionFile,
+			checkpointEntryId,
+		});
+		assert.throws(
+			() =>
+				reconnaissanceSeed(SessionManager.create(root, sessionDir), { expired: false }, 120_000),
+			/no persistent checkpoint/,
+		);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a review with nothing to fork gets no forks and no seed is opened", () => {
+	assert.deepEqual(
+		forkSessions({ seedSessionFile: "unused", checkpointEntryId: "unused", keys: [] }),
+		[],
+	);
 });
 
 void test("rejects duplicate and empty keys before creating a fork", () => {

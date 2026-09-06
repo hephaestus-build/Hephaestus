@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+	deriveReconBudget,
 	deriveTimeouts,
 	deriveTurnTiming,
 	deriveWorkstreamBudget,
@@ -13,6 +14,20 @@ void test("review budget reserves fifteen percent for a retry", () => {
 		retryMs: 135_000,
 		compositionMs: 0,
 	});
+});
+
+void test("the shared reconnaissance gets a turn's worth of time, not a share of the review", () => {
+	// One model turn over the whole change: too small a share buys nothing, and the cap keeps a large
+	// review from spending its observers' time here.
+	assert.equal(deriveReconBudget(deriveTimeouts(900_000).initialMs), 120_000);
+	assert.equal(deriveReconBudget(1_800_000), 180_000);
+	assert.equal(deriveReconBudget(9_000_000), 240_000);
+	// A pass too short to fund the floor keeps most of itself for the groups, and its deadline still
+	// expires inside the pass rather than after the review is already over.
+	assert.equal(deriveReconBudget(deriveTimeouts(120_000).initialMs), 25_500);
+	for (const invalid of [0, -1, Number.NaN]) {
+		assert.throws(() => deriveReconBudget(invalid), /positive number/);
+	}
 });
 
 void test("a small review never allocates more time than it owns", () => {
