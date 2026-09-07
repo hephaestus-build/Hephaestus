@@ -17,10 +17,10 @@ concurrency:
 permissions: {}
 
 jobs:
-  validate-title:
-    name: "Validate title"
+  validate-pr:
+    name: "Validate PR"
     timeout-minutes: 5
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     if: ${{ !github.event.pull_request.draft }}
     permissions:
       contents: read
@@ -114,21 +114,9 @@ jobs:
         if: steps.title.outcome == 'failure'
         run: exit 1
 
-  # Squash-merge hides a commit's author on `main`, but a pull request's commit list keeps it
-  # forever, and that list is where reviewers and provenance readers look. `CONTRIBUTING.md`
-  # § Identity and Transparency asks for accountable identities; this is what holds them to it.
-  verify-commit-identity:
-    name: "Verify commit identity"
-    timeout-minutes: 5
-    runs-on: ubuntu-latest
-    if: ${{ !github.event.pull_request.draft }}
-    permissions:
-      contents: read
-      pull-requests: write
-    # No checkout: the query and the rule live here, so nothing from the pull request is fetched.
-    steps:
       - name: "Resolve the author of every commit"
         id: identity
+        if: ${{ !cancelled() }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         continue-on-error: true
         with:
@@ -219,6 +207,7 @@ jobs:
       # allowed.
       - name: "Refuse model attribution in the pull request body"
         id: attribution
+        if: ${{ !cancelled() }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         continue-on-error: true
         with:
@@ -240,7 +229,10 @@ jobs:
             const findAttribution = (text) =>
               patterns.filter(({ pattern }) => pattern.test(text ?? "")).map(({ name }) => name);
 
-            const bodyMatches = findAttribution(context.payload.pull_request.body);
+            const { data: { body } } = await github.rest.pulls.get({
+              ...context.repo, pull_number: context.payload.pull_request.number,
+            });
+            const bodyMatches = findAttribution(body);
             if (bodyMatches.length === 0) return;
 
             await writeFile(
@@ -281,7 +273,7 @@ jobs:
   assign-author:
     name: "Assign author"
     timeout-minutes: 5
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     permissions:
       pull-requests: write
     if: github.event.action == 'opened'
