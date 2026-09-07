@@ -11,11 +11,6 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/**
- * Practice-review Pi adapter. Thin facade over {@link PiRuntimeFactory} + {@link PiResultParser}:
- * supplies the practice-specific precompute step and wraps the runtime plan in a
- * {@link PracticeSandboxSpec}.
- */
 @Service
 @RequiredArgsConstructor
 public class PracticePiAdapter {
@@ -51,67 +46,22 @@ public class PracticePiAdapter {
                 plan.promptDigest());
     }
 
-    /** Parse the sandbox result via the shared {@link PiResultParser}. */
     public AgentResult parseResult(SandboxResult sandboxResult) {
         return resultParser.parse(sandboxResult);
     }
 
-    /** Build the fixed, best-effort precompute shell fragment. */
+    /** Precompute is advisory; failure must not prevent the review. */
     static String buildPrecomputeStep() {
-        String root = SandboxLayout.WORKSPACE_ROOT;
-        String contextTarget = root + "/" + SandboxLayout.CONTEXT_PREFIX;
-        String precomputeIn = root + "/" + SandboxLayout.PRECOMPUTE_PREFIX + "practices";
-        String precomputeStage = root + "/work/precompute-stage";
-        String precomputeOut = root + "/" + SandboxLayout.PRECOMPUTE_OUT_PREFIX.replaceFirst("/$", "");
-        return ("(rm -rf " + precomputeStage
-                + " && mkdir -p "
-                + precomputeStage
-                + "/practices "
-                + precomputeOut
-                + " && find "
-                + precomputeIn
-                + " -maxdepth 1 -type f -name '*.ts' -exec cp {} "
-                + precomputeStage
-                + "/practices/ \\;"
-                + " && ln -sf /opt/precompute/lib "
-                + precomputeStage
-                + "/lib"
-                +
-                // Precompute consumes a raw diff; the staged agent view prefixes lines with [L<n>].
-                " && sed 's/^\\[L[0-9]*\\] //' "
-                + contextTarget
-                + "diff.patch > "
-                + precomputeOut
-                +
-                // env -i resolves node through the PATH it sets, so it must include /usr/local/bin,
-                // where the node:24-slim base installs the binary.
-                "/diff_clean.patch 2>/dev/null ; env -i HOME=/home/agent PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp node"
-                + " --permission"
-                + " --allow-fs-read=/workspace"
-                + " --allow-fs-read=/opt/precompute"
-                + " '--allow-fs-write=/workspace/work/precompute-out*'"
-                + " --allow-child-process /opt/precompute/runner.ts"
-                + " --repo "
-                + SandboxLayout.REPO_MOUNT
-                + " --diff "
-                + precomputeOut
-                + "/diff_clean.patch"
-                + " --metadata "
-                + contextTarget
-                + "metadata.json"
-                + " --context "
-                + contextTarget
-                + " --practices "
-                + precomputeStage
-                + "/practices"
-                + " --output "
-                + precomputeOut
-                + " > /tmp/precompute-runner.log 2>&1"
-                + " || { echo '[precompute] failed, continuing without hints'"
-                + " && cp /tmp/precompute-runner.log "
-                + precomputeOut
-                + "/precompute-runner.log 2>/dev/null"
-                + " ; tail -200 /tmp/precompute-runner.log 2>/dev/null"
-                + " ; true; }) && ");
+        return "(mkdir -p /workspace/work/precompute-stage /workspace/work/precompute-out"
+                // Node's permission model requires unrestricted filesystem access to create symlinks.
+                + " && ln -sf /opt/precompute/lib /workspace/work/precompute-stage/lib"
+                + " && env -i HOME=/home/agent PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp node"
+                + " --permission --allow-fs-read=/workspace --allow-fs-read=/opt/precompute"
+                + " '--allow-fs-write=/workspace/work/precompute-stage*'"
+                + " '--allow-fs-write=/workspace/work/precompute-out*' --allow-child-process"
+                + " /workspace/pi-precompute.ts /workspace > /tmp/precompute-runner.log 2>&1"
+                + " || { echo '[precompute] failed, continuing without hints';"
+                + " cp /tmp/precompute-runner.log /workspace/work/precompute-out/precompute-runner.log 2>/dev/null;"
+                + " tail -200 /tmp/precompute-runner.log 2>/dev/null; true; }) && ";
     }
 }

@@ -9,9 +9,11 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
 
     public static final String SCRIPT = "pi-runner.ts";
 
-    /** Imported by {@link #SCRIPT} with a relative specifier, so each must be staged beside it. */
+    /** Relative imports require these scripts to share the runner's directory. */
     private static final List<String> SIDECARS = List.of(
             "pi-agent-sandbox.ts",
+            "pi-task-paths.ts",
+            "pi-precompute.ts",
             "pi-error-text.ts",
             "pi-grep-tool.ts",
             "pi-observation-normalize.ts",

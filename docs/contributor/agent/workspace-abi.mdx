@@ -47,6 +47,8 @@ vs writable is decided by *where* a file lives, not by convention. Three top-lev
 ├── pi-provider.json                 # Provider/model routing for the runner.
 ├── pi-provider.ts                   # Provider/model helper imported by both runners.
 ├── pi-error-text.ts                 # Shared error-message helper.
+├── pi-task-paths.ts                 # Task path validation and resolution.
+├── pi-precompute.ts                 # Precompute launcher using task-declared paths.
 ├── pi-observation-normalize.ts      # Normalises sandbox observations before out/ is written.
 ├── pi-runner-usage.ts               # Token-usage accounting sidecar.
 ├── pi-runner-timings.ts             # Attempt-timing sidecar.
@@ -92,11 +94,39 @@ covered by this ABI.
 - **`node_modules`** — a symlink to `/opt/pi-sdk/node_modules`, so the runner's bare-specifier
   import of `@earendil-works/pi-coding-agent` resolves. The runner, precompute scripts, and SDK native
   bindings execute on Node.
-- **`task.json`** — `TaskEnvelope<T extends Task>`. Schema version `1`. The runner asserts
-  `schemaVersion` and `task.kind`, exiting `42` on mismatch (envelope/image drift signal).
+- **`task.json`** — the [task envelope](#task-envelope).
 - **`.pi*`** / `inputs/practices/` / `work/precompute*` / `work/analysis/` / `out/`
   — internal control surfaces. AI-readable as configured by the orchestrator, but
   *not* part of the public agent ABI; subject to change without a `schemaVersion` bump.
+
+## Task envelope
+
+`task.json` contains a `TaskEnvelope` with `schemaVersion: 2`, `jobId`, `workspaceId`, `task`
+and `paths`. The practice runner accepts `task.kind: "practice_review"` and requires a non-empty
+`task.prompt`. Unreadable or invalid JSON, unsupported versions or kinds, blank prompts and invalid
+paths exit with `42`.
+
+All seven `paths` fields are required:
+
+| Field | Location |
+|-------|----------|
+| `contextRoot` | Captured context directory, including `metadata.json` and `diff.patch` when applicable |
+| `repositoryRoot` | Captured repository directory |
+| `manifest` | Source and artifact manifest file |
+| `practiceIndex` | Practice index file; practice documents share its directory |
+| `compositionRequest` | Feedback-composition request file |
+| `preparedFeedback` | Previously prepared feedback file; review history shares its directory |
+| `precomputeScripts` | Per-practice TypeScript script directory |
+
+Values are relative to `/workspace`, use `/` separators, and cannot be empty or consist only of
+Unicode separators. Absolute paths, `.` or `..` components, empty components, backslashes, colons
+and control characters are rejected. Validation is lexical; it does not establish filesystem
+ownership or prevent symlink traversal.
+
+A declared location does not guarantee content exists there. For example, a review without a
+repository has no repository tree, and feedback composition runs only when its request is present.
+The runner and precompute resolve input locations from these fields, not from the layout shown above.
+Scratch and output locations remain fixed by this ABI.
 
 ## Output archive validation
 
@@ -127,7 +157,7 @@ worker filesystem.
 | 1    | No complete review output after the initial attempt *and* the recovery retry |
 | 2    | Fatal runner error — an unhandled rejection or uncaught exception. Debug and usage files are persisted first |
 | 3    | Watchdog hard-kill (budget + grace exceeded); writes `out/watchdog-killed.json` first |
-| 42   | Envelope mismatch (unsupported `schemaVersion` or unknown `kind`) — image/server drift |
+| 42   | Task-envelope contract drift: malformed envelope, unsupported version or kind, or invalid paths |
 | 75   | The review finished, but the call admitting its observations never reached the server |
 | 76   | No practice was reached, and every model call the run made went unanswered |
 
@@ -151,8 +181,14 @@ names them in the transcript, and the server queues the work again on the same t
 
 ## Versioning policy
 
-`task.json.schemaVersion` is per-envelope, not per-task variant. Add a new permitted `Task`
-subtype (a new `kind` discriminator) without bumping the version. Add a required field to an
-existing kind, and the version bumps. The Pi runner and the Java server ship in the same
-Docker-image rebuild, so version drift is bounded by deploy cadence; there is no cross-version
-contract.
+`task.json.schemaVersion` versions the envelope shared by task kinds. Bump it when an existing
+producer or consumer must change: for example, adding a required field, removing a field, or
+changing a field's meaning. An additive optional field or new task kind does not require a bump;
+runners still reject kinds they do not support.
+
+The server creates the envelope and stages the runner and its sidecars from its own classpath for
+each attempt. They evolve together; there is no cross-version envelope compatibility layer.
+
+The agent image's `hephaestus.agent.runtime-contract` label versions its runtime dependencies and
+launch contract separately. Its value is `2`, independent of the envelope schema version. See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md)
+for the image contract.
