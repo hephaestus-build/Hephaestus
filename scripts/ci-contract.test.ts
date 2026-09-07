@@ -277,10 +277,19 @@ function bashRunsRunnerSteps(): boolean {
 	return probe.error === undefined && probe.status === 0;
 }
 
-const runnerBashOnly = {
-	skip: bashRunsRunnerSteps()
-		? false
-		: "this bash has no mapfile; runner steps need bash 4 or later",
+/**
+ * The buildpack step this guards is driven by replacing `pack` and `docker` with executable stubs
+ * on PATH. That needs a bash new enough for the runner's own steps, and a platform where an
+ * extensionless stub is executable: on Windows the exec goes through Git Bash and fails
+ * intermittently, which is a property of the harness rather than of the step — the job that runs
+ * this shell is pinned to the ubuntu-24.04 runners and never executes on Windows at all.
+ */
+const runnerStepsOnly = {
+	skip: !bashRunsRunnerSteps()
+		? "this bash has no mapfile; runner steps need bash 4 or later"
+		: process.platform === "win32"
+			? "the buildpack step runs only on Linux runners; PATH stubs are not reliably executable here"
+			: false,
 };
 
 /**
@@ -908,7 +917,7 @@ void describe("CI contract", () => {
 
 	void test(
 		"a fork's buildpack build produces an image without contacting the registry",
-		runnerBashOnly,
+		runnerStepsOnly,
 		async () => {
 			const reusable = parseDocument(
 				await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
