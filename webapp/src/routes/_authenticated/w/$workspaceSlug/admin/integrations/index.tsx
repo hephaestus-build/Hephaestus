@@ -21,6 +21,9 @@ import { problemDetailOf } from "@/lib/problem-detail";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/integrations/")({
 	head: workspaceAdminHead("Integrations"),
+	// The cards are keyed by integration kind, which is the same key in every workspace, so a switch
+	// would otherwise leave a sync this workspace never asked for pending on the matching card.
+	remountDeps: ({ params }) => params.workspaceSlug,
 	component: IntegrationsOverview,
 });
 

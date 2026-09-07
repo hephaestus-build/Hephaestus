@@ -110,18 +110,27 @@ so the ACME store cannot change during the copy. Back up that `acme.json` first;
 it is under `docker/letsencrypt/`. Copy it into the volume before starting the new proxy, or Traefik
 issues the certificates again.
 
+A volume that already holds an `acme.json` holds the store Traefik is using: copying an older backup
+over it discards the certificates currently being served. The command below refuses in that case
+rather than leaving the operator to notice, so a store that is already there has to be looked at
+deliberately before anything replaces it.
+
 On the Docker Engine host, use the volume's actual mountpoint rather than assuming Docker's data root:
 
 ```bash
 sudo docker volume create proxy_letsencrypt
 volume_path=$(sudo docker volume inspect --format '{{ .Mountpoint }}' proxy_letsencrypt)
-sudo install -m 600 /path/to/previous/acme.json "$volume_path/acme.json"
+if sudo test -s "$volume_path/acme.json"; then
+  echo "acme.json is already in proxy_letsencrypt — inspect it before replacing it" >&2
+else
+  sudo install -m 600 /path/to/previous/acme.json "$volume_path/acme.json"
+fi
 ```
 
-Do not overwrite a populated volume with an older copy. Keep the backup until the new proxy serves
-the existing certificates successfully, then re-enable reconciliation. A rollback to a release whose
-proxy still uses the bind mount needs the current ACME store copied back while Traefik is stopped;
-retaining the old release tree alone does not keep that copy current.
+Keep the backup until the new proxy serves the existing certificates successfully, then re-enable
+reconciliation. A rollback to a release whose proxy still uses the bind mount needs the current ACME
+store copied back while Traefik is stopped; retaining the old release tree alone does not keep that
+copy current.
 
 The pull-based stacks use the bundled database with its fixed credentials, so there is no
 database password to carry. On the Compose installer, `docker/self-host/setup.sh` refuses to
