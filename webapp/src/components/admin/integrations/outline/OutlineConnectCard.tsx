@@ -103,7 +103,7 @@ export function OutlineConnectCard({
 					{!connected && (
 						<CardDescription>
 							Mirror Outline collections so their design docs and decision records reach practice
-							detection as context. Use a dedicated bot-user API token; after connecting you choose
+							reviews as context. Use a dedicated bot-user API token; after connecting you choose
 							exactly which collections are mirrored.
 						</CardDescription>
 					)}

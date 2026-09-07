@@ -18,6 +18,7 @@ import java.util.Objects;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 
 class CredentialRotationServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
@@ -46,7 +47,7 @@ class CredentialRotationServiceIntegrationTest extends AbstractWorkspaceIntegrat
         byte[] corrupted =
                 Objects.requireNonNull(corrupt.getCredentialsEncrypted()).clone();
         corrupted[corrupted.length - 1] ^= 1;
-        corrupt.setCredentialsEncrypted(corrupted);
+        ReflectionTestUtils.setField(corrupt, "credentialsEncrypted", corrupted);
         corrupt = connectionRepository.save(corrupt);
         Connection healthy = connectionRepository.save(connection(workspace, "healthy"));
         healthy.setCredentials(TOKEN, oldConverter);

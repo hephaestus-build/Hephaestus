@@ -27,7 +27,6 @@ export function useWorkspaceFeatures(workspaceSlug: string | undefined): Workspa
 	const query = useQuery({
 		...listWorkspacesOptions(),
 		enabled: isAuthenticated && !authLoading,
-		staleTime: 30_000,
 	});
 
 	const workspaces = Array.isArray(query.data) ? query.data : [];

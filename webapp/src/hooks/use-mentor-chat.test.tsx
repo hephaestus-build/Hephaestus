@@ -46,6 +46,7 @@ function activeWorkspace(
 	return {
 		workspaceSlug: "test-workspace",
 		chromeWorkspaceSlug: "test-workspace",
+		chromeWorkspace: undefined,
 		workspaces: [],
 		providerType: "GITHUB",
 		isLoading: false,

@@ -413,7 +413,7 @@ function fetchOptions(config: HostConfig): { cwd: string; signal: AbortSignal } 
 	return { cwd: config.checkout, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) };
 }
 
-async function main(): Promise<void> {
+export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	const config = hostConfig(process.env);
 	const appliedFile = join(config.stateDirectory, "applied.json");
 	const applied = await readApplied(appliedFile);
@@ -442,7 +442,7 @@ async function main(): Promise<void> {
 				applied.release,
 				commit,
 			);
-			if (await followTooling(config, tree)) {
+			if (await followTooling(config, tree, unitsDirectory)) {
 				console.log(`Adopted the tooling of ${applied.release}; the next run uses it`);
 				return;
 			}
@@ -698,7 +698,7 @@ async function main(): Promise<void> {
 		);
 	console.log(`Applied ${decision.release} to ${config.stacks.join(", ")}`);
 	// Only now, with the release verified and running, does the host run that release's tooling.
-	await followTooling(config, releaseTree);
+	await followTooling(config, releaseTree, unitsDirectory);
 }
 
 const DAY_SECONDS = 24 * 60 * 60;
@@ -775,13 +775,17 @@ export async function commitImages(
  * and its reconciler could not read a current channel — so a rollback to one keeps the tooling the
  * host has. Every step is idempotent, because a tick can stop between any two of them.
  */
-async function followTooling(config: HostConfig, tree: string): Promise<boolean> {
+async function followTooling(
+	config: HostConfig,
+	tree: string,
+	unitsDirectory: string,
+): Promise<boolean> {
 	if (!(await carriesToolingLink(tree))) {
 		console.log(`Keeping the current tooling: ${tree} predates the tooling link`);
 		return false;
 	}
 	const moved = await adoptTooling(config.tooling, tree);
-	const changed = await syncUnits(tree, SYSTEMD_UNITS);
+	const changed = await syncUnits(tree, unitsDirectory);
 	if (changed.length > 0) console.log(`Updated ${changed.join(", ")}`);
 	// systemd itself knows whether the units it loaded match the files, so a tick that stopped
 	// between writing a unit and reloading is finished by the next one.

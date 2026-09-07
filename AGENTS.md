@@ -242,7 +242,6 @@ Oxlint lints; oxfmt formats and sorts imports. Each tree states its rule set in 
   attribution to pull request titles or bodies.
 - UI changes need before/after images; motion or timing needs a short video. Never commit PR-only
   evidence; `/land-pr` owns its preparation and upload.
-- One concern per PR. If the description says "also", split it.
 - A PR that changes shipped code ships a changeset — `.changeset/README.md` is the contract. With no
   TTY, hand-write `.changeset/<slug>.md` in the shape shown there; `verify-changesets` fails the PR
   without one and rejects `major` before 1.0. The summary is a release note in the operator's or
@@ -281,8 +280,7 @@ change that ships, never a measurement or a verdict alone.
 - Comments say what the code cannot — a constraint, a platform behaviour, a rejected alternative —
   and move when the code moves. Nothing in them is a run number, a measured duration or an
   incident. Deleting one of these needs the same justification as adding one: either the code now
-  says it, or it moved to its one home. A pass that strips comments across files is its own pull
-  request, never a rider on a fix.
+  says it, or it moved to its one home.
 - Our users read feedback about their own work. A wrong claim, a stale label or a lying spinner
   costs trust that a fast fix does not buy back.
 

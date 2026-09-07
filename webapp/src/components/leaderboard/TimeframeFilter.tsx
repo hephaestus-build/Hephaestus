@@ -1,17 +1,6 @@
-import {
-	addDays,
-	addWeeks,
-	endOfMonth,
-	format,
-	formatISO,
-	isSameYear,
-	parseISO,
-	startOfMonth,
-	subDays,
-} from "date-fns";
+import { addDays, addWeeks, endOfMonth, format, isSameYear, startOfMonth, subDays } from "date-fns";
 import { CalendarDays, CalendarIcon, CalendarRange, Clock } from "lucide-react";
-// oxlint-disable-next-line no-restricted-imports -- `schedule` below is a dependency of the emitting effect, so its identity decides whether that effect re-runs; see the note there.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import type { DateRange } from "react-day-picker";
 
 import { useNow } from "@/components/common/use-now";
@@ -26,27 +15,24 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { asDate } from "@/lib/dates";
 import {
 	DEFAULT_SCHEDULE,
 	detectPresetFromDates,
 	formatDateRangeForApi,
 	formatDropdownLabel,
 	getDateRangeForPreset,
-	type LeaderboardSchedule,
 	type TimeframePreset,
+	type LeaderboardSchedule,
 } from "@/lib/timeframe";
 import { cn } from "@/lib/utils";
 
 export interface TimeframeFilterProps {
 	onTimeframeChange?: (afterDate: string, beforeDate?: string, timeframe?: string) => void;
-	initialAfterDate?: string;
-	initialBeforeDate?: string;
-	leaderboardSchedule?: {
-		day: number;
-		hour: number;
-		minute: number;
-		formatted?: string;
-	};
+	/** Selected ISO interval: inclusive start and exclusive end. */
+	afterDate?: string;
+	beforeDate?: string;
+	leaderboardSchedule?: LeaderboardSchedule;
 	/**
 	 * When true, presets "this week/this month" emit only afterDate (open-ended).
 	 * "Last week/last month" always send both bounds so their labels remain bounded.
@@ -58,7 +44,6 @@ export interface TimeframeFilterProps {
 	enableAllActivityOption?: boolean;
 }
 
-/** Icon component for each preset type */
 function PresetIcon({ preset, className }: { preset: TimeframePreset; className?: string }) {
 	const iconClass = cn("h-4 w-4 shrink-0", className);
 
@@ -79,47 +64,26 @@ function PresetIcon({ preset, className }: { preset: TimeframePreset; className?
 export function TimeframeFilter({
 	onTimeframeChange,
 	leaderboardSchedule,
-	initialAfterDate,
-	initialBeforeDate,
+	afterDate,
+	beforeDate,
 	openEndedPresets = false,
 	enableAllActivityOption = false,
 }: TimeframeFilterProps) {
-	// Keyed on the three scalars, not on `leaderboardSchedule`: callers pass that inline, and a fresh
-	// identity each render would re-run the emitting effect below each render.
-	const scheduleDay = leaderboardSchedule?.day ?? DEFAULT_SCHEDULE.day;
-	const scheduleHour = leaderboardSchedule?.hour ?? DEFAULT_SCHEDULE.hour;
-	const scheduleMinute = leaderboardSchedule?.minute ?? DEFAULT_SCHEDULE.minute;
-	const schedule = useMemo<LeaderboardSchedule>(
-		() => ({ day: scheduleDay, hour: scheduleHour, minute: scheduleMinute }),
-		[scheduleDay, scheduleHour, scheduleMinute],
+	const schedule = leaderboardSchedule ?? DEFAULT_SCHEDULE;
+	const [customRangeOpen, setCustomRangeOpen] = useState(false);
+	const now = new Date(useNow());
+	const selectedPreset = detectPresetFromDates(
+		now,
+		afterDate,
+		beforeDate,
+		schedule,
+		enableAllActivityOption,
 	);
-
-	const [chosenPreset, setChosenPreset] = useState<TimeframePreset>();
-	// Ticks, so a week or month boundary crossed with the page open rolls the emitted range over
-	// instead of stranding it in the period that ended.
-	const nowMs = useNow();
-	const now = new Date(nowMs);
-
-	const selectedPreset =
-		chosenPreset ??
-		detectPresetFromDates(
-			now,
-			initialAfterDate,
-			initialBeforeDate,
-			schedule,
-			enableAllActivityOption,
-		);
-
-	const [customRange, setCustomRange] = useState<DateRange | undefined>(() => {
-		if (selectedPreset === "custom" && initialAfterDate) {
-			const from = parseISO(initialAfterDate);
-			const to = initialBeforeDate ? subDays(parseISO(initialBeforeDate), 1) : undefined;
-			return { from, to };
-		}
-		return undefined;
-	});
-
-	const lastEmittedRef = useRef<{ after: string; before?: string } | null>(null);
+	const startDate = asDate(afterDate);
+	const before = asDate(beforeDate);
+	const customRange = startDate
+		? { from: startDate, to: before ? subDays(before, 1) : undefined }
+		: undefined;
 
 	const baseItems: { value: TimeframePreset; label: string }[] = [
 		{ value: "this-week", label: formatDropdownLabel("this-week") },
@@ -132,88 +96,29 @@ export function TimeframeFilter({
 		? [{ value: "all-activity", label: formatDropdownLabel("all-activity") }, ...baseItems]
 		: baseItems;
 
-	// Emit changes when preset or custom range changes
-	useEffect(() => {
-		if (!onTimeframeChange) return;
-
-		let range: { after: string; before: string | undefined };
-
-		const at = new Date(nowMs);
-
-		if (selectedPreset === "custom") {
-			if (!customRange?.from) return;
-			const dateRange = getDateRangeForPreset(at, selectedPreset, schedule, {
-				from: customRange.from,
-				to: customRange.to,
-			});
-			range = formatDateRangeForApi(dateRange);
-		} else {
-			const dateRange = getDateRangeForPreset(at, selectedPreset, schedule);
-			// For leaderboard, we may need bounded ranges even for "this week"
-			if (!openEndedPresets && dateRange.before === undefined) {
-				// Force bounded range for leaderboard display
-				if (selectedPreset === "this-week" || selectedPreset === "last-week") {
-					// For weeks, use the week end
-					range = {
-						after: formatISO(dateRange.after),
-						before: formatISO(addWeeks(dateRange.after, 1)),
-					};
-				} else if (selectedPreset === "this-month") {
-					// For this month, use next month start
-					const monthEnd = startOfMonth(addDays(endOfMonth(dateRange.after), 1));
-					range = {
-						after: formatISO(dateRange.after),
-						before: formatISO(monthEnd),
-					};
-				} else {
-					range = formatDateRangeForApi(dateRange);
-				}
-			} else {
-				range = formatDateRangeForApi(dateRange);
-			}
-		}
-
-		if (
-			lastEmittedRef.current?.after === range.after &&
-			lastEmittedRef.current.before === range.before
-		) {
+	const handlePresetChange = (preset: TimeframePreset) => {
+		if (preset === "custom") {
+			setCustomRangeOpen(true);
 			return;
 		}
-
-		lastEmittedRef.current = range;
-		onTimeframeChange(range.after, range.before, selectedPreset);
-	}, [nowMs, selectedPreset, customRange, schedule, onTimeframeChange, openEndedPresets]);
-
-	const handlePresetChange = (preset: TimeframePreset) => {
-		setChosenPreset(preset);
-
-		if (preset === "custom" && !customRange?.from) {
-			// If we have an initial after date from props (from a previous preset),
-			// use it as the from date and set to as now
-			if (initialAfterDate) {
-				const fromDate = parseISO(initialAfterDate);
-				setCustomRange({
-					from: fromDate,
-					to: now,
-				});
-			} else {
-				// Fallback to last 7 days
-				setCustomRange({
-					from: subDays(now, 7),
-					to: now,
-				});
-			}
+		setCustomRangeOpen(false);
+		const range = getDateRangeForPreset(now, preset, schedule);
+		if (!openEndedPresets && !range.before) {
+			if (preset === "this-week") range.before = addWeeks(range.after, 1);
+			if (preset === "this-month") range.before = startOfMonth(addDays(endOfMonth(range.after), 1));
 		}
+		const dates = formatDateRangeForApi(range);
+		onTimeframeChange?.(dates.after, dates.before, preset);
 	};
 
 	const handleCustomRangeChange = (range: DateRange | undefined) => {
-		if (range) {
-			setChosenPreset("custom");
-			setCustomRange(range);
-		}
+		if (!range?.from) return;
+		const dates = formatDateRangeForApi(
+			getDateRangeForPreset(now, "custom", schedule, { from: range.from, to: range.to }),
+		);
+		onTimeframeChange?.(dates.after, dates.before, "custom");
 	};
 
-	// Format custom range label for the button
 	const formatCustomRangeLabel = () => {
 		if (!customRange?.from) return "Pick dates";
 		const from = customRange.from;
@@ -274,14 +179,15 @@ export function TimeframeFilter({
 					</SelectItem>
 				</SelectContent>
 			</Select>
-			{selectedPreset === "custom" && (
+			{(selectedPreset === "custom" || customRangeOpen) && (
 				<div className="pt-2">
 					<div className="grid gap-2">
-						<Popover>
+						<Popover open={customRangeOpen} onOpenChange={setCustomRangeOpen}>
 							<PopoverTrigger
 								render={
 									<Button
 										id="date"
+										aria-label="Choose custom dates"
 										variant="outline"
 										className={cn(
 											"w-full justify-start text-left font-normal",

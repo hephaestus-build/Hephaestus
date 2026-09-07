@@ -2,6 +2,8 @@ import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@ta
 
 import { captureException } from "@/integrations/sentry";
 
+import { QUERY_STALE_TIME_MS } from "./query-defaults";
+
 const queryClient = new QueryClient({
 	queryCache: new QueryCache({ onError: (error) => captureException(error) }),
 	mutationCache: new MutationCache({ onError: (error) => captureException(error) }),
@@ -17,7 +19,7 @@ const queryClient = new QueryClient({
 			 * Not `Infinity`: SSE hint delivery is at-most-once, so `refetchOnWindowFocus` (default
 			 * `true`) must stay armed as the catch-up-after-absence healer.
 			 */
-			staleTime: 30_000,
+			staleTime: QUERY_STALE_TIME_MS,
 		},
 	},
 });

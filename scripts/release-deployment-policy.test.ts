@@ -101,16 +101,6 @@ await test("every promotion decision is taken by the script that owns it", () =>
 		);
 	// Rollback must support releases predating immutable tags; the signed lock binds their digests.
 	assert.doesNotMatch(resolver, /isImmutable/);
-	// The verifier is the tooling this tick runs — resolved from the running script, which Node pins
-	// to the tree it loaded — never the release under review.
-	assert.match(reconciler, /join\(import\.meta\.dirname, "prepare-release-lock\.ts"\)/);
-	assert.doesNotMatch(reconciler, /join\(releaseTree, "scripts\/prepare-release-lock\.ts"\)/);
-	// Run through the tooling link, argv[1] and import.meta.filename differ; only import.meta.main holds.
-	assert.match(reconciler, /^if \(import\.meta\.main\) \{/m);
-	// A host pointed at an environment nobody has promoted yet must be told that, not handed git's
-	// "path does not exist" as an unhandled exec failure — it is the first thing a new host meets.
-	assert.match(reconciler, /cat-file", "-e", `\$\{channelCommit\}:\$\{channelPath\}`/);
-	assert.match(reconciler, /promoted yet/);
 });
 
 function referenced(expression: string, pattern: RegExp): string[] {

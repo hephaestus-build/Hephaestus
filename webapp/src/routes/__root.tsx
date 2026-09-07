@@ -305,10 +305,8 @@ function AppSidebarContainer() {
 	const navigate = useNavigate();
 	const switchWorkspace = useWorkspaceSwitcher();
 	const workspaceAccess = useWorkspaceAccess();
-	const { chromeWorkspaceSlug, workspaces } = workspaceAccess;
+	const { chromeWorkspaceSlug, chromeWorkspace, workspaces } = workspaceAccess;
 	const hasWorkspace = Boolean(chromeWorkspaceSlug);
-	const workspaceList = Array.isArray(workspaces) ? workspaces : [];
-	const activeWorkspace = workspaceList.find((ws) => ws.workspaceSlug === chromeWorkspaceSlug);
 	const integrationCatalogQuery = useQuery({
 		...getIntegrationCatalogOptions({ path: { workspaceSlug: chromeWorkspaceSlug ?? "" } }),
 		enabled: workspaceAccess.isAdmin && Boolean(chromeWorkspaceSlug),
@@ -320,9 +318,9 @@ function AppSidebarContainer() {
 	const integrationKinds = [
 		...new Set([
 			...integrationCatalog.map((entry) => entry.kind),
-			...(activeWorkspace?.providerType === "GITLAB"
+			...(chromeWorkspace?.providerType === "GITLAB"
 				? (["GITLAB"] as const)
-				: activeWorkspace?.providerType === "GITHUB"
+				: chromeWorkspace?.providerType === "GITHUB"
 					? (["GITHUB"] as const)
 					: []),
 		]),
@@ -349,7 +347,7 @@ function AppSidebarContainer() {
 		return null;
 	}
 
-	const handleWorkspaceChange = (ws: typeof activeWorkspace) => {
+	const handleWorkspaceChange = (ws: typeof chromeWorkspace) => {
 		if (!ws) return;
 		void switchWorkspace(ws);
 	};
@@ -366,8 +364,8 @@ function AppSidebarContainer() {
 			hasMentorAccess={hasMentorAccess}
 			integrationKinds={integrationKinds}
 			context={sidebarContext}
-			workspaces={workspaceList}
-			activeWorkspace={activeWorkspace}
+			workspaces={workspaces}
+			activeWorkspace={chromeWorkspace}
 			onWorkspaceChange={handleWorkspaceChange}
 			onAddWorkspace={handleAddWorkspace}
 			workspacesLoading={workspaceAccess.isLoading}

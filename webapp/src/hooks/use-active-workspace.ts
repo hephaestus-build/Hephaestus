@@ -14,8 +14,6 @@ export function useActiveWorkspaceSlug() {
 	const query = useQuery({
 		...listWorkspacesOptions(),
 		enabled: isAuthenticated && !authLoading,
-		staleTime: 30_000,
-		refetchOnWindowFocus: true,
 	});
 	const workspaces = Array.isArray(query.data) ? query.data : NO_WORKSPACES;
 	const workspaceSlug = useParams({ strict: false, select: (params) => params.workspaceSlug });
@@ -30,6 +28,7 @@ export function useActiveWorkspaceSlug() {
 	return {
 		workspaceSlug,
 		chromeWorkspaceSlug,
+		chromeWorkspace,
 		workspaces,
 		// A workspace is SCM-backed; SLACK (an identity provider) never reaches SCM-only UI, but the
 		// generated type includes it, so narrow to the SCM ProviderType with a GITHUB fallback.

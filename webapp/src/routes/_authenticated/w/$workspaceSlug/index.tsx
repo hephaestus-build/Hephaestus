@@ -321,8 +321,8 @@ function LeaderboardContainer() {
 			teamLabelsById={teamLabelsById}
 			selectedTeam={team}
 			selectedSort={sort}
-			initialAfterDate={effectiveDates.after}
-			initialBeforeDate={effectiveDates.before}
+			afterDate={effectiveDates.after}
+			beforeDate={effectiveDates.before}
 			leaderboardEnd={leaderboardEnd}
 			leaderboardSchedule={schedule}
 			onTeamChange={handleTeamChange}

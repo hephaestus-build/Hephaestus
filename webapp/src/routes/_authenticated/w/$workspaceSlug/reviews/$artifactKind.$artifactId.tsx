@@ -15,6 +15,7 @@ import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
 export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/reviews/$artifactKind/$artifactId",
 )({
+	remountDeps: ({ params }) => params,
 	// `artifactKind` stays the wire id (`scm.pull_request`) rather than a short slug: kinds are an
 	// open vocabulary, and a slug map would make a kind this build has never heard of unreachable.
 	loader: ({ params: { artifactId } }) => {
@@ -40,10 +41,12 @@ function ReviewActivityDetailRoute() {
 	});
 	const requestReview = useMutation({
 		...requestPracticeReviewMutation(),
-		onSuccess: (outcome) => {
+		onSuccess: (outcome, { path, body }) => {
 			if (outcome.status !== "SUBMITTED") return;
 			void queryClient.invalidateQueries({
-				queryKey: getArtifactTraceQueryKey({ path: { workspaceSlug, artifactKind, artifactId } }),
+				queryKey: getArtifactTraceQueryKey({
+					path: { ...path, artifactKind: body.artifactKind, artifactId: body.artifactId },
+				}),
 			});
 			toast.success("Review started");
 		},

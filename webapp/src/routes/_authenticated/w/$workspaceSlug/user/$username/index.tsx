@@ -24,6 +24,7 @@ import {
 } from "@/lib/activity-monitor";
 import { resolveLeaderboardSchedule } from "@/lib/leaderboard-schedule";
 import { toScmProviderType } from "@/lib/provider";
+import { useSearchState } from "@/lib/search-params";
 import { formatDateRangeForApi, getDateRangeForPreset } from "@/lib/timeframe";
 
 const profileSearchSchema = z.object({
@@ -37,8 +38,6 @@ const profileSearchSchema = z.object({
 		.max(MAX_ACTIVITY_MONITOR_LIMIT)
 		.default(DEFAULT_ACTIVITY_MONITOR_LIMIT),
 });
-
-type ProfileSearchParams = z.infer<typeof profileSearchSchema>;
 
 const parseRepositoryIds = (value?: string): number[] => {
 	if (!value) return [];
@@ -58,6 +57,7 @@ const serializeRepositoryIds = (repositoryIds: number[]) => {
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/user/$username/")({
 	component: UserProfile,
+	remountDeps: ({ params }) => params,
 	validateSearch: profileSearchSchema,
 	search: {
 		middlewares: [retainSearchParams(["after", "before", "monitorRepositories", "monitorLimit"])],
@@ -74,6 +74,7 @@ function UserProfile() {
 	const practicesEnabled = featureState.features?.practicesEnabled;
 	const { after, before, monitorRepositories, monitorLimit } = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
+	const setSearch = useSearchState();
 
 	const workspaceQuery = useQuery({
 		...getWorkspaceOptions({
@@ -167,23 +168,19 @@ function UserProfile() {
 	});
 
 	const handleTimeframeChange = (nextAfter: string, nextBefore?: string) => {
-		void navigate({
-			search: (prev: ProfileSearchParams) => ({
-				...prev,
-				after: nextAfter,
-				before: nextBefore,
-			}),
-		});
+		void setSearch((prev) => ({
+			...prev,
+			after: nextAfter,
+			before: nextBefore,
+		}));
 	};
 
 	const handleActivityMonitorFiltersChange = (filters: ActivityMonitorFilters) => {
-		void navigate({
-			search: (prev: ProfileSearchParams) => ({
-				...prev,
-				monitorRepositories: serializeRepositoryIds(filters.repositoryIds),
-				monitorLimit: filters.limit === DEFAULT_ACTIVITY_MONITOR_LIMIT ? undefined : filters.limit,
-			}),
-		});
+		void setSearch((prev) => ({
+			...prev,
+			monitorRepositories: serializeRepositoryIds(filters.repositoryIds),
+			monitorLimit: filters.limit === DEFAULT_ACTIVITY_MONITOR_LIMIT ? undefined : filters.limit,
+		}));
 	};
 
 	if (featureState.isError) {
@@ -201,15 +198,21 @@ function UserProfile() {
 			providerType={toScmProviderType(workspaceQuery.data?.providerType)}
 			profileData={profileQuery.data}
 			activityMonitorData={activityMonitorQuery.data}
+			activityMonitorError={workspaceQuery.error ?? activityMonitorQuery.error}
+			onRetryActivityMonitor={() => {
+				if (workspaceQuery.isError) void workspaceQuery.refetch();
+				if (activityMonitorQuery.isError) void activityMonitorQuery.refetch();
+			}}
 			activityMonitorFilters={{
 				repositoryIds: selectedRepositoryIds,
 				limit: monitorLimit,
 			}}
 			onActivityMonitorFiltersChange={handleActivityMonitorFiltersChange}
-			isLoading={
-				profileQuery.isPending ||
+			isLoading={profileQuery.isPending || workspaceQuery.isPending}
+			isActivityLoading={
 				workspaceQuery.isPending ||
-				(activityMonitorQuery.isPending && !activityMonitorQuery.data)
+				activityMonitorQuery.isPending ||
+				activityMonitorQuery.isPlaceholderData
 			}
 			error={profileQuery.error ?? undefined}
 			onRetry={() => void profileQuery.refetch()}

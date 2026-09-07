@@ -106,3 +106,109 @@ void describe("ships-tests-with-the-change", () => {
 		assert.ok(result.directions.join(" ").includes("WORKTREE NOT VISIBLE"));
 	});
 });
+
+void describe("issue classification across practices", () => {
+	const names = [
+		"issue-has-checkable-outcome",
+		"issue-states-an-actionable-problem",
+		"issue-scoped-to-single-concern",
+	];
+
+	for (const { name, metadata, emptyOrTitleEcho, hasDeliverableType, looksUmbrella } of [
+		{
+			name: "empty deliverable",
+			metadata: { title: "Export billing reports", labels: ["FEATURE"] },
+			emptyOrTitleEcho: 1,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "title repeated with different punctuation",
+			metadata: {
+				title: "Export billing reports to CSV",
+				body: "EXPORT billing reports: to CSV!",
+				issue_type: "Task",
+			},
+			emptyOrTitleEcho: 1,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "substantive umbrella",
+			metadata: {
+				title: "Billing improvements",
+				body: "Split the invoice work into independently deliverable child issues with their own acceptance criteria.",
+				labels: ["REQUIREMENT"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 1,
+		},
+		{
+			name: "substantive body with an omitted title",
+			metadata: {
+				body: "The PDF contains overlapping text when a customer's address spans more than three lines.",
+				labels: ["BUG"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "substantive body with an empty title",
+			metadata: {
+				title: "",
+				body: "The PDF contains overlapping text when a customer's address spans more than three lines.",
+				labels: ["BUG"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "substantive body with a non-Latin title",
+			metadata: {
+				title: "报告",
+				body: "The PDF contains overlapping text when a customer's address spans more than three lines.",
+				labels: ["BUG"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "substantive untyped issue",
+			metadata: {
+				title: "Unreadable invoice",
+				body: "The PDF contains overlapping text when a customer's address spans more than three lines.",
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 0,
+			looksUmbrella: 0,
+		},
+	]) {
+		void it(`preserves shared facts for a ${name}`, async () => {
+			for (const scriptName of names) {
+				const run = await loadScript(scriptName);
+				const result = await run("", new Map(), metadata);
+				assert.equal(result.metrics.emptyOrTitleEcho, emptyOrTitleEcho, scriptName);
+				assert.deepEqual(result.hints, [], scriptName);
+				if (scriptName !== "issue-scoped-to-single-concern") {
+					assert.equal(result.metrics.hasDeliverableType, hasDeliverableType, scriptName);
+					assert.equal(result.metrics.looksUmbrella, looksUmbrella, scriptName);
+				}
+				if (
+					scriptName === "issue-states-an-actionable-problem" &&
+					emptyOrTitleEcho &&
+					hasDeliverableType
+				) {
+					assert.ok(
+						result.directions.some((direction) =>
+							direction.includes("investigate whether a maintainer can actually act on it."),
+						),
+					);
+				}
+			}
+		});
+	}
+});

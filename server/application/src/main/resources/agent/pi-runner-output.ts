@@ -18,6 +18,11 @@ export function outputPath(outputDir: string, name: string): string {
 			`Output file name must start with an ASCII letter or digit and hold only letters, digits, '.', '_', '-' and '/': ${name}`,
 		);
 	}
+	if (name.split("/").some((segment) => segment === "" || segment === "." || segment === "..")) {
+		throw new Error(
+			`Output file name must contain only non-empty, relative path segments: ${name}`,
+		);
+	}
 	// ASCII by the test above, so one character is one byte.
 	if (member.length > MAX_MEMBER_BYTES) {
 		throw new Error(

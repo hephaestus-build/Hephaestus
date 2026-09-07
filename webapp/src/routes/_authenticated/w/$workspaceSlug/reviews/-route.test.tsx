@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -92,4 +93,15 @@ describe("review activity routes", () => {
 
 		await screen.findByRole("heading", { name: "Page Not Found" }, ROUTE_RENDER_WAIT);
 	});
+});
+
+it("changes the work filter without resetting scroll", async () => {
+	const { router } = renderRouteAtWithRouter("/w/acme/reviews");
+	const control = await screen.findByRole("combobox", { name: "Show" }, ROUTE_RENDER_WAIT);
+	const scroll = vi.spyOn(window, "scrollTo").mockReturnValue(undefined);
+	await userEvent.click(control);
+	await userEvent.click(await screen.findByRole("option", { name: "Issues" }));
+	await vi.waitFor(() => expect(router.state.location.search).toMatchObject({ kind: "scm.issue" }));
+	expect(scroll).not.toHaveBeenCalled();
+	scroll.mockRestore();
 });
