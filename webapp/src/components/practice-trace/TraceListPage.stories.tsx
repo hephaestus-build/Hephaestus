@@ -103,6 +103,46 @@ export const NothingRecorded: Story = {
 	},
 };
 
+export const PracticeReviewsOff: Story = {
+	args: { practicesEnabled: false },
+	play: async ({ canvas }) => {
+		// The link to this page is deliberately not feature-gated, on the promise that the page says
+		// why nothing was observed. This is that promise.
+		await expect(await canvas.findByText("Practice reviews are off")).toBeVisible();
+		// The work is still recorded and still listed; only the reviewing stopped.
+		await expect(canvas.getByText("5 pieces of work.")).toBeVisible();
+		await expect(
+			canvas.getByText(/Practice reviews are off, so new work is not observed/),
+		).toBeVisible();
+		// Switching reviews off does not erase what was observed while they ran, so the notice must
+		// not claim the recorded work carries nothing.
+		await expect(canvas.getByText(/still shown below/)).toBeVisible();
+	},
+};
+
+export const FeatureLookupUnavailable: Story = {
+	args: { practicesEnabled: undefined },
+	play: async ({ canvas }) => {
+		// The workspace lookup has not answered, or failed. Saying practices observed this work would
+		// be a guess, and so would saying they did not, so the page claims neither.
+		await expect(
+			await canvas.findByText("Every piece of work recorded in this workspace."),
+		).toBeVisible();
+		await expect(canvas.queryByText("Practice reviews are off")).toBeNull();
+	},
+};
+
+export const PracticeReviewsOffWithNothingRecorded: Story = {
+	args: { practicesEnabled: false, artifacts: tracedArtifactPage([]) },
+	play: async ({ canvas }) => {
+		// Both reasons at once: nothing has synced yet, and nothing would be reviewed if it had. The
+		// empty state must not be the only thing said, or the reader takes "connect a repository" as
+		// the answer when the switch is the answer.
+		await expect(await canvas.findByText("Practice reviews are off")).toBeVisible();
+		await expect(canvas.getByText("Nothing has been recorded here yet")).toBeVisible();
+	},
+};
+
 export const FilteredToOneKind: Story = {
 	args: {
 		search: { kind: "scm.issue" },

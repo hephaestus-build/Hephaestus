@@ -71,6 +71,7 @@ function UserProfile() {
 	const achievementsEnabled = featureState.features?.achievementsEnabled;
 	const progressionEnabled = featureState.features?.progressionEnabled;
 	const leaguesEnabled = featureState.features?.leaguesEnabled;
+	const practicesEnabled = featureState.features?.practicesEnabled;
 	const { after, before, monitorRepositories, monitorLimit } = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
 
@@ -104,26 +105,29 @@ function UserProfile() {
 
 	const currUserIsDashboardUser = isCurrentUser(username);
 
+	// Standings only mean anything where practices review the work, so with them off this asks for
+	// nothing rather than asking and rendering an empty answer as "none configured".
+	const showsPracticeStandings = currUserIsDashboardUser && practicesEnabled === true;
 	const groupsQuery = useQuery({
 		...listGroupsOptions({
 			path: { workspaceSlug },
 			query: { visibleInPracticeDashboardsOnly: true },
 		}),
-		enabled: Boolean(workspaceSlug) && currUserIsDashboardUser,
+		enabled: Boolean(workspaceSlug) && showsPracticeStandings,
 	});
 	const practiceGroups = groupsQuery.data ?? [];
 	const groupStandingsQuery = useQuery({
 		...listPracticeGroupStandingsOptions({
 			path: { workspaceSlug },
 		}),
-		enabled: Boolean(workspaceSlug) && currUserIsDashboardUser,
+		enabled: Boolean(workspaceSlug) && showsPracticeStandings,
 	});
 	const groupStandings = Object.fromEntries(
 		(groupStandingsQuery.data ?? []).map((status) => [status.groupSlug, status]),
 	);
 	const standingsQuery = useQuery({
 		...listPracticeStandingsOptions({ path: { workspaceSlug } }),
-		enabled: Boolean(workspaceSlug) && currUserIsDashboardUser,
+		enabled: Boolean(workspaceSlug) && showsPracticeStandings,
 	});
 	const practicesByGroup = (standingsQuery.data ?? []).reduce<Record<string, PracticeStanding[]>>(
 		(grouped, practice) => {
@@ -220,7 +224,7 @@ function UserProfile() {
 			progressionEnabled={progressionEnabled === true}
 			leaguesEnabled={leaguesEnabled === true}
 			practiceGroupStandings={
-				currUserIsDashboardUser ? (
+				showsPracticeStandings ? (
 					<PracticeGroupStandingCard
 						groups={practiceGroups}
 						standings={groupStandings}

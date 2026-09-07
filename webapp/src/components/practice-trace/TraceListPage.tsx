@@ -8,6 +8,7 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { ResultCount } from "@/components/common/ResultCount";
 import { TablePagination } from "@/components/common/TablePagination";
 import { PageHeader } from "@/components/core/PageHeader";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
 	Empty,
 	EmptyDescription,
@@ -36,6 +37,12 @@ export interface TraceListPageProps {
 	isLoading: boolean;
 	error: unknown;
 	onRetry: () => void;
+	/**
+	 * Whether this workspace reviews practices at all. Undefined while the answer is on its way and
+	 * when the lookup failed: this page is reachable with practices off precisely so it can say so,
+	 * and asserting either answer before knowing it would be its own wrong answer.
+	 */
+	practicesEnabled?: boolean;
 }
 
 /** Every piece of work this workspace recorded anything about, including the unreviewed. */
@@ -47,6 +54,7 @@ export function TraceListPage({
 	isLoading,
 	error,
 	onRetry,
+	practicesEnabled,
 }: TraceListPageProps) {
 	const page = search.page ?? 0;
 	const rows = artifacts?.content ?? [];
@@ -66,8 +74,27 @@ export function TraceListPage({
 			<PageHeader
 				icon={<RadarIcon />}
 				title="Review activity"
-				description="Every piece of work recorded in this workspace, and what each practice observed about it — including the practices that stayed quiet, and why."
+				description={
+					practicesEnabled === false
+						? "Every piece of work recorded in this workspace. Practice reviews are off, so new work is not observed."
+						: practicesEnabled === true
+							? "Every piece of work recorded in this workspace, and what each practice observed about it — including the practices that stayed quiet, and why."
+							: // Whether practices review here is not known yet, or the lookup failed. Claiming
+								// either answer would be a guess, so this says only what is true regardless.
+								"Every piece of work recorded in this workspace."
+				}
 			/>
+			{practicesEnabled === false && (
+				<Alert variant="warning">
+					<AlertTitle>Practice reviews are off</AlertTitle>
+					<AlertDescription>
+						New work still syncs and is recorded here, but nothing reviews it: no new observations
+						are recorded and no feedback is delivered. Anything observed before reviews were
+						switched off is still shown below. A workspace admin starts practice reviews again in
+						the workspace's practice review settings.
+					</AlertDescription>
+				</Alert>
+			)}
 			<section aria-label="Recorded work" className="space-y-4">
 				<FilterToolbar
 					hasFilter={hasFilter}
