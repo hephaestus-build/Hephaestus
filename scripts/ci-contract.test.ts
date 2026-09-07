@@ -1626,6 +1626,16 @@ void describe("CI contract", () => {
 		);
 
 		const scanPath = ["jobs", "security-scan"];
+		const secretScan = stepInputs(namedStep(workflow, scanPath, "Secret detection"));
+		assert.equal(
+			secretScan.get("base"),
+			`\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || '' }}`,
+		);
+		assert.equal(
+			secretScan.get("head"),
+			`\${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}`,
+		);
+		assert.ok(String(secretScan.get("extra_args")).split(" ").includes("--fail-on-scan-errors"));
 		const report = stepInputs(namedStep(workflow, scanPath, "Trivy dependency scan"));
 		assert.equal(report.get("format"), "sarif");
 		assert.ok(
