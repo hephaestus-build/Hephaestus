@@ -375,7 +375,7 @@ jobs:
         with:
           min-confidence: medium
           # renovate: datasource=github-releases depName=zizmorcore/zizmor
-          version: 1.29.0
+          version: 1.30.0
 
       - name: Enforce Zizmor findings
         env:
