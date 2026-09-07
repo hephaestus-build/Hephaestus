@@ -38,9 +38,9 @@ export interface TraceListPageProps {
 	error: unknown;
 	onRetry: () => void;
 	/**
-	 * Whether this workspace reviews practices at all. Undefined while the answer is still on its
-	 * way, which reads as enabled: this page is reachable with practices off precisely so it can
-	 * say so, and claiming it before knowing would be its own wrong answer.
+	 * Whether this workspace reviews practices at all. Undefined while the answer is on its way and
+	 * when the lookup failed: this page is reachable with practices off precisely so it can say so,
+	 * and asserting either answer before knowing it would be its own wrong answer.
 	 */
 	practicesEnabled?: boolean;
 }
@@ -76,17 +76,22 @@ export function TraceListPage({
 				title="Review activity"
 				description={
 					practicesEnabled === false
-						? "Every piece of work recorded in this workspace. Practice reviews are off, so none of it carries an observation."
-						: "Every piece of work recorded in this workspace, and what each practice observed about it — including the practices that stayed quiet, and why."
+						? "Every piece of work recorded in this workspace. Practice reviews are off, so new work is not observed."
+						: practicesEnabled === true
+							? "Every piece of work recorded in this workspace, and what each practice observed about it — including the practices that stayed quiet, and why."
+							: // Whether practices review here is not known yet, or the lookup failed. Claiming
+								// either answer would be a guess, so this says only what is true regardless.
+								"Every piece of work recorded in this workspace."
 				}
 			/>
 			{practicesEnabled === false && (
 				<Alert variant="warning">
 					<AlertTitle>Practice reviews are off</AlertTitle>
 					<AlertDescription>
-						New work still syncs and is recorded here, but nothing reviews it: no observations are
-						recorded and no feedback is delivered. A workspace admin starts practice reviews again
-						in the workspace's practice review settings.
+						New work still syncs and is recorded here, but nothing reviews it: no new observations
+						are recorded and no feedback is delivered. Anything observed before reviews were
+						switched off is still shown below. A workspace admin starts practice reviews again in
+						the workspace's practice review settings.
 					</AlertDescription>
 				</Alert>
 			)}

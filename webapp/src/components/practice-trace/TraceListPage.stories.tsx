@@ -112,8 +112,23 @@ export const PracticeReviewsOff: Story = {
 		// The work is still recorded and still listed; only the reviewing stopped.
 		await expect(canvas.getByText("5 pieces of work.")).toBeVisible();
 		await expect(
-			canvas.getByText(/Practice reviews are off, so none of it carries an observation/),
+			canvas.getByText(/Practice reviews are off, so new work is not observed/),
 		).toBeVisible();
+		// Switching reviews off does not erase what was observed while they ran, so the notice must
+		// not claim the recorded work carries nothing.
+		await expect(canvas.getByText(/still shown below/)).toBeVisible();
+	},
+};
+
+export const FeatureLookupUnavailable: Story = {
+	args: { practicesEnabled: undefined },
+	play: async ({ canvas }) => {
+		// The workspace lookup has not answered, or failed. Saying practices observed this work would
+		// be a guess, and so would saying they did not, so the page claims neither.
+		await expect(
+			await canvas.findByText("Every piece of work recorded in this workspace."),
+		).toBeVisible();
+		await expect(canvas.queryByText("Practice reviews are off")).toBeNull();
 	},
 };
 

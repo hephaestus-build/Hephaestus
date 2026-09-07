@@ -216,9 +216,12 @@ export const Mobile: Story = {
 		const name = canvas.getByRole("heading", { level: 1 });
 		const leagueBox = league.getBoundingClientRect();
 		const nameBox = name.getBoundingClientRect();
-		// Same band: the league starts before the name's line has ended vertically.
-		await expect(leagueBox.top).toBeLessThan(nameBox.bottom);
-		// And to the side of it, not under it.
-		await expect(leagueBox.left).toBeGreaterThan(nameBox.left);
+		// Same band: the two boxes overlap vertically, which "league.top < name.bottom" alone would
+		// also allow if the league sat entirely above the heading.
+		await expect(Math.min(leagueBox.bottom, nameBox.bottom)).toBeGreaterThan(
+			Math.max(leagueBox.top, nameBox.top),
+		);
+		// Beside it rather than over it: the league starts where the heading has ended.
+		await expect(leagueBox.left).toBeGreaterThanOrEqual(nameBox.right);
 	},
 };
