@@ -56,6 +56,7 @@ import {
 import { isRetryableStatus, retrying } from "./pi-runner-retry.ts";
 import {
 	armRetryWindow,
+	deriveCompositionWindow,
 	deriveReconBudget,
 	deriveTimeouts,
 	deriveTurnTiming,
@@ -1831,6 +1832,7 @@ async function main() {
 	async function completeWithAdmittedComposition(notReached: readonly string[]) {
 		measurementClosed = true;
 		await admitObservations();
+		persistComposedFeedback();
 		const parsed = parseJson(readFileSync(RESULT_PATH, "utf8"));
 		const result: Record<string, unknown> = isRecord(parsed) ? parsed : {};
 		result.admissionDigest = admissionDigest;
@@ -1853,7 +1855,18 @@ async function main() {
 		}
 		const unsubscribeComposer = subscribeSession(composerSession, "composer");
 		const instructions = readFileSync(COMPOSER_PROMPT_PATH, "utf8");
-		const compositionDeadline = scheduleDeadline(COMPOSITION_TIMEOUT_MS, () => {
+		const compositionMs = deriveCompositionWindow(
+			COMPOSITION_TIMEOUT_MS,
+			AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS),
+		);
+		if (compositionMs === 0) {
+			console.error("[pi-runner] Composition budget exhausted — preserving admitted observations");
+			unsubscribeComposer();
+			stopSession(composerSession);
+			persistComposedFeedback();
+			return;
+		}
+		const compositionDeadline = scheduleDeadline(compositionMs, () => {
 			console.error(
 				`[pi-runner] Composition timeout — preserving observations and composed units so far`,
 			);
@@ -1869,10 +1882,10 @@ async function main() {
 		} finally {
 			clearTimeout(compositionDeadline.timer);
 			unsubscribeComposer();
+			stopSession(composerSession);
+			persistComposedFeedback();
 		}
-		persistComposedFeedback();
 		const combinedUsage = extractUsageFromSession(composerSession.state, streamUsage);
-		stopSession(composerSession);
 		accumulateUsage(prevUsage, combinedUsage);
 		prevUsage = combinedUsage;
 		persistUsage();
@@ -1882,14 +1895,18 @@ async function main() {
 	const activeSessions = new Set<AgentSession>();
 	const hardAbort = new AbortController();
 
-	const hardTimer = setTimeout(() => {
+	const reviewDeadline = PROCESS_START_MS + INITIAL_TIMEOUT_MS;
+	const abortInitial = () => {
 		hardAborted = true;
 		hardAbort.abort();
 		console.error(`[pi-runner] Hard timeout — aborting ${activeSessions.size} active session(s)`);
 		for (const activeSession of activeSessions) {
 			stopSession(activeSession);
 		}
-	}, INITIAL_TIMEOUT_MS);
+	};
+	const initialWindowMs = Math.max(0, reviewDeadline - Date.now());
+	const hardTimer = initialWindowMs > 0 ? setTimeout(abortInitial, initialWindowMs) : undefined;
+	if (initialWindowMs === 0) abortInitial();
 
 	console.error(`[pi-runner] Starting initial analysis`);
 	const startMs = Date.now();
@@ -1905,7 +1922,6 @@ async function main() {
 		tree.practiceCount,
 	);
 	const sessionDir = `${CWD}/.sessions`;
-	const reviewDeadline = startMs + INITIAL_TIMEOUT_MS;
 	console.error(
 		`[pi-runner] Review tree: ${tree.practiceCount} practices, ${tree.groups.length} evidence group(s), concurrency=${concurrency}`,
 	);
@@ -1925,40 +1941,49 @@ async function main() {
 			modelRuntime,
 			model,
 		});
-		const unsubscribeRecon = subscribeSession(reconSession, "recon:shared");
-		activeSessions.add(reconSession);
-		const reconBudgetMs = deriveReconBudget(INITIAL_TIMEOUT_MS);
-		const reconDeadline = scheduleDeadline(reconBudgetMs, () => stopSession(reconSession));
-		try {
-			const groupScope = tree.groups
-				.map((group) => `${group.id} [${group.practiceSlugs.join(", ")}]`)
-				.join("; ");
-			await Promise.race([
-				reconSession.prompt(
-					`Build one factual reconnaissance map for this review. Read the manifest and the artifact summary first, then inspect only enough shared evidence to identify changed surfaces, review activity, linked work, tests, and likely code paths. Record exact artifact paths and diff coordinates. Do not evaluate a practice or claim GOOD/BAD. The following group sessions will continue from this checkpoint: ${groupScope}`,
-				),
-				reconDeadline.elapsed,
-			]);
-			const { seedSessionFile, checkpointEntryId } = reconnaissanceSeed(
-				reconSession.sessionManager,
-				reconDeadline.state,
-				reconBudgetMs,
-			);
-			for (const fork of forkSessions({
-				seedSessionFile,
-				checkpointEntryId,
-				keys: tree.groups.map((group) => group.id),
-				sessionDir,
-			})) {
-				groupSeedFiles.set(fork.key, fork.sessionFile);
-			}
-		} catch (error) {
-			console.error(`[pi-runner] shared reconnaissance failed: ${errorText(error)}`);
-		} finally {
-			clearTimeout(reconDeadline.timer);
-			activeSessions.delete(reconSession);
-			unsubscribeRecon();
+		if (hardAbort.signal.aborted || Date.now() >= reviewDeadline) {
+			hardAborted = true;
+			hardAbort.abort();
 			stopSession(reconSession);
+		} else {
+			const unsubscribeRecon = subscribeSession(reconSession, "recon:shared");
+			activeSessions.add(reconSession);
+			const reconBudgetMs = Math.min(
+				deriveReconBudget(INITIAL_TIMEOUT_MS),
+				reviewDeadline - Date.now(),
+			);
+			const reconDeadline = scheduleDeadline(reconBudgetMs, () => stopSession(reconSession));
+			try {
+				const groupScope = tree.groups
+					.map((group) => `${group.id} [${group.practiceSlugs.join(", ")}]`)
+					.join("; ");
+				await Promise.race([
+					reconSession.prompt(
+						`Build one factual reconnaissance map for this review. Read the manifest and the artifact summary first, then inspect only enough shared evidence to identify changed surfaces, review activity, linked work, tests, and likely code paths. Record exact artifact paths and diff coordinates. Do not evaluate a practice or claim GOOD/BAD. The following group sessions will continue from this checkpoint: ${groupScope}`,
+					),
+					reconDeadline.elapsed,
+				]);
+				const { seedSessionFile, checkpointEntryId } = reconnaissanceSeed(
+					reconSession.sessionManager,
+					reconDeadline.state,
+					reconBudgetMs,
+				);
+				for (const fork of forkSessions({
+					seedSessionFile,
+					checkpointEntryId,
+					keys: tree.groups.map((group) => group.id),
+					sessionDir,
+				})) {
+					groupSeedFiles.set(fork.key, fork.sessionFile);
+				}
+			} catch (error) {
+				console.error(`[pi-runner] shared reconnaissance failed: ${errorText(error)}`);
+			} finally {
+				clearTimeout(reconDeadline.timer);
+				activeSessions.delete(reconSession);
+				unsubscribeRecon();
+				stopSession(reconSession);
+			}
 		}
 	}
 
@@ -1984,6 +2009,12 @@ async function main() {
 					modelRuntime,
 					model,
 				});
+				if (hardAbort.signal.aborted || Date.now() >= reviewDeadline) {
+					hardAborted = true;
+					hardAbort.abort();
+					stopSession(observerSession);
+					return;
+				}
 				const unsubscribeObserver = subscribeSession(
 					observerSession,
 					`observer:${group.id}`,
@@ -2122,6 +2153,13 @@ async function main() {
 					modelRuntime,
 					model,
 				});
+				const remainingRetryMs = Math.max(0, retryStartMs + retry.windowMs - Date.now());
+				if (retryAbort.signal.aborted || remainingRetryMs === 0) {
+					retryAborted = true;
+					retryAbort.abort();
+					stopSession(retrySession);
+					return;
+				}
 				const unsubscribeRetry = subscribeSession(
 					retrySession,
 					`retry:${group.id}`,
@@ -2129,7 +2167,11 @@ async function main() {
 				);
 				activeSessions.add(retrySession);
 				const activeSlots = Math.min(concurrency, retriesRemaining);
-				const retryBudgetMs = deriveWorkstreamBudget(retry.windowMs, activeSlots, retriesRemaining);
+				const retryBudgetMs = deriveWorkstreamBudget(
+					remainingRetryMs,
+					activeSlots,
+					retriesRemaining,
+				);
 				const retryDeadline = scheduleDeadline(retryBudgetMs, () => {
 					stopSession(retrySession);
 				});

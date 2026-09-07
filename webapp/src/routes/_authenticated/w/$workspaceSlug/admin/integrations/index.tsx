@@ -15,7 +15,6 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/core/PageHeader";
 import { PageLayout } from "@/components/core/PageLayout";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -26,13 +25,9 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/int
 });
 
 function IntegrationsOverview() {
-	const { workspaceSlug } = useActiveWorkspaceSlug();
-	const slug = workspaceSlug ?? "";
+	const { workspaceSlug: slug } = Route.useParams();
 
-	const catalogQuery = useQuery({
-		...getIntegrationCatalogOptions({ path: { workspaceSlug: slug } }),
-		enabled: Boolean(workspaceSlug),
-	});
+	const catalogQuery = useQuery(getIntegrationCatalogOptions({ path: { workspaceSlug: slug } }));
 
 	return (
 		<PageLayout>

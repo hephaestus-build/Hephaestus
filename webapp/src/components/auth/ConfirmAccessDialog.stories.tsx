@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent } from "storybook/test";
+import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import { Stateful } from "@/stories/stateful";
 import { expectSettledVisible } from "@/test/overlay";
@@ -135,5 +135,20 @@ export const Dismiss: Story = {
 		await screen.findByRole("dialog", { name: "Confirm access" });
 		await userEvent.keyboard("{Escape}");
 		await expect(args.onOpenChange).toHaveBeenCalledWith(false);
+	},
+};
+
+export const CustomGitLabRegistration: Story = {
+	args: {
+		providers: [
+			{ registrationId: "company-sso", providerType: "GITLAB", displayName: "Company GitLab" },
+		],
+	},
+	play: async () => {
+		const button = await screen.findByRole("button", { name: "Continue with Company GitLab" });
+		await expect(within(button).getByRole("img", { hidden: true })).toHaveAttribute(
+			"aria-hidden",
+			"true",
+		);
 	},
 };

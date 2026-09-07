@@ -18,6 +18,7 @@ import {
 	removeRepositoryToMonitorMutation,
 	triggerSyncJobMutation,
 	updateConnectionSyncJobMutation,
+	updateTokenMutation,
 } from "@/api/@tanstack/react-query.gen";
 import { AdminRepositoriesSettings } from "@/components/admin/integrations/AdminRepositoriesSettings";
 import { ConnectionStateNotice } from "@/components/admin/integrations/ConnectionStateNotice";
@@ -29,12 +30,12 @@ import {
 	SyncResourcesTable,
 } from "@/components/admin/integrations/SyncResourcesTable";
 import { SyncStatusHeader } from "@/components/admin/integrations/SyncStatusHeader";
+import { WorkspaceScmTokenSettings } from "@/components/admin/integrations/WorkspaceScmTokenSettings";
 import { PageHeader } from "@/components/core/PageHeader";
 import { PageLayout } from "@/components/core/PageLayout";
 import { GithubIcon, GitlabIcon } from "@/components/icons/brand";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -48,16 +49,12 @@ const JOBS_PAGE_SIZE = 10;
 
 function ScmIntegrationPage() {
 	const queryClient = useQueryClient();
-	const { workspaceSlug } = useActiveWorkspaceSlug();
-	const slug = workspaceSlug ?? "";
+	const { workspaceSlug: slug } = Route.useParams();
 	const [jobsPage, setJobsPage] = useState(0);
 	const livePushUnavailable = useLivePushUnavailable();
 
 	const workspaceQueryOptions = getWorkspaceOptions({ path: { workspaceSlug: slug } });
-	const workspaceQuery = useQuery({
-		...workspaceQueryOptions,
-		enabled: Boolean(workspaceSlug),
-	});
+	const workspaceQuery = useQuery(workspaceQueryOptions);
 	const workspaceData = workspaceQuery.data;
 
 	const kind = workspaceData ? (workspaceData.kind === "GITLAB" ? "GITLAB" : "GITHUB") : undefined;
@@ -65,10 +62,7 @@ function ScmIntegrationPage() {
 	const isAppInstallationWorkspace = kind === "GITHUB" && workspaceData?.installationId != null;
 
 	const catalogQueryOptions = getIntegrationCatalogOptions({ path: { workspaceSlug: slug } });
-	const catalogQuery = useQuery({
-		...catalogQueryOptions,
-		enabled: Boolean(workspaceSlug),
-	});
+	const catalogQuery = useQuery(catalogQueryOptions);
 	const entry = kind ? catalogQuery.data?.find((e) => e.kind === kind) : undefined;
 	const hasConnection = entry?.connected === true;
 	const isConnectionActive = entry?.connectionState === "ACTIVE";
@@ -79,7 +73,7 @@ function ScmIntegrationPage() {
 	});
 	const statusQuery = useQuery({
 		...statusQueryOptions,
-		enabled: Boolean(workspaceSlug) && connectionId != null,
+		enabled: connectionId != null,
 		refetchInterval: (query) =>
 			syncPollInterval(query.state.data?.activeJob != null, livePushUnavailable),
 	});
@@ -97,7 +91,7 @@ function ScmIntegrationPage() {
 		refetch: refetchResources,
 	} = useQuery({
 		...resourcesQueryOptions,
-		enabled: Boolean(workspaceSlug) && connectionId != null,
+		enabled: connectionId != null,
 		refetchInterval: syncPollInterval(hasActiveJob, livePushUnavailable),
 	});
 
@@ -113,7 +107,7 @@ function ScmIntegrationPage() {
 		refetch: refetchJobs,
 	} = useQuery({
 		...jobsQueryOptions,
-		enabled: Boolean(workspaceSlug) && connectionId != null,
+		enabled: connectionId != null,
 		refetchInterval: syncPollInterval(hasActiveJob, livePushUnavailable),
 		placeholderData: (previousData) => previousData,
 	});
@@ -128,7 +122,6 @@ function ScmIntegrationPage() {
 		refetch: refetchRepositories,
 	} = useQuery({
 		...repositoriesQueryOptions,
-		enabled: Boolean(workspaceSlug),
 	});
 
 	const invalidateSyncState = () => {
@@ -167,6 +160,19 @@ function ScmIntegrationPage() {
 		onSuccess: onRepositorySetChanged,
 		onError: (e) => {
 			toast.error("Failed to stop monitoring repository", { description: problemDetailOf(e) });
+		},
+	});
+
+	const replaceToken = useMutation({
+		...updateTokenMutation(),
+		gcTime: 0,
+		onSuccess: async () => {
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: workspaceQueryOptions.queryKey }),
+				queryClient.invalidateQueries({ queryKey: catalogQueryOptions.queryKey }),
+			]);
+			invalidateSyncState();
+			toast.success("Personal access token replaced");
 		},
 	});
 
@@ -220,7 +226,13 @@ function ScmIntegrationPage() {
 				<ConnectionStateNotice
 					connectionState={entry.connectionState}
 					credentialsUnreadableSince={entry.credentialsUnreadableSince}
-					credentialRecovery="Replace it by storing a new personal access token for this workspace"
+					credentialRecovery={
+						isAppInstallationWorkspace
+							? "Reconnect through the GitHub App installation"
+							: isConnectionActive
+								? "Replace it using the personal access token form below"
+								: "Reconnect this source-control integration before replacing its token"
+					}
 					displayName={label}
 				/>
 			)}
@@ -274,6 +286,27 @@ function ScmIntegrationPage() {
 					});
 				}}
 			/>
+
+			{isConnectionActive && kind && !isAppInstallationWorkspace && (
+				<WorkspaceScmTokenSettings
+					key={slug}
+					providerLabel={label}
+					isSaving={replaceToken.isPending}
+					error={replaceToken.error}
+					onSave={async (personalAccessToken) => {
+						try {
+							await replaceToken.mutateAsync({
+								path: { workspaceSlug: slug },
+								body: { personalAccessToken },
+							});
+							replaceToken.reset();
+							return true;
+						} catch {
+							return false;
+						}
+					}}
+				/>
+			)}
 
 			{hasConnection && (
 				<Card>

@@ -64,11 +64,17 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
         }
 
         @Test
-        void reportsAnAdmittedPracticeWithNoFindingsAsReviewedRatherThanSilent() {
+        void shouldReportAnExplicitlyEvaluatedPracticeWithoutObservationsAsReviewed() {
+            var review = new ReviewOutcome(
+                    ReviewRunState.COMPLETED,
+                    false,
+                    AT,
+                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null)),
+                    Map.of("slug", PracticeCoverageOutcome.EVALUATED));
             var entry = only(
                     practice(PracticeAutonomy.AUTOMATIC, READY),
                     List.of(triggered(READY, RUN)),
-                    Map.of(RUN, completed(Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null)))),
+                    Map.of(RUN, review),
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.REVIEWED);
@@ -210,6 +216,19 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.NOT_REACHED);
             assertThat(entry.explanation()).contains("ended before reaching");
+        }
+
+        @Test
+        void shouldNotReportAnAllClearWhenACompletedReviewHasNoCoverageRecord() {
+            var entry = only(
+                    practice(PracticeAutonomy.AUTOMATIC, READY),
+                    List.of(triggered(READY, RUN)),
+                    Map.of(RUN, completed(Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null)))),
+                    Map.of());
+
+            assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.NOT_REACHED);
+            assertThat(entry.explanation()).isEqualTo("The review did not record whether it reached this practice.");
+            assertThat(entry.observationCount()).isZero();
         }
 
         @Test

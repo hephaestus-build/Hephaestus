@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
 	armRetryWindow,
+	deriveCompositionWindow,
 	deriveReconBudget,
 	deriveRetryWindow,
 	deriveTimeouts,
@@ -38,8 +39,8 @@ void test("the retry inherits what the initial pass did not spend", () => {
 	assert.equal(deriveRetryWindow(timeouts, 400_000, 900_000), 500_000);
 	// It used every second it was given: the retry gets exactly its reservation.
 	assert.equal(deriveRetryWindow(timeouts, timeouts.initialMs, 135_000), timeouts.retryMs);
-	// It overran (a hard abort lands late): the reservation is the floor, never a negative window.
-	assert.equal(deriveRetryWindow(timeouts, 900_000, 0), timeouts.retryMs);
+	// A reservation cannot create time after the process budget is exhausted.
+	assert.equal(deriveRetryWindow(timeouts, 900_000, 0), 0);
 });
 
 void test("the retry leaves composition its slice of what the process has left", () => {
@@ -134,4 +135,38 @@ void test("a workstream budget is not capped below its fair share", () => {
 void test("rejects invalid workstream capacity", () => {
 	assert.throws(() => deriveWorkstreamBudget(1_000, 0, 1), /activeSlots/);
 	assert.throws(() => deriveWorkstreamBudget(1_000, 1, 0), /remainingWorkstreams/);
+});
+
+void test("retry cannot consume composition time or exceed the remaining process budget", () => {
+	const timeouts = deriveTimeouts(900_000, true);
+	assert.equal(
+		deriveRetryWindow(timeouts, timeouts.initialMs, timeouts.compositionMs + 5_000),
+		5_000,
+	);
+	assert.equal(deriveRetryWindow(timeouts, timeouts.initialMs, timeouts.compositionMs), 0);
+	assert.equal(deriveRetryWindow(timeouts, timeouts.initialMs, -1), 0);
+	for (const remaining of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+		assert.throws(
+			() => deriveRetryWindow(timeouts, 0, remaining),
+			/remainingProcessMs must be finite/,
+		);
+	}
+});
+
+void test("an exhausted retry window aborts before any work can start", () => {
+	let aborted = false;
+	const retry = armRetryWindow(deriveTimeouts(900_000), 900_000, 0, () => {
+		aborted = true;
+	});
+	assert.equal(aborted, true);
+	assert.equal(retry.windowMs, 0);
+	assert.equal(retry.timer, undefined);
+});
+
+void test("composition uses only the time left after admission and session setup", () => {
+	assert.equal(deriveCompositionWindow(135_000, 150_000), 135_000);
+	assert.equal(deriveCompositionWindow(135_000, 10_000), 10_000);
+	assert.equal(deriveCompositionWindow(135_000, 0), 0);
+	assert.equal(deriveCompositionWindow(135_000, -1), 0);
+	assert.throws(() => deriveCompositionWindow(135_000, Number.NaN), /finite/);
 });

@@ -37,7 +37,6 @@ import { PageLayout } from "@/components/core/PageLayout";
 import { SlackIcon } from "@/components/icons/brand";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -51,23 +50,16 @@ const JOBS_PAGE_SIZE = 10;
 
 function SlackIntegrationPage() {
 	const queryClient = useQueryClient();
-	const { workspaceSlug } = useActiveWorkspaceSlug();
-	const slug = workspaceSlug ?? "";
+	const { workspaceSlug: slug } = Route.useParams();
 	const [jobsPage, setJobsPage] = useState(0);
 	const livePushUnavailable = useLivePushUnavailable();
 
 	const workspaceQueryOptions = getWorkspaceOptions({ path: { workspaceSlug: slug } });
-	const workspaceQuery = useQuery({
-		...workspaceQueryOptions,
-		enabled: Boolean(workspaceSlug),
-	});
+	const workspaceQuery = useQuery(workspaceQueryOptions);
 	const workspaceData = workspaceQuery.data;
 
 	const catalogQueryOptions = getIntegrationCatalogOptions({ path: { workspaceSlug: slug } });
-	const catalogQuery = useQuery({
-		...catalogQueryOptions,
-		enabled: Boolean(workspaceSlug),
-	});
+	const catalogQuery = useQuery(catalogQueryOptions);
 	const catalog = catalogQuery.data;
 	const entry = catalog?.find((e) => e.kind === "SLACK");
 	const hasConnection = entry?.connected === true;
@@ -79,7 +71,7 @@ function SlackIntegrationPage() {
 		...getConnectionSyncStatusOptions({
 			path: { workspaceSlug: slug, connectionId: connectionId ?? -1 },
 		}),
-		enabled: Boolean(workspaceSlug) && connectionId != null,
+		enabled: connectionId != null,
 		refetchInterval: (query) =>
 			syncPollInterval(query.state.data?.activeJob != null, livePushUnavailable),
 	});
@@ -96,7 +88,7 @@ function SlackIntegrationPage() {
 		...listConnectionSyncResourcesOptions({
 			path: { workspaceSlug: slug, connectionId: connectionId ?? -1 },
 		}),
-		enabled: Boolean(workspaceSlug) && connectionId != null,
+		enabled: connectionId != null,
 		refetchInterval: syncPollInterval(hasActiveJob, livePushUnavailable),
 	});
 
@@ -112,7 +104,7 @@ function SlackIntegrationPage() {
 		refetch: refetchJobs,
 	} = useQuery({
 		...jobsQueryOptions,
-		enabled: Boolean(workspaceSlug) && connectionId != null,
+		enabled: connectionId != null,
 		refetchInterval: syncPollInterval(hasActiveJob, livePushUnavailable),
 		placeholderData: (previousData) => previousData,
 	});
@@ -125,7 +117,7 @@ function SlackIntegrationPage() {
 		refetch: refetchSlackChannels,
 	} = useQuery({
 		...slackChannelsQueryOptions,
-		enabled: Boolean(workspaceSlug && workspaceData?.hasSlackToken),
+		enabled: workspaceData?.hasSlackToken === true,
 		refetchInterval: syncPollInterval(hasActiveJob, livePushUnavailable),
 	});
 
@@ -139,7 +131,7 @@ function SlackIntegrationPage() {
 		refetch: refetchSlackChannelCandidates,
 	} = useQuery({
 		...slackChannelCandidatesQueryOptions,
-		enabled: Boolean(workspaceSlug && workspaceData?.hasSlackToken),
+		enabled: workspaceData?.hasSlackToken === true,
 	});
 
 	const invalidateSlackChannels = () => {
@@ -321,7 +313,7 @@ function SlackIntegrationPage() {
 				</Card>
 			)}
 
-			{workspaceSlug != null && !routeLoading && !routeError && (
+			{!routeLoading && !routeError && (
 				<AdminSlackNotificationSettings
 					key={`slack:${workspaceData?.slackConnectionId ?? "none"}:${workspaceData?.leaderboardNotificationChannelId ?? ""}:${workspaceData?.leaderboardNotificationEnabled ?? false}:${workspaceData?.leaderboardScheduleDay ?? ""}:${workspaceData?.leaderboardScheduleTime ?? ""}:${workspaceData?.leaderboardNotificationTeam ?? ""}`}
 					workspaceSlug={slug}
@@ -341,7 +333,7 @@ function SlackIntegrationPage() {
 				/>
 			)}
 
-			{workspaceSlug != null && !routeLoading && !routeError && (
+			{!routeLoading && !routeError && (
 				<AdminSlackChannelsSettings
 					workspaceSlug={slug}
 					hasSlackConnection={isConnectionActive}

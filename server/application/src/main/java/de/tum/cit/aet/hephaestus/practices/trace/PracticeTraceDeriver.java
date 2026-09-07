@@ -105,12 +105,14 @@ final class PracticeTraceDeriver {
             if (readiness == null) {
                 continue;
             }
-            if (readiness.ready()
-                    && review.coverageByPracticeSlug().get(practice.slug()) == PracticeCoverageOutcome.NOT_REACHED) {
+            PracticeCoverageOutcome coverage = review.coverageByPracticeSlug().get(practice.slug());
+            if (readiness.ready() && coverage != PracticeCoverageOutcome.EVALUATED) {
                 return entry(
                         practice,
                         PracticeTraceOutcome.NOT_REACHED,
-                        "The review ended before reaching this practice.",
+                        coverage == PracticeCoverageOutcome.NOT_REACHED
+                                ? "The review ended before reaching this practice."
+                                : "The review did not record whether it reached this practice.",
                         occurrence,
                         review.decidedAt(),
                         occurrence.reviewId(),

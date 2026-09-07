@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import {
+	copyFile,
+	mkdir,
+	mkdtemp,
+	readFile,
+	readlink,
+	rm,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { test } from "node:test";
 
 import { parseDocument } from "yaml";
@@ -597,3 +606,265 @@ await test("only a record that kept its commit, or names one, says what tooling 
 		/hephaestus_deploy_tooling_pending 1\n/,
 	);
 });
+
+const reconcilerSubprocess = {
+	skip: process.platform === "win32" && "the systemd host uses POSIX executable stubs",
+};
+
+async function reconcilerFixture(directory: string) {
+	const checkout = join(directory, "checkout");
+	const bootstrap = join(directory, "bootstrap");
+	const units = join(directory, "units");
+	const bin = join(directory, "bin");
+	const callsFile = join(directory, "calls");
+	const metricsFile = join(directory, "deploy.prom");
+	const image = `example.invalid/app@sha256:${"a".repeat(64)}`;
+	const git = (...args: string[]) =>
+		execFileSync("git", args, {
+			cwd: checkout,
+			encoding: "utf8",
+			env: environmentForGitFixture(),
+		}).trim();
+	await Promise.all([checkout, units, bin].map((path) => mkdir(path, { recursive: true })));
+	for (const tree of [checkout, bootstrap]) {
+		await mkdir(join(tree, "scripts/lib"), { recursive: true });
+		await writeFile(join(tree, "package.json"), '{"type":"module"}\n');
+		for (const file of ["reconcile-deployment.ts", "lib/env.ts", "lib/json.ts", "lib/process.ts"])
+			await copyFile(join(import.meta.dirname, file), join(tree, "scripts", file));
+	}
+	const sourceUnits = join(checkout, "docker/self-host/systemd");
+	await mkdir(sourceUnits, { recursive: true });
+	await writeFile(
+		join(sourceUnits, "hephaestus-reconcile.service"),
+		"[Service]\nExecStart=/usr/bin/env node /var/lib/hephaestus/tooling/scripts/reconcile-deployment.ts\n",
+	);
+	await writeFile(
+		join(sourceUnits, "hephaestus-reconcile.timer"),
+		"[Timer]\nOnUnitActiveSec=1min\n",
+	);
+	await writeFile(
+		join(checkout, "scripts/prepare-release-lock.ts"),
+		'throw new Error("candidate release must not verify itself");\n',
+	);
+	git("init", "--quiet", "--initial-branch=main");
+	git("config", "user.email", "host@example.invalid");
+	git("config", "user.name", "host");
+	git("config", "core.autocrlf", "false");
+	git("add", ".");
+	git("commit", "--quiet", "-m", "release");
+	const releaseCommit = git("rev-parse", "HEAD");
+	git("tag", "v1.0.0");
+	git("checkout", "--quiet", "-b", "deploy-state");
+	await mkdir(join(checkout, "channels"));
+	await writeFile(join(checkout, "channels/test.json"), JSON.stringify({ release: "v1.0.0" }));
+	await writeFile(join(checkout, "channels/test.json.sigstore.json"), "{}\n");
+	git("add", "channels");
+	git("commit", "--quiet", "-m", "promotion");
+	const channelCommit = git("rev-parse", "HEAD");
+	const origin = join(directory, "origin.git");
+	git("clone", "--quiet", "--bare", checkout, origin);
+	git("remote", "add", "origin", origin);
+	git("checkout", "--quiet", "main");
+	await symlink(bootstrap, join(directory, "tooling"));
+	await writeFile(metricsFile, "previous metrics\n");
+	await writeFile(callsFile, "");
+	const realGit = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
+	const recordCall = `import { appendFileSync } from "node:fs";
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(callsFile)}, [NAME, ...args].join(" ") + "\\n");\n`;
+	// `--` keeps Node from interpreting Docker's --env-file as its own startup option.
+	for (const [name, body] of Object.entries({
+		git: `import { spawnSync } from "node:child_process";
+const result = spawnSync(${JSON.stringify(realGit)}, args, { stdio: "inherit" });
+process.exit(result.status ?? 1);`,
+		cosign: 'process.exit(process.env.FAIL_VERIFICATION === "1" ? 1 : 0);',
+		systemctl: 'if (args[0] === "show") console.log("yes");',
+		docker: `if (args.includes("config")) console.log(${JSON.stringify(JSON.stringify({ services: { app: { image } } }))});`,
+	})) {
+		await writeFile(
+			join(bin, name),
+			`#!/usr/bin/env -S node --\n${recordCall.replace("NAME", JSON.stringify(name))}${body}\n`,
+			{
+				mode: 0o755,
+			},
+		);
+	}
+	await writeFile(
+		join(bootstrap, "scripts/prepare-release-lock.ts"),
+		`import { appendFileSync, writeFileSync } from "node:fs";
+appendFileSync(${JSON.stringify(callsFile)}, "trusted verifier\\n");
+writeFileSync(process.argv[3], ${JSON.stringify(`HEPHAESTUS_RELEASE_COMMIT=${releaseCommit}\nHEPHAESTUS_IMAGE_APP=${image}\n`)});\n`,
+	);
+	await writeFile(
+		join(directory, "run.mjs"),
+		`import { main } from "./tooling/scripts/reconcile-deployment.ts";
+await main(${JSON.stringify(units)});\n`,
+	);
+	const record = { release: "v1.0.0", channelCommit, appliedAt: applied.appliedAt };
+	return {
+		bootstrap,
+		units,
+		releaseCommit,
+		record,
+		metricsFile,
+		calls: () => readFile(callsFile, "utf8"),
+		run: ({
+			cli = false,
+			failVerification = false,
+			channel = "test",
+		}: { cli?: boolean; failVerification?: boolean; channel?: string } = {}) =>
+			spawnSync(
+				process.execPath,
+				[join(directory, cli ? "tooling/scripts/reconcile-deployment.ts" : "run.mjs")],
+				{
+					encoding: "utf8",
+					timeout: 30_000,
+					env: environmentForGitFixture({
+						PATH: `${bin}${delimiter}${process.env.PATH ?? ""}`,
+						STATE_DIRECTORY: directory,
+						HEPHAESTUS_CHANNEL: channel,
+						HEPHAESTUS_STACKS: "proxy core app",
+						HEPHAESTUS_PROMOTE_IDENTITY: "https://example.invalid/promote",
+						HEPHAESTUS_METRICS_FILE: metricsFile,
+						FAIL_VERIFICATION: failVerification ? "1" : "0",
+					}),
+				},
+			),
+	};
+}
+
+await test(
+	"startup adopts the recorded release before attempting to read the channel",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(join(tmpdir(), "reconcile-startup-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const record = { ...fixture.record, commit: fixture.releaseCommit };
+			await writeFile(join(directory, "applied.json"), JSON.stringify(record));
+			const result = fixture.run();
+			assert.equal(result.status, 0, result.stderr);
+			const tree = join(directory, "releases", record.release);
+			assert.equal(await readlink(join(directory, "tooling")), tree);
+			assert.deepEqual(await readApplied(join(directory, "applied.json")), record);
+			assert.equal(await readFile(fixture.metricsFile, "utf8"), "previous metrics\n");
+			assert.equal(
+				await readFile(join(fixture.units, "hephaestus-reconcile.service"), "utf8"),
+				await readFile(join(tree, "docker/self-host/systemd/hephaestus-reconcile.service"), "utf8"),
+			);
+			const calls = await fixture.calls();
+			assert.match(calls, /git worktree add/);
+			assert.match(calls, /git status[\s\S]*systemctl show[\s\S]*systemctl daemon-reload/);
+			assert.doesNotMatch(calls, /git fetch|cosign|docker/);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"the symlinked CLI preserves pending tooling after a no-op and a failure",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(join(tmpdir(), "reconcile-cli-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			await writeFile(join(directory, "applied.json"), JSON.stringify(fixture.record));
+			const noop = fixture.run({ cli: true });
+			assert.equal(noop.status, 0, noop.stderr);
+			assert.match(noop.stdout, /No change: already running v1\.0\.0/);
+			assert.match(
+				await readFile(fixture.metricsFile, "utf8"),
+				/^hephaestus_deploy_reconcile_success 1$/m,
+			);
+			assert.match(
+				await readFile(fixture.metricsFile, "utf8"),
+				/^hephaestus_deploy_tooling_pending 1$/m,
+			);
+			const failed = fixture.run({ cli: true, failVerification: true });
+			assert.notEqual(failed.status, 0);
+			assert.match(failed.stderr, /cosign exited with code 1/);
+			assert.match(
+				await readFile(fixture.metricsFile, "utf8"),
+				/^hephaestus_deploy_reconcile_success 0$/m,
+			);
+			assert.match(
+				await readFile(fixture.metricsFile, "utf8"),
+				/^hephaestus_deploy_tooling_pending 1$/m,
+			);
+			assert.equal(await readlink(join(directory, "tooling")), fixture.bootstrap);
+			assert.deepEqual(await readApplied(join(directory, "applied.json")), fixture.record);
+			assert.doesNotMatch(await fixture.calls(), /docker|systemctl/);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"an apply verifies with the running tooling before starting stacks and adopting the release",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(join(tmpdir(), "reconcile-apply-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const result = fixture.run();
+			assert.equal(result.status, 0, result.stderr);
+			const record = await readApplied(join(directory, "applied.json"));
+			assert.equal(record?.release, fixture.record.release);
+			assert.equal(record.commit, fixture.releaseCommit);
+			assert.equal(record.channelCommit, fixture.record.channelCommit);
+			assert.equal(await readlink(join(directory, "tooling")), join(directory, "releases/v1.0.0"));
+			assert.match(
+				await readFile(fixture.metricsFile, "utf8"),
+				/^hephaestus_deploy_reconcile_success 1$/m,
+			);
+			const calls = (await fixture.calls())
+				.split("\n")
+				.filter((line) => /^(cosign|trusted verifier|docker|systemctl)/.test(line));
+			assert.match(calls[0] ?? "", /^cosign verify-blob/);
+			assert.equal(calls[1], "trusted verifier");
+			const docker = calls.filter((line) => line.startsWith("docker"));
+			assert.equal(docker.length, 7);
+			for (const [index, stack] of ["app", "core", "proxy"].entries())
+				assert.match(
+					docker[index] ?? "",
+					new RegExp(`--project-name ${stack} .* config --format json$`),
+				);
+			assert.match(docker[3] ?? "", /--project-name core .* up .* nats-server$/);
+			for (const [index, stack] of ["app", "core", "proxy"].entries())
+				assert.match(
+					docker[index + 4] ?? "",
+					new RegExp(`--project-name ${stack} .* up .* --remove-orphans$`),
+				);
+			assert.match(calls.at(-2) ?? "", /^systemctl show/);
+			assert.equal(calls.at(-1), "systemctl daemon-reload");
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"the CLI explains an unpromoted channel without starting any stack",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(join(tmpdir(), "reconcile-missing-channel-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const result = fixture.run({ cli: true, channel: "unpromoted" });
+			assert.notEqual(result.status, 0);
+			assert.match(result.stderr, /no channels\/unpromoted\.json on deploy-state/);
+			assert.match(result.stderr, /Run the Promote workflow/);
+			assert.equal(await readApplied(join(directory, "applied.json")), undefined);
+			assert.equal(await readlink(join(directory, "tooling")), fixture.bootstrap);
+			assert.match(
+				await readFile(fixture.metricsFile, "utf8"),
+				/^hephaestus_deploy_reconcile_success 0$/m,
+			);
+			assert.doesNotMatch(await fixture.calls(), /cosign|docker|systemctl/);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);

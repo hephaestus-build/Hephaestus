@@ -22,6 +22,7 @@ function ReviewActivityListRoute() {
 				return { ...next, page: pageParam(next.page) };
 			},
 			replace: true,
+			resetScroll: false,
 		});
 
 	const query = useQuery({

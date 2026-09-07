@@ -30,22 +30,10 @@ export interface ConfirmAccessDialogProps {
 	onRetry: () => void;
 }
 
-/**
- * The server states the window in seconds and a reader does not think in seconds, so 300 has to
- * reach the screen as "5 minutes". `formatDuration` picks the units the value lands on, which keeps
- * a 90-second window honest ("1 minute 30 seconds") instead of rounding it into a claim.
- */
 function signInWindow(maxAgeSeconds: number): string {
 	return formatDuration(intervalToDuration({ start: 0, end: maxAgeSeconds * 1000 }));
 }
 
-/**
- * Asks for a fresh sign-in when an instance-admin action refuses without one.
- *
- * The provider a reader picks here re-authenticates the session they are already in, so the choice
- * is not "how does this instance sign people in" but "which identity is this account". A
- * registration the account has never linked would quietly become a different account.
- */
 export function ConfirmAccessDialog({
 	open,
 	onOpenChange,

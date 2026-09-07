@@ -17,7 +17,6 @@ import { PageLayout } from "@/components/core/PageLayout";
 import { OutlineIcon } from "@/components/icons/brand";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useOutlineIntegration } from "@/hooks/use-outline-integration";
 import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
 import { workspaceAdminHead } from "@/lib/page-title";
@@ -32,8 +31,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/int
 const JOBS_PAGE_SIZE = 10;
 
 function OutlineIntegrationPage() {
-	const { workspaceSlug } = useActiveWorkspaceSlug();
-	const slug = workspaceSlug ?? "";
+	const { workspaceSlug: slug } = Route.useParams();
 	const [jobsPage, setJobsPage] = useState(0);
 	const livePushUnavailable = useLivePushUnavailable();
 	const outline = useOutlineIntegration(slug);
@@ -50,7 +48,7 @@ function OutlineIntegrationPage() {
 			path: { workspaceSlug: slug, connectionId: connectionId ?? -1 },
 			query: { page: jobsPage, size: JOBS_PAGE_SIZE },
 		}),
-		enabled: Boolean(workspaceSlug) && connectionId != null,
+		enabled: connectionId != null,
 		refetchInterval: syncPollInterval(outline.hasActiveJob, livePushUnavailable),
 		placeholderData: (previousData) => previousData,
 	});
@@ -63,9 +61,9 @@ function OutlineIntegrationPage() {
 				description="Mirror Outline collections so their documents reach practice reviews as context."
 			/>
 
-			{workspaceSlug != null && outline.isLoading && <Skeleton className="h-48 w-full" />}
+			{outline.isLoading && <Skeleton className="h-48 w-full" />}
 
-			{workspaceSlug != null && outline.connectionsError && (
+			{outline.connectionsError && (
 				<QueryErrorAlert
 					error={outline.connectionsError}
 					title="We couldn't load the Outline connection"
@@ -73,7 +71,7 @@ function OutlineIntegrationPage() {
 				/>
 			)}
 
-			{workspaceSlug != null && !outline.isLoading && !outline.connectionsError && (
+			{!outline.isLoading && !outline.connectionsError && (
 				<>
 					{outline.hasConnection && outline.statusError && (
 						<QueryErrorAlert
@@ -114,7 +112,10 @@ function OutlineIntegrationPage() {
 						</Card>
 					)}
 
-					<OutlineConnectCard {...outline.connectCardProps} />
+					<OutlineConnectCard
+						key={`${slug}:${connectionId ?? "new"}`}
+						{...outline.connectCardProps}
+					/>
 
 					{outline.collectionsProps && <OutlineCollectionsSection {...outline.collectionsProps} />}
 				</>
