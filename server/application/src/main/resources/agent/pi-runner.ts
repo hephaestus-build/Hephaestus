@@ -2146,10 +2146,14 @@ async function main() {
 				try {
 					const retryTool = buildReportObservationTool(group.practiceSlugs);
 					const priorSessionFile = groupSessionFiles.get(group.id);
+					// Read through a call rather than inline: testing `signal.aborted` directly narrows it
+					// to false for the rest of the branch, which would make the identical check after
+					// the await dead to the type system while the signal can still abort during it.
+					const retryIsOver = () =>
+						retryAbort.signal.aborted || retryStartMs + retry.windowMs - Date.now() <= 0;
 					// Before building anything: a session costs the budget composition is about to need,
-					// and a window that is already gone would only have it stopped again. The same check
-					// runs after creation too, because building one takes time of its own.
-					if (retryAbort.signal.aborted || retryStartMs + retry.windowMs - Date.now() <= 0) {
+					// and a window that is already gone would only have it stopped again.
+					if (retryIsOver()) {
 						retryAborted = true;
 						retryAbort.abort();
 						return;
@@ -2167,13 +2171,15 @@ async function main() {
 						modelRuntime,
 						model,
 					});
-					const remainingRetryMs = Math.max(0, retryStartMs + retry.windowMs - Date.now());
-					if (retryAbort.signal.aborted || remainingRetryMs === 0) {
+					// Again after: building the session takes time of its own, and the window may have
+					// closed or the abort fired while it was being built.
+					if (retryIsOver()) {
 						retryAborted = true;
 						retryAbort.abort();
 						stopSession(retrySession);
 						return;
 					}
+					const remainingRetryMs = Math.max(0, retryStartMs + retry.windowMs - Date.now());
 					const unsubscribeRetry = subscribeSession(
 						retrySession,
 						`retry:${group.id}`,
