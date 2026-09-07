@@ -59,6 +59,29 @@ void test("dependency pull requests explain the human-review requirement", () =>
 	);
 });
 
+void test("compatibility overrides receive same-major fixes without restricting direct dependencies", () => {
+	assert.ok(Array.isArray(config.packageRules));
+	const rules = config.packageRules.filter(isRecord);
+	for (const [selector, versions] of [
+		["js-yaml@>=4.0.0", "4.x"],
+		["markdown-it@<=14.1.1", "14.x"],
+		["uuid@<11.1.1", "11.x"],
+	]) {
+		const rule = rules.find(
+			(candidate) =>
+				Array.isArray(candidate.matchDepNames) && candidate.matchDepNames.includes(selector),
+		);
+		assert.ok(rule);
+		// The npm extractor retains the whole override selector as depName, not packageName.
+		assert.deepEqual(rule.matchDepNames, [selector]);
+		assert.deepEqual(rule.matchManagers, ["npm"]);
+		assert.deepEqual(rule.matchDepTypes, ["pnpm-workspace.overrides"]);
+		assert.equal(rule.allowedVersions, versions);
+		assert.equal(rule.enabled, undefined);
+		assert.equal(rule.matchUpdateTypes, undefined);
+	}
+});
+
 void test("every pin of one toolchain version moves in a single pull request", () => {
 	assert.ok(Array.isArray(config.packageRules));
 	const rules = config.packageRules.filter(isRecord);
