@@ -119,6 +119,10 @@ server:
 
 # Actuator on the management port; health probes for Kubernetes liveness/readiness.
 management:
+    info:
+        build:
+            # RunningRelease owns version reporting, including build-once release promotion.
+            enabled: false
     tracing:
         # Propagate trace context without sampling spans.
         sampling:
@@ -182,6 +186,8 @@ springdoc:
     writer-with-order-by-keys: true
 
 hephaestus:
+    release:
+        check-enabled: ${HEPHAESTUS_RELEASE_CHECK_ENABLED:true}
     database:
         allow-insecure-remote: ${HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE:false}
     auth:

@@ -27,6 +27,9 @@ const OWN_IMAGE_PREFIX = "ghcr.io/hephaestus-build/";
  * added to the reference and not considered here fails the build.
  */
 const DELIBERATELY_OMITTED = new Set([
+	// Commit-pinned previews have no release lock, so release discovery is ineligible.
+	"HEPHAESTUS_DEPLOYMENT_IDENTITY",
+	"HEPHAESTUS_RELEASE_CHECK_ENABLED",
 	"GITLAB_DEFAULT_SERVER_URL",
 	"GITLAB_OAUTH_BASE_URL",
 	"GITLAB_OAUTH_CLIENT_ID",

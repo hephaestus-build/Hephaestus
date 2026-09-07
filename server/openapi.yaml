@@ -1581,6 +1581,32 @@ paths:
       summary: Publish a product survey
       tags:
       - feedback-admin
+  /admin/release:
+    get:
+      operationId: adminGetRelease
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseStatus"
+          description: OK
+      summary: Get running identity and cached update state
+      tags:
+      - release-admin
+  /admin/release/checks:
+    post:
+      operationId: adminCheckRelease
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseStatus"
+          description: OK
+      summary: "Check releases, respecting cache and rate-limit backoff"
+      tags:
+      - release-admin
   /admin/settings:
     get:
       operationId: adminGetInstanceSettings
@@ -8444,6 +8470,29 @@ components:
       - pricingMode
       - scope
       - supportsReasoning
+    AvailableRelease:
+      type: object
+      properties:
+        notesUrl:
+          type: string
+        operatorActions:
+          type: string
+        schemaMigrations:
+          type: string
+          enum:
+          - REQUIRED
+          - NONE
+          - UNKNOWN
+        securityRelevance:
+          type: string
+        version:
+          type: string
+      required:
+      - notesUrl
+      - operatorActions
+      - schemaMigrations
+      - securityRelevance
+      - version
     BackfillSummary:
       type: object
       description: Connection-level backfill rollup
@@ -13520,6 +13569,48 @@ components:
           pattern: "^[CG][A-Z0-9]{8,}$"
       required:
       - slackChannelId
+    ReleaseStatus:
+      type: object
+      description: "The shared instance release read model. Discovery is advisory,\
+        \ not installation verification."
+      properties:
+        available:
+          $ref: "#/components/schemas/AvailableRelease"
+        backupRestoreStatus:
+          type: string
+        enabled:
+          type: boolean
+        failureReason:
+          type: string
+        lastAttempt:
+          type: string
+          format: date-time
+        lastSuccess:
+          type: string
+          format: date-time
+        nextCheck:
+          type: string
+          format: date-time
+        running:
+          $ref: "#/components/schemas/RunningRelease"
+        status:
+          type: string
+          enum:
+          - CURRENT
+          - UPDATE_AVAILABLE
+          - CHECK_FAILED
+          - NEVER_CHECKED
+          - UNSUPPORTED
+          - DISABLED
+          - STALE
+        upgradeGuideUrl:
+          type: string
+      required:
+      - backupRestoreStatus
+      - enabled
+      - running
+      - status
+      - upgradeGuideUrl
     RenameWorkspaceSlugRequest:
       type: object
       description: Request to rename a workspace's URL slug
@@ -14690,6 +14781,41 @@ components:
         revoked:
           type: integer
           format: int32
+    RunningRelease:
+      type: object
+      properties:
+        channel:
+          type: string
+          enum:
+          - stable
+          - prerelease
+          - unknown
+        commit:
+          type: string
+        identityStatus:
+          type: string
+          enum:
+          - DEPLOYMENT_REPORTED
+          - MISMATCH
+          - INVALID
+          - UNKNOWN
+        images:
+          type: object
+          additionalProperties:
+            type: string
+        roles:
+          type: array
+          items:
+            type: string
+        version:
+          type: string
+      required:
+      - channel
+      - commit
+      - identityStatus
+      - images
+      - roles
+      - version
     SessionView:
       type: object
       properties:

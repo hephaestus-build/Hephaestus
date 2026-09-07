@@ -464,6 +464,14 @@ export type AvailableLlmModel = {
   supportsReasoning: boolean;
 };
 
+export type AvailableRelease = {
+  notesUrl: string;
+  operatorActions: string;
+  schemaMigrations: 'REQUIRED' | 'NONE' | 'UNKNOWN';
+  securityRelevance: string;
+  version: string;
+};
+
 /**
  * Connection-level backfill rollup
  */
@@ -3783,6 +3791,22 @@ export type RegisterSlackChannelRequest = {
 };
 
 /**
+ * The shared instance release read model. Discovery is advisory, not installation verification.
+ */
+export type ReleaseStatus = {
+  available?: AvailableRelease;
+  backupRestoreStatus: string;
+  enabled: boolean;
+  failureReason?: string;
+  lastAttempt?: Date;
+  lastSuccess?: Date;
+  nextCheck?: Date;
+  running: RunningRelease;
+  status: 'CURRENT' | 'UPDATE_AVAILABLE' | 'CHECK_FAILED' | 'NEVER_CHECKED' | 'UNSUPPORTED' | 'DISABLED' | 'STALE';
+  upgradeGuideUrl: string;
+};
+
+/**
  * Request to rename a workspace's URL slug
  */
 export type RenameWorkspaceSlugRequest = {
@@ -4471,6 +4495,17 @@ export type ReviewedPractice = {
 
 export type RevokeSessionsResult = {
   revoked?: number;
+};
+
+export type RunningRelease = {
+  channel: 'stable' | 'prerelease' | 'unknown';
+  commit: string;
+  identityStatus: 'DEPLOYMENT_REPORTED' | 'MISMATCH' | 'INVALID' | 'UNKNOWN';
+  images: {
+    [key: string]: string;
+  };
+  roles: Array<string>;
+  version: string;
 };
 
 export type SessionView = {
@@ -7242,6 +7277,38 @@ export type AdminCreateProductSurveyResponses = {
 };
 
 export type AdminCreateProductSurveyResponse = AdminCreateProductSurveyResponses[keyof AdminCreateProductSurveyResponses];
+
+export type AdminGetReleaseData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/admin/release';
+};
+
+export type AdminGetReleaseResponses = {
+  /**
+   * OK
+   */
+  200: ReleaseStatus;
+};
+
+export type AdminGetReleaseResponse = AdminGetReleaseResponses[keyof AdminGetReleaseResponses];
+
+export type AdminCheckReleaseData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/admin/release/checks';
+};
+
+export type AdminCheckReleaseResponses = {
+  /**
+   * OK
+   */
+  200: ReleaseStatus;
+};
+
+export type AdminCheckReleaseResponse = AdminCheckReleaseResponses[keyof AdminCheckReleaseResponses];
 
 export type AdminGetInstanceSettingsData = {
   body?: never;

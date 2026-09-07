@@ -95,3 +95,17 @@ await test("refuses evidence that is not exactly represented by the lock", () =>
 		/disagree/,
 	);
 });
+
+await test("deployment identity preserves the lock release, commit and image references", () => {
+	const lock = parseReleaseImageLock(rawLock);
+	const line = lockEnvironment(lock)
+		.split("\n")
+		.find((value) => value.startsWith("HEPHAESTUS_DEPLOYMENT_IDENTITY="));
+	assert.ok(line);
+	const value = line.slice("HEPHAESTUS_DEPLOYMENT_IDENTITY='".length, -1);
+	assert.deepEqual(JSON.parse(value), {
+		release: lock.release,
+		commit: lock.commit,
+		images: { webapp: `${rawLock.images[0].repository}@${rawLock.images[0].indexDigest}` },
+	});
+});

@@ -283,6 +283,8 @@ services:
       # Leave false in production.
       HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK: ${HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK:-false}
       <<: [*practice-review-env, *scm-access-env]
+      HEPHAESTUS_DEPLOYMENT_IDENTITY: ${HEPHAESTUS_DEPLOYMENT_IDENTITY:-}
+      HEPHAESTUS_RELEASE_CHECK_ENABLED: ${HEPHAESTUS_RELEASE_CHECK_ENABLED:-true}
       GITLAB_WORKSPACE_CREATION: ${GITLAB_WORKSPACE_CREATION:-false}
       # LLM providers are registered at runtime (Instance admin → AI models), not via env vars —
       # the proxy reads each connection's base URL/auth from the catalog per request.
@@ -374,6 +376,7 @@ services:
       APP_VERSION: ${IMAGE_TAG}
       SPRING_PROFILES_ACTIVE: prod,worker
       <<: [*practice-review-env, *scm-access-env]
+      HEPHAESTUS_DEPLOYMENT_IDENTITY: ${HEPHAESTUS_DEPLOYMENT_IDENTITY:-}
       HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES:-}
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: ${HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST:-true}
       # Valueless, as on application-server above; this is the pod that actually opens sandboxes.

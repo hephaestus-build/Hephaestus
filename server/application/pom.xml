@@ -25,6 +25,7 @@
     </scm>
     <properties>
         <app.profiles>local</app.profiles>
+        <build.commit>unknown</build.commit>
         <maven.test.failure.ignore>false</maven.test.failure.ignore>
         <hephaestus.surefire.timeout>1200</hephaestus.surefire.timeout>
         <hephaestus.surefire.forkCount>1</hephaestus.surefire.forkCount>
@@ -636,6 +637,16 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals><goal>build-info</goal></goals>
+                        <configuration>
+                            <additionalProperties>
+                                <commit>${build.commit}</commit>
+                            </additionalProperties>
+                        </configuration>
+                    </execution>
+                </executions>
                 <configuration>
                     <profiles>${app.profiles}</profiles>
                     <jvmArguments>-XX:+EnableDynamicAgentLoading --enable-native-access=ALL-UNNAMED</jvmArguments>
@@ -720,6 +731,11 @@
         </plugins>
     </build>
     <profiles>
+        <profile>
+            <id>ci-build-identity</id>
+            <activation><property><name>env.GITHUB_SHA</name></property></activation>
+            <properties><build.commit>${env.GITHUB_SHA}</build.commit></properties>
+        </profile>
         <profile>
             <id>live-tests</id>
             <properties>

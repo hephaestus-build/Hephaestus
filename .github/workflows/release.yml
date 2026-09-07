@@ -250,6 +250,7 @@ jobs:
           fi
 
           NOTES=$(mktemp)
+          echo "<!-- hephaestus:schema-migrations=$MIGRATIONS -->" >> "$NOTES"
           if [ "$MIGRATIONS" = true ]; then
             {
               echo "> [!WARNING]"

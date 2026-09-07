@@ -17,6 +17,7 @@ services:
     expose:
       - "8080"
     environment:
+      HEPHAESTUS_DEPLOYMENT_IDENTITY: ${HEPHAESTUS_DEPLOYMENT_IDENTITY:-}
       APP_VERSION: ${IMAGE_TAG}
       SPRING_PROFILES_ACTIVE: "prod,webhook"
       HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED: "true"
