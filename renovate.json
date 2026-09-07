@@ -26,6 +26,7 @@
 		"schedule": ["before 7am on monday"]
 	},
 	"rangeStrategy": "replace",
+	"postUpdateOptions": ["pnpmDedupe"],
 	"packageRules": [
 		{
 			"matchManagers": ["maven"],
