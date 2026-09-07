@@ -197,6 +197,15 @@ verifies the lock signer and release identity before Compose consumes any digest
 release assets provide the per-platform SBOM, vulnerability, license, and index-membership evidence;
 `SHA256SUMS` covers that evidence set.
 
+## Current migration-guide instructions
+
+Edit `scripts/templates/migration-guide.md` for current operator instructions, not `MIGRATION.md`.
+`vp run release:version` renders the template in the Version PR; keep its single
+`<!-- VERSION_HISTORY -->` marker. Released entries retain their original text, image namespaces
+and signing identities. Add new version-specific actions through [migration fragments](#writing-changesets).
+
+Run `vp run gate:changesets` to verify generation and history preservation.
+
 ## Writing changesets
 
 A changeset summary becomes the `CHANGELOG.md` entry **verbatim** — write it in the operator/user's voice:
