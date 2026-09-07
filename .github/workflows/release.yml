@@ -8,12 +8,10 @@ on:
     types: [completed]
     branches: [main]
 
-# Serialising the whole run would put the production approval inside the lock: `deploy-production`
-# waits for a required reviewer, and a release nobody approves then holds the group for as long as
-# the approval is outstanding — every later release queues behind it and never starts a job. One
-# unapproved deploy stalled every release for two days that way, invisibly, because a run waiting on
-# an environment does not appear in the default run listing. The lock therefore sits on the jobs it
-# is actually for: promotion of the moving series and latest tags.
+# The lock sits on the jobs it is actually for — promotion of the moving series and latest tags —
+# rather than on the whole run, so a release can never hold the group open waiting on something
+# outside those jobs. Deployment is not part of this workflow: hosts pull a signed channel, which
+# the Promote workflow publishes. See docs/admin/pull-based-deployment.
 permissions: {}
 
 jobs:
@@ -523,41 +521,3 @@ jobs:
               [ "$promoted" = "$digest" ] || { echo "::error::Promotion changed $ref:$tag digest"; exit 1; }
             done
           done < "$RUNNER_TEMP/promotions.tsv"
-
-  # Staging is not promoted here — it follows the default branch, and a release re-tags that commit's
-  # images rather than rebuilding them, so the digests production is offered are the digests staging
-  # runs. But following is not the same as having arrived: this release and that promotion start
-  # from the same finished build, so production waits until staging is actually on this commit.
-  awaiting-staging:
-    needs: [release, tag-images, publish-release]
-    if: needs.release.outputs.released == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/setup-toolchain
-        with:
-          install: "none"
-
-      - name: Wait for staging to be running this commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-          COMMIT: ${{ needs.release.outputs.sha }}
-        run: node scripts/await-staging.ts
-
-  deploy-production:
-    needs: [release, awaiting-staging]
-    if: needs.release.outputs.released == 'true'
-    uses: ./.github/workflows/deploy-prod.yml
-    permissions:
-      contents: read
-    with:
-      image-tag: ${{ needs.release.outputs.tag_name }}
-    # Deploy credentials include organization secrets, which reach nested reusable
-    # workflows only through inheritance — environment secrets alone do not cover them.
-    secrets: inherit # zizmor: ignore[secrets-inherit]

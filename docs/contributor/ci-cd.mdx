@@ -368,9 +368,9 @@ why the label is the authority, and which alternatives were priced and declined,
 | `reconcile-previews.yml` | Nightly, manual | Re-sends teardown for any preview environment whose pull request is closed, drafted or unlabelled |
 | `cd-docs.yml`, `cd-docs-teardown.yml` | `docs/**` on push and pull requests; PR closed | Publishes the docs site and its pull-request previews |
 | `version-pr.yml` | Push to main | Maintains the accumulating Version PR (changesets) and dispatches CI/CD on its branch, release evidence preflight included |
-| `release.yml` | Successful CI/CD push on `main` | Publishes the release and promotes it through the Staging and Production environment gates |
+| `release.yml` | Successful CI/CD push on `main` | Publishes the release and promotes the moving series and latest image tags |
 | `release-upgrade.yml` | Called by `release.yml`, weekly | Boots the previous stable release with seeded data, then the candidate against the same database |
-| `deploy-staging.yml`, `deploy-prod.yml` | Called by `release.yml` or manual dispatch | Deploy a verified release lock through `deploy-locked-compose.yml` |
+| `promote.yml` | Manual dispatch, or automatically for staging | Signs the channel a host follows; hosts pull and apply it themselves |
 
 ### Commits a workflow makes
 

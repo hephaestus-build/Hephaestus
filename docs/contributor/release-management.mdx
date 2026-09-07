@@ -235,10 +235,13 @@ The whole app is versioned as one product: changesets target the root `hephaestu
 
 ## Deploys
 
-`release.yml` calls `deploy-staging.yml` on publication and `deploy-prod.yml` after the Production
-environment's required reviewer approves; both also run by `workflow_dispatch` with a release tag.
-The environments are listed in [CI/CD](./ci-cd.mdx#environments). Verify staging before approving
-production. Hotfixes have no separate process: PR → changeset → merge → merge the Version PR.
+Publishing a release does not deploy it. Hosts follow a signed channel and apply it themselves, so
+moving an environment is a separate, deliberate step: run the **Promote** workflow for that
+environment and release, which the Production environment's required reviewer gates. The host picks
+it up on its next reconcile — [Pull-Based Deployment](../admin/pull-based-deployment.mdx) has the
+mechanics, and the environments are listed in [CI/CD](./ci-cd.mdx#environments). Verify staging
+before promoting production. Hotfixes have no separate process: PR → changeset → merge → merge the
+Version PR.
 
 ## Version management
 
