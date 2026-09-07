@@ -35,7 +35,7 @@
 		"oxlint": "catalog:",
 		"oxlint-tsgolint": "catalog:",
 		"pg": "8.20.0",
-		"surge": "0.43.1",
+		"surge": "0.44.0",
 		"typescript": "7.0.2",
 		"vite-plus": "0.3.0",
 		"yaml": "2.9.0"
