@@ -20,8 +20,8 @@ import Header from "@/components/core/Header";
 import { AppSidebar, type SidebarContext } from "@/components/core/sidebar/AppSidebar";
 import { SkipToContent } from "@/components/core/SkipToContent";
 import { StandardPageSurface } from "@/components/core/StandardPageSurface";
-import { ActiveSurveyDialog } from "@/components/feedback/ActiveSurveyDialog";
 import { ProductFeedbackDialog } from "@/components/feedback/ProductFeedbackDialog";
+import { ProductSurveyInvitations } from "@/components/feedback/ProductSurveyInvitations";
 import { Chat } from "@/components/mentor/Chat";
 import { Copilot } from "@/components/mentor/Copilot";
 import { defaultPartRenderers } from "@/components/mentor/renderers";
@@ -30,7 +30,7 @@ import { Toaster } from "@/components/ui/sonner";
 import environment from "@/environment";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useMentorChat } from "@/hooks/use-mentor-chat";
-import { useActiveSurvey, useSubmitProductFeedback } from "@/hooks/use-product-feedback";
+import { useProductSurveys, useSubmitProductFeedback } from "@/hooks/use-product-feedback";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
@@ -124,23 +124,42 @@ function RootLayout() {
 			<Toaster />
 			{showCopilot && <GlobalCopilot />}
 			<FeatureFlagDevTools />
-			{!isLoading && isAuthenticated ? <GlobalSurvey /> : null}
 		</>
 	);
 }
 
-function GlobalSurvey() {
-	const { workspaceSlug } = useActiveWorkspaceSlug();
-	const survey = useActiveSurvey(workspaceSlug);
+function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) {
+	const { pathname } = useLocation();
+	const feedback = useSubmitProductFeedback(workspaceSlug);
+	const surveys = useProductSurveys(workspaceSlug);
 	return (
-		<ActiveSurveyDialog
-			key={survey.survey?.id}
-			survey={survey.survey}
-			isSubmitting={survey.isSubmitting}
-			isDismissing={survey.isDismissing}
-			onSubmit={survey.submit}
-			onDismiss={survey.dismiss}
-		/>
+		<>
+			{workspaceSlug && (
+				<ProductSurveyInvitations
+					surveys={surveys.query.data ?? []}
+					isLoading={surveys.query.isLoading}
+					loadError={surveys.query.isError}
+					isPending={surveys.isPending}
+					error={surveys.error}
+					onSelect={surveys.reset}
+					onRetry={() => void surveys.query.refetch()}
+					onSubmit={surveys.submit}
+					onDismiss={surveys.dismiss}
+				/>
+			)}
+			<ProductFeedbackDialog
+				isSubmitting={feedback.isPending}
+				error={feedback.error}
+				pagePath={pathname.length <= 500 ? pathname : undefined}
+				onSubmit={(kind, message, includePagePath) =>
+					feedback.submit({
+						kind,
+						message,
+						pagePath: includePagePath && pathname.length <= 500 ? pathname : undefined,
+					})
+				}
+			/>
+		</>
 	);
 }
 
@@ -252,6 +271,8 @@ function HeaderContainer() {
 		login,
 		logout,
 		getUserProfilePictureUrl,
+		getUserId,
+		isImpersonating,
 	} = useAuth();
 	const {
 		chromeWorkspaceSlug,
@@ -262,10 +283,6 @@ function HeaderContainer() {
 	const effectiveUsername = workspaceUserLogin ?? username;
 	const effectiveName =
 		workspaceUserName ?? (userProfile && `${userProfile.firstName} ${userProfile.lastName}`);
-	// Feedback about the product reaches instance administrators either way; carrying the chrome's
-	// workspace lets them answer a member in context, and the instance-only path is for an account
-	// that belongs to no workspace at all.
-	const feedback = useSubmitProductFeedback(chromeWorkspaceSlug);
 
 	return (
 		<Header
@@ -280,12 +297,12 @@ function HeaderContainer() {
 			avatarUrl={getUserProfilePictureUrl()}
 			workspaceSlug={chromeWorkspaceSlug}
 			feedbackDialog={
-				<ProductFeedbackDialog
-					isSubmitting={feedback.isPending}
-					onSubmit={(kind, message) =>
-						feedback.submit({ kind, message, pagePath: window.location.pathname })
-					}
-				/>
+				!isLoading && isAuthenticated && !isImpersonating ? (
+					<ProductFeedbackControls
+						key={`${getUserId()}:${chromeWorkspaceSlug}`}
+						workspaceSlug={chromeWorkspaceSlug}
+					/>
+				) : null
 			}
 			onLogin={(idpHint) => login(idpHint)}
 			onLogout={() => void logout()}

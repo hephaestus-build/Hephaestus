@@ -29,6 +29,7 @@ const sidebars: SidebarsConfig = {
 			label: "Architecture & Data",
 			items: [
 				"system-design",
+				"product-feedback",
 				"instance-admin",
 				"sync-lifecycle",
 				"migration-unified-integration",

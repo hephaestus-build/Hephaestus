@@ -18,7 +18,7 @@ final class FeedbackDTOs {
 
             @NotBlank @Size(max = 300) @NonNull String prompt,
             @NotNull @NonNull QuestionType type,
-            @Size(max = 20) @NonNull List<@NotBlank @Size(max = 200) String> options,
+            @NotNull @Size(max = 20) @NonNull List<@NotBlank @Size(max = 200) String> options,
             boolean required) {}
 
     enum QuestionType {
@@ -30,7 +30,7 @@ final class FeedbackDTOs {
     record CreateSurveyDTO(
             @NotBlank @Size(max = 160) @NonNull String title,
             @NotBlank @Size(max = 500) @NonNull String description,
-            @NotEmpty @Size(max = 20) @NonNull List<@Valid QuestionDTO> questions,
+            @NotEmpty @Size(max = 20) @NonNull List<@NotNull @Valid QuestionDTO> questions,
             @Nullable Long workspaceId,
             @NotNull @NonNull Instant startsAt,
             @Nullable Instant endsAt) {}
@@ -47,12 +47,16 @@ final class FeedbackDTOs {
             @Nullable Instant createdAt) {}
 
     record SubmitSurveyDTO(
-            @NotNull @Size(max = 20) @NonNull Map<@Size(max = 80) String, @Size(max = 4000) String> answers) {}
+            @NotNull @Size(max = 20) @NonNull Map<@Size(max = 80) String, @NotNull @Size(max = 4000) String> answers) {}
+
+    record SurveyStatusDTO(@NotNull @NonNull Boolean active) {}
 
     record FeedbackRequestDTO(
             @NotNull ProductFeedback.@NonNull Kind kind,
             @NotBlank @Size(max = 5000) @NonNull String message,
-            @Size(max = 500) @Nullable String pagePath) {}
+
+            @Size(max = 500) @Pattern(regexp = "/(?!/)[^?#\\p{Cc}]*") @Nullable
+            String pagePath) {}
 
     record FeedbackItemDTO(
             @NonNull UUID id,

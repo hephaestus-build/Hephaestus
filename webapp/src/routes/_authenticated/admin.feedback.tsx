@@ -2,9 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useNow } from "@/components/common/use-now";
+import { productSurveyAvailability } from "@/components/feedback/product-survey-status";
+import { productSurveyQueryScope } from "@/hooks/use-product-feedback";
 
 import {
 	adminCreateProductSurveyMutation,
+	adminUpdateProductSurveyStatusMutation,
 	adminListProductFeedbackOptions,
 	adminListProductSurveyResponsesOptions,
 	adminListProductSurveysOptions,
@@ -13,25 +17,11 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { TablePagination } from "@/components/common/TablePagination";
+import { ProductSurveyComposer } from "@/components/feedback/ProductSurveyComposer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-
-const QUESTION_TYPES = [
-	{ label: "Free text", value: "TEXT" },
-	{ label: "Single choice", value: "SINGLE_CHOICE" },
-	{ label: "Rating (1–5)", value: "RATING" },
-] as const;
 
 export const Route = createFileRoute("/_authenticated/admin/feedback")({
 	component: AdminProductFeedbackPage,
@@ -39,12 +29,8 @@ export const Route = createFileRoute("/_authenticated/admin/feedback")({
 
 function AdminProductFeedbackPage() {
 	const queryClient = useQueryClient();
-	const [title, setTitle] = useState("");
-	const [description, setDescription] = useState("");
-	const [prompt, setPrompt] = useState("");
-	const [workspaceId, setWorkspaceId] = useState("all");
-	const [questionType, setQuestionType] = useState<"TEXT" | "SINGLE_CHOICE" | "RATING">("TEXT");
-	const [choiceOptions, setChoiceOptions] = useState("");
+	const now = useNow();
+	const [composerVersion, setComposerVersion] = useState(0);
 	const [feedbackPage, setFeedbackPage] = useState(0);
 	const [responsePage, setResponsePage] = useState(0);
 	const [surveyPage, setSurveyPage] = useState(0);
@@ -61,33 +47,25 @@ function AdminProductFeedbackPage() {
 	const surveyItems = surveys.data?.content ?? [];
 	const responseItems = responses.data?.content ?? [];
 	const workspaces = useQuery(adminListWorkspacesOptions());
-	const workspaceOptions = [
-		{ label: "All workspaces", value: "all" },
-		...(workspaces.data?.map((workspace) => ({
-			label: workspace.displayName,
-			value: String(workspace.id),
-		})) ?? []),
-	];
-	const options = choiceOptions
-		.split("\n")
-		.map((option) => option.trim())
-		.filter(Boolean);
-	const hasDuplicateOptions = new Set(options).size !== options.length;
 	const create = useMutation({
 		...adminCreateProductSurveyMutation(),
+		retry: false,
 		onSuccess: () => {
 			toast.success("Survey published.");
-			setTitle("");
-			setDescription("");
-			setPrompt("");
-			setWorkspaceId("all");
-			setQuestionType("TEXT");
-			setChoiceOptions("");
-			// Key without page params so every cached page of the list is invalidated, not just the
-			// one currently shown.
+			setComposerVersion((version) => version + 1);
 			void queryClient.invalidateQueries({ queryKey: adminListProductSurveysQueryKey() });
+			void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
 		},
 		onError: () => toast.error("Couldn't publish the survey."),
+	});
+	const status = useMutation({
+		...adminUpdateProductSurveyStatusMutation(),
+		retry: false,
+		onSuccess: () => {
+			void queryClient.invalidateQueries({ queryKey: adminListProductSurveysQueryKey() });
+			void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
+		},
+		onError: () => toast.error("Couldn't change survey availability. Please try again."),
 	});
 	return (
 		<div className="mx-auto w-full max-w-6xl space-y-6">
@@ -123,14 +101,16 @@ function AdminProductFeedbackPage() {
 								</CardDescription>
 							</CardHeader>
 							<CardContent>
-								<p className="whitespace-pre-wrap">{item.message}</p>
+								<p className="break-words whitespace-pre-wrap">{item.message}</p>
 								{item.pagePath ? (
-									<p className="mt-2 text-sm text-muted-foreground">Page: {item.pagePath}</p>
+									<p className="mt-2 break-all text-sm text-muted-foreground">
+										Page: {item.pagePath}
+									</p>
 								) : null}
 							</CardContent>
 						</Card>
 					))}
-					{feedback.isLoading ? <p>Loading…</p> : null}
+					{feedback.isLoading ? <Skeleton className="h-32 w-full" /> : null}
 					{feedback.isSuccess && feedbackItems.length === 0 ? <p>No feedback yet.</p> : null}
 					<TablePagination
 						page={feedbackPage}
@@ -165,7 +145,7 @@ function AdminProductFeedbackPage() {
 											return answer ? (
 												<div key={question.id}>
 													<dt className="font-medium">{question.prompt}</dt>
-													<dd className="whitespace-pre-wrap text-sm">{answer}</dd>
+													<dd className="break-words whitespace-pre-wrap text-sm">{answer}</dd>
 												</div>
 											) : null;
 										})}
@@ -174,7 +154,7 @@ function AdminProductFeedbackPage() {
 							) : null}
 						</Card>
 					))}
-					{responses.isLoading ? <p>Loading…</p> : null}
+					{responses.isLoading ? <Skeleton className="h-32 w-full" /> : null}
 					{responses.isSuccess && responseItems.length === 0 ? (
 						<p>No survey responses yet.</p>
 					) : null}
@@ -184,7 +164,12 @@ function AdminProductFeedbackPage() {
 						onPageChange={setResponsePage}
 					/>
 				</TabsContent>
-				<TabsContent value="surveys" className="space-y-6" aria-busy={surveys.isLoading}>
+				<TabsContent
+					value="surveys"
+					keepMounted
+					className="space-y-6"
+					aria-busy={surveys.isLoading}
+				>
 					{surveys.isError ? (
 						<QueryErrorAlert
 							error={surveys.error}
@@ -203,135 +188,32 @@ function AdminProductFeedbackPage() {
 						<CardHeader>
 							<CardTitle>Publish a survey</CardTitle>
 							<CardDescription>
-								Choose an audience and answer type for a focused one-question survey.
+								Publish a focused survey with optional follow-up questions and a bounded schedule.
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<form
-								className="space-y-4"
-								onSubmit={(event) => {
-									event.preventDefault();
-									create.mutate({
-										body: {
-											title: title.trim(),
-											description: description.trim(),
-											workspaceId: workspaceId === "all" ? undefined : Number(workspaceId),
-											startsAt: new Date(),
-											questions: [
-												{
-													id: "response",
-													prompt: prompt.trim(),
-													type: questionType,
-													options: questionType === "SINGLE_CHOICE" ? options : [],
-													required: true,
-												},
-											],
-										},
-									});
-								}}
-							>
-								<div>
-									<Label htmlFor="survey-title">Title</Label>
-									<Input
-										id="survey-title"
-										name="title"
-										required
-										value={title}
-										maxLength={160}
-										onChange={(e) => setTitle(e.target.value)}
-									/>
-								</div>
-								<div>
-									<Label htmlFor="survey-description">Purpose</Label>
-									<Textarea
-										id="survey-description"
-										name="description"
-										required
-										value={description}
-										maxLength={500}
-										onChange={(e) => setDescription(e.target.value)}
-									/>
-								</div>
-								<div>
-									<Label htmlFor="survey-prompt">Question</Label>
-									<Textarea
-										id="survey-prompt"
-										name="prompt"
-										required
-										value={prompt}
-										maxLength={300}
-										onChange={(e) => setPrompt(e.target.value)}
-									/>
-								</div>
-								<div className="space-y-2">
-									<Label id="survey-type-label" htmlFor="survey-type">
-										Answer type
-									</Label>
-									<Select
-										items={QUESTION_TYPES}
-										value={questionType}
-										onValueChange={(value) => value && setQuestionType(value)}
-									>
-										<SelectTrigger id="survey-type">
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent aria-labelledby="survey-type-label">
-											<SelectItem value="TEXT">Free text</SelectItem>
-											<SelectItem value="SINGLE_CHOICE">Single choice</SelectItem>
-											<SelectItem value="RATING">Rating (1–5)</SelectItem>
-										</SelectContent>
-									</Select>
-								</div>
-								{questionType === "SINGLE_CHOICE" ? (
-									<div>
-										<Label htmlFor="survey-options">Choices (one per line)</Label>
-										<Textarea
-											id="survey-options"
-											name="options"
-											required
-											value={choiceOptions}
-											maxLength={4000}
-											onChange={(e) => setChoiceOptions(e.target.value)}
-										/>
-									</div>
-								) : null}
-								<div className="space-y-2">
-									<Label id="survey-workspace-label" htmlFor="survey-workspace">
-										Audience
-									</Label>
-									<Select
-										items={workspaceOptions}
-										value={workspaceId}
-										onValueChange={(value) => value && setWorkspaceId(value)}
-									>
-										<SelectTrigger id="survey-workspace">
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent aria-labelledby="survey-workspace-label">
-											<SelectItem value="all">All workspaces</SelectItem>
-											{workspaces.data?.map((workspace) => (
-												<SelectItem key={workspace.id} value={String(workspace.id)}>
-													{workspace.displayName}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</div>
-								<Button
-									type="submit"
-									disabled={
-										!title.trim() ||
-										!description.trim() ||
-										!prompt.trim() ||
-										(questionType === "SINGLE_CHOICE" && options.length < 2) ||
-										hasDuplicateOptions ||
-										workspaces.isError ||
-										create.isPending
+							{workspaces.isPending ? (
+								<Skeleton className="h-64 w-full" />
+							) : workspaces.data ? (
+								<ProductSurveyComposer
+									key={composerVersion}
+									workspaces={workspaces.data}
+									isPending={create.isPending}
+									error={
+										create.isError
+											? "Couldn't publish. Your draft is still here; review the fields and try again."
+											: undefined
 									}
-								>
-									{create.isPending ? "Publishing…" : "Publish survey"}
-								</Button>
-							</form>
+									onSubmit={async (body) => {
+										try {
+											await create.mutateAsync({ body });
+											return true;
+										} catch {
+											return false;
+										}
+									}}
+								/>
+							) : null}
 						</CardContent>
 					</Card>
 					{surveyItems.map((survey) => (
@@ -343,10 +225,35 @@ function AdminProductFeedbackPage() {
 									{survey.createdAt?.toLocaleString() ?? "Unknown time"}
 								</CardDescription>
 							</CardHeader>
-							<CardContent>{survey.description}</CardContent>
+							<CardContent className="space-y-3">
+								<p>{survey.description}</p>
+								<p className="text-sm text-muted-foreground">
+									{survey.questions.length} questions · {productSurveyAvailability(survey, now)}
+									<br />
+									Starts {survey.startsAt.toLocaleString()}
+									{survey.endsAt ? ` · Ends ${survey.endsAt.toLocaleString()}` : " · No end date"}
+								</p>
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={status.isPending}
+									onClick={() =>
+										status.mutate({
+											path: { surveyId: survey.id },
+											body: { active: !survey.active },
+										})
+									}
+								>
+									{status.isPending && status.variables.path.surveyId === survey.id
+										? "Saving…"
+										: survey.active
+											? "Pause survey"
+											: "Resume survey"}
+								</Button>
+							</CardContent>
 						</Card>
 					))}
-					{surveys.isLoading ? <p>Loading…</p> : null}
+					{surveys.isLoading ? <Skeleton className="h-32 w-full" /> : null}
 					{surveys.isSuccess && surveyItems.length === 0 ? <p>No surveys yet.</p> : null}
 					<TablePagination
 						page={surveyPage}

@@ -73,15 +73,19 @@ class FeedbackService {
     }
 
     @Transactional
+    public SurveyDTO setActive(UUID id, boolean active) {
+        Survey survey = surveys.findById(id).orElseThrow(() -> new EntityNotFoundException("Survey", id.toString()));
+        survey.setActive(active);
+        return dto(survey);
+    }
+
+    @Transactional
     public void submit(UUID id, Long workspaceId, Long accountId, SubmitSurveyDTO request) {
         Survey survey = targeted(id, workspaceId);
         List<QuestionDTO> questions = readQuestions(survey.getQuestions());
         Set<String> valid = new HashSet<>();
         questions.forEach(q -> valid.add(q.id()));
-        // JSON `null` answer values reach here despite the DTO's constraints (@Size skips null),
-        // and must be a 400, not a NullPointerException in the required-answer check below.
-        if (request.answers().values().stream().anyMatch(Objects::isNull)
-                || !valid.containsAll(request.answers().keySet())
+        if (!valid.containsAll(request.answers().keySet())
                 || questions.stream()
                         .anyMatch(q -> q.required()
                                 && request.answers().getOrDefault(q.id(), "").isBlank()))
@@ -108,6 +112,12 @@ class FeedbackService {
     public void dismiss(UUID id, Long workspaceId, Long accountId) {
         targeted(id, workspaceId);
         saveOnce(new SurveySubmission(id, accountId, workspaceId, SurveySubmission.Disposition.DISMISSED, null));
+    }
+
+    @Transactional
+    public void restore(UUID id, Long workspaceId, Long accountId) {
+        targeted(id, workspaceId);
+        submissions.deleteDismissal(id, accountId);
     }
 
     @Transactional

@@ -29,6 +29,7 @@ const exportPolls = new Map<string, number>();
 type AdminUserPatch = { appRole?: string };
 
 export const handlers = [
+	http.get("*/workspaces/:workspaceSlug/product-feedback/surveys", () => HttpResponse.json([])),
 	// --- current user -------------------------------------------------------
 	http.get("*/user", () => HttpResponse.json(currentUser)),
 	http.get("*/user/consent", () =>

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -43,26 +44,48 @@ class FeedbackServiceTest {
     }
 
     @Test
-    void shouldRejectNullAnswerValueAsBadRequest() {
-        Survey survey = survey(List.of(new QuestionDTO("q", "Question?", QuestionType.TEXT, List.of(), true)));
-        when(surveys.findById(survey.getId())).thenReturn(Optional.of(survey));
-        // Built through Jackson because that is where the null comes from: a JSON `null` answer
-        // passes the DTO's @Size constraints and must become a 400, not a NullPointerException.
-        SubmitSurveyDTO request = new ObjectMapper().readValue("{\"answers\":{\"q\":null}}", SubmitSurveyDTO.class);
-
-        assertThatThrownBy(() -> service.submit(survey.getId(), 7L, 42L, request))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("400");
-        verifyNoInteractions(submissions);
-    }
-
-    @Test
     void shouldRejectChoiceOutsideAuthoredOptions() {
         Survey survey = survey(List.of(new QuestionDTO("q", "Choose", QuestionType.SINGLE_CHOICE, List.of("A"), true)));
         when(surveys.findById(survey.getId())).thenReturn(Optional.of(survey));
 
         assertThatThrownBy(() -> service.submit(survey.getId(), 7L, 42L, new SubmitSurveyDTO(Map.of("q", "B"))))
                 .isInstanceOf(ResponseStatusException.class);
+        verifyNoInteractions(submissions);
+    }
+
+    @Test
+    void shouldRejectResponsesAndDismissalsWhilePausedAndAcceptAfterResume() {
+        Survey survey = survey(List.of(new QuestionDTO("q", "Question?", QuestionType.TEXT, List.of(), false)));
+        when(surveys.findById(survey.getId())).thenReturn(Optional.of(survey));
+        assertThat(service.setActive(survey.getId(), false).active()).isFalse();
+        assertThatThrownBy(() -> service.submit(survey.getId(), 7L, 42L, new SubmitSurveyDTO(Map.of())))
+                .isInstanceOf(de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException.class);
+        assertThatThrownBy(() -> service.dismiss(survey.getId(), 7L, 42L))
+                .isInstanceOf(de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException.class);
+        verifyNoInteractions(submissions);
+        assertThat(service.setActive(survey.getId(), true).active()).isTrue();
+        service.submit(survey.getId(), 7L, 42L, new SubmitSurveyDTO(Map.of()));
+        verify(submissions).saveAndFlush(argThat(s -> s.getDisposition() == SurveySubmission.Disposition.RESPONDED));
+    }
+
+    @Test
+    void shouldRejectAnotherWorkspaceBeforeWritingAResponse() {
+        Survey survey = survey(List.of(new QuestionDTO("q", "Question?", QuestionType.TEXT, List.of(), false)));
+        when(surveys.findById(survey.getId())).thenReturn(Optional.of(survey));
+        assertThatThrownBy(() -> service.submit(survey.getId(), 8L, 42L, new SubmitSurveyDTO(Map.of())))
+                .isInstanceOf(de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException.class);
+        verifyNoInteractions(submissions);
+    }
+
+    @Test
+    void shouldRejectUnknownAnswersAndOutOfRangeRatings() {
+        Survey survey = survey(List.of(new QuestionDTO("q", "Question?", QuestionType.RATING, List.of(), true)));
+        when(surveys.findById(survey.getId())).thenReturn(Optional.of(survey));
+        for (Map<String, String> answers : List.of(Map.of("q", "6"), Map.of("other", "3"), Map.of("q", " "))) {
+            assertThatThrownBy(() -> service.submit(survey.getId(), 7L, 42L, new SubmitSurveyDTO(answers)))
+                    .isInstanceOf(ResponseStatusException.class)
+                    .hasMessageContaining("400");
+        }
         verifyNoInteractions(submissions);
     }
 

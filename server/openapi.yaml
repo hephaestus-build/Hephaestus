@@ -1581,6 +1581,32 @@ paths:
       summary: Publish a product survey
       tags:
       - feedback-admin
+  /admin/product-feedback/surveys/{surveyId}/status:
+    patch:
+      operationId: adminUpdateProductSurveyStatus
+      parameters:
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveyStatus"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Survey"
+          description: OK
+      summary: Pause or resume a product survey
+      tags:
+      - feedback-admin
   /admin/settings:
     get:
       operationId: adminGetInstanceSettings
@@ -6662,6 +6688,28 @@ paths:
       tags:
       - feedback
   /workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/dismissal:
+    delete:
+      operationId: restoreProductSurvey
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+      summary: Undo a survey dismissal without changing a submitted response
+      tags:
+      - feedback
     put:
       operationId: dismissProductSurvey
       parameters:
@@ -6681,7 +6729,7 @@ paths:
       responses:
         "200":
           description: OK
-      summary: Permanently dismiss a survey for the current account
+      summary: Dismiss a survey for the current account
       tags:
       - feedback
   /workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/responses:
@@ -10328,6 +10376,7 @@ components:
           type: string
           maxLength: 500
           minLength: 0
+          pattern: "/(?!/)[^?#\\p{Cc}]*"
       required:
       - kind
       - message
@@ -14975,6 +15024,13 @@ components:
       - questions
       - startsAt
       - title
+    SurveyStatus:
+      type: object
+      properties:
+        active:
+          type: boolean
+      required:
+      - active
     SyncJob:
       type: object
       description: One sync_job row — a single INITIAL/RECONCILIATION/BACKFILL pass

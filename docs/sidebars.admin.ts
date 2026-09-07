@@ -22,6 +22,7 @@ const sidebars: SidebarsConfig = {
 		{ type: "doc", id: "credential-key-rotation", label: "Credential Key Rotation" },
 		{ type: "doc", id: "production-setup", label: "Integrations & Reference Deployment" },
 		{ type: "doc", id: "compatibility-policy", label: "Compatibility Policy" },
+		{ type: "doc", id: "product-feedback", label: "Product feedback" },
 		{ type: "doc", id: "runtime-roles", label: "Runtime Roles" },
 		{ type: "doc", id: "configuration-readiness", label: "Configuration Readiness" },
 		{ type: "doc", id: "threat-model", label: "Threat Model" },

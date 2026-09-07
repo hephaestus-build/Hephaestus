@@ -65,4 +65,8 @@ public class Survey {
         this.active = true;
         this.createdByAccountId = createdByAccountId;
     }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
 }

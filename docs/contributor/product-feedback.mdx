@@ -1,0 +1,40 @@
+---
+title: Product feedback boundaries
+---
+
+# Product feedback boundaries
+
+Product feedback collects identified submissions for instance administrators. It is separate from
+practice feedback and does not forward submissions outside the instance. See
+[operator guidance](../admin/product-feedback.mdx) for survey authoring and
+[the personal-data map](../admin/dsms/personal-data-map.md) for retention and erasure ownership.
+
+## Collection and state
+
+Invitations do not capture focus automatically. Closing a survey preserves its draft; declining
+records an account-wide dismissal. A dismissal undo deletes only that account's `DISMISSED` row,
+never a `RESPONDED` row. Survey content remains unchanged after publication so stored answers retain
+their meaning; availability can change without rewriting responses.
+
+Drafts belong to the signed-in account and current workspace and live only in memory. The root
+route keys the feedback controls by both scopes to prevent a draft from crossing either boundary.
+Page context requires opt-in; the request DTO rejects absolute URLs, protocol-relative URLs, query
+strings, fragments and control characters.
+
+## Writes and caching
+
+The generated client is the HTTP boundary. `use-product-feedback.ts` owns mutation acknowledgements
+and the available-survey cache. A successful response or dismissal removes the invitation from all
+cached workspaces before revalidation because an instance-wide survey is handled once per account,
+not once per workspace. A failed refresh must not leave the previously cached invitation in place.
+
+POST mutations do not retry automatically. Network errors preserve drafts, and a conflict is not an
+acknowledgement that the current answers were saved. The database enforces one response or dismissal
+per account and survey. Product feedback uses a separate fixed-minute limit: one submission per
+account per UTC calendar minute, not a rolling 60-second window.
+
+## Authorization
+
+Workspace endpoints require membership and derive the submitting account from authentication.
+Instance-administrator endpoints own authoring, availability changes and the inbox. Availability
+and workspace targeting are checked on submission, not only when invitations are fetched.

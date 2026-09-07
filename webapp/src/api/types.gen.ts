@@ -4655,6 +4655,10 @@ export type Survey = {
   workspaceId?: number;
 };
 
+export type SurveyStatus = {
+  active: boolean;
+};
+
 /**
  * One sync_job row — a single INITIAL/RECONCILIATION/BACKFILL pass for a connection
  */
@@ -7242,6 +7246,24 @@ export type AdminCreateProductSurveyResponses = {
 };
 
 export type AdminCreateProductSurveyResponse = AdminCreateProductSurveyResponses[keyof AdminCreateProductSurveyResponses];
+
+export type AdminUpdateProductSurveyStatusData = {
+  body: SurveyStatus;
+  path: {
+    surveyId: string;
+  };
+  query?: never;
+  url: '/admin/product-feedback/surveys/{surveyId}/status';
+};
+
+export type AdminUpdateProductSurveyStatusResponses = {
+  /**
+   * OK
+   */
+  200: Survey;
+};
+
+export type AdminUpdateProductSurveyStatusResponse = AdminUpdateProductSurveyStatusResponses[keyof AdminUpdateProductSurveyStatusResponses];
 
 export type AdminGetInstanceSettingsData = {
   body?: never;
@@ -11412,6 +11434,26 @@ export type ListAvailableProductSurveysResponses = {
 };
 
 export type ListAvailableProductSurveysResponse = ListAvailableProductSurveysResponses[keyof ListAvailableProductSurveysResponses];
+
+export type RestoreProductSurveyData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    surveyId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/dismissal';
+};
+
+export type RestoreProductSurveyResponses = {
+  /**
+   * OK
+   */
+  200: unknown;
+};
 
 export type DismissProductSurveyData = {
   body?: never;

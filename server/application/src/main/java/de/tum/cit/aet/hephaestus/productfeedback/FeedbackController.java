@@ -39,7 +39,7 @@ public class FeedbackController {
     }
 
     @PutMapping("/surveys/{surveyId}/dismissal")
-    @Operation(operationId = "dismissProductSurvey", summary = "Permanently dismiss a survey for the current account")
+    @Operation(operationId = "dismissProductSurvey", summary = "Dismiss a survey for the current account")
     public ResponseEntity<Void> dismiss(WorkspaceContext workspace, @PathVariable UUID surveyId) {
         service.dismiss(surveyId, workspace.id(), CurrentAccount.requireId());
         return ResponseEntity.noContent().build();
@@ -52,5 +52,14 @@ public class FeedbackController {
     public ResponseEntity<Void> feedback(WorkspaceContext workspace, @Valid @RequestBody FeedbackRequestDTO request) {
         service.addFeedback(request, CurrentAccount.requireId(), workspace.id());
         return ResponseEntity.accepted().build();
+    }
+
+    @DeleteMapping("/surveys/{surveyId}/dismissal")
+    @Operation(
+            operationId = "restoreProductSurvey",
+            summary = "Undo a survey dismissal without changing a submitted response")
+    public ResponseEntity<Void> restore(WorkspaceContext workspace, @PathVariable UUID surveyId) {
+        service.restore(surveyId, workspace.id(), CurrentAccount.requireId());
+        return ResponseEntity.noContent().build();
     }
 }

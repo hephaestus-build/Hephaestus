@@ -7,9 +7,11 @@ import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.CreateSurveyDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackItemDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.SubmissionDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.SurveyDTO;
+import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.SurveyStatusDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
@@ -22,7 +24,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/admin/product-feedback")
-@RecentSignInExempt(reason = "creates a survey; grants no access and stores no credential")
+@RecentSignInExempt(reason = "manages product surveys; grants no access and stores no credential")
 @PreAuthorize("hasAuthority('app_admin')")
 @RequiredArgsConstructor
 public class FeedbackAdminController {
@@ -38,7 +40,7 @@ public class FeedbackAdminController {
 
     @PostMapping("/surveys")
     @Operation(operationId = "adminCreateProductSurvey", summary = "Publish a product survey")
-    @AuditExempt(reason = "the immutable survey row is the domain audit trail")
+    @AuditExempt(reason = "the survey retains its original content, author and creation time")
     public ResponseEntity<SurveyDTO> create(@Valid @RequestBody CreateSurveyDTO request) {
         SurveyDTO created = service.create(request, CurrentAccount.requireId());
         return ResponseEntity.created(URI.create("/admin/product-feedback/surveys/" + created.id()))
@@ -49,6 +51,14 @@ public class FeedbackAdminController {
     @Operation(operationId = "adminListProductSurveyResponses", summary = "List recent survey responses")
     public PagedModel<SubmissionDTO> responses(@ParameterObject @PageableDefault(size = 50) Pageable pageable) {
         return new PagedModel<>(service.responses(pageable));
+    }
+
+    @PatchMapping("/surveys/{surveyId}/status")
+    @Operation(operationId = "adminUpdateProductSurveyStatus", summary = "Pause or resume a product survey")
+    @AuditExempt(
+            reason = "changes invitation availability only; grants no access and changes no response or survey content")
+    public SurveyDTO status(@PathVariable UUID surveyId, @Valid @RequestBody SurveyStatusDTO request) {
+        return service.setActive(surveyId, request.active());
     }
 
     @GetMapping
