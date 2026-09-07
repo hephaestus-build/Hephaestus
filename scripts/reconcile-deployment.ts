@@ -19,8 +19,7 @@ export type Stack = "proxy" | "core" | "app";
 
 /**
  * The application server runs the Liquibase migration the webhook runtime in `core` reads, and the
- * edge comes last so it never routes to a stack that is still starting. The push deploy declares the
- * same order in `.github/workflows/deploy-locked-compose.yml`, and one test holds the two together.
+ * edge comes last so it never routes to a stack that is still starting.
  */
 const STACK_ORDER: readonly Stack[] = ["app", "core", "proxy"];
 
