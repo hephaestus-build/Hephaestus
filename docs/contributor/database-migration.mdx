@@ -24,13 +24,12 @@ conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
    creates it and appends its `<include>` to `master.xml`; later runs add change sets to it. It then
    refreshes the ERD. With no drift it writes nothing.
 
-   `master.xml` lists every changelog explicitly rather than through `<includeAll/>`, so the apply
-   order is committed and append-only.
-
 3. **Review the change sets.** Keep the real deltas and remove what the diff only inferred. Prefer
    `renameColumn` over a drop-and-add pair, start new sequences at `1` unless there is a data
-   migration plan, and confirm every `dropTable` or `dropColumn` is intended. Give every change set a
-   precondition (`onFail="MARK_RAN"`) and a `<rollback>`. If you pruned anything, refresh the ERD:
+   migration plan, and follow the destructive-change policy below. Use preconditions to reject
+   incompatible database states; use `onFail="MARK_RAN"` only when failure proves the intended change
+   is already present. Provide a tested rollback when reversal is safe; otherwise document recovery
+   through a verified backup in the operator instructions. If you edit the changelog, refresh the ERD:
 
    ```bash
    vp run db:generate-erd-docs
@@ -41,19 +40,6 @@ conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
    and a schema change needs both; `verify-changesets` fails a PR that touches `db/changelog/`
    without one. Keep the summary user-facing; the release notes flag the migration automatically.
 5. Commit the changelog, the `master.xml` edit, the changeset, and `docs/contributor/erd/schema.mmd`.
-
-### Safe rename example
-
-```xml
-<!-- Avoid drop + add when renaming -->
-<dropColumn tableName="user" columnName="first_name"/>
-<addColumn tableName="user">
-    <column name="firstName" type="VARCHAR(255)"/>
-</addColumn>
-
-<!-- Use renameColumn to preserve data -->
-<renameColumn tableName="user" oldColumnName="first_name" newColumnName="firstName"/>
-```
 
 ## Changelog immutability policy
 
@@ -93,65 +79,15 @@ CI enforces 1 and 2 mechanically (see below); 3 is a review responsibility.
    readiness, the seeded relationships, the practice catalog and authenticated reads. Release
    publication depends on it; it also runs weekly.
 
-The empty-database replay applies **every** changeset (the Maven plugin sets no context filter), so it validates
-that the whole chain is well-formed — it does **not** reproduce a specific instance's boot (a real
-`dev`/`prod` boot filters by `spring.liquibase.contexts`) and, running against an empty database,
-does **not** catch data-incompatible migrations (a `NOT NULL` add or a `CHECK` that existing rows
-violate). The replay is also forward-only, so `<rollback>` blocks and `onFail="MARK_RAN"`
-preconditions are never exercised. Those remain a review responsibility, enforced through the
-deprecate-then-remove discipline above.
+The empty-database replay sets no context filter. It evaluates the full chain, but preconditions can
+skip changesets; a successful replay does not prove that every change ran. It also does not reproduce
+the context selection of a `dev` or `prod` boot (`spring.liquibase.contexts`).
 
-## Example
-
-```java
-@Entity
-public class User {
-    private String email;            // NOT NULL under @NullMarked
-    private @Nullable String phone;  // nullable column
-}
-```
-
-Generates:
-
-```xml
-<changeSet id="1749286026779-1" author="hephaestus">
-    <addColumn tableName="user">
-        <column name="email" type="VARCHAR(255)"><constraints nullable="false"/></column>
-        <column name="phone" type="VARCHAR(255)"/>
-    </addColumn>
-</changeSet>
-```
-
-## CI flow
-
-```mermaid
-flowchart TD
-    accTitle: Database schema change workflow
-    accDescr: Entity changes produce a migration, which updates generated schema documentation and is checked in continuous integration.
-    A[Entity changes] --> B[Migrations]
-    B --> C[ERD docs]
-
-    subgraph CI [Pull request gates]
-        D[Schema validation]
-        E[ERD validation]
-        F[Changelog immutability]
-    end
-
-    A -.-> D
-    B -.-> D
-    B -.-> E
-    C -.-> E
-    B -.-> F
-
-    D -->|❌ Drift| G[Missing migration]
-    D -->|✅| H[Schema OK]
-    E -->|❌ Outdated| I[Update ERD]
-    E -->|✅| J[Docs OK]
-    F -->|❌ Released file edited| K[Ship a new changelog]
-    F -->|✅| L[History intact]
-
-    style CI fill:#fff3e0,stroke:#ff9800,stroke-width:2px
-```
+Add focused migration tests for populated tables, rejected database states and any supported rollback.
+Empty-database replay cannot prove that existing rows satisfy a new `NOT NULL` or `CHECK` constraint,
+and it does not exercise rollback. Preconditions run during replay, but only against the states that
+replay reaches. The JPA diff cannot establish equivalence for objects Hibernate does not model, such
+as triggers, partitioning and partial-index predicates; verify those through database-level tests.
 
 ## Resources
 
