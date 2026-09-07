@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
 	needsDispatch,
@@ -69,3 +73,41 @@ void test("a missing Version branch is distinct from a malformed API response", 
 		/branch sha/,
 	);
 });
+
+void test(
+	"the CLI preserves reserved characters in branch lookup URLs",
+	{ skip: process.platform === "win32" },
+	async (context) => {
+		const directory = await mkdtemp(path.join(tmpdir(), "version-pr-"));
+		context.after(() => rm(directory, { recursive: true, force: true }));
+		await mkdir(path.join(directory, ".changeset"));
+		await writeFile(
+			path.join(directory, ".changeset/config.json"),
+			'{"baseBranch":"release#2026%"}',
+		);
+		await writeFile(
+			path.join(directory, "gh"),
+			`#!/bin/sh
+[ "$1" = api ] || exit 1
+[ "$2" = 'repos/owner/repo/git/matching-refs/heads/changeset-release/release%232026%25' ] || exit 2
+printf '[]'
+`,
+			{ mode: 0o755 },
+		);
+		const result = spawnSync(
+			process.execPath,
+			[fileURLToPath(new URL("./dispatch-version-pr-ci.ts", import.meta.url))],
+			{
+				cwd: directory,
+				env: {
+					...process.env,
+					GITHUB_REPOSITORY: "owner/repo",
+					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+				},
+				encoding: "utf8",
+			},
+		);
+		assert.equal(result.status, 0, result.stderr);
+		assert.match(result.stdout, /No changeset-release\/release#2026% branch/);
+	},
+);

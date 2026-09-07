@@ -50,7 +50,12 @@ export function parseBranchHead(value: unknown, branch: string): string | undefi
 async function branchHead(repository: string, branch: string): Promise<string | undefined> {
 	// Missing branches return no matching refs; transport and authentication errors still fail.
 	return parseBranchHead(
-		JSON.parse(await gh(["api", `repos/${repository}/git/matching-refs/heads/${branch}`])),
+		JSON.parse(
+			await gh([
+				"api",
+				`repos/${repository}/git/matching-refs/heads/${branch.split("/").map(encodeURIComponent).join("/")}`,
+			]),
+		),
 		branch,
 	);
 }
