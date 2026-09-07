@@ -9,9 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
-import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Job;
-import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Outcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -20,15 +19,10 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 import tools.jackson.databind.ObjectMapper;
 
-/**
- * Pins {@link ExportGenerationWorker}'s outcome state machine: success sets payload + a 48h expiry
- * and flips to READY; an assembly error flips to FAILED with the payload nulled (never left
- * half-written); and a vanished row writes nothing. Guards against a failed export being stranded in
- * PROCESSING or a failure leaking a partial payload, and against any of the three paths ending
- * without the terminal outcome an operator alerts on.
- */
 class ExportGenerationWorkerTest extends BaseUnitTest {
 
     private static final long EXPORT_ID = 5L;
@@ -38,7 +32,8 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
     private AccountExportRepository repository;
     private ExportBundleAssembler assembler;
     private ObjectMapper objectMapper;
-    private PrivacyJobMetrics metrics;
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    private final PrivacyJobMetrics metrics = new PrivacyJobMetrics(registry);
     private ExportGenerationWorker worker;
 
     @BeforeEach
@@ -46,9 +41,10 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
         repository = mock(AccountExportRepository.class);
         assembler = mock(ExportBundleAssembler.class);
         objectMapper = mock(ObjectMapper.class);
-        metrics = mock(PrivacyJobMetrics.class);
+        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        when(transactionManager.getTransaction(any())).thenAnswer(invocation -> new SimpleTransactionStatus());
         worker = new ExportGenerationWorker(
-                repository, assembler, objectMapper, Clock.fixed(NOW, ZoneOffset.UTC), metrics);
+                repository, assembler, objectMapper, Clock.fixed(NOW, ZoneOffset.UTC), metrics, transactionManager);
     }
 
     private AccountExport existingExport() {
@@ -58,7 +54,7 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
     }
 
     @Test
-    void generate_success_setsPayloadExpiryAndReady() {
+    void shouldSetPayloadExpiryAndReadyWhenGenerationSucceeds() {
         AccountExport export = existingExport();
         ExportBundle.Profile profile = new ExportBundle.Profile(ACCOUNT_ID, "User", null, "ACTIVE", NOW);
         ExportBundle bundle = new ExportBundle("v1", NOW, profile, List.of(), List.of(), List.of(), null, List.of());
@@ -71,12 +67,20 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
         assertThat(export.getPayload()).containsExactly(1, 2, 3);
         assertThat(export.getCompletedAt()).isEqualTo(NOW);
         assertThat(export.getExpiresAt()).isEqualTo(NOW.plus(Duration.ofHours(48)));
-        verify(metrics).record(Job.EXPORT_GENERATION, Outcome.SUCCESS);
-        verify(metrics).recordAffected(Job.EXPORT_GENERATION, 1);
+        assertThat(registry.get("privacy.job.completed")
+                        .tags("job", "export_generation", "outcome", "success")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+        assertThat(registry.get("privacy.job.affected")
+                        .tag("job", "export_generation")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
     }
 
     @Test
-    void generate_assemblyError_marksFailedAndNullsPayload() {
+    void shouldMarkFailedAndClearPayloadWhenAssemblyFails() {
         AccountExport export = existingExport();
         when(assembler.assemble(ACCOUNT_ID)).thenThrow(new RuntimeException("db unavailable"));
 
@@ -85,17 +89,79 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
         assertThat(export.getStatus()).isEqualTo(AccountExport.Status.FAILED);
         assertThat(export.getFailureReason()).isEqualTo("assembly_failed");
         assertThat(export.getPayload()).isNull();
-        verify(metrics).record(Job.EXPORT_GENERATION, Outcome.FAILURE);
+        assertThat(registry.get("privacy.job.completed")
+                        .tags("job", "export_generation", "outcome", "failure")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
     }
 
     @Test
-    void generate_missingRow_writesNothingAndReportsFailure() {
+    void shouldMarkFailedWhenTheInitialLookupFails() {
+        AccountExport export = new AccountExport(ACCOUNT_ID);
+        when(repository.findByIdAndAccountId(EXPORT_ID, ACCOUNT_ID))
+                .thenThrow(new IllegalStateException("lookup failed"))
+                .thenReturn(Optional.of(export));
+
+        worker.generate(EXPORT_ID, ACCOUNT_ID);
+
+        assertThat(export.getStatus()).isEqualTo(AccountExport.Status.FAILED);
+        assertThat(export.getFailureReason()).isEqualTo("assembly_failed");
+        assertThat(registry.get("privacy.job.completed")
+                        .tags("job", "export_generation", "outcome", "failure")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldMarkFailedWhenSavingProcessingFails() {
+        AccountExport export = existingExport();
+        when(repository.save(export))
+                .thenThrow(new IllegalStateException("save failed"))
+                .thenReturn(export);
+
+        worker.generate(EXPORT_ID, ACCOUNT_ID);
+
+        assertThat(export.getStatus()).isEqualTo(AccountExport.Status.FAILED);
+        assertThat(export.getFailureReason()).isEqualTo("assembly_failed");
+        assertThat(registry.get("privacy.job.completed")
+                        .tags("job", "export_generation", "outcome", "failure")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldReportFailureWhenTheDatabaseCannotRecordIt() {
+        when(repository.findByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenThrow(new IllegalStateException("db down"));
+
+        worker.generate(EXPORT_ID, ACCOUNT_ID);
+
+        assertThat(registry.get("privacy.job.completed")
+                        .tags("job", "export_generation", "outcome", "failure")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+        assertThat(registry.find("privacy.job.completed")
+                        .tags("job", "export_generation", "outcome", "success")
+                        .counter())
+                .isNull();
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void shouldWriteNothingAndReportFailureWhenRowIsMissing() {
         when(repository.findByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenReturn(Optional.empty());
 
         worker.generate(EXPORT_ID, ACCOUNT_ID);
 
         verify(repository, never()).save(any());
         verify(assembler, never()).assemble(eq(ACCOUNT_ID));
-        verify(metrics).record(Job.EXPORT_GENERATION, Outcome.FAILURE);
+        assertThat(registry.get("privacy.job.completed")
+                        .tags("job", "export_generation", "outcome", "failure")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
     }
 }

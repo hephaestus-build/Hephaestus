@@ -8,8 +8,6 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		onSignIn: fn(),
-		onGoToDashboard: fn(),
-		isSignedIn: false,
 	},
 } satisfies Meta<typeof LandingHeroSection>;
 
@@ -21,13 +19,6 @@ export const Default: Story = {
 		// One DOM serves the scattered and the stacked composition; a second copy means the
 		// two layouts have drifted apart.
 		await expect(canvas.getAllByText("Export reports to CSV")).toHaveLength(1);
-	},
-};
-
-export const SignedIn: Story = {
-	args: { isSignedIn: true },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /dashboard/i })).toBeVisible();
 	},
 };
 

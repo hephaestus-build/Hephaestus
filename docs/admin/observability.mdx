@@ -51,6 +51,10 @@ deployment that reports it every day never finishes deleting. Account, workspace
 identifiers are not labels. The erasure and retention paths these cover are listed in the
 [personal-data map](./dsms/personal-data-map.md).
 
+For export generation, `success` and the affected count are published only after the export commits.
+A failed attempt reports `failure` even if the database is unavailable and cannot save the failed
+status; consult the server log when an export remains queued or processing after a reported failure.
+
 ## Correlating a request
 
 Every HTTP response carries an `X-Request-Id` header whose value is the request's W3C trace ID — a

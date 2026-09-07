@@ -1,15 +1,14 @@
 package de.tum.cit.aet.hephaestus.core.auth.export;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
-import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Job;
-import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Outcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 
 class ExportRetentionSweeperTest extends BaseUnitTest {
@@ -17,11 +16,15 @@ class ExportRetentionSweeperTest extends BaseUnitTest {
     @Mock
     private AccountExportService accountExportService;
 
-    @Mock
-    private PrivacyJobMetrics metrics;
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    private final PrivacyJobMetrics metrics = new PrivacyJobMetrics(registry);
 
-    @InjectMocks
     private ExportRetentionSweeper sweeper;
+
+    @BeforeEach
+    void setUp() {
+        sweeper = new ExportRetentionSweeper(accountExportService, metrics);
+    }
 
     @Test
     void shouldRecordSuccessAndTheExpiredCountWhenTheSweepRuns() {
@@ -29,8 +32,16 @@ class ExportRetentionSweeperTest extends BaseUnitTest {
 
         sweeper.sweep();
 
-        verify(metrics).record(Job.EXPORT_RETENTION, Outcome.SUCCESS);
-        verify(metrics).recordAffected(Job.EXPORT_RETENTION, 4);
+        assertThat(registry.get("privacy.job.completed")
+                        .tags("job", "export_retention", "outcome", "success")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+        assertThat(registry.get("privacy.job.affected")
+                        .tag("job", "export_retention")
+                        .counter()
+                        .count())
+                .isEqualTo(4);
     }
 
     @Test
@@ -39,8 +50,16 @@ class ExportRetentionSweeperTest extends BaseUnitTest {
 
         sweeper.sweep();
 
-        verify(metrics).record(Job.EXPORT_RETENTION, Outcome.SUCCESS);
-        verify(metrics).recordAffected(Job.EXPORT_RETENTION, 0);
+        assertThat(registry.get("privacy.job.completed")
+                        .tags("job", "export_retention", "outcome", "success")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+        assertThat(registry.get("privacy.job.affected")
+                        .tag("job", "export_retention")
+                        .counter()
+                        .count())
+                .isEqualTo(0);
     }
 
     @Test
@@ -49,6 +68,10 @@ class ExportRetentionSweeperTest extends BaseUnitTest {
 
         assertThatThrownBy(sweeper::sweep).isInstanceOf(IllegalStateException.class);
 
-        verify(metrics).record(Job.EXPORT_RETENTION, Outcome.FAILURE);
+        assertThat(registry.get("privacy.job.completed")
+                        .tags("job", "export_retention", "outcome", "failure")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
     }
 }

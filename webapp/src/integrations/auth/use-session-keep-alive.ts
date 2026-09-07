@@ -1,8 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
-import { getCurrentUserOptions, getCurrentUserQueryKey } from "@/api/@tanstack/react-query.gen";
+import { getCurrentUserQueryKey } from "@/api/@tanstack/react-query.gen";
 
+import { currentUserQueryOptions } from "./guard";
 import { refreshAccessToken } from "./session-refresh";
 
 /**
@@ -40,7 +41,7 @@ const ACTIVITY_EVENTS = ["pointerdown", "keydown", "scroll", "pointermove", "whe
  */
 export function useSessionKeepAlive() {
 	const queryClient = useQueryClient();
-	const { data: user } = useQuery({ ...getCurrentUserOptions(), retry: false, staleTime: 30_000 });
+	const { data: user } = useQuery(currentUserQueryOptions());
 	const expiresAtSec = user?.accessTokenExpiresAt ?? undefined;
 	const isAuthenticated = Boolean(user);
 

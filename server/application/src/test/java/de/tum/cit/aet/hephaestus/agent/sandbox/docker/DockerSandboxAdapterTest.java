@@ -188,7 +188,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             Map<String, String> env = captor.getValue().environment();
             // No per-provider path segment — the connection is identified from the authenticated token, not the URL.
             assertThat(env).containsEntry("LLM_PROXY_URL", "http://172.18.0.2:8081/internal/llm");
-            assertThat(env).containsEntry("GATEWAY_URL", "http://172.18.0.2:8081");
+            assertThat(env).doesNotContainKey("GATEWAY_URL");
             assertThat(env).containsEntry("LLM_PROXY_TOKEN", "token-123");
         }
 

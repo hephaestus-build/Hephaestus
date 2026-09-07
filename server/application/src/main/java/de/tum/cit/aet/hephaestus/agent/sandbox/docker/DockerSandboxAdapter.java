@@ -348,17 +348,14 @@ public class DockerSandboxAdapter implements SandboxManager {
         env.put("GIT_ATTR_NOSYSTEM", "1");
 
         if (spec.networkPolicy() != null) {
-            String gatewayUrl = appServerIp != null ? "http://" + appServerIp + ":" + gatewayPort : null;
-            if (gatewayUrl != null) {
-                env.put("GATEWAY_URL", gatewayUrl);
-            }
+            String gatewayUrl = "http://" + appServerIp + ":" + gatewayPort;
             if (spec.networkPolicy().llmProxyUrl() != null) {
                 String proxyUrl = spec.networkPolicy().llmProxyUrl();
-                if (proxyUrl.contains(PROXY_URL_PLACEHOLDER) && appServerIp != null) {
+                if (proxyUrl.contains(PROXY_URL_PLACEHOLDER)) {
                     proxyUrl = proxyUrl.replace(PROXY_URL_PLACEHOLDER, appServerIp);
                 }
                 env.put("LLM_PROXY_URL", proxyUrl);
-            } else if (gatewayUrl != null) {
+            } else {
                 // One route for every provider: the proxy identifies the connection from the
                 // authenticated job token, not the URL.
                 env.put("LLM_PROXY_URL", gatewayUrl + "/internal/llm");

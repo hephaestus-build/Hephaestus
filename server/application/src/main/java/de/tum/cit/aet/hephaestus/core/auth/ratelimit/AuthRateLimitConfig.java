@@ -33,10 +33,12 @@ import tools.jackson.databind.ObjectMapper;
  * (otherwise context startup fails on the unsatisfied {@code DataSource} dependency).
  *
  * <p><strong>Trade-off / fallback:</strong> when {@code postgres-backed=false} (the {@code specs}
- * profile, worker-only pods, the H2 test context, and any DataSource-less boot set it),
+ * profile, the H2 test context, and any DataSource-less server boot set it),
  * an in-JVM {@code ConcurrentHashMap}-backed resolver is used instead. In that mode the limits are
- * <strong>per-replica</strong>: N replicas allow up to N× the configured rate cluster-wide. This is
- * acceptable for those non-production contexts but would be a regression in a multi-replica
+ * <strong>per-replica</strong>: N replicas allow up to N× the configured rate cluster-wide.
+ * Worker-only pods exclude this configuration; their gateway resolver lives in
+ * {@link de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration}. This fallback is
+ * acceptable for non-production server contexts but would be a regression in a multi-replica
  * production deployment — production MUST run Postgres-backed. The active mode is logged at startup.
  */
 @ConditionalOnServerRole
@@ -97,14 +99,14 @@ public class AuthRateLimitConfig {
      * In-JVM fallback. PER-REPLICA limits — see the class Javadoc trade-off. Activated only when
      * {@code postgres-backed=false} (the Postgres beans above require a DataSource and do not back off
      * on their own). Bounded by
-     * {@link #IN_MEMORY_MAX_BUCKETS}: this mode is dev / specs / worker-only and short-lived, so a
+     * {@link #IN_MEMORY_MAX_BUCKETS}: this mode is dev / specs and short-lived, so a
      * coarse clear-on-overflow is sufficient to keep memory bounded without per-entry eviction.
      */
     @Bean
     @ConditionalOnMissingBean(BucketResolver.class)
     BucketResolver inMemoryBucketResolver() {
         log.warn("Auth rate limiting: in-JVM fallback — limits are PER-REPLICA, NOT shared across the "
-                + "cluster. Acceptable for dev / specs / worker-only pods; production must run "
+                + "cluster. Acceptable for dev / specs; production must run "
                 + "Postgres-backed (hephaestus.auth.rate-limit.postgres-backed=true with a DataSource).");
         var store = new ConcurrentHashMap<String, io.github.bucket4j.Bucket>();
         return (key, config) -> {

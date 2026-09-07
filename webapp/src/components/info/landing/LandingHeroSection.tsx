@@ -21,8 +21,6 @@ import styles from "./LandingVisuals.module.css";
 
 interface LandingHeroSectionProps {
 	onSignIn: (idpHint: string) => void;
-	onGoToDashboard?: () => void;
-	isSignedIn: boolean;
 }
 
 const itemVariants = {
@@ -204,11 +202,7 @@ export function HeroScene() {
 	);
 }
 
-export function LandingHeroSection({
-	onSignIn,
-	onGoToDashboard,
-	isSignedIn,
-}: LandingHeroSectionProps) {
+export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 	const reduceMotion = useReducedMotion();
 	return (
 		<section
@@ -266,9 +260,7 @@ export function LandingHeroSection({
 						className="relative z-10 mt-8 flex w-full flex-col items-center gap-3 sm:w-auto sm:flex-row"
 					>
 						<LandingSignInCta
-							isSignedIn={isSignedIn}
 							onSignIn={onSignIn}
-							onGoToDashboard={onGoToDashboard}
 							size="lg"
 							className="h-11 w-full px-5 shadow-lg shadow-primary/10 sm:w-auto"
 						/>

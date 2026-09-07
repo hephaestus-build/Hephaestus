@@ -239,10 +239,6 @@ public class Connection {
         this.config = config;
     }
 
-    void setCredentialsEncrypted(byte @Nullable [] credentialsEncrypted) {
-        this.credentialsEncrypted = credentialsEncrypted;
-    }
-
     /** Encrypts or clears this connection's credentials. */
     public void setCredentials(@Nullable CredentialBundle bundle, CredentialBundleConverter converter) {
         if (bundle == null) {

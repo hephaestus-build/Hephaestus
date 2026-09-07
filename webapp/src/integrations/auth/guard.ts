@@ -6,6 +6,7 @@ import {
 	getCurrentUserOptions,
 } from "@/api/@tanstack/react-query.gen";
 import type { CurrentUserView, WorkspaceMembership } from "@/api/types.gen";
+import { QUERY_STALE_TIME_MS } from "@/integrations/tanstack-query/query-defaults";
 import { isRecord } from "@/lib/is-record";
 
 /**
@@ -13,7 +14,7 @@ import { isRecord } from "@/lib/is-record";
  * is a definitive "not signed in", not a transient error, so it is never retried.
  */
 export function currentUserQueryOptions() {
-	return { ...getCurrentUserOptions(), retry: false, staleTime: 30_000 };
+	return { ...getCurrentUserOptions(), retry: false, staleTime: QUERY_STALE_TIME_MS };
 }
 
 /**
@@ -66,14 +67,13 @@ function isServerRefusal(error: unknown): boolean {
 }
 
 /**
- * Shared by the route guard and `useWorkspaceAccess` so both read one cache entry on one schedule —
- * the hook's default `staleTime` of 0 would otherwise refetch the moment the guard's fetch landed.
- * `staleTime` is therefore also the bound on how long a role change takes to reach the UI.
+ * Shared by route guards and hooks, including callers with their own QueryClient. The freshness
+ * window bounds how long a role change takes to reach the UI.
  */
 export function workspaceMembershipQueryOptions(workspaceSlug: string) {
 	return {
 		...getCurrentUserMembershipOptions({ path: { workspaceSlug } }),
-		staleTime: 30_000,
+		staleTime: QUERY_STALE_TIME_MS,
 		// Retrying a refusal would stall the redirect of everyone who is legitimately not a member.
 		retry: (failureCount: number, error: unknown) => !isServerRefusal(error) && failureCount < 2,
 	};
