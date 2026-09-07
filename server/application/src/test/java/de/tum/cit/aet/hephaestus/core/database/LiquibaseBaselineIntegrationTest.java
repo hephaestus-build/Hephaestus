@@ -139,12 +139,12 @@ class LiquibaseBaselineIntegrationTest {
                 ORDER BY p.proname, pg_get_function_identity_arguments(p.oid)
                 """);
         assertNativeSchemaEqual(archived, baseline, "triggers", """
-                SELECT pg_get_triggerdef(t.oid) FROM pg_trigger t
+                SELECT t.tgenabled::text || ':' || pg_get_triggerdef(t.oid) FROM pg_trigger t
                 JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace
                 WHERE n.nspname = 'public' AND NOT t.tgisinternal
                 ORDER BY c.relname, t.tgname
                 """);
-        assertNativeExpressionsEqual(archived, baseline, "check and not-null constraints", """
+        assertNativeExpressionsEqual(archived, baseline, "check, not-null and exclusion constraints", """
                 SELECT c.relname || ':' || k.contype::text || ':' ||
                        ARRAY(SELECT a.attname FROM unnest(k.conkey) WITH ORDINALITY AS key(attnum, position)
                              JOIN pg_attribute a ON a.attrelid = k.conrelid AND a.attnum = key.attnum
@@ -152,17 +152,17 @@ class LiquibaseBaselineIntegrationTest {
                        CASE WHEN k.contype = 'n' THEN '' ELSE k.conname END || ':' || pg_get_constraintdef(k.oid)
                 FROM pg_constraint k JOIN pg_class c ON c.oid = k.conrelid
                 JOIN pg_namespace n ON n.oid = c.relnamespace
-                WHERE n.nspname = 'public' AND k.contype IN ('c', 'n')
+                WHERE n.nspname = 'public' AND k.contype IN ('c', 'n', 'x')
                   AND c.relname NOT IN ('databasechangelog', 'databasechangeloglock')
                 ORDER BY c.relname, k.contype, k.conkey, pg_get_constraintdef(k.oid)
                 """);
-        assertNativeExpressionsEqual(archived, baseline, "index expressions and predicates", """
-                SELECT c.relname || ':' || i.relname || ':' ||
+        assertNativeExpressionsEqual(archived, baseline, "index expressions, predicates and usability", """
+                SELECT c.relname || ':' || i.relname || ':' || x.indisvalid::text || ':' || x.indisready::text || ':' ||
                        coalesce(pg_get_expr(x.indexprs, x.indrelid), '') || ':' ||
                        coalesce(pg_get_expr(x.indpred, x.indrelid), '')
                 FROM pg_index x JOIN pg_class i ON i.oid = x.indexrelid
                 JOIN pg_class c ON c.oid = x.indrelid JOIN pg_namespace n ON n.oid = c.relnamespace
-                WHERE n.nspname = 'public' AND (x.indexprs IS NOT NULL OR x.indpred IS NOT NULL)
+                WHERE n.nspname = 'public' AND c.relname NOT IN ('databasechangelog', 'databasechangeloglock')
                 ORDER BY c.relname, i.relname
                 """);
         assertNativeSchemaEqual(archived, baseline, "partition parents", """

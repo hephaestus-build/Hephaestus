@@ -177,6 +177,11 @@ jobs:
             exit 1
           fi
 
+      - uses: ./.github/actions/setup-toolchain
+        if: always()
+        with:
+          install: "frozen"
+
       - name: Resolve released-chain baseline
         id: baseline
         continue-on-error: true

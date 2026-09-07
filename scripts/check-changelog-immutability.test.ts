@@ -11,13 +11,15 @@ const baseline = "0000000000000_baseline_v0_77_4.xml";
 const include = (file: string): string =>
 	`<include file="./changelog/${file}" relativeToChangelogFile="true"/>`;
 
+const xml = (content: string): string => `<databaseChangeLog>${content}</databaseChangeLog>`;
+
 function original(): ChangelogSnapshot {
 	return {
 		blobs: new Map([
 			[master, releasedMasterBlob],
 			[`${directory}old.xml`, "old-blob"],
 		]),
-		master: include("old.xml"),
+		master: xml(include("old.xml")),
 	};
 }
 
@@ -30,7 +32,7 @@ function squashed(): ChangelogSnapshot {
 			[`${directory}${baseline}`, "baseline-blob"],
 			[`${directory}baseline.sql`, "sql-blob"],
 		]),
-		master: include(baseline),
+		master: xml(include(baseline)),
 	};
 }
 
@@ -46,7 +48,7 @@ void test("accepts unchanged history and appended migrations", () => {
 	assert.deepEqual(
 		violations(squashed(), {
 			...squashed(),
-			master: `${include(baseline)}\n${include("next.xml")}`,
+			master: xml(`${include(baseline)}\n${include("next.xml")}`),
 		}),
 		[],
 	);
@@ -69,12 +71,12 @@ void test("rejects incomplete retirement and unapproved replacement includes", (
 		violations(original(), changed(squashed(), `${directory}old.xml`, "old-blob")),
 		[],
 	);
-	for (const xml of [
+	for (const content of [
 		include("different.xml"),
 		`${include(baseline)}${include("next.xml")}`,
 		`${include(baseline)}<includeAll path="extra"/>`,
 	])
-		assert.notDeepEqual(violations(original(), { ...squashed(), master: xml }), []);
+		assert.notDeepEqual(violations(original(), { ...squashed(), master: xml(content) }), []);
 });
 
 void test("rejects ordinary edits, deletion, and reordering of released migrations", () => {
@@ -86,7 +88,7 @@ void test("rejects ordinary edits, deletion, and reordering of released migratio
 	assert.notDeepEqual(
 		violations(original(), {
 			...original(),
-			master: `${include("next.xml")}${include("old.xml")}`,
+			master: xml(`${include("next.xml")}${include("old.xml")}`),
 		}),
 		[],
 	);
@@ -102,4 +104,30 @@ void test("protects the baseline SQL, XML, and archive after the transition", ()
 		assert.notDeepEqual(violations(squashed(), changed(squashed(), path, "modified")), []);
 		assert.notDeepEqual(violations(squashed(), changed(squashed(), path)), []);
 	}
+});
+
+void test("commenting out an include cannot retire migrations or remove the baseline", () => {
+	const commented = { ...squashed(), master: xml(`<!-- ${include(baseline)} -->`) };
+	assert.notDeepEqual(violations(original(), commented), []);
+	assert.notDeepEqual(violations(squashed(), commented), []);
+});
+
+void test("include attributes remain immutable but their XML ordering is irrelevant", () => {
+	for (const attribute of ['contextFilter="dev"', 'ignore="true"', 'labels="skip"']) {
+		const altered = xml(include(baseline).replace("/>", ` ${attribute}/>`));
+		assert.notDeepEqual(violations(squashed(), { ...squashed(), master: altered }), []);
+		assert.notDeepEqual(violations(original(), { ...squashed(), master: altered }), []);
+	}
+	assert.deepEqual(
+		violations(squashed(), {
+			...squashed(),
+			master: xml(`<include relativeToChangelogFile="true" file="./changelog/${baseline}"/>`),
+		}),
+		[],
+	);
+});
+
+void test("malformed XML and the wrong root fail closed", () => {
+	for (const content of ["<databaseChangeLog>", "<other/>"])
+		assert.notDeepEqual(violations(squashed(), { ...squashed(), master: content }), []);
 });

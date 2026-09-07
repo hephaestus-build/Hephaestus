@@ -16,22 +16,23 @@ holds bounded evidence copies that may become irreproducible after upstream cont
 | `.env` | `/opt/hephaestus/docker/self-host/.env` | **Equal priority.** Its encryption keys protect values inside the database backup. Without them, provider credentials and signing material are unreadable. |
 | TLS certificates | `./letsencrypt/` | Optional — Let's Encrypt re-issues on first boot (rate limits permitting). |
 | Context Fabric | `git-repos` volume | Back up when replayable evidence is required. Skipping it discards repository clones and bounded replay/CAS content; durable job provenance remains in PostgreSQL, but the exact source bytes may be unrecoverable. |
-| NATS JetStream | `nats-data` volume | Skip — a transient event buffer, not a source of truth. |
+| NATS JetStream | `nats-data` volume | Pending events; preserve for reconciliation with the restored database. |
 
 ## Backup
 
-Logical dump while everything runs (safe — Postgres MVCC gives a consistent snapshot):
+PostgreSQL MVCC gives a consistent database snapshot while the application runs. Do not deploy or
+rotate encryption keys until the database, configuration and release lock have all been captured:
 
 ```bash
 (
-set -eu
+set -euC
 umask 077
 cd /opt/hephaestus/docker/self-host
 dc() { docker compose --env-file .env --env-file release-lock.env "$@"; }
-backup="hephaestus-$(date +%F)"
+backup="hephaestus-$(date -u +%Y%m%dT%H%M%SZ)"
 dc exec -T postgres pg_dump -U root -Fc hephaestus > "$backup.dump"
-cp .env "$backup.env"
-cp release-lock.env "$backup.release-lock.env"
+cat .env > "$backup.env"
+cat release-lock.env > "$backup.release-lock.env"
 )
 ```
 
@@ -40,22 +41,23 @@ Ship all three files **off the host**, encrypted. Cron it daily; test-restore it
 ## Restore
 
 On a fresh host, complete install steps 1–2 first, restoring the saved `release-lock.env` and `.env` (same
-`POSTGRES_PASSWORD` and both `HEPHAESTUS_SECURITY_*ENCRYPTION_KEY` values). Then:
+`POSTGRES_PASSWORD` and both `HEPHAESTUS_SECURITY_*ENCRYPTION_KEY` values). Replace
+`hephaestus-TIMESTAMP.dump` below with the timestamped dump from that backup:
 
 ```bash
 (
 set -eu
 cd /opt/hephaestus/docker/self-host
 dc() { docker compose --env-file .env --env-file release-lock.env "$@"; }
-dc up -d postgres
+dc up -d --wait postgres
 dc stop application-server webhook-server
 
-test -s hephaestus-YYYY-MM-DD.dump
-dc exec -T postgres pg_restore --list < hephaestus-YYYY-MM-DD.dump >/dev/null
+test -s hephaestus-TIMESTAMP.dump
+dc exec -T postgres pg_restore --list < hephaestus-TIMESTAMP.dump >/dev/null
 dc exec -T postgres dropdb -U root --if-exists hephaestus
 dc exec -T postgres createdb -U root hephaestus
 dc exec -T postgres pg_restore -U root -d hephaestus --no-owner --no-acl --single-transaction \
-  < hephaestus-YYYY-MM-DD.dump
+  < hephaestus-TIMESTAMP.dump
 
 dc up -d --wait
 )
@@ -74,13 +76,12 @@ volume; `pg_restore --list` checks the archive contents, not recoverability.
 
 ## After a point-in-time restore
 
-- **Sessions:** users signed in after the backup was taken must sign in again. If the
-  restored `jwt_signing_key` table is unusable, truncate it and restart — a fresh key is
-  auto-seeded and everyone re-logs-in. No data loss beyond sessions.
-- **NATS JetStream:** the stream on `nats-data` may hold events the restored database has
-  already processed (or never saw). Webhook ingest deduplicates by delivery id and
-  idempotency keys, so replays are absorbed on ingest. The conservative option after a restore
-  from an old backup: `dc down`, `docker volume rm <project>_nats-data` (replace `<project>`
-  with the Compose project name), `dc up -d` — events in the gap are re-fetched by the
-  scheduled sync.
+- **Sessions and credentials:** users signed in after the backup was taken must sign in again.
+  If restored signing keys cannot be read, verify the matching encryption configuration rather than
+  deleting the keys. Review access revocations and credential rotations made after the recovery point
+  before reopening access.
+- **NATS JetStream:** preserve the queue while reconciling it with the restored database. Its
+  events may already have been processed or may fall after the backup's recovery point. Do not
+  delete `nats-data` as a routine recovery step. Provider sync may recover current state, but cannot
+  guarantee recovery of every event or content that has since changed or been deleted.
 - **Restore into an older app version:** don't. Restore with the same signed release lock the backup was taken from, then upgrade.

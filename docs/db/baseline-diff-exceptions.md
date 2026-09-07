@@ -5,8 +5,9 @@ The v0.77.4 baseline describes the application-managed schema. Its reference is 
 Liquibase diff for tables, columns, keys, indexes, sequences and views in both `dev` and `prod`.
 There are no accepted structural differences between those two initialization paths.
 
-Native PostgreSQL comparisons additionally cover functions, triggers, check/not-null constraints,
-index expressions and predicates, and partition keys. They disregard only these representation details:
+Native PostgreSQL comparisons additionally cover functions, trigger definitions and enabled states,
+check/not-null/exclusion constraints, index expressions, predicates, validity and readiness, and partition
+keys. They disregard only these representation details:
 
 - **Database names:** isolated test databases have different catalog names.
 - **Not-null constraint names and physical column numbers:** historical renames and dropped columns

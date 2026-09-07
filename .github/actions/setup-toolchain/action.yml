@@ -2,7 +2,7 @@ name: "Setup toolchain"
 description: "The Node.js version package.json pins and, for a frozen install, its pnpm and Vite+ pins with the pnpm executable and the pnpm store cached; install is none or frozen."
 inputs:
   install:
-    description: "none: the Node.js runtime alone, for a job that runs node scripts/… or shell; frozen: pnpm and Vite+ as well, then pnpm install --frozen-lockfile --ignore-scripts. No lifecycle script runs in CI, so pnpm-workspace.yaml#allowBuilds is exercised only by a contributor's install."
+    description: "none: the Node.js runtime alone, for dependency-free Node scripts or shell; frozen: pnpm and Vite+ as well, then pnpm install --frozen-lockfile --ignore-scripts. No lifecycle script runs in CI, so pnpm-workspace.yaml#allowBuilds is exercised only by a contributor's install."
     required: false
     default: "none"
 runs:
