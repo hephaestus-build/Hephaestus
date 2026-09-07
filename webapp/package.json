@@ -94,7 +94,7 @@
 		"@vitest/browser": "catalog:",
 		"@vitest/browser-playwright": "catalog:",
 		"@vitest/coverage-v8": "catalog:",
-		"chromatic": "16.10.1",
+		"chromatic": "18.7.2",
 		"jsdom": "29.1.1",
 		"msw": "2.14.6",
 		"msw-storybook-addon": "2.0.7",
