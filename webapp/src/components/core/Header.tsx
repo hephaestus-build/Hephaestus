@@ -2,7 +2,6 @@ import { TagIcon } from "@primer/octicons-react";
 import { Link } from "@tanstack/react-router";
 import { LogOut, Settings, User } from "lucide-react";
 
-import { SignInButtons } from "@/components/auth/SignInButtons";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { ModeToggle } from "@/components/core/ModeToggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -41,7 +40,7 @@ export interface HeaderProps {
 	avatarUrl?: string;
 	workspaceSlug?: string;
 	feedbackDialog?: React.ReactNode;
-	onLogin: (idpHint?: string) => void;
+	onLogin: () => void;
 	onLogout: () => void;
 }
 
@@ -137,7 +136,9 @@ export default function Header({
 				<ModeToggle />
 				<div className="flex items-center gap-2">
 					{!isAuthenticated ? (
-						<SignInButtons onSignIn={onLogin} disabled={isLoading} header />
+						<Button variant="outline" onClick={onLogin} disabled={isLoading}>
+							Sign in
+						</Button>
 					) : (
 						<div className="flex items-center gap-2">
 							<DropdownMenu>

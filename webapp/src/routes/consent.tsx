@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import {
 	completeFirstLoginConsentMutation,
 	getConsentStatusOptions,
 	getConsentStatusQueryKey,
 } from "@/api/@tanstack/react-query.gen";
-import { ConsentDialog } from "@/components/auth/ConsentDialog";
+import { ConsentDialog, type ConsentSubmission } from "@/components/auth/ConsentDialog";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { resolveCurrentUser, safeReturnTo } from "@/integrations/auth/guard";
 
@@ -14,14 +15,6 @@ interface ConsentSearch {
 	returnTo?: string;
 }
 
-/**
- * The transparency notice.
- *
- * It is a route because only aborting the match stops the pages below from loading, and they fetch
- * from endpoints the server refuses until the notice is answered — suppressing what renders would
- * leave those requests running. The routes that send a reader here mask the address bar to the page
- * they asked for, so what a reader sees is that page interrupted, not a trip somewhere else.
- */
 export const Route = createFileRoute("/consent")({
 	staticData: { surface: "auth" },
 	validateSearch: (search): ConsentSearch => ({
@@ -31,8 +24,11 @@ export const Route = createFileRoute("/consent")({
 		const user = await resolveCurrentUser(context.queryClient);
 		if (!user)
 			throw redirect({ to: "/login", search: { returnTo: safeReturnTo(search.returnTo) } });
-		const consent = await context.queryClient.query(getConsentStatusOptions({}));
-		if (consent.completed) throw redirect({ href: safeReturnTo(search.returnTo) });
+		// The dialog owns retry and sign-out on failure; a loader error would bypass both.
+		const consent = await context.queryClient
+			.query(getConsentStatusOptions({}))
+			.catch(() => undefined);
+		if (consent?.completed) throw redirect({ href: safeReturnTo(search.returnTo) });
 	},
 	component: ConsentPage,
 });
@@ -45,20 +41,42 @@ function ConsentPage() {
 	const { data, isError, refetch } = useQuery(getConsentStatusOptions({}));
 	const mutation = useMutation({
 		...completeFirstLoginConsentMutation(),
+		onError: () => {
+			// A notice may have changed while it was open. Refresh it without retrying a consent write.
+			void queryClient.invalidateQueries({ queryKey: getConsentStatusQueryKey({}) });
+		},
 		onSuccess: (status) => {
 			queryClient.setQueryData(getConsentStatusQueryKey({}), status);
-			void navigate({ href: safeReturnTo(returnTo), replace: true });
 		},
 	});
 
+	useEffect(() => {
+		if (data?.completed) void navigate({ href: safeReturnTo(returnTo), replace: true });
+	}, [data?.completed, navigate, returnTo]);
+
+	if (isError)
+		return (
+			<ConsentDialog
+				state={{ status: "error", onRetry: () => void refetch() }}
+				onSignOut={() => void logout()}
+			/>
+		);
+	if (!data) return <ConsentDialog state={{ status: "loading" }} onSignOut={() => void logout()} />;
+
+	const submission: ConsentSubmission = mutation.isPending
+		? { status: "saving", participateInResearch: mutation.variables.body.participateInResearch }
+		: mutation.isError && mutation.variables.body.noticeVersion === data.noticeVersion
+			? { status: "error" }
+			: { status: "idle" };
 	return (
 		<ConsentDialog
-			notice={data}
-			failedToLoad={isError}
-			submitting={mutation.isPending}
-			failedToSubmit={mutation.isError}
-			onSubmit={(choice) => mutation.mutate({ body: choice })}
-			onRetry={() => void refetch()}
+			key={data.noticeVersion}
+			state={{
+				status: "ready",
+				notice: data,
+				submission,
+				onSubmit: (choice) => mutation.mutate({ body: choice }),
+			}}
 			onSignOut={() => void logout()}
 		/>
 	);

@@ -113,7 +113,8 @@ export async function consentIsPending(queryClient: QueryClient): Promise<boolea
 		const status = await queryClient.query(getConsentStatusOptions({}));
 		return !status.completed;
 	} catch {
-		// An outage must not invent a consent obligation; the server still enforces the gate.
-		return false;
+		// Fail closed: the consent route this branch adds offers retry and sign-out, so holding the
+		// loader back is recoverable. #2047 returned false here because no such route existed yet.
+		return true;
 	}
 }

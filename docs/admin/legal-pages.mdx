@@ -6,8 +6,9 @@ description: How Hephaestus resolves the /imprint and /privacy pages, and what t
 
 Hephaestus ships with two legal pages, `/imprint` and `/privacy`, that are rendered from Markdown files served directly by nginx. This page explains the three-layer resolution used by the webapp, and what each self-hosted operator is responsible for.
 
-:::danger Serving the built-in disclaimer in production is a legal violation
-If your deployment is reachable to end users and `/imprint` or `/privacy` still show the red "not configured" banner, you are operating without a valid imprint (§ 5 DDG) and without a valid privacy statement (Art. 13 GDPR). Either select `LEGAL_PROFILE=tumaet` (if you are the canonical TUM / AET deployment) or mount your own `/legal-overrides/` directory **before** opening the deployment to users.
+:::danger Configure legal notices before admitting users
+The built-in “not configured” pages are placeholders, not legal notices. Use `LEGAL_PROFILE=tumaet`
+only for the TUM/AET deployment it describes; other operators must supply their own notices.
 :::
 
 ## First-login consent notice
@@ -23,24 +24,24 @@ selection of that version.
 
 ## Operator obligations
 
-Regardless of where you get the source code, **the operator of a running Hephaestus instance is the controller** for the personal data processed by that instance within the meaning of Art. 4(7) GDPR, and the **content provider** within the meaning of § 5 DDG (Digitale-Dienste-Gesetz). Neither obligation can be satisfied by linking to the upstream `hephaestus.build` pages, and neither obligation can be delegated to the Hephaestus project.
+Identify the organisation responsible for your deployment and its processing purposes. Under
+[Art. 4(7) GDPR](https://eur-lex.europa.eu/eli/reg/2016/679/oj), the controller is the party that determines
+the purposes and means of processing; using Hephaestus does not make the upstream project your controller.
 
-Practically, every running deployment must publish:
-
-1. an **imprint** that directly identifies the operator (§ 5 DDG — name, postal address, phone, email, VAT ID if applicable, authorised representative, regulatory authority); and
-2. a **privacy statement** compliant with Art. 13 and Art. 14 GDPR covering at least authentication, repository synchronisation, server logs, error telemetry, and any optional features (LLM / Slack) that the deployment has enabled.
-
-The only situation in which it is safe to operate without configuring one of these is a strictly-internal, zero-data, local-development deployment.
+Publish a privacy notice covering the information required by Arts. 13 and 14 GDPR, including data about
+contributors who never sign in. Publish the operator identification required in your jurisdiction;
+[§ 5 DDG](https://www.gesetze-im-internet.de/ddg/__5.html) applies to qualifying German digital services.
+Linking to the upstream notices does not describe a separately operated deployment.
 
 ## Three-layer resolution
 
 At page load, the webapp fetches the relevant Markdown file in this priority order — first hit wins:
 
-| Priority | Path                                              | Typical source                         |
-| -------: | ------------------------------------------------- | -------------------------------------- |
-|       1. | `/legal-overrides/<page>.md`                      | Bind-mounted by the operator           |
-|       2. | `/legal/profiles/<LEGAL_PROFILE>/<page>.md`       | Baked into the image (bundled profile) |
-|       3. | `/legal/_disclaimer/<page>.md`                    | Shipped safety-fallback                |
+| Priority | Path                                        | Typical source                         |
+| -------: | ------------------------------------------- | -------------------------------------- |
+|       1. | `/legal-overrides/<page>.md`                | Bind-mounted by the operator           |
+|       2. | `/legal/profiles/<LEGAL_PROFILE>/<page>.md` | Baked into the image (bundled profile) |
+|       3. | `/legal/_disclaimer/<page>.md`              | Shipped safety-fallback                |
 
 `<page>` is `imprint` or `privacy`. A banner alerts end users whenever the disclaimer is being served.
 
@@ -48,7 +49,7 @@ At page load, the webapp fetches the relevant Markdown file in this priority ord
 
 ### Mode A — Bundled profile (operators of `hephaestus.build`)
 
-If your deployment is the canonical TUM / AET deployment, set `LEGAL_PROFILE=tumaet` in your environment. No other configuration is needed — the `tumaet` profile is baked into the webapp image and contains the audited texts matching the [DSMS record](./dsms) on file at TUM.
+If your deployment is the canonical TUM / AET deployment, set `LEGAL_PROFILE=tumaet` in your environment. The bundled texts describe the deployment documented in the [data-protection records](./dsms). Verify that your enabled services and processing still match those records.
 
 ```env
 LEGAL_PROFILE=tumaet
@@ -62,41 +63,39 @@ This is the recommended mode for self-hosters. You author two Markdown files and
 
 1. Create a directory next to your Compose file:
 
-    ```text
-    legal-overrides/
-    ├── imprint.md
-    └── privacy.md
-    ```
+   ```text
+   legal-overrides/
+   ├── imprint.md
+   └── privacy.md
+   ```
 
 2. Mount the directory read-only into the webapp container at `/usr/share/nginx/html/legal-overrides`:
 
-    ```yaml
-    services:
-      webapp:
-        environment:
-          LEGAL_PROFILE: ""      # leave empty; overrides take priority anyway
-        volumes:
-          - ./legal-overrides:/usr/share/nginx/html/legal-overrides:ro
-    ```
+   ```yaml
+   services:
+     webapp:
+       environment:
+         LEGAL_PROFILE: ""
+       volumes:
+         - ./legal-overrides:/usr/share/nginx/html/legal-overrides:ro
+   ```
 
-    On Kubernetes, project the Markdown files into the same path via a `ConfigMap` volume. The simplest form mounts the whole ConfigMap as the directory:
+   On Kubernetes, project the Markdown files into the same path via a `ConfigMap` volume. The simplest form mounts the whole ConfigMap as the directory:
 
-    ```yaml
-    volumes:
-      - name: legal-overrides
-        configMap:
-          name: hephaestus-legal-overrides   # keys: imprint.md, privacy.md
-    volumeMounts:
-      - name: legal-overrides
-        mountPath: /usr/share/nginx/html/legal-overrides
-        readOnly: true
-    ```
-
-    If you must overlay only a subset of files onto an existing directory, use `items` with `subPath` (or a `projected` volume) — otherwise the ConfigMap mount hides the directory's original contents. A ConfigMap is limited to ~1 MiB in total, comfortably above the size of both pages.
+   ```yaml
+   volumes:
+     - name: legal-overrides
+       configMap:
+         name: hephaestus-legal-overrides
+   volumeMounts:
+     - name: legal-overrides
+       mountPath: /usr/share/nginx/html/legal-overrides
+       readOnly: true
+   ```
 
 3. On Coolify, add `/usr/share/nginx/html/legal-overrides` as a **Bind Mount** (not a Volume) so the files remain editable from the host filesystem. The file paths are checked on each request, so you can update them by editing the files in the mount — no redeploy needed.
 
-Overrides always win, so you can safely combine Mode A with a single-file override (for example, `privacy.md` only) when you are operating a derivative deployment and want to keep the upstream imprint.
+Resolution is per page: a single-file override leaves the other page on the next available layer. Verify both pages identify the correct operator.
 
 ### Mode C — Built-in fallback (developer default, not a production configuration)
 
@@ -110,12 +109,16 @@ Use Art. 13 GDPR as the outline. Hephaestus processes personal data in at least 
 - **Repository synchronisation** — for every configured repository: pull/merge requests, issues, reviews, review comments, commit metadata, profile information of the authors. State the retention triggers: this mirrored copy is erased when the last workspace stops monitoring the source repository, when the workspace's integration is disconnected, or when the workspace is purged — see the erasure triggers in the [record of processing](./dsms/record-of-processing.md).
 - **Account settings and notification email** — user preferences, notification subscriptions, optional self-provided notification email.
 - **AI-assisted features** — if enabled: messages sent to the configured LLM provider, persisted conversations, generated observations.
-- **Server logs** — IP address, request metadata (Art. 6(1)(e) or (f) depending on your legal framing).
+- **Server logs** — IP address and request metadata.
 - **Error telemetry** — if you run a Sentry (or equivalent) instance, state so explicitly and link its retention policy.
 
-For German public universities, the legal basis is typically Art. 6(1)(e) GDPR in conjunction with the applicable state higher-education act; Art. 6(1)(f) is not available for tasks carried out in the performance of a statutory public duty (Art. 6(1) Unterabsatz 2 GDPR). Private operators should use Art. 6(1)(b) GDPR (contract) and, for logging / security, Art. 6(1)(f) GDPR (legitimate interest).
+Determine a lawful basis for each processing purpose with your data-protection adviser; neither
+self-hosting nor accepting terms supplies one automatically. Art. 6(1)(f) GDPR does not apply to public
+authorities processing data in the performance of their tasks.
 
-Third-country transfers, when you enable an external LLM provider (Microsoft Azure OpenAI, OpenAI, or Anthropic), must be covered under Chapter V GDPR. OpenAI and Microsoft are currently DPF-certified; for those providers the primary safeguard is the Commission adequacy decision under Art. 45(3) GDPR in relation to the DPF, with Standard Contractual Clauses under Art. 46(2)(c) GDPR contracted as a fall-back. Anthropic is not on the U.S. Department of Commerce DPF active list and relies on Standard Contractual Clauses Module 2 under Art. 46(2)(c) GDPR alone.
+For international transfers, document the applicable Chapter V safeguard for the actual recipient,
+service and destination. Verify current adequacy decisions, certification scope where relevant, and
+contractual safeguards rather than inferring coverage from a provider's brand.
 
 ## Verifying the configuration
 
@@ -142,3 +145,31 @@ Finally, open `/imprint` and `/privacy` in a browser. If the red "not configured
 ## Changing the texts over time
 
 Markdown files are static resources. Overrides under `/legal-overrides/` are served with `Cache-Control: no-cache, must-revalidate`, so an edit on the host takes effect on the next page load (browsers revalidate every time). The bundled `/legal/` layer is served with `max-age=300`, so edits to a bundled profile require a rebuild and up to five minutes for caches to clear. When you ship a new bundled profile that replaces a previous one, update the text in place under `webapp/public/legal/profiles/<profile>/` and rebuild the image; there is no extra registry to maintain.
+
+## Sign-in and research participation
+
+The public `/privacy` page and the archived onboarding notice are separate. **Editing a Markdown
+privacy override does not change the archived notice or research invitation**, which name TUM/AET.
+A different controller or study requires a matching onboarding notice and invitation before enrollment.
+
+Onboarding records terms acceptance, privacy-notice acknowledgement and the separate research choice
+against the archived notice version. Advancing to the research question records nothing; submitting
+either research choice completes setup. Account settings record later research decisions. See
+[the user guide](/user/privacy#signing-in-and-choosing-research-participation) for the participant flow.
+
+Before using data for research:
+
+- Obtain the required institutional and ethics review. Specify purposes, data categories, recipients,
+  retention and withdrawal handling in participant information; pseudonymised data remains personal data.
+- Keep refusal and withdrawal free of consequences for access, assessment, employment or service quality.
+  Address supervisor–student and employer–employee power imbalances.
+- Preserve the information participants saw. Obtain renewed consent before processing for a new purpose
+  outside the existing consent; updating `/privacy` alone does not renew consent.
+- Verify that every research export and analysis honours the current decision, including withdrawals.
+  The onboarding record alone does not establish enforcement in downstream tools or existing datasets.
+- Assess experiments and additional data collection against the approved protocol and consent scope;
+  a general participation choice is not blanket permission for altered feedback or indefinite reuse.
+
+The [EDPB consent guidelines](https://www.edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-052020-consent-under-regulation-2016679_en)
+cover freely given, specific, informed consent, withdrawal and scientific research. Recruitment rate is
+not a substitute for participant understanding or voluntary choice.

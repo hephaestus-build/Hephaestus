@@ -25,19 +25,18 @@ function showNotice(onComplete: (body: FirstLoginConsent) => void) {
 }
 
 describe("first-login consent route", () => {
-	it("records refusal when the optional choice remains unchecked", async () => {
+	it("records an explicit research refusal and resumes the requested page", async () => {
 		let submitted: FirstLoginConsent | undefined;
 		showNotice((body) => {
 			submitted = body;
 		});
-		renderRouteAtWithRouter("/consent");
+		const { router } = renderRouteAtWithRouter("/consent?returnTo=%2Fabout");
 
 		await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
-		const continueButton = screen.getByRole("button", { name: "Continue" });
-		expect(continueButton.hasAttribute("disabled")).toBe(true);
 
 		await userEvent.click(screen.getByRole("checkbox", { name: /terms of use/i }));
-		fireEvent.click(continueButton);
+		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+		fireEvent.click(screen.getByRole("button", { name: "Continue without research" }));
 
 		await waitFor(() =>
 			expect(submitted).toStrictEqual({
@@ -46,6 +45,7 @@ describe("first-login consent route", () => {
 				termsAccepted: true,
 			}),
 		);
+		await waitFor(() => expect(router.state.location.pathname).toBe("/about"));
 	});
 
 	it("records an affirmative research choice", async () => {
@@ -57,8 +57,8 @@ describe("first-login consent route", () => {
 
 		await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
 		await userEvent.click(screen.getByRole("checkbox", { name: /terms of use/i }));
-		await userEvent.click(screen.getByRole("checkbox", { name: /research/i }));
 		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+		fireEvent.click(screen.getByRole("button", { name: "Yes, I'll take part" }));
 
 		await waitFor(() =>
 			expect(submitted).toStrictEqual({
@@ -67,5 +67,74 @@ describe("first-login consent route", () => {
 				termsAccepted: true,
 			}),
 		);
+	});
+});
+
+describe("consent recovery", () => {
+	it("offers retry after a failed notice fetch without loading protected data", async () => {
+		let protectedReads = 0;
+		server.use(
+			http.get("*/user/consent", () => new HttpResponse(null, { status: 503 })),
+			http.get("*/workspaces", () => {
+				protectedReads += 1;
+				return HttpResponse.json([]);
+			}),
+		);
+		renderRouteAtWithRouter("/");
+		await screen.findByRole("alert", undefined, ROUTE_RENDER_WAIT);
+		expect(protectedReads).toBe(0);
+		server.use(http.get("*/user/consent", () => HttpResponse.json(notice)));
+		await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+		await screen.findByRole("checkbox", { name: /terms of use/i });
+		expect(screen.queryByRole("alert")).toBeNull();
+	});
+
+	it("returns to the intended destination when retry discovers onboarding was already completed", async () => {
+		server.use(http.get("*/user/consent", () => new HttpResponse(null, { status: 503 })));
+		const { router } = renderRouteAtWithRouter("/consent?returnTo=%2Fabout");
+		await screen.findByRole("alert", undefined, ROUTE_RENDER_WAIT);
+		server.use(http.get("*/user/consent", () => HttpResponse.json({ ...notice, completed: true })));
+		await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+		await waitFor(() => expect(router.state.location.pathname).toBe("/about"));
+	});
+
+	it("keeps the research choice available after a failed save", async () => {
+		server.use(
+			http.get("*/user/consent", () => HttpResponse.json(notice)),
+			http.put("*/user/consent", () => new HttpResponse(null, { status: 503 })),
+		);
+		renderRouteAtWithRouter("/consent");
+		await userEvent.click(
+			await screen.findByRole("checkbox", { name: /terms of use/i }, ROUTE_RENDER_WAIT),
+		);
+		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+		fireEvent.click(screen.getByRole("button", { name: "Continue without research" }));
+		await screen.findByRole("alert");
+		expect(
+			screen.getByRole<HTMLButtonElement>("button", { name: "Yes, I'll take part" }).disabled,
+		).toBe(false);
+		expect(
+			screen.getByRole<HTMLButtonElement>("button", { name: "Continue without research" }).disabled,
+		).toBe(false);
+	});
+
+	it("requires fresh acceptance when a rejected save reveals a new notice version", async () => {
+		let version = notice.noticeVersion;
+		server.use(
+			http.get("*/user/consent", () => HttpResponse.json({ ...notice, noticeVersion: version })),
+			http.put("*/user/consent", () => {
+				version = "next-notice";
+				return new HttpResponse(null, { status: 409 });
+			}),
+		);
+		renderRouteAtWithRouter("/consent");
+		await userEvent.click(
+			await screen.findByRole("checkbox", { name: /terms of use/i }, ROUTE_RENDER_WAIT),
+		);
+		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+		fireEvent.click(screen.getByRole("button", { name: "Yes, I'll take part" }));
+		await screen.findByRole("checkbox", { name: /terms of use/i });
+		expect(screen.getByRole<HTMLButtonElement>("button", { name: "Continue" }).disabled).toBe(true);
+		expect(screen.queryByRole("alert")).toBeNull();
 	});
 });

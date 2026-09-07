@@ -44,8 +44,17 @@ export function ResearchParticipationSection({
 						</FieldLabel>
 						<FieldDescription>
 							When enabled, AET may use your Hephaestus usage and feedback interactions for the
-							academic research described in the privacy notice and may invite you to occasional
-							surveys. Turn this off to withdraw consent and stop new research processing.
+							academic research described in the{" "}
+							<a
+								href="/privacy"
+								target="_blank"
+								rel="noreferrer"
+								className="underline underline-offset-4"
+							>
+								privacy notice (opens in a new tab)
+							</a>{" "}
+							and may invite you to occasional surveys. Turn this off to withdraw consent and stop
+							new research processing.
 						</FieldDescription>
 					</FieldContent>
 					<Switch

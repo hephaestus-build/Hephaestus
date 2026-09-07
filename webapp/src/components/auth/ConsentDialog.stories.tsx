@@ -1,101 +1,162 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent, within } from "storybook/test";
+import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
-import { ConsentDialog } from "./ConsentDialog";
+import { Stateful } from "@/stories/stateful";
+import { expectGenuinelyDisabled } from "@/test/controls";
+
+import { ConsentDialog, type ConsentDialogProps, type ConsentSubmission } from "./ConsentDialog";
 
 const notice = {
 	completed: false,
-	noticeVersion: "2026-09-01",
+	noticeVersion: "2026-08-30",
 	participateInResearch: false,
 	noticeText: [
-		"Hephaestus reads the work you already do in GitHub, GitLab, Slack and Outline, and reviews it against the practices your team has chosen.",
-		"It stores the work it reviewed, the observations it recorded, and the feedback it wrote for you. Nobody outside your workspace sees any of it.",
-		"You can export or delete everything from your settings at any time.",
+		"Hephaestus is operated by the Technical University of Munich (TUM), Research Group for Applied Education Technologies (AET).",
+		"Hephaestus analyzes your GitHub, GitLab, Slack and Outline activity against your team's engineering practices to provide practice feedback. Platform operation uses the public-task basis described in the privacy notice; accepting the terms is not consent to research.",
+		"Terms of use: use Hephaestus lawfully and only for workspaces and data you are authorized to access. Feedback is advisory, may be inaccurate, and must not be used as the sole basis for grading, employment, or access decisions.",
+		"You may access, rectify or erase your data, restrict or object to processing, complain to a supervisory authority, and withdraw any research consent at any time without affecting your use of Hephaestus. Read the full privacy notice for recipients, retention periods and contact details.",
+		"Separately, you may choose to let AET use your Hephaestus usage and feedback data for academic research and invite you to occasional surveys. This is optional, starts only if you opt in, and declining has no effect on the service.",
 	].join("\n\n"),
 };
-
+const onSubmit = fn();
+const onRetry = fn();
+const ready = {
+	status: "ready",
+	notice,
+	submission: { status: "idle" },
+	onSubmit,
+} satisfies ConsentDialogProps["state"];
 const meta = {
 	component: ConsentDialog,
-	args: { notice, onSubmit: fn(), onSignOut: fn(), onRetry: fn() },
+	args: { state: ready, onSignOut: fn() },
 	parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof ConsentDialog>;
-
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
+async function openResearch() {
+	const dialog = within(await screen.findByRole("dialog"));
+	await userEvent.click(dialog.getByRole("checkbox", { name: /terms of use/i }));
+	await userEvent.click(dialog.getByRole("button", { name: "Continue" }));
+	return dialog;
+}
 
-/** Nothing can be submitted until the required acceptance is given. */
-export const RequiresAcceptance: Story = {
-	play: async ({ args }) => {
+function AfterSubmission(args: ConsentDialogProps) {
+	const { state } = args;
+	if (state.status !== "ready") return <ConsentDialog {...args} />;
+	return (
+		<Stateful<ConsentSubmission> initial={{ status: "idle" }}>
+			{(submission, setSubmission) => (
+				<ConsentDialog
+					{...args}
+					state={{
+						...state,
+						submission,
+						onSubmit: (choice) => {
+							state.onSubmit(choice);
+							setSubmission(state.submission);
+						},
+					}}
+				/>
+			)}
+		</Stateful>
+	);
+}
+
+export const Default: Story = {
+	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		const submit = dialog.getByRole("button", { name: "Continue" });
-		await expect(submit).toBeDisabled();
-
-		await userEvent.click(dialog.getByRole("checkbox", { name: /terms of use/i }));
-		await expect(submit).toBeEnabled();
-		await userEvent.click(submit);
-		await expect(args.onSubmit).toHaveBeenCalledWith({
-			noticeVersion: "2026-09-01",
+		await waitFor(() =>
+			expect(dialog.getByRole("heading", { name: "How Hephaestus uses your data" })).toHaveFocus(),
+		);
+		await expectGenuinelyDisabled(dialog.getByRole("button", { name: "Continue" }));
+		await openResearch();
+		await expect(onSubmit).not.toHaveBeenCalled();
+		await expect(
+			dialog.getByRole("heading", { name: "Help shape better feedback for developers" }),
+		).toHaveFocus();
+	},
+};
+export const ResearchInvitation: Story = {
+	play: async () => {
+		const dialog = await openResearch();
+		await userEvent.click(dialog.getByRole("button", { name: "Yes, I'll take part" }));
+		await expect(onSubmit).toHaveBeenCalledWith({
+			noticeVersion: "2026-08-30",
+			termsAccepted: true,
+			participateInResearch: true,
+		});
+	},
+};
+export const ContinueWithoutResearch: Story = {
+	play: async () => {
+		const dialog = await openResearch();
+		await userEvent.click(dialog.getByRole("button", { name: "Continue without research" }));
+		await expect(onSubmit).toHaveBeenCalledWith({
+			noticeVersion: "2026-08-30",
 			termsAccepted: true,
 			participateInResearch: false,
 		});
 	},
 };
-
-/** The optional choice is off until it is chosen, and never gates the button. */
-export const ResearchIsOptional: Story = {
-	play: async ({ args }) => {
-		const dialog = within(await screen.findByRole("dialog"));
-		await expect(dialog.getByRole("checkbox", { name: /research/i })).not.toBeChecked();
-
-		await userEvent.click(dialog.getByRole("checkbox", { name: /terms of use/i }));
-		await userEvent.click(dialog.getByRole("checkbox", { name: /research/i }));
-		await userEvent.click(dialog.getByRole("button", { name: "Continue" }));
-		await expect(args.onSubmit).toHaveBeenCalledWith(
+export const RevisitNotice: Story = {
+	play: async () => {
+		const dialog = await openResearch();
+		await userEvent.click(dialog.getByRole("button", { name: "Back to your data" }));
+		await expect(dialog.getByRole("checkbox", { name: /terms of use/i })).toBeChecked();
+		await expect(onSubmit).not.toHaveBeenCalled();
+	},
+};
+export const Submitting: Story = {
+	args: { state: { ...ready, submission: { status: "saving", participateInResearch: true } } },
+	render: (args) => <AfterSubmission {...args} />,
+	play: async () => {
+		const dialog = await openResearch();
+		await userEvent.click(dialog.getByRole("button", { name: "Yes, I'll take part" }));
+		await expect(onSubmit).toHaveBeenCalledWith(
 			expect.objectContaining({ participateInResearch: true }),
+		);
+		await expectGenuinelyDisabled(dialog.getByRole("button", { name: "Saving…" }));
+		await expectGenuinelyDisabled(
+			dialog.getByRole("button", { name: "Continue without research" }),
 		);
 	},
 };
-
-export const Submitting: Story = { args: { submitting: true } };
-
-/** The choice reached the server and was refused; the reader is told and can retry. */
 export const SubmitFailed: Story = {
-	args: { failedToSubmit: true },
+	args: { state: { ...ready, submission: { status: "error" } } },
+	render: (args) => <AfterSubmission {...args} />,
 	play: async () => {
-		const dialog = within(await screen.findByRole("dialog"));
+		const dialog = await openResearch();
+		await userEvent.click(dialog.getByRole("button", { name: "Continue without research" }));
+		await expect(onSubmit).toHaveBeenCalledWith(
+			expect.objectContaining({ participateInResearch: false }),
+		);
 		await expect(dialog.getByRole("alert")).toHaveTextContent(/wasn't saved/i);
 	},
 };
-
-/** Still open while the notice loads, so the application never paints behind it first. */
-export const Loading: Story = { args: { notice: undefined } };
-
-/** The notice could not be fetched. The reader stays blocked, because the choice is still required. */
+export const Loading: Story = { args: { state: { status: "loading" } } };
 export const FailedToLoad: Story = {
-	args: { notice: undefined, failedToLoad: true },
+	args: { state: { status: "error", onRetry } },
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await expect(dialog.getByRole("alert")).toHaveTextContent(/couldn't load/i);
+		await userEvent.click(dialog.getByRole("button", { name: "Try again" }));
+		await expect(onRetry).toHaveBeenCalled();
 	},
 };
-
-/** A mandatory dialog still needs a way out: declining is an answer, not a dead end. */
-export const CanDeclineAndSignOut: Story = {
+export const CanSignOut: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await userEvent.click(dialog.getByRole("button", { name: /sign out/i }));
 		await expect(args.onSignOut).toHaveBeenCalled();
 	},
 };
-
-/** The load failure offers a retry rather than stranding the reader on a reload instruction. */
-export const FailedToLoadCanRetry: Story = {
-	args: { notice: undefined, failedToLoad: true },
-	play: async ({ args }) => {
-		const dialog = within(await screen.findByRole("dialog"));
-		await userEvent.click(dialog.getByRole("button", { name: /try again/i }));
-		await expect(args.onRetry).toHaveBeenCalled();
+export const NarrowNotice: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+};
+export const NarrowResearchInvitation: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: async () => {
+		const dialog = await openResearch();
+		await expect(dialog.getByRole("button", { name: "Continue without research" })).toBeEnabled();
 	},
 };

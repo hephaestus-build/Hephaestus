@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 
 type ButtonSize = ComponentPropsWithoutRef<typeof Button>["size"];
 
-/** Recognisable provider mark (icon only — the button itself stays the stock shadcn style). */
 export function ProviderIcon({ provider }: { provider: IdentityProviderView }) {
 	if (provider.providerType?.toUpperCase() === "GITHUB") {
 		return <GithubIcon className="shrink-0" aria-hidden="true" focusable="false" />;
@@ -18,10 +17,6 @@ export function ProviderIcon({ provider }: { provider: IdentityProviderView }) {
 	return null;
 }
 
-/**
- * One "Continue with …" button for one registration, shared by the sign-in page and by the
- * confirm-access dialog so both send the same registration id to the same kickoff.
- */
 export function SignInProviderButton({
 	provider,
 	onSignIn,
@@ -43,10 +38,10 @@ export function SignInProviderButton({
 			size={size}
 			disabled={disabled}
 			onClick={() => onSignIn(registrationId)}
-			className={cn("w-full", className)}
+			className={cn("h-auto min-h-9 w-full whitespace-normal", className)}
 		>
 			<ProviderIcon provider={provider} />
-			Continue with {label}
+			<span className="min-w-0 wrap-anywhere">Continue with {label}</span>
 		</Button>
 	);
 }

@@ -119,7 +119,10 @@ describe("practice-group routes", () => {
 			),
 		);
 		const { router } = renderRouteAtWithRouter(path);
-		await vi.waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/user/ada"));
+		await vi.waitFor(
+			() => expect(router.state.location.pathname).toBe("/w/acme/user/ada"),
+			ROUTE_RENDER_WAIT,
+		);
 		expect(practiceReads).toBe(0);
 	});
 	it("waits for features without redirecting, then loads the enabled surface", async () => {
@@ -143,7 +146,8 @@ describe("practice-group routes", () => {
 	it("keeps a feature failure recoverable instead of redirecting", async () => {
 		server.use(http.get("*/workspaces", () => new HttpResponse(null, { status: 500 })));
 		const { router } = renderRouteAtWithRouter(path);
-		await screen.findByText("Couldn't load workspace features", undefined, ROUTE_RENDER_WAIT);
+		await vi.waitFor(() => expect(router.state.isLoading).toBe(false), ROUTE_RENDER_WAIT);
+		await screen.findByRole("button", { name: "Retry" }, ROUTE_RENDER_WAIT);
 		expect(router.state.location.pathname).toBe(path);
 		expect(practiceReads).toBe(0);
 		server.use(

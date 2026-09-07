@@ -20,7 +20,7 @@ import {
 import styles from "./LandingVisuals.module.css";
 
 interface LandingHeroSectionProps {
-	onSignIn: (idpHint: string) => void;
+	onSignIn: () => void;
 }
 
 const itemVariants = {
