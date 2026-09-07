@@ -240,8 +240,8 @@
 		"groupName": null
 	},
 	"ignorePaths": ["**/node_modules/**", "**/target/**", "**/dist/**", "**/build/**"],
-	"prConcurrentLimit": 5,
-	"branchConcurrentLimit": 10,
+	"prConcurrentLimit": 2,
+	"branchConcurrentLimit": 2,
 	"prHourlyLimit": 2,
 	"osvVulnerabilityAlerts": true,
 	"dependencyDashboardOSVVulnerabilitySummary": "unresolved"

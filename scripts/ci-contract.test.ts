@@ -475,6 +475,16 @@ void describe("CI contract", () => {
 		assert.ok(isMap(matrix), "server-integration runs no matrix");
 		const selectors = matrixValues(matrix, "tests");
 		assert.equal(selectors.length, 2, "The tier is sharded in two");
+		const startup = "de/tum/cit/aet/hephaestus/StartupBudgetIntegrationTest";
+		assert.ok(surefireSelects(selectors[0] ?? "", startup));
+		assert.ok(!surefireSelects(selectors[1] ?? "", startup));
+		const startupSource = await readFile(
+			`server/application/src/test/java/${startup}.java`,
+			"utf8",
+		);
+		assert.match(startupSource, /@Tag\("integration"\)/);
+		assert.doesNotMatch(startupSource, /@Tag\("architecture"\)/);
+
 		for (const selector of selectors)
 			assert.doesNotMatch(
 				selector,
@@ -2191,4 +2201,40 @@ void test("every Semgrep rule ships a positive and a negative fixture", async ()
 			assert.match(fixtures, new RegExp(`ok: ${id}$`, "m"), `${id} has no compliant example`);
 		}
 	}
+});
+
+void test("CodeQL selects languages with native change detection", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/codeql.yml", "utf8"));
+	assert.equal(workflow.getIn(["jobs", "analyze", "needs"]), "changes");
+	assert.equal(
+		workflow.getIn(["jobs", "analyze", "if"]),
+		"needs.changes.outputs.languages != '[]'",
+	);
+	assert.equal(
+		workflow.getIn(["jobs", "analyze", "strategy", "matrix", "language"]),
+		`\${{ fromJSON(needs.changes.outputs.languages) }}`,
+	);
+	assert.equal(
+		workflow.getIn(["jobs", "changes", "outputs", "languages"]),
+		`\${{ steps.filter.outputs.changes || '["actions","java-kotlin","javascript-typescript"]' }}`,
+	);
+	const steps = workflow.getIn(["jobs", "changes", "steps"]);
+	assert.ok(isSeq(steps));
+	const selection = steps.items.find((item) => isMap(item) && item.get("id") === "filter");
+	assert.ok(isMap(selection));
+	assert.equal(
+		selection.get("if"),
+		"github.event_name == 'pull_request' || github.event_name == 'merge_group'",
+	);
+	const filter = step(workflow, ["jobs", "changes"], "dorny/paths-filter");
+	const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CodeQL filters");
+	assert.deepEqual(Object.keys(filters), ["actions", "java-kotlin", "javascript-typescript"]);
+	for (const [language, patterns] of Object.entries(filters)) {
+		const paths = asArray(patterns, language);
+		assert.ok(
+			paths.some((pattern) => typeof pattern === "string" && pattern.startsWith(".github/")),
+		);
+	}
+	assert.ok(asArray(filters["java-kotlin"], "Java paths").includes("server/**"));
+	assert.ok(asArray(filters["javascript-typescript"], "JS paths").includes("pnpm-lock.yaml"));
 });

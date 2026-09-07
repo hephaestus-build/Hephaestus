@@ -16,9 +16,7 @@ on:
 
 permissions: {}
 
-# Both suites compile from source instead of depending on ci-build.yml's package job: neither
-# produces anything that ships, and each runs longer than packaging, so a dependency would only
-# lengthen the critical path. Revisit if packaging ever outlasts a suite.
+# Test compilation runs independently of release packaging to avoid a serial build dependency.
 jobs:
   server-verification:
     name: "App Server: Unit and architecture"
@@ -59,13 +57,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Surefire's `test` parameter replaces `includes`, so only the second shard's exclusion —
-          # never an inclusion of its own — keeps the two selectors complementary over every class
-          # the unsharded tier scans. scripts/ci-contract.test.ts proves the partition.
-          - shard: providers
-            tests: "de/tum/cit/aet/hephaestus/integration/**"
+          # Surefire's test selector replaces includes; an exclusion-only shard covers the remainder.
+          - shard: providers-and-startup
+            tests: "de/tum/cit/aet/hephaestus/integration/**,de/tum/cit/aet/hephaestus/StartupBudgetIntegrationTest"
           - shard: application
-            tests: "!de/tum/cit/aet/hephaestus/integration/**"
+            tests: "!de/tum/cit/aet/hephaestus/integration/**,!de/tum/cit/aet/hephaestus/StartupBudgetIntegrationTest"
     permissions:
       contents: read
       checks: write
@@ -82,8 +78,6 @@ jobs:
           os: ${{ runner.os }}
       - name: Run integration tests
         env:
-          # vite.config.ts reads this at load, so no matrix value ever reaches a run: script — which
-          # the workflow linter forbids.
           HEPHAESTUS_INTEGRATION_TESTS: ${{ matrix.tests }}
         run: vp run test:server:integration
       - name: Upload test results

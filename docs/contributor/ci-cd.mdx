@@ -95,10 +95,9 @@ still reports `skipped`, not `success`. A workflow that never triggers reports n
 required context left pending blocks the queue for good — `merge_group` supports no `paths:` filter
 in any case, so the filtering lives in each job's `if`. The queue builds up to
 `max_entries_to_build: 2` groups speculatively, a repository-ruleset field rather than a file here,
-and each group costs a whole `CI/CD` run, so a job added to `cicd.yml` is paid for once per group in
-flight. Two rather than three because the plan allows 20 concurrent jobs across every run in the
-repository: a third group starved pull-request runs and its own siblings for the sake of a merge
-pace the queue rarely reaches.
+and each group starts a `CI/CD` run. GitHub's
+[runner concurrency limits](https://docs.github.com/en/actions/reference/limits#job-concurrency-limits-for-github-hosted-runners)
+apply across workflows, so queue parallelism competes with pull-request validation for capacity.
 
 A failed merge group drops its pull requests from the queue without failing any check on them, so
 CI updates a comment on the pull request named by the merge group's head ref with the run link. It
@@ -162,7 +161,10 @@ which covers the whole tree where TruffleHog covers a pull request's own commits
 Renovate groups routine updates only when they share a review and verification boundary. Production
 dependencies remain separate unless Renovate identifies a package family that must move together.
 Major updates and minor updates to pre-1.0 dependencies remain ungrouped, wait seven days, and require
-Dependency Dashboard approval. Vulnerability alerts remain ungrouped and bypass those gates.
+Dependency Dashboard approval. Native
+[branch and PR limits](https://docs.renovatebot.com/configuration-options/#branchconcurrentlimit)
+bound routine update concurrency; the hourly limit only restricts PR creation. Vulnerability alerts
+remain ungrouped and bypass those gates and limits.
 
 Lockfile maintenance runs on Mondays. `renovate.json` owns the managed ecosystems and extraction
 rules; `scripts/renovate-config.test.ts` exercises each custom manager against its source. The Node,
@@ -191,6 +193,10 @@ reproduce a run locally. A pull request from a fork gets the scan verdict but no
 because GitHub caps a fork token's `security-events` access at read.
 
 ### CodeQL configuration
+
+PR and merge-group diffs select analysis languages, not individual files: each selected language
+scans its configured source tree. Main and scheduled runs select all languages, as do changes to
+the CodeQL workflow or configuration. The language filters live in `.github/workflows/codeql.yml`.
 
 `.github/workflows/codeql.yml` runs CodeQL under advanced setup: only advanced setup reads a
 committed config file, and `.github/codeql/codeql-config.yml` excludes `security/semgrep/**`,
@@ -360,7 +366,7 @@ why the label is the authority, and which alternatives were priced and declined,
 | `semgrep.yml` | Pull request, push to main, merge group | Tests and scans the repository's own TLS rule pack |
 | `rescan-main-images.yml` | Weekly, manual | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings |
 | `rescan-release-images.yml` | Weekly, manual | Rescans the latest published release's images and reports drift on the vulnerability response issue |
-| `ci-profile.yml` | Weekly, manual | Profiles server integration tests and Spring contexts |
+| `ci-profile.yml` | Weekly, manual | Enforces PR latency budgets and profiles server integration tests and Spring contexts |
 | `ci-server-clean-reference.yml` | Weekly, manual | Records cold server phases and compares generated JARs |
 | `scorecard-ratchet.yml` | Push to main, branch-protection change, weekly, manual | Fails when a Scorecard check drops below the committed baseline; a push fails only for the checks its own commit decides |
 | `deploy-preview.yml` | `preview` label added, or a push, reopen or ready-for-review on a labelled PR | Waits for this commit's attested CI images, deploys them, and registers the native GitHub deployment |
@@ -487,17 +493,13 @@ reaches no such commit builds every image itself. `detect-changes` resolves that
 
 - `Quality` legs and `Test` suites start from source; `Build` gates start when `App Server: Package`
   uploads its artifact.
-- `App Server: Integration` runs two matrix shards: `providers` selects the `integration` package
-  and `application` excludes it. Both keep the `integration` tag filter and run in their own JVM and
-  Testcontainers database. The split is by package boundary rather than by size, so the tier's wall
-  time is the larger `application` shard's. Because
-  Surefire's `-Dtest` replaces its include patterns, only `application`'s pure exclusion keeps the
-  two selectors complementary over every class the unsharded run scans; an inclusion of its own
-  would drop whatever it failed to name. `scripts/ci-contract.test.ts` proves the partition against
-  the test sources, so a selector that drifts fails `check` rather than passing green. The selector
-  reaches Maven through `HEPHAESTUS_INTEGRATION_TESTS`, which `vite.config.ts` reads when it loads,
-  so the matrix value never appears in a `run:` script. `fail-fast: false` lets both shards report,
-  and `CI Status Gate` requires the aggregate `Test` result. Locally the tier runs whole.
+- `App Server: Integration` has two shards: `providers-and-startup` selects the `integration`
+  package and `StartupBudgetIntegrationTest`; `application` excludes both. Both retain the
+  `integration` tag filter and run in separate JVMs and Testcontainers databases. The startup test
+  owns a database separate from other Spring contexts. Surefire's `-Dtest` replaces its include
+  patterns, so the second selector is exclusion-only; `scripts/ci-contract.test.ts` checks that
+  the selectors partition the tier. Both shards report with `fail-fast: false`, and
+  `CI Status Gate` requires their aggregate result. Locally the tier runs whole.
 - Pull requests and merge groups build `linux/amd64`; pushes to `main`, and every run on the Version
   PR's branch, build both architectures. A pull request and a merge group each also build only the
   images their own diff touched and alias the rest, while the Version PR's branch builds all of
@@ -505,7 +507,8 @@ reaches no such commit builds every image itself. `detect-changes` resolves that
   every image build in the run.
 - The `Quality` matrix uses `fail-fast: false`; the image matrix in `reusable-docker-build.yml` uses
   `fail-fast: true`.
-- Pull-request runs cancel superseded runs; `release.yml` never cancels.
+- Pull-request runs cancel superseded runs; `release.yml` never cancels. PR and dispatch lanes
+  remain separate because they validate different refs: the PR merge ref and the branch head.
 - A run on `main` that leaves a per-commit record — `codeql.yml`, `semgrep.yml`, `scorecard.yml`,
   `scorecard-ratchet.yml` — is never cancelled, because it is the only run that commit will get and
   its absence is what a later score reads as a gap. Those workflows write
@@ -520,15 +523,54 @@ for workflow and job run time, queue time, failure rate, and runner usage. Each 
 also includes the current run's dependency-aware timeline and job summary, and JUnit results appear
 as `Test Results - …` check runs.
 
-The weekly `CI profile` workflow covers the server-specific data GitHub does not provide: JFR,
-resource usage, JUnit results, and Spring context-cache metrics. It signals only after three
-consecutive regressions against five earlier default-branch profiles. Branch dispatches produce
-standalone diagnostic artifacts without changing or enforcing that baseline. The exact invocation is
-that workflow's `Run integration suite with JFR` step; `SpringTestContextArchitectureTest` enforces
-the reviewed Spring context keys.
+### Pull-request latency
 
-The weekly **Server Phase Reference** workflow records cache-disabled Maven generation, compilation,
-test-compilation, and execution profiles and compares two clean generated-client JARs.
+The full-verification target is a six-minute median and a seven-minute p90, measured from workflow
+creation to completion of **CI Status Gate**. `CI profile` samples the ten most recent successful,
+first-attempt PR runs with full server and browser verification from the latest 100 completed PR
+runs created in the last 28 days. Lightweight changes and Version-PR runs cannot satisfy this
+cohort. Failed and cancelled counts describe the bounded listing, not a repository-wide failure
+rate. Fewer than ten qualifying runs fails as insufficient evidence; budget failures also retain
+the JSON report.
+
+Reproduce the observer with an authenticated GitHub CLI:
+
+```bash
+GITHUB_REPOSITORY=owner/repository vp run report:ci-latency
+```
+
+To inspect one completed run, download its metadata and every page of jobs for the same attempt.
+Replace `RUN_ID` and `ATTEMPT` in both requests:
+
+```bash
+mkdir -p tmp/ci-timings
+gh api repos/{owner}/{repo}/actions/runs/RUN_ID/attempts/ATTEMPT > tmp/ci-timings/run.json
+gh api --paginate 'repos/{owner}/{repo}/actions/runs/RUN_ID/attempts/ATTEMPT/jobs?per_page=100' |
+  jq -s '{total_count: .[0].total_count, jobs: [.[].jobs[]]}' > tmp/ci-timings/jobs.json
+vp run report:ci-timings tmp/ci-timings/run.json tmp/ci-timings/jobs.json
+```
+
+The report separates time before job creation, time before the first runner, per-job start delay,
+and execution time. Start delay includes dependency waiting, so it is not a pure runner-queue
+metric. Summed execution times overlap: they measure runner demand, not verdict latency. Retries
+retain the original run creation time and must not enter first-attempt percentiles. Unlike the
+gate's in-flight summary, this report uses its completed verdict and rejects incomplete job lists
+or mixed attempts. Keep raw API evidence under `tmp/`, not in committed performance snapshots.
+
+### Server profiles
+
+`CI profile` records JFR, resource usage, JUnit results and Spring context-cache metrics. It signals
+a sustained regression after three consecutive profiles exceed variance limits against five earlier
+default-branch profiles or absolute Spring-context limits. Only successful test runs with valid
+summaries enter history, including runs whose performance budget fails. History is restored from this repository's default-branch
+workflow artifacts, retained for 90 days; a rerun replaces its own sample. Without seven earlier
+profiles, the sustained-regression check has no verdict. Branch dispatches produce diagnostic
+artifacts without changing or enforcing the baseline.
+
+The workflow's `Run integration suite with JFR` step owns the invocation;
+`SpringTestContextArchitectureTest` enforces the reviewed Spring context keys. The weekly
+**Server Phase Reference** workflow records cache-disabled Maven generation, compilation,
+test-compilation and execution profiles and compares two clean generated-client JARs.
 
 ## Running CI locally
 
