@@ -42,6 +42,7 @@ import { problemDetailOf } from "@/lib/problem-detail";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/integrations/scm")({
 	head: workspaceAdminHead("Source control"),
+	remountDeps: ({ params }) => params.workspaceSlug,
 	component: ScmIntegrationPage,
 });
 
@@ -289,7 +290,6 @@ function ScmIntegrationPage() {
 
 			{isConnectionActive && kind && !isAppInstallationWorkspace && (
 				<WorkspaceScmTokenSettings
-					key={slug}
 					providerLabel={label}
 					isSaving={replaceToken.isPending}
 					error={replaceToken.error}

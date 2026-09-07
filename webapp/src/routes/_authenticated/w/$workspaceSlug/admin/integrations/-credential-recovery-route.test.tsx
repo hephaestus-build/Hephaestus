@@ -3,7 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ConnectionSyncStatus, IntegrationCatalogEntry, Workspace } from "@/api/types.gen";
+import { getIntegrationCatalogQueryKey } from "@/api/@tanstack/react-query.gen";
+import type {
+	ConnectionSyncStatus,
+	IntegrationCatalogEntry,
+	SyncJob,
+	Workspace,
+} from "@/api/types.gen";
+import type { Wire } from "@/lib/dates";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
@@ -124,6 +131,59 @@ describe("source-control credential recovery", () => {
 		expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
 	});
 
+	it("isolates a pending token replacement when switching workspaces", async () => {
+		const { workspace } = mockConnection("GITHUB");
+		let releaseResponse = () => {};
+		const response = new Promise<void>((resolve) => {
+			releaseResponse = resolve;
+		});
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([workspaceListItem("acme"), workspaceListItem("other")]),
+			),
+			http.patch("*/workspaces/acme/token", async () => {
+				await response;
+				return HttpResponse.json(workspace);
+			}),
+		);
+		const { router, queryClient } = renderRouteAtWithRouter("/w/acme/admin/integrations/scm");
+		const input = await screen.findByLabelText(
+			"New personal access token",
+			undefined,
+			ROUTE_RENDER_WAIT,
+		);
+		const user = userEvent.setup();
+		await user.type(input, "acme-private-token");
+		await user.click(screen.getByRole("button", { name: "Replace token" }));
+		await screen.findByRole("button", { name: "Saving token…" });
+		try {
+			await act(() =>
+				router.navigate({
+					to: "/w/$workspaceSlug/admin/integrations/scm",
+					params: { workspaceSlug: "other" },
+				}),
+			);
+			await waitFor(() => {
+				expect(screen.getByLabelText("New personal access token")).toHaveProperty(
+					"disabled",
+					false,
+				);
+				expect(screen.getByLabelText("New personal access token")).toHaveProperty("value", "");
+			});
+		} finally {
+			releaseResponse();
+		}
+		await waitFor(() =>
+			expect(
+				queryClient.getQueryState(
+					getIntegrationCatalogQueryKey({
+						path: { workspaceSlug: "acme" },
+					}),
+				)?.isInvalidated,
+			).toBe(true),
+		);
+	});
+
 	it("keeps GitHub App connections on the installation recovery path", async () => {
 		mockConnection("GITHUB", 123);
 		renderRouteAt("/w/acme/admin/integrations/scm");
@@ -165,4 +225,61 @@ describe("Outline connection drafts", () => {
 			expect(screen.getByLabelText("Server URL")).toHaveProperty("value", "");
 		});
 	});
+});
+
+describe("integration job history", () => {
+	it.each([
+		{ integration: "scm", kind: "GITHUB" },
+		{ integration: "slack", kind: "SLACK" },
+		{ integration: "outline", kind: "OUTLINE" },
+	] as const)(
+		"resets $integration pagination without showing the previous workspace's jobs",
+		async ({ integration, kind }) => {
+			const { entry } = mockConnection("GITHUB");
+			let releaseResponse = () => {};
+			const response = new Promise<void>((resolve) => {
+				releaseResponse = resolve;
+			});
+			const requestedPages: Array<string | null> = [];
+			const job = {
+				id: 1,
+				createdAt: "2026-09-07T12:00:00Z",
+				status: "SUCCEEDED",
+				type: "RECONCILIATION",
+				trigger: "MANUAL",
+				cancelRequested: false,
+				itemsProcessed: 123456,
+			} satisfies Wire<SyncJob>;
+			server.use(
+				http.get("*/workspaces", () =>
+					HttpResponse.json([workspaceListItem("acme"), workspaceListItem("other")]),
+				),
+				http.get("*/workspaces/:workspaceSlug/connections/catalog", () =>
+					HttpResponse.json([{ ...entry, kind }]),
+				),
+				http.get("*/workspaces/:workspaceSlug/connections", () =>
+					HttpResponse.json([{ id: 7, kind: "OUTLINE", state: "SUSPENDED" }]),
+				),
+				http.get("*/workspaces/other/connections/7/sync/jobs", async ({ request }) => {
+					requestedPages.push(new URL(request.url).searchParams.get("page"));
+					await response;
+					return HttpResponse.json({ content: [], totalPages: 0 });
+				}),
+				http.get("*/workspaces/acme/connections/7/sync/jobs", () =>
+					HttpResponse.json({ content: [job], totalPages: 2 }),
+				),
+			);
+			const { router } = renderRouteAtWithRouter(`/w/acme/admin/integrations/${integration}`);
+			await screen.findByText("123,456", undefined, ROUTE_RENDER_WAIT);
+			await userEvent.setup().click(screen.getByRole("button", { name: "Go to next page" }));
+			try {
+				await act(() => router.navigate({ to: `/w/other/admin/integrations/${integration}` }));
+				await waitFor(() => expect(requestedPages).toStrictEqual(["0"]));
+				expect(screen.queryByText("123,456")).toBeNull();
+			} finally {
+				releaseResponse();
+			}
+			await screen.findByText("No sync jobs yet");
+		},
+	);
 });

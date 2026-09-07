@@ -228,3 +228,10 @@ export const ActivityUnavailable: Story = {
 		onRetryActivityMonitor: fn(),
 	},
 };
+
+export const LoadingActivity: Story = {
+	args: {
+		...Default.args,
+		isActivityLoading: true,
+	},
+};

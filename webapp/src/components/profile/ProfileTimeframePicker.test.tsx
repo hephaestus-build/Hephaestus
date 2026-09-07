@@ -5,7 +5,19 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ProfileTimeframePicker } from "./ProfileTimeframePicker";
 
+vi.mock("@/components/common/use-now", () => ({
+	useNow: () => new Date(2026, 8, 16, 12).getTime(),
+}));
+
 describe("ProfileTimeframePicker", () => {
+	it("keeps an adjacent-day custom range accessible rather than labeling it This month", async () => {
+		render(<ProfileTimeframePicker afterDate="2026-09-02T00:00:00" />);
+		expect(screen.getByRole("combobox", { name: "Timeframe" }).textContent).toContain(
+			"Custom range",
+		);
+		await userEvent.click(screen.getByRole("button", { name: "Choose custom dates" }));
+		screen.getByRole("button", { name: /September 2nd, 2026/ });
+	});
 	it("renders bookmarked dates without rewriting them", () => {
 		const onTimeframeChange = vi.fn();
 		const { rerender } = render(

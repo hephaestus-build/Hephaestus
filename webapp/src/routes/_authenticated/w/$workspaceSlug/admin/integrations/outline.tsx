@@ -24,6 +24,7 @@ import { workspaceAdminHead } from "@/lib/page-title";
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/integrations/outline")(
 	{
 		head: workspaceAdminHead("Outline"),
+		remountDeps: ({ params }) => params.workspaceSlug,
 		component: OutlineIntegrationPage,
 	},
 );
@@ -112,10 +113,7 @@ function OutlineIntegrationPage() {
 						</Card>
 					)}
 
-					<OutlineConnectCard
-						key={`${slug}:${connectionId ?? "new"}`}
-						{...outline.connectCardProps}
-					/>
+					<OutlineConnectCard key={connectionId ?? "new"} {...outline.connectCardProps} />
 
 					{outline.collectionsProps && <OutlineCollectionsSection {...outline.collectionsProps} />}
 				</>

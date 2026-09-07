@@ -80,6 +80,24 @@ describe("useSessionKeepAlive", () => {
 		expect(session.refreshCalls()).toBe(2);
 	});
 
+	it("can renew after a transient failure without retrying an idle session", async () => {
+		const session = mountSession();
+		server.use(
+			http.post("*/auth/refresh", () => new HttpResponse(null, { status: 503 }), { once: true }),
+		);
+		await advance(1_000);
+		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
+		await advance(5_000);
+		expect(session.refreshCalls()).toBe(0);
+		act(() => {
+			window.dispatchEvent(new Event("keydown"));
+		});
+		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(2)));
+		expect(session.refreshCalls()).toBe(1);
+		await advance(5_000);
+		expect(session.refreshCalls()).toBe(1);
+	});
+
 	it("removes the timer and activity listeners when unmounted", async () => {
 		const session = mountSession();
 		session.unmount();

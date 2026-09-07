@@ -1929,61 +1929,63 @@ async function main() {
 	const groupSessionFiles = new Map<string, string>();
 	const groupSeedFiles = new Map<string, string>();
 	if (!hardAborted) {
-		const manager = SessionManager.create(CWD, sessionDir);
-		const { session: reconSession } = await createAgentSession({
-			cwd: CWD,
-			agentDir: AGENT_DIR,
-			tools: [...EVIDENCE_TOOLS],
-			customTools: [grepTool],
-			sessionManager: manager,
-			settingsManager,
-			resourceLoader: await loadResources(),
-			modelRuntime,
-			model,
-		});
-		if (hardAbort.signal.aborted || Date.now() >= reviewDeadline) {
-			hardAborted = true;
-			hardAbort.abort();
-			stopSession(reconSession);
-		} else {
-			const unsubscribeRecon = subscribeSession(reconSession, "recon:shared");
-			activeSessions.add(reconSession);
-			const reconBudgetMs = Math.min(
-				deriveReconBudget(INITIAL_TIMEOUT_MS),
-				reviewDeadline - Date.now(),
-			);
-			const reconDeadline = scheduleDeadline(reconBudgetMs, () => stopSession(reconSession));
-			try {
-				const groupScope = tree.groups
-					.map((group) => `${group.id} [${group.practiceSlugs.join(", ")}]`)
-					.join("; ");
-				await Promise.race([
-					reconSession.prompt(
-						`Build one factual reconnaissance map for this review. Read the manifest and the artifact summary first, then inspect only enough shared evidence to identify changed surfaces, review activity, linked work, tests, and likely code paths. Record exact artifact paths and diff coordinates. Do not evaluate a practice or claim GOOD/BAD. The following group sessions will continue from this checkpoint: ${groupScope}`,
-					),
-					reconDeadline.elapsed,
-				]);
-				const { seedSessionFile, checkpointEntryId } = reconnaissanceSeed(
-					reconSession.sessionManager,
-					reconDeadline.state,
-					reconBudgetMs,
-				);
-				for (const fork of forkSessions({
-					seedSessionFile,
-					checkpointEntryId,
-					keys: tree.groups.map((group) => group.id),
-					sessionDir,
-				})) {
-					groupSeedFiles.set(fork.key, fork.sessionFile);
-				}
-			} catch (error) {
-				console.error(`[pi-runner] shared reconnaissance failed: ${errorText(error)}`);
-			} finally {
-				clearTimeout(reconDeadline.timer);
-				activeSessions.delete(reconSession);
-				unsubscribeRecon();
+		try {
+			const manager = SessionManager.create(CWD, sessionDir);
+			const { session: reconSession } = await createAgentSession({
+				cwd: CWD,
+				agentDir: AGENT_DIR,
+				tools: [...EVIDENCE_TOOLS],
+				customTools: [grepTool],
+				sessionManager: manager,
+				settingsManager,
+				resourceLoader: await loadResources(),
+				modelRuntime,
+				model,
+			});
+			if (hardAbort.signal.aborted || Date.now() >= reviewDeadline) {
+				hardAborted = true;
+				hardAbort.abort();
 				stopSession(reconSession);
+			} else {
+				const unsubscribeRecon = subscribeSession(reconSession, "recon:shared");
+				activeSessions.add(reconSession);
+				const reconBudgetMs = Math.min(
+					deriveReconBudget(INITIAL_TIMEOUT_MS),
+					reviewDeadline - Date.now(),
+				);
+				const reconDeadline = scheduleDeadline(reconBudgetMs, () => stopSession(reconSession));
+				try {
+					const groupScope = tree.groups
+						.map((group) => `${group.id} [${group.practiceSlugs.join(", ")}]`)
+						.join("; ");
+					await Promise.race([
+						reconSession.prompt(
+							`Build one factual reconnaissance map for this review. Read the manifest and the artifact summary first, then inspect only enough shared evidence to identify changed surfaces, review activity, linked work, tests, and likely code paths. Record exact artifact paths and diff coordinates. Do not evaluate a practice or claim GOOD/BAD. The following group sessions will continue from this checkpoint: ${groupScope}`,
+						),
+						reconDeadline.elapsed,
+					]);
+					const { seedSessionFile, checkpointEntryId } = reconnaissanceSeed(
+						reconSession.sessionManager,
+						reconDeadline.state,
+						reconBudgetMs,
+					);
+					for (const fork of forkSessions({
+						seedSessionFile,
+						checkpointEntryId,
+						keys: tree.groups.map((group) => group.id),
+						sessionDir,
+					})) {
+						groupSeedFiles.set(fork.key, fork.sessionFile);
+					}
+				} finally {
+					clearTimeout(reconDeadline.timer);
+					activeSessions.delete(reconSession);
+					unsubscribeRecon();
+					stopSession(reconSession);
+				}
 			}
+		} catch (error) {
+			console.error(`[pi-runner] shared reconnaissance failed: ${errorText(error)}`);
 		}
 	}
 
@@ -1993,70 +1995,73 @@ async function main() {
 			tree.groups,
 			concurrency,
 			async (group, index) => {
-				const seedFile = groupSeedFiles.get(group.id);
-				const manager = seedFile
-					? SessionManager.open(seedFile, sessionDir)
-					: SessionManager.create(CWD, sessionDir);
-				const scopedTool = buildReportObservationTool(group.practiceSlugs);
-				const { session: observerSession } = await createAgentSession({
-					cwd: CWD,
-					agentDir: AGENT_DIR,
-					tools: [...EVIDENCE_TOOLS, "report_observation"],
-					customTools: [grepTool, scopedTool],
-					sessionManager: manager,
-					settingsManager,
-					resourceLoader: await loadResources(),
-					modelRuntime,
-					model,
-				});
-				if (hardAbort.signal.aborted || Date.now() >= reviewDeadline) {
-					hardAborted = true;
-					hardAbort.abort();
-					stopSession(observerSession);
-					return;
-				}
-				const unsubscribeObserver = subscribeSession(
-					observerSession,
-					`observer:${group.id}`,
-					createRecordingPace(contextWindow, seedFile !== undefined),
-				);
-				activeSessions.add(observerSession);
-				const remainingMs = Math.max(1, reviewDeadline - Date.now());
-				const activeSlots = Math.min(concurrency, remainingGroups);
-				const groupBudgetMs = deriveWorkstreamBudget(remainingMs, activeSlots, remainingGroups);
-				const timing = deriveTurnTiming(groupBudgetMs, 1);
-				const timers = scheduleTurnTimers(
-					observerSession,
-					index + 1,
-					tree.groups.length,
-					timing.softNudgeMs,
-					timing.fairShareMs,
-				);
 				try {
-					await Promise.race([
-						observerSession.prompt(
-							`${prompt}\n\n## Practice group: ${group.id}\nEvaluate exactly these practices: ${group.practiceSlugs.join(", ")}. ` +
-								`Read their files under inputs/practices/, then start with the cheapest decisive practice. Persist each ` +
-								`observation as soon as it is supported; do not finish a group-wide evidence map first. Reuse evidence ` +
-								`already gathered when investigating the remaining practices. Persist at least one disposition for ` +
-								`every listed practice, plus any distinct material problems a practice exposes. Use ` +
-								`NO_REVIEW_OCCASION only after complete evidence proves the practice's explicit prerequisite did not ` +
-								`occur; missing evidence is not an occasion that failed to happen. Do not skip a practice because its ` +
-								`behavior is absent.`,
-						),
-						timers.hardDeadline,
-					]);
+					const seedFile = groupSeedFiles.get(group.id);
+					const manager = seedFile
+						? SessionManager.open(seedFile, sessionDir)
+						: SessionManager.create(CWD, sessionDir);
+					const scopedTool = buildReportObservationTool(group.practiceSlugs);
+					const { session: observerSession } = await createAgentSession({
+						cwd: CWD,
+						agentDir: AGENT_DIR,
+						tools: [...EVIDENCE_TOOLS, "report_observation"],
+						customTools: [grepTool, scopedTool],
+						sessionManager: manager,
+						settingsManager,
+						resourceLoader: await loadResources(),
+						modelRuntime,
+						model,
+					});
+					if (hardAbort.signal.aborted || Date.now() >= reviewDeadline) {
+						hardAborted = true;
+						hardAbort.abort();
+						stopSession(observerSession);
+						return;
+					}
+					const unsubscribeObserver = subscribeSession(
+						observerSession,
+						`observer:${group.id}`,
+						createRecordingPace(contextWindow, seedFile !== undefined),
+					);
+					activeSessions.add(observerSession);
+					const remainingMs = Math.max(1, reviewDeadline - Date.now());
+					const activeSlots = Math.min(concurrency, remainingGroups);
+					const groupBudgetMs = deriveWorkstreamBudget(remainingMs, activeSlots, remainingGroups);
+					const timing = deriveTurnTiming(groupBudgetMs, 1);
+					const timers = scheduleTurnTimers(
+						observerSession,
+						index + 1,
+						tree.groups.length,
+						timing.softNudgeMs,
+						timing.fairShareMs,
+					);
+					try {
+						await Promise.race([
+							observerSession.prompt(
+								`${prompt}\n\n## Practice group: ${group.id}\nEvaluate exactly these practices: ${group.practiceSlugs.join(", ")}. ` +
+									`Read their files under inputs/practices/, then start with the cheapest decisive practice. Persist each ` +
+									`observation as soon as it is supported; do not finish a group-wide evidence map first. Reuse evidence ` +
+									`already gathered when investigating the remaining practices. Persist at least one disposition for ` +
+									`every listed practice, plus any distinct material problems a practice exposes. Use ` +
+									`NO_REVIEW_OCCASION only after complete evidence proves the practice's explicit prerequisite did not ` +
+									`occur; missing evidence is not an occasion that failed to happen. Do not skip a practice because its ` +
+									`behavior is absent.`,
+							),
+							timers.hardDeadline,
+						]);
+					} finally {
+						const sessionFile = observerSession.sessionManager.getSessionFile();
+						if (sessionFile) groupSessionFiles.set(group.id, sessionFile);
+						softTimeoutFired ||= timers.state.softTimedOut;
+						clearTimeout(timers.softTimer);
+						clearTimeout(timers.hardTimer);
+						activeSessions.delete(observerSession);
+						unsubscribeObserver();
+						stopSession(observerSession);
+					}
 				} catch (error) {
 					console.error(`[pi-runner] observer ${group.id} failed: ${errorText(error)}`);
 				} finally {
-					const sessionFile = observerSession.sessionManager.getSessionFile();
-					if (sessionFile) groupSessionFiles.set(group.id, sessionFile);
-					softTimeoutFired ||= timers.state.softTimedOut;
-					clearTimeout(timers.softTimer);
-					clearTimeout(timers.hardTimer);
-					activeSessions.delete(observerSession);
-					unsubscribeObserver();
-					stopSession(observerSession);
 					remainingGroups--;
 				}
 			},
@@ -2138,60 +2143,63 @@ async function main() {
 			retryGroups,
 			concurrency,
 			async (group) => {
-				const retryTool = buildReportObservationTool(group.practiceSlugs);
-				const priorSessionFile = groupSessionFiles.get(group.id);
-				const { session: retrySession } = await createAgentSession({
-					cwd: CWD,
-					agentDir: AGENT_DIR,
-					tools: [...EVIDENCE_TOOLS, "report_observation"],
-					customTools: [grepTool, retryTool],
-					sessionManager: priorSessionFile
-						? SessionManager.open(priorSessionFile, sessionDir)
-						: SessionManager.inMemory(),
-					settingsManager,
-					resourceLoader: await loadResources(),
-					modelRuntime,
-					model,
-				});
-				const remainingRetryMs = Math.max(0, retryStartMs + retry.windowMs - Date.now());
-				if (retryAbort.signal.aborted || remainingRetryMs === 0) {
-					retryAborted = true;
-					retryAbort.abort();
-					stopSession(retrySession);
-					return;
-				}
-				const unsubscribeRetry = subscribeSession(
-					retrySession,
-					`retry:${group.id}`,
-					createRecordingPace(contextWindow, priorSessionFile !== undefined),
-				);
-				activeSessions.add(retrySession);
-				const activeSlots = Math.min(concurrency, retriesRemaining);
-				const retryBudgetMs = deriveWorkstreamBudget(
-					remainingRetryMs,
-					activeSlots,
-					retriesRemaining,
-				);
-				const retryDeadline = scheduleDeadline(retryBudgetMs, () => {
-					stopSession(retrySession);
-				});
 				try {
-					await Promise.race([
-						retrySession.prompt(
-							`${prompt}\n\n## Recovery practice group\nThe earlier group did not persist: ${group.practiceSlugs.join(", ")}. ` +
-								`Continue from its evidence and tool feedback. Persist one best-justified outcome for each missing ` +
-								`practice now; read more only to resolve a specific validation failure or genuinely open evidence ` +
-								`question. Evaluate no other practice. ${PERSIST_DISCIPLINE}`,
-						),
-						retryDeadline.elapsed,
-					]);
+					const retryTool = buildReportObservationTool(group.practiceSlugs);
+					const priorSessionFile = groupSessionFiles.get(group.id);
+					const { session: retrySession } = await createAgentSession({
+						cwd: CWD,
+						agentDir: AGENT_DIR,
+						tools: [...EVIDENCE_TOOLS, "report_observation"],
+						customTools: [grepTool, retryTool],
+						sessionManager: priorSessionFile
+							? SessionManager.open(priorSessionFile, sessionDir)
+							: SessionManager.inMemory(),
+						settingsManager,
+						resourceLoader: await loadResources(),
+						modelRuntime,
+						model,
+					});
+					const remainingRetryMs = Math.max(0, retryStartMs + retry.windowMs - Date.now());
+					if (retryAbort.signal.aborted || remainingRetryMs === 0) {
+						retryAborted = true;
+						retryAbort.abort();
+						stopSession(retrySession);
+						return;
+					}
+					const unsubscribeRetry = subscribeSession(
+						retrySession,
+						`retry:${group.id}`,
+						createRecordingPace(contextWindow, priorSessionFile !== undefined),
+					);
+					activeSessions.add(retrySession);
+					const activeSlots = Math.min(concurrency, retriesRemaining);
+					const retryBudgetMs = deriveWorkstreamBudget(
+						remainingRetryMs,
+						activeSlots,
+						retriesRemaining,
+					);
+					const retryDeadline = scheduleDeadline(retryBudgetMs, () => {
+						stopSession(retrySession);
+					});
+					try {
+						await Promise.race([
+							retrySession.prompt(
+								`${prompt}\n\n## Recovery practice group\nThe earlier group did not persist: ${group.practiceSlugs.join(", ")}. ` +
+									`Continue from its evidence and tool feedback. Persist one best-justified outcome for each missing ` +
+									`practice now; read more only to resolve a specific validation failure or genuinely open evidence ` +
+									`question. Evaluate no other practice. ${PERSIST_DISCIPLINE}`,
+							),
+							retryDeadline.elapsed,
+						]);
+					} finally {
+						clearTimeout(retryDeadline.timer);
+						activeSessions.delete(retrySession);
+						unsubscribeRetry();
+						stopSession(retrySession);
+					}
 				} catch (error) {
 					console.error(`[pi-runner] retry ${group.id} failed: ${errorText(error)}`);
 				} finally {
-					clearTimeout(retryDeadline.timer);
-					activeSessions.delete(retrySession);
-					unsubscribeRetry();
-					stopSession(retrySession);
 					retriesRemaining--;
 				}
 			},

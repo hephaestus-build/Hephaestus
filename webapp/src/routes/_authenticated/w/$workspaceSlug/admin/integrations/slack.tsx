@@ -43,6 +43,7 @@ import { problemDetailOf } from "@/lib/problem-detail";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/integrations/slack")({
 	head: workspaceAdminHead("Slack"),
+	remountDeps: ({ params }) => params.workspaceSlug,
 	component: SlackIntegrationPage,
 });
 

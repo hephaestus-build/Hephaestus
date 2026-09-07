@@ -88,8 +88,8 @@ if (scenario) {
 							: "retry"
 						: "recon";
 				record(`create:${lane}`);
-				if (lane === "composer" && scenario === "composer")
-					throw new Error("Composer initialization failed");
+				if (scenario === `${lane}-init` || (lane === "composer" && scenario === "composer"))
+					throw new Error(`${lane} initialization failed`);
 				if (lane === "composer" && scenario === "composer-budget") now += 20_000;
 				if (scenario === lane) now += 20_000;
 				return Promise.resolve({
@@ -103,7 +103,13 @@ if (scenario) {
 						async prompt() {
 							record(`prompt:${lane}`);
 							if (lane === "recon") throw new Error("Reconnaissance unavailable");
-							if (scenario.startsWith("composer") && lane === "observer") {
+							if (
+								((scenario.startsWith("composer") ||
+									scenario === "recon-init" ||
+									scenario === "retry-init") &&
+									lane === "observer") ||
+								(scenario === "observer-init" && lane === "retry")
+							) {
 								const tool = options.customTools.find((item) => item.name === "report_observation");
 								assert.ok(tool);
 								await tool.execute("report-1", {
@@ -134,11 +140,23 @@ if (scenario) {
 	});
 	await import("../../../main/resources/agent/pi-runner.ts");
 } else {
-	for (const stage of ["setup", "recon", "observer", "retry", "composer", "composer-budget"]) {
+	for (const stage of [
+		"setup",
+		"recon",
+		"observer",
+		"retry",
+		"composer",
+		"composer-budget",
+		"recon-init",
+		"observer-init",
+		"retry-init",
+	]) {
 		void test(
-			stage === "composer"
-				? "preserves admitted observations when composer initialization fails"
-				: `does not prompt a session whose ${stage} initialization exhausts the budget`,
+			stage.endsWith("-init")
+				? `preserves review progress when ${stage} throws`
+				: stage === "composer"
+					? "preserves admitted observations when composer initialization fails"
+					: `does not prompt a session whose ${stage} initialization exhausts the budget`,
 			() => {
 				const cwd = mkdtempSync(join(tmpdir(), "pi-orchestration-"));
 				try {
@@ -173,7 +191,11 @@ if (scenario) {
 					);
 					writeFileSync(
 						join(cwd, "inputs/practices/index.json"),
-						JSON.stringify([{ slug: "test-practice" }]),
+						JSON.stringify(
+							stage === "retry-init"
+								? [{ slug: "test-practice" }, { slug: "missing-practice" }]
+								: [{ slug: "test-practice" }],
+						),
 					);
 					writeFileSync(
 						join(cwd, "pi-provider.json"),
@@ -206,7 +228,11 @@ if (scenario) {
 					assert.equal(child.error, undefined);
 					assert.equal(
 						child.status,
-						stage === "composer" ? 2 : stage === "composer-budget" ? 0 : 1,
+						stage === "composer"
+							? 2
+							: stage === "composer-budget" || stage.endsWith("-init")
+								? 0
+								: 1,
 						child.stderr,
 					);
 					const events = readFileSync(join(cwd, "events"), "utf8")
@@ -219,6 +245,19 @@ if (scenario) {
 						assert.ok(events.includes("create:composer"), child.stderr);
 						assert.ok(!events.includes("prompt:composer"));
 						if (stage === "composer-budget") assert.ok(events.includes("dispose:composer"));
+					} else if (stage.endsWith("-init")) {
+						const lane = stage.slice(0, -5);
+						assert.ok(events.includes(`create:${lane}`), child.stderr);
+						assert.ok(!events.includes(`prompt:${lane}`));
+						assert.ok(
+							events.includes(stage === "observer-init" ? "prompt:retry" : "prompt:observer"),
+						);
+					} else {
+						assert.ok(events.includes(`create:${stage}`), child.stderr);
+						assert.ok(events.includes(`dispose:${stage}`), child.stderr);
+						assert.ok(!events.includes(`prompt:${stage}`), events.join("\n"));
+					}
+					if (stage.startsWith("composer") || stage.endsWith("-init")) {
 						const feedback: unknown = JSON.parse(
 							readFileSync(join(cwd, "out/feedback.json"), "utf8"),
 						);
@@ -229,22 +268,24 @@ if (scenario) {
 							units: [],
 							lead: null,
 						});
-					} else {
-						assert.ok(events.includes(`create:${stage}`), child.stderr);
-						assert.ok(events.includes(`dispose:${stage}`), child.stderr);
-						assert.ok(!events.includes(`prompt:${stage}`), events.join("\n"));
 					}
 					const coverage: unknown = JSON.parse(
 						readFileSync(join(cwd, "out/practice-coverage.json"), "utf8"),
 					);
 					assert.deepEqual(coverage, {
-						eligible: 1,
-						evaluated: stage.startsWith("composer") ? 1 : 0,
+						eligible: stage === "retry-init" ? 2 : 1,
+						evaluated: stage.startsWith("composer") || stage.endsWith("-init") ? 1 : 0,
 						outcomes: [
 							{
 								practiceSlug: "test-practice",
-								outcome: stage.startsWith("composer") ? "EVALUATED" : "NOT_REACHED",
+								outcome:
+									stage.startsWith("composer") || stage.endsWith("-init")
+										? "EVALUATED"
+										: "NOT_REACHED",
 							},
+							...(stage === "retry-init"
+								? [{ practiceSlug: "missing-practice", outcome: "NOT_REACHED" }]
+								: []),
 						],
 					});
 				} finally {

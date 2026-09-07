@@ -679,7 +679,11 @@ const result = spawnSync(${JSON.stringify(realGit)}, args, { stdio: "inherit" })
 process.exit(result.status ?? 1);`,
 		cosign: 'process.exit(process.env.FAIL_VERIFICATION === "1" ? 1 : 0);',
 		systemctl: 'if (args[0] === "show") console.log("yes");',
-		docker: `if (args.includes("config")) console.log(${JSON.stringify(JSON.stringify({ services: { app: { image } } }))});`,
+		docker: `if (args.includes("config")) {
+const stack = args[args.indexOf("--project-name") + 1];
+const image = stack === process.env.UNLOCKED_STACK ? "example.invalid/unverified:latest" : ${JSON.stringify(image)};
+console.log(JSON.stringify({ services: { app: { image } } }));
+}`,
 	})) {
 		await writeFile(
 			join(bin, name),
@@ -711,8 +715,14 @@ await main(${JSON.stringify(units)});\n`,
 		run: ({
 			cli = false,
 			failVerification = false,
+			unlockedStack,
 			channel = "test",
-		}: { cli?: boolean; failVerification?: boolean; channel?: string } = {}) =>
+		}: {
+			cli?: boolean;
+			failVerification?: boolean;
+			channel?: string;
+			unlockedStack?: string;
+		} = {}) =>
 			spawnSync(
 				process.execPath,
 				[join(directory, cli ? "tooling/scripts/reconcile-deployment.ts" : "run.mjs")],
@@ -727,6 +737,7 @@ await main(${JSON.stringify(units)});\n`,
 						HEPHAESTUS_PROMOTE_IDENTITY: "https://example.invalid/promote",
 						HEPHAESTUS_METRICS_FILE: metricsFile,
 						FAIL_VERIFICATION: failVerification ? "1" : "0",
+						UNLOCKED_STACK: unlockedStack,
 					}),
 				},
 			),
@@ -863,6 +874,29 @@ await test(
 				/^hephaestus_deploy_reconcile_success 0$/m,
 			);
 			assert.doesNotMatch(await fixture.calls(), /cosign|docker|systemctl/);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"an unlocked image in a later stack leaves the applied release and every container untouched",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(join(tmpdir(), "reconcile-unlocked-image-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const previous = { ...fixture.record, release: "v0.9.0" };
+			await writeFile(join(directory, "applied.json"), JSON.stringify(previous));
+
+			const result = fixture.run({ unlockedStack: "proxy" });
+
+			assert.notEqual(result.status, 0);
+			assert.match(result.stderr, /proxy renders images outside the release lock/);
+			assert.deepEqual(await readApplied(join(directory, "applied.json")), previous);
+			assert.equal(await readlink(join(directory, "tooling")), fixture.bootstrap);
+			assert.doesNotMatch(await fixture.calls(), / up |systemctl/);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}

@@ -208,10 +208,11 @@ function UserProfile() {
 				limit: monitorLimit,
 			}}
 			onActivityMonitorFiltersChange={handleActivityMonitorFiltersChange}
-			isLoading={
-				profileQuery.isPending ||
+			isLoading={profileQuery.isPending || workspaceQuery.isPending}
+			isActivityLoading={
 				workspaceQuery.isPending ||
-				(activityMonitorQuery.isPending && !activityMonitorQuery.data)
+				activityMonitorQuery.isPending ||
+				activityMonitorQuery.isPlaceholderData
 			}
 			error={profileQuery.error ?? undefined}
 			onRetry={() => void profileQuery.refetch()}

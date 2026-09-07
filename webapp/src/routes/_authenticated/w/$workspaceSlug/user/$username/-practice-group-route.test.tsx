@@ -278,6 +278,11 @@ it("restores the bookmarked custom timeframe on Back without scrolling on select
 	expect(screen.getByRole("button", { name: "Choose custom dates" }).textContent).toContain(
 		"Jun 2 – 6",
 	);
+	act(() => router.history.forward());
+	await vi.waitFor(() =>
+		expect(screen.getByRole("combobox", { name: "Timeframe" }).textContent).toContain("Last week"),
+	);
+	expect(screen.queryByRole("button", { name: "Choose custom dates" })).toBeNull();
 });
 
 it.each([
@@ -309,3 +314,34 @@ it.each([
 		screen.getByRole("heading", { name: "Developer ada" });
 	},
 );
+
+it("does not present the previous timeframe's activity as the newly selected range", async () => {
+	let respond = (_response: Response) => {};
+	const pendingActivity = new Promise<Response>((resolve) => {
+		respond = resolve;
+	});
+	let activityReads = 0;
+	server.use(
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
+		http.get("*/workspaces/:workspaceSlug/profile/ada", () => HttpResponse.json(profile("ada"))),
+		http.get("*/workspaces/:workspaceSlug/profile/:login/activity-monitor", () =>
+			HttpResponse.json(activityMonitor),
+		),
+	);
+	renderRouteAtWithRouter("/w/acme/user/ada?after=2026-06-02T00:00:00Z");
+	await screen.findByRole("heading", { name: "No review activity" }, ROUTE_RENDER_WAIT);
+	server.use(
+		http.get("*/workspaces/:workspaceSlug/profile/:login/activity-monitor", () => {
+			activityReads++;
+			return pendingActivity.then((response) => response.clone());
+		}),
+	);
+	await userEvent.click(screen.getByRole("combobox", { name: "Timeframe" }));
+	await userEvent.click(await screen.findByRole("option", { name: "Last week" }));
+	await vi.waitFor(() => expect(activityReads).toBe(1));
+	expect(screen.queryByRole("heading", { name: "No review activity" })).toBeNull();
+	screen.getByRole("heading", { name: "Developer ada" });
+	screen.getByRole("combobox", { name: "Timeframe" });
+	await act(async () => respond(HttpResponse.json(activityMonitor)));
+	await screen.findByRole("heading", { name: "No review activity" }, ROUTE_RENDER_WAIT);
+});

@@ -19,6 +19,7 @@ interface ProfileProps {
 	activityMonitorFilters: ActivityMonitorFilters;
 	onActivityMonitorFiltersChange: (filters: ActivityMonitorFilters) => void;
 	isLoading: boolean;
+	isActivityLoading?: boolean;
 	error?: unknown;
 	onRetry?: () => void;
 	username: string;
@@ -43,6 +44,7 @@ export function ProfilePage({
 	activityMonitorFilters,
 	onActivityMonitorFiltersChange,
 	isLoading,
+	isActivityLoading = isLoading,
 	error,
 	onRetry,
 	username,
@@ -97,7 +99,7 @@ export function ProfilePage({
 					activityMonitorData={activityMonitorData}
 					activityMonitorFilters={activityMonitorFilters}
 					onActivityMonitorFiltersChange={onActivityMonitorFiltersChange}
-					isLoading={isLoading}
+					isLoading={isActivityLoading}
 					username={username}
 					displayName={profileData?.userInfo.name}
 					currUserIsDashboardUser={currUserIsDashboardUser}
