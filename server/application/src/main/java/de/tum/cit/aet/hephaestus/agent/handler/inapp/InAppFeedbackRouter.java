@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler.inapp;
 
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
@@ -15,14 +16,6 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 public final class InAppFeedbackRouter {
-
-    /**
-     * Distinct artifacts a problem must appear on before it is a pattern. One occurrence is a task-level
-     * note and belongs on the work itself; claiming a habit from it would be the surface asserting more
-     * than the evidence carries. Mirrors {@code ObservationService.CORROBORATION_TARGETS}, which already
-     * holds the same line on the reflective read model.
-     */
-    public static final int CORROBORATION_ARTIFACTS = 2;
 
     /**
      * How long the same practice stays quiet on this surface after it was last shown. A habit does not
@@ -68,7 +61,7 @@ public final class InAppFeedbackRouter {
         if (problems.stream().allMatch(o -> o.getOrigin() == ObservationOrigin.BACKFILL)) {
             return InAppRoutingDecision.BACKFILL_HELD;
         }
-        if (distinctArtifacts(problems) < CORROBORATION_ARTIFACTS) {
+        if (distinctArtifacts(problems) < FeedbackCompositionInputs.MIN_DISTINCT_ARTIFACTS) {
             return InAppRoutingDecision.UNCORROBORATED;
         }
         if (lastSurfaced != null && lastSurfaced.isAfter(now.minus(Duration.ofDays(RESURFACE_COOLDOWN_DAYS)))) {

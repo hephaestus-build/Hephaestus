@@ -1638,12 +1638,7 @@ function scheduleDeadline(timeoutMs: number, onTimeout: () => void) {
 	return { elapsed, timer, state };
 }
 
-/**
- * Ends a session for good. A steer still queued when a session is disposed is not dropped: the SDK
- * keeps it on the agent and starts a fresh run to deliver it, so a nudge that arrived just as a
- * deadline did would spend the budget that deadline just took away. Clearing the queue first is what
- * the SDK's own interactive mode does before it aborts.
- */
+/** Clear queued steering before disposal so aborting cannot start a queued continuation. */
 function stopSession(session: AgentSession) {
 	session.clearQueue();
 	session.dispose();

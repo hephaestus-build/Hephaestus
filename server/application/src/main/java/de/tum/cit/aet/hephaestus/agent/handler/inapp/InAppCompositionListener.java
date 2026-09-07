@@ -40,29 +40,16 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Turns a finished review's composed process-level messages into IN_APP feedback units.
+ * Prepares composed IN_APP feedback and resolves its eligible supporting observations.
  *
- * <p>A failure here is logged and the feedback the developer already received is unaffected.
- *
- * <p>Late rather than lost. The event is delivered once and a submission to a saturated executor is
- * rejected outright, so this listener is not a guarantee of anything on its own — it is the fast path.
- * {@link #prepare} records that the lane ran, and {@code FeedbackLanePreparationSweeper} runs it for
- * every finished job that carries no such record.
- *
- * <p>Writes none of the words. The composer names a practice; the server — not the model — resolves
- * which of that person's measurements stand behind it, because evidence a model asserts about itself is
- * not evidence.
+ * <p>The asynchronous listener is the fast path. {@code FeedbackLanePreparationSweeper} retries
+ * unmarked jobs within its recovery window, including jobs whose listener submission was rejected.
  */
 @Component
 public class InAppCompositionListener {
 
     private static final Logger log = LoggerFactory.getLogger(InAppCompositionListener.class);
 
-    /**
-     * Ceiling on how many of a person's measurements of one practice are read to weigh a pattern. The
-     * router only needs to count distinct artifacts and check provenance, so the whole window is never
-     * required and an unbounded read would grow with how much work somebody did.
-     */
     private static final int MAX_EVIDENCE_PER_PRACTICE = 50;
 
     private final AgentJobRepository agentJobRepository;
@@ -108,17 +95,10 @@ public class InAppCompositionListener {
     }
 
     /**
-     * Route this job's composed messages to their recipients, then record that the lane ran.
+     * Records completion even when nothing is prepared. Exceptions propagate so recovery can retry
+     * jobs whose completion mark was not committed.
      *
-     * <p>Throws rather than logging, because its second caller is the recovery sweeper: a failure that
-     * leaves the mark unwritten is what makes the sweeper try again, and a caught one would look
-     * identical to success and retire the job from the sweep for good.
-     *
-     * <p>The mark is written on every non-exceptional path, including a job that composed nothing —
-     * which is the common case, since composition is a stage a review may skip. "Nothing to prepare" is
-     * an answer, and a lane that has answered must stop being swept.
-     *
-     * @return units newly prepared by this call (0 on a re-run, and 0 when nothing was composed)
+     * @return newly prepared units
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int prepare(UUID agentJobId, Long workspaceId) {
@@ -145,13 +125,8 @@ public class InAppCompositionListener {
         if (messages.isEmpty()) {
             return 0;
         }
-        // One recipient in practice — a review job files its observations against one person — but
-        // read rather than assumed, so a kind that ever files against several does not silently
-        // deliver all of their patterns to whoever happened to be first.
         List<Long> recipients = observationRepository.findSubjectUserIdsByAgentJobId(agentJobId, workspaceId);
-        // Every recipient's units share this job's id, and (agent_job_id, position) is unique, so each
-        // recipient gets its own slice of the band. The query orders by user id, so a re-run assigns
-        // the same slices and the idempotency guard still recognises what it already wrote.
+        // Stable recipient ordering preserves unique (agent_job_id, position) slots across retries.
         int positionBase = FeedbackLedgerRecorder.IN_APP_UNIT_ORDINAL_BASE;
         int prepared = 0;
         for (Long recipient : recipients) {
@@ -164,16 +139,6 @@ public class InAppCompositionListener {
         return prepared;
     }
 
-    /**
-     * This lane's share of one composition turn. The stage writes for every open surface in a single
-     * turn, so the units arrive together and each lane takes its own: a unit addressed to the merge
-     * request or to the mentor is not this producer's to route, and silently treating one as an in-app
-     * card would put a note about one line on a surface that exists to talk about habits.
-     *
-     * <p>A {@code WITHHOLD} unit is dropped here without a row, because on this lane the reason is
-     * always a property of the evidence — there was no pattern, nobody was owed anything — and a refusal
-     * that is a property of the evidence is not a withholding to explain.
-     */
     private List<ComposedInAppMessage> inAppMessages(@Nullable JsonNode jobOutput) {
         return resultParser.parse(jobOutput, FeedbackChannel.IN_APP).stream()
                 .filter(unit -> unit.action() != ComposedFeedbackUnit.Action.WITHHOLD)
@@ -183,8 +148,6 @@ public class InAppCompositionListener {
                         Objects.requireNonNull(unit.title()),
                         Objects.requireNonNull(unit.body()),
                         Objects.requireNonNull(unit.nextStep()),
-                        // Carried, not acted on here: whether the card it names is still unread is a fact
-                        // about the moment of writing, so the decision belongs where the write happens.
                         unit.supersedesThreadKey()))
                 .toList();
     }
@@ -218,22 +181,14 @@ public class InAppCompositionListener {
                         message.practiceSlug(),
                         agentJobId);
             }
-            // Only the problems are bound, not the whole window the router read: the card renders these
-            // rows as "the pieces of work this habit was observed on", so a piece of work where the
-            // practice went WELL must never appear among them.
+            // The card presents bound observations as examples of the problem, not the full review window.
             routed.add(new InAppFeedbackPreparer.RoutedMessage(
                     message, decision, InAppFeedbackRouter.problemsIn(evidence)));
         }
         return preparer.prepare(agentJobId, workspaceId, recipientUserId, List.copyOf(routed), positionBase);
     }
 
-    /**
-     * The recipient's own measurements of one practice, narrowed to what may be shown at all.
-     *
-     * <p>The visibility gate runs here and again at read: a claim measured under review rules the
-     * practice has since replaced, or one whose evidence source lost its authorization, must stop being
-     * cited. Composition freezes text; it must not freeze permission.
-     */
+    /** Filters evidence before preparation; read paths must recheck eligibility. */
     private List<Observation> visibleEvidence(
             Long workspaceId, Long recipientUserId, String practiceSlug, Instant since) {
         List<Observation> candidates = observationRepository.findRecentForSubjectAndPractice(
@@ -246,11 +201,7 @@ public class InAppCompositionListener {
         return candidates.stream().filter(o -> visible.contains(o.getId())).toList();
     }
 
-    /**
-     * The practice's effective autonomy, resolved through the practice → group → workspace chain from a
-     * projection rather than by walking associations — the same reason {@code FeedbackChannelRouter}
-     * projects it: the routing rule must not depend on whether the caller holds a session.
-     */
+    // Project autonomy to avoid depending on initialized entity associations.
     private @Nullable PracticeAutonomy effectiveTier(
             List<Observation> evidence, Long workspaceId, PracticeAutonomy workspaceDefault) {
         List<UUID> ids = evidence.stream()
@@ -268,12 +219,7 @@ public class InAppCompositionListener {
                 .orElse(null);
     }
 
-    /**
-     * Whose conduct the practice behind this evidence judges, read off its occasion. Asked with no
-     * signal, so every occasion the practice declares is considered: the question here is whether this
-     * practice can be about somebody other than the person we are about to show it to, not which run
-     * produced it.
-     */
+    // No occasion signal: consider all bindings when resolving whose conduct the practice reviews.
     private ActorRole subjectRole(List<Observation> evidence) {
         return evidence.stream()
                 .map(Observation::getPractice)
