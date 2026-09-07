@@ -280,6 +280,29 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
     }
 
     @Test
+    void hibernateBatchedCollectionLoadByParentFkIsAllowed() {
+        // The query that took production down: Repository.labels carries @BatchSize, so Hibernate
+        // fills several repositories' label collections in one round trip and writes the parent FK
+        // predicate as "= any(?)" rather than "= ?". Same safety argument as the unbatched form —
+        // the caller already held every key in the array — so it stays on the fast path.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
+        inspector.inspect("select l1_0.repository_id,l1_0.id,l1_0.color,l1_0.name "
+                + "from label l1_0 where l1_0.repository_id=any(?)");
+        verifyNoInteractions(reporter, scopedTables);
+    }
+
+    @Test
+    void batchedParentFkDisjoinedWithOrStillEnforced() {
+        // The batched form earns the fast path only while the array predicate is what pins the
+        // result set. A disjunction widens it past those keys exactly as it does for "= ?".
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        when(scopedTables.isScoped("label")).thenReturn(true);
+        String sql = "select l1_0.id from label l1_0 where l1_0.repository_id=any(?) or l1_0.is_public=true";
+        inspector.inspect(sql);
+        verify(reporter).report(sql, Set.of("label"), TenancyEnforcement.LOG);
+    }
+
+    @Test
     void pkPredicateDisjoinedWithOrStillEnforced() {
         // The PK-only fast path tolerates extra CONJUNCTIVE predicates, but a DISJUNCTION broadens the
         // result set past the single keyed row — "WHERE id = ? OR is_public = true" returns every public
