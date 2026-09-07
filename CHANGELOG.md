@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.77.1
+
+### Patch Changes
+
+- A release no longer waits behind an unapproved production deployment. The approval for production
+  used to sit inside the same run that serialises tag promotion, so a release nobody approved held
+  that lock and every later release queued behind it without starting — for two days, in a state the
+  default run listing does not show. The lock now covers only the promotion of the version, series and
+  latest tags.
+- An instance that used the mentor before its chat storage changed can now upgrade without a
+  hand-run migration. The upgrade previously stopped at a step that refuses to remove the old
+  chat-parts table while it still holds rows, and nothing ever emptied it, so the application stayed
+  down on exactly the installations that had chat history. The history itself is carried onto the
+  message, as that step always intended.
+- Keeps the edge proxy's TLS certificates across deployments. They were stored next to the Compose file, which on a pull-based host is replaced with every release, so each deployment re-issued every certificate and a handful of deployments in one week were enough for Let's Encrypt to start refusing — leaving the site on an untrusted certificate. Certificates now live in their own volume and survive upgrades.
+
+  An instance that already serves TLS from the bundled proxy issues its certificates once more on the first start after this upgrade, which needs nothing from you. To skip even that, copy `acme.json` out of the `letsencrypt` directory beside your Compose files into the new `proxy_letsencrypt` volume before starting.
+
 ## 0.77.0
 
 ### Minor Changes
