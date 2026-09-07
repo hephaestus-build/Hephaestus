@@ -107,6 +107,10 @@ await test("every promotion decision is taken by the script that owns it", () =>
 	assert.doesNotMatch(reconciler, /join\(releaseTree, "scripts\/prepare-release-lock\.ts"\)/);
 	// Run through the tooling link, argv[1] and import.meta.filename differ; only import.meta.main holds.
 	assert.match(reconciler, /^if \(import\.meta\.main\) \{/m);
+	// A host pointed at an environment nobody has promoted yet must be told that, not handed git's
+	// "path does not exist" as an unhandled exec failure — it is the first thing a new host meets.
+	assert.match(reconciler, /cat-file", "-e", `\$\{channelCommit\}:\$\{channelPath\}`/);
+	assert.match(reconciler, /promoted yet/);
 });
 
 function referenced(expression: string, pattern: RegExp): string[] {

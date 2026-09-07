@@ -462,6 +462,18 @@ async function main(): Promise<void> {
 		})
 	).trim();
 	const channelPath = `channels/${config.channel}.json`;
+	// An environment nobody has promoted yet has no channel file. That is the first thing a new
+	// host meets, so say which channel is missing and what publishes it rather than letting git's
+	// "path does not exist" surface as an unhandled exec failure.
+	if (
+		!(await succeeds("git", ["cat-file", "-e", `${channelCommit}:${channelPath}`], {
+			cwd: config.checkout,
+		}))
+	)
+		throw new Error(
+			`no ${channelPath} on deploy-state: the "${config.channel}" environment has not been ` +
+				"promoted yet. Run the Promote workflow for it and this host applies it on the next tick.",
+		);
 	const channelJson = await output("git", ["show", `${channelCommit}:${channelPath}`], {
 		cwd: config.checkout,
 	});
