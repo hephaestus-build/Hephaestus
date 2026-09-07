@@ -61,7 +61,10 @@ if history never changes underneath an instance that already ran part of it.
    stops writing/reading it (and migrates data if needed), release *N+1* drops it. A single
    release must stay bootable against the schema left behind by the previous one.
 
-CI enforces 1 and 2 mechanically (see below); 3 is a review responsibility.
+CI enforces 1 and 2 mechanically (see below); 3 is a review responsibility. The sole archival
+transition is the verified v0.77.4 baseline: archived files remain byte-identical and test-only.
+The baseline and subsequent migrations follow the same immutability policy. Existing installations
+must follow the [baseline synchronization runbook](../admin/liquibase-baseline-runbook.md).
 
 ## CI validation
 
@@ -73,9 +76,11 @@ CI enforces 1 and 2 mechanically (see below); 3 is a review responsibility.
 2. **Changelog immutability** — Security workflow, job *Dependencies, secrets, and policy*, step
    *Changelog immutability guard*. A git diff from the PR base commit fails if any file under
    `db/changelog/` was modified, renamed or deleted, or if an existing `<include>` line in
-   `master.xml` was removed, reordered or edited. This catches what checksums miss.
+   `master.xml` was removed, reordered or edited. The v0.77.4 transition additionally requires the
+   pinned original master and byte-identical archives; it is not a general squash bypass.
 3. **Seeded release upgrade** — `release-upgrade.yml` boots the previous stable release, seeds
-   account and workspace data, then boots the candidate against the same database and checks
+   account and workspace data, synchronizes the baseline when crossing its verified cut-point,
+   then boots the candidate against the same database and checks
    readiness, the seeded relationships, the practice catalog and authenticated reads. Release
    publication depends on it; it also runs weekly.
 

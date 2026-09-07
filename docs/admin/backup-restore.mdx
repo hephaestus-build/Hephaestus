@@ -12,6 +12,7 @@ holds bounded evidence copies that may become irreproducible after upstream cont
 | Data | Where | Priority |
 | --- | --- | --- |
 | PostgreSQL database | Compose-managed `postgresql-data` volume mounted by `postgres` | **Everything.** Accounts, workspaces, observations, feedback, encrypted provider tokens, JWT signing keys. |
+| `release-lock.env` | `/opt/hephaestus/docker/self-host/release-lock.env` | The signed image digests matching the database backup. |
 | `.env` | `/opt/hephaestus/docker/self-host/.env` | **Equal priority.** Its encryption keys protect values inside the database backup. Without them, provider credentials and signing material are unreadable. |
 | TLS certificates | `./letsencrypt/` | Optional — Let's Encrypt re-issues on first boot (rate limits permitting). |
 | Context Fabric | `git-repos` volume | Back up when replayable evidence is required. Skipping it discards repository clones and bounded replay/CAS content; durable job provenance remains in PostgreSQL, but the exact source bytes may be unrecoverable. |
@@ -22,21 +23,28 @@ holds bounded evidence copies that may become irreproducible after upstream cont
 Logical dump while everything runs (safe — Postgres MVCC gives a consistent snapshot):
 
 ```bash
+(
+set -eu
+umask 077
 cd /opt/hephaestus/docker/self-host
 dc() { docker compose --env-file .env --env-file release-lock.env "$@"; }
-dc exec -T postgres pg_dump -U root -Fc hephaestus \
-  > hephaestus-$(date +%F).dump
-cp .env hephaestus-$(date +%F).env
+backup="hephaestus-$(date +%F)"
+dc exec -T postgres pg_dump -U root -Fc hephaestus > "$backup.dump"
+cp .env "$backup.env"
+cp release-lock.env "$backup.release-lock.env"
+)
 ```
 
-Ship both files **off the host**, encrypted. Cron it daily; test-restore it at least once (below).
+Ship all three files **off the host**, encrypted. Cron it daily; test-restore it at least once (below).
 
 ## Restore
 
-On a fresh host, complete install steps 1–2 first, restoring the saved `.env` (same
+On a fresh host, complete install steps 1–2 first, restoring the saved `release-lock.env` and `.env` (same
 `POSTGRES_PASSWORD` and both `HEPHAESTUS_SECURITY_*ENCRYPTION_KEY` values). Then:
 
 ```bash
+(
+set -eu
 cd /opt/hephaestus/docker/self-host
 dc() { docker compose --env-file .env --env-file release-lock.env "$@"; }
 dc up -d postgres
@@ -50,6 +58,7 @@ dc exec -T postgres pg_restore -U root -d hephaestus --no-owner --no-acl --singl
   < hephaestus-YYYY-MM-DD.dump
 
 dc up -d --wait
+)
 ```
 
 Verify: sign in, open a workspace, check recent activity is present up to the backup

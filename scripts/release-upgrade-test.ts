@@ -49,6 +49,8 @@ function startApplication(name: string, image: string): number {
 		"--env",
 		"SPRING_PROFILES_ACTIVE=e2e",
 		"--env",
+		"SPRING_LIQUIBASE_CONTEXTS=prod",
+		"--env",
 		"SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/hephaestus",
 		"--env",
 		"SPRING_DATASOURCE_USERNAME=root",
@@ -115,16 +117,10 @@ async function login(port: number, username: string): Promise<string> {
 	return cookie;
 }
 
-/**
- * A signed-in person may not read anything else until they complete the current transparency
- * notice, so the drill completes it through the endpoint the first-login interstitial uses. The
- * notice arrived after some of the releases this runs against, and those have no consent endpoint.
- */
 async function completeTransparencyNotice(port: number, cookie: string): Promise<void> {
 	const status = await fetchWithTimeout(`http://127.0.0.1:${port}/user/consent`, {
 		headers: { cookie },
 	});
-	if (status.status === 404) return;
 	if (!status.ok)
 		throw new Error(`Consent status returned ${status.status}: ${await status.text()}`);
 	const statusBody: unknown = await status.json();
@@ -355,6 +351,56 @@ function appliedChangeCount(): number {
 	return count("SELECT count(*) FROM databasechangelog;");
 }
 
+function synchronizeBaseline(image: string): void {
+	const baselineFile = "db/changelog/0000000000000_baseline_v0_77_4.xml";
+	if (
+		count(`SELECT count(*) FROM databasechangelog
+			WHERE id = 'baseline_v0_77_4-tag' AND author = 'hephaestus-release'
+			AND filename = '${baselineFile}' AND tag = 'baseline_v0_77_4';`) === 1
+	)
+		return;
+
+	if (
+		count(`SELECT count(*) FROM databasechangelog
+			WHERE id = '1788679885460-1' AND author = 'hephaestus'
+			AND filename = 'db/changelog/1788679885460_changelog.xml'
+			AND md5sum = '9:658c0b7abed980fcd0e8142337bec5be'
+			AND exectype IN ('EXECUTED', 'MARK_RAN');`) !== 1
+	)
+		throw new Error(
+			"The previous release has not reached the verified v0.77.4 baseline cut-point.",
+		);
+
+	// Use the candidate's bundled Liquibase and resources, not a separately versioned CLI.
+	docker(
+		"run",
+		"--rm",
+		"--network",
+		network,
+		"--entrypoint",
+		"/cnb/lifecycle/launcher",
+		image,
+		"--",
+		"java",
+		"-cp",
+		"runner.jar:lib/*",
+		"liquibase.integration.commandline.Main",
+		"--changeLogFile=db/master.xml",
+		"--url=jdbc:postgresql://postgres:5432/hephaestus",
+		"--username=root",
+		"--password=root",
+		"--contexts=prod",
+		"changeLogSyncToTag",
+		"baseline_v0_77_4",
+	);
+	if (
+		count(`SELECT count(*) FROM databasechangelog
+			WHERE id = 'baseline_v0_77_4-tag' AND author = 'hephaestus-release'
+			AND filename = '${baselineFile}' AND tag = 'baseline_v0_77_4';`) !== 1
+	)
+		throw new Error("Baseline synchronization did not record the expected tag.");
+}
+
 try {
 	docker("network", "create", network);
 	docker(
@@ -403,6 +449,7 @@ try {
 
 	docker("stop", "--time", "30", application);
 	docker("rm", application);
+	synchronizeBaseline(candidateImage);
 	application = `${runId}-candidate`;
 	port = startApplication(application, candidateImage);
 	await waitUntilReady(application, port);
