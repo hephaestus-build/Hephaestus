@@ -54,7 +54,7 @@
         <springdoc.version>3.1.0</springdoc.version>
         <sentry.version>8.53.0</sentry.version>
         <logstash-logback-encoder.version>9.0</logstash-logback-encoder.version>
-        <slack-bolt.version>1.50.0</slack-bolt.version>
+        <slack-bolt.version>1.51.0</slack-bolt.version>
         <jnats.version>2.26.2</jnats.version>
         <jgit.version>7.7.1.202607240634-r</jgit.version>
         <java-jwt.version>4.6.0</java-jwt.version>
