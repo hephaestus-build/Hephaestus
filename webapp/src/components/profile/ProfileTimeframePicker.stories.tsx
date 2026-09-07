@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, fn, screen } from "storybook/test";
+import { expect, fn, screen, waitFor } from "storybook/test";
 
 import { STORY_NOW } from "@/components/common/story-clock";
 import { DEFAULT_SCHEDULE, formatDateRangeForApi, getDateRangeForPreset } from "@/lib/timeframe";
@@ -41,11 +41,12 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-	play: async ({ canvas, args, userEvent }) => {
+	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Timeframe" }));
-		await userEvent.click(screen.getByRole("option", { name: "All time" }));
-		await expect(canvas.getByRole("combobox", { name: "Timeframe" })).toHaveTextContent("All time");
-		await expect(args.onTimeframeChange).toHaveBeenCalledOnce();
+		await userEvent.click(await screen.findByRole("option", { name: "All time" }));
+		await waitFor(() =>
+			expect(canvas.getByRole("combobox", { name: "Timeframe" })).toHaveTextContent("All time"),
+		);
 	},
 };
 

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, fn, userEvent } from "storybook/test";
+import { expect, fn, userEvent, waitFor } from "storybook/test";
 
 import { STORY_NOW } from "@/components/common/story-clock";
 
@@ -68,6 +68,6 @@ export const SuccessfulReplacement: Story = {
 		const input = canvas.getByLabelText("New personal access token");
 		await userEvent.type(input, "replacement-token");
 		await userEvent.click(canvas.getByRole("button", { name: "Replace token" }));
-		await expect(input).toHaveValue("");
+		await waitFor(() => expect(input).toHaveValue(""));
 	},
 };
