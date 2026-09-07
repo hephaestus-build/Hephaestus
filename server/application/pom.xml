@@ -63,12 +63,12 @@
         <nullaway.version>0.14.1</nullaway.version>
         <shedlock.version>7.9.0</shedlock.version>
         <bucket4j.version>8.19.0</bucket4j.version>
-        <!-- Transitive only, via docker-java-core: bcpkix -> bcutil -> bcprov. Not managed by the
-             Spring Boot BOM, so the version it resolves to is docker-java's, and 1.82 carries
-             CVE-2025-14813 (critical) and CVE-2026-5598, both fixed in 1.84. Managed here so the
-             image scan stays clean and Renovate keeps it current; drop it once docker-java ships a
-             fixed floor of its own. -->
-        <bouncycastle.version>1.84</bouncycastle.version>
+        <!-- Override docker-java-core's transitive cryptography dependencies to keep its TLS
+             certificate handling on maintained releases. Artifacts publish patch releases
+             independently, so Renovate must track each version separately. -->
+        <bcprov.version>1.85.2</bcprov.version>
+        <bcutil.version>1.85</bcutil.version>
+        <bcpkix.version>1.85</bcpkix.version>
         <maven.build.cache.skipCache>true</maven.build.cache.skipCache>
         <maven.build.cache.skipSave>true</maven.build.cache.skipSave>
     </properties>
@@ -410,24 +410,20 @@
                 <scope>import</scope>
                 <type>pom</type>
             </dependency>
-            <!-- All three move together: Bouncy Castle only supports a matched provider, util and
-                 PKIX set. docker-java's TLS path (CertificateUtils, LocalDirectorySSLConfig) is the
-                 only consumer, and it links against PEMParser, JcaPEMKeyConverter,
-                 JcaX509CertificateConverter and BouncyCastleProvider, all unchanged in 1.84. -->
             <dependency>
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcprov-jdk18on</artifactId>
-                <version>${bouncycastle.version}</version>
+                <version>${bcprov.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcutil-jdk18on</artifactId>
-                <version>${bouncycastle.version}</version>
+                <version>${bcutil.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcpkix-jdk18on</artifactId>
-                <version>${bouncycastle.version}</version>
+                <version>${bcpkix.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
