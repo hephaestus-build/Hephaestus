@@ -30,7 +30,7 @@
 		"mermaid": "11.16.1",
 		"micromark-extension-mdxjs": "3.0.0",
 		"mprocs": "0.9.3",
-		"npm-package-arg": "13.0.2",
+		"npm-package-arg": "14.0.0",
 		"oxfmt": "catalog:",
 		"oxlint": "catalog:",
 		"oxlint-tsgolint": "catalog:",
