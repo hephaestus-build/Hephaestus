@@ -339,17 +339,22 @@ export default defineConfig({
 
 			// What each CI job runs.
 			"ci:server": group(serverGates.concat("gate:contracts", "gate:env")),
-			"ci:tooling": group([
-				// Excluded here because another job or workflow runs them; the Windows leg re-runs what it can.
-				...policyGates.filter(
-					(gate) =>
-						!["gate:contracts", "gate:env", "gate:changesets", "gate:preview-stack"].includes(gate),
-				),
-				...agentGates,
-				...docsGates,
-				...loadGates,
-				"gate:load-syntax",
-			]),
+			// Render docs after the checks: lint cannot detect broken theme contexts during static rendering.
+			"ci:tooling": run("vp run verification:docs-build", {
+				dependsOn: [
+					// Excluded here because another job or workflow runs them; the Windows leg re-runs what it can.
+					...policyGates.filter(
+						(gate) =>
+							!["gate:contracts", "gate:env", "gate:changesets", "gate:preview-stack"].includes(
+								gate,
+							),
+					),
+					...agentGates,
+					...docsGates,
+					...loadGates,
+					"gate:load-syntax",
+				],
+			}),
 			"ci:webapp:static": group([...webappGates, "gate:docs-tokens", "verification:webapp-tests"]),
 			// The build regenerates the route tree, so it never runs beside a gate that reads it. A
 			// second name after `vp run` is an argument, not a second task, so the two are separate.

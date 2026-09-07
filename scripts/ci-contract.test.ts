@@ -394,6 +394,19 @@ void describe("CI contract", () => {
 		);
 	});
 
+	void test("required tooling CI renders docs after its checks", async () => {
+		const tasks = await loadTasks();
+		const tooling = asRecord(tasks["ci:tooling"], "ci:tooling");
+		assert.deepEqual(commandsOf(tooling), ["vp run verification:docs-build"]);
+		const dependencies = asArray(tooling.dependsOn, "ci:tooling.dependsOn").map((dependency) =>
+			asString(dependency, "ci:tooling dependency"),
+		);
+		const checks = taskClosure(tasks, dependencies);
+		assert.ok(checks.has("gate:docs-lint"));
+		assert.ok(!checks.has("docs:build"), "docs must render after, not alongside, the checks");
+		assert.ok(taskClosure(tasks, ["ci:tooling"]).has("docs:build"));
+	});
+
 	void test("every local gate runs in a workflow, and every CI gate is a local gate", async () => {
 		const tasks = await loadTasks();
 		const local = taskClosure(tasks, ["quality"]);
