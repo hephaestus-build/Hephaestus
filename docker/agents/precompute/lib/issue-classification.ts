@@ -15,6 +15,7 @@ export function classifyIssue(metadata: IssueMetadata) {
 	const titleNorm = norm(title);
 	const bodyNorm = norm(body);
 	const titleEcho =
+		titleNorm.length > 0 &&
 		bodyNorm.length > 0 &&
 		(bodyNorm === titleNorm || titleNorm.includes(bodyNorm) || bodyNorm.includes(titleNorm));
 	const emptyOrTitleEcho = body.length < 25 || titleEcho;

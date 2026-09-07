@@ -145,6 +145,38 @@ void describe("issue classification across practices", () => {
 			looksUmbrella: 1,
 		},
 		{
+			name: "substantive body with an omitted title",
+			metadata: {
+				body: "The PDF contains overlapping text when a customer's address spans more than three lines.",
+				labels: ["BUG"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "substantive body with an empty title",
+			metadata: {
+				title: "",
+				body: "The PDF contains overlapping text when a customer's address spans more than three lines.",
+				labels: ["BUG"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "substantive body with a non-Latin title",
+			metadata: {
+				title: "报告",
+				body: "The PDF contains overlapping text when a customer's address spans more than three lines.",
+				labels: ["BUG"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
 			name: "substantive untyped issue",
 			metadata: {
 				title: "Unreadable invoice",
