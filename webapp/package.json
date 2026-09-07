@@ -43,7 +43,7 @@
 		"@tanstack/react-query-devtools": "5.102.5",
 		"@tanstack/react-router": "1.170.32",
 		"@tanstack/react-router-devtools": "1.167.1",
-		"@tanstack/react-table": "9.1.2",
+		"@tanstack/react-table": "9.2.4",
 		"@xyflow/react": "^12.11.5",
 		"ai": "7.0.85",
 		"class-variance-authority": "0.7.1",
