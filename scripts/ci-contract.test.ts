@@ -2248,3 +2248,81 @@ void test("CodeQL selects languages with native change detection", async () => {
 	assert.ok(asArray(filters["java-kotlin"], "Java paths").includes("server/**"));
 	assert.ok(asArray(filters["javascript-typescript"], "JS paths").includes("pnpm-lock.yaml"));
 });
+
+void test("Stories enforces visual evidence independently of preview publication", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/ci-quality-gates.yml", "utf8"));
+	const jobPath = ["jobs", "webapp-stories"];
+	assert.equal(
+		workflow.getIn([...jobPath, "env", "CHROMATIC_POLICY_SKIP"]),
+		`\${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || startsWith(github.head_ref || github.ref_name, 'dependabot/') || startsWith(github.head_ref || github.ref_name, 'renovate/') }}`,
+	);
+	const chromatic = namedStep(workflow, jobPath, "Chromatic visual testing");
+	assert.equal(chromatic.get("if"), "success() && env.CHROMATIC_POLICY_SKIP != 'true'");
+	assert.equal(chromatic.getIn(["with", "autoAcceptChanges"]), false);
+	assert.equal(chromatic.getIn(["with", "exitZeroOnChanges"]), false);
+	assert.equal(chromatic.getIn(["with", "exitOnceUploaded"]), false);
+	assert.equal(chromatic.getIn(["with", "skip"]), false);
+	const report = namedStep(workflow, jobPath, "Report Chromatic visual coverage");
+	assert.equal(report.get("if"), "always()");
+	assert.equal(report.get("continue-on-error"), true);
+	assert.equal(report.get("run"), "node scripts/report-chromatic.ts");
+	assert.equal(report.getIn(["env", "CHROMATIC_OUTCOME"]), `\${{ steps.chromatic.outcome }}`);
+	for (const [name, output] of Object.entries({
+		CODE: "code",
+		CAPTURED: "actualCaptureCount",
+		INHERITED: "inheritedCaptureCount",
+		TESTS: "testCount",
+		ERRORS: "errorCount",
+		CHANGES: "changeCount",
+		INTERACTIONS: "interactionTestFailuresCount",
+		BUILD_URL: "buildUrl",
+	}))
+		assert.equal(
+			report.getIn(["env", `CHROMATIC_${name}`]),
+			`\${{ steps.chromatic.outputs.${output} }}`,
+		);
+	const gate = namedStep(workflow, jobPath, "Evaluate stories checks");
+	assert.equal(gate.get("if"), "always()");
+	assert.equal(gate.getIn(["env", "CHROMATIC"]), `\${{ steps.visual_coverage.outcome }}`);
+});
+
+void test("global styles and assets retain full-snapshot invalidation", async () => {
+	const config: unknown = JSON.parse(await readFile("webapp/chromatic.config.json", "utf8"));
+	assert.ok(
+		config &&
+			typeof config === "object" &&
+			"externals" in config &&
+			Array.isArray(config.externals),
+	);
+	for (const pattern of [
+		"webapp/public/**",
+		"webapp/src/assets/**",
+		"webapp/**/*.css",
+		"webapp/**/*.scss",
+		"webapp/**/*.sass",
+		"webapp/tailwind.config.*",
+		"webapp/vite.*",
+		"webapp/components.json",
+	])
+		assert.ok(config.externals.includes(pattern), `${pattern} must invalidate snapshots`);
+});
+
+void test(
+	"Stories final verdict rejects every incomplete or failed leg",
+	{ skip: !bashRunsRunnerSteps() },
+	async () => {
+		const workflow = parseDocument(
+			await readFile(".github/workflows/ci-quality-gates.yml", "utf8"),
+		);
+		const command = runScript(workflow, ["jobs", "webapp-stories"], "Evaluate stories checks");
+		for (const stories of ["success", "failure", "skipped"])
+			for (const coverage of ["success", "failure", "skipped", "cancelled", ""]) {
+				const result = await runStep(command, { STORYBOOK_TESTS: stories, CHROMATIC: coverage });
+				assert.equal(
+					result.failed,
+					stories !== "success" || coverage !== "success",
+					result.diagnosis,
+				);
+			}
+	},
+);

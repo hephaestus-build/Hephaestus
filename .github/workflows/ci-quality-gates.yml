@@ -236,6 +236,7 @@ jobs:
       statuses: write
     env:
       PREVIEW_URL: hephaestus-build-storybook-pr-${{ github.event.number }}.surge.sh
+      CHROMATIC_POLICY_SKIP: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || startsWith(github.head_ref || github.ref_name, 'dependabot/') || startsWith(github.head_ref || github.ref_name, 'renovate/') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -265,8 +266,7 @@ jobs:
         id: chromatic
         continue-on-error: true
         if: >-
-          success() &&
-          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          success() && env.CHROMATIC_POLICY_SKIP != 'true'
         uses: chromaui/action@2a0b63f30233c48591844a46d451b9cf68128186 # v18.7.2
         with:
           projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
@@ -274,14 +274,30 @@ jobs:
           storybookBuildDir: storybook-static
           onlyChanged: true
           zip: true
-          skip: "@(dependabot/**|renovate/**)"
-          autoAcceptChanges: ${{ github.ref == 'refs/heads/main' && 'main' || '' }}
+          skip: false
+          autoAcceptChanges: false
           exitZeroOnChanges: false
+          exitOnceUploaded: false
           logLevel: info
           junitReport: true
         env:
           CHROMATIC_BRANCH: ${{ github.head_ref || github.ref_name }}
           CHROMATIC_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Report Chromatic visual coverage
+        id: visual_coverage
+        if: always()
+        continue-on-error: true
+        env:
+          CHROMATIC_OUTCOME: ${{ steps.chromatic.outcome }}
+          CHROMATIC_CODE: ${{ steps.chromatic.outputs.code }}
+          CHROMATIC_CAPTURED: ${{ steps.chromatic.outputs.actualCaptureCount }}
+          CHROMATIC_INHERITED: ${{ steps.chromatic.outputs.inheritedCaptureCount }}
+          CHROMATIC_TESTS: ${{ steps.chromatic.outputs.testCount }}
+          CHROMATIC_ERRORS: ${{ steps.chromatic.outputs.errorCount }}
+          CHROMATIC_CHANGES: ${{ steps.chromatic.outputs.changeCount }}
+          CHROMATIC_INTERACTIONS: ${{ steps.chromatic.outputs.interactionTestFailuresCount }}
+          CHROMATIC_BUILD_URL: ${{ steps.chromatic.outputs.buildUrl }}
+        run: node scripts/report-chromatic.ts
       - name: Deploy public Storybook preview
         id: storybook_preview
         if: >-
@@ -344,9 +360,9 @@ jobs:
         if: always()
         env:
           STORYBOOK_TESTS: ${{ steps.tests.outcome }}
-          CHROMATIC: ${{ steps.chromatic.outcome }}
+          CHROMATIC: ${{ steps.visual_coverage.outcome }}
         run: |
-          if [ "$STORYBOOK_TESTS" != success ] || { [ "$CHROMATIC" != success ] && [ "$CHROMATIC" != skipped ]; }; then
+          if [ "$STORYBOOK_TESTS" != success ] || [ "$CHROMATIC" != success ]; then
             echo "::error::Storybook tests or Chromatic failed; review both independently reported steps."
             exit 1
           fi
