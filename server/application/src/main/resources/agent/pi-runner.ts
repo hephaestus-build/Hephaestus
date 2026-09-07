@@ -2146,6 +2146,14 @@ async function main() {
 				try {
 					const retryTool = buildReportObservationTool(group.practiceSlugs);
 					const priorSessionFile = groupSessionFiles.get(group.id);
+					// Before building anything: a session costs the budget composition is about to need,
+					// and a window that is already gone would only have it stopped again. The same check
+					// runs after creation too, because building one takes time of its own.
+					if (retryAbort.signal.aborted || retryStartMs + retry.windowMs - Date.now() <= 0) {
+						retryAborted = true;
+						retryAbort.abort();
+						return;
+					}
 					const { session: retrySession } = await createAgentSession({
 						cwd: CWD,
 						agentDir: AGENT_DIR,

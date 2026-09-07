@@ -28,7 +28,17 @@ export interface StageTimeouts {
 	compositionMs: number;
 }
 
-/** The retry uses unspent review time, bounded by the process deadline and composition reservation. */
+/**
+ * The retry's wall clock: what the initial pass did not spend, and never less than the slice the
+ * split reserved for it. That floor is the point of the reservation — an initial pass that ran long
+ * is exactly when a practice is still unobserved, and the retry is the last stage that can close
+ * one. Taking the unspent time alone would hand that case zero.
+ *
+ * <p>The process deadline is the only hard cap, and composition is subtracted from it first: the
+ * review budget is measured from the first pass and the process budget from module load, so the
+ * stretches inside neither — building the runtime before, composing after — come out of what is
+ * left. A window of zero means there is genuinely nothing left to spend.
+ */
 export function deriveRetryWindow(
 	timeouts: StageTimeouts,
 	initialElapsedMs: number,
@@ -44,7 +54,8 @@ export function deriveRetryWindow(
 	}
 	const unspentReviewMs = timeouts.initialMs + timeouts.retryMs - initialElapsedMs;
 	const beforeCompositionMs = remainingProcessMs - timeouts.compositionMs;
-	return Math.max(0, Math.floor(Math.min(unspentReviewMs, beforeCompositionMs)));
+	const wantedMs = Math.max(unspentReviewMs, timeouts.retryMs);
+	return Math.max(0, Math.floor(Math.min(wantedMs, beforeCompositionMs)));
 }
 
 /**

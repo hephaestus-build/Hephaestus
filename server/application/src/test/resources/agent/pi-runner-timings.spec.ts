@@ -43,6 +43,22 @@ void test("the retry inherits what the initial pass did not spend", () => {
 	assert.equal(deriveRetryWindow(timeouts, 900_000, 0), 0);
 });
 
+void test("an initial pass that overran still gets the retry slice the split reserved", () => {
+	const timeouts = { initialMs: 600_000, retryMs: 120_000, compositionMs: 60_000 };
+	// The pass ran 200s past its own budget, so nothing of the review is unspent — but the process
+	// clock still holds 400s and composition needs only 60s of it. Taking the unspent time alone
+	// would hand the retry zero while 340s sat there, and the retry is the last stage that can close
+	// a practice nobody observed.
+	assert.equal(deriveRetryWindow(timeouts, 800_000, 400_000), timeouts.retryMs);
+});
+
+void test("the reserved slice is still bounded by a process that really is out of time", () => {
+	const timeouts = { initialMs: 600_000, retryMs: 120_000, compositionMs: 60_000 };
+	// 30s left and composition alone wants 60s: there is nothing to reserve, so the floor does not
+	// invent any and the window is zero rather than a timer armed in the past.
+	assert.equal(deriveRetryWindow(timeouts, 800_000, 30_000), 0);
+});
+
 void test("the retry leaves composition its slice of what the process has left", () => {
 	const timeouts = deriveTimeouts(1_740_000, true);
 	// 18s of SDK and model runtime setup ran before the first pass, which returned after 736s of its
