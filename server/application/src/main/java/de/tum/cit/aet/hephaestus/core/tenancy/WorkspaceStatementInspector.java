@@ -135,9 +135,14 @@ public class WorkspaceStatementInspector implements StatementInspector {
      *       (or the discriminator appears first).</li>
      *   <li>Lazy {@code @OneToMany}/{@code @ManyToMany} collection initialisation →
      *       {@code FROM join_or_child_table alias … WHERE alias.<parent>_id = ?}</li>
+     *   <li>That same initialisation under {@code @BatchSize}, where Hibernate fills several
+     *       parents' collections in one round trip →
+     *       {@code FROM child_table alias … WHERE alias.<parent>_id = ANY(?)}</li>
      * </ul>
      *
-     * <p>Safe by construction: the caller already had the surrogate key. Surrogate keys are
+     * <p>Safe by construction: the caller already had the surrogate key — or, in the batched form,
+     * every key in the bound array, each obtained the same way. {@code ANY(?)} takes a single array
+     * parameter, so the predicate stays pinned to those keys. Surrogate keys are
      * opaque to URL inputs and only come into existence via a workspace-scoped path
      * ({@code findByWorkspaceIdAndSlug} → {@code entity.getRelation()} → lazy fetch).
      *
@@ -151,7 +156,7 @@ public class WorkspaceStatementInspector implements StatementInspector {
             "^\\s*SELECT\\b.+?\\bFROM\\s+\"?[A-Za-z_][A-Za-z0-9_]*\"?\\s+([A-Za-z_][A-Za-z0-9_]*)\\b" + ".*?"
                     + "\\bWHERE\\b"
                     + ".*?"
-                    + "\\b\\1\\s*\\.\\s*\"?(?:id|[A-Za-z_][A-Za-z0-9_]*_id)\"?\\s*=\\s*\\?"
+                    + "\\b\\1\\s*\\.\\s*\"?(?:id|[A-Za-z_][A-Za-z0-9_]*_id)\"?\\s*=\\s*(?:\\?|ANY\\s*\\(\\s*\\?\\s*\\))"
                     + ".*?$",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
