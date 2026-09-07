@@ -53,5 +53,3 @@ overrides:
   "shell-quote@<=1.8.4": 1.10.0
   "uuid@<11.1.1": 11.1.1
 
-patchedDependencies:
-  "storybook@10.4.0": patches/storybook@10.4.0.patch
