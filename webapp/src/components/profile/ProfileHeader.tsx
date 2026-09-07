@@ -52,7 +52,9 @@ export function ProfileHeader({
 	const leagueTier = rawTier === "none" ? "bronze" : rawTier;
 
 	return (
-		<div className="flex min-w-0 flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+		// A row at every width: stacked, the league became a full-width centred band under the
+		// identity, reading as its own section rather than as this person's standing.
+		<div className="flex min-w-0 flex-row items-start justify-between gap-4 sm:gap-6">
 			<div className="flex min-w-0 w-full max-w-xl flex-col gap-4">
 				<div className="flex min-w-0 items-center gap-4">
 					<div className="relative shrink-0">

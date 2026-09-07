@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { expect } from "storybook/test";
 
 import { ProfileHeader } from "./ProfileHeader";
 
@@ -199,5 +200,25 @@ export const LevelUpReady: Story = {
 		leaguePoints: 2000,
 		firstContribution: new Date("2020-01-01T00:00:00Z"),
 		contributedRepositories: [],
+	},
+};
+
+export const Mobile: Story = {
+	args: Default.args,
+	parameters: {
+		chromatic: { disableSnapshot: true },
+		viewport: { defaultViewport: "reflow" },
+	},
+	play: async ({ canvas }) => {
+		// The league is this person's standing, so it belongs beside them at every width. Stacked, it
+		// became a full-width centred band below the identity and read as a section of its own.
+		const league = await canvas.findByLabelText(/tier$/);
+		const name = canvas.getByRole("heading", { level: 1 });
+		const leagueBox = league.getBoundingClientRect();
+		const nameBox = name.getBoundingClientRect();
+		// Same band: the league starts before the name's line has ended vertically.
+		await expect(leagueBox.top).toBeLessThan(nameBox.bottom);
+		// And to the side of it, not under it.
+		await expect(leagueBox.left).toBeGreaterThan(nameBox.left);
 	},
 };

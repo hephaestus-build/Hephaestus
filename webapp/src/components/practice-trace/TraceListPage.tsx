@@ -8,6 +8,7 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { ResultCount } from "@/components/common/ResultCount";
 import { TablePagination } from "@/components/common/TablePagination";
 import { PageHeader } from "@/components/core/PageHeader";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
 	Empty,
 	EmptyDescription,
@@ -36,6 +37,12 @@ export interface TraceListPageProps {
 	isLoading: boolean;
 	error: unknown;
 	onRetry: () => void;
+	/**
+	 * Whether this workspace reviews practices at all. Undefined while the answer is still on its
+	 * way, which reads as enabled: this page is reachable with practices off precisely so it can
+	 * say so, and claiming it before knowing would be its own wrong answer.
+	 */
+	practicesEnabled?: boolean;
 }
 
 /** Every piece of work this workspace recorded anything about, including the unreviewed. */
@@ -47,6 +54,7 @@ export function TraceListPage({
 	isLoading,
 	error,
 	onRetry,
+	practicesEnabled,
 }: TraceListPageProps) {
 	const page = search.page ?? 0;
 	const rows = artifacts?.content ?? [];
@@ -66,8 +74,22 @@ export function TraceListPage({
 			<PageHeader
 				icon={<RadarIcon />}
 				title="Review activity"
-				description="Every piece of work recorded in this workspace, and what each practice observed about it — including the practices that stayed quiet, and why."
+				description={
+					practicesEnabled === false
+						? "Every piece of work recorded in this workspace. Practice reviews are off, so none of it carries an observation."
+						: "Every piece of work recorded in this workspace, and what each practice observed about it — including the practices that stayed quiet, and why."
+				}
 			/>
+			{practicesEnabled === false && (
+				<Alert variant="warning">
+					<AlertTitle>Practice reviews are off</AlertTitle>
+					<AlertDescription>
+						New work still syncs and is recorded here, but nothing reviews it: no observations are
+						recorded and no feedback is delivered. A workspace admin starts practice reviews again
+						in the workspace's practice review settings.
+					</AlertDescription>
+				</Alert>
+			)}
 			<section aria-label="Recorded work" className="space-y-4">
 				<FilterToolbar
 					hasFilter={hasFilter}

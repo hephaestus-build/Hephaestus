@@ -103,6 +103,31 @@ export const NothingRecorded: Story = {
 	},
 };
 
+export const PracticeReviewsOff: Story = {
+	args: { practicesEnabled: false },
+	play: async ({ canvas }) => {
+		// The link to this page is deliberately not feature-gated, on the promise that the page says
+		// why nothing was observed. This is that promise.
+		await expect(await canvas.findByText("Practice reviews are off")).toBeVisible();
+		// The work is still recorded and still listed; only the reviewing stopped.
+		await expect(canvas.getByText("5 pieces of work.")).toBeVisible();
+		await expect(
+			canvas.getByText(/Practice reviews are off, so none of it carries an observation/),
+		).toBeVisible();
+	},
+};
+
+export const PracticeReviewsOffWithNothingRecorded: Story = {
+	args: { practicesEnabled: false, artifacts: tracedArtifactPage([]) },
+	play: async ({ canvas }) => {
+		// Both reasons at once: nothing has synced yet, and nothing would be reviewed if it had. The
+		// empty state must not be the only thing said, or the reader takes "connect a repository" as
+		// the answer when the switch is the answer.
+		await expect(await canvas.findByText("Practice reviews are off")).toBeVisible();
+		await expect(canvas.getByText("Nothing has been recorded here yet")).toBeVisible();
+	},
+};
+
 export const FilteredToOneKind: Story = {
 	args: {
 		search: { kind: "scm.issue" },
