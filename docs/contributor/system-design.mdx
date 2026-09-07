@@ -5,7 +5,7 @@ title: System Design
 description: Explore the architecture, workflows, and user journeys that power Hephaestus.
 ---
 
-Hephaestus follows an architecture-first approach. All diagrams originate from a shared StarUML project that you can [download as `hephaestus-system-model.mdj`](/files/hephaestus-system-model.mdj).
+The diagrams on this page are maintained in the shared [StarUML project](/files/hephaestus-system-model.mdj).
 
 :::tip Update the source of truth
 Open the `.mdj` file in StarUML, adjust the relevant diagram, then export the SVG back into `docs/contributor/img/system-design`. Keep filenames stable so existing embeds stay intact.
@@ -15,40 +15,26 @@ Open the `.mdj` file in StarUML, adjust the relevant diagram, then export the SV
 
 ![Hephaestus top level architecture](./img/system-design/top_level_architecture.svg)
 
-The platform is intentionally layered. Internally we distinguish between:
+The React client talks to a Spring Boot application packaged as one JAR. Its **server**, **worker**,
+and **webhook** runtime roles can run together or in separate containers; [runtime roles](/admin/runtime-roles)
+owns their configuration and deployment boundaries.
 
-- **Application Server** - Spring Boot, integrates with Git providers, manages the leaderboard, exposes the primary REST API, and runs the Pi mentor agent in-process (streaming to clients via SSE).
-- **Webhook Server** - same image as Application Server, activated with `SPRING_PROFILES_ACTIVE=prod,webhook` so only the inbound webhook receiver beans load. Restart-independent from Application Server; publishes to the same NATS JetStream streams that the sync consumer reads. See ADR 0008.
-- **User Management** - Hephaestus-native auth: Spring Security `oauth2Login` federates to GitHub / gitlab.lrz.de, then issues a cookie-session JWT (ADR 0017). Accounts + federated identity links live in the application database.
-
-Externally we integrate with code hosting (GitHub and GitLab), Slack/email notifications, and the analytics stack used for anonymised usage metrics. Data enters through webhooks, gets enriched via API calls, and surfaces in the React client.
-
-## Gamification model
-
-![Gamification analysis object model](./img/system-design/gamification_analysis_object_model.svg)
-
-The analysis object model maps GitHub webhook payloads to Hephaestus entities. Its core classes — review, pull request, developer — mirror GitHub data, while leaderboard, reward and dashboard classes extend the model for competitions. These are names on the diagram, not a guide to the Java packages.
-
-The original webhook events contain redundant fields, so we normalise them into dedicated entities. Around that core we layer abstractions for leaderboards, rewards, and dashboards that keep gamification state cohesive and queryable.
+GitHub, GitLab, Slack, and Outline adapters provide project work and context for practice reviews
+and mentoring. The [practice-review pipeline](./practice-review-pipeline.mdx) defines how reviewed
+work becomes observations and delivered feedback.
 
 ## AI mentor architecture
 
-The mentor runs on the Pi runtime, in-process on the application server, streaming to clients over SSE.
-[Unified Pi runtime](./unified-pi-runtime.mdx) is the source of truth for its structure.
+Heph uses a Pi sandbox and streams responses to the client over SSE.
+[Unified Pi runtime](./unified-pi-runtime.mdx) documents sandbox connections and replica affinity.
 
 ## User interaction flows
 
-![Gamification use cases](./img/system-design/gamification_use_cases.svg)
-
 ![AI mentor use cases](./img/system-design/mentor_use_cases.svg)
 
-These use case diagrams model the primary developer interactions with the platform, from leaderboard browsing to mentor sessions.
-
-We model the developer as the primary actor: configuring workspaces, reviewing pull requests, receiving mentor guidance, and engaging with competitions. The diagrams capture how a user moves between dashboards, mentor sessions, and notifications across a typical sprint.
-
-![Developer journeys across the platform](./img/system-design/all_use_cases.svg)
-
-The combined journey map highlights how onboarding, weekly rituals, and review feedback interleave across gamification and mentoring features.
+Developers review work, receive practice feedback, and talk with Heph. Workspace administrators
+choose the connected sources and enabled features. Optional leaderboards and leagues remain
+separate from practice feedback.
 
 ## Core workflows
 
@@ -56,12 +42,13 @@ The combined journey map highlights how onboarding, weekly rituals, and review f
 
 ![GitHub login and authorisation flow](./img/system-design/login_authorization_flow.svg)
 
-The login flow uses GitHub (and optionally gitlab.lrz.de) OAuth directly. On success the server mints a short-lived ES256 cookie-session JWT; the SPA reads `GET /user` (no token in the browser).
+[Native authentication](../decisions/0017-replace-keycloak-with-spring-native-auth.md) describes
+federated sign-in and cookie sessions.
 
 ### New review activity
 
 ![New review activity workflow](./img/system-design/new_review_activity.svg)
 
-Webhook events arrive at the `webhook-server` container (the application-server image running under `SPRING_PROFILES_ACTIVE=prod,webhook`), which verifies the signature/token and publishes to NATS JetStream. The application-server's sync consumer reads the stream, enriches the data, and recalculates leaderboard standings in real time. The two containers are restart-independent — see ADR 0008.
-
-These workflows highlight the two critical loops: authenticating via GitHub (producing application + mentor tokens) and streaming review events through ingest → enrichment → leaderboard updates.
+The webhook role verifies provider events and publishes them to NATS JetStream for the server’s
+integration consumers. [Webhook ingestion operations](/admin/webhook-ingestion-operations)
+documents transport, retention, and recovery.

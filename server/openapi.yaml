@@ -26,8 +26,6 @@ servers:
 security:
 - bearerAuth: []
 tags:
-- description: User achievement progress and unlocks
-  name: Achievements
 - description: Per-workspace LLM spend rollup and budget status
   name: LLM Usage
 - description: Practice group trends and review runs for the current developer
@@ -7629,118 +7627,6 @@ paths:
       summary: List workspace users and the teams they belong to
       tags:
       - workspace
-  /workspaces/{workspaceSlug}/users/{login}/achievements:
-    get:
-      description: Returns all achievements with progress information for the specified
-        user
-      operationId: getUserAchievements
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: the user's GitHub login
-        in: path
-        name: login
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Achievement"
-          description: list of all achievements with user-specific progress
-      security: []
-      summary: Get user achievements
-      tags:
-      - Achievements
-  /workspaces/{workspaceSlug}/users/{login}/achievements/definitions:
-    get:
-      description: Returns the master list of all available achievements. Restricted
-        to non-prod environments.
-      operationId: getAllAchievementDefinitions
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - in: path
-        name: login
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Achievement"
-          description: OK
-      security: []
-      summary: Get all achievement definitions
-      tags:
-      - Achievements
-  /workspaces/{workspaceSlug}/users/{login}/achievements/recalculate:
-    post:
-      description: Wipes and historically recalculates a user's achievement timeline.
-        Admin only.
-      operationId: recalculateUserAchievements
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: the user's GitHub login
-        in: path
-        name: login
-        required: true
-        schema:
-          type: string
-      responses:
-        "202":
-          description: Recalculation task started successfully
-      summary: Recalculate user achievements
-      tags:
-      - Achievements
-  /workspaces/{workspaceSlug}/users/{login}/achievements/reload:
-    post:
-      description: Hot reloads the achievements.yml configuration without requiring
-        a restart. Admin only.
-      operationId: reloadAchievements
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - in: path
-        name: login
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          description: OK
-      summary: Reload achievements configuration
-      tags:
-      - Achievements
 components:
   schemas:
     AccountRef:
@@ -7757,129 +7643,6 @@ components:
           format: int64
       required:
       - id
-    Achievement:
-      type: object
-      description: Achievement with user-specific progress information
-      properties:
-        category:
-          type: string
-          description: Category for grouping achievements
-          enum:
-          - pull_requests
-          - commits
-          - communication
-          - issues
-          - milestones
-          example: pull_requests
-        id:
-          type: string
-          $ref: "#/components/schemas/AchievementId"
-          description: Unique identifier for the achievement
-          example: pr.merged.common.1
-        isHidden:
-          type: boolean
-          description: Whether the achievement should be hidden until unlocked
-        parent:
-          type: string
-          description: Parent achievement in progression chain
-          example: first_pull
-        progressData:
-          description: The structured progress data based on the achievements evaluator
-          oneOf:
-          - $ref: "#/components/schemas/BinaryAchievementProgress"
-          - $ref: "#/components/schemas/LinearAchievementProgress"
-        rarity:
-          type: string
-          description: Visual level tier/rarity for badge styling
-          enum:
-          - common
-          - uncommon
-          - rare
-          - epic
-          - legendary
-          - mythic
-          example: common
-        status:
-          type: string
-          description: Current status of the achievement for this user
-          enum:
-          - locked
-          - available
-          - unlocked
-          - hidden
-          example: unlocked
-        unlockedAt:
-          type: string
-          format: date-time
-          description: "When the achievement was unlocked, absent while it is still\
-            \ locked"
-      required:
-      - category
-      - id
-      - progressData
-      - rarity
-      - status
-    AchievementId:
-      type: string
-      enum:
-      - commit.common.1
-      - commit.common.2
-      - commit.epic
-      - commit.legendary
-      - commit.mythic
-      - commit.rare
-      - commit.special.atomic_changes
-      - commit.special.brute_force
-      - commit.special.cross_boundary
-      - commit.special.itsy_bitsy
-      - commit.uncommon.1
-      - commit.uncommon.2
-      - issue.close.common.1
-      - issue.close.common.2
-      - issue.close.epic
-      - issue.close.legendary
-      - issue.close.rare
-      - issue.close.uncommon
-      - issue.open.common.1
-      - issue.open.common.2
-      - issue.open.epic
-      - issue.open.legendary
-      - issue.open.rare
-      - issue.open.uncommon
-      - issue.special.hive_mind
-      - issue.special.necromancer
-      - issue.special.oracle
-      - milestone.all_epic
-      - milestone.all_legendary
-      - milestone.all_rare
-      - milestone.first_action
-      - milestone.long_time_return
-      - milestone.night_owl
-      - milestone.polyglot
-      - pr.merged.common.1
-      - pr.merged.common.2
-      - pr.merged.epic
-      - pr.merged.legendary
-      - pr.merged.rare
-      - pr.merged.uncommon
-      - pr.special.speedster
-      - review.common.1
-      - review.common.2
-      - review.epic
-      - review.legendary
-      - review.mythic
-      - review.rare
-      - review.uncommon.1
-      - review.uncommon.2
-    AchievementProgress:
-      description: Polymorphic progress data
-      discriminator:
-        propertyName: type
-      properties:
-        type:
-          type: string
-      required:
-      - type
     AdminAccountView:
       type: object
       properties:
@@ -8457,16 +8220,6 @@ components:
           description: Integration-defined backfill state string
       required:
       - state
-    BinaryAchievementProgress:
-      allOf:
-      - $ref: "#/components/schemas/AchievementProgress"
-      - type: object
-        properties:
-          unlocked:
-            type: boolean
-      description: Binary progress indicating unlocked state
-      required:
-      - unlocked
     BindPracticeGroupRequest:
       type: object
       description: Request to move a practice to a group or Unassigned
@@ -10960,23 +10713,6 @@ components:
       required:
       - leaguePointsChange
       - login
-    LinearAchievementProgress:
-      allOf:
-      - $ref: "#/components/schemas/AchievementProgress"
-      - type: object
-        properties:
-          current:
-            type: integer
-            format: int32
-            minimum: 0
-          target:
-            type: integer
-            format: int32
-            minimum: 0
-      description: Linear progress with current and target counts
-      required:
-      - current
-      - target
     LinkedProvider:
       type: object
       description: "A provider instance the current user is linked to: its type +\
@@ -15952,9 +15688,6 @@ components:
       description: Request to update workspace feature flags. Null fields are left
         unchanged.
       properties:
-        achievementsEnabled:
-          type: boolean
-          description: Enable the achievements system
         leaderboardEnabled:
           type: boolean
           description: Enable the leaderboard ranking page
@@ -16198,9 +15931,6 @@ components:
         accountLogin:
           type: string
           description: Git provider account login associated with this workspace
-        achievementsEnabled:
-          type: boolean
-          description: Whether the achievements system is enabled
         createdAt:
           type: string
           format: date-time
@@ -16309,7 +16039,6 @@ components:
           example: my-workspace
       required:
       - accountLogin
-      - achievementsEnabled
       - createdAt
       - displayName
       - gitlabWebhookRegistered
@@ -16334,9 +16063,6 @@ components:
         accountLogin:
           type: string
           description: Git provider account login associated with this workspace
-        achievementsEnabled:
-          type: boolean
-          description: Whether the achievements system is enabled
         createdAt:
           type: string
           format: date-time
@@ -16382,7 +16108,6 @@ components:
           example: my-workspace
       required:
       - accountLogin
-      - achievementsEnabled
       - createdAt
       - displayName
       - id

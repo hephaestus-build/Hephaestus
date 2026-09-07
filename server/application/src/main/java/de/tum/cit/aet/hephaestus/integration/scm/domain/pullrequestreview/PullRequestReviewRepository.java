@@ -100,23 +100,6 @@ public interface PullRequestReviewRepository extends JpaRepository<PullRequestRe
     List<PullRequestReview> findAllByIdWithRelations(@Param("ids") Collection<Long> ids);
 
     /**
-     * Fetch a single review with its pull request and PR author eagerly loaded.
-     *
-     * <p>Used by the achievement evaluator to check PR authorship without N+1 lazy loads.
-     *
-     * @param id the review ID
-     * @return review with pullRequest and pullRequest.author eagerly loaded
-     */
-    @Query("""
-        SELECT prr
-        FROM PullRequestReview prr
-        LEFT JOIN FETCH prr.pullRequest pr
-        LEFT JOIN FETCH pr.author
-        WHERE prr.id = :id
-        """)
-    Optional<PullRequestReview> findByIdWithPullRequestAuthor(@Param("id") Long id);
-
-    /**
      * Find all reviews by a specific author within a time range, scoped to a workspace.
      *
      * <p>Used by the profile module to show all review activity directly from the source,

@@ -31,6 +31,7 @@ public class WorkspaceFeatures {
     @Column(name = "mentor_enabled", nullable = false)
     private Boolean mentorEnabled = false;
 
+    // Storage-only during retirement; see the achievement package.
     @NotNull
     @ColumnDefault("false")
     @Column(name = "achievements_enabled", nullable = false)
@@ -65,7 +66,6 @@ public class WorkspaceFeatures {
     public void applyPatch(UpdateWorkspaceFeaturesRequestDTO request) {
         if (request.practicesEnabled() != null) this.practicesEnabled = request.practicesEnabled();
         if (request.mentorEnabled() != null) this.mentorEnabled = request.mentorEnabled();
-        if (request.achievementsEnabled() != null) this.achievementsEnabled = request.achievementsEnabled();
         if (request.leaderboardEnabled() != null) this.leaderboardEnabled = request.leaderboardEnabled();
         if (request.progressionEnabled() != null) this.progressionEnabled = request.progressionEnabled();
         if (request.leaguesEnabled() != null) this.leaguesEnabled = request.leaguesEnabled();

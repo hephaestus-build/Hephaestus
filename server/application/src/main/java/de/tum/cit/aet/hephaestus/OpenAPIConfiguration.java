@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus;
 
-import de.tum.cit.aet.hephaestus.achievement.AchievementRegistry;
 import io.swagger.v3.core.converter.ModelConverters;
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
@@ -17,7 +16,6 @@ import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -130,10 +128,6 @@ public class OpenAPIConfiguration {
             "DeliveryPolicyFactsSnapshot",
             "PracticeFact",
             "SubjectStatus");
-    /**
-     * Domain objects to include by specific suffix (like AchievementProgress records)
-     */
-    private static final List<String> SAFE_DOMAIN_SUFFIXES = List.of("AchievementProgress");
 
     /**
      * Zalando's non-standard-but-conventional {@code format} for an exact decimal, which stops a client
@@ -145,30 +139,13 @@ public class OpenAPIConfiguration {
 
     @Bean
     public OpenApiCustomizer schemaCustomizer(
-            AchievementRegistry registry, @Value("${spring.application.version:0.0.0-development}") String appVersion) {
+            @Value("${spring.application.version:0.0.0-development}") String appVersion) {
         return openApi -> {
             openApi.getInfo().setVersion(appVersion);
             includeSpringDataPageMetadata(openApi);
             processApplicationServerSchemas(openApi);
             processAllPaths(openApi);
             declareExactDecimals(openApi);
-
-            // Inject AchievementId enum based on registry keys
-            if (openApi.getComponents() != null) {
-                // Collect and sort IDs for deterministic output
-                List<String> achievementIds = new ArrayList<>(registry.getAchievementIds());
-                Collections.sort(achievementIds);
-
-                log.info("Injected {} achievement IDs into OpenAPI", achievementIds.size());
-                if (achievementIds.isEmpty()) {
-                    log.error(
-                            "Achievement registry is empty during OpenAPI generation! This will cause frontend type errors.");
-                }
-
-                StringSchema idSchema = new StringSchema();
-                idSchema.setEnum(achievementIds);
-                openApi.getComponents().addSchemas("AchievementId", idSchema);
-            }
         };
     }
 
@@ -191,7 +168,6 @@ public class OpenAPIConfiguration {
         @SuppressWarnings("rawtypes")
         Map<String, Schema> filteredSchemas = new HashMap<>();
 
-        // Include DTOs with suffix removed
         components.getSchemas().entrySet().stream()
                 .filter(e -> e.getKey().endsWith("DTO"))
                 .forEach(e -> {
@@ -200,14 +176,10 @@ public class OpenAPIConfiguration {
                     filteredSchemas.put(nameWithoutDto, e.getValue());
                 });
 
-        // Include allowed domain objects
         components.getSchemas().entrySet().stream()
-                .filter(e -> ALLOWED_DOMAIN_OBJECTS.contains(e.getKey())
-                        || SAFE_DOMAIN_SUFFIXES.stream()
-                                .anyMatch(s -> e.getKey().endsWith(s)))
+                .filter(e -> ALLOWED_DOMAIN_OBJECTS.contains(e.getKey()))
                 .forEach(e -> filteredSchemas.put(e.getKey(), e.getValue()));
 
-        // Update $ref to remove DTO suffix
         filteredSchemas.values().forEach(this::removeDtoSuffixFromRefs);
 
         components.setSchemas(filteredSchemas);
@@ -222,7 +194,6 @@ public class OpenAPIConfiguration {
 
         paths.forEach((path, pathItem) -> {
             pathItem.readOperations().forEach(operation -> {
-                // Remove DTO suffix from response/request schemas
                 if (operation.getResponses() != null) {
                     operation.getResponses().forEach((code, response) -> {
                         if (response.getContent() != null) {
@@ -244,21 +215,18 @@ public class OpenAPIConfiguration {
                     });
                 }
 
-                // Clean up controller suffix from tags
                 if (operation.getTags() != null) {
                     operation.setTags(operation.getTags().stream()
                             .map(tag -> tag.endsWith("-controller") ? tag.substring(0, tag.length() - 11) : tag)
                             .collect(Collectors.toList()));
                 }
 
-                // Filter out WorkspaceContext parameter
                 if (operation.getParameters() != null) {
                     operation.setParameters(operation.getParameters().stream()
                             .filter(p -> !isWorkspaceContextParam(p))
                             .collect(Collectors.toCollection(ArrayList::new)));
                 }
 
-                // Ensure workspaceSlug parameter for workspace paths
                 if (path.contains("{workspaceSlug}")) {
                     ensureWorkspaceSlugParam(operation);
                 }

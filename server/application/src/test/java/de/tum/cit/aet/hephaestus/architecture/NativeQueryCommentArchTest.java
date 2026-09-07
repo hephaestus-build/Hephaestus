@@ -14,52 +14,15 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /**
- * An apostrophe inside a {@code --} line comment of a native {@code @Query} takes the whole
- * application down at startup.
- *
- * <p>Hibernate's parameter scanner does not understand SQL line comments. It sees the {@code '} in a
- * word like {@code sweep's}, treats it as the start of a quoted literal, finds no closing quote, and
- * fails the query with <em>"starts a quoted range at N, but never ends it"</em>. Spring Data cannot
- * then build the repository proxy, so <em>every</em> bean depending on it fails and the
- * {@code ApplicationContext} never starts — a whole-application outage caused by an English
- * possessive in a comment.
- *
- * <p>Nothing else catches this. Unit tests mock repositories, and the JPA slice/integration tests
- * that would boot the context are not what most contributors run first — the failure surfaces only
- * once something actually starts Spring, where it presents as an unrelated bean ("Error creating bean
- * with name 'achievementController'") many frames away from the offending comment. This has bitten
- * the codebase before. The rule is therefore mechanical: no apostrophes in SQL comments, ever.
- *
- * <p>Fix by rewording — {@code "the sweep's tombstone"} becomes {@code "a deletion-sweep tombstone"}.
- *
- * <p>The rule covers every annotation that can carry a hand-written query ({@code @Query},
- * {@code @NativeQuery}) and every attribute of those that can hold one ({@code value},
- * {@code countQuery}). A guard that covered only {@code @Query.value} would leave a one-annotation
- * bypass back to the same outage.
+ * Hibernate's parameter scanner can interpret apostrophes in SQL line comments as unmatched
+ * quotes. Check both query and count-query annotations before repository initialization.
  */
 class NativeQueryCommentArchTest extends HephaestusArchitectureTest {
 
-    /**
-     * Every annotation that can carry a hand-written query string. Fully-qualified so no
-     * compile-time dependency on the JPA annotations is added here; ArchUnit matches annotation
-     * types by name off the bytecode.
-     *
-     * <p>{@code @NativeQuery} is meta-annotated {@code @Query(nativeQuery = true)}, but ArchUnit
-     * reports <em>directly declared</em> annotations only — matching {@code @Query} alone therefore
-     * misses it entirely, and one {@code @NativeQuery} would reproduce the outage this rule exists
-     * to prevent. It is the higher-risk of the two: it is native by definition, so every query it
-     * carries is raw SQL that may contain {@code --} comments.
-     */
+    // ArchUnit exposes directly declared annotations, so @NativeQuery must be matched separately.
     private static final Set<String> QUERY_ANNOTATIONS = Set.of(
             "org.springframework.data.jpa.repository.Query", "org.springframework.data.jpa.repository.NativeQuery");
 
-    /**
-     * The attributes of those annotations that hold a query string. {@code countQuery} is a real
-     * carrier, not a hypothetical: both annotations declare it, it is a separate hand-written
-     * statement, and it fails at repository-proxy construction exactly like {@code value}. The
-     * remaining attributes ({@code countProjection}, {@code name}, {@code countName},
-     * {@code queryRewriter}) never hold SQL comments.
-     */
     private static final Set<String> QUERY_ATTRIBUTES = Set.of("value", "countQuery");
 
     @Test

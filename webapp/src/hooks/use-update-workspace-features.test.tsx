@@ -18,7 +18,6 @@ vi.mock("@/api/@tanstack/react-query.gen", async (importOriginal) => {
 
 const workspace: WorkspaceListItem = {
 	accountLogin: "acme",
-	achievementsEnabled: true,
 	createdAt: new Date("2026-01-01"),
 	displayName: "Acme",
 	id: 1,

@@ -88,43 +88,6 @@ public interface IssueCommentRepository extends JpaRepository<IssueComment, Long
             @Param("onlyFromPullRequests") boolean onlyFromPullRequests,
             @Param("workspaceId") Long workspaceId);
 
-    /**
-     * Count distinct comment authors on an issue.
-     * Used by HiveMind achievement evaluator.
-     */
-    @Query("""
-        SELECT COUNT(DISTINCT ic.author.id)
-        FROM IssueComment ic
-        WHERE ic.issue.id = :issueId
-        """)
-    long countDistinctAuthorIdsByIssueId(@Param("issueId") Long issueId);
-
-    /**
-     * Count distinct participants on an issue (union of comment authors and issue author).
-     * Uses UNION to deduplicate when the issue author also commented.
-     * Used by HiveMind achievement evaluator.
-     */
-    @Query(value = """
-        SELECT COUNT(*) FROM (
-            SELECT DISTINCT author_id FROM issue_comment WHERE issue_id = :issueId AND author_id IS NOT NULL
-            UNION
-            SELECT author_id FROM issue WHERE id = :issueId AND author_id IS NOT NULL
-        ) AS participants
-        """, nativeQuery = true)
-    long countDistinctParticipantsByIssueId(@Param("issueId") Long issueId);
-
-    /**
-     * Count comments on an issue NOT authored by a specific user.
-     * Used by Necromancer achievement evaluator.
-     */
-    @Query("""
-        SELECT COUNT(ic)
-        FROM IssueComment ic
-        WHERE ic.issue.id = :issueId
-        AND ic.author.id <> :authorId
-        """)
-    long countByIssueIdAndAuthorIdNot(@Param("issueId") Long issueId, @Param("authorId") Long authorId);
-
     @Query("SELECT ic FROM IssueComment ic LEFT JOIN FETCH ic.author "
             + "WHERE ic.issue.id = :issueId ORDER BY ic.createdAt DESC, ic.id DESC")
     List<IssueComment> findRecentByIssueIdWithAuthor(@Param("issueId") Long issueId, Pageable pageable);

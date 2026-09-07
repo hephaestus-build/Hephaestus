@@ -63,7 +63,7 @@ relationships stay with people.
   selected Slack channels and Outline collections.
 - **Puts admins in control.** They configure repositories, practices, members, integrations, the AI
   model through any OpenAI-compatible endpoint, and a monthly spending cap.
-- **Ships optional recognition features.** Achievements, leagues, a weekly leaderboard, and a Slack
+- **Ships optional recognition features.** Leagues, a weekly leaderboard, and a Slack
   digest of review activity, all separate from practice feedback.
 
 ## How feedback works

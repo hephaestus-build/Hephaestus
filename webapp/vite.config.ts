@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import path, { resolve } from "node:path";
+import { resolve } from "node:path";
 
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
@@ -7,7 +7,6 @@ import { parse } from "jsonc-parser";
 import type { OxfmtConfig } from "oxfmt";
 import type { OxlintConfig } from "oxlint";
 import Terminal from "vite-plugin-terminal";
-import type { ViteDevServer } from "vite-plus";
 import { configDefaults } from "vitest/config";
 
 import { appSourcePlugins } from "./vite.shared.ts";
@@ -64,40 +63,6 @@ const viteConfig = {
 		...Terminal({ output: ["terminal", "console"] }).map(
 			(plugin) => plugin && { ...plugin, apply: "serve" as const },
 		),
-		{
-			name: "save-achievement-layout",
-			apply: "serve" as const,
-			configureServer(server: ViteDevServer) {
-				server.middlewares.use("/__save-coordinates", (req, res) => {
-					if (req.method !== "POST") {
-						res.statusCode = 405;
-						res.end("Method Not Allowed");
-						return;
-					}
-
-					let body = "";
-					req.on("data", (chunk: Buffer) => {
-						body += chunk.toString();
-					});
-
-					req.on("end", () => {
-						try {
-							JSON.parse(body);
-							const filePath = path.resolve(
-								import.meta.dirname,
-								"src/components/achievements/coordinates.json",
-							);
-							fs.writeFileSync(filePath, body);
-							res.statusCode = 200;
-							res.end("Layout saved successfully");
-						} catch {
-							res.statusCode = 400;
-							res.end("Invalid JSON");
-						}
-					});
-				});
-			},
-		},
 	],
 	build: {
 		sourcemap: "hidden" as const,

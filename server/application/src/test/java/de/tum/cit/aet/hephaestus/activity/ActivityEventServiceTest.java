@@ -14,11 +14,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
-import org.springframework.context.ApplicationEventPublisher;
 
-/**
- * Unit tests for ActivityEventService.
- */
 class ActivityEventServiceTest extends BaseUnitTest {
 
     @Mock
@@ -30,25 +26,19 @@ class ActivityEventServiceTest extends BaseUnitTest {
     @Mock
     private ExperiencePointProperties xpProperties;
 
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
-
     private MeterRegistry meterRegistry;
     private ActivityEventService service;
 
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        // Use lenient stubbing since not all tests exercise XP clamping path
-        lenient().when(xpProperties.maxXpPerEvent()).thenReturn(1000.0);
-        service = new ActivityEventService(
-                eventRepository, workspaceRepository, xpProperties, meterRegistry, eventPublisher);
+        service = new ActivityEventService(eventRepository, workspaceRepository, xpProperties, meterRegistry);
     }
 
     @Test
     void record_success_savesEvent() {
         when(workspaceRepository.existsById(1L)).thenReturn(true);
-        // insertIfAbsent returns 1 = event was inserted
+        when(xpProperties.maxXpPerEvent()).thenReturn(1000.0);
         when(eventRepository.insertIfAbsent(
                         any(UUID.class),
                         anyString(),
@@ -91,7 +81,7 @@ class ActivityEventServiceTest extends BaseUnitTest {
     @Test
     void record_duplicate_returnsFalse() {
         when(workspaceRepository.existsById(1L)).thenReturn(true);
-        // insertIfAbsent returns 0 = duplicate (ON CONFLICT DO NOTHING)
+        when(xpProperties.maxXpPerEvent()).thenReturn(1000.0);
         when(eventRepository.insertIfAbsent(
                         any(UUID.class),
                         anyString(),
@@ -141,7 +131,7 @@ class ActivityEventServiceTest extends BaseUnitTest {
     @Test
     void record_negativeXp_clampsToZero() {
         when(workspaceRepository.existsById(1L)).thenReturn(true);
-        // Capture the XP value passed to insertIfAbsent
+        when(xpProperties.maxXpPerEvent()).thenReturn(1000.0);
         when(eventRepository.insertIfAbsent(
                         any(UUID.class),
                         anyString(),
@@ -163,11 +153,9 @@ class ActivityEventServiceTest extends BaseUnitTest {
                 null,
                 ActivityTargetType.PULL_REQUEST,
                 100L,
-                -50.0 // negative XP
-                );
+                -50.0);
 
         assertThat(result).isTrue();
-        // Verify XP was clamped to 0.0
         verify(eventRepository)
                 .insertIfAbsent(
                         any(UUID.class),
@@ -185,7 +173,7 @@ class ActivityEventServiceTest extends BaseUnitTest {
     @Test
     void record_excessiveXp_clampsToMax() {
         when(workspaceRepository.existsById(1L)).thenReturn(true);
-        // Verify XP was clamped to max (1000.0 as configured in setUp)
+        when(xpProperties.maxXpPerEvent()).thenReturn(1000.0);
         when(eventRepository.insertIfAbsent(
                         any(UUID.class),
                         anyString(),
@@ -207,11 +195,9 @@ class ActivityEventServiceTest extends BaseUnitTest {
                 null,
                 ActivityTargetType.PULL_REQUEST,
                 100L,
-                9999.0 // excessive XP
-                );
+                9999.0);
 
         assertThat(result).isTrue();
-        // Verify XP was clamped to 1000.0
         verify(eventRepository)
                 .insertIfAbsent(
                         any(UUID.class),
