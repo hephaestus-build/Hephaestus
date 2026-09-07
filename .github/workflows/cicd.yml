@@ -264,6 +264,7 @@ jobs:
             quality-config:
               - '.github/workflows/cicd.yml'
               - '.github/workflows/ci-quality-gates.yml'
+              - '.github/workflows/ci-quality-leg.yml'
               - 'vite.config.ts'
               - '.vite-hooks/**'
               - '.java-version'
@@ -314,6 +315,7 @@ jobs:
               - 'package.json'
               - 'scripts/run-mvnw.ts'
               - '.github/workflows/ci-quality-gates.yml'
+              - '.github/workflows/ci-quality-leg.yml'
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: webapp_image_source
@@ -648,7 +650,7 @@ jobs:
   all-ci-passed:
     name: "CI Status Gate"
     timeout-minutes: 10
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     permissions:
       actions: read
       statuses: write

@@ -2070,26 +2070,25 @@ void test("a workflow triggered by main does not cancel the run main is judged b
 	}
 });
 
-// A toolchain claim is a job: every leg of the task graph is one matrix entry of one job, the Vite+
-// shell and the hook dispatcher run on Windows as one of them, and the documented first command of
-// a contributor runs from a clone that has nothing but the launcher.
 void test("proves the toolchain on Windows and from a clean clone", async () => {
 	const source = await readFile(".github/workflows/ci-quality-gates.yml", "utf8");
-	const workflow = parseDocument(source);
+	const legSource = await readFile(".github/workflows/ci-quality-leg.yml", "utf8");
+	const workflow = parseDocument(legSource);
 	const qualityPath = ["jobs", "quality"];
-	const quality = job(source, "quality");
-	assert.match(quality, /runs-on: \$\{\{ matrix\.os \}\}/);
+	const quality = job(legSource, "quality");
+	assert.match(quality, /runs-on: .*inputs\.leg == 'windows'.*'windows-latest'.*'ubuntu-latest'/);
 	assert.match(quality, /shell: bash/);
-	assert.match(quality, /run: vp run \$\{\{ matrix\.flags \}\} ci:\$\{\{ matrix\.leg \}\}/);
-	assert.match(quality, /- leg: windows\n(?:\s+\S[^\n]*\n)*?\s+os: windows-latest/);
-	// The task cache is a Linux-only trust: the Windows leg neither restores nor saves it.
-	assert.doesNotMatch(quality, /- leg: windows\n(?:\s+\S[^\n]*\n)*?\s+cache: true/);
-	assert.match(quality, /- leg: windows\n(?:\s+\S[^\n]*\n)*?\s+flags: --no-cache/);
+	assert.match(quality, /windows\) vp run --no-cache ci:windows/);
+	for (const name of ["Restore Vite task cache", "Save Vite task cache"])
+		assert.match(
+			String(namedStep(workflow, qualityPath, name).get("if")),
+			/inputs\.leg != 'windows'/,
+		);
 	const install = job(source, "clean-install");
 	assert.doesNotMatch(install, /setup-toolchain|pnpm\/setup/);
 	assert.match(install, /vp install --frozen-lockfile/);
 	assert.match(install, /vp run gate:toolchain/);
-	const hookCondition = "env.RUN == 'true' && matrix.hooks && !cancelled()";
+	const hookCondition = "(inputs.leg == 'tooling' || inputs.leg == 'windows') && !cancelled()";
 	for (const name of ["Commit-msg hook", "Pre-push hook"])
 		assert.equal(namedStep(workflow, qualityPath, name).get("if"), hookCondition);
 	const commitHook = runScript(workflow, qualityPath, "Commit-msg hook");
@@ -2104,10 +2103,55 @@ void test("proves the toolchain on Windows and from a clean clone", async () => 
 	assert.doesNotMatch(prePushHook, /^\s*vp run check\s*$/m);
 });
 
+void test(
+	"quality dispatch selects one task and rejects an unknown leg",
+	{ skip: !bashRunsRunnerSteps() },
+	async () => {
+		const workflow = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
+		const script = runScript(workflow, ["jobs", "quality"], "Quality gates");
+		const probe = `vp() { printf 'command=%s\\n' "$*" >> "$GITHUB_OUTPUT"; }\n${script}`;
+		for (const leg of ["server", "tooling", "webapp", "windows"]) {
+			const result = await runStep(probe, { LEG: leg });
+			assert.equal(result.failed, false, result.diagnosis);
+			assert.equal(
+				result.outputs.command,
+				`run ${leg === "windows" ? "--no-cache " : ""}ci:${leg}`,
+			);
+		}
+		const invalid = await runStep(probe, { LEG: "unknown" });
+		assert.equal(invalid.failed, true);
+		assert.deepEqual(invalid.outputs, {});
+		const failed = await runStep(`vp() { return 1; }\n${script}`, { LEG: "server" });
+		assert.equal(failed.failed, true, "a failing quality task must fail the job");
+	},
+);
+
+void test("unchanged quality legs are skipped before runner allocation", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/ci-quality-gates.yml", "utf8"));
+	for (const [leg, scope] of [
+		["server", "application_server"],
+		["tooling", "tooling"],
+		["webapp", "webapp"],
+		["windows", "tooling"],
+	]) {
+		assert.equal(
+			workflow.getIn(["jobs", leg, "if"]),
+			`inputs.should_skip != 'true' && inputs.${scope}_changed == 'true'`,
+		);
+		assert.equal(workflow.getIn(["jobs", leg, "uses"]), "./.github/workflows/ci-quality-leg.yml");
+		assert.equal(workflow.getIn(["jobs", leg, "with", "leg"]), leg);
+	}
+});
+
 void test("a change to the task graph or the hooks selects every quality leg", async () => {
 	const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
 	const filter = pathFilter(orchestrator, "quality-config");
-	for (const entry of ["vite.config.ts", ".vite-hooks/**", ".java-version"])
+	for (const entry of [
+		"vite.config.ts",
+		".vite-hooks/**",
+		".java-version",
+		".github/workflows/ci-quality-leg.yml",
+	])
 		assert.match(
 			filter,
 			new RegExp(`'${escapeRegExp(entry)}'`),
