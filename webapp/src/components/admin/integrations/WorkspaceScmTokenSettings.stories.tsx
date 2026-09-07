@@ -14,7 +14,7 @@ const meta = {
 		providerLabel: "GitHub",
 		isSaving: false,
 		error: null,
-		onSave: fn().mockResolvedValue(true),
+		onSave: fn(async () => true),
 	},
 } satisfies Meta<typeof WorkspaceScmTokenSettings>;
 
