@@ -68,7 +68,7 @@
              CVE-2025-14813 (critical) and CVE-2026-5598, both fixed in 1.84. Managed here so the
              image scan stays clean and Renovate keeps it current; drop it once docker-java ships a
              fixed floor of its own. -->
-        <bouncycastle.version>1.84</bouncycastle.version>
+        <bouncycastle.version>1.85.2</bouncycastle.version>
         <maven.build.cache.skipCache>true</maven.build.cache.skipCache>
         <maven.build.cache.skipSave>true</maven.build.cache.skipSave>
     </properties>
