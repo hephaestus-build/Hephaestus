@@ -2,7 +2,7 @@
 
 `practice-review.json` is shared by the Java writer and TypeScript runner tests. The Java test
 compares parsed JSON, not formatting. Schema evolution follows the
-[workspace ABI](https://docs.hephaestus.build/contributor/agent/workspace-abi#versioning-policy).
+[workspace ABI](https://docs.hephaestus.build/contributor/agent/agent-workspace-abi#versioning-policy).
 
 To regenerate an intentionally changed envelope, run from the repository root after the initial
 server build:
