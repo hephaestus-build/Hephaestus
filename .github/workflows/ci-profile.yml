@@ -34,7 +34,7 @@ jobs:
           os: ${{ runner.os }}
 
       - name: Find performance history
-        if: github.ref_name == github.event.repository.default_branch
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         id: history
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
@@ -54,7 +54,7 @@ jobs:
                   run_id: run.id,
                   per_page: 100,
                 });
-                const history = artifacts.find((artifact) => artifact.name === 'ci-profile-history' && !artifact.expired);
+                const history = artifacts.find((artifact) => artifact.name === 'ci-profile-history-jfr' && !artifact.expired);
                 if (history) {
                   core.setOutput('run-id', run.id);
                   return;
@@ -67,32 +67,43 @@ jobs:
         if: steps.history.outputs.run-id != ''
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: ci-profile-history
+          name: ci-profile-history-jfr
           run-id: ${{ steps.history.outputs.run-id }}
           github-token: ${{ github.token }}
           path: ci-profile-history
 
       - name: Run integration suite with JFR
         id: profile
+        shell: bash
         run: |
-          mkdir -p ci-metrics
+          mkdir -p ci-metrics/maven
           /usr/bin/time -v -o ci-metrics/server-integration-resource.txt \
             vp run test:server:integration \
-            -DargLine=-XX:StartFlightRecording=filename=target/integration-profile.jfr,settings=profile,dumponexit=true \
+            '-Dhephaestus.test.jvmArgs=-XX:StartFlightRecording=filename=target/integration-profile.jfr,settings=profile,dumponexit=true -Xlog:jfr+startup=off' \
             -Dlogging.level.org.springframework.test.context.cache=DEBUG \
+            -Dprofile=server-integration -DprofileFormat=JSON \
+            -Dmaven-profiler-report-directory=../ci-metrics/maven \
             2>&1 | tee ci-metrics/server-integration.log
+
+      - name: Validate profile artifacts
+        id: recording
+        if: ${{ !cancelled() && steps.profile.outcome == 'success' }}
+        run: |
+          jq -e '.projects | length > 0' ci-metrics/maven/*.json > /dev/null
+          jfr summary server/application/target/integration-profile.jfr > ci-metrics/jfr-summary.txt
+          jfr print --events hephaestus.test.DatabaseCleanup \
+            server/application/target/integration-profile.jfr > ci-metrics/database-cleanup.jfr.txt
 
       - name: Summarize integration results
         id: summary
         if: always()
-        continue-on-error: true
         run: >-
           vp run report:test-results "Server Integration Profile"
           server/application/target/surefire-reports ci-metrics/server-integration-profile.json
           ci-metrics/server-integration.log ci-metrics/server-integration-resource.txt
 
       - name: Enforce performance budgets
-        if: success() && github.ref_name == github.event.repository.default_branch
+        if: success() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         run: |
           # Do not compare a rerun against its own previous attempt.
           rm -f "ci-profile-history/${{ github.run_id }}.json"
@@ -101,7 +112,7 @@ jobs:
       # Keep budget failures in history so sustained regressions remain detectable.
       - name: Record completed profile
         id: record
-        if: ${{ !cancelled() && steps.profile.outcome == 'success' && steps.summary.outcome == 'success' && github.ref_name == github.event.repository.default_branch }}
+        if: ${{ !cancelled() && steps.profile.outcome == 'success' && steps.recording.outcome == 'success' && steps.summary.outcome == 'success' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
         run: |
           mkdir -p ci-profile-history
           cp ci-metrics/server-integration-profile.json "ci-profile-history/${{ github.run_id }}.json"
@@ -110,25 +121,17 @@ jobs:
         if: ${{ !cancelled() && steps.record.outcome == 'success' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ci-profile-history
+          name: ci-profile-history-jfr
           path: ci-profile-history
           if-no-files-found: error
           retention-days: 90
           overwrite: true
 
-      - name: Extract database cleanup timings
-        if: always()
-        continue-on-error: true
-        run: >-
-          jfr print --events hephaestus.test.DatabaseCleanup
-          server/application/target/integration-profile.jfr
-          > ci-metrics/database-cleanup.jfr.txt
-
       - name: Upload profile
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: server-integration-profile-${{ github.run_id }}
+          name: server-integration-profile-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             server/application/target/integration-profile.jfr
             server/application/target/surefire-reports
@@ -136,10 +139,13 @@ jobs:
             ci-metrics/server-integration.log
             ci-metrics/server-integration-resource.txt
             ci-metrics/database-cleanup.jfr.txt
+            ci-metrics/jfr-summary.txt
+            ci-metrics/maven
           if-no-files-found: warn
           retention-days: 14
 
   pr-latency:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     name: Pull-request latency budget
     runs-on: ubuntu-latest
     timeout-minutes: 5

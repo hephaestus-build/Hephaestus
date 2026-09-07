@@ -2,7 +2,8 @@ import { appendFile, readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import type { TestSummary } from "./summarize-test-results.ts";
+import { isRecord } from "./lib/json.ts";
+import { type TestSummary, validateProfile } from "./summarize-test-results.ts";
 
 type Metric = {
 	name: string;
@@ -86,8 +87,9 @@ function historyMarkdown(summaries: TestSummary[]): string {
 }
 
 export function regressions(current: TestSummary, history: TestSummary[]): string[] {
+	validateProfile(current);
+	for (const previous of history) validateProfile(previous);
 	const failures: string[] = [];
-	if (current.performance === undefined) return ["performance metrics are missing"];
 	const usable = history.filter((summary) => summary.performance !== undefined).slice(-7);
 	if (usable.length < 7) return failures;
 	const baselineRuns = usable.slice(0, 5);
@@ -107,13 +109,12 @@ export function regressions(current: TestSummary, history: TestSummary[]): strin
 	return failures;
 }
 
-function parseSummary(json: string): TestSummary {
+export function parseSummary(json: string): TestSummary {
 	const value: unknown = JSON.parse(json);
-	const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
-		typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
 	const number = (record: Record<string, unknown>, key: string): number => {
 		const candidate = record[key];
-		if (typeof candidate !== "number") throw new Error(`Invalid CI metrics field: ${key}`);
+		if (typeof candidate !== "number" || !Number.isFinite(candidate) || candidate < 0)
+			throw new Error(`Invalid CI metrics field: ${key}`);
 		return candidate;
 	};
 	if (
@@ -124,7 +125,7 @@ function parseSummary(json: string): TestSummary {
 	) {
 		throw new Error("Invalid CI metrics summary");
 	}
-	return {
+	const summary: TestSummary = {
 		schemaVersion: 2,
 		name: value.name,
 		files: number(value, "files"),
@@ -143,6 +144,8 @@ function parseSummary(json: string): TestSummary {
 			contextCacheMisses: number(value.performance, "contextCacheMisses"),
 		},
 	};
+	validateProfile(summary);
+	return summary;
 }
 
 async function main(): Promise<void> {
