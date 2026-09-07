@@ -144,7 +144,6 @@ overrides:
 
 patchedDependencies:
   storybook@10.4.0: 266885747f5f3e33f57d0f78661b7a0ce1644e54acf135146ad9efa4860e37cf
-  zod@4.4.3: c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d
 
 importers:
 
@@ -161,7 +160,7 @@ importers:
         version: 21.0.1
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))
+        version: 0.84.4(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3)
       '@nats-io/jetstream':
         specifier: 3.4.0
         version: 3.4.0
@@ -327,7 +326,7 @@ importers:
     dependencies:
       '@ai-sdk/react':
         specifier: 4.0.96
-        version: 4.0.96(react@19.2.8)(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))
+        version: 4.0.96(react@19.2.8)(zod@4.5.4)
       '@base-ui/react':
         specifier: 1.8.0
         version: 1.8.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -372,7 +371,7 @@ importers:
         version: 12.11.5(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       ai:
         specifier: 7.0.93
-        version: 7.0.93(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))
+        version: 7.0.93(zod@4.5.4)
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1
@@ -419,8 +418,8 @@ importers:
         specifier: 14.0.2
         version: 14.0.2
       zod:
-        specifier: 4.4.3
-        version: 4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d)
+        specifier: 4.5.4
+        version: 4.5.4
       zustand:
         specifier: 5.0.15
         version: 5.0.15(@types/react@19.2.18)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))
@@ -11362,6 +11361,9 @@ packages:
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
+  zod@4.5.4:
+    resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
+
   zustand@4.5.7:
     resolution: {integrity: sha512-CHOUy7mu3lbD6o6LJLfllpjkzhHXSBlX8B9+qPddUsIfeF5S/UZ5q0kmCsnRqT1UHFQZchNFDDzMbQsuesHWlw==}
     engines: {node: '>=12.7.0'}
@@ -11409,40 +11411,40 @@ snapshots:
 
   '@adobe/css-tools@4.5.0': {}
 
-  '@ai-sdk/gateway@4.0.75(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))':
+  '@ai-sdk/gateway@4.0.75(zod@4.5.4)':
     dependencies:
       '@ai-sdk/provider': 4.0.10
-      '@ai-sdk/provider-utils': 5.0.36(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))
+      '@ai-sdk/provider-utils': 5.0.36(zod@4.5.4)
       '@vercel/oidc': 3.2.0
-      zod: 4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d)
+      zod: 4.5.4
 
-  '@ai-sdk/mcp@2.0.45(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))':
+  '@ai-sdk/mcp@2.0.45(zod@4.5.4)':
     dependencies:
       '@ai-sdk/provider': 4.0.10
-      '@ai-sdk/provider-utils': 5.0.36(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))
+      '@ai-sdk/provider-utils': 5.0.36(zod@4.5.4)
       cross-spawn: 7.0.6
       pkce-challenge: 5.0.1
-      zod: 4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d)
+      zod: 4.5.4
 
-  '@ai-sdk/provider-utils@5.0.36(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))':
+  '@ai-sdk/provider-utils@5.0.36(zod@4.5.4)':
     dependencies:
       '@ai-sdk/provider': 4.0.10
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.1
       undici: 7.29.0
-      zod: 4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d)
+      zod: 4.5.4
 
   '@ai-sdk/provider@4.0.10':
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/react@4.0.96(react@19.2.8)(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))':
+  '@ai-sdk/react@4.0.96(react@19.2.8)(zod@4.5.4)':
     dependencies:
-      '@ai-sdk/mcp': 2.0.45(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))
+      '@ai-sdk/mcp': 2.0.45(zod@4.5.4)
       '@ai-sdk/provider': 4.0.10
-      '@ai-sdk/provider-utils': 5.0.36(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))
-      ai: 7.0.93(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))
+      '@ai-sdk/provider-utils': 5.0.36(zod@4.5.4)
+      ai: 7.0.93(zod@4.5.4)
       react: 19.2.8
       swr: 2.5.1(react@19.2.8)
       throttleit: 2.1.0
@@ -11584,11 +11586,11 @@ snapshots:
       package-manager-detector: 1.8.0
       tinyexec: 1.3.0
 
-  '@anthropic-ai/sdk@0.91.1(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))':
+  '@anthropic-ai/sdk@0.91.1(zod@4.4.3)':
     dependencies:
       json-schema-to-ts: 3.1.1
     optionalDependencies:
-      zod: 4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d)
+      zod: 4.4.3
 
   '@asamuzakjp/css-color@5.1.11':
     dependencies:
@@ -14234,9 +14236,9 @@ snapshots:
       - uglify-js
       - webpack-cli
 
-  '@earendil-works/pi-agent-core@0.84.4(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))':
+  '@earendil-works/pi-agent-core@0.84.4(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3)':
     dependencies:
-      '@earendil-works/pi-ai': 0.84.4(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))
+      '@earendil-works/pi-ai': 0.84.4(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-telemetry': 0.84.4
       diff: 8.0.4
       ignore: 7.0.5
@@ -14250,16 +14252,16 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-ai@0.84.4(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))':
+  '@earendil-works/pi-ai@0.84.4(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3)':
     dependencies:
-      '@anthropic-ai/sdk': 0.91.1(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))
+      '@anthropic-ai/sdk': 0.91.1(zod@4.4.3)
       '@aws-sdk/client-bedrock-runtime': 3.1048.0
       '@earendil-works/pi-telemetry': 0.84.4
       '@google/genai': 1.52.0(supports-color@8.1.1)
       '@smithy/node-http-handler': 4.7.3
       http-proxy-agent: 7.0.2(supports-color@8.1.1)
       https-proxy-agent: 7.0.6(supports-color@8.1.1)
-      openai: 6.40.0(ws@8.21.3)(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))
+      openai: 6.40.0(ws@8.21.3)(zod@4.4.3)
       partial-json: 0.1.7
       typebox: 1.3.7
     transitivePeerDependencies:
@@ -14274,10 +14276,10 @@ snapshots:
     dependencies:
       '@earendil-works/pi-protocol': 0.84.4
 
-  '@earendil-works/pi-coding-agent@0.84.4(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))':
+  '@earendil-works/pi-coding-agent@0.84.4(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3)':
     dependencies:
-      '@earendil-works/pi-agent-core': 0.84.4(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))
-      '@earendil-works/pi-ai': 0.84.4(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))
+      '@earendil-works/pi-agent-core': 0.84.4(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3)
+      '@earendil-works/pi-ai': 0.84.4(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-client': 0.84.4
       '@earendil-works/pi-protocol': 0.84.4
       '@earendil-works/pi-tui': 0.84.4
@@ -16561,7 +16563,7 @@ snapshots:
       jiti: 2.7.0
       magic-string: 0.30.21
       prettier: 3.9.6
-      zod: 4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d)
+      zod: 4.5.4
     transitivePeerDependencies:
       - supports-color
 
@@ -16575,7 +16577,7 @@ snapshots:
       '@tanstack/router-utils': 1.162.2(supports-color@8.1.1)
       chokidar: 5.0.0
       unplugin: 3.3.0(@rspack/core@1.7.12)(esbuild@0.28.2)(rolldown@1.2.6)(vite@8.2.2(@types/node@24.12.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.0)(yaml@2.9.0))(webpack@5.109.2(@swc/core@1.16.1)(@swc/html@1.16.1)(clean-css@5.3.3)(cssnano@6.1.2(postcss@8.5.26))(csso@5.0.5)(esbuild@0.28.2)(html-minifier-terser@7.2.0)(lightningcss@1.33.0)(postcss@8.5.26))
-      zod: 4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d)
+      zod: 4.5.4
     optionalDependencies:
       '@tanstack/react-router': 1.170.32(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       vite: 8.2.2(@types/node@24.12.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.0)(yaml@2.9.0)
@@ -17465,12 +17467,12 @@ snapshots:
       clean-stack: 2.2.0
       indent-string: 4.0.0
 
-  ai@7.0.93(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d)):
+  ai@7.0.93(zod@4.5.4):
     dependencies:
-      '@ai-sdk/gateway': 4.0.75(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))
+      '@ai-sdk/gateway': 4.0.75(zod@4.5.4)
       '@ai-sdk/provider': 4.0.10
-      '@ai-sdk/provider-utils': 5.0.36(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d))
-      zod: 4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d)
+      '@ai-sdk/provider-utils': 5.0.36(zod@4.5.4)
+      zod: 4.5.4
 
   ajv-formats@2.1.1(ajv@8.20.0):
     optionalDependencies:
@@ -21082,10 +21084,10 @@ snapshots:
       is-docker: 2.2.1
       is-wsl: 2.2.0
 
-  openai@6.40.0(ws@8.21.3)(zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d)):
+  openai@6.40.0(ws@8.21.3)(zod@4.4.3):
     optionalDependencies:
       ws: 8.21.3
-      zod: 4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d)
+      zod: 4.4.3
 
   opener@1.5.2: {}
 
@@ -23784,7 +23786,10 @@ snapshots:
       '@yuku-parser/binding-win32-arm64': 0.5.48
       '@yuku-parser/binding-win32-x64': 0.5.48
 
-  zod@4.4.3(patch_hash=c7399dc70f5535128157357bad0854939dc99537ad71e8b6612f26dc499a544d): {}
+  zod@4.4.3:
+    optional: true
+
+  zod@4.5.4: {}
 
   zustand@4.5.7(@types/react@19.2.18)(react@19.2.8):
     dependencies:
