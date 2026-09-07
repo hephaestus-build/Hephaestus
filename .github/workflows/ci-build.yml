@@ -227,7 +227,7 @@ jobs:
           base-sha: ${{ inputs.postgres_base_sha }}
           image-changed: ${{ inputs.postgres_image_changed }}
           tag: hephaestus-postgres:ci
-      - name: Run database contract tests and the major-upgrade drill
+      - name: Run database contract tests and the backup-restore drill
         run: |
           docker run -d --name postgres-db \
             -e POSTGRES_DB=hephaestus -e POSTGRES_PASSWORD=root -e POSTGRES_USER=root \
@@ -241,7 +241,7 @@ jobs:
           (cd server && ./mvnw -f application/pom.xml --batch-mode -Dmaven.build.cache.enabled=false \
             -Dsurefire.includedGroups=database surefire:test)
 
-          vp run test:postgres-upgrade
+          vp run test:postgres-restore
       - name: Upload test results
         if: always()
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
