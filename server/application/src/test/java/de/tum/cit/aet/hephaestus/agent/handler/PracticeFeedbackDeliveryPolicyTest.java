@@ -14,12 +14,11 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
+import de.tum.cit.aet.hephaestus.integration.scm.ReviewTargetQuery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
@@ -84,7 +83,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
     private PullRequestRepository pullRequestRepository;
 
     @Mock
-    private PullRequestReviewRepository pullRequestReviewRepository;
+    private ReviewTargetQuery reviewTargets;
 
     @Mock
     private RepositoryToMonitorRepository repositoryToMonitorRepository;
@@ -293,14 +292,8 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         metadata.put("review_id", REVIEW_ID);
         metadata.put("about_user_id", REVIEWER_ID);
         PullRequest pullRequest = openPullRequest();
-        PullRequestReview review = new PullRequestReview();
-        review.setId(REVIEW_ID);
-        review.setPullRequest(pullRequest);
-        User reviewer = new User();
-        reviewer.setId(REVIEWER_ID);
-        reviewer.setType(User.Type.USER);
-        review.setAuthor(reviewer);
-        when(pullRequestReviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
+        when(reviewTargets.reviewMatchesTarget(REVIEW_ID, pullRequest.getId(), REVIEWER_ID))
+                .thenReturn(true);
         stubPullRequestEvaluation(pullRequest, coverage(true));
         when(accountPreferencesQuery.practiceFeedbackDeliveryEnabled(REVIEWER_ID))
                 .thenReturn(false);
@@ -432,7 +425,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         return new PracticeFeedbackDeliveryPolicy(
                 issueRepository,
                 pullRequestRepository,
-                pullRequestReviewRepository,
+                reviewTargets,
                 repositoryToMonitorRepository,
                 workspaceRepository,
                 accountPreferencesQuery,
