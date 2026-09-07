@@ -14,11 +14,13 @@ export function NavDashboards({
 	workspaceSlug,
 	achievementsEnabled,
 	leaderboardEnabled,
+	practicesEnabled,
 }: {
 	username: string;
 	workspaceSlug: string;
 	achievementsEnabled: boolean;
 	leaderboardEnabled: boolean;
+	practicesEnabled: boolean;
 }) {
 	const matchRoute = useMatchRoute();
 	const onProfile = Boolean(matchRoute({ to: "/w/$workspaceSlug/user/$username", fuzzy: true }));
@@ -67,18 +69,18 @@ export function NavDashboards({
 						</SidebarMenuButton>
 					</SidebarMenuItem>
 				)}
-				{/* Deliberately not feature-gated: with practices off the page says so, which is the answer
-				    a developer wondering why nothing was said came for. */}
-				<SidebarMenuItem>
-					<SidebarMenuButton
-						tooltip="Review activity"
-						isActive={onReviews}
-						render={<Link to="/w/$workspaceSlug/reviews" params={{ workspaceSlug }} />}
-					>
-						<Radar />
-						<span>Review activity</span>
-					</SidebarMenuButton>
-				</SidebarMenuItem>
+				{practicesEnabled && (
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							tooltip="Review activity"
+							isActive={onReviews}
+							render={<Link to="/w/$workspaceSlug/reviews" params={{ workspaceSlug }} />}
+						>
+							<Radar />
+							<span>Review activity</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
+				)}
 				<SidebarMenuItem>
 					<SidebarMenuButton
 						tooltip="Teams"

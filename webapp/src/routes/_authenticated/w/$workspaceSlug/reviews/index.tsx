@@ -4,7 +4,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { listTracedArtifactsOptions } from "@/api/@tanstack/react-query.gen";
 import { type TraceSearch, traceSearchSchema } from "@/components/practice-trace/trace-search";
 import { TRACE_PAGE_SIZE, TraceListPage } from "@/components/practice-trace/TraceListPage";
-import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { pageParam } from "@/lib/search-params";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/reviews/")({
@@ -14,7 +13,6 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/reviews/"
 
 function ReviewActivityListRoute() {
 	const { workspaceSlug } = Route.useParams();
-	const featureState = useWorkspaceFeatures(workspaceSlug);
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
 	const updateSearch = (patch: Partial<TraceSearch>) =>
@@ -42,7 +40,6 @@ function ReviewActivityListRoute() {
 			isLoading={query.isLoading}
 			error={query.isError ? query.error : undefined}
 			onRetry={() => void query.refetch()}
-			practicesEnabled={featureState.features?.practicesEnabled}
 		/>
 	);
 }

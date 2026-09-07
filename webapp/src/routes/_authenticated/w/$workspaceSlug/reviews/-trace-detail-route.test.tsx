@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { artifactTrace } from "@/components/practice-trace/story-mock-data";
+import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
@@ -27,6 +28,10 @@ beforeEach(() => {
 		// A plain MEMBER: this surface is deliberately not behind the admin layout's role guard.
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json({ role: "MEMBER", userId: 1, userLogin: "ada", userName: "Ada" }),
+		),
+		// This surface exists only where practices review the work; the shared fixture has them off.
+		http.get("*/workspaces", () =>
+			HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })]),
 		),
 		http.get(TRACE_PATH, () => {
 			traceReads += 1;
