@@ -35,8 +35,8 @@ from those pages remain in scope.
 | Workspace administration | members, practices, review operations, models, usage and integrations |
 | Instance administration | users, workspaces, audit, catalogue, providers, models and usage |
 
-The dated [audit record](./accessibility-audit-record-template.md) expands this inventory to the routes,
-states and roles present in the tested revision.
+Use the [audit record template](./accessibility-audit-record-template.md) to expand this inventory to
+the routes, states and roles present in the tested revision.
 
 ## Evaluation
 

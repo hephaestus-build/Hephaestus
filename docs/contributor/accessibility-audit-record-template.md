@@ -29,7 +29,8 @@ information required by the accessibility statement.
 
 ## Surfaces
 
-Use `Pass`, `Fail`, or `Not applicable`. Explain `Not applicable` and link each failure to its issue.
+Use `Pass`, `Fail`, `Not tested`, or `Not applicable`. Explain untested and inapplicable entries
+and link failures to their issues.
 
 | Surface | Route, state and role | Keyboard | NVDA | VoiceOver | Evidence or issue |
 | --- | --- | --- | --- | --- | --- |
@@ -37,6 +38,25 @@ Use `Pass`, `Fail`, or `Not applicable`. Explain `Not applicable` and link each 
 
 ## Complete processes
 
-| Process | Roles and states | Success path | Error recovery | Evidence or issue |
+Record each process separately for each evaluated environment.
+
+| Process | Roles, states and environment | Success path | Error recovery | Evidence or issue |
 | --- | --- | --- | --- | --- |
 | | | | | |
+
+## Criterion results and automated checks
+
+Link the WCAG-EM criterion report and structured and random sample rationale. Record automated tool
+versions, configuration, exclusions, results and report locations separately for component and
+integrated-page checks. Include the disposition of results requiring manual review.
+
+## Defects and retests
+
+| Issue | WCAG criterion | Surface and shared callers | Evidence | Fix revision and retest result |
+| --- | --- | --- | --- | --- |
+| | | | | |
+
+## Conclusion
+
+State evaluation completeness, remaining gaps, and the evidence supporting the public statement
+for the tested revision.
