@@ -25,8 +25,8 @@ void test("Renovate creates bounded update PRs without a manual dispatch queue",
 	assert.ok(!extensions.includes(":dependencyDashboardApproval"));
 	assert.deepEqual(config.schedule, ["before 7am every weekday"]);
 	assert.equal(config.prHourlyLimit, 2);
-	assert.equal(config.prConcurrentLimit, 5);
-	assert.equal(config.branchConcurrentLimit, 10);
+	assert.equal(config.prConcurrentLimit, 2);
+	assert.equal(config.branchConcurrentLimit, 2);
 	assert.ok(Array.isArray(config.packageRules));
 	const rules = config.packageRules.filter(isRecord);
 	for (const [updateType, currentVersion] of [

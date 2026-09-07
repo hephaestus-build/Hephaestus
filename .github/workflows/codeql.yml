@@ -1,8 +1,5 @@
 name: CodeQL
 
-# Advanced setup, not GitHub's managed default setup: only advanced setup reads a committed
-# `config-file`, and `security/semgrep/**` needs `paths-ignore` (docs/contributor/ci-cd.mdx §
-# CodeQL configuration).
 on:
   push:
     branches: [main]
@@ -15,15 +12,49 @@ permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # A superseded analysis of a branch is wasted work, but on the default branch it is the only
-  # analysis that commit will ever get: cancelling it leaves the tip unanalysed, the SAST score drops
-  # and the scorecard ratchet fails on a main nobody broke. Two merges landing within a minute of each
-  # other is enough to trigger it.
+  # Preserve analysis for every default-branch commit.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  changes:
+    name: Select analysis languages
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      languages: ${{ steps.filter.outputs.changes || '["actions","java-kotlin","javascript-typescript"]' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        with:
+          filters: |
+            actions:
+              - '.github/**'
+            java-kotlin:
+              - 'server/**'
+              - '.java-version'
+              - '.github/codeql/**'
+              - '.github/workflows/codeql.yml'
+            javascript-typescript:
+              - '**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx,html,vue}'
+              - '**/package.json'
+              - '**/tsconfig*.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'patches/**'
+              - '.github/codeql/**'
+              - '.github/workflows/codeql.yml'
+
   analyze:
     name: Analyze (${{ matrix.language }})
+    needs: changes
+    if: needs.changes.outputs.languages != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -33,7 +64,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [actions, java-kotlin, javascript-typescript]
+        language: ${{ fromJSON(needs.changes.outputs.languages) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
