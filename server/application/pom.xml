@@ -33,6 +33,7 @@
         <!-- Surefire expands @{argLine}. JaCoCo's prepare-agent sets it in the lifecycle; the empty
              default lets a bare surefire:test goal run without that phase. -->
         <argLine />
+        <hephaestus.test.jvmArgs />
         <surefire.excludedGroups>live</surefire.excludedGroups>
         <surefire.includedGroups>unit</surefire.includedGroups>
         <failsafe.excludedGroups>live</failsafe.excludedGroups>
@@ -586,7 +587,7 @@
                          Modulith's full class graph (1000+ classes) in the same fork as the
                          regular unit tests. 2GB OOMs on CI under that load. The dedicated
                          `architecture-tests` profile uses the same 4GB ceiling. -->
-                    <argLine>@{argLine} -Xmx${hephaestus.surefire.maxHeap} -Dspring.profiles.active=test -Dfile.encoding=UTF-8
+                    <argLine>@{argLine} ${hephaestus.test.jvmArgs} -Xmx${hephaestus.surefire.maxHeap} -Dspring.profiles.active=test -Dfile.encoding=UTF-8
                         -XX:+EnableDynamicAgentLoading -XX:+ExitOnOutOfMemoryError
                     </argLine>
                     <printSummary>true</printSummary>
@@ -613,7 +614,7 @@
 <!-- EnableDynamicAgentLoading mirrors surefire: without it Byte Buddy cannot
                          self-attach on JDK 21+ and every Mockito-using integration test fails to
                          initialize. -->
-                    <argLine>@{argLine} -Xmx4096m -Dspring.profiles.active=test -Dfile.encoding=UTF-8
+                    <argLine>@{argLine} ${hephaestus.test.jvmArgs} -Xmx4096m -Dspring.profiles.active=test -Dfile.encoding=UTF-8
                         -XX:+EnableDynamicAgentLoading
                     </argLine>
                     <groups>${failsafe.includedGroups}</groups>

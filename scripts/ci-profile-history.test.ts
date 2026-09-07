@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import { isMap, isSeq, parseDocument } from "yaml";
@@ -39,7 +41,7 @@ const run = (id: number, headBranch = "main", repository = "owner/repo") => ({
 	head_branch: headBranch,
 	head_repository: { full_name: repository },
 });
-const history = { name: "ci-profile-history", expired: false };
+const history = { name: "ci-profile-history-jfr", expired: false };
 
 void test("history skips this rerun, foreign sources and incomplete profiles across pages", () => {
 	assert.equal(
@@ -61,3 +63,41 @@ void test("a budget-failed run's completed profile remains usable", () => {
 void test("expired history cannot become a baseline", () => {
 	assert.equal(selectHistory([[run(9)]], { 9: [{ ...history, expired: true }] }), "");
 });
+
+void test("uninstrumented history cannot become the JFR baseline", () => {
+	assert.equal(
+		selectHistory([[run(9)]], { 9: [{ name: "ci-profile-history", expired: false }] }),
+		"",
+	);
+});
+
+void test(
+	"the profiling pipeline preserves Maven failures through tee",
+	{ skip: process.platform !== "linux" },
+	async (context) => {
+		const profile = steps.items.find((item) => isMap(item) && item.get("id") === "profile");
+		assert.ok(isMap(profile));
+		assert.equal(profile.get("shell"), "bash");
+		const command = profile.get("run");
+		assert.equal(typeof command, "string");
+		const directory = await mkdtemp(path.join(tmpdir(), "profile-pipeline-"));
+		context.after(() => rm(directory, { recursive: true, force: true }));
+		await writeFile(path.join(directory, "vp"), "#!/bin/sh\necho 'Maven failed' >&2\nexit 17\n", {
+			mode: 0o755,
+		});
+		const result = spawnSync(
+			"bash",
+			["--noprofile", "--norc", "-eo", "pipefail", "-c", String(command)],
+			{
+				cwd: directory,
+				env: { ...process.env, PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}` },
+				encoding: "utf8",
+			},
+		);
+		assert.equal(result.status, 17, result.stderr);
+		assert.match(
+			await readFile(path.join(directory, "ci-metrics/server-integration.log"), "utf8"),
+			/Maven failed/,
+		);
+	},
+);

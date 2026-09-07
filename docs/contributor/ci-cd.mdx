@@ -526,7 +526,7 @@ as `Test Results - …` check runs.
 ### Pull-request latency
 
 The full-verification target is a six-minute median and a seven-minute p90, measured from workflow
-creation to completion of **CI Status Gate**. `CI profile` samples the ten most recent successful,
+creation to completion of **CI Status Gate**. On the default branch, `CI profile` samples the ten most recent successful,
 first-attempt PR runs with full server and browser verification from the latest 100 completed PR
 runs created in the last 28 days. Lightweight changes and Version-PR runs cannot satisfy this
 cohort. Failed and cancelled counts describe the bounded listing, not a repository-wide failure
@@ -559,15 +559,28 @@ or mixed attempts. Keep raw API evidence under `tmp/`, not in committed performa
 
 ### Server profiles
 
-`CI profile` records JFR, resource usage, JUnit results and Spring context-cache metrics. It signals
+Normal PR test jobs retain Surefire reports for 14 days, separately for each suite, shard and
+attempt. Use those reports and GitHub's step timings before rerunning tests with instrumentation.
+Deep profiling stays in the manual/weekly workflow, not on the PR critical path.
+
+`CI profile` records JFR, Maven phase timings, resource usage, JUnit results and Spring context-cache
+metrics. It signals
 a sustained regression after three consecutive profiles exceed variance limits against five earlier
-default-branch profiles or absolute Spring-context limits. Only successful test runs with valid
-summaries enter history, including runs whose performance budget fails. History is restored from this repository's default-branch
-workflow artifacts, retained for 90 days; a rerun replaces its own sample. Without seven earlier
+default-branch profiles or absolute Spring-context limits. Only successful test runs with a readable
+JFR recording and valid summaries enter history, including runs whose performance budget fails.
+History is restored from this repository's default-branch JFR history artifacts, retained for
+90 days; a rerun replaces its own sample. Uninstrumented runs are not baseline candidates. Without seven earlier
 profiles, the sustained-regression check has no verdict. Branch dispatches produce diagnostic
 artifacts without changing or enforcing the baseline.
 
-The workflow's `Run integration suite with JFR` step owns the invocation;
+The workflow's `Run integration suite with JFR` step owns the invocation. Additional test-JVM flags
+use `-Dhephaestus.test.jvmArgs=...`; Surefire and Failsafe compose these with JaCoCo's late-bound
+arguments and the configured memory limits. Missing recordings, Maven reports, resource metrics
+or Spring-context measurements fail the profile rather than becoming zero-valued baselines.
+For local shard profiling, use the same `HEPHAESTUS_INTEGRATION_TESTS` selector as the CI matrix
+and the Java version pinned in `.java-version`. Compare the same suite, runtime and cache state;
+the weekly whole-tier baseline is not comparable to one shard.
+
 `SpringTestContextArchitectureTest` enforces the reviewed Spring context keys. The weekly
 **Server Phase Reference** workflow records cache-disabled Maven generation, compilation,
 test-compilation and execution profiles and compares two clean generated-client JARs.
