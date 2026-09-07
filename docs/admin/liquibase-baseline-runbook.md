@@ -1,15 +1,14 @@
 # Synchronizing the v0.77.4 database baseline
 
 PostgreSQL 18 is required. Fresh installations apply the baseline automatically. Existing databases
-must first finish the v0.77.4 migrations, then explicitly synchronize the new baseline before
-starting the candidate application. An existing unsynchronized schema fails startup; table existence
-is not treated as proof of a completed migration.
+must finish the v0.77.4 migrations and synchronize the baseline before starting the candidate.
+Unsynchronized existing schemas fail startup.
 
 ## Before deployment
 
 1. Verify the currently running release has completed every v0.77.4 migration with no pending
-   changesets. Match migration identities by **id, author and logical filename**, not a row count:
-   historical backfills can have repeated history rows. Resolve schema drift before synchronization.
+   changesets. Match migration identities by **id, author and logical filename**, not a row count.
+   Resolve schema drift before synchronization.
 2. Rehearse with an isolated restoration of the environment's full backup. Verify application rows,
    operator settings, consent data, pg_partman registration and partition maintenance survive.
 3. Stop every application process that can write to this database, including server, worker and
@@ -25,8 +24,7 @@ it does not validate their schema or execute initialization.
 
 ## Synchronize without executing DDL
 
-Use the **candidate** application image's bundled Liquibase and changelog. The Buildpacks launcher
-sets up Java; `--` requests direct execution without requiring a shell in the image.
+Use the **candidate** application image's bundled Liquibase and changelog:
 
 Set `CANDIDATE_IMAGE` to the verified image digest, `DATABASE_NETWORK` to the database's Docker
 network. Set `LIQUIBASE_DEFAULTS_FILE` to a protected Liquibase properties file containing that
@@ -101,9 +99,9 @@ These commands assume the bundled single-role deployment. If you manage addition
 restore their ownership and grants separately before starting writers.
 
 Expect zero baseline-tag rows in a pre-squash backup. Redeploy the previous **signed image and release
-lock**, then verify readiness and the restored data. Revert the squash in source separately; a Git
-revert alone neither restores the database nor selects the previous deployed image. Writes accepted
-after the backup are outside its recovery point and need a separate reconciliation decision.
+lock** only after the [recovery checks](backup-restore.mdx#before-restarting-services), then verify
+readiness and restored data. A Git revert alone neither restores the database nor selects the
+previous image.
 
 > **Never run `clearCheckSums` in production or staging.** It does not repair schema drift and removes
 > checksum evidence. Reserve it for disposable developer databases after understanding the mismatch;
@@ -117,5 +115,3 @@ after the backup are outside its recovery point and need a separate reconciliati
   only as test resources; it must not enter the application JAR.
 - Announce the cut-point and synchronization requirement before merging. Developer reset:
   `vp run dev:reset`, then `vp run dev`. This destroys local database data.
-
-These operational gates require deployment evidence; passing CI does not fulfill them.

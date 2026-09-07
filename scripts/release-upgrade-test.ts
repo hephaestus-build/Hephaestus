@@ -485,7 +485,7 @@ try {
 		try {
 			console.error(`\n--- ${name} logs ---\n${docker("logs", name)}`);
 		} catch {
-			// Containers created after the failure point have no logs.
+			// Preserve the upgrade failure if diagnostic collection also fails.
 		}
 	}
 	throw error;

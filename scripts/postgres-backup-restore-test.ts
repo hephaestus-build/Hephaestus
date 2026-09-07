@@ -91,8 +91,7 @@ try {
 	if (sql(source, "SHOW server_version_num").slice(0, 2) !== "18")
 		throw new Error("source is not PostgreSQL 18");
 
-	// liquibase:update is a single-module invocation, so the reactor sibling the application
-	// depends on must be installed to the local repository first — a warm CI cache is not a given.
+	// Single-module liquibase:update resolves reactor dependencies from the local repository.
 	run("node", [
 		"scripts/run-mvnw.ts",
 		"-pl",
@@ -141,7 +140,6 @@ try {
 	if (listing.status !== 0) throw new Error("source dump is unreadable");
 	docker("rm", "-f", source);
 
-	// Recover without access to the original cluster.
 	docker("volume", "rm", volume);
 	docker("volume", "create", volume);
 

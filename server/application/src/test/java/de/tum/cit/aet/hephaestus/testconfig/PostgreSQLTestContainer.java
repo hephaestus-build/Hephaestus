@@ -147,7 +147,7 @@ public final class PostgreSQLTestContainer {
         return newContainer;
     }
 
-    /** Enables extensions required by Hibernate-generated test schemas because Liquibase is disabled in tests. */
+    // Hibernate-created schemas need citext without relying on Liquibase.
     private static void ensureExtensions(String jdbcUrl, String username, String password) {
         try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password)) {
             connection.createStatement().execute("CREATE EXTENSION IF NOT EXISTS citext");

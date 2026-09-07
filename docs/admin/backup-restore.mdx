@@ -36,7 +36,8 @@ cat release-lock.env > "$backup.release-lock.env"
 )
 ```
 
-Ship all three files **off the host**, encrypted. Cron it daily; test-restore it at least once (below).
+Copy all three files **off-host**, encrypted. Schedule backups to meet your acceptable data-loss
+window and rehearse restores regularly.
 
 ## Restore
 
@@ -58,13 +59,34 @@ dc exec -T postgres dropdb -U root --if-exists hephaestus
 dc exec -T postgres createdb -U root hephaestus
 dc exec -T postgres pg_restore -U root -d hephaestus --no-owner --no-acl --single-transaction \
   < hephaestus-TIMESTAMP.dump
-
-dc up -d --wait
 )
 ```
 
-Verify: sign in, open a workspace, check recent activity is present up to the backup
-timestamp.
+### Before restarting services
+
+Writes after the backup are outside its recovery point. Restoring PostgreSQL does not restore
+external credentials or event queues. Keep application services stopped while you reconcile:
+
+- **Sessions and credentials:** use the matching encryption configuration; do not delete unreadable
+  signing keys. Reapply access revocations and review credential rotations since the recovery point.
+- **NATS JetStream:** preserve `nats-data`. Queued events may already have been processed or may fall
+  after the recovery point; decide which can safely replay against the restored database. Provider
+  sync cannot recover every event or content that has changed or been deleted.
+- **Release:** use the signed release lock saved with the backup, not an older application image.
+  Upgrade only after verifying recovery.
+
+Then resume the stack:
+
+```bash
+(
+set -eu
+cd /opt/hephaestus/docker/self-host
+docker compose --env-file .env --env-file release-lock.env up -d --wait
+)
+```
+
+Sign in, open a workspace, and check that activity through the backup timestamp is present. Users
+whose sessions were created after the backup must sign in again.
 
 ## Unsupported PostgreSQL versions
 
@@ -73,15 +95,3 @@ Only PostgreSQL 18 is supported. For an existing PostgreSQL 17 installation, fol
 Do not attach an older data directory to PostgreSQL 18 or change the image tag as an upgrade.
 Keep an encrypted, off-host backup and successfully rehearse its restore before removing any data
 volume; `pg_restore --list` checks the archive contents, not recoverability.
-
-## After a point-in-time restore
-
-- **Sessions and credentials:** users signed in after the backup was taken must sign in again.
-  If restored signing keys cannot be read, verify the matching encryption configuration rather than
-  deleting the keys. Review access revocations and credential rotations made after the recovery point
-  before reopening access.
-- **NATS JetStream:** preserve the queue while reconciling it with the restored database. Its
-  events may already have been processed or may fall after the backup's recovery point. Do not
-  delete `nats-data` as a routine recovery step. Provider sync may recover current state, but cannot
-  guarantee recovery of every event or content that has since changed or been deleted.
-- **Restore into an older app version:** don't. Restore with the same signed release lock the backup was taken from, then upgrade.

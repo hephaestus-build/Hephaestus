@@ -21,8 +21,8 @@ keys. They disregard only these representation details:
 
 The baseline was derived from the supplied production schema, restored into the repository's
 PostgreSQL 18 + pg_partman image. Liquibase 5.0.4 `generateChangeLog` was run as an independent
-inspection aid. The committed baseline uses Liquibase `sqlFile` for PostgreSQL-native DDL rather
-than losing functions, deferred triggers, partial indexes or partition definitions in XML conversion.
+inspection aid. Liquibase `sqlFile` preserves the PostgreSQL-native functions, deferred triggers,
+partial indexes and partition definitions.
 
 The following production-only objects are outside the application baseline:
 
@@ -40,9 +40,7 @@ The schema captures and accompanying history exports establish the audited schem
 cut-point. They contain neither business rows nor `partman.part_config` data and do not prove data
 preservation. Automated upgrade and backup/restore tests use synthetic data; operators must still
 rehearse with a full environment backup as required by the
-[deployment runbook](../admin/liquibase-baseline-runbook.md). The immutable consent notice is copied
-from its historical changeset; singleton settings and identity providers are initialized separately
-from schema DDL.
+[deployment runbook](../admin/liquibase-baseline-runbook.md).
 
 Capture fingerprints (SHA-256) bind the audit to the supplied files without publishing the captures:
 
