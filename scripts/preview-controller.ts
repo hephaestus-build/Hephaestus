@@ -41,7 +41,6 @@ export interface GitHubApi {
 		};
 		readonly repos: {
 			readonly compareCommitsWithBasehead: ApiMethod<{ files?: PullRequestFile[] }>;
-			readonly deleteAnEnvironment: ApiMethod<unknown>;
 			readonly createDeployment: ApiMethod<Deployment>;
 			readonly createDeploymentStatus: ApiMethod<unknown>;
 			readonly deleteDeployment: ApiMethod<unknown>;
@@ -422,35 +421,6 @@ const inactivate = async ({ github, context }: ControllerInput): Promise<void> =
 };
 
 /** Whether a preview found on the host or in GitHub's records should still be holding its slot. */
-/** The environments this controller owns. Nothing else is ever a candidate for deletion. */
-const PREVIEW_ENVIRONMENT = /^preview\/pr-(?:[1-9]\d*)$/;
-
-/**
- * Removes the GitHub environment once its pull request is closed.
- *
- * <p>Marking a deployment inactive retires the deployment; the environment outlives it and shows up
- * in the repository's settings forever. Four survived from pull requests merged days earlier, which
- * is what this exists to stop. It runs only from the scheduled sweep, never from a
- * `pull_request_target` workflow, because deleting an environment needs a permission no
- * pull-request-triggered run should carry.
- *
- * <p>While a pull request is still open the environment stays, even with the label removed: the
- * record is worth keeping and re-labelling should be cheap.
- */
-const demolish = async ({ github, context, core }: ControllerInput): Promise<void> => {
-	const { owner, repo } = context.repo;
-	const environment = requiredEnv(process.env, "ENVIRONMENT");
-	if (!PREVIEW_ENVIRONMENT.test(environment)) {
-		throw new Error(`Refusing to delete ${environment}: not a preview environment.`);
-	}
-	await github.rest.repos.deleteAnEnvironment({
-		owner,
-		repo,
-		environment_name: environment,
-	});
-	core.notice(`Deleted ${environment}; its pull request is closed.`);
-};
-
 const assess = async ({ github, context, core }: ControllerInput): Promise<void> => {
 	const { owner, repo } = context.repo;
 	const number = requiredPositiveInteger(process.env, "PR_NUMBER");
@@ -498,7 +468,6 @@ const retire = async ({ github, context }: ControllerInput): Promise<void> => {
 };
 
 export {
-	demolish,
 	progress,
 	TEARDOWN_REQUESTED_DESCRIPTION,
 	PREVIEW_LABEL,

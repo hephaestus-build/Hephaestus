@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 
 import {
 	assess,
-	demolish,
 	inventory,
 	TEARDOWN_REQUESTED_DESCRIPTION,
 	create,
@@ -63,7 +62,6 @@ interface GitHubOptions {
 }
 
 const postedStatuses: Record<string, unknown>[] = [];
-const deletedEnvironments: string[] = [];
 
 const makeGitHub = ({
 	deployments = [{ environment: "preview/pr-7", id: 1, sha: "old-sha" }],
@@ -88,10 +86,6 @@ const makeGitHub = ({
 			},
 			createDeployment: () =>
 				Promise.resolve({ data: { environment: "preview/pr-7", id: 2, sha: "head-sha" } }),
-			deleteAnEnvironment: (params: Record<string, unknown>) => {
-				deletedEnvironments.push(String(params.environment_name));
-				return Promise.resolve({ data: {} });
-			},
 			createDeploymentStatus: (params: Record<string, unknown>) => {
 				postedStatuses.push(params);
 				return Promise.resolve({ data: {} });
@@ -687,38 +681,7 @@ void describe("preview deployment lifecycle", () => {
 	});
 });
 
-void describe("preview environment teardown", () => {
-	beforeEach(() => {
-		deletedEnvironments.length = 0;
-	});
-
-	void it("deletes the environment of a closed pull request", async () => {
-		process.env.ENVIRONMENT = "preview/pr-2042";
-		await demolish({ github: makeGitHub({}), context: makeContext(), core: makeCore() });
-		assert.deepEqual(deletedEnvironments, ["preview/pr-2042"]);
-	});
-
-	void it("refuses any environment it does not own", async () => {
-		// The blast radius of a bug here is Production, so the name is checked rather than trusted.
-		for (const environment of [
-			"Production",
-			"Staging",
-			"github-pages",
-			"preview/pr-0",
-			"preview/pr-",
-			"preview/pr-2042/../Production",
-			"PREVIEW/PR-1",
-		]) {
-			process.env.ENVIRONMENT = environment;
-			await assert.rejects(
-				() => demolish({ github: makeGitHub({}), context: makeContext(), core: makeCore() }),
-				/not a preview environment/,
-				environment,
-			);
-		}
-		assert.deepEqual(deletedEnvironments, []);
-	});
-
+void describe("preview teardown reporting", () => {
 	void it("says a closed pull request is closed, which is what authorizes the delete", async () => {
 		process.env.PR_NUMBER = "2042";
 		const core = makeCore();
