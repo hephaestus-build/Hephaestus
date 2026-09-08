@@ -27,7 +27,7 @@
 		"jsonc-parser": "3.3.1",
 		"mdast-util-from-markdown": "2.0.3",
 		"mdast-util-mdx": "3.0.0",
-		"mermaid": "11.16.1",
+		"mermaid": "11.17.2",
 		"micromark-extension-mdxjs": "3.0.0",
 		"mprocs": "0.9.3",
 		"npm-package-arg": "13.0.2",
@@ -35,7 +35,7 @@
 		"oxlint": "catalog:",
 		"oxlint-tsgolint": "catalog:",
 		"pg": "8.20.0",
-		"surge": "0.43.1",
+		"surge": "0.44.0",
 		"typescript": "7.0.2",
 		"vite-plus": "0.3.0",
 		"yaml": "2.9.0"
