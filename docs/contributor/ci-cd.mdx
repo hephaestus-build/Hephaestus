@@ -302,11 +302,32 @@ An alias serves a preview and never release evidence: when the base commit's ima
 publishing it falls back to the candidate the merged pull request built, which carries `linux/amd64`
 alone. That is why the Version PR's branch builds every image itself instead.
 
-A sticky comment carries the URL, and GitHub records each accepted update as the transient
-environment `preview/pr-N`, so the pull request's **View deployment** link opens it too.
+A draft deploys like any other pull request: wanting eyes on unfinished work is the usual reason to
+ask for a preview, so the label is the only opt-in.
 
-Remove the `preview` label to tear the stack down and free the slot. Closing, merging, or converting
-the pull request back to draft does the same thing.
+A sticky comment carries the URL, and GitHub records each accepted update as the transient
+environment `preview/pr-N`. The deployment is opened as soon as the pull request is admitted, not
+when the stack is finally up, and moves through `queued` while CI publishes this commit's images,
+`in_progress` while Coolify builds, and then `success` — so the pull request's **View deployment**
+link and the run log are both reachable throughout. A run that a newer push supersedes, or whose
+label is removed while it works, ends `inactive` rather than `failure`; neither is a fault.
+
+Remove the `preview` label to tear the stack down and free the slot. Closing or merging the pull
+request does the same thing. Converting it back to draft does not — a draft is a thing you can
+preview.
+
+The environment itself outlives the deployments recorded in it. Deleting one needs repository
+administration, which `GITHUB_TOKEN` cannot be granted — `administration` is not among the
+permission scopes a workflow may request — so a `preview/pr-N` entry stays in the repository's
+settings after its pull request closes, holding only retired deployments. Removing them is a
+maintainer action:
+
+```bash
+gh api -X DELETE "repos/hephaestus-build/Hephaestus/environments/preview%2Fpr-<n>"
+```
+
+Automating it would mean giving a scheduled workflow an administration-scoped credential, which is a
+larger grant than tidy settings are worth.
 
 Deployments are serialized, never parallel, and each one deploys the pull request's *current* head.
 A burst of pushes therefore produces one deployment of the newest commit rather than one per commit.

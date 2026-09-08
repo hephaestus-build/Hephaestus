@@ -4,7 +4,6 @@ type ApiMethod<T> = (params: Record<string, unknown>) => Promise<{ data: T }>;
 
 interface PullRequest {
 	readonly state: string;
-	readonly draft: boolean;
 	readonly html_url: string;
 	readonly title: string;
 	readonly author_association: string;
@@ -152,7 +151,6 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 
 	if (!labelled) return skip(`PR #${number} does not carry the \`${PREVIEW_LABEL}\` label.`);
 	if (pull.state !== "open") return skip(`PR #${number} is closed.`);
-	if (pull.draft) return skip(`PR #${number} is a draft. Mark it ready for review to deploy.`);
 	if (pull.head.repo?.full_name !== `${owner}/${repo}`) {
 		return skip(
 			`PR #${number} comes from a fork. Previews run only for branches in this repository.`,
@@ -255,7 +253,7 @@ const recheck = async ({ github, context, core }: ControllerInput): Promise<void
 		core.notice(reason);
 		core.setOutput("proceed", "false");
 	};
-	if (pull.state !== "open" || pull.draft || !hasPreviewLabel(pull)) {
+	if (pull.state !== "open" || !hasPreviewLabel(pull)) {
 		return halt(`PR #${number} opted out while deploying; cleanup takes it from here.`);
 	}
 	if (pull.head.sha !== headSha) {
@@ -303,13 +301,36 @@ const create = async ({ github, context, core }: ControllerInput): Promise<void>
 	});
 };
 
+/**
+ * Moves the deployment GitHub already shows to its next state. Without this the record is created
+ * and then says nothing until the run ends, which for a preview waiting on CI images is most of its
+ * life — and a deployment that never moves is indistinguishable from one that is stuck.
+ */
+const progress = async ({ github, context }: ControllerInput): Promise<void> => {
+	const { owner, repo } = context.repo;
+	const state = requiredEnv(process.env, "STATE");
+	if (state !== "queued" && state !== "in_progress") {
+		throw new Error(`progress reports queued or in_progress, not ${state}.`);
+	}
+	await github.rest.repos.createDeploymentStatus({
+		owner,
+		repo,
+		deployment_id: requiredPositiveInteger(process.env, "DEPLOYMENT_ID"),
+		state,
+		description: requiredEnv(process.env, "DESCRIPTION").slice(0, 140),
+		environment: requiredEnv(process.env, "ENVIRONMENT"),
+		environment_url: requiredEnv(process.env, "PREVIEW_URL"),
+		log_url: requiredEnv(process.env, "SOURCE_RUN_URL"),
+	});
+};
+
 const finalize = async ({ github, context, core }: ControllerInput): Promise<void> => {
 	const { owner, repo } = context.repo;
 	const deploymentId = requiredPositiveInteger(process.env, "DEPLOYMENT_ID");
 	const environment = requiredEnv(process.env, "ENVIRONMENT");
 	const previewUrl = requiredEnv(process.env, "PREVIEW_URL");
 	const sourceRunUrl = requiredEnv(process.env, "SOURCE_RUN_URL");
-	const allowedStates = new Set(["error", "failure", "success"]);
+	const allowedStates = new Set(["error", "failure", "inactive", "success"]);
 	const finalState = requiredEnv(process.env, "FINAL_STATE");
 	let state = allowedStates.has(finalState) ? finalState : "error";
 	let description = requiredEnv(process.env, "DESCRIPTION");
@@ -404,8 +425,9 @@ const assess = async ({ github, context, core }: ControllerInput): Promise<void>
 	const { owner, repo } = context.repo;
 	const number = requiredPositiveInteger(process.env, "PR_NUMBER");
 	const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: number });
-	const stale = pull.state !== "open" || pull.draft || !hasPreviewLabel(pull);
+	const stale = pull.state !== "open" || !hasPreviewLabel(pull);
 	core.setOutput("stale", String(stale));
+	core.setOutput("closed", String(pull.state !== "open"));
 	if (!stale) {
 		core.notice(`PR #${number} still wants its preview; leaving it untouched.`);
 		return;
@@ -446,6 +468,7 @@ const retire = async ({ github, context }: ControllerInput): Promise<void> => {
 };
 
 export {
+	progress,
 	TEARDOWN_REQUESTED_DESCRIPTION,
 	PREVIEW_LABEL,
 	assess,

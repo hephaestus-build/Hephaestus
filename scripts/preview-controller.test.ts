@@ -9,6 +9,7 @@ import {
 	finalize,
 	inactivate,
 	PREVIEW_LABEL,
+	progress,
 	recheck,
 	type GitHubApi,
 	resolve,
@@ -60,6 +61,8 @@ interface GitHubOptions {
 	defaultStatuses?: Status[];
 }
 
+const postedStatuses: Record<string, unknown>[] = [];
+
 const makeGitHub = ({
 	deployments = [{ environment: "preview/pr-7", id: 1, sha: "old-sha" }],
 	files = [],
@@ -83,7 +86,10 @@ const makeGitHub = ({
 			},
 			createDeployment: () =>
 				Promise.resolve({ data: { environment: "preview/pr-7", id: 2, sha: "head-sha" } }),
-			createDeploymentStatus: () => Promise.resolve({ data: {} }),
+			createDeploymentStatus: (params: Record<string, unknown>) => {
+				postedStatuses.push(params);
+				return Promise.resolve({ data: {} });
+			},
 			deleteDeployment: () => Promise.resolve({ data: {} }),
 			listDeployments: (params) =>
 				Promise.resolve({
@@ -147,7 +153,7 @@ void describe("preview controller admission", () => {
 		assert.match(core.outputs.get("reason") ?? "", /fork/);
 	});
 
-	void it("waits for a draft to be marked ready for review", async () => {
+	void it("deploys a draft, which is usually the point of asking for a preview", async () => {
 		const core = makeCore();
 		await resolve({
 			github: makeGitHub({ resolvedPull: { ...pull, draft: true } }),
@@ -155,8 +161,7 @@ void describe("preview controller admission", () => {
 			core,
 		});
 
-		assert.equal(core.outputs.get("eligible"), "false");
-		assert.match(core.outputs.get("reason") ?? "", /draft/);
+		assert.equal(core.outputs.get("eligible"), "true");
 	});
 
 	void it("refuses PR-controlled changes to any part of the deployment control plane", async () => {
@@ -616,7 +621,7 @@ void describe("reconcile staleness", () => {
 		assert.equal(core.outputs.get("stale"), "true");
 	});
 
-	void it("reclaims a pull request that went back to draft", async () => {
+	void it("leaves a draft alone, since the label is what opts in", async () => {
 		const core = makeCore();
 		await assess({
 			github: makeGitHub({ resolvedPull: { ...pull, draft: true } }),
@@ -624,6 +629,80 @@ void describe("reconcile staleness", () => {
 			core,
 		});
 
+		// Reclaiming here would tear the preview down moments after the deploy that created it.
+		assert.equal(core.outputs.get("stale"), "false");
+	});
+});
+
+void describe("preview deployment lifecycle", () => {
+	beforeEach(() => {
+		postedStatuses.length = 0;
+	});
+
+	void it("moves the deployment while the run waits, so it is not silent for most of its life", async () => {
+		for (const [state, description] of [
+			["queued", "Waiting for CI to publish signed images for this commit."],
+			["in_progress", "Images are ready; Coolify is building the preview."],
+		] as const) {
+			process.env.DEPLOYMENT_ID = "42";
+			process.env.STATE = state;
+			process.env.DESCRIPTION = description;
+			process.env.ENVIRONMENT = "preview/pr-7";
+			process.env.PREVIEW_URL = "https://pr7.example/";
+			process.env.SOURCE_RUN_URL = "https://runs.example/1";
+
+			await progress({ github: makeGitHub({}), context: makeContext(), core: makeCore() });
+		}
+
+		assert.deepEqual(
+			postedStatuses.map((status) => status.state),
+			["queued", "in_progress"],
+		);
+		// The environment link is what makes GitHub render a destination rather than a bare record.
+		const [first] = postedStatuses;
+		assert.ok(first);
+		assert.equal(first.environment_url, "https://pr7.example/");
+		assert.equal(first.log_url, "https://runs.example/1");
+	});
+
+	void it("reports only states GitHub treats as still running", async () => {
+		process.env.DEPLOYMENT_ID = "42";
+		process.env.STATE = "success";
+		process.env.DESCRIPTION = "done";
+		process.env.ENVIRONMENT = "preview/pr-7";
+		process.env.PREVIEW_URL = "https://pr7.example/";
+		process.env.SOURCE_RUN_URL = "https://runs.example/1";
+
+		await assert.rejects(
+			() => progress({ github: makeGitHub({}), context: makeContext(), core: makeCore() }),
+			/queued or in_progress/,
+		);
+		assert.equal(postedStatuses.length, 0);
+	});
+});
+
+void describe("preview teardown reporting", () => {
+	void it("says a closed pull request is closed, which is what authorizes the delete", async () => {
+		process.env.PR_NUMBER = "2042";
+		const core = makeCore();
+		await assess({
+			github: makeGitHub({ resolvedPull: { ...pull, state: "closed" } }),
+			context: makeContext(),
+			core,
+		});
 		assert.equal(core.outputs.get("stale"), "true");
+		assert.equal(core.outputs.get("closed"), "true");
+	});
+
+	void it("keeps the environment of an open pull request that merely dropped the label", async () => {
+		process.env.PR_NUMBER = "2042";
+		const core = makeCore();
+		await assess({
+			github: makeGitHub({ resolvedPull: { ...pull, labels: [] } }),
+			context: makeContext(),
+			core,
+		});
+		assert.equal(core.outputs.get("stale"), "true");
+		assert.equal(core.outputs.get("closed"), "false");
 	});
 });
