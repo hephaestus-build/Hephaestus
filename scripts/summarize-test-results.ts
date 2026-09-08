@@ -14,7 +14,7 @@ type TestCase = {
 };
 
 export type TestSummary = {
-	schemaVersion: 2;
+	schemaVersion: 3;
 	name: string;
 	files: number;
 	tests: number;
@@ -25,8 +25,6 @@ export type TestSummary = {
 	slowest: Array<{ test: string; seconds: number }>;
 	performance?: {
 		wallTimeSeconds: number;
-		cpuTimeSeconds: number;
-		maxRssKilobytes: number;
 		contextStarts: number;
 		contextStartupSeconds: number;
 		contextCacheMisses: number;
@@ -80,7 +78,7 @@ export function parseJUnit(xml: string): TestCase[] {
 export function summarize(name: string, documents: string[]): TestSummary {
 	const cases = documents.flatMap(parseJUnit);
 	return {
-		schemaVersion: 2,
+		schemaVersion: 3,
 		name,
 		files: documents.length,
 		tests: cases.length,
@@ -114,17 +112,9 @@ export function parsePerformance(
 		/Elapsed \(wall clock\) time .*: (?:(\d+):)?(\d+):(\d+(?:\.\d+)?)/,
 	);
 	if (elapsed === null) throw new Error("Missing or invalid elapsed resource time");
-	const value = (label: string): number => {
-		const match = resourceUsage.match(new RegExp(`${label}: (\\d+(?:\\.\\d+)?)`));
-		if (match === null) throw new Error(`Missing or invalid resource metric: ${label}`);
-		const result = Number(match[1]);
-		if (!Number.isFinite(result)) throw new Error(`Invalid resource metric: ${label}`);
-		return result;
-	};
+
 	return {
 		wallTimeSeconds: Number(elapsed[1] ?? 0) * 3600 + Number(elapsed[2]) * 60 + Number(elapsed[3]),
-		cpuTimeSeconds: value("User time \\(seconds\\)") + value("System time \\(seconds\\)"),
-		maxRssKilobytes: value("Maximum resident set size \\(kbytes\\)"),
 		contextStarts: starts.length,
 		contextStartupSeconds: starts.reduce((total, seconds) => total + seconds, 0),
 		contextCacheMisses: [...cacheMisses.values()].reduce((total, misses) => total + misses, 0),
@@ -150,8 +140,7 @@ export function validateProfile(
 		)
 	)
 		throw new Error("Profile metrics must be finite and nonnegative");
-	if (performance.wallTimeSeconds === 0 || performance.maxRssKilobytes === 0)
-		throw new Error("Profile wall time and resident memory must be positive");
+	if (performance.wallTimeSeconds === 0) throw new Error("Profile wall time must be positive");
 	if (
 		kind === "integration" &&
 		(performance.contextStarts === 0 || performance.contextCacheMisses === 0)
@@ -177,7 +166,7 @@ export function markdown(summary: TestSummary): string {
 		const performance = summary.performance;
 		lines.push(
 			"",
-			`**Wall:** ${performance.wallTimeSeconds.toFixed(1)}s · **CPU:** ${performance.cpuTimeSeconds.toFixed(1)}s · **Max RSS:** ${(performance.maxRssKilobytes / 1024).toFixed(0)} MiB · **Contexts:** ${performance.contextStarts} starts / ${performance.contextCacheMisses} misses / ${performance.contextStartupSeconds.toFixed(1)}s startup`,
+			`**Wall:** ${performance.wallTimeSeconds.toFixed(1)}s · **Contexts:** ${performance.contextStarts} starts / ${performance.contextCacheMisses} misses / ${performance.contextStartupSeconds.toFixed(1)}s startup`,
 		);
 	}
 	return `${lines.join("\n")}\n`;

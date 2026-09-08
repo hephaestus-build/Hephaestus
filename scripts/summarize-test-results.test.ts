@@ -117,7 +117,7 @@ await test("uses XML structure rather than matching tag-like text", () => {
 	]);
 });
 
-await test("extracts process and Spring context metrics", () => {
+await test("extracts wall and context metrics without claiming daemon CPU or memory", () => {
 	const performance = parsePerformance(
 		"Started FirstTest in 4.25 seconds\nDefaultContextCache@abc missCount = 1\nStarted SecondTest in 5.75 seconds\nDefaultContextCache@abc missCount = 2",
 		`User time (seconds): 12.5
@@ -127,31 +127,14 @@ Maximum resident set size (kbytes): 524288`,
 	);
 	assert.deepEqual(performance, {
 		wallTimeSeconds: 63.5,
-		cpuTimeSeconds: 15,
-		maxRssKilobytes: 524288,
 		contextStarts: 2,
 		contextStartupSeconds: 10,
 		contextCacheMisses: 2,
 	});
 });
 
-await test("does not turn missing resource measurements into zeroes", () => {
-	const resources = [
-		"User time (seconds): 12.5",
-		"System time (seconds): 2.5",
-		"Elapsed (wall clock) time (h:mm:ss or m:ss): 1:03.50",
-		"Maximum resident set size (kbytes): 524288",
-	];
-	for (let missing = 0; missing < resources.length; missing++) {
-		assert.throws(
-			() => parsePerformance("", resources.filter((_, index) => index !== missing).join("\n")),
-			/Missing or invalid/,
-		);
-	}
-	assert.throws(
-		() => parsePerformance("", resources.join("\n").replace("12.5", "-12.5")),
-		/Missing or invalid/,
-	);
+await test("does not turn missing wall time into zero", () => {
+	assert.throws(() => parsePerformance("", ""), /Missing or invalid elapsed/);
 });
 
 await test("profile CLI preserves diagnostics and fails when no tests were reported", async (context) => {

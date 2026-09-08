@@ -649,6 +649,13 @@ Deep profiling stays in the manual/weekly workflow, not on the PR critical path.
 runners at once. Each tier retains its JFR recording, Gradle task profile, resource usage and JUnit
 results for 14 days. Verification profiles are diagnostic artifacts, not integration-history samples.
 
+Profile invocations use a single-use Gradle process (`--no-daemon`) for repeatable JVM startup.
+Gradle streams test output only in these profiles so Spring context diagnostics reach the retained log.
+History uses the `ci-profile-history-gradle-jfr` artifact and compares wall time, test time and context
+measurements. GNU time's CPU/RSS accounting does not reliably include Gradle's detached JVMs, so those
+values are not reported as suite metrics or compared against budgets. Inspect the retained JFR recordings
+for JVM CPU, allocation and GC diagnostics instead.
+
 The integration profile additionally records Spring context-cache metrics. It warns about
 a sustained regression after three consecutive profiles exceed variance limits against five earlier
 default-branch profiles or absolute Spring-context limits. Only successful test runs with a readable

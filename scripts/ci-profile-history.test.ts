@@ -41,7 +41,7 @@ const run = (id: number, headBranch = "main", repository = "owner/repo") => ({
 	head_branch: headBranch,
 	head_repository: { full_name: repository },
 });
-const history = { name: "ci-profile-history-jfr", expired: false };
+const history = { name: "ci-profile-history-gradle-jfr", expired: false };
 
 void test("history skips this rerun, foreign sources and incomplete profiles across pages", () => {
 	assert.equal(
@@ -118,4 +118,26 @@ void test("verification profiling retains coverage and runs separately from inte
 		items.items.some((item) => isMap(item) && item.get("id") === "history"),
 		false,
 	);
+});
+
+void test("only opt-in Gradle profiles stream context diagnostics", async () => {
+	const build = await readFile("server/application/build.gradle.kts", "utf8");
+	assert.match(build, /showStandardStreams = profileTests\.get\(\)/);
+});
+
+void test("profile history excludes incompatible process-accounting baselines", () => {
+	assert.equal(
+		selectHistory([[run(9)]], { 9: [{ name: "ci-profile-history-jfr", expired: false }] }),
+		"",
+	);
+});
+
+void test("both profile tiers use a fresh Gradle process", () => {
+	for (const job of ["server-integration", "server-verification"]) {
+		const items = workflow.getIn(["jobs", job, "steps"]);
+		assert.ok(isSeq(items));
+		const profile = items.items.find((item) => isMap(item) && item.get("id") === "profile");
+		assert.ok(isMap(profile));
+		assert.match(String(profile.get("run")), /--no-daemon/);
+	}
 });
