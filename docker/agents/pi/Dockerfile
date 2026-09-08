@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.26@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
 # renovate: datasource=node-version depName=node
-ARG NODE_VERSION=24.19.0
+ARG NODE_VERSION=24.20.0
 FROM ghcr.io/pnpm/pnpm:12.3.4@sha256:b81d53184f670fe19d1a33f9d5041907d314b31d596838e8133cbd83d45be043 AS dependencies
 ARG NODE_VERSION
 WORKDIR /opt/pi-sdk
@@ -8,7 +8,7 @@ RUN pnpm runtime set node ${NODE_VERSION} -g
 COPY pi/package.json pi/pnpm-lock.yaml pi/pnpm-workspace.yaml ./
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
-FROM node:${NODE_VERSION}-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df
+FROM node:${NODE_VERSION}-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e
 ARG NODE_VERSION
 
 # The base digest is pinned, so Debian security updates published after the upstream image was
