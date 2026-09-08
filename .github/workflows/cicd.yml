@@ -53,18 +53,17 @@ jobs:
       pmd-canary: ${{ steps.filter.outputs.pmd-canary }}
       version-bump: ${{ steps.version_bump.outputs.changed }}
       version: ${{ steps.version.outputs.version }}
-      version-branch: ${{ steps.version_branch.outputs.version-branch }}
+      release-candidate: ${{ steps.release_candidate.outputs.release-candidate }}
       any-code: ${{ steps.filter.outputs.webapp == 'true' || steps.filter.outputs.application-server == 'true' || steps.filter.outputs.tooling == 'true' || steps.filter.outputs.agent-images == 'true' || steps.filter.outputs.postgres-image == 'true' }}
       # The vulnerability policy's match key includes the platform, so an arm64-only finding has to
       # be found before the release rather than by it, and only a manifest that exists can carry it.
-      single-arch: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.version_branch.outputs.version-branch != 'true' }}
+      single-arch: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.release_candidate.outputs.release-candidate != 'true' }}
       # The commit an unchanged image is aliased from; scripts/resolve-alias-base.ts says how it is
       # found and docs/contributor/ci-cd.mdx the rule.
       alias-base: ${{ steps.alias_base.outputs.commit }}
-      # Aliasing an unchanged image falls back to main's own push run, which has published nothing
-      # yet when the Version PR head is written, so that branch builds the whole set itself; so does
-      # a pull request whose chain of bases reaches no published commit at all.
-      all-images: ${{ steps.alias_base.outputs.commit == '' || steps.version_branch.outputs.version-branch == 'true' }}
+      # A release candidate publishes its complete image set under its own commit identity.
+      # Ordinary PRs can reuse unchanged images when their base has published artifacts.
+      all-images: ${{ steps.alias_base.outputs.commit == '' || steps.release_candidate.outputs.release-candidate == 'true' }}
       # A push and a dispatch validate a commit whole; a pull request and a merge group are each a
       # diff, which paths-filter reads for a group from `merge_group.base_sha..head_sha` without
       # being told.
@@ -73,7 +72,7 @@ jobs:
       previews: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
       # A skipped duplicate would skip the image builds the release evidence preflight needs, and
       # the gate refuses to pass the Version PR without one.
-      should_skip: ${{ steps.skip_check.outputs.should_skip == 'true' && steps.version_branch.outputs.version-branch != 'true' }}
+      should_skip: ${{ steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -92,18 +91,23 @@ jobs:
         id: version
         run: echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
 
-      # Whether this run is looking at the Version PR's head, whichever event started it. The branch
-      # name is read from the config changesets derives it from rather than restated, so a
-      # base-branch rename cannot quietly turn the release evidence preflight off; ci-contract.test.ts
-      # runs this shell against `versionBranch()` and requires the two to agree.
-      - name: Detect the Version PR branch
-        id: version_branch
+      # Merge groups use synthetic refs, so a version change against the group's base also requires
+      # release evidence. Read the aggregate tree rather than guessing which PRs a group contains.
+      - name: Detect the release candidate
+        id: release_candidate
         env:
           HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+          MERGE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
         run: |
           version_branch="changeset-release/$(jq -r .baseBranch .changeset/config.json)"
           [ "$HEAD_BRANCH" = "$version_branch" ] && on_version_branch=true || on_version_branch=false
-          echo "version-branch=$on_version_branch" >> "$GITHUB_OUTPUT"
+          release_candidate="$on_version_branch"
+          if [ -n "$MERGE_BASE_SHA" ]; then
+            base_version=$(git show "$MERGE_BASE_SHA:package.json" | jq -er .version)
+            current_version=$(jq -er .version package.json)
+            [ "$base_version" = "$current_version" ] || release_candidate=true
+          fi
+          echo "release-candidate=$release_candidate" >> "$GITHUB_OUTPUT"
 
       - name: Detect version bump
         id: version_bump
@@ -572,23 +576,13 @@ jobs:
           docker compose --env-file .env --env-file smoke-lock.env up -d --wait \
             --wait-timeout 600 postgres nats-server application-server
 
-  # Everything the release evidence gate checks, against the images this run just built, except the
-  # signatures and attestations that do not exist until a release creates them. A release was the
-  # first and only thing that ever produced an evidence bundle, so the SBOM triple, the licence
-  # report binding, index membership, and the linux/arm64 vulnerability policy for the images we
-  # build could each fail for the first time at the release — the pinned upstream digests need no
-  # build, so ci-security-scan.yml already covers both of their platforms on the pull request that
-  # changes them. release-management.mdx § Nothing may fail for the first time at a release carries
-  # the check-by-check reasoning.
-  #
-  # On the Version PR's branch it runs whatever event started the run. That head is the commit whose
-  # merge cuts a release, and more than one run can report `CI Status Gate` for it — the run
-  # version-pr.yml dispatches, and an approved `pull_request` run — while the ruleset is satisfied by
-  # either. So the answer has to be in every one of them, not in the dispatched one alone.
+  # Validate the built images before release; signatures and attestations are added at publication.
+  # Every release candidate needs evidence for its own tree, including a merge group's aggregate.
+  # release-management.mdx owns the evidence contract.
   Release-preflight:
     name: "Release evidence preflight"
     needs: [detect-changes, Build, Docker]
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || needs.detect-changes.outputs.version-branch == 'true' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || needs.detect-changes.outputs.release-candidate == 'true' }}
     timeout-minutes: 45
     runs-on: ubuntu-latest
     permissions:
@@ -716,7 +710,7 @@ jobs:
           echo "Docker:         ${{ needs.Docker.result }}"
           echo "Host smoke:     ${{ needs.Supported-host-smoke.result }}"
           echo "Preflight:      ${{ needs.Release-preflight.result }}"
-          echo "Version branch: ${{ needs.detect-changes.outputs.version-branch == 'true' }}"
+          echo "Release candidate: ${{ needs.detect-changes.outputs.release-candidate == 'true' }}"
 
           if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
             echo "status=failure" >> $GITHUB_OUTPUT
@@ -728,11 +722,9 @@ jobs:
             exit 1
           fi
 
-          # The Version PR's merge cuts a release, so its gate is only worth the name if the release
-          # evidence preflight actually ran here. A skipped job is a missing answer, not an
-          # affirmative one, and the checks above read it as neither failed nor cancelled.
-          if [[ "${{ needs.detect-changes.outputs.version-branch == 'true' && needs.Release-preflight.result != 'success' }}" == "true" ]]; then
-            echo "The Version PR requires a successful release evidence preflight; this run's was '${{ needs.Release-preflight.result }}'."
+          # A skipped preflight is a missing release verdict, not a successful one.
+          if [[ "${{ needs.detect-changes.outputs.release-candidate == 'true' && needs.Release-preflight.result != 'success' }}" == "true" ]]; then
+            echo "The release candidate requires a successful release evidence preflight; this run's was '${{ needs.Release-preflight.result }}'."
             echo "status=failure" >> $GITHUB_OUTPUT
             exit 1
           fi
@@ -796,7 +788,7 @@ jobs:
             echo "### 💡 Troubleshooting Guide" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
 
-            if [[ "${{ needs.detect-changes.outputs.version-branch == 'true' && needs.Release-preflight.result != 'success' }}" == "true" ]]; then
+            if [[ "${{ needs.detect-changes.outputs.release-candidate == 'true' && needs.Release-preflight.result != 'success' }}" == "true" ]]; then
               echo "❌ **The release evidence preflight did not pass.** Merging this pull request cuts a release, so its gate requires the preflight to succeed in this run; it was \`${{ needs.Release-preflight.result }}\`." >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
             fi
