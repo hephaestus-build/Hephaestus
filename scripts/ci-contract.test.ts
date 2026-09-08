@@ -108,46 +108,6 @@ function escapeRegExp(value: string): string {
 }
 
 /**
- * Whether a Surefire `-Dtest` value selects one test class, named by its path under the test root
- * without the extension.
- *
- * The value replaces the `includes` and `excludes` parameters outright, and a pattern prefixed with
- * `!` is an exclusion — so a value carrying only exclusions leaves no inclusion pattern, and every
- * class Surefire scans is a candidate until an exclusion removes it. That is what lets one shard
- * select a package and the other select its complement without either restating the four default
- * include patterns.
- * https://maven.apache.org/surefire/maven-surefire-plugin/test-mojo.html#test
- */
-function surefireSelects(selector: string, testClass: string): boolean {
-	const patterns = selector.split(",").map((pattern) => pattern.trim());
-	const matches = (pattern: string) => surefirePattern(pattern.replace(/^!/, "")).test(testClass);
-	const included = patterns.filter((pattern) => !pattern.startsWith("!"));
-	const excluded = patterns.filter((pattern) => pattern.startsWith("!"));
-	return (included.length === 0 || included.some(matches)) && !excluded.some(matches);
-}
-
-/** Surefire's glob dialect: `**` crosses directories, `*` and `?` stay inside one segment. */
-function surefirePattern(pattern: string): RegExp {
-	const unqualified = pattern.replace(/\.(?:java|class)$/, "");
-	const qualified = unqualified.includes("/") ? unqualified : `**/${unqualified}`;
-	const body = qualified.replaceAll(/\*\*\/|\*\*|\*|\?|[^*?]+/g, (token) => {
-		switch (token) {
-			case "**/":
-				return "(?:[^/]+/)*";
-			case "**":
-				return ".*";
-			case "*":
-				return "[^/]*";
-			case "?":
-				return "[^/]";
-			default:
-				return escapeRegExp(token);
-		}
-	});
-	return new RegExp(`^${body}$`);
-}
-
-/**
  * Every repository script a given entry point loads, transitively — its static relative imports,
  * plus any sibling script it names as a string, which is how the scanners reach the policy
  * evaluator (they spawn it rather than importing it, so that its exit status is the verdict).
@@ -441,112 +401,29 @@ void describe("CI contract", () => {
 		);
 	});
 
-	void test("passes only cache types accepted by setup-caches", async () => {
+	void test("server CI uses native Gradle caching and verifies JUnit selection", async () => {
 		const action = await readFile(".github/actions/setup-caches/action.yml", "utf8");
-		assert.match(action, /steps:\s+- name: Validate cache type/);
-		const validation = action.match(/case "\$CACHE_TYPE" in\s+([^\n]+)\) ;;/);
-		assert.ok(validation, "setup-caches must explicitly validate cache-type");
-		assert.match(action, /\*\) [^\n]*exit 1 ;;\s+esac/);
-		const acceptedValues = validation[1];
-		assert.ok(acceptedValues);
-		const accepted = new Set(acceptedValues.split("|"));
-		const rejected: string[] = [];
-		const used = new Set<string>();
-
-		for (const [file, source] of await workflowSources()) {
-			for (const match of source.matchAll(/^\s+cache-type:\s+(.+)$/gm)) {
-				const rawValue = match[1];
-				assert.ok(rawValue);
-				const value = rawValue.trim();
-				if (!value.startsWith("${{")) {
-					if (!accepted.has(value)) rejected.push(`${file}: ${value}`);
-					used.add(value);
-					continue;
-				}
-				const key = value.match(/matrix\.([\w-]+)/)?.[1];
-				assert.ok(key, `${file}: cache-type expression must resolve from a matrix key`);
-				const values = [...source.matchAll(new RegExp(`^\\s+- ${key}: (.+)$`, "gm"))].map(
-					(item) => {
-						const matrixValue = item[1];
-						assert.ok(matrixValue);
-						return matrixValue.trim();
-					},
-				);
-				assert.notEqual(values.length, 0, `${file}: matrix.${key} has no static values`);
-				for (const matrixValue of values) {
-					if (!accepted.has(matrixValue)) rejected.push(`${file}: ${matrixValue}`);
-					used.add(matrixValue);
-				}
-			}
-		}
-		assert.deepEqual(rejected, [], "Workflows may only request recognised cache types");
-		assert.deepEqual(used, accepted, "Every accepted cache type is requested by a workflow");
-	});
-
-	void test("every class the integration tier can run belongs to exactly one shard", async () => {
+		assert.match(action, /gradle\/actions\/setup-gradle@/);
+		assert.doesNotMatch(action, /cache-type|\.m2/);
 		const workflow = parseDocument(await readFile(".github/workflows/ci-tests.yml", "utf8"));
 		const matrix = workflow.getIn(["jobs", "server-integration", "strategy", "matrix"]);
-		assert.ok(isMap(matrix), "server-integration runs no matrix");
-		const selectors = matrixValues(matrix, "tests");
-		assert.equal(selectors.length, 2, "The tier is sharded in two");
-		const startup = "de/tum/cit/aet/hephaestus/StartupBudgetIntegrationTest";
-		assert.ok(surefireSelects(selectors[0] ?? "", startup));
-		assert.ok(!surefireSelects(selectors[1] ?? "", startup));
-		const startupSource = await readFile(
-			`server/application/src/test/java/${startup}.java`,
-			"utf8",
+		assert.ok(isMap(matrix));
+		assert.deepEqual(matrixValues(matrix, "shard"), ["providers-and-startup", "application"]);
+		assert.equal(
+			runScript(workflow, ["jobs", "server-verification"], "Verify test tier and shard discovery"),
+			"vp run test:server:selection",
 		);
-		assert.match(startupSource, /@Tag\("integration"\)/);
-		assert.doesNotMatch(startupSource, /@Tag\("architecture"\)/);
+	});
 
-		for (const selector of selectors)
-			assert.doesNotMatch(
-				selector,
-				/[%#]/,
-				`${selector}: a regex or method selector is outside what surefireSelects models`,
-			);
-
-		// The tier the shards must cover is what Surefire runs when nothing narrows it: the four
-		// default include patterns, filtered by the integration tag. A probe for each pattern, in and
-		// out of the sharded package, keeps the tier's current naming from deciding the verdict — a
-		// class dropped by both shards is invisible in CI and runs locally, so the shape has to be
-		// safe for the name nobody has written yet.
-		const testRoot = "server/application/src/test/java/";
-		const sources = await posixGlob(`${testRoot}**/*.java`);
-		assert.ok(sources.length > 0, `No test sources under ${testRoot}`);
-		const probes = ["TestFoo", "FooTest", "FooTests", "FooTestCase"].flatMap((name) => [
-			`de/tum/cit/aet/hephaestus/integration/github/${name}`,
-			`de/tum/cit/aet/hephaestus/practice/${name}`,
-		]);
-		const defaultIncludes = [
-			"**/Test*.java",
-			"**/*Test.java",
-			"**/*Tests.java",
-			"**/*TestCase.java",
-		];
-		const tier = [
-			...sources.map((file) => file.slice(testRoot.length).replace(/\.java$/, "")),
-			...probes,
-		].filter((candidate) =>
-			defaultIncludes.some((pattern) => surefirePattern(pattern).test(candidate)),
-		);
-		assert.ok(tier.length > probes.length, "The tier is more than its probes");
-
-		const shards = selectors.map(
-			(selector) => new Set(tier.filter((candidate) => surefireSelects(selector, candidate))),
-		);
-		for (const [index, shard] of shards.entries())
-			assert.notEqual(shard.size, 0, `${selectors[index]} selects no class at all`);
-		assert.deepEqual(
-			tier.filter((candidate) => !shards.some((shard) => shard.has(candidate))),
-			[],
-			"Classes the pull request would never run",
-		);
-		assert.deepEqual(
-			tier.filter((candidate) => shards.every((shard) => shard.has(candidate))),
-			[],
-			"Classes both shards would run",
-		);
+	void test("Gradle lock changes rebuild and verify the shipped server", async () => {
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const filter = step(workflow, ["jobs", "detect-changes"], "dorny/paths-filter");
+		const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
+		for (const gate of ["application-server-image", "e2e", "pmd-canary"]) {
+			const paths = asArray(filters[gate], gate);
+			for (const input of ["server/application/gradle.lockfile", "server/settings-gradle.lockfile"])
+				assert.ok(paths.includes(input), `${gate} must include ${input}`);
+		}
 	});
 
 	void test("runs the integration tier once, under the status gate, off an untemplated command", async () => {
@@ -559,23 +436,23 @@ void describe("CI contract", () => {
 		const environment = run.get("env");
 		assert.ok(isMap(environment));
 		assert.match(
-			String(environment.get("HEPHAESTUS_INTEGRATION_TESTS")),
-			/matrix\.tests/,
+			String(environment.get("HEPHAESTUS_INTEGRATION_SHARD")),
+			/matrix\.shard/,
 			"The shard's selector reaches the task as an environment value",
 		);
 		assert.doesNotMatch(
 			runScript(workflow, jobPath, "Run integration tests"),
 			/\$\{\{/,
-			"The selector reaches Maven through the environment, never through a run: script",
+			"The selector reaches Gradle through the environment, never through a run: script",
 		);
 		assert.equal((source.match(/run: vp run test:server:integration/g) ?? []).length, 1);
 		assert.match(integration, /Test Results - App Server Integration \(\$\{\{ matrix.shard \}\}\)/);
 		const tasks = await readFile("vite.config.ts", "utf8");
-		assert.match(tasks, /HEPHAESTUS_INTEGRATION_TESTS/);
 		assert.match(
-			tasks,
-			/"test:server:integration": run\([\s\S]*?-Dsurefire.includedGroups=integration\$\{integrationShard\}/,
+			await readFile("server/application/build.gradle.kts", "utf8"),
+			/HEPHAESTUS_INTEGRATION_SHARD/,
 		);
+		assert.match(tasks, /"test:server:integration": run\([\s\S]*?:application:integrationTest/);
 		const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
 		assert.match(job(orchestrator, "Test"), /uses: \.\/\.github\/workflows\/ci-tests.yml/);
 		assert.match(job(orchestrator, "all-ci-passed"), /needs\.Test\.result/);
@@ -584,10 +461,10 @@ void describe("CI contract", () => {
 	void test("packages the server once and runs every artifact gate against it", async () => {
 		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
 		const packageJob = job(build, "server-package");
-		const packaging = packageJob.match(/^\s+run: (\.\/mvnw .*)$/m)?.[1];
+		const packaging = packageJob.match(/^\s+run: (\.\/gradlew .*)$/m)?.[1];
 		assert.ok(packaging);
-		assert.match(packaging, /\bpackage\b/);
-		assert.match(packaging, /-DskipTests\b/);
+		assert.match(packaging, /:application:bootJar/);
+		assert.match(packaging, /:application:testClasses/);
 		assert.equal((packageJob.match(/actions\/upload-artifact@/g) ?? []).length, 1);
 		assert.match(packageJob, /overwrite: true/);
 		for (const name of ["server-api", "server-database"]) {
@@ -597,10 +474,10 @@ void describe("CI contract", () => {
 			// Goals against the restored classes; a lifecycle phase would compile again.
 			assert.doesNotMatch(
 				consumer,
-				/mvnw[^\n]* (?:compile|test-compile|package|verify|install)(?:\s|$)/,
+				/gradlew[^\n]* :(?:application|generated-clients):(?:compileJava|compileTestJava|bootJar|classes|testClasses)(?:\s|$)/,
 			);
 		}
-		assert.match(job(build, "server-database"), /surefire:test/);
+		assert.match(job(build, "server-database"), /:application:databaseTest -PpackagedServer=true/);
 		assert.match(job(build, "server-api"), /HEPHAESTUS_APPLICATION_JAR/);
 		const e2e = job(build, "webapp-e2e");
 		assert.match(e2e, /needs: server-package/);
@@ -628,11 +505,7 @@ void describe("CI contract", () => {
 		// One invocation exports to the registry; the fork path builds the same image locally.
 		assert.equal(packBuilds.filter((call) => call.includes("--publish")).length, 1);
 		for (const [file, source] of await workflowSources()) {
-			assert.doesNotMatch(
-				source,
-				/spring-boot:build-image/,
-				`${file} must build the image from the JAR`,
-			);
+			assert.doesNotMatch(source, /bootBuildImage/, `${file} must build the image from the JAR`);
 		}
 	});
 
@@ -2013,22 +1886,13 @@ void test("the task graph keeps its cache posture", async () => {
 			assert.ok(isGroup || task.cache === false, `${name} must be a group or uncached`);
 		}
 	}
-	// One Maven process per checkout: the two Maven gates run one after another, the install PMD
-	// needs is an uncached dependency because no cache replays it, and both name the JDK they read.
+	// Java quality gates remain serialized and name the JDK they read.
 	const serverCommands = commandsOf(tasks["gate:server"]);
 	assert.ok(
 		serverCommands.indexOf("vp run gate:server-format") <
 			serverCommands.indexOf("vp run gate:server-lint"),
 	);
-	const serverLint = asRecord(tasks["gate:server-lint"], "gate:server-lint");
-	assert.ok(
-		Array.isArray(serverLint.dependsOn) &&
-			serverLint.dependsOn.includes("prepare:server:generated"),
-	);
-	assert.equal(
-		asRecord(tasks["prepare:server:generated"], "prepare:server:generated").cache,
-		false,
-	);
+	assert.equal(tasks["prepare:server:generated"], undefined, "Gradle owns generation dependencies");
 	for (const entry of ["gate:server-format", "gate:server-lint", "gate:docs-lint"])
 		assert.ok(Array.isArray(asRecord(tasks[entry], entry).input), `${entry} names its inputs`);
 	for (const entry of ["gate:server-format", "gate:server-lint"]) {

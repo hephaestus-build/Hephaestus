@@ -29,7 +29,7 @@ try {
 		maxBuffer: CAPTURE_LIMIT_BYTES,
 	});
 	// The verdict is in PMD's report, which names the rule and the file; the console does not.
-	const reportFile = resolve(REPO_ROOT, "server/application/target/pmd.xml");
+	const reportFile = resolve(REPO_ROOT, "server/application/build/reports/pmd/main.xml");
 	if (!existsSync(reportFile)) {
 		console.error(`${pmd.stdout}${pmd.stderr}`);
 		throw new Error("PMD wrote no report; the build failed before analysis");

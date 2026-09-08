@@ -1,5 +1,5 @@
 /**
- * Refreshes the vendored Outline OpenAPI spec, which the openapi-generator Maven plugin turns into
+ * Refreshes the vendored Outline OpenAPI spec, which the OpenAPI Generator Gradle plugin turns into
  * the client models. Vendoring makes each refresh a reviewable diff instead of a build that changes
  * under you, and the content is checked before it reaches disk for the reason `update-github-schema`
  * gives: a public URL can answer 200 with something that is not the document.
@@ -94,9 +94,7 @@ async function main(): Promise<void> {
 		console.log(`Downloaded ${Math.round(stats.size / 1024)}KB`);
 		renameSync(tempFile, SPEC_FILE);
 		console.log(`Spec updated successfully: ${SPEC_FILE}`);
-		console.log(
-			"\nTo regenerate models: cd server && ./mvnw -pl generated-clients -am compile -DskipTests",
-		);
+		console.log("\nTo regenerate models: cd server && ./gradlew :generated-clients:classes");
 	} catch (error) {
 		try {
 			unlinkSync(tempFile);

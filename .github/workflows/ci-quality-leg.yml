@@ -54,9 +54,6 @@ jobs:
       - name: Setup application-server caches
         if: inputs.leg == 'server'
         uses: ./.github/actions/setup-caches
-        with:
-          cache-type: application-server-reactor
-          os: ${{ runner.os }}
 
       - name: Quality gates
         env:

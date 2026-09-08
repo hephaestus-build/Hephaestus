@@ -20,14 +20,15 @@ with JDK 21:
 vp run test:server:mutation
 ```
 
-The command prepares reactor dependencies, compiles the target tests, and runs PIT. It fails if any
-Maven phase fails, the report is missing or invalid, or PIT leaves a mutation in a technical or
+The command invokes the native PIT task, which builds its own prerequisites. Analysis always reruns;
+unchanged compilation can use Gradle's cache. It fails if any
+Gradle task fails, the report is missing or invalid, or PIT leaves a mutation in a technical or
 incomplete state. The job summary reports timing and outcomes. PIT's HTML/XML reports and a Markdown
-summary are written below the application module's `target/pit-reports` directory and uploaded by
+summary are written below the application module's `build/reports/pitest` directory and uploaded by
 the workflow even on failure.
 
-The command evaluates the full target set without incremental analysis and is limited to eight
-minutes, leaving two minutes for artifact upload.
+The command evaluates the full target set without incremental analysis. CI limits it to eight
+minutes within a ten-minute job; local runs have no wrapper timeout.
 
 ## Triage
 
@@ -45,5 +46,5 @@ the decision to keep it non-required and advisory.
 
 ## Further reading
 
-- [PIT Maven guide](https://pitest.org/quickstart/maven/)
+- [PIT Gradle plugin](https://github.com/szpak/gradle-pitest-plugin)
 - [Mutation testing at Google](https://testing.googleblog.com/2021/04/mutation-testing.html)

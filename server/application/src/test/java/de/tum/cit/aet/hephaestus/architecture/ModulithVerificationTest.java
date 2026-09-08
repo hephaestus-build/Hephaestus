@@ -10,7 +10,7 @@ import org.springframework.modulith.core.ApplicationModules;
 /**
  * Verifies the Spring Modulith application-module structure.
  *
- * <p>Runs in the {@code architecture} surefire group on every PR. Fails the build if:
+ * <p>Runs in the {@code architectureTest} Gradle task on every PR. Fails the build if:
  * <ul>
  *   <li>Two modules form a source-level dependency cycle</li>
  *   <li>A module reaches into another module's internal (non-API) packages without a
@@ -26,10 +26,6 @@ import org.springframework.modulith.core.ApplicationModules;
  * <p>Generated GraphQL/OpenAPI wire models are excluded because they contain no application module
  * behavior or dependencies. Their isolation from production boundaries is enforced separately by
  * the vendor DTO architecture tests.
- *
- * <p>Documenter (PlantUML / C4 / Application Module Canvas) output is generated locally
- * via {@code mvn spring-boot:run -Pdocumenter} (not in the test path — writing diagrams
- * adds ~57s of CI time with no assertions).
  *
  * @see org.springframework.modulith.core.ApplicationModules#verify()
  * @see <a href="https://docs.spring.io/spring-modulith/reference/verification.html">Modulith Verification</a>

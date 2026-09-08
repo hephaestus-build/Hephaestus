@@ -139,7 +139,7 @@ void test("routine update groups preserve repository boundaries", () => {
 	const groups = [
 		["repository tooling dependencies", "npm", "package.json", undefined],
 		["webapp development dependencies", "npm", "webapp/package.json", ["devDependencies"]],
-		["server build dependencies", "maven", undefined, ["build", "test"]],
+		["server dependencies", "gradle", undefined, undefined],
 	] as const;
 	for (const [groupName, manager, fileName, depTypes] of groups) {
 		const rule = rules.find((candidate) => candidate.groupName === groupName);

@@ -100,31 +100,27 @@ function isRecordArray(value: unknown): value is Record<string, unknown>[] {
 	return Array.isArray(value) && value.every(isRecord);
 }
 
-function runMaven(server: string, args: string[]): { exitCode: number; seconds: number } {
+function runGradle(server: string, args: string[]): { exitCode: number; seconds: number } {
 	const started = performance.now();
-	const result = spawnSync("./mvnw", args, { cwd: server, stdio: "inherit" });
+	const result = spawnSync(
+		process.execPath,
+		[resolve(import.meta.dirname, "run-gradlew.ts"), ...args],
+		{ cwd: server, stdio: "inherit" },
+	);
 	return {
 		exitCode: result.status ?? 1,
 		seconds: Math.round((performance.now() - started) / 1000),
 	};
 }
 
-function markdown(
-	summary: Summary,
-	setupSeconds: number,
-	compileSeconds: number,
-	analysisSeconds: number,
-	passed: boolean,
-) {
+function markdown(summary: Summary, elapsedSeconds: number, passed: boolean) {
 	const analyzed = summary.total > 0;
 	const lines = [
 		`# Security mutation testing: ${passed ? "PASS" : "FAIL"}`,
 		"",
 		"| Metric | Value |",
 		"| --- | ---: |",
-		`| Dependency setup | ${setupSeconds}s |`,
-		`| Preflight compilation | ${compileSeconds}s |`,
-		`| PIT goal wall time | ${analysisSeconds}s |`,
+		`| Build and mutation analysis | ${elapsedSeconds}s |`,
 		`| Generated mutants | ${analyzed ? summary.total : "N/A"} |`,
 		...REPORTED_STATUSES.map(
 			(status) => `| ${status} | ${analyzed ? (summary.counts.get(status) ?? 0) : "N/A"} |`,
@@ -132,7 +128,7 @@ function markdown(
 		"",
 		passed
 			? "PIT completed without technical analysis errors. Review the rows below; use the HTML report for source detail."
-			: `The run is invalid: ${summary.error ?? "Maven or PIT failed"}. Do not interpret its mutation score.`,
+			: `The run is invalid: ${summary.error ?? "Gradle or PIT failed"}. Do not interpret its mutation score.`,
 		"",
 	];
 	if (summary.actionable.length > 0) {
@@ -158,39 +154,20 @@ function markdownCell(value: string): string {
 function main() {
 	const repo = resolve(import.meta.dirname, "..");
 	const server = resolve(repo, "server");
-	const reportDirectory = resolve(server, "application/target/pit-reports");
+	const reportDirectory = resolve(server, "application/build/reports/pitest");
 	const xmlPath = resolve(reportDirectory, "mutations.xml");
 	rmSync(reportDirectory, { recursive: true, force: true });
 	mkdirSync(reportDirectory, { recursive: true });
 
-	const common = ["-f", "application/pom.xml", "-Ppitest", "-Dmaven.build.cache.enabled=false"];
-	const setup = runMaven(server, [
-		"-pl",
-		"generated-clients",
-		"-am",
-		"install",
-		"-DskipTests",
-		"--batch-mode",
-	]);
-	const compilation =
-		setup.exitCode === 0
-			? runMaven(server, [...common, "-DskipTests", "test-compile", "--batch-mode"])
-			: { exitCode: 1, seconds: 0 };
-	const analysis =
-		compilation.exitCode === 0
-			? runMaven(server, [...common, "org.pitest:pitest-maven:mutationCoverage", "--batch-mode"])
-			: { exitCode: 1, seconds: 0 };
+	// Rerun the analysis, not its unchanged compilation dependencies.
+	const analysis = runGradle(server, [":application:pitest", "--rerun"]);
 
 	let summary = invalidSummary(
-		setup.exitCode !== 0
-			? `dependency setup failed (Maven exit ${setup.exitCode})`
-			: compilation.exitCode !== 0
-				? `preflight compilation failed (Maven exit ${compilation.exitCode})`
-				: analysis.exitCode !== 0
-					? `PIT goal failed (Maven exit ${analysis.exitCode})`
-					: "mutation report was not produced",
+		analysis.exitCode !== 0
+			? `Mutation build failed (Gradle exit ${analysis.exitCode})`
+			: "mutation report was not produced",
 	);
-	if (setup.exitCode === 0 && compilation.exitCode === 0 && analysis.exitCode === 0) {
+	if (analysis.exitCode === 0) {
 		try {
 			summary = summarizePitXml(readFileSync(xmlPath, "utf8"));
 		} catch (error) {
@@ -199,9 +176,8 @@ function main() {
 			);
 		}
 	}
-	const passed =
-		setup.exitCode === 0 && compilation.exitCode === 0 && analysis.exitCode === 0 && summary.valid;
-	const output = markdown(summary, setup.seconds, compilation.seconds, analysis.seconds, passed);
+	const passed = analysis.exitCode === 0 && summary.valid;
+	const output = markdown(summary, analysis.seconds, passed);
 	writeFileSync(resolve(reportDirectory, "summary.md"), output);
 	process.stdout.write(output);
 	if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, output);

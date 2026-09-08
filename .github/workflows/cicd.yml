@@ -179,7 +179,7 @@ jobs:
               - 'server/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
-              - 'scripts/run-mvnw.ts'
+              - 'scripts/run-gradlew.ts'
               # gate:env validates these deployment inputs against application.yml.
               - 'docker/compose.app.yaml'
               - 'docker/compose.core.yaml'
@@ -220,12 +220,16 @@ jobs:
               - '.vscode/settings.json'
             application-server-image:
               - 'server/application/src/main/**'
-              - 'server/application/pom.xml'
+              - 'server/application/build.gradle.kts'
+              - 'server/application/gradle.lockfile'
               - 'server/application/project.toml'
               - 'server/generated-clients/**'
-              - 'server/pom.xml'
-              - 'server/mvnw'
-              - 'server/.mvn/**'
+              - 'server/build.gradle.kts'
+              - 'server/settings.gradle.kts'
+              - 'server/settings-gradle.lockfile'
+              - 'server/gradle.properties'
+              - 'server/gradle/**'
+              - 'server/gradlew*'
             e2e:
               - 'webapp/e2e/**'
               - 'webapp/src/**'
@@ -234,9 +238,15 @@ jobs:
               - 'webapp/package.json'
               - 'webapp/playwright.config.ts'
               - 'server/application/src/main/**'
-              - 'server/application/pom.xml'
+              - 'server/application/build.gradle.kts'
+              - 'server/application/gradle.lockfile'
               - 'server/generated-clients/**'
-              - 'server/pom.xml'
+              - 'server/build.gradle.kts'
+              - 'server/settings.gradle.kts'
+              - 'server/settings-gradle.lockfile'
+              - 'server/gradle.properties'
+              - 'server/gradle/**'
+              - 'server/gradlew*'
               - 'server/compose.yaml'
               - 'docker/postgres/**'
               - 'package.json'
@@ -317,9 +327,16 @@ jobs:
               - '.github/workflows/reusable-docker-build.yml'
             pmd-canary:
               - 'server/pmd-ruleset.xml'
-              - 'server/pom.xml'
+              - 'server/application/build.gradle.kts'
+              - 'server/application/gradle.lockfile'
+              - 'server/build.gradle.kts'
+              - 'server/settings.gradle.kts'
+              - 'server/settings-gradle.lockfile'
+              - 'server/gradle.properties'
+              - 'server/gradle/**'
+              - 'server/gradlew*'
               - 'package.json'
-              - 'scripts/run-mvnw.ts'
+              - 'scripts/run-gradlew.ts'
               - '.github/workflows/ci-quality-gates.yml'
               - '.github/workflows/ci-quality-leg.yml'
 
@@ -824,7 +841,7 @@ jobs:
               echo "|------------|-------------|" >> $GITHUB_STEP_SUMMARY
               echo "| Webapp unit | \`vp run test:webapp\` |" >> $GITHUB_STEP_SUMMARY
               echo "| Webapp Storybook | \`vp run --filter webapp test:storybook\` |" >> $GITHUB_STEP_SUMMARY
-              echo "| Application server | \`cd server && ./mvnw test\` |" >> $GITHUB_STEP_SUMMARY
+              echo "| Application server | \`cd server && ./gradlew :application:test\` |" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
               echo "**Tip:** Check the **Test Results** tab above for specific failures." >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY

@@ -170,7 +170,7 @@ async function main(): Promise<void> {
 	const failures = regressions(current, history);
 	const status =
 		history.length < 7 ? "insufficient-data" : failures.length > 0 ? "regression" : "within-budget";
-	const rendered = `${historyMarkdown([...history, current])}\nStatus: **${status}** (advisory).\n\n${failures.map((failure) => `- ${failure}\n`).join("")}\nCompare retained JFR and Maven profiles before attributing a change to code; shared-runner variation and suite growth can affect these measurements.\n`;
+	const rendered = `${historyMarkdown([...history, current])}\nStatus: **${status}** (advisory).\n\n${failures.map((failure) => `- ${failure}\n`).join("")}\nCompare retained JFR and Gradle profiles before attributing a change to code; shared-runner variation and suite growth can affect these measurements.\n`;
 	process.stdout.write(rendered);
 	if (process.env.GITHUB_STEP_SUMMARY !== undefined)
 		await appendFile(process.env.GITHUB_STEP_SUMMARY, rendered);

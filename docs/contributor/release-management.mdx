@@ -254,7 +254,7 @@ Version PR.
 
 ## Version management
 
-Version numbers in source manifests stay at their placeholders (`webapp/package.json` and `server/pom.xml`
+Version numbers in source manifests stay at their placeholders (`webapp/package.json` and `server/build.gradle.kts`
 are `0.0.0-development`) — the **release version**
 lives in the root `package.json` and is bumped only by the Version PR. At deploy time the release
 lock sets `IMAGE_TAG`, which `docker/compose.app.yaml` passes as `APP_VERSION`; `application.yml`

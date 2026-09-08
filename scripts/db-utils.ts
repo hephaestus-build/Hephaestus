@@ -10,8 +10,8 @@ const server = join(root, "server");
 const dataDirectory = join(server, "postgres-data");
 const changelogDirectory = join(server, "application/src/main/resources/db/changelog");
 const master = join(server, "application/src/main/resources/db/master.xml");
-// Liquibase writes the diff here (application/pom.xml, diffChangeLogFile); absent when there is no drift.
-const draft = join(server, "application/target/changelog_new.xml");
+// liquibaseDiff produces no file when the schema matches.
+const draft = join(server, "application/build/changelog_new.xml");
 
 interface Config {
 	env: Record<string, string | undefined>;
@@ -34,7 +34,7 @@ async function config(): Promise<Config> {
 }
 
 async function checkEnvironment(value: Config): Promise<void> {
-	await access(join(server, "pom.xml"));
+	await access(join(server, "build.gradle.kts"));
 	await access(join(import.meta.dirname, "generate-mermaid-erd.ts"));
 	if (!value.ci) {
 		if (!(await succeeds("docker", ["info"])))
@@ -69,25 +69,14 @@ async function stopPostgres(value: Config): Promise<void> {
 }
 
 async function migrate(value: Config, diff = false, signal?: AbortSignal): Promise<void> {
-	// The single-module Liquibase run resolves the generated clients from the local repository and
-	// diffs the compiled entity classes. With CI=true both are already in place (restore-server-build
-	// installed the packaged reactor); a workstation builds them here.
-	if (!value.ci) {
-		await run(
-			"./mvnw",
-			["-pl", "generated-clients", "-am", "install", "-DskipTests", "--batch-mode"],
-			{ cwd: server, env: value.env, signal },
-		);
-	}
 	await run(
-		"./mvnw",
+		process.execPath,
 		[
-			"-f",
-			"application/pom.xml",
-			...(value.ci ? [] : ["compile"]),
-			"liquibase:update",
-			...(diff ? ["liquibase:diff"] : []),
-			`-Dpostgres.port=${value.port}`,
+			join(import.meta.dirname, "run-gradlew.ts"),
+			":application:liquibaseUpdate",
+			...(diff ? [":application:liquibaseDiff"] : []),
+			`-PpostgresPort=${value.port}`,
+			...(value.ci ? ["-PpackagedServer=true"] : []),
 		],
 		{ cwd: server, env: { ...value.env, SPRING_PROFILES_ACTIVE: "local,dev" }, signal },
 	);

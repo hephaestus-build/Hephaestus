@@ -39,15 +39,15 @@ process.stdout.write(JSON.stringify(commands));
 	return asArray(value, "commands").map((command) => asStringArray(command, "command"));
 }
 
-await test("local task prepares Maven artifacts and the drill builds one PostgreSQL 18 image", async () => {
+await test("local drill builds one PostgreSQL image and lets Gradle prepare its inputs", async () => {
 	const tasks = await loadTasks();
 	const task = asRecord(tasks["test:postgres-restore"], "restore task");
-	assert.ok(asStringArray(task.dependsOn, "dependencies").includes("prepare:server:generated"));
+	assert.deepEqual(task.dependsOn, []);
 	const commands = preparation([]);
 	assert.equal(commands.filter((command) => command[1] === "build").length, 1);
-	const maven = commands.filter((command) => command[0] === "node");
-	assert.equal(maven.length, 1);
-	assert.ok(maven[0]?.includes("liquibase:update"));
+	const gradle = commands.filter((command) => command[0] === "node");
+	assert.equal(gradle.length, 1);
+	assert.ok(gradle[0]?.includes(":application:liquibaseUpdate"));
 	assert.equal(commands.filter((command) => command[1] === "rmi").length, 1);
 });
 

@@ -144,7 +144,7 @@ await test("main reuses immutable verified artifacts without bypassing validatio
 		"github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
 	);
 	assert.equal(lookup.get("continue-on-error"), true);
-	const download = step("Download the validated reactor");
+	const download = step("Download the validated server build");
 	assert.match(String(download.get("uses")), /^actions\/download-artifact@/);
 	assert.equal(download.get("if"), "steps.reuse.outputs.artifact-id != ''");
 	assert.notEqual(download.get("continue-on-error"), true);
@@ -155,9 +155,9 @@ await test("main reuses immutable verified artifacts without bypassing validatio
 	assert.equal(download.getIn(["with", "path"]), "server");
 	assert.equal(download.getIn(["with", "merge-multiple"]), true);
 	assert.equal(download.hasIn(["with", "name"]), false);
-	assert.equal(step("Package the reactor").get("if"), "steps.reuse.outputs.artifact-id == ''");
-	const validate = step("Validate the packaged reactor");
-	const upload = step("Upload the packaged reactor");
+	assert.equal(step("Package the server").get("if"), "steps.reuse.outputs.artifact-id == ''");
+	const validate = step("Validate the packaged server");
+	const upload = step("Upload the packaged server");
 	for (const required of [validate, upload]) {
 		assert.equal(required.has("if"), false);
 		assert.notEqual(required.get("continue-on-error"), true);

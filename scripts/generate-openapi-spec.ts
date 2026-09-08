@@ -1,7 +1,4 @@
-// Writes server/openapi.yaml from the executable JAR: boots it under the `specs` profile, fetches
-// springdoc's YAML verbatim, and stops it. HEPHAESTUS_APPLICATION_JAR names an already-built JAR
-// (CI passes the reactor artifact); otherwise the reactor is packaged first, so the documented API
-// always comes from the same executable the other gates run.
+// Scrape the supplied CI artifact, or build a local JAR when HEPHAESTUS_APPLICATION_JAR is unset.
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { glob, readFile, rm, writeFile } from "node:fs/promises";
@@ -14,28 +11,18 @@ import { run } from "./lib/process.ts";
 
 const serverDirectory = join(import.meta.dirname, "..", "server");
 const specification = join(serverDirectory, "openapi.yaml");
-const wrapper = process.platform === "win32" ? "mvnw.cmd" : "./mvnw";
+const wrapper = join(import.meta.dirname, "run-gradlew.ts");
 const startupBudgetMs = 180_000;
 
 async function executableJar(): Promise<string> {
 	const configured = process.env.HEPHAESTUS_APPLICATION_JAR;
 	if (configured) return configured;
-	await run(
-		wrapper,
-		[
-			"-pl",
-			"application",
-			"-am",
-			"package",
-			"-Dmaven.test.skip=true",
-			"--batch-mode",
-			...process.argv.slice(2),
-		],
-		{ cwd: serverDirectory },
-	);
+	await run(process.execPath, [wrapper, ":application:bootJar", ...process.argv.slice(2)], {
+		cwd: serverDirectory,
+	});
 	const jars = (
 		await Array.fromAsync(
-			glob("application/target/hephaestus-application-*.jar", { cwd: serverDirectory }),
+			glob("application/build/libs/hephaestus-application-*.jar", { cwd: serverDirectory }),
 		)
 	).filter((jar) => !/-(?:sources|javadoc)\.jar$/.test(jar));
 	if (jars.length !== 1) throw new Error(`Expected one executable JAR, found ${jars.length}`);
@@ -60,7 +47,7 @@ async function fetchSpecification(url: string, child: ReturnType<typeof spawn>):
 			const response = await fetch(url, { signal: AbortSignal.timeout(deadline - Date.now()) });
 			if (response.ok) return await response.text();
 		} catch {
-			// Not listening yet.
+			// Retry connection failures until the startup deadline.
 		}
 		await sleep(1000);
 	}
@@ -68,7 +55,8 @@ async function fetchSpecification(url: string, child: ReturnType<typeof spawn>):
 }
 
 const jar = await executableJar();
-const port = await freePort();
+// Both HTTP connectors must be isolated from other worktrees, including the sandbox gateway.
+const [port, sandboxPort] = await Promise.all([freePort(), freePort()]);
 const child = spawn(
 	"java",
 	[
@@ -76,6 +64,7 @@ const child = spawn(
 		jar,
 		"--spring.profiles.active=specs",
 		`--server.port=${port}`,
+		`--hephaestus.sandbox.gateway.port=${sandboxPort}`,
 		"--management.server.port=0",
 	],
 	{ cwd: serverDirectory, stdio: ["ignore", "inherit", "inherit"] },

@@ -46,7 +46,7 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * <p>This bypasses Docker, so it measures direct runner RSS and latency without container overhead.
  *
- * <p>Run with: {@code N=10 ./mvnw -Plive-tests test -Dtest=MentorSandboxStressTest}.
+ * <p>Run with: {@code N=10 ./gradlew :application:liveTest --tests MentorSandboxStressTest}.
  * Defaults to N=5 to stay polite on shared infra.
  */
 @LiveLlmTest
@@ -102,7 +102,7 @@ class MentorSandboxStressTest {
      * extra thread costs once the Pi SDK is loaded. The single-session test gives the floor
      * (~150 MB); this test gives the slope.
      *
-     * <p>Run: {@code N=3 K=5 ./mvnw -Plive-tests test -Dtest=MentorSandboxStressTest#multiSessionPerRunner}.
+     * <p>Run: {@code N=3 K=5 ./gradlew :application:liveTest --tests MentorSandboxStressTest.multiSessionPerRunner}.
      */
     @Test
     void multiSessionPerRunner() throws Exception {

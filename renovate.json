@@ -12,8 +12,8 @@
 	"semanticCommitScope": "deps",
 	"enabledManagers": [
 		"npm",
-		"maven",
-		"maven-wrapper",
+		"gradle",
+		"gradle-wrapper",
 		"dockerfile",
 		"docker-compose",
 		"github-actions",
@@ -28,11 +28,6 @@
 	"rangeStrategy": "replace",
 	"postUpdateOptions": ["pnpmDedupe"],
 	"packageRules": [
-		{
-			"matchManagers": ["maven"],
-			"matchPackageNames": ["de.tum.cit.aet:hephaestus-server-parent"],
-			"enabled": false
-		},
 		{
 			"matchManagers": ["github-actions"],
 			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
@@ -52,10 +47,9 @@
 			"groupName": "webapp development dependencies"
 		},
 		{
-			"matchManagers": ["maven"],
-			"matchDepTypes": ["build", "test"],
+			"matchManagers": ["gradle"],
 			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
-			"groupName": "server build dependencies"
+			"groupName": "server dependencies"
 		},
 		{
 			"matchUpdateTypes": ["major"],

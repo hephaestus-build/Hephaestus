@@ -50,11 +50,11 @@ published.
 | Quality → Tooling and Docs | toolchain and agent-runtime pins, the runner and lint contracts, `gate:agents`, load-test format and syntax, agent specs, instruction mirrors, docs format and `docs:lint`, Mermaid parse | `vp run gate:agents`, `gate:docs`, `test:agents` |
 | Quality → Webapp | `vp check`, presentational components, story prose, story sort, docs colour tokens, unit tests, Vite build with a `routeTree.gen.ts` diff | `vp run check:webapp`, `test:webapp`, `build:webapp` |
 | Quality → Webapp: Stories | Storybook interaction tests, `export:assets` diff, Storybook build, Chromatic | `vp run test:webapp:stories` |
-| Quality → Windows | Every gate that needs neither Maven, Docker nor the agent sandbox, on `windows-latest`, uncached | `vp run --no-cache ci:windows` |
+| Quality → Windows | Every gate that needs neither Gradle, Docker nor the agent sandbox, on `windows-latest`, uncached | `vp run --no-cache ci:windows` |
 | Quality → Clean install | `vp install --frozen-lockfile` on a runner with Node and the launcher and nothing else, then `gate:toolchain` and the hooks path | `vp install` |
-| Build → App Server: Package | `./mvnw -pl application -am package -DskipTests`; uploads the classes and JARs once | — |
+| Build → App Server: Package | `./gradlew :application:bootJar :application:testClasses`; uploads the classes and JARs once | — |
 | Build → App Server: Generated artifacts | `generate:api` diff against the packaged JAR; `db:check-drift`, which replays `master.xml` and diffs the JPA model; ERD diff | `vp run generate:api`, `db:check-drift`, `db:generate-erd-docs` |
-| Build → App Server: Database | Surefire `database` group against PostgreSQL; the PostgreSQL 18 backup-restore drill | `vp run test:postgres-restore` |
+| Build → App Server: Database | Gradle `databaseTest` task against PostgreSQL; the PostgreSQL 18 backup-restore drill | `vp run test:postgres-restore` |
 | Build → Webapp: E2E | Playwright against the packaged JAR | `vp run --filter webapp test:e2e` |
 | Build → App Server image | `pack build` from the packaged JAR, signed, attested and policy-scanned | — |
 | Test → App Server: Unit and architecture, App Server: Integration | compiled from source | `vp run test:server:verification`, `test:server:integration` |
@@ -168,8 +168,9 @@ code-scanning feed: SARIF output reports every severity whatever `severity` is s
 that publishes it carries neither `severity` nor `exit-code`, and it keeps Trivy's secret scanner,
 which covers the whole tree where TruffleHog covers a pull request's own commits.
 
-Renovate groups routine updates only when they share a review and verification boundary. Production
-dependencies remain separate unless Renovate identifies a package family that must move together.
+Renovate groups routine Gradle updates as server dependencies and webapp development updates
+separately. Webapp production dependencies remain separate unless Renovate identifies a package
+family that must move together.
 Major updates and minor updates to pre-1.0 dependencies remain ungrouped, wait seven days, and require
 Dependency Dashboard approval. Native
 [branch and PR limits](https://docs.renovatebot.com/configuration-options/#branchconcurrentlimit)
@@ -364,7 +365,7 @@ why the label is the authority, and which alternatives were priced and declined,
 | `pull-request.yml` | PR opened, edited, synchronized, reopened, ready for review | Validates the title against the policy `commitlint.config.ts` exports, without installing the workspace, checks that every commit resolves to the pull request's author, and assigns the author when the pull request opens |
 | `ci-quality-gates.yml` | Called by cicd.yml | Selects quality legs, clean-install verification and story tests |
 | `ci-quality-leg.yml` | Called by ci-quality-gates.yml | Shared formatting, lint, type-check and unit-test execution for each selected task-graph leg |
-| `ci-build.yml` | Called by cicd.yml | Packages the server reactor once, then runs the OpenAPI, schema, database and browser E2E gates and the application-server image against that artifact |
+| `ci-build.yml` | Called by cicd.yml | Packages the server once, then runs the OpenAPI, schema, database and browser E2E gates and the application-server image against that artifact |
 | `ci-tests.yml` | Called by cicd.yml | The server unit, architecture and integration suites, compiled from source |
 | `ci-docker-build.yml` | Called by cicd.yml | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images |
 | `reusable-docker-build.yml` | Called by ci-build.yml and ci-docker-build.yml | Builds, signs, attests, and blocks on the release vulnerability policy for the `linux/amd64` image |
@@ -410,8 +411,8 @@ credential is still `GITHUB_TOKEN`, so these commits start no further workflow r
 | Action | Contract |
 | --- | --- |
 | `setup-toolchain` | Installs the Node.js version pinned in `package.json`, and nothing else when `install` is `none`, so a job that only runs `node scripts/…` reaches no package registry; `frozen` adds the pinned pnpm — caching its executable by runner platform and pinned version and retrying the download twice on a miss — restores the pnpm store cache, and installs the launcher through the SHA-pinned `setup-vp` with `node-manager: false`, which then runs the lockfile's `vite-plus` |
-| `setup-caches` | Sets up the JDK from `.java-version` and restores the Maven dependency cache with a prefix fallback; `application-server-reactor` also restores the generated-client build cache and is the only type that writes caches, on default-branch push, schedule and dispatch runs |
-| `restore-server-build` | Downloads the packaged reactor and installs its generated-clients JAR and parent pom so single-module Maven goals resolve them; outputs the executable JAR path |
+| `setup-caches` | Sets up the JDK from `.java-version`, validates the wrapper and uses the official Gradle action for dependency and build caches; only default-branch push, schedule and dispatch runs may publish caches |
+| `restore-server-build` | Downloads and validates the packaged JARs, compiled tests and resources; outputs the executable JAR path without recompiling or installing local artifacts |
 | `setup-browsers` | Restores the exact Playwright browser version and installs Chromium system dependencies |
 | `setup-release-security-tools` | Installs Cosign, Trivy, and optionally Syft for release-evidence jobs |
 | `download-trivy-db` | Fetches the vulnerability database with retries and a mirror fallback; optionally refuses one over `max-age-hours` old and records its metadata |
@@ -419,12 +420,17 @@ credential is still `GITHUB_TOKEN`, so these commits start no further workflow r
 
 ### Caches
 
-A run restores caches from its own branch and from `main`, never from a sibling branch; within that
-scope the newest entry under the key prefix wins. Task-cache entries are content-addressed, so a
-pull request saves them for its own reruns; the Maven caches and the pnpm executable cache save only
-from `main`, because every branch shares their key and a write from any other ref would be reused by
-nobody. The JDK the caches depend on is pinned once, in `.java-version`, which every workflow
-provisions from.
+A run restores caches from its own branch and from `main`, never from a sibling branch. Task-cache
+entries are content-addressed, so a pull request saves them for its own reruns. Gradle caches are
+published only by trusted default-branch push, schedule and dispatch runs; the pnpm executable cache
+also saves only from `main`. The JDK is pinned once, in `.java-version`.
+
+Gradle's official action explicitly uses its [enhanced cache provider](https://github.com/gradle/actions/blob/v6.3.0/docs/setup-gradle.md#enhanced-caching).
+Its proprietary caching helper is [free for public repositories](https://github.com/gradle/actions/blob/v6.3.0/DISTRIBUTION.md).
+It retains dependency fallback and deduplicated build outputs; the OSS basic provider's immutable,
+exact-match cache cannot refresh build outputs after source-only changes. Configuration-cache
+reuse remains within a job: no encryption key is configured, so the
+action does not persist configuration-cache entries across jobs.
 
 Repository-local actions require checkout first. Jobs without checkout use the external SHA-pinned
 action directly rather than checking out the repository only to reach a wrapper.
@@ -440,10 +446,10 @@ paths, because previews need every image at the head SHA; no other event has a p
 | Selects | Paths |
 | --- | --- |
 | Quality → Webapp | `webapp/**`, `docs/images/readme/**`, `docs/src/css/custom.css`, the root oxlint and oxfmt configs, the four `scripts/check-*` files it runs, root package files |
-| Quality → App Server | `server/**` except `AGENTS.md` and `CLAUDE.md`, `scripts/run-mvnw.ts`, `docker/compose.app.yaml`, `docker/compose.core.yaml`, root package files |
+| Quality → App Server | `server/**` except `AGENTS.md` and `CLAUDE.md`, `scripts/run-gradlew.ts`, `docker/compose.app.yaml`, `docker/compose.core.yaml`, root package files |
 | Quality → Tooling and Docs | `scripts/**`, `docker/agents/**`, `load-tests/**`, `docs/**`, tsconfigs, oxlint and oxfmt configs, `.changeset/**`, `commitlint.config.ts`, instruction files, `renovate.json`, `openapitools.json` |
 | Every quality leg | `vite.config.ts`, `.vite-hooks/**`, `.java-version`, `cicd.yml`, `ci-quality-gates.yml`, `ci-quality-leg.yml` and the setup actions: the task graph, the hooks and the JDK decide every leg's verdict, so a change to one runs all of them |
-| Build artifact gates | contracts: the App Server paths or `docker/postgres/**`; E2E: webapp source and the server main sources; image: `server/application/src/main/**`, the poms, `server/application/project.toml`, `server/generated-clients/**` |
+| Build artifact gates | contracts: the App Server paths or `docker/postgres/**`; E2E: webapp source and the server main sources; image: `server/application/src/main/**`, the Gradle build scripts, catalog, locks and wrapper, `server/application/project.toml`, `server/generated-clients/**` |
 | Docker images | `webapp-image`: the webapp build inputs and non-test source; `agent-images`: `docker/agents/**`; `postgres-image`: `docker/postgres/**` |
 | Supported-host boot smoke | `docker/**`, `application*.yml`, and the sources Spring binds configuration from — `**/*Properties.java` and `Application.java`. `ci-contract.test.ts` fails if a source carrying `@ConfigurationProperties` or `@ConfigurationPropertiesScan` is not selected |
 | CI config | one filter per leg naming its own workflow files and actions; any `.github/workflows/**` or `.github/actions/**` change runs Actionlint and Zizmor |
@@ -487,13 +493,13 @@ gives the retried job a new attempt number.
 
 ## Build once
 
-`Build` packages the server reactor once. The OpenAPI and schema gates, the database contract tests,
-the browser E2E suite and the application-server image download that artifact and run Maven goals or
-`pack` against it: the JAR the E2E suite ran is the JAR inside the image, and the spec is scraped
-from the same JAR. The unit, architecture and integration suites are the exception: they produce
-nothing that ships, so they compile from source in `Test` and do not wait for packaging.
+`Build` packages the server once and uploads its JARs, compiled tests and resources. OpenAPI and
+browser checks boot that executable JAR; buildpacks consume it without another build. Schema gates
+and database contract tests use the restored classes with `-PpackagedServer=true`, which bypasses
+compilation. Unit, architecture and integration suites compile from source in `Test` without
+waiting for packaging; their outputs do not ship.
 
-A default-branch push reuses the packaged reactor when a successful release-candidate merge group
+A default-branch push reuses the packaged server when a successful release-candidate merge group
 validated the exact same commit. The source must be this repository's `cicd.yml` run, with successful
 artifact gates, tests, security checks, dual-platform server builds, release preflight and final gate.
 The immutable artifact ID and its SHA-256 digest bind the download to that run. Missing, expired or
@@ -515,10 +521,11 @@ reaches no such commit builds every image itself. `detect-changes` resolves that
 - `App Server: Integration` has two shards: `providers-and-startup` selects the `integration`
   package and `StartupBudgetIntegrationTest`; `application` excludes both. Both retain the
   `integration` tag filter and run in separate JVMs and Testcontainers databases. The startup test
-  owns a database separate from other Spring contexts. Surefire's `-Dtest` replaces its include
-  patterns, so the second selector is exclusion-only; `scripts/ci-contract.test.ts` checks that
-  the selectors partition the tier. Both shards report with `fail-fast: false`, and
-  `CI Status Gate` requires their aggregate result. Locally the tier runs whole.
+  owns a database separate from other Spring contexts. Gradle's native test filters partition
+  the tier; `vp run test:server:selection` checks coverage through JUnit dry-run reports before
+  unit/architecture verification. Discovery reports stay separate from execution results.
+  Both shards use `fail-fast: false`; `CI Status Gate` requires their aggregate result. Locally
+  the tier runs whole.
 - Pull requests and merge groups build `linux/amd64`; pushes to `main`, and every run on the Version
   PR's branch, build both architectures. A pull request and a merge group each also build only the
   images their own diff touched and alias the rest, while the Version PR's branch builds all of
@@ -590,12 +597,12 @@ or mixed attempts. Keep raw API evidence under `tmp/`, not in committed performa
 
 ### Server profiles
 
-Normal PR test jobs retain Surefire reports for 14 days, separately for each suite, shard and
+Normal PR test jobs retain JUnit XML reports for 14 days, separately for each suite, shard and
 attempt. Use those reports and GitHub's step timings before rerunning tests with instrumentation.
 Deep profiling stays in the manual/weekly workflow, not on the PR critical path. Select
 `integration`, `verification` (unit and architecture, including coverage), or `all` when dispatching
 `CI profile`. Weekly runs profile both tiers sequentially so diagnostics do not occupy two heavy
-runners at once. Each tier retains its JFR recording, Maven phase report, resource usage and JUnit
+runners at once. Each tier retains its JFR recording, Gradle task profile, resource usage and JUnit
 results for 14 days. Verification profiles are diagnostic artifacts, not integration-history samples.
 
 The integration profile additionally records Spring context-cache metrics. It warns about
@@ -608,17 +615,18 @@ profiles, the sustained-regression check has no verdict. Branch dispatches produ
 artifacts without changing or comparing against the baseline.
 
 The workflow's `Run integration suite with JFR` step owns the invocation. Additional test-JVM flags
-use `-Dhephaestus.test.jvmArgs=...`; Surefire and Failsafe compose these with JaCoCo's late-bound
-arguments and the configured memory limits. Missing recordings, Maven reports or resource metrics
+use `-PtestJvmArgs=...`; Gradle composes them with the configured memory limits and JaCoCo agent.
+`-PprofileTests=true` writes a separate JFR recording for each test task, so unit and architecture
+recordings never overwrite each other. Missing recordings, Gradle reports or resource metrics
 fail the profile rather than becoming zero-valued baselines. Integration profiles also require
 Spring-context measurements; unit/architecture profiles do not require a Spring application to boot.
-For local shard profiling, use the same `HEPHAESTUS_INTEGRATION_TESTS` selector as the CI matrix
+For local shard profiling, use the same `HEPHAESTUS_INTEGRATION_SHARD` selector as the CI matrix
 and the Java version pinned in `.java-version`. Compare the same suite, runtime and cache state;
 the weekly whole-tier baseline is not comparable to one shard.
 
 `SpringTestContextArchitectureTest` enforces the reviewed Spring context keys. The weekly
-**Server Phase Reference** workflow records cache-disabled Maven generation, compilation,
-test-compilation and execution profiles and compares two clean generated-client JARs.
+**Server Phase Reference** workflow profiles generation, compilation and test execution with the
+build cache disabled, and compares two clean generated-client JARs.
 
 ## Running CI locally
 

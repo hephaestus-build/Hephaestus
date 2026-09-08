@@ -259,7 +259,7 @@
 
 	"overrides": [
 		{
-			// Maven splits a module across `src/test/resources` and `src/main/resources`, so a spec
+			// Java source sets split resources across `src/test/resources` and `src/main/resources`, so a spec
 			// reaches its subject across that boundary and no alias spans it.
 			"files": ["server/application/src/test/resources/agent/**"],
 			"rules": { "import/no-relative-parent-imports": "off" }

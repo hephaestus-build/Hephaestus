@@ -72,7 +72,7 @@ import tools.jackson.databind.json.JsonMapper;
  * encrypted credential. Sources are the same two paths
  * {@link de.tum.cit.aet.hephaestus.core.security.EncryptedStringConverter} reads:
  * the {@code hephaestus.security.encryption-key} system property (Spring binds
- * Maven/JVM properties there) or the {@code HEPHAESTUS_SECURITY_ENCRYPTION_KEY} env var.
+ * JVM properties there) or the {@code HEPHAESTUS_SECURITY_ENCRYPTION_KEY} env var.
  * Workspaces without an encrypted credential to rewrap (App mode, or rows with
  * NULL PAT) never trigger the lookup — a local dev DB with no key still
  * migrates App-mode rows cleanly.

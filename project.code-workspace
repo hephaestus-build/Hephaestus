@@ -27,7 +27,8 @@
 			"**/.metadata/**",
 			"**/archetype-resources/**",
 			"**/META-INF/maven/**",
-			"**/target/**",
+			"**/build/**",
+			"**/.gradle/**",
 		],
 		"files.exclude": {
 			"**/target": true,
@@ -77,7 +78,7 @@
 			"editorconfig.editorconfig",
 			"vscjava.vscode-java-pack",
 			"redhat.java",
-			"vscjava.vscode-maven",
+			"vscjava.vscode-gradle",
 			"bradlc.vscode-tailwindcss",
 			"github.vscode-pull-request-github",
 			"davidanson.vscode-markdownlint",

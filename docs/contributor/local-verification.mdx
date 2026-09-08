@@ -4,11 +4,11 @@ title: Local verification
 
 # Local verification
 
-| Command | What success proves | Excludes |
-|---|---|---|
-| `vp run check:affected` | Selected gates passed, including any tests they contain | Unselected scopes, verification-only suites and builds, and CI-only checks |
-| `vp run check` | Every gate the `quality` task in `vite.config.ts` runs passed | Distributable builds, browser and live-service tests, images, mutation analysis, and release security |
-| `vp run verify` | The complete credential-free local CI inventory passed | Live-service integration and E2E tests, images, mutation analysis, and release security |
+| Command                 | What success proves                                           | Excludes                                                                                                                         |
+| ----------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `vp run check:affected` | Selected gates passed, including any tests they contain       | Unselected scopes, verification-only suites and builds, and CI-only checks                                                       |
+| `vp run check`          | Every gate the `quality` task in `vite.config.ts` runs passed | Distributable builds, browser and live-service tests, images, mutation analysis, and release security                            |
+| `vp run verify`         | The local verification suites and builds passed               | Server integration and database tests, full-application E2E, live-service tests, images, mutation analysis, and release security |
 
 Run `check:affected` while working, `check` before pushing, and `verify` before requesting review.
 `vp run` with no task name lists every task, and `vite.config.ts` is where each one is defined.
@@ -18,14 +18,14 @@ Run `check:affected` while working, `check` before pushing, and `verify` before 
 The command compares committed, staged, unstaged, untracked, and deleted paths with the merge base of
 `origin/main`. For another target, run `vp run check:affected --base <revision>`.
 
-| Changed path | Task |
-|---|---|
-| `webapp/**` | `affected:webapp` |
-| `server/**` outside the agent and precompute resources | `affected:server` |
-| `server/**/resources/{agent,practices/precompute}/**`, `docker/agents/**` | `affected:agents` |
-| `docs/**` | `affected:docs` |
-| `docs/images/readme/**` | `affected:docs` and `affected:webapp` |
-| `.github/**`, `.claude/**`, `.agents/**`, `.changeset/**`, `scripts/**`, `webapp/tools/oxlint/**`, root package and tsconfig files, generated artifacts, `AGENTS.md`, `CLAUDE.md`, or any other path | `quality` |
+| Changed path                                                                                                                                                                                         | Task                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `webapp/**`                                                                                                                                                                                          | `affected:webapp`                     |
+| `server/**` outside the agent and precompute resources                                                                                                                                               | `affected:server`                     |
+| `server/**/resources/{agent,practices/precompute}/**`, `docker/agents/**`                                                                                                                            | `affected:agents`                     |
+| `docs/**`                                                                                                                                                                                            | `affected:docs`                       |
+| `docs/images/readme/**`                                                                                                                                                                              | `affected:docs` and `affected:webapp` |
+| `.github/**`, `.claude/**`, `.agents/**`, `.changeset/**`, `scripts/**`, `webapp/tools/oxlint/**`, root package and tsconfig files, generated artifacts, `AGENTS.md`, `CLAUDE.md`, or any other path | `quality`                             |
 
 The tasks are defined in `vite.config.ts`. Selection uses `git diff --no-renames`, so both sides of a
 rename are evaluated. Git documents the underlying change statuses in
@@ -42,12 +42,13 @@ The pre-push hook runs `vp run check`; `git push --no-verify` skips it. With cus
 ## Complete local verification
 
 `vp run verify` runs `quality`, then the webapp unit tests, the Storybook browser tests,
-`test:server:verification` (unit and architecture with coverage), the webapp build with a
+`test:server:selection` followed by `test:server:verification` (unit and architecture with coverage), the webapp build with a
 `routeTree.gen.ts` comparison that restores the committed file before exiting, the Storybook build,
 and the docs build.
 
-Full-application E2E, live-service integration, image builds, mutation analysis and release security
-are outside `verify`; see [CI/CD](./ci-cd.mdx).
+Server integration and database tests, full-application E2E, live-service tests, image builds,
+mutation analysis and release security are outside `verify`; see [CI/CD](./ci-cd.mdx).
+Run affected server integration tests separately with `vp run test:server:integration`.
 
 ## Vite+ task cache
 

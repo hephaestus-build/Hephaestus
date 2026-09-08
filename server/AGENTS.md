@@ -11,7 +11,7 @@ are not here: write code that reads like the file you are editing.
 ## Local development loop
 
 - **No devtools.** Hot reload is JVM HotSwap via the IDE — IntelliJ's Spring Boot run config with
-  *Update Classes and Resources* on save. Method-body edits reload; signature changes, new methods and
+  _Update Classes and Resources_ on save. Method-body edits reload; signature changes, new methods and
   `@Configuration` edits need a full restart
   ([ref](https://docs.spring.io/spring-boot/how-to/hotswapping.html)).
 - **`ddl-auto: validate`** locally — Liquibase owns DDL. If the validator fails on boot your DB has
@@ -21,34 +21,26 @@ are not here: write code that reads like the file you are editing.
 
 ## Build traps
 
-Each of these can leave you with the wrong result.
-
-- **Use the reactor.** `server/generated-clients` owns every GraphQL and Outline generator and
-  `server/application` consumes its JAR. From the repository root, use
-  `vp run test:server:unit` after a fresh checkout or generated-client input change. For the repeated
-  application-edit loop, use `./mvnw -f application/pom.xml test` from `server/` (and
-  `-Dtest=ClassName` to focus a test) so Maven does not restore the generated module and invalidate
-  application incremental compilation.
-- **`-Dgroups=architecture` silently runs the unit suite instead.** `pom.xml` sets Surefire's `<groups>`
-  to `${surefire.includedGroups}`, and a POM element beats the `-Dgroups` user property — so the flag is
-  discarded and the default (`unit`) runs. Use `vp run test:server:architecture`; CI passes the
-  `${surefire.includedGroups}` property that the POM reads.
-- **`clean` does not guarantee a cold build.** It removes workspace outputs, but Maven Build Cache can
-  restore them. The repository enables the cache for `generated-clients`; Maven logs `Found cached
-  build` on a hit. Pass `-Dmaven.build.cache.enabled=false` when measuring a cold build. Schema,
-  generator configuration, Java, dependency, and generated-client POM changes invalidate the entry.
-- **Do not run concurrent Maven processes in one checkout.** Both write the same module `target/`
-  directories.
-- **`server/.env` leaks into Maven test JVMs.** A local `MANAGEMENT_PORT` collides across worktrees and
-  local OAuth variables make environment-sensitive tests fail only on your machine. Run tests with
-  `MANAGEMENT_PORT=0 SERVER_PORT=0`.
+- **Use the wrapper.** `./gradlew :application:test` from `server/` builds its generated-client
+  dependency automatically. Use `--tests ClassName` or `--tests 'ClassName.methodName'` to focus a test.
+- **Select a tier by task**, not by a system property. `test`, `architectureTest`, `integrationTest`,
+  `databaseTest` and `liveTest` each own their JUnit tag filter. Every non-live tier excludes `live`.
+- **`clean` is not cache-disabled.** Use `--no-build-cache` as well for a cold measurement.
+  Configuration cache reuses task configuration; build cache reuses declared task outputs.
+- **One build invocation per checkout at a time.** Gradle owns the module `build/` directories.
+- **Tests always execute when requested.** Test result caching and up-to-date skipping are disabled;
+  PostgreSQL, containers and provider state are not content-addressed inputs. Compilation remains
+  incremental and cacheable. Test JVMs set `MANAGEMENT_PORT=0 SERVER_PORT=0`; local OAuth settings
+  in `server/.env` can still affect environment-sensitive tests.
+- **Packaged-artifact consumption is CI-only.** `-PpackagedServer=true` uses restored compiled
+  classes for database tooling and database tests. Never use it after editing source locally.
 
 ## Boundaries
 
 **Always** — run the unit baseline and every affected tier before committing · tag every test (`@Tag("unit")`,
 `@Tag("integration")`, `@Tag("live")`) · declare a new endpoint's permission explicitly.
 
-**Ask first** — schema changes · security configuration · a new `pom.xml` dependency · workspace
+**Ask first** — schema changes · security configuration · a new Gradle dependency · workspace
 authorization logic.
 
 **Never** — commit credentials · `System.out.println` (log through SLF4J with `{}` placeholders, and
@@ -68,21 +60,20 @@ a nullness contract.
 
 ## Test tiers
 
-| Tag | Runs | Command |
-|---|---|---|
-| `unit` | no Spring context | `vp run test:server:unit` |
-| `architecture` | ArchUnit + Modulith verification | `vp run test:server:architecture` |
-| `integration` | full context + Testcontainers | `vp run test:server:integration` |
-| `database` | contract tests against a running PostgreSQL | the *App Server: Database* CI job: from `server/`, `./mvnw -f application/pom.xml -Dsurefire.includedGroups=database surefire:test` with `SPRING_DATASOURCE_URL`, `_USERNAME` and `_PASSWORD` set |
-| `live` | real GitHub API | from `server/`, `./mvnw test -Plive-tests` |
+| Tag            | Runs                                            | Command                                                                                                                                                |
+| -------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unit`         | no Spring context                               | `vp run test:server:unit`                                                                                                                              |
+| `architecture` | ArchUnit + Modulith verification                | `vp run test:server:architecture`                                                                                                                      |
+| `integration`  | full context + Testcontainers                   | `vp run test:server:integration`                                                                                                                       |
+| `database`     | contract tests against a running PostgreSQL     | the _App Server: Database_ CI job: from `server/`, `./gradlew :application:databaseTest` with `SPRING_DATASOURCE_URL`, `_USERNAME` and `_PASSWORD` set |
+| `live`         | real provider APIs, LLMs and sandbox containers | from `server/`, `./gradlew :application:liveTest`                                                                                                      |
 
-Live tests need GitHub App credentials in `application-live-local.yml` (gitignored); the Maven profile
-is the only guard.
+Live-test credential gates and setup: [Testing Guide](../docs/contributor/testing.mdx#live-external-service-tests).
 
-**An integration test's *filename* decides whether it ever runs.** Failsafe includes
-`**/*IntegrationTest.java` and `**/*LiquibaseTest.java` and nothing else, so a `@Tag("integration")`
-class named anything else is silently never executed by `./mvnw verify` — it fails no build and reports
-no skip.
+**JUnit tags, not filename patterns, select tests.** Keep descriptive `*Test` and `*IntegrationTest`
+names for readers. `TestTierTaggingArchTest` uses JUnit discovery to reject untagged tests;
+`vp run test:server:selection` proves actual tier coverage and disjoint integration shards using
+Gradle's test dry-run reports, without executing Spring contexts.
 
 Name tests `should[ExpectedBehavior]When[Condition]`. Controller-level integration tests extend
 `AbstractWorkspaceIntegrationTest` (or a domain-specific base) and exercise access control through
@@ -98,8 +89,8 @@ or on "the only" result, and never write cleanup that another test depends on ha
   returns pull requests too. Any query that means "issues only" must say `WHERE TYPE(i) = Issue`
   explicitly — see `MentorContextQueryRepository` and `ReviewableArtifactOwnershipRepository`. A test
   with a mocked repository cannot catch a missing `TYPE(…)`.
-- **The changelog is untested by the suite.** Tests run against `ddl-auto: create`, so a broken
-  changelog passes every tier; `vp run db:check-drift` is the check
+- **Integration tests do not prove migrations.** Their schema uses `ddl-auto: create`; run
+  `vp run db:check-drift` to replay and compare the changelog
   (`docs/contributor/database-migration.mdx`).
 - **A native `@Query` may not contain an apostrophe inside a `--` comment.** Hibernate reads it as the
   start of a string literal and the whole `ApplicationContext` fails to build, naming something else;
@@ -144,7 +135,7 @@ Procedure: `docs/contributor/database-migration.mdx`. What the drift gate reads 
 - An un-annotated field in a `@NullMarked` package is a NOT NULL column; a column that may be NULL
   carries `@Nullable` on the field.
 - A foreign key backing a plain id column with no JPA association is named `sfk_*`; the gate
-  ignores that prefix (`application/pom.xml`, `diffExcludeObjects`). An association's foreign key
+  ignores that prefix (`application/build.gradle.kts`, `liquibaseDiff`). An association's foreign key
   keeps `fk_*` and is drift-checked, so a misnamed constraint fails in either direction.
 
 ## Webhook receiver
@@ -165,14 +156,14 @@ envelope to JetStream, all gated on `RuntimeRole.WEBHOOK_PROPERTY`. Configuratio
   `integration.core.consumer.ConsumerSubjectMath#buildSubjectPrefix` must agree —
   `SubjectGrammarRoundTripTest` enforces it for every committed fixture.
 - **ArchUnit guards the primitives**: `HexEncodingArchTest` (only `HexFormat.of()`),
-  `LocaleSafetyArchTest` (no naked `toLowerCase`/`toUpperCase`). `application/pom.xml` sets
-  per-package JaCoCo branch floors, checked whenever `-DskipCoverage=false`: `test:server:unit`,
-  `test:server:verification` and the *App Server: Unit and architecture* CI job. Raise a floor when
+  `LocaleSafetyArchTest` (no naked `toLowerCase`/`toUpperCase`). `application/build.gradle.kts` sets
+  per-package JaCoCo branch floors, checked by the unit coverage task and `verification`: `test:server:unit`,
+  `test:server:verification` and the _App Server: Unit and architecture_ CI job. Raise a floor when
   its package clears the next step.
 
 ## Container image
 
 Paketo Cloud Native Buildpacks with Application CDS; no `Dockerfile`. From `server/`:
-`./mvnw -pl application -am package -DskipTests`, then
-`pack build hephaestus/application-server --path application/target/hephaestus-application-*.jar --descriptor application/project.toml --run-image <the run image pinned in .github/workflows/ci-build.yml>`.
+`./gradlew :application:bootJar`, then
+`pack build hephaestus/application-server --path application/build/libs/hephaestus-application-*.jar --descriptor application/project.toml --run-image <the run image pinned in .github/workflows/ci-build.yml>`.
 Pinning and rationale: `docs/admin/buildpacks-cds-decision.md`.

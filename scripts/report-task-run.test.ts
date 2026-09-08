@@ -11,9 +11,9 @@ Statistics:   4 tasks • 1 cache hits • 1 cache misses • 2 cache disabled �
   [2] hephaestus#gate:stories: $ node scripts/check-story-prose.ts ✗ (exit code: 1)
       → Cache miss: 'webapp/src/a.stories.tsx' modified
   ·······················································
-  [3] hephaestus#gate:server-lint: $ node scripts/run-mvnw.ts -f application/pom.xml compile pmd:check -q ✗ (exit code: 137)
+  [3] hephaestus#gate:server-lint: $ node scripts/run-gradlew.ts :application:pmdMain --quiet ✗ (exit code: 137)
   ·······················································
-  [4] hephaestus#gate:server-lint: $ node scripts/run-mvnw.ts -f application/pom.xml compile pmd:check -q ✗ (exit code: 1)
+  [4] hephaestus#gate:server-lint: $ node scripts/run-gradlew.ts :application:pmdMain --quiet ✗ (exit code: 1)
 `;
 
 void test("names each task that did not pass once, in report order", () => {
