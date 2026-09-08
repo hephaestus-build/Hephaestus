@@ -19,30 +19,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Runs the two feedback-preparation lanes for finished jobs whose lanes never ran.
+ * Retries unfinished feedback preparation for completed reviews within the recovery window.
  *
- * <p><b>What it is for.</b> Both lanes hang off one {@code @Async @TransactionalEventListener}
- * (AFTER_COMMIT) event. That event is published once and never again; the pool it is submitted to is
- * bounded and rejects with {@code AbortPolicy} when full; and a rejection surfaces inside a transaction
- * synchronisation callback where no lane code runs, so nothing logs it as a loss. A single busy sync was
- * enough to throw thousands of rejections, and the only visible consequence was that some developers
- * silently got no feedback. Preparing late is fine — the practice pages and the mentor's queue are both
- * read days later — so the fix is to make "lost" into "late".
- *
- * <p><b>How it knows.</b> Not by looking for missing {@code feedback} rows: both lanes legitimately
- * prepare nothing very often, so absence of rows cannot distinguish "decided nothing" from "never ran"
- * and a sweep built on it would re-route every recent job on every pass, forever. Each lane instead
- * records its own completion on the job ({@code agent_job.in_chat_prepared_at} /
- * {@code in_app_prepared_at}) on every non-exceptional path, and this sweep is exactly the set of
- * finished jobs missing one of those marks.
- *
- * <p><b>Idempotence</b> is the preparers', not this class's: both write at deterministic
- * {@code (agent_job_id, position)} pairs and skip what {@code existsByAgentJobIdAndPosition} already
- * finds, so a recovered job re-derives the same units and writes none of them twice.
- *
- * <p>Shaped on {@link de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationFeedbackTtlSweeper}
- * — {@code @Scheduled} plus {@code @SchedulerLock} so one pod sweeps, server role only, per-job failures
- * isolated and counted rather than aborting the pass.
+ * <p>Completion marks distinguish a successful empty result from preparation that never completed.
+ * The preparers own idempotency; this sweep does not rerun model composition or provider delivery.
  */
 @ConditionalOnServerRole
 @Component
@@ -51,23 +31,12 @@ public class FeedbackLanePreparationSweeper {
 
     private static final Logger log = LoggerFactory.getLogger(FeedbackLanePreparationSweeper.class);
 
-    /**
-     * How far back a pass looks. A lane left unprepared for longer than this is never recovered, which is
-     * the deliberate trade: the alternative is a query with no lower bound that re-reads all of history
-     * every hour to find the handful of rows an outage left behind. Comfortably longer than any pool
-     * saturation the system has produced, and shorter than the practice pages' own reading rhythm.
-     */
+    /** Jobs older than this are excluded even if preparation remains incomplete. */
     static final Duration LOOKBACK = Duration.ofHours(24);
 
-    /**
-     * How recent a job may be and still be left alone. The listener owns the fast path; without this the
-     * sweep would race a submission still sitting in the queue, and both would run the preparers at once
-     * on the same job. They would not corrupt anything — the position guard holds — but one of them would
-     * lose a unique-constraint race and log a failure that is not one.
-     */
+    /** Gives asynchronous listeners time to finish before recovery can select the same job. */
     static final Duration SETTLE = Duration.ofMinutes(10);
 
-    /** Bounds one pass, so a backlog is worked off over several passes instead of in one long lock hold. */
     static final int MAX_JOBS_PER_PASS = 500;
 
     private final AgentJobRepository agentJobRepository;
@@ -92,13 +61,7 @@ public class FeedbackLanePreparationSweeper {
         sweepNow(Instant.now());
     }
 
-    /**
-     * Recover every unprepared lane in the window ending {@code SETTLE} before {@code now}. Exposed so
-     * tests can place the window around a fixture instead of waiting for the clock.
-     *
-     * @param now the reference instant; the window is {@code [now - LOOKBACK, now - SETTLE)}
-     * @return what the pass found and what it managed to do about it
-     */
+    /** Selects unfinished preparation in {@code [now - LOOKBACK, now - SETTLE)}. */
     public SweepOutcome sweepNow(Instant now) {
         List<UnpreparedFeedbackLanes> pending = agentJobRepository.findUnpreparedFeedbackLanes(
                 now.minus(LOOKBACK), now.minus(SETTLE), PageRequest.of(0, MAX_JOBS_PER_PASS));
@@ -132,9 +95,6 @@ public class FeedbackLanePreparationSweeper {
                 failed++;
             }
         }
-        // Always logged when the pass found anything: a run of this sweeper observation work at all means the
-        // listeners are dropping events, which is a fact about the async pool worth seeing in the log even
-        // on the passes where every recovery succeeded.
         log.info(
                 "feedback.lane.sweep: {} job(s) had an unprepared lane; recovered {}, prepared {} unit(s), {} still failing",
                 pending.size(),
@@ -156,8 +116,6 @@ public class FeedbackLanePreparationSweeper {
                     .increment();
             return new LaneResult(true, units);
         } catch (RuntimeException e) {
-            // The mark stays null, so the next pass tries again — until the job falls out of the lookback
-            // window, at which point this counter is the only remaining evidence it was ever owed feedback.
             log.warn(
                     "feedback.lane.sweep: {} lane still failing for jobId={}: {}",
                     lane.tag,
