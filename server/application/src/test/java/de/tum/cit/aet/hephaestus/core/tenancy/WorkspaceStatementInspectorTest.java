@@ -441,6 +441,41 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
     }
 
     @Test
+    void anAssignmentMustBeABoundParameterAndNotAnExpressionThatReads() {
+        // PostgreSQL spells a read more than one way. `TABLE t` is a SELECT equivalent, so a
+        // keyword blacklist cannot decide this; only "every assignment is a bound parameter" can.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        when(scopedTables.isScoped("repository_collaborator")).thenReturn(true);
+        when(scopedTables.primaryKeyColumns("repository_collaborator")).thenReturn(Set.of("repository_id", "user_id"));
+        for (String sql : List.of(
+                "update repository_collaborator set permission=case when exists (table repository_collaborator "
+                        + "offset 1) then ? else ? end where repository_id=? and user_id=?",
+                "update repository_collaborator set permission=(select max(permission) from repository_collaborator) "
+                        + "where repository_id=? and user_id=?",
+                "update repository_collaborator set permission=coalesce(permission,?) where repository_id=? and user_id=?")) {
+            inspector.inspect(sql);
+            verify(reporter).report(sql, Set.of("repository_collaborator"), TenancyEnforcement.LOG);
+        }
+    }
+
+    @Test
+    void theSingleKeyFormIsHeldToTheSameRules() {
+        // The older exemption used to accept these, so the newer one could simply be routed around
+        // by naming one key column instead of two.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        when(scopedTables.isScoped("repository_collaborator")).thenReturn(true);
+        for (String sql : List.of(
+                "update repository_collaborator set permission=?\n-- where repository_id=?",
+                "update repository_collaborator set permission=(select max(permission) from repository_collaborator) "
+                        + "where repository_id=?",
+                "update repository_collaborator set permission=case when exists (table repository_collaborator) "
+                        + "then ? else ? end where repository_id=?")) {
+            inspector.inspect(sql);
+            verify(reporter).report(sql, Set.of("repository_collaborator"), TenancyEnforcement.LOG);
+        }
+    }
+
+    @Test
     void aStatementLongerThanTheOrmEmitsDeclinesTheFastPath() {
         // The bound keeps a reluctant match over pathological whitespace from costing more than the
         // check it would have skipped. Declining is safe: the standard check still reports.
