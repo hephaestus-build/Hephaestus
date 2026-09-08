@@ -5,7 +5,6 @@ WORKDIR /repo
 ARG NODE_VERSION=24.20.0
 RUN pnpm runtime set node ${NODE_VERSION} -g
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .oxfmtrc.json /repo/
-COPY patches/ /repo/patches/
 COPY webapp/package.json /repo/webapp/
 COPY docs/package.json /repo/docs/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
