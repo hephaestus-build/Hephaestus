@@ -241,8 +241,8 @@ jobs:
           (cd server && ./mvnw -f application/pom.xml --batch-mode -Dmaven.build.cache.enabled=false \
             -Dsurefire.includedGroups=database surefire:test)
 
-      - name: Run the PostgreSQL major-upgrade drill
-        run: node scripts/postgres-major-upgrade-test.ts --target-image hephaestus-postgres:ci
+      - name: Run the PostgreSQL backup-restore drill
+        run: node scripts/postgres-backup-restore-test.ts --target-image hephaestus-postgres:ci
       - name: Upload test results
         if: always()
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0

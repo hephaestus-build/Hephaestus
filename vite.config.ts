@@ -274,7 +274,7 @@ export default defineConfig({
 				`${mvnw} -pl application -am package -Dspring-boot.repackage.skip=true -Dsurefire.includedGroups=integration${integrationShard} -Dparallel=none --batch-mode`,
 			),
 			"test:server:mutation": run("node scripts/run-security-mutations.ts"),
-			"test:postgres-upgrade": run("node scripts/postgres-major-upgrade-test.ts", {
+			"test:postgres-restore": run("node scripts/postgres-backup-restore-test.ts", {
 				dependsOn: ["prepare:server:generated"],
 			}),
 

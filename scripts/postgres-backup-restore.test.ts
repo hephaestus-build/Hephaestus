@@ -6,7 +6,7 @@ import { asArray, asRecord, asStringArray } from "./lib/json.ts";
 import { loadTasks } from "./lib/task-graph.ts";
 
 function preparation(args: string[], imageExists = true): (readonly string[])[] {
-	const script = new URL("./postgres-major-upgrade-test.ts", import.meta.url).href;
+	const script = new URL("./postgres-backup-restore-test.ts", import.meta.url).href;
 	const result = spawnSync(process.execPath, ["--input-type=module"], {
 		input: `
 import childProcess from "node:child_process";
@@ -19,7 +19,7 @@ childProcess.spawnSync = (command, args) => {
   if (command === "node") return { status: 1, stdout: "", stderr: "stop before migrations" };
   if (args[0] === "image" && args[1] === "inspect" && !${imageExists}) status = 1;
   if (args[0] === "port") stdout = "127.0.0.1:54321";
-  if (args.includes("SHOW server_version_num")) stdout = "170000";
+  if (args.includes("SHOW server_version_num")) stdout = "180000";
   return { status, stdout, stderr: status ? "missing image" : "" };
 };
 syncBuiltinESMExports();
@@ -39,24 +39,24 @@ process.stdout.write(JSON.stringify(commands));
 	return asArray(value, "commands").map((command) => asStringArray(command, "command"));
 }
 
-await test("local task prepares Maven artifacts and the drill builds both PostgreSQL images", async () => {
+await test("local task prepares Maven artifacts and the drill builds one PostgreSQL 18 image", async () => {
 	const tasks = await loadTasks();
-	const task = asRecord(tasks["test:postgres-upgrade"], "upgrade task");
+	const task = asRecord(tasks["test:postgres-restore"], "restore task");
 	assert.ok(asStringArray(task.dependsOn, "dependencies").includes("prepare:server:generated"));
 	const commands = preparation([]);
-	assert.equal(commands.filter((command) => command[1] === "build").length, 2);
+	assert.equal(commands.filter((command) => command[1] === "build").length, 1);
 	const maven = commands.filter((command) => command[0] === "node");
 	assert.equal(maven.length, 1);
 	assert.ok(maven[0]?.includes("liquibase:update"));
-	assert.equal(commands.filter((command) => command[1] === "rmi").length, 2);
+	assert.equal(commands.filter((command) => command[1] === "rmi").length, 1);
 });
 
 await test("restored CI artifacts and PostgreSQL image are reused, not rebuilt or deleted", () => {
 	const commands = preparation(["--target-image", "hephaestus-postgres:ci"]);
 	assert.deepEqual(commands[0], ["docker", "image", "inspect", "hephaestus-postgres:ci"]);
-	assert.equal(commands.filter((command) => command[1] === "build").length, 1);
+	assert.equal(commands.filter((command) => command[1] === "build").length, 0);
 	assert.equal(commands.filter((command) => command.includes("install")).length, 0);
-	assert.equal(commands.filter((command) => command[1] === "rmi").length, 1);
+	assert.equal(commands.filter((command) => command[1] === "rmi").length, 0);
 	assert.equal(
 		commands.some((command) => command[1] === "rmi" && command.includes("hephaestus-postgres:ci")),
 		false,

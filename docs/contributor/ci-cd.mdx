@@ -54,7 +54,7 @@ published.
 | Quality → Clean install | `vp install --frozen-lockfile` on a runner with Node and the launcher and nothing else, then `gate:toolchain` and the hooks path | `vp install` |
 | Build → App Server: Package | `./mvnw -pl application -am package -DskipTests`; uploads the classes and JARs once | — |
 | Build → App Server: Generated artifacts | `generate:api` diff against the packaged JAR; `db:check-drift`, which replays `master.xml` and diffs the JPA model; ERD diff | `vp run generate:api`, `db:check-drift`, `db:generate-erd-docs` |
-| Build → App Server: Database | Surefire `database` group against PostgreSQL; the major-upgrade drill | `vp run test:postgres-upgrade` |
+| Build → App Server: Database | Surefire `database` group against PostgreSQL; the PostgreSQL 18 backup-restore drill | `vp run test:postgres-restore` |
 | Build → Webapp: E2E | Playwright against the packaged JAR | `vp run --filter webapp test:e2e` |
 | Build → App Server image | `pack build` from the packaged JAR, signed, attested and policy-scanned | — |
 | Test → App Server: Unit and architecture, App Server: Integration | compiled from source | `vp run test:server:verification`, `test:server:integration` |

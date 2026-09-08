@@ -177,6 +177,11 @@ jobs:
             exit 1
           fi
 
+      - uses: ./.github/actions/setup-toolchain
+        if: always()
+        with:
+          install: "frozen"
+
       - name: Resolve released-chain baseline
         id: baseline
         continue-on-error: true
@@ -205,36 +210,7 @@ jobs:
         if: steps.baseline.outputs.base != ''
         env:
           BASE: ${{ steps.baseline.outputs.base }}
-          RELEASED_REF: ${{ github.event_name == 'pull_request' && github.base_ref || 'main' }}
-        run: |
-          set -euo pipefail
-          CHANGELOG_DIR="server/application/src/main/resources/db/changelog"
-          MASTER="server/application/src/main/resources/db/master.xml"
-          FAILED=false
-
-          VIOLATIONS=$(git diff --name-only --diff-filter=MDR "$BASE" HEAD -- "$CHANGELOG_DIR")
-          if [ -n "$VIOLATIONS" ]; then
-            FAILED=true
-            echo "::error::Released Liquibase changesets were modified, renamed, or deleted. Ship a new follow-up changelog instead:"
-            echo "$VIOLATIONS"
-          fi
-
-          git show "$BASE:$MASTER" 2>/dev/null | grep '<include ' > /tmp/includes-base || true
-          grep '<include ' "$MASTER" > /tmp/includes-head || true
-          if [ -s /tmp/includes-base ] && ! diff /tmp/includes-base <(head -n "$(wc -l < /tmp/includes-base)" /tmp/includes-head) >/dev/null; then
-            FAILED=true
-            echo "::error::master.xml is append-only: an existing <include> was removed, reordered, or edited. New changelogs go at the end of the list."
-          fi
-
-          if [ "$FAILED" = "true" ]; then
-            {
-              echo "### Changelog immutability"
-              echo "Changesets that reached \`$RELEASED_REF\` may already be applied to production databases — editing or removing them breaks the upgrade path (checksum errors or silently orphaned changesets)."
-              echo "Fix forward with a **new** changelog appended to \`master.xml\`. See \`docs/contributor/database-migration.mdx\`."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-          echo "No released changeset was touched; master.xml stays append-only."
+        run: node scripts/check-changelog-immutability.ts "$BASE"
 
       - name: Assert no legacy agent-image references
         id: legacy-image-policy

@@ -428,6 +428,15 @@
         </dependencies>
     </dependencyManagement>
     <build>
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+            <testResource>
+                <directory>${project.basedir}/../../docs/db/archive/v0.77.4</directory>
+                <targetPath>db</targetPath>
+            </testResource>
+        </testResources>
         <plugins>
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>

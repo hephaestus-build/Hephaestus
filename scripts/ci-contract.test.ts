@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
 
-import { type Document, isMap, isScalar, isSeq, parseDocument, type YAMLMap } from "yaml";
+import { type Document, isMap, isScalar, isSeq, parseDocument, visit, type YAMLMap } from "yaml";
 
 import { evaluate as evaluateVulnerabilityPolicy } from "./check-release-vulnerabilities.ts";
 import { versionBranch } from "./dispatch-version-pr-ci.ts";
@@ -1814,16 +1814,18 @@ void describe("CI contract", () => {
 				/pnpm install --frozen-lockfile/,
 				`${file} must install through setup-toolchain`,
 			);
-			const setupCalls = source.match(/uses: \.\/\.github\/actions\/setup-toolchain/g) ?? [];
-			const explicitModes =
-				source.match(
-					/uses: \.\/\.github\/actions\/setup-toolchain\n\s+with:\n\s+install: "(?:none|frozen)"/g,
-				) ?? [];
-			assert.equal(
-				explicitModes.length,
-				setupCalls.length,
-				`${file} must select an explicit setup-toolchain install mode`,
-			);
+			visit(parseDocument(source), {
+				Map(_key, node) {
+					if (node.get("uses") !== "./.github/actions/setup-toolchain") return;
+					const options = node.get("with");
+					assert.ok(isMap(options), `${file} must configure setup-toolchain`);
+					const mode = options.get("install");
+					assert.ok(
+						mode === "none" || mode === "frozen",
+						`${file} must select an explicit setup-toolchain install mode`,
+					);
+				},
+			});
 		}
 		for (const file of [
 			".github/workflows/ci-build.yml",
