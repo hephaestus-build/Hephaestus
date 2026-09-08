@@ -58,7 +58,7 @@ jobs:
                   run_id: run.id,
                   per_page: 100,
                 });
-                const history = artifacts.find((artifact) => artifact.name === 'ci-profile-history-jfr' && !artifact.expired);
+                const history = artifacts.find((artifact) => artifact.name === 'ci-profile-history-gradle-jfr' && !artifact.expired);
                 if (history) {
                   core.setOutput('run-id', run.id);
                   return;
@@ -71,7 +71,7 @@ jobs:
         if: steps.history.outputs.run-id != ''
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: ci-profile-history-jfr
+          name: ci-profile-history-gradle-jfr
           run-id: ${{ steps.history.outputs.run-id }}
           github-token: ${{ github.token }}
           path: ci-profile-history
@@ -84,7 +84,7 @@ jobs:
           /usr/bin/time -v -o ci-metrics/server-integration-resource.txt \
             vp run test:server:integration \
             -PprofileTests=true \
-            --profile \
+            --profile --no-daemon \
             2>&1 | tee ci-metrics/server-integration.log
 
       - name: Validate profile artifacts
@@ -123,7 +123,7 @@ jobs:
         if: ${{ !cancelled() && steps.record.outcome == 'success' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ci-profile-history-jfr
+          name: ci-profile-history-gradle-jfr
           path: ci-profile-history
           if-no-files-found: error
           retention-days: 90
@@ -171,7 +171,7 @@ jobs:
           /usr/bin/time -v -o ci-metrics/server-verification-resource.txt \
             vp run test:server:verification \
             -PprofileTests=true \
-            --profile \
+            --profile --no-daemon \
             2>&1 | tee ci-metrics/server-verification.log
 
       - name: Validate profile artifacts

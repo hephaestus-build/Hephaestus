@@ -200,6 +200,7 @@ tasks.withType<Test>().configureEach {
     }
     jvmArgs(testJvmArgs.get().split(" ").filter(String::isNotBlank))
     testLogging {
+        showStandardStreams = profileTests.get()
         events("failed")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
