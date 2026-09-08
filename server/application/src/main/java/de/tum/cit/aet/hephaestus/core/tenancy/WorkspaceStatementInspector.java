@@ -125,6 +125,28 @@ public class WorkspaceStatementInspector implements StatementInspector {
             Pattern.CASE_INSENSITIVE);
 
     /**
+     * The shape of a single-row DML whose WHERE clause might be a complete primary key:
+     * {@code UPDATE table SET ... WHERE <conjunction>} or {@code DELETE FROM table WHERE
+     * <conjunction>}. The conjunction is captured whole rather than matched column by column,
+     * because whether it covers the key is a question for the mapping metamodel, not for a regex —
+     * {@link #coversCompletePrimaryKey} answers it.
+     */
+    private static final Pattern FULL_KEY_DML_PATTERN = Pattern.compile(
+            "^\\s*(?:DELETE\\s+FROM|UPDATE)\\s+\"?([A-Za-z_][A-Za-z0-9_]*)\"?"
+                    + "(?:\\s+SET\\s+.+?)?"
+                    + "\\s+WHERE\\s+(.+?)\\s*$",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+    /** One conjunct of that WHERE clause, and the only shape allowed in it: {@code column = ?}. */
+    private static final Pattern KEY_PREDICATE_PATTERN =
+            Pattern.compile("^\\s*\"?([A-Za-z_][A-Za-z0-9_]*)\"?\\s*=\\s*\\?\\s*$");
+
+    private static final Pattern AND_SPLIT_PATTERN = Pattern.compile("\\s+AND\\s+", Pattern.CASE_INSENSITIVE);
+
+    /** Hibernate's optimistic-lock predicate, which rides along with the key on a versioned entity. */
+    private static final String VERSION_COLUMN = "version";
+
+    /**
      * Matches a Hibernate-emitted load that pins the result set to a single row (or a
      * parent-FK-bounded set) via a surrogate-key predicate. Three concrete shapes:
      * <ul>
@@ -208,6 +230,38 @@ public class WorkspaceStatementInspector implements StatementInspector {
         return sql;
     }
 
+    /**
+     * True iff {@code sql} is single-row DML whose WHERE clause is a conjunction of {@code column =
+     * ?} predicates covering exactly the table's primary key — no more columns and no fewer.
+     *
+     * <p>Every way of being unsure is a {@code false}: an unknown table (the metamodel is not
+     * populated until {@link org.springframework.boot.context.event.ApplicationReadyEvent}), a
+     * conjunct that is anything but {@code column = ?}, a disjunction, a repeated column, or a
+     * column set that is not the key. The statement then falls through to the standard
+     * {@code workspace_id} check, so this can only ever narrow what is reported, never widen it.
+     */
+    private boolean coversCompletePrimaryKey(String sql) {
+        Matcher dml = FULL_KEY_DML_PATTERN.matcher(sql);
+        if (!dml.matches()) return false;
+        // An OR anywhere would reach rows the key does not name.
+        if (OR_TOKEN_PATTERN.matcher(sql).find()) return false;
+
+        Set<String> keyColumns = scopedTables.primaryKeyColumns(unqualify(dml.group(1)));
+        if (keyColumns.isEmpty()) return false;
+
+        Set<String> predicateColumns = new HashSet<>();
+        for (String conjunct : AND_SPLIT_PATTERN.split(dml.group(2))) {
+            Matcher predicate = KEY_PREDICATE_PATTERN.matcher(conjunct);
+            if (!predicate.matches()) return false;
+            String column = predicate.group(1).toLowerCase(Locale.ROOT);
+            // `version = ?` is the optimistic lock, not part of the key — unless this table really
+            // does key on a column of that name, in which case it counts as the key column it is.
+            if (VERSION_COLUMN.equals(column) && !keyColumns.contains(column)) continue;
+            if (!predicateColumns.add(column)) return false;
+        }
+        return predicateColumns.equals(keyColumns);
+    }
+
     private Decision analyze(String sql) {
         // INSERTs cannot leak data across workspaces — they create new rows.
         if (INSERT_STATEMENT_PATTERN.matcher(sql).find()) {
@@ -216,6 +270,16 @@ public class WorkspaceStatementInspector implements StatementInspector {
         // Hibernate-emitted single-row PK DML is safe: the row was already loaded
         // within a workspace-checked scope and identified by a surrogate primary key.
         if (PK_ONLY_DML_PATTERN.matcher(sql).matches()) {
+            return Decision.ok();
+        }
+        // The same reasoning as PK_ONLY_DML above, for a composite key: a WHERE clause that is
+        // exactly the table's whole primary key names at most one row, and the caller had to hold
+        // that row's full identity to write it. Hibernate emits this for every @EmbeddedId
+        // association entity — `UPDATE repository_collaborator SET permission=? WHERE
+        // repository_id=? AND "user_id"=?` — which the single-key pattern above cannot match, and
+        // which is not a @ManyToMany join table so the join-table rule below does not cover it
+        // either. The key comes from the mapping metamodel, never from a naming convention.
+        if (coversCompletePrimaryKey(sql)) {
             return Decision.ok();
         }
         Matcher joinTableRowDelete = JOIN_TABLE_ROW_DELETE_PATTERN.matcher(sql);

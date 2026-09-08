@@ -346,6 +346,65 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         verifyNoInteractions(reporter, scopedTables);
     }
 
+    // composite primary keys: the mapping metamodel decides, never a naming convention
+
+    @Test
+    void updateByCompleteCompositeKeyIsAllowed() {
+        // The production shape: an @EmbeddedId association entity carrying a payload column.
+        // Collaborator sync aborted on this until the key came from the metamodel.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
+        when(scopedTables.primaryKeyColumns("repository_collaborator")).thenReturn(Set.of("repository_id", "user_id"));
+        inspector.inspect("update repository_collaborator set permission=? where repository_id=? and \"user_id\"=?");
+        inspector.inspect("delete from repository_collaborator where repository_id=? and user_id=?");
+        verifyNoInteractions(reporter);
+    }
+
+    @Test
+    void compositeKeyAllowanceToleratesTheOptimisticLock() {
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
+        when(scopedTables.primaryKeyColumns("repository_collaborator")).thenReturn(Set.of("repository_id", "user_id"));
+        inspector.inspect(
+                "update repository_collaborator set permission=? where repository_id=? and user_id=? and version=?");
+        verifyNoInteractions(reporter);
+    }
+
+    @Test
+    void aPartialOrPaddedKeyIsNotACompleteKey() {
+        // Fewer columns than the key reaches more than one row; more columns is a hand-written
+        // query the standard check must still see.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        when(scopedTables.isScoped("repository_collaborator")).thenReturn(true);
+        when(scopedTables.primaryKeyColumns("repository_collaborator")).thenReturn(Set.of("repository_id", "user_id"));
+        for (String sql : List.of(
+                "update repository_collaborator set permission=? where repository_id=? and permission=?",
+                "delete from repository_collaborator where repository_id=? and user_id=? and permission=?",
+                "delete from repository_collaborator where repository_id=? or user_id=?",
+                "delete from repository_collaborator where repository_id=? and repository_id=?",
+                "delete from repository_collaborator where repository_id=? and user_id in (select id from \"user\")")) {
+            inspector.inspect(sql);
+            verify(reporter).report(sql, Set.of("repository_collaborator"), TenancyEnforcement.LOG);
+        }
+    }
+
+    @Test
+    void aTableTheMetamodelDoesNotKnowFailsClosed() {
+        // Before ApplicationReady the key map is empty. Unsure must mean reported, not allowed.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        when(scopedTables.isScoped("repository_collaborator")).thenReturn(true);
+        when(scopedTables.primaryKeyColumns("repository_collaborator")).thenReturn(Set.of());
+        String sql = "update repository_collaborator set permission=? where repository_id=? and user_id=?";
+        inspector.inspect(sql);
+        verify(reporter).report(sql, Set.of("repository_collaborator"), TenancyEnforcement.LOG);
+    }
+
+    @Test
+    void aSingleColumnKeyIsCoveredTooWhenTheMetamodelNamesIt() {
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
+        when(scopedTables.primaryKeyColumns("bad_practice")).thenReturn(Set.of("id"));
+        inspector.inspect("update bad_practice set title=? where id=?");
+        verifyNoInteractions(reporter);
+    }
+
     // helper: Mockito.any() shorthand
     private static <T> T any() {
         return ArgumentMatchers.any();
