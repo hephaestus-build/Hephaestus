@@ -26,7 +26,7 @@ RUN --mount=type=secret,id=sentry_auth_token,required=false \
     find webapp/dist -name '*.map' -delete && \
     ! find webapp/dist -name '*.map' -print -quit | grep -q .
 
-FROM nginx:stable-alpine@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46
+FROM nginx:stable-alpine@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c
 ARG COOLIFY_BRANCH
 ARG SOURCE_COMMIT
 ENV BUILD_GIT_BRANCH=$COOLIFY_BRANCH BUILD_GIT_COMMIT=$SOURCE_COMMIT
