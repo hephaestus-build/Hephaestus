@@ -131,6 +131,14 @@ conversions; then the SPDX predicate is attached as a Cosign attestation and the
 build provenance are verified. SBOMs, reports, the policy, checksums and `manifest.json` are release
 assets.
 
+Evidence capture processes two subjects at a time and waits for both before starting the next pair.
+A failed capture blocks the bundle after its in-flight peer finishes. Trivy uses its
+[memory scan cache](https://trivy.dev/latest/docs/configuration/cache/) because the filesystem cache
+locks out concurrent processes; the vulnerability database and Java index remain shared and are
+prepared before capture. Both workflow callers request `java-db: "true"` from `download-trivy-db`; direct generator
+invocations also need both databases prepared because capture disables their updates. Each subject
+still receives the same SBOM formats and combined vulnerability/license scan.
+
 Each subject also has a `.timings.json` diagnostic with its digest, platform and elapsed Syft and
 Trivy time, including failed invocations. Timings use a monotonic clock around the existing scans;
 they add no scanner work or latency threshold. They are advisory, not security evidence: failure to
@@ -139,18 +147,17 @@ save them warns without changing the scan result. The same durations appear in t
 Upstream NATS, Traefik, nginx, and Alpine images are versioned and digest-pinned in the production
 Compose topology. They receive the same per-platform SBOM, license, vulnerability, and index-membership
 evidence as first-party images. Hephaestus requires its own signatures and build provenance only for
-images it builds.
+images it builds. Image publishing uses GitHub's native attestation action to record provenance and
+registry storage metadata. Only publishing jobs and their reusable-workflow callers receive
+`artifact-metadata: write`, alongside the signing and attestation permissions.
 
 [Vulnerability remediation](./vulnerability-remediation.mdx) is the normative policy for blocking
 findings, scheduled rescans, and exceptions.
 
 ### Nothing may fail for the first time at a release
 
-For a long time a release was the only thing that ever produced an evidence bundle, so it was also
-the only thing that could evaluate a check over one. v0.75.0 failed twice on findings no earlier
-gate had ever looked at. The fix for the *subjects* was to scan the pinned upstream images before the
-release; the fix for the *checks* is that the same bundle is now produced and judged before a release
-exists. `scripts/generate-release-evidence.ts` is the one generator and
+Pre-merge validation covers the same image subjects and evidence checks as release publication.
+`scripts/generate-release-evidence.ts` is the one generator and
 `scripts/verify-release-evidence.ts` the one verifier; `release.yml` and the `Release evidence
 preflight` job in `cicd.yml` both run them, and the preflight runs the verifier in its default mode,
 which performs every check except signature verification.

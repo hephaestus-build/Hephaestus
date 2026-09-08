@@ -1545,6 +1545,19 @@ void describe("CI contract", () => {
 		// is why this action exists at all.
 		assert.match(action, /public\.ecr\.aws\/aquasecurity\/trivy-db/);
 		assert.match(action, /--download-db-only/);
+		assert.match(action, /--download-java-db-only/);
+		for (const file of [".github/workflows/cicd.yml", ".github/workflows/release.yml"]) {
+			const workflow = parseDocument(await readFile(file, "utf8"));
+			const evidenceJob = file.endsWith("cicd.yml") ? "Release-preflight" : "tag-images";
+			const steps = workflow.getIn(["jobs", evidenceJob, "steps"]);
+			assert.ok(isSeq(steps));
+			const prepare = steps.items.find(
+				(entry) => isMap(entry) && entry.get("uses") === "./.github/actions/download-trivy-db",
+			);
+			assert.ok(isMap(prepare));
+			assert.equal(prepare.getIn(["with", "java-db"]), "true");
+		}
+
 		for (const [file, source] of await workflowSources())
 			assert.doesNotMatch(
 				source,

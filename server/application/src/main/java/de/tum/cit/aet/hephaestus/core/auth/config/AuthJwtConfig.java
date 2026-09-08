@@ -12,6 +12,7 @@ import jakarta.annotation.PostConstruct;
 import java.time.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Bean;
@@ -19,14 +20,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 
-/**
- * Wires the JWT issuance + verification primitives for our own ES256 cookie-session JWTs (ADR 0017).
- *
- * <h2>Boot order</h2>
- * {@link #seedKeysOnStartup} runs in {@code @PostConstruct} after the JPA EntityManagerFactory
- * is ready, so the {@code jwt_signing_key} table has at least one row before the first request
- * lands. Production deploys can pre-seed via Liquibase if deterministic kids are needed.
- */
+/** Wires issuance and verification for ES256 cookie-session JWTs (ADR 0017). */
 @ConditionalOnServerRole
 @Configuration
 @EnableConfigurationProperties(AuthProperties.class)
@@ -83,20 +77,20 @@ public class AuthJwtConfig {
         return cookieBearerTokenResolver;
     }
 
-    /**
-     * Best-effort key bootstrap. Wrapped so a DB-less boot (e.g. the {@code specs} OpenAPI
-     * profile, or a worker-only pod) never fails to start — the first real token issuance
-     * will seed the key if this didn't.
-     */
     @PostConstruct
-    void seedKeysOnStartup() {
-        try {
-            keyService.ensureActiveKey();
-        } catch (RuntimeException e) {
-            log.warn("auth.jwt: deferred signing-key bootstrap (will seed on first issuance): {}", e.toString());
-        }
-        // SECURITY: the bootstrap above is best-effort, but an unsealed signing key in prod is a
-        // forge-any-token risk — that condition must NOT be swallowed. Fail the boot loudly.
+    void assertSigningKeysSealed() {
         keyService.assertProdKeysSealed();
+    }
+
+    // CDS training exits at context refresh, before runners can perform database writes.
+    @Bean
+    ApplicationRunner seedKeysOnStartup() {
+        return args -> {
+            try {
+                keyService.ensureActiveKey();
+            } catch (RuntimeException e) {
+                log.warn("auth.jwt: deferred signing-key bootstrap (will seed on first issuance): {}", e.toString());
+            }
+        };
     }
 }

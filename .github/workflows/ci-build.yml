@@ -352,6 +352,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+      artifact-metadata: write
     with:
       image-name: "hephaestus-build/application-server"
       use-buildpacks: true

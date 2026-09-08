@@ -62,6 +62,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+      artifact-metadata: write
     secrets:
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
@@ -93,6 +94,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+      artifact-metadata: write
     with:
       image-name: "hephaestus-build/agent-pi"
       docker-file: "./docker/agents/pi/Dockerfile"
@@ -119,6 +121,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+      artifact-metadata: write
     with:
       image-name: "hephaestus-build/postgres"
       docker-file: "./docker/postgres/Dockerfile"

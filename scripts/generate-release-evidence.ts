@@ -135,6 +135,22 @@ async function resolvePlatformDigests(
 	return digests;
 }
 
+export async function captureSubjects(
+	subjects: readonly Subject[],
+	capture: (subject: Subject) => Promise<void>,
+): Promise<void> {
+	for (let offset = 0; offset < subjects.length; offset += 2) {
+		const results = await Promise.allSettled(subjects.slice(offset, offset + 2).map(capture));
+		const failures = results.filter((result) => result.status === "rejected");
+		if (failures.length > 0) {
+			throw new AggregateError(
+				failures.map((result): unknown => result.reason),
+				"Release evidence capture failed",
+			);
+		}
+	}
+}
+
 export async function captureSubject(subject: Subject, directory: string): Promise<void> {
 	const reference = `${subject.repository}@${subject.digest}`;
 	const stem = path.join(directory, evidenceStem(subject));
@@ -175,6 +191,9 @@ export async function captureSubject(subject: Subject, directory: string): Promi
 		await scan("trivy", [
 			"image",
 			"--skip-db-update",
+			"--skip-java-db-update",
+			"--cache-backend",
+			"memory",
 			"--scanners",
 			"vuln,license",
 			"--format",
@@ -233,7 +252,7 @@ export async function generateReleaseEvidence(options: {
 		images,
 		(image, platform) => digests.get(`${image.image}\0${platform}`) ?? "",
 	);
-	for (const subject of subjects) await captureSubject(subject, directory);
+	await captureSubjects(subjects, (subject) => captureSubject(subject, directory));
 	const manifest = buildManifest(subjects, {
 		commit,
 		durationSeconds: Math.round((Date.now() - startedAt) / 1000),
