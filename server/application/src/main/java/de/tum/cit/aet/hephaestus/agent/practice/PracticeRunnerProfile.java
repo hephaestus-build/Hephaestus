@@ -14,6 +14,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-agent-sandbox.ts",
             "pi-task-paths.ts",
             "pi-precompute.ts",
+            "pi-precompute.sh",
             "pi-error-text.ts",
             "pi-grep-tool.ts",
             "pi-observation-normalize.ts",

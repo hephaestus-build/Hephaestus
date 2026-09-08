@@ -55,6 +55,14 @@ export default (repo, diff, metadata, context) => ({
 });
 `,
 			);
+			for (const [name, source] of Object.entries({
+				"missing-export": "export const value = 1;",
+				"invalid-result":
+					"export default () => ({ hints: [], directions: [], metrics: { count: Infinity } });",
+				throws: "export default () => { throw new Error('broken practice'); };",
+			})) {
+				writeFileSync(join(root, scripts, `${name}.ts`), source);
+			}
 			mkdirSync(join(root, "repos/project with spaces"), { recursive: true });
 			writeFileSync(join(root, "repos/project with spaces/marker"), "7");
 			writeFileSync(join(root, context, "marker"), "11");
@@ -113,6 +121,18 @@ export default (repo, diff, metadata, context) => ({
 				repo: 7,
 			});
 			assert.ok(readFileSync(join(root, "work/precompute-out/.complete"), "utf8"));
+			for (const slug of ["missing-export", "invalid-result", "throws"]) {
+				const failure: unknown = JSON.parse(
+					readFileSync(join(root, `work/precompute-out/${slug}.json`), "utf8"),
+				);
+				assert.ok(typeof failure === "object" && failure !== null);
+				assert.equal(Reflect.get(failure, "status"), "error");
+				assert.deepEqual(Reflect.get(failure, "hints"), []);
+			}
+			assert.match(
+				readFileSync(join(root, "work/precompute-out/summary.md"), "utf8"),
+				/3 script\(s\) failed/,
+			);
 
 			assert.throws(
 				() => readFileSync(join(root, "work/precompute-stage/practices/linked.ts")),

@@ -40,21 +40,18 @@ class PracticePiAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldResolvePrecomputeInputsFromTaskInsteadOfShellPaths() {
-        assertThat(PracticePiAdapter.buildPrecomputeStep())
-                .contains("/workspace/pi-precompute.ts /workspace")
-                .contains("ln -sf /opt/precompute/lib /workspace/work/precompute-stage/lib")
-                .doesNotContain("inputs/", "--repo", "--context", "sed ");
+    void shouldStagePrecomputeBootstrapWithItsRunner() {
+        var spec = adapter.buildSandboxSpec(proxyRequest());
+        assertThat(spec.inputFiles()).containsKeys("pi-precompute.sh", "pi-precompute.ts", "pi-task-paths.ts");
+        assertThat(spec.command())
+                .anySatisfy(command -> assertThat(command).contains("sh /workspace/pi-precompute.sh 30 && "));
     }
 
     @Test
-    void shouldKeepPrecomputeBestEffortAndCredentialFree() {
-        assertThat(PracticePiAdapter.buildPrecomputeStep())
-                .contains("env -i HOME=/home/agent PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp node")
-                .contains("--permission", "--allow-fs-read=/workspace", "--allow-fs-read=/opt/precompute")
-                .contains("--allow-fs-write=/workspace/work/precompute-stage*")
-                .contains("--allow-fs-write=/workspace/work/precompute-out*")
-                .contains("|| {", "; true; }");
+    void shouldCapPrecomputeAtThirtySecondsAndOneTenthOfTheJobDeadline() {
+        assertThat(PracticePiAdapter.buildPrecomputeStep(600)).contains("pi-precompute.sh 30 &&");
+        assertThat(PracticePiAdapter.buildPrecomputeStep(120)).contains("pi-precompute.sh 12 &&");
+        assertThat(PracticePiAdapter.buildPrecomputeStep(61)).contains("pi-precompute.sh 6 &&");
     }
 
     @Test

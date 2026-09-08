@@ -48,6 +48,7 @@ vs writable is decided by *where* a file lives, not by convention. Three top-lev
 ├── pi-provider.ts                   # Provider/model helper imported by both runners.
 ├── pi-error-text.ts                 # Shared error-message helper.
 ├── pi-task-paths.ts                 # Task path validation and resolution.
+├── pi-precompute.sh                 # Bounded, best-effort precompute bootstrap.
 ├── pi-precompute.ts                 # Precompute launcher using task-declared paths.
 ├── pi-observation-normalize.ts      # Normalises sandbox observations before out/ is written.
 ├── pi-runner-usage.ts               # Token-usage accounting sidecar.
@@ -192,3 +193,24 @@ each attempt. They evolve together; there is no cross-version envelope compatibi
 The agent image's `hephaestus.agent.runtime-contract` label versions its runtime dependencies and
 launch contract separately. Its value is `2`, independent of the envelope schema version. See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md)
 for the image contract.
+
+## Precompute validation and limits
+
+Precompute is advisory. In production, the image runner validates every script's default export
+and returned hints, directions and finite numeric metrics. An invalid result or a thrown exception
+becomes a recorded script error with no hints; it does not become an observation about the reviewed work.
+
+The server-staged bootstrap bounds the **entire stage**, including copying scripts, module imports
+and synchronous execution, to one tenth of the job timeout, capped at 30 seconds. This fits inside
+the existing 60-second non-model allowance. The image runner's per-script asynchronous timeout is
+not a substitute for this outer deadline. Ordinary child processes are killed when the stage ends,
+including after success. Failed precompute remains best-effort: the practice review continues without
+its hints.
+
+The bootstrap clears the inherited environment, retains the Node filesystem permission grants and
+applies a **10 MiB per-file limit** in its subshell, including the diagnostic log. On failure, at most
+8 KiB of diagnostics is passed onward. The subsequent review does not inherit that file limit.
+These are safeguards against broken scripts, not hostile-code isolation: a per-file limit is not a
+cumulative disk quota, Node child-process permission is not a security boundary, and a deliberately
+detached process can escape process-group cleanup. Container resource limits and teardown remain the
+outer boundary. Runtime contract v3's workspace budgets and gateway transport are separate work.

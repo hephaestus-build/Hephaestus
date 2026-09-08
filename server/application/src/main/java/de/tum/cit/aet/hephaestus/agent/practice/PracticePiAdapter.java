@@ -33,7 +33,7 @@ public class PracticePiAdapter {
                 request.timeoutSeconds(),
                 PROFILE,
                 Map.of(),
-                buildPrecomputeStep()));
+                buildPrecomputeStep(request.timeoutSeconds())));
         return new PracticeSandboxSpec(
                 imageProperties.reference(),
                 plan.command(),
@@ -50,18 +50,8 @@ public class PracticePiAdapter {
         return resultParser.parse(sandboxResult);
     }
 
-    /** Precompute is advisory; failure must not prevent the review. */
-    static String buildPrecomputeStep() {
-        return "(mkdir -p /workspace/work/precompute-stage /workspace/work/precompute-out"
-                // Node's permission model requires unrestricted filesystem access to create symlinks.
-                + " && ln -sf /opt/precompute/lib /workspace/work/precompute-stage/lib"
-                + " && env -i HOME=/home/agent PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp node"
-                + " --permission --allow-fs-read=/workspace --allow-fs-read=/opt/precompute"
-                + " '--allow-fs-write=/workspace/work/precompute-stage*'"
-                + " '--allow-fs-write=/workspace/work/precompute-out*' --allow-child-process"
-                + " /workspace/pi-precompute.ts /workspace > /tmp/precompute-runner.log 2>&1"
-                + " || { echo '[precompute] failed, continuing without hints';"
-                + " cp /tmp/precompute-runner.log /workspace/work/precompute-out/precompute-runner.log 2>/dev/null;"
-                + " tail -200 /tmp/precompute-runner.log 2>/dev/null; true; }) && ";
+    static String buildPrecomputeStep(int timeoutSeconds) {
+        int budgetSeconds = Math.min(30, Math.max(1, timeoutSeconds / 10));
+        return "sh /workspace/pi-precompute.sh " + budgetSeconds + " && ";
     }
 }
