@@ -4,6 +4,23 @@ PostgreSQL 18 is required. Fresh installations apply the baseline automatically.
 must finish the v0.77.4 migrations and synchronize the baseline before starting the candidate.
 Unsynchronized existing schemas fail startup.
 
+## Fresh self-hosted installations
+
+Use the same baseline files as every other installation; do not edit them for your hostname, database
+name or database user. Those values belong in deployment configuration. The `v0.77.4` suffix identifies
+the schema cut-point, not a particular operator or deployment.
+
+The [supported self-hosted stack](install) supplies PostgreSQL 18 with `citext` and `btree_gist` in
+`public` and `pg_partman` in `partman`. The baseline uses these schemas explicitly; it is not a
+schema-per-tenant or arbitrary-extension-schema installer. Database provisioning must permit the
+migration connection to create the required extensions and application objects.
+
+Production deployments must use the `prod` Spring profile, as the shipped Compose stack does. It
+selects the audit protections that development deliberately omits. A fresh database initializes
+without baseline synchronization; no accounts, workspaces or production credentials are imported.
+The [first-login consent limitation](legal-pages#first-login-consent-notice) still applies to non-TUM
+operators; schema portability does not resolve operator-specific legal configuration.
+
 ## Before deployment
 
 1. Verify the currently running release has completed every v0.77.4 migration with no pending

@@ -39,6 +39,8 @@ class LiquibaseBaselineIntegrationTest {
         TestDatabase database = emptyDatabase();
         update(database, "db/master.xml", context);
 
+        assertThat(query(database, "SELECT count(*)::text FROM account UNION ALL SELECT count(*)::text FROM workspace"))
+                .containsExactly("0", "0");
         assertThat(query(database, "SELECT type || ':' || server_url FROM identity_provider ORDER BY type"))
                 .containsExactly("GITHUB:https://github.com", "GITLAB:https://gitlab.com", "SLACK:https://slack.com");
         assertThat(query(database, "SELECT silent_mode_engaged::text FROM instance_settings WHERE id = 1"))
@@ -61,6 +63,17 @@ class LiquibaseBaselineIntegrationTest {
                 """);
         assertThat(query(database, "SELECT (tableoid <> 'public.auth_event_default'::regclass)::text FROM auth_event"))
                 .containsExactly("true");
+        if (context.equals("prod")) {
+            assertThatThrownBy(() -> execute(database, "UPDATE auth_event SET details = '{}'::jsonb"))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("auth_event is append-only");
+            assertThatThrownBy(() -> execute(database, "DELETE FROM auth_event"))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("auth_event is append-only");
+        } else {
+            execute(database, "UPDATE auth_event SET details = '{}'::jsonb");
+            execute(database, "DELETE FROM auth_event");
+        }
         List<String> history =
                 query(database, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted");
         assertThat(history).hasSize(context.equals("prod") ? 4 : 3);
