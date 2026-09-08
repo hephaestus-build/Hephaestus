@@ -65,9 +65,10 @@ published.
 | Docker → Webapp, Agent: Pi, Postgres (pg_partman), Tag unchanged images | Dockerfile images; aliases for unchanged ones | — |
 | Supported-host boot smoke | `docker/self-host/setup.sh`, then PostgreSQL, NATS and the application server from this run's own images, waiting for the application to report healthy | — |
 | Actionlint, Zizmor | workflow lint with ShellCheck warnings; Zizmor at medium confidence | — |
-| PR → Verify commit identity | every commit's primary author resolves to a GitHub account, and that account is the pull request's author; a `Bot` author is matched against its `[bot]` account; no commit message or the pull request body names a model, agent, harness or tool | — |
+| PR → Validate PR | Conventional Commit title; every commit’s primary author resolves to the pull request author’s GitHub account (including bot accounts); the PR body follows attribution policy | — |
 
-The four quality legs are one matrix job, one entry per leg of the task graph. Each runs
+The four quality legs call `ci-quality-leg.yml` independently. Job-level conditions omit unchanged
+legs before a runner is allocated; selected legs do not cancel each other on failure. Each runs
 `vp run ci:<leg>`, then pipes `vp run --last-details` through `scripts/report-task-run.ts`: every
 task that did not pass becomes an error annotation naming the command that reproduces it, and the
 report, cache hits and miss reasons included, lands in the job summary. A leg runs when the change
@@ -352,7 +353,8 @@ why the label is the authority, and which alternatives were priced and declined,
 | `cicd.yml` | PR, merge group, push to main, manual | Validates changes before merge and builds final-SHA images after merge; the release evidence gate runs over the images the run built on the Version PR's branch, and wherever the `release-preflight` dispatch input asks for it |
 | `review-policy.yml` | PR opened, reopened, synchronized, ready for review, edited | Approves a listed maintainer's pull request so the ruleset's required approval is met; does nothing for anyone else |
 | `pull-request.yml` | PR opened, edited, synchronized, reopened, ready for review | Validates the title against the policy `commitlint.config.ts` exports, without installing the workspace, checks that every commit resolves to the pull request's author, and assigns the author when the pull request opens |
-| `ci-quality-gates.yml` | Called by cicd.yml | Formatting, lint, type checks, webapp unit and story tests: everything verifiable from source |
+| `ci-quality-gates.yml` | Called by cicd.yml | Selects quality legs, clean-install verification and story tests |
+| `ci-quality-leg.yml` | Called by ci-quality-gates.yml | Shared formatting, lint, type-check and unit-test execution for each selected task-graph leg |
 | `ci-build.yml` | Called by cicd.yml | Packages the server reactor once, then runs the OpenAPI, schema, database and browser E2E gates and the application-server image against that artifact |
 | `ci-tests.yml` | Called by cicd.yml | The server unit, architecture and integration suites, compiled from source |
 | `ci-docker-build.yml` | Called by cicd.yml | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images |
@@ -431,7 +433,7 @@ paths, because previews need every image at the head SHA; no other event has a p
 | Quality → Webapp | `webapp/**`, `docs/images/readme/**`, `docs/src/css/custom.css`, the root oxlint and oxfmt configs, the four `scripts/check-*` files it runs, root package files |
 | Quality → App Server | `server/**` except `AGENTS.md` and `CLAUDE.md`, `scripts/run-mvnw.ts`, `docker/compose.app.yaml`, `docker/compose.core.yaml`, root package files |
 | Quality → Tooling and Docs | `scripts/**`, `docker/agents/**`, `load-tests/**`, `docs/**`, tsconfigs, oxlint and oxfmt configs, `.changeset/**`, `commitlint.config.ts`, instruction files, `renovate.json`, `openapitools.json` |
-| Every quality leg | `vite.config.ts`, `.vite-hooks/**`, `.java-version`, `cicd.yml`, `ci-quality-gates.yml` and the setup actions: the task graph, the hooks and the JDK decide every leg's verdict, so a change to one runs all of them |
+| Every quality leg | `vite.config.ts`, `.vite-hooks/**`, `.java-version`, `cicd.yml`, `ci-quality-gates.yml`, `ci-quality-leg.yml` and the setup actions: the task graph, the hooks and the JDK decide every leg's verdict, so a change to one runs all of them |
 | Build artifact gates | contracts: the App Server paths or `docker/postgres/**`; E2E: webapp source and the server main sources; image: `server/application/src/main/**`, the poms, `server/application/project.toml`, `server/generated-clients/**` |
 | Docker images | `webapp-image`: the webapp build inputs and non-test source; `agent-images`: `docker/agents/**`; `postgres-image`: `docker/postgres/**` |
 | Supported-host boot smoke | `docker/**`, `application*.yml`, and the sources Spring binds configuration from — `**/*Properties.java` and `Application.java`. `ci-contract.test.ts` fails if a source carrying `@ConfigurationProperties` or `@ConfigurationPropertiesScan` is not selected |
@@ -505,7 +507,7 @@ reaches no such commit builds every image itself. `detect-changes` resolves that
   images their own diff touched and alias the rest, while the Version PR's branch builds all of
   them. `detect-changes` decides both once, as `single-arch` and `all-images`, and hands them to
   every image build in the run.
-- The `Quality` matrix uses `fail-fast: false`; the image matrix in `reusable-docker-build.yml` uses
+- Quality legs run independently; the image matrix in `reusable-docker-build.yml` uses
   `fail-fast: true`.
 - Pull-request runs cancel superseded runs; `release.yml` never cancels. PR and dispatch lanes
   remain separate because they validate different refs: the PR merge ref and the branch head.

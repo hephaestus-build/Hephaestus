@@ -33,12 +33,12 @@ export function isFullVerification(jobs: readonly { name: string }[]) {
 	return (
 		[
 			"Test / App Server: Unit and architecture",
-			"Quality / Webapp",
 			"Quality / Webapp: Stories",
 			"Build / Webapp: E2E",
 			"Build / App Server: Database",
 			"Build / App Server: Generated artifacts",
 		].every((name) => names.has(name)) &&
+		(names.has("Quality / Webapp") || names.has("Quality / Webapp / Gates")) &&
 		jobs.filter((job) => job.name.startsWith("Test / App Server: Integration (")).length === 2
 	);
 }

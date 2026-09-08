@@ -49,10 +49,12 @@ void test("lightweight PRs cannot make full verification's latency budget pass",
 		"Test / App Server: Integration (providers)",
 		"Test / App Server: Integration (application)",
 	];
-	const jobs = names.map((name) => ({ name }));
-	assert.equal(isFullVerification(jobs), true);
-	for (const name of names)
-		assert.equal(isFullVerification(jobs.filter((job) => job.name !== name)), false, name);
+	for (const webappName of ["Quality / Webapp", "Quality / Webapp / Gates"]) {
+		const jobs = names.map((name) => ({ name: name === "Quality / Webapp" ? webappName : name }));
+		assert.equal(isFullVerification(jobs), true);
+		for (const { name } of jobs)
+			assert.equal(isFullVerification(jobs.filter((job) => job.name !== name)), false, name);
+	}
 	assert.equal(isFullVerification([{ name: "Quality / Tooling and Docs" }]), false);
 });
 
