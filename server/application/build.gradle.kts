@@ -133,7 +133,31 @@ pmd {
     isConsoleOutput = true
 }
 
+tasks.withType<Pmd>().configureEach {
+    reports.xml.required.set(true)
+    val reportFile = reports.xml.outputLocation
+    // Gradle counts rule violations, but PMD's recoverable analysis errors do not fail its task.
+    doLast {
+        val document =
+            javax.xml.parsers.DocumentBuilderFactory.newInstance()
+                .apply { setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
+                .newDocumentBuilder()
+                .parse(reportFile.get().asFile)
+        check(
+            document.getElementsByTagName("error").length == 0 &&
+                document.getElementsByTagName("configerror").length == 0
+        ) {
+            "PMD could not analyze all sources. See ${reportFile.get().asFile}"
+        }
+    }
+}
+
 tasks.named("pmdTest") { enabled = false }
+
+tasks.named("dependencies") {
+    // PMD creates its auxiliary configuration lazily; lock updates must include that graph too.
+    tasks.named("pmdMain").get()
+}
 
 jacoco { toolVersion = libs.versions.jacoco.get() }
 
@@ -142,10 +166,18 @@ val testSelection = providers.gradleProperty("testSelection").map(String::toBool
 val testJvmArgs = providers.gradleProperty("testJvmArgs").orElse("")
 val integrationShard = providers.environmentVariable("HEPHAESTUS_INTEGRATION_SHARD").orElse("")
 val packagedServer = providers.gradleProperty("packagedServer").map(String::toBoolean).orElse(false)
+val testInventories =
+    mapOf(
+        "testInventory" to "",
+        "integrationProvidersInventory" to "providers-and-startup",
+        "integrationApplicationInventory" to "application",
+    )
 
 tasks.withType<Test>().configureEach {
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
     useJUnitPlatform()
-    if (testSelection.get()) {
+    if (testSelection.get() || name in testInventories) {
         dryRun.set(true)
         val selectionDirectory = layout.buildDirectory.dir("test-selection/$name")
         reports.junitXml.outputLocation.set(selectionDirectory.map { it.dir("xml") })
@@ -184,6 +216,20 @@ tasks.test {
     if (!testSelection.get()) finalizedBy("jacocoTestReport")
 }
 
+fun Test.selectIntegrationShard(shard: String) {
+    val providerTests =
+        listOf(
+            "de.tum.cit.aet.hephaestus.integration.*",
+            "de.tum.cit.aet.hephaestus.StartupBudgetIntegrationTest",
+        )
+    when (shard) {
+        "" -> Unit
+        "providers-and-startup" -> filter { providerTests.forEach(::includeTestsMatching) }
+        "application" -> filter { providerTests.forEach(::excludeTestsMatching) }
+        else -> error("Unknown integration shard: $shard")
+    }
+}
+
 for ((taskName, tag) in
     mapOf(
         "architectureTest" to "architecture",
@@ -194,26 +240,12 @@ for ((taskName, tag) in
     tasks.register<Test>(taskName) {
         description = "Runs the $tag test tier."
         group = "verification"
-        testClassesDirs = sourceSets.test.get().output.classesDirs
-        classpath = sourceSets.test.get().runtimeClasspath
         useJUnitPlatform {
             includeTags(tag)
             if (tag != "live") excludeTags("live")
         }
         shouldRunAfter(tasks.test)
-        if (tag == "integration") {
-            val providerTests =
-                listOf(
-                    "de.tum.cit.aet.hephaestus.integration.*",
-                    "de.tum.cit.aet.hephaestus.StartupBudgetIntegrationTest",
-                )
-            when (integrationShard.get()) {
-                "" -> Unit
-                "providers-and-startup" -> filter { providerTests.forEach(::includeTestsMatching) }
-                "application" -> filter { providerTests.forEach(::excludeTestsMatching) }
-                else -> error("Unknown integration shard: ${integrationShard.get()}")
-            }
-        }
+        if (tag == "integration") selectIntegrationShard(integrationShard.get())
     }
 }
 
@@ -397,10 +429,16 @@ if (packagedServer.get()) {
     }
 }
 
-// JUnit discovery is the source of truth for the tier and shard completeness check.
-tasks.register<Test>("testInventory") {
-    testClassesDirs = sourceSets.test.get().output.classesDirs
-    classpath = sourceSets.test.get().runtimeClasspath
-    useJUnitPlatform { excludeTags("live") }
-    dryRun.set(true)
+// Separate reports let one invocation prove tier coverage and disjoint shards without overwriting
+// results.
+for ((taskName, shard) in testInventories) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Discovers ${shard.ifEmpty { "all non-live" }} tests without executing them."
+        useJUnitPlatform {
+            excludeTags("live")
+            if (shard.isNotEmpty()) includeTags("integration")
+        }
+        selectIntegrationShard(shard)
+    }
 }

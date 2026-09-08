@@ -73,7 +73,8 @@ Live-test credential gates and setup: [Testing Guide](../docs/contributor/testin
 **JUnit tags, not filename patterns, select tests.** Keep descriptive `*Test` and `*IntegrationTest`
 names for readers. `TestTierTaggingArchTest` uses JUnit discovery to reject untagged tests;
 `vp run test:server:selection` proves actual tier coverage and disjoint integration shards using
-Gradle's test dry-run reports, without executing Spring contexts.
+Gradle's test dry-run reports in one invocation, without executing Spring contexts. Its inventories
+write only to `application/build/test-selection/`, never execution or coverage reports.
 
 Name tests `should[ExpectedBehavior]When[Condition]`. Controller-level integration tests extend
 `AbstractWorkspaceIntegrationTest` (or a domain-specific base) and exercise access control through

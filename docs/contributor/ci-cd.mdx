@@ -156,16 +156,22 @@ changesets rather than adding one. [Release management](./release-management.mdx
 
 One check owns the dependency verdict: the dependency vulnerability gate in `ci-security-scan.yml`,
 a second Trivy pass in `table` format over the same checkout. It runs on pull requests and on `main`
-pushes and evaluates every dependency the lockfiles resolve, so an advisory published against a pin
-no pull request touches fails the next run rather than waiting for someone to open the code-scanning
-dashboard. It applies the severity policy in [vulnerability
+pushes and includes development and test dependencies from the lockfiles. An advisory published
+against a pin no pull request touches fails the next run rather than waiting for someone to open
+the code-scanning dashboard. It applies the severity policy in [vulnerability
 remediation](./vulnerability-remediation.mdx) — fixable high or critical — and its exceptions are the
 one exception path for a dependency finding, recorded in `security/trivy-dependency-ignore.yaml`.
 
-Dependency review sees only the manifests a pull request changes, so it cannot hold that verdict; it
-reports what the pull request introduces and fails nothing. The first Trivy pass is the
-code-scanning feed: SARIF output reports every severity whatever `severity` is set to, so the pass
-that publishes it carries neither `severity` nor `exit-code`, and it keeps Trivy's secret scanner,
+Dependency review compares the base and head dependency graphs, so it cannot hold that verdict; it
+reports what the pull request introduces and fails nothing. Gradle graphs are generated on pull
+requests and main pushes through the official Gradle action, with dependency verification still
+enabled. Generation has read-only permissions; a separate `workflow_run` publisher submits the
+snapshot without checking out or executing the originating code. Dependency review waits for these
+asynchronous snapshots. The publisher must exist on the default branch before GitHub runs it.
+
+The first Trivy pass is the code-scanning feed: SARIF output reports every severity whatever
+`severity` is set to, so the pass that publishes it carries neither `severity` nor `exit-code`,
+and it keeps Trivy's secret scanner,
 which covers the whole tree where TruffleHog covers a pull request's own commits.
 
 Renovate groups routine Gradle updates as server dependencies and webapp development updates
@@ -183,6 +189,14 @@ pnpm and Pi SDK pins are grouped, so a version stated in several managed files m
 request; the toolchain checks reject a version that reads differently in any of them. Renovate
 provisions the Node it runs lockfile updates with from `engines`, so `engines.node` restates
 `devEngines.runtime` exactly rather than the supported line.
+
+For Gradle, `constraints.java` restates `.java-version`, enforced by `gate:toolchain`: Renovate's
+parser cannot infer the toolchain through the file read in the Kotlin build. The Gradle and wrapper
+managers own version, lockfile and verification-metadata updates. A self-hosted Renovate administrator
+must permit `gradleWrapper` in `allowedUnsafeExecutions` for artifact updates; a repository config
+cannot grant that permission. Missing or failed artifact updates are not a reason to weaken Gradle
+verification. Follow [Updating Java dependencies](./local-development.mdx#updating-java-dependencies)
+to repair and verify them before merging. Renovate-generated checksums still require independent review.
 
 [Vulnerability remediation](./vulnerability-remediation.mdx) owns the severity policy and the shape,
 ceiling and approval of an exception, for images and dependencies alike.
@@ -370,6 +384,8 @@ why the label is the authority, and which alternatives were priced and declined,
 | `ci-docker-build.yml` | Called by cicd.yml | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images |
 | `reusable-docker-build.yml` | Called by ci-build.yml and ci-docker-build.yml | Builds, signs, attests, and blocks on the release vulnerability policy for the `linux/amd64` image |
 | `ci-security-scan.yml` | Called by cicd.yml | Dependency review on pull requests; Trivy dependency scan, secret detection and repository policy checks |
+| `dependency-graph.yml` | PR, push to main | Resolves and uploads the verified Gradle dependency graph with read-only permissions |
+| `submit-dependency-graph.yml` | Successful dependency-graph workflow | Submits snapshot data without executing code from the originating run |
 | `verify-changesets.yml` | Called by cicd.yml | Tests changeset and version-sync policy and enforces release-note presence |
 | `ci-compose-validate.yml` | Called by cicd.yml | Validates rendered reference and self-hosted Compose stacks |
 | `openapi-autocommit.yml` | `autocommit-openapi` label | Regenerates the OpenAPI spec and client and commits them to the pull request |
@@ -424,6 +440,10 @@ A run restores caches from its own branch and from `main`, never from a sibling 
 entries are content-addressed, so a pull request saves them for its own reruns. Gradle caches are
 published only by trusted default-branch push, schedule and dispatch runs; the pnpm executable cache
 also saves only from `main`. The JDK is pinned once, in `.java-version`.
+
+Java quality verdicts are not stored in the Vite task cache: Gradle owns their task inputs and outputs.
+The [local verification contract](./local-verification.mdx#java-checks-and-caching) describes the shared
+local/CI command and how to distinguish Vite, Gradle build and Gradle configuration caches.
 
 Gradle's official action explicitly uses its [enhanced cache provider](https://github.com/gradle/actions/blob/v6.3.0/docs/setup-gradle.md#enhanced-caching).
 Its proprietary caching helper is [free for public repositories](https://github.com/gradle/actions/blob/v6.3.0/DISTRIBUTION.md).

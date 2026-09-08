@@ -31,6 +31,11 @@ reimplementing runner selection semantics. Test execution is neither cached nor 
 date because external services and environment are not fully declared task inputs. Compilation and
 packaging retain native incrementality and build caching.
 
+Gradle also owns Java quality inputs and cached outputs. Vite invokes the formatting and analysis
+tasks in one build rather than maintaining another file fingerprint and verdict cache over Gradle.
+The [verification contract](../contributor/local-verification.mdx#java-checks-and-caching) owns the commands
+and incomplete-analysis checks.
+
 CI uses the official Gradle setup action and restores the package job's outputs for artifact
 consumers. [CI documentation](../contributor/ci-cd.mdx#caches) owns cache trust and provider choices;
 [server profiles](../contributor/ci-cd.mdx#server-profiles) describe Gradle profiling and JFR.

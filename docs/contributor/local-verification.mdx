@@ -55,10 +55,34 @@ Run affected server integration tests separately with `vp run test:server:integr
 On Windows the runner's automatic input tracking misses a file you add, so run
 `vp run --no-cache check` there.
 
-`quality` is a group: its gates run in parallel, and a gate whose inputs are unchanged replays.
+`quality` is a group: its gates run in parallel, and a cacheable gate whose inputs are unchanged replays.
 `vite.config.ts` states which gates are uncached and which name their inputs. Run
 `vp run --last-details` to inspect the latest run and its miss reasons, or `vp cache clean` to
 discard the local cache. In CI the cache restores per [CI/CD](./ci-cd.mdx#caches).
+
+### Java checks and caching
+
+`gate:server` invokes Gradle once for build-script formatting, Java formatting and PMD. Gradle owns
+their inputs and cached outputs; Vite does not cache a second verdict over the Java build. The scoped
+commands `format:java:check` and `lint:java` use the same native tasks. Test execution remains uncached.
+
+`vp run --no-cache check` disables Vite's cache, not Gradle's. To inspect a Java check without task-output
+or configuration-cache reuse, run:
+
+```sh
+./server/gradlew -p server :spotlessCheck :application:spotlessCheck :application:pmdMain \
+  --rerun-tasks --no-build-cache --no-configuration-cache --profile
+```
+
+The generated HTML report is `server/build/reports/profile/profile-*.html`. Keep clean, warm and cache-restored
+measurements separate; [Gradle's performance guide](https://docs.gradle.org/current/userguide/performance.html)
+explains why a baseline is needed before changing the build.
+
+PMD must analyze every selected source successfully: a report containing processing or configuration
+errors fails the task, even when it contains no rule violations. `vp run gate:pmd-canary` proves this
+with clean, rule-violating and unparseable sources in a temporary directory. It checks the production
+task's source coverage and annotation policy without editing or compiling the application's source
+files. CI runs it when its implementation or PMD wiring changes.
 
 The facts the graph relies on are gates of their own: `gate:runner-contract` proves how `vp run`
 executes commands, and `gate:lint-contract` proves every house rule still fires through `vp lint`.

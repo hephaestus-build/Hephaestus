@@ -416,6 +416,9 @@ void describe("CI contract", () => {
 	});
 
 	void test("Gradle lock changes rebuild and verify the shipped server", async () => {
+		const build = await readFile("server/build.gradle.kts", "utf8");
+		assert.match(build, /lockAllConfigurations\(\)/);
+		assert.match(build, /lockMode\.set\(LockMode\.STRICT\)/);
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const filter = step(workflow, ["jobs", "detect-changes"], "dorny/paths-filter");
 		const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
@@ -424,6 +427,35 @@ void describe("CI contract", () => {
 			for (const input of ["server/application/gradle.lockfile", "server/settings-gradle.lockfile"])
 				assert.ok(paths.includes(input), `${gate} must include ${input}`);
 		}
+		assert.ok(asArray(filters.e2e, "browser test paths").includes(".java-version"));
+	});
+
+	void test("security mutation checks follow their Gradle launcher and toolchain inputs", async () => {
+		const workflow = parseDocument(
+			await readFile(".github/workflows/security-mutation.yml", "utf8"),
+		);
+		const node = workflow.getIn(["on", "pull_request", "paths"]);
+		assert.ok(isSeq(node));
+		const paths = asArray(node.toJSON(), "mutation paths");
+		for (const input of [
+			".github/actions/setup-caches/**",
+			".java-version",
+			"scripts/run-gradlew.ts",
+		])
+			assert.ok(paths.includes(input), `security mutation checks must include ${input}`);
+	});
+
+	void test("changes to the PMD canary exercise it even without server source changes", async () => {
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const filter = step(workflow, ["jobs", "detect-changes"], "dorny/paths-filter");
+		const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
+		const paths = asArray(filters["pmd-canary"], "PMD canary paths");
+		for (const input of [
+			"scripts/check-pmd-canary.ts",
+			"scripts/check-pmd-canary.test.ts",
+			"vite.config.ts",
+		])
+			assert.ok(paths.includes(input), `PMD canary must include ${input}`);
 	});
 
 	void test("runs the integration tier once, under the status gate, off an untemplated command", async () => {
@@ -1534,6 +1566,56 @@ void describe("CI contract", () => {
 		}
 	});
 
+	void test("generates verified Gradle snapshots without giving pull request code write access", async () => {
+		const source = await readFile(".github/workflows/dependency-graph.yml", "utf8");
+		const workflow = parseDocument(source);
+		assert.equal(workflow.get("name"), "Gradle dependency graph");
+		assert.equal(workflow.getIn(["jobs", "generate", "permissions", "contents"]), "read");
+		assert.doesNotMatch(
+			source,
+			/: write|verification=off|write-verification-metadata|dependency-submission@/,
+		);
+		const setup = stepInputs(namedStep(workflow, ["jobs", "generate"], "Set up the Java build"));
+		assert.equal(setup.get("dependency-graph"), "generate-and-upload");
+		const resolve = namedStep(workflow, ["jobs", "generate"], "Resolve the dependency graph");
+		assert.equal(resolve.get("working-directory"), "server");
+		assert.equal(resolve.get("run"), "./gradlew dependencies --no-configuration-cache");
+		assert.equal(
+			workflow.getIn(["jobs", "generate", "env", "GITHUB_DEPENDENCY_GRAPH_JOB_CORRELATOR"]),
+			"server",
+		);
+		assert.equal(
+			namedStep(workflow, ["jobs", "generate"], "Require the snapshot").get("run"),
+			"test -s dependency-graph-reports/server.json",
+		);
+		const action = parseDocument(await readFile(".github/actions/setup-caches/action.yml", "utf8"));
+		assert.equal(action.getIn(["inputs", "dependency-graph", "default"]), "disabled");
+	});
+
+	void test("submits dependency snapshot data without executing the originating checkout", async () => {
+		const source = await readFile(".github/workflows/submit-dependency-graph.yml", "utf8");
+		const workflow = parseDocument(source);
+		assert.equal(workflow.getIn(["on", "workflow_run", "workflows", 0]), "Gradle dependency graph");
+		assert.equal(workflow.getIn(["on", "workflow_run", "types", 0]), "completed");
+		assert.equal(
+			workflow.getIn(["jobs", "submit", "if"]),
+			"github.event.workflow_run.conclusion == 'success'",
+		);
+		assert.equal(workflow.getIn(["jobs", "submit", "permissions", "contents"]), "write");
+		assert.equal(workflow.getIn(["jobs", "submit", "permissions", "actions"]), "read");
+		const submission = step(workflow, ["jobs", "submit"], "gradle/actions/dependency-submission");
+		assert.equal(submission.get("dependency-graph"), "download-and-submit");
+		assert.equal(submission.get("cache-disabled"), true);
+		assert.doesNotMatch(
+			source,
+			/uses: actions\/checkout|uses: \.\/|run:.*(?:gradlew|node|bash|curl)/,
+		);
+		assert.equal(
+			namedStep(workflow, ["jobs", "submit"], "Require the submitted snapshot").get("run"),
+			"test -s dependency-graph-reports/server.json",
+		);
+	});
+
 	void test("blocks dependency regressions across the release trust boundary", async () => {
 		const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
 		const securityConfig = pathFilter(orchestrator, "security-config");
@@ -1552,6 +1634,8 @@ void describe("CI contract", () => {
 		);
 		const review = step(workflow, reviewPath, "actions/dependency-review-action");
 		assert.equal(review.get("config-file"), "./.github/dependency-review-config.yml");
+		assert.equal(review.get("retry-on-snapshot-warnings"), true);
+		assert.equal(review.get("retry-on-snapshot-warnings-timeout"), 600);
 
 		const config = parseDocument(await readFile(".github/dependency-review-config.yml", "utf8"));
 		assert.equal(config.get("warn-only"), true);
@@ -1567,6 +1651,7 @@ void describe("CI contract", () => {
 		);
 
 		const scanPath = ["jobs", "security-scan"];
+		assert.equal(workflow.getIn([...scanPath, "env", "TRIVY_INCLUDE_DEV_DEPS"]), "true");
 		const secretScan = stepInputs(namedStep(workflow, scanPath, "Secret detection"));
 		assert.equal(
 			secretScan.get("base"),
@@ -1886,19 +1971,22 @@ void test("the task graph keeps its cache posture", async () => {
 			assert.ok(isGroup || task.cache === false, `${name} must be a group or uncached`);
 		}
 	}
-	// Java quality gates remain serialized and name the JDK they read.
+	// One native build owns Java quality, inputs and cached outputs; no outer verdict can hide it.
 	const serverCommands = commandsOf(tasks["gate:server"]);
-	assert.ok(
-		serverCommands.indexOf("vp run gate:server-format") <
-			serverCommands.indexOf("vp run gate:server-lint"),
+	assert.equal(serverCommands.length, 1);
+	assert.match(
+		serverCommands[0] ?? "",
+		/run-gradlew\.ts.*:spotlessCheck.*:application:spotlessCheck.*:application:pmdMain/,
 	);
 	assert.equal(tasks["prepare:server:generated"], undefined, "Gradle owns generation dependencies");
-	for (const entry of ["gate:server-format", "gate:server-lint", "gate:docs-lint"])
-		assert.ok(Array.isArray(asRecord(tasks[entry], entry).input), `${entry} names its inputs`);
-	for (const entry of ["gate:server-format", "gate:server-lint"]) {
-		const env = asRecord(tasks[entry], entry).env;
-		assert.ok(Array.isArray(env) && env.includes("JAVA_HOME"), `${entry} names JAVA_HOME`);
+	for (const entry of ["gate:server", "format:java:check", "lint:java"]) {
+		assert.equal(
+			asRecord(tasks[entry], entry).cache,
+			false,
+			`${entry} delegates caching to Gradle`,
+		);
 	}
+	assert.ok(Array.isArray(asRecord(tasks["gate:docs-lint"], "gate:docs-lint").input));
 
 	for (const [file, source] of await workflowSources()) {
 		assert.doesNotMatch(
@@ -2080,7 +2168,9 @@ void test("unchanged quality legs are skipped before runner allocation", async (
 	]) {
 		assert.equal(
 			workflow.getIn(["jobs", leg, "if"]),
-			`inputs.should_skip != 'true' && inputs.${scope}_changed == 'true'`,
+			leg === "server"
+				? "inputs.should_skip != 'true' && (inputs.application_server_changed == 'true' || inputs.pmd_canary == 'true')"
+				: `inputs.should_skip != 'true' && inputs.${scope}_changed == 'true'`,
 		);
 		assert.equal(workflow.getIn(["jobs", leg, "uses"]), "./.github/workflows/ci-quality-leg.yml");
 		assert.equal(workflow.getIn(["jobs", leg, "with", "leg"]), leg);

@@ -14,6 +14,11 @@ spring:
     config:
         import: optional:file:.env[.properties]
 
+    # Moments enables scheduling independently of our runtime-role gate; no calendar events are used.
+    modulith:
+        moments:
+            enabled: false
+
     threads:
         virtual:
             enabled: true

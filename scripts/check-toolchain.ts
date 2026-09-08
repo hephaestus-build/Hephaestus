@@ -187,7 +187,7 @@ for (const name of Object.keys(overrides).filter((entry) => entry in BUNDLED_PIN
 		throw new Error(`pnpm-workspace.yaml overrides.${name} must pin through the catalog`);
 }
 
-// The JDK line is stated once: CI and Gradle both read `.java-version`.
+// CI and Gradle read `.java-version`; Renovate cannot parse the indirect toolchain expression.
 const javaVersion = readFileSync(".java-version", "utf8").trim();
 const gradleBuild = readFileSync("server/build.gradle.kts", "utf8");
 if (
@@ -195,6 +195,11 @@ if (
 	!gradleBuild.includes('file("../.java-version").readText().trim().toInt()')
 )
 	throw new Error("Gradle must compile with the JDK line from .java-version");
+const renovate = readJson("renovate.json");
+if (asRecord(renovate.constraints, "Renovate constraints").java !== javaVersion)
+	throw new Error(
+		"Renovate constraints.java must restate .java-version for Gradle artifact updates",
+	);
 for (const file of execFileSync("git", ["ls-files", ".github"], { encoding: "utf8" }).split("\n")) {
 	if (!/\.ya?ml$/.test(file)) continue;
 	const source = readFileSync(file, "utf8");

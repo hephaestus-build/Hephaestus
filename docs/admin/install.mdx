@@ -265,8 +265,11 @@ instance to users. See [Legal Pages](./legal-pages).
 
 ## Upgrades
 
-Any release upgrades directly to any later one — no intermediate steps. Support window and
-what a version number promises: [Compatibility Policy](./compatibility-policy).
+Read the target release's migration instructions before starting its images. Pre-1.0 upgrades may
+require an intermediate release or manual preparation; the [Compatibility Policy](./compatibility-policy)
+defines the guarantee and support window. Existing databases crossing the PostgreSQL 18/Liquibase
+baseline transition must complete the [baseline synchronization runbook](./liquibase-baseline-runbook.md)
+first. The commands below do not perform that preparation.
 
 ```bash
 # 1. Back up first — see Backup & Restore.

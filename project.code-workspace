@@ -31,7 +31,8 @@
 			"**/.gradle/**",
 		],
 		"files.exclude": {
-			"**/target": true,
+			"**/build": true,
+			"**/.gradle": true,
 		},
 		"scm.defaultViewMode": "tree",
 		"diffEditor.renderSideBySide": false,

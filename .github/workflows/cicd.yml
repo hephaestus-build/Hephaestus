@@ -231,6 +231,7 @@ jobs:
               - 'server/gradle/**'
               - 'server/gradlew*'
             e2e:
+              - '.java-version'
               - 'webapp/e2e/**'
               - 'webapp/src/**'
               - 'webapp/public/**'
@@ -326,6 +327,13 @@ jobs:
               - '.github/workflows/ci-docker-build.yml'
               - '.github/workflows/reusable-docker-build.yml'
             pmd-canary:
+              - 'scripts/check-pmd-canary.ts'
+              - 'scripts/check-pmd-canary.test.ts'
+              - 'scripts/lib/json.ts'
+              - 'scripts/lib/process.ts'
+              - 'vite.config.ts'
+              - '.java-version'
+              - 'pnpm-lock.yaml'
               - 'server/pmd-ruleset.xml'
               - 'server/application/build.gradle.kts'
               - 'server/application/gradle.lockfile'

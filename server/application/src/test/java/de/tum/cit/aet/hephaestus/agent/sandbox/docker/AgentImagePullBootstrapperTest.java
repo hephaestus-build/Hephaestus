@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Map;
 import java.util.Optional;
@@ -19,6 +20,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class AgentImagePullBootstrapperTest extends BaseUnitTest {
 
@@ -33,6 +35,22 @@ class AgentImagePullBootstrapperTest extends BaseUnitTest {
                 new AgentImageProperties(IMAGE, policy),
                 registry,
                 new AgentImageContractVerifier(imageOps, registry));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"default,true,true", "specs,true,false", "default,false,false"})
+    void shouldOnlyBootstrapImagesForWorkersOutsideSpecGeneration(
+            String profile, boolean workerEnabled, boolean expected) {
+        new ApplicationContextRunner()
+                .withPropertyValues(
+                        "spring.profiles.active=" + profile, "hephaestus.runtime.worker.enabled=" + workerEnabled)
+                .withUserConfiguration(AgentImagePullBootstrapper.class)
+                .withBean(DockerImageOperations.class, () -> imageOps)
+                .withBean(AgentImageProperties.class, () -> new AgentImageProperties(IMAGE, ImagePullPolicy.ALWAYS))
+                .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
+                .withBean(AgentImageContractVerifier.class)
+                .run(context -> assertThat(context.getBeansOfType(AgentImagePullBootstrapper.class))
+                        .hasSize(expected ? 1 : 0));
     }
 
     @Test

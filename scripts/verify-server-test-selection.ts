@@ -71,6 +71,7 @@ async function main(): Promise<void> {
 	const reports = resolve(server, "application/build/test-selection");
 	const wrapper = resolve(import.meta.dirname, "run-gradlew.ts");
 	const tiers = ["test", "architectureTest", "integrationTest", "databaseTest"];
+	const shardInventories = ["integrationProvidersInventory", "integrationApplicationInventory"];
 	// Dry-run reports are isolated from execution and coverage reports.
 	await rm(reports, { recursive: true, force: true });
 	await run(
@@ -79,6 +80,7 @@ async function main(): Promise<void> {
 			wrapper,
 			":application:testInventory",
 			...tiers.map((tier) => `:application:${tier}`),
+			...shardInventories.map((inventory) => `:application:${inventory}`),
 			"-PtestSelection=true",
 		],
 		{
@@ -92,15 +94,9 @@ async function main(): Promise<void> {
 	);
 	assertCoverage(all, tierTests, false);
 	const integration = await readIdentities(resolve(reports, "integrationTest", "xml"));
-	const shards: Set<string>[] = [];
-	for (const shard of ["providers-and-startup", "application"]) {
-		await rm(resolve(reports, "integrationTest"), { recursive: true, force: true });
-		await run(process.execPath, [wrapper, ":application:integrationTest", "-PtestSelection=true"], {
-			cwd: server,
-			env: { ...process.env, HEPHAESTUS_INTEGRATION_SHARD: shard },
-		});
-		shards.push(await readIdentities(resolve(reports, "integrationTest", "xml")));
-	}
+	const shards = await Promise.all(
+		shardInventories.map((inventory) => readIdentities(resolve(reports, inventory, "xml"))),
+	);
 	assertCoverage(integration, shards, true);
 	console.log(
 		`JUnit discovery: ${all.size} non-live discovery entries covered; ${integration.size} integration entries partitioned exactly once.`,

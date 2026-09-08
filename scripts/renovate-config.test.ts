@@ -12,6 +12,28 @@ assert.ok(Array.isArray(config.extends));
 assert.ok(config.extends.every((entry) => typeof entry === "string"));
 const extensions = config.extends;
 
+void test("Gradle artifact updates use the repository JDK and retain human checksum review", async () => {
+	assert.ok(isRecord(config.constraints));
+	assert.equal(config.constraints.java, (await readFile(".java-version", "utf8")).trim());
+	assert.ok(Array.isArray(config.enabledManagers));
+	assert.ok(config.enabledManagers.includes("gradle"));
+	assert.ok(config.enabledManagers.includes("gradle-wrapper"));
+	assert.ok(!config.enabledManagers.includes("maven"));
+	assert.ok(Array.isArray(config.packageRules));
+	for (const manager of ["gradle", "gradle-wrapper"]) {
+		const rule = config.packageRules
+			.filter(isRecord)
+			.find(
+				(candidate) =>
+					Array.isArray(candidate.matchManagers) &&
+					candidate.matchManagers.includes(manager) &&
+					Array.isArray(candidate.prBodyNotes),
+			);
+		assert.ok(rule, `${manager} updates must explain artifact verification`);
+		assert.match(String(rule.prBodyNotes), /local-development#updating-java-dependencies/);
+	}
+});
+
 void test("dependency updates normalize optional peer snapshots with the pinned pnpm", () => {
 	assert.deepEqual(config.postUpdateOptions, ["pnpmDedupe"]);
 });

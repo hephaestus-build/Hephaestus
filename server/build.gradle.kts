@@ -44,10 +44,16 @@ subprojects {
         options.forkOptions.memoryMaximumSize = "4g"
         options.release.set(javaVersion)
     }
-    dependencyLocking { lockAllConfigurations() }
+    dependencyLocking {
+        lockAllConfigurations()
+        lockMode.set(LockMode.STRICT)
+    }
 }
 
 tasks.named("check") { dependsOn(":application:check") }
+
+// Renovate uses the root dependency report to refresh verification metadata.
+tasks.named("dependencies") { dependsOn(subprojects.map { "${it.path}:dependencies" }) }
 
 spotless {
     kotlinGradle {

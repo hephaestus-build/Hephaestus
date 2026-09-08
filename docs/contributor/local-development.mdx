@@ -77,7 +77,8 @@ The repository commands are the source of truth. Optional editor integrations:
 - [IntelliJ](https://plugins.jetbrains.com/plugin/13180-palantir-java-format)
 - [Eclipse](https://github.com/palantir/palantir-java-format/tree/develop/eclipse_plugin)
 
-Other editors should run the repository command.
+Other editors should run the repository command. VS Code does not format Java on save: a Java
+formatter with a different style would undo Spotless's Palantir formatting.
 
 ## Application server
 
@@ -440,6 +441,10 @@ spec. Commit both with the change.
 ### Updating Java dependencies
 
 Edit `server/gradle/libs.versions.toml`, then resolve the graphs and exercise the changed tools.
+Strict dependency locking rejects missing lock state as well as version drift; do not delete a
+lockfile or disable verification to make an update pass.
+The root `dependencies` report covers both projects, including PMD's auxiliary classpath, so
+Renovate's standard lock and checksum commands refresh the same graphs used by source builds.
 Set `GRADLE_USER_HOME` to an empty temporary directory and disable configuration caching when
 generating metadata, so cached resolution cannot omit parent POM or module-descriptor checksums:
 
@@ -457,3 +462,8 @@ what was downloaded; it does not establish trust. Run the checks again without m
 flags, still without configuration caching and with another empty Gradle user home, to verify fresh
 downloads. Exercise changed generators, formatters, Liquibase or mutation tooling as well: their
 classpaths are separate from the application runtime. Restore your usual Gradle user home afterward.
+
+For a Gradle wrapper update, also run the build with `--warning-mode all` and review plugin
+compatibility before accepting a new major. Do not suppress upstream deprecations to make the
+upgrade appear clean. A JDK-line change updates `.java-version` and Renovate's matching
+`constraints.java`; `gate:toolchain` rejects drift between them.

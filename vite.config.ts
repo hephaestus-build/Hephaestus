@@ -68,18 +68,6 @@ const oxlintTargets = "server docker scripts .changeset .github commitlint.confi
 const oxlintFormat = process.env.GITHUB_ACTIONS === "true" ? "-f github " : "";
 const repoRoot = import.meta.dirname;
 
-// Formatting and PMD do not read the local runtime configuration in `server/.env`.
-const gradleInputs = [
-	"server/**",
-	"!server/**/build/**",
-	"!server/**/.gradle/**",
-	"!server/postgres-data/**",
-	"!server/.env",
-	"scripts/run-gradlew.ts",
-	".java-version",
-];
-// The wrapper reads these to select and configure its JVM.
-const gradleEnv = ["JAVA_HOME", "GRADLE_OPTS", "JAVA_OPTS"];
 // The docs lint's file set, plus the trees markdownlint reaches outside `docs/`, read from its own
 // config so the fingerprint cannot miss a scope change.
 const markdownScope = (
@@ -170,7 +158,7 @@ export default defineConfig({
 				"format:config",
 			]),
 			"format:check": group([
-				"gate:server-format",
+				"format:java:check",
 				"gate:webapp-format",
 				"gate:agents-format",
 				"gate:load-format",
@@ -178,7 +166,7 @@ export default defineConfig({
 				"gate:config-format",
 			]),
 			"format:java": run(`${gradlew} :spotlessApply :application:spotlessApply --quiet`),
-			"format:java:check": group(["gate:server-format"]),
+			"format:java:check": run(`${gradlew} :spotlessCheck :application:spotlessCheck --quiet`),
 			"format:webapp": run(`vp fmt --write ${webappSources}`),
 			"format:webapp:check": group(["gate:webapp-format"]),
 			"format:agents": run(`vp fmt --write ${agentSources}`),
@@ -192,9 +180,9 @@ export default defineConfig({
 			"format:achievements": run("node scripts/format-achievements.ts"),
 
 			// Lint and typecheck
-			lint: group(["gate:server-lint", "lint:webapp", "gate:agents-lint", "gate:docs-lint"]),
+			lint: group(["lint:java", "lint:webapp", "gate:agents-lint", "gate:docs-lint"]),
 			typecheck: group(["typecheck:webapp", "gate:scripts-typecheck", "gate:agents-typecheck"]),
-			"lint:java": group(["gate:server-lint"]),
+			"lint:java": run(`${gradlew} :application:pmdMain --quiet`),
 			"lint:java:report": run(
 				`${gradlew} :application:pmdMain && echo 'Report: server/application/build/reports/pmd/main.html'`,
 			),
@@ -232,21 +220,13 @@ export default defineConfig({
 				"node --test scripts/verify-changesets.test.ts scripts/sync-release-version.test.ts",
 			),
 
-			// Application server. One Gradle process per checkout: the lint waits for the format check.
+			// Gradle owns Java task inputs and cached outputs; Vite starts it once per quality run.
 			"gate:java-nullness": run(
 				"node scripts/check-java-nullness.ts && node --test scripts/check-java-nullness.test.ts",
 			),
-			"gate:server-format": cachedOn(
-				`${gradlew} :spotlessCheck :application:spotlessCheck --quiet`,
-				gradleInputs,
-				{
-					env: gradleEnv,
-				},
+			"gate:server": run(
+				`${gradlew} :spotlessCheck :application:spotlessCheck :application:pmdMain --quiet`,
 			),
-			"gate:server-lint": cachedOn(`${gradlew} :application:pmdMain --quiet`, gradleInputs, {
-				env: gradleEnv,
-			}),
-			"gate:server": run(["vp run gate:server-format", "vp run gate:server-lint"]),
 			"gate:pmd-canary": run("node scripts/check-pmd-canary.ts"),
 			"test:server:selection": run("node scripts/verify-server-test-selection.ts"),
 			"test:server:unit": run(

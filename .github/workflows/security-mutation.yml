@@ -6,6 +6,9 @@ on:
     paths:
       - ".github/workflows/security-mutation.yml"
       - ".github/actions/setup-toolchain/**"
+      - ".github/actions/setup-caches/**"
+      - ".java-version"
+      - "scripts/run-gradlew.ts"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
