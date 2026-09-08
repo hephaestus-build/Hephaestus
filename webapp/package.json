@@ -30,7 +30,7 @@
 		"generate:api": "openapi-ts"
 	},
 	"dependencies": {
-		"@ai-sdk/react": "4.0.88",
+		"@ai-sdk/react": "4.0.96",
 		"@base-ui/react": "1.7.0",
 		"@dnd-kit/core": "^6.3.1",
 		"@dnd-kit/modifiers": "^9.0.0",
@@ -45,7 +45,7 @@
 		"@tanstack/react-router-devtools": "1.167.1",
 		"@tanstack/react-table": "9.1.2",
 		"@xyflow/react": "^12.11.5",
-		"ai": "7.0.85",
+		"ai": "7.0.93",
 		"class-variance-authority": "0.7.1",
 		"clsx": "2.1.1",
 		"date-fns": "4.4.0",
