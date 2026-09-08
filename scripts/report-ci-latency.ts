@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, writeFile } from "node:fs/promises";
 
 import { versionBranch } from "./dispatch-version-pr-ci.ts";
 import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
@@ -33,12 +33,12 @@ export function isFullVerification(jobs: readonly { name: string }[]) {
 	return (
 		[
 			"Test / App Server: Unit and architecture",
-			"Quality / Webapp",
 			"Quality / Webapp: Stories",
 			"Build / Webapp: E2E",
 			"Build / App Server: Database",
 			"Build / App Server: Generated artifacts",
 		].every((name) => names.has(name)) &&
+		(names.has("Quality / Webapp") || names.has("Quality / Webapp / Gates")) &&
 		jobs.filter((job) => job.name.startsWith("Test / App Server: Integration (")).length === 2
 	);
 }
@@ -69,6 +69,25 @@ export function latencyBudget(values: number[]) {
 					? "within-budget"
 					: "exceeded",
 	};
+}
+
+export function renderLatencyBudget(budget: ReturnType<typeof latencyBudget>): string {
+	const seconds = (value: number | null) =>
+		value === null ? "Not available" : `${value.toFixed(1)}s`;
+	return [
+		"## Pull-request latency (advisory)",
+		"",
+		`Status: **${budget.status}** (${budget.count}/10 qualifying runs).`,
+		"",
+		"| Metric | Observed | Target |",
+		"|---|---:|---:|",
+		`| Median | ${seconds(budget.p50Seconds)} | ${budget.p50LimitSeconds}s |`,
+		`| p90 | ${seconds(budget.p90Seconds)} | ${budget.p90LimitSeconds}s |`,
+		"",
+		"Historical timings include runner waiting and earlier commits; this is not a verdict on the current change.",
+		"Inspect the retained ci-latency.json run timelines to distinguish queue delays from execution before changing CI.",
+		"",
+	].join("\n");
 }
 
 if (import.meta.main) {
@@ -130,6 +149,16 @@ if (import.meta.main) {
 	await mkdir("tmp/ci-metrics", { recursive: true });
 	await writeFile("tmp/ci-metrics/ci-latency.json", `${JSON.stringify(report, null, 2)}\n`);
 	process.stdout.write(`${JSON.stringify(budget, null, 2)}\n`);
-	if (budget.status !== "within-budget")
-		throw new Error(`PR latency budget: ${budget.status}; see tmp/ci-metrics/ci-latency.json`);
+	const rendered = renderLatencyBudget(budget);
+	process.stdout.write(rendered);
+	if (process.env.GITHUB_STEP_SUMMARY !== undefined)
+		await appendFile(process.env.GITHUB_STEP_SUMMARY, rendered);
+	if (budget.status === "exceeded")
+		process.stdout.write(
+			"::warning title=PR latency target exceeded::Historical PR latency exceeds the target; inspect the job summary and retained run timelines.\n",
+		);
+	else if (budget.status === "insufficient-data")
+		process.stdout.write(
+			"::notice title=PR latency baseline incomplete::Fewer than ten qualifying runs; no performance verdict yet.\n",
+		);
 }

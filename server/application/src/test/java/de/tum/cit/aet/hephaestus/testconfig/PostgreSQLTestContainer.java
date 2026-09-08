@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.testconfig;
 
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -15,6 +16,8 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.images.builder.ImageFromDockerfile;
+import org.testcontainers.utility.DockerImageName;
 
 public final class PostgreSQLTestContainer {
 
@@ -115,7 +118,11 @@ public final class PostgreSQLTestContainer {
 
     @SuppressWarnings("resource") // Closed by the JVM shutdown hook.
     private static PostgreSQLContainer<?> createContainer() {
-        PostgreSQLContainer<?> newContainer = new PostgreSQLContainer<>("postgres:18")
+        PostgreSQLContainer<?> newContainer = new PostgreSQLContainer<>(DockerImageName.parse(new ImageFromDockerfile()
+                                .withDockerfile(
+                                        Path.of(System.getProperty("basedir", "."), "../../docker/postgres/Dockerfile"))
+                                .get())
+                        .asCompatibleSubstituteFor("postgres"))
                 .withDatabaseName(DEFAULT_TEST_DB)
                 .withUsername(DEFAULT_TEST_USER)
                 .withPassword(DEFAULT_TEST_PASSWORD);
@@ -140,7 +147,7 @@ public final class PostgreSQLTestContainer {
         return newContainer;
     }
 
-    /** Enables extensions required by Hibernate-generated test schemas because Liquibase is disabled in tests. */
+    // Hibernate-created schemas need citext without relying on Liquibase.
     private static void ensureExtensions(String jdbcUrl, String username, String password) {
         try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password)) {
             connection.createStatement().execute("CREATE EXTENSION IF NOT EXISTS citext");

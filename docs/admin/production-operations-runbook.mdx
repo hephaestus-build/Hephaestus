@@ -82,6 +82,9 @@ decision. Release affects every workspace and never flushes suppressed feedback.
 
 Use a restricted staging copy of production, subject to the same access and retention rules as the
 backup. Apply the pre-boot isolation below **before** restoring secrets or starting application code.
+When crossing the v0.77.4 baseline, complete the
+[baseline synchronization prerequisites](./liquibase-baseline-runbook#before-deployment) before candidate
+startup; rehearse the synchronization on this same isolated copy.
 Run Liquibase **update**, not just `validate` or SQL generation: starting the target release's
 application server with the production profile runs Spring Boot's Liquibase update against the staging
 database. Use that exact release's changelog, contexts, PostgreSQL image/extensions, secrets and role
@@ -101,7 +104,9 @@ not your production data; they do not replace this staging update.
 
 [Install → Upgrades](./install#upgrades) prepares the release; the silent checklist above owns startup.
 Follow the [compatibility policy](./compatibility-policy#upgrade-guarantee) for skip-version support and
-read intervening release notes, including PostgreSQL-major migration steps. In-place downgrades are unsupported.
+read intervening release notes. PostgreSQL 18 and the
+[baseline synchronization](./liquibase-baseline-runbook) are required when crossing the v0.77.4 cut-point.
+In-place downgrades are unsupported.
 
 Before manual changes, [pause reconciliation](./pull-based-deployment#operating-it) and wait for any
 active service run to finish. Before resuming it, ensure the channel matches the recovered release or

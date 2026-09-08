@@ -46,7 +46,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
         var request = new CreateWorkspaceLlmConnectionRequestDTO(
                 slug,
                 "My Provider",
-                "https://api.openai.com",
+                LlmCatalogTestFixtures.PUBLIC_BASE_URL,
                 "openai-completions",
                 LlmAuthMode.BEARER,
                 "sk-workspace-secret",

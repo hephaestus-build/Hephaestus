@@ -4,6 +4,7 @@
 **Date:** 2026-06-09
 **Authors:** Felix T.J. Dietrich
 **Supersedes (partition sub-decision only):** [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md)
+**PostgreSQL version superseded by:** [ADR 0038](0038-postgresql-18-release-baseline.md)
 
 ## Context
 

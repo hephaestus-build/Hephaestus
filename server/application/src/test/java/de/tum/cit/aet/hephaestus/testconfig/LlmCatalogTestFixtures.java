@@ -24,6 +24,9 @@ public final class LlmCatalogTestFixtures {
      */
     public static final String BASE_URL = "https://api.openai.example/v1";
 
+    /** Public IP literal for URL-validation tests: no DNS lookup or HTTP request is needed. */
+    public static final String PUBLIC_BASE_URL = "https://8.8.8.8/v1";
+
     private LlmCatalogTestFixtures() {}
 
     public static LlmConnection connection(String slug) {

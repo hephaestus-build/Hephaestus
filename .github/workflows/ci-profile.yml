@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
+    inputs:
+      suite:
+        description: "Server tier to profile"
+        type: choice
+        default: all
+        options: [all, integration, verification]
 
 concurrency:
   group: ci-profile-${{ github.ref }}
@@ -14,6 +20,7 @@ permissions: {}
 jobs:
   server-integration:
     name: "Server integration profile"
+    if: github.event_name != 'workflow_dispatch' || inputs.suite != 'verification'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -102,14 +109,14 @@ jobs:
           server/application/target/surefire-reports ci-metrics/server-integration-profile.json
           ci-metrics/server-integration.log ci-metrics/server-integration-resource.txt
 
-      - name: Enforce performance budgets
+      - name: Report performance budgets
         if: success() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         run: |
           # Do not compare a rerun against its own previous attempt.
           rm -f "ci-profile-history/${{ github.run_id }}.json"
           node scripts/check-ci-performance.ts ci-metrics/server-integration-profile.json ci-profile-history
 
-      # Keep budget failures in history so sustained regressions remain detectable.
+      # Retain valid out-of-budget samples so sustained regressions remain detectable.
       - name: Record completed profile
         id: record
         if: ${{ !cancelled() && steps.profile.outcome == 'success' && steps.recording.outcome == 'success' && steps.summary.outcome == 'success' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
@@ -144,9 +151,66 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  server-verification:
+    name: "Server unit and architecture profile"
+    needs: server-integration
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.suite != 'integration') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+      - uses: ./.github/actions/setup-caches
+        with:
+          cache-type: application-server-reactor
+          os: ${{ runner.os }}
+
+      - name: Run unit and architecture verification with JFR
+        id: profile
+        shell: bash
+        run: |
+          mkdir -p ci-metrics/maven
+          /usr/bin/time -v -o ci-metrics/server-verification-resource.txt \
+            vp run test:server:verification \
+            '-Dhephaestus.test.jvmArgs=-XX:StartFlightRecording=filename=target/verification-profile.jfr,settings=profile,dumponexit=true -Xlog:jfr+startup=off' \
+            -Dprofile=server-verification -DprofileFormat=JSON \
+            -Dmaven-profiler-report-directory=../ci-metrics/maven \
+            2>&1 | tee ci-metrics/server-verification.log
+
+      - name: Validate profile artifacts
+        if: ${{ !cancelled() && steps.profile.outcome == 'success' }}
+        run: |
+          jq -e '.projects | length > 0' ci-metrics/maven/*.json > /dev/null
+          jfr summary server/application/target/verification-profile.jfr > ci-metrics/jfr-summary.txt
+
+      - name: Summarize verification results
+        if: ${{ !cancelled() }}
+        run: >-
+          vp run report:test-results "Server Unit and Architecture Profile"
+          server/application/target/surefire-reports ci-metrics/server-verification-profile.json
+          ci-metrics/server-verification.log ci-metrics/server-verification-resource.txt verification
+
+      - name: Upload profile
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: server-verification-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            server/application/target/verification-profile.jfr
+            server/application/target/surefire-reports
+            ci-metrics
+          if-no-files-found: error
+          retention-days: 14
+
   pr-latency:
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-    name: Pull-request latency budget
+    name: Pull-request latency report
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
