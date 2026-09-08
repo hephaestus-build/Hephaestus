@@ -69,9 +69,19 @@ public class WorkspaceAccountMembershipSync {
     /** Workspace creation uses a verified account, never a provider display name or cached actor ID. */
     @Transactional
     public void createForActor(Workspace workspace, User actor, WorkspaceRole role) {
+        createForActor(workspace, actor, role, true);
+    }
+
+    /** An installation may precede sign-in, and an organization is not a human account. */
+    @Transactional
+    public void createForInstallation(Workspace workspace, User actor) {
+        createForActor(workspace, actor, WorkspaceRole.OWNER, false);
+    }
+
+    private void createForActor(Workspace workspace, User actor, WorkspaceRole role, boolean requireOwner) {
         workspaces.findByIdForUpdate(workspace.getId()).orElseThrow();
         var accountId = accountId(actor);
-        if (accountId.isEmpty() && role == WorkspaceRole.OWNER)
+        if (accountId.isEmpty() && role == WorkspaceRole.OWNER && requireOwner)
             throw new IllegalStateException(
                     "Connect the workspace owner's SCM identity to an active account before creating the workspace");
         accountId.ifPresent(id -> {

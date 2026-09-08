@@ -350,6 +350,18 @@ public class WorkspaceMembershipService {
         return workspaceMembershipRepository.save(membership);
     }
 
+    /** Records the provider installation owner without inventing a human account for an organization. */
+    @Transactional
+    public void recordInstallationOwner(Workspace workspace, Long userId) {
+        User actor = entityManager.find(User.class, userId);
+        if (actor == null) throw new IllegalArgumentException("Installation owner actor does not exist");
+        workspaceMembershipRepository
+                .findByWorkspace_IdAndUser_Id(workspace.getId(), userId)
+                .orElseGet(() -> workspaceMembershipRepository.save(
+                        createMembershipInternal(workspace, actor, WorkspaceMembership.WorkspaceRole.OWNER)));
+        accountMembershipSync.createForInstallation(workspace, actor);
+    }
+
     private WorkspaceMembership createMembershipInternal(Workspace workspace, User user) {
         return createMembershipInternal(workspace, user, WorkspaceMembership.WorkspaceRole.MEMBER);
     }

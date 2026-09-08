@@ -20,6 +20,7 @@ import { adaptApiUserTeams } from "@/components/admin/types";
 import type { UsersTableView } from "@/components/admin/UsersTable";
 import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
+import { useAuth } from "@/integrations/auth";
 import { workspaceMembershipQueryOptions } from "@/integrations/auth/guard";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -45,6 +46,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/mem
 });
 
 function AdminMembersContainer() {
+	const { isAppAdmin } = useAuth();
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
 	const {
@@ -164,6 +166,10 @@ function AdminMembersContainer() {
 			accountMemberships={{
 				members: accountMembers.data ?? [],
 				isOwner: currentMembership.data?.role === "OWNER",
+				canInitializeOwner:
+					isAppAdmin &&
+					accountMembers.isSuccess &&
+					!accountMembers.data.some((member) => member.role === "OWNER" && !member.suspended),
 				isLoading: accountMembers.isLoading,
 				error: accountMembers.error,
 				isSaving: assignMembership.isPending || suspendMembership.isPending,

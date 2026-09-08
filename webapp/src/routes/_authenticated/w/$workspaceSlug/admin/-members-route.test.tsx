@@ -80,6 +80,46 @@ describe("workspace members route", () => {
 		expect(assignments).toBe(2);
 	});
 
+	it("lets an instance administrator appoint the first owner but does not keep that authority", async () => {
+		mockMembersRoute();
+		const user = userEvent.setup();
+		const owner = {
+			accountId: 73,
+			displayName: "Initial owner",
+			role: "OWNER",
+			source: "MANUAL",
+			suspended: false,
+		};
+		let members: (typeof owner)[] = [];
+		server.use(
+			http.get("*/workspaces/acme/members/me", () =>
+				HttpResponse.json({
+					accountId: 42,
+					displayName: "Instance administrator",
+					role: "ADMIN",
+					suspended: false,
+				}),
+			),
+			http.get("*/workspaces/acme/members", () => HttpResponse.json(members)),
+			http.post("*/workspaces/acme/members/assign", async ({ request }) => {
+				expect(await request.json()).toStrictEqual({ accountId: 73, role: "OWNER" });
+				members = [owner];
+				return HttpResponse.json(owner);
+			}),
+		);
+		renderRouteAtWithRouter("/w/acme/admin/members");
+		await screen.findByText(/assign its first owner/, {}, ROUTE_RENDER_WAIT);
+		await user.click(screen.getByRole("button", { name: "Add member" }));
+		const dialog = await screen.findByRole("dialog");
+		await user.type(within(dialog).getByLabelText("Account ID"), "73");
+		await user.click(within(dialog).getByRole("combobox", { name: "Workspace role" }));
+		await user.click(await screen.findByRole("option", { name: "Owner" }));
+		await user.click(within(dialog).getByRole("button", { name: "Save access" }));
+		await screen.findByText("Initial owner");
+		await waitFor(() => expect(screen.queryByText(/assign its first owner/)).toBeNull());
+		expect(screen.queryByRole("button", { name: "Edit access for Initial owner" })).toBeNull();
+	});
+
 	it("does not trap sidebar navigation", async () => {
 		mockMembersRoute();
 		const { router } = renderRouteAtWithRouter("/w/acme/admin/members");

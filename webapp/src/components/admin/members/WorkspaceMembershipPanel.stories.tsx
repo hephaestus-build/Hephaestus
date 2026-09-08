@@ -65,3 +65,11 @@ export const AddMember: Story = {
 	},
 };
 export const Saving: Story = { args: { isSaving: true } };
+
+export const AwaitingFirstOwner: Story = {
+	args: { members: [], isOwner: false, canInitializeOwner: true },
+	play: async ({ canvas }) => {
+		canvas.getByText(/assign its first owner/);
+		await expect(canvas.getByRole("button", { name: "Add member" })).toBeEnabled();
+	},
+};

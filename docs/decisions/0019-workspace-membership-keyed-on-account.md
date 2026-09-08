@@ -61,3 +61,13 @@ manual grant. Account deletion must transfer final ownership before proceeding.
 
 The additive migration retains an intentionally legacy contributor table name. Renaming or dropping
 that table is not necessary for the authorization split and is not part of this decision.
+
+### GitHub App installation before account ownership
+
+An installation can arrive before a developer signs in, and a GitHub organization is not a human
+account. Installation provisioning records the provider owner without inventing an account or
+matching by username. A verified personal installation owner can receive account ownership; an
+installation with no account owner remains under instance administration until an instance
+administrator explicitly assigns its first owner. That initial assignment is audited and serialized
+with other role changes. Once an active account owner exists, instance administration cannot grant
+additional ownership or take it over; the owner must transfer it.

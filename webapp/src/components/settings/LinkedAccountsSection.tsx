@@ -201,7 +201,12 @@ export function LinkedAccountsSection({
 			</div>
 
 			{isLoading ? (
-				<div className="space-y-2" aria-busy="true" aria-label="Loading connected accounts">
+				<div
+					className="space-y-2"
+					role="group"
+					aria-busy="true"
+					aria-label="Loading connected accounts"
+				>
 					{[0, 1].map((row) => (
 						<div
 							key={row}

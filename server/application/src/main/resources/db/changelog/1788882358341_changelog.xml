@@ -1,11 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
     <changeSet id="1788882358341-1" author="hephaestus">
-        <createSequence incrementBy="1" sequenceName="workspace_account_membership_seq" startValue="1"/>
-    </changeSet>
-    <changeSet id="1788882358341-2" author="hephaestus">
         <createTable tableName="workspace_account_membership">
-            <column defaultValueComputed="nextval('workspace_account_membership_seq'::regclass)" name="id" type="BIGINT">
+            <column autoIncrement="true" name="id" type="BIGINT">
                 <constraints nullable="false" primaryKey="true" primaryKeyName="workspace_account_membershipPK"/>
             </column>
             <column name="account_id" type="BIGINT">
@@ -28,13 +25,13 @@
             </column>
         </createTable>
     </changeSet>
-    <changeSet id="1788882358341-3" author="hephaestus">
+    <changeSet id="1788882358341-2" author="hephaestus">
         <addUniqueConstraint columnNames="workspace_id, account_id" constraintName="uq_workspace_account_membership" tableName="workspace_account_membership"/>
     </changeSet>
-    <changeSet id="1788882358341-4" author="hephaestus">
+    <changeSet id="1788882358341-3" author="hephaestus">
         <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="workspace_account_membership" constraintName="fk_workspace_account_membership_workspace" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
     </changeSet>
-    <changeSet id="1788882358341-5" author="hephaestus">
+    <changeSet id="1788882358341-4" author="hephaestus">
         <addForeignKeyConstraint baseColumnNames="account_id" baseTableName="workspace_account_membership"
                 constraintName="sfk_workspace_account_membership_account" referencedColumnNames="id" referencedTableName="account"/>
         <createIndex tableName="workspace_account_membership" indexName="idx_workspace_account_membership_account">
@@ -48,7 +45,7 @@
             ALTER TABLE login_provider ADD CONSTRAINT ck_login_provider_type CHECK (type IN ('GITHUB', 'GITLAB', 'SLACK', 'OUTLINE', 'OIDC'));
         ]]></sql>
     </changeSet>
-    <changeSet id="1788882358341-6" author="hephaestus">
+    <changeSet id="1788882358341-5" author="hephaestus">
         <preConditions onFail="HALT" onFailMessage="Link at least one existing workspace owner to an active account before upgrading. Match provider ID and immutable subject, never username or email. See the account membership upgrade guide.">
             <sqlCheck expectedResult="0"><![CDATA[
                 SELECT count(DISTINCT original.workspace_id)

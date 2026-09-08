@@ -323,6 +323,31 @@ class WorkspaceMembershipControllerIntegrationTest extends RealAuthIntegrationTe
                 .isOk();
     }
 
+    @Test
+    void shouldAllowOnlyInstanceAdminToAppointFirstOwnerWhenInstallationHasNoAccountOwner() {
+        var operator = account("Installation operator");
+        operator.setAppRole(Account.AppRole.APP_ADMIN);
+        accounts.saveAndFlush(operator);
+        var candidate = account("Initial owner");
+        var workspace = workspace("unclaimed-installation", candidate);
+        memberships.deleteAll(memberships.findByWorkspace_Id(workspace.getId()));
+        var admin = account("Workspace administrator");
+        membership(workspace, admin, WorkspaceRole.ADMIN);
+        assign(workspace, token(admin), admin, WorkspaceRole.OWNER)
+                .expectStatus()
+                .isForbidden();
+        assign(workspace, token(operator), candidate, WorkspaceRole.OWNER)
+                .expectStatus()
+                .isOk();
+        assertThat(memberships.findByWorkspace_IdAndAccountId(workspace.getId(), id(candidate)))
+                .get()
+                .extracting(WorkspaceAccountMembership::getRole)
+                .isEqualTo(WorkspaceRole.OWNER);
+        assign(workspace, token(operator), operator, WorkspaceRole.OWNER)
+                .expectStatus()
+                .isForbidden();
+    }
+
     private static Long id(Account account) {
         return Objects.requireNonNull(account.getId());
     }

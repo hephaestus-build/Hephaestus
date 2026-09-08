@@ -22,7 +22,6 @@ import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugService;
@@ -708,12 +707,12 @@ public class GithubLifecycleListener implements IntegrationLifecycleListener {
         workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
 
         Workspace saved = workspaceRepository.save(workspace);
-        workspaceMembershipService.createMembership(saved, ownerUserId, WorkspaceMembership.WorkspaceRole.OWNER);
+        workspaceMembershipService.recordInstallationOwner(saved, ownerUserId);
         return saved;
     }
 
     /**
-     * Looks up an existing user by login, or creates one from installation webhook account info.
+     * Upserts the installation account by its immutable GitHub identity; login is only profile metadata.
      *
      * @param installationId the GitHub App installation ID
      * @param accountId      the GitHub account database ID
@@ -728,15 +727,6 @@ public class GithubLifecycleListener implements IntegrationLifecycleListener {
             String accountLogin,
             AccountKind accountKind,
             @Nullable String avatarUrl) {
-        var existingUser = userRepository.findByLogin(accountLogin);
-        if (existingUser.isPresent()) {
-            log.info(
-                    "Found existing user for workspace ownership: userLogin={}, userId={}",
-                    LoggingUtils.sanitizeForLog(accountLogin),
-                    existingUser.get().getId());
-            return existingUser.get().getId();
-        }
-
         // Three-step upsert (lock, free conflicts, insert) avoids uk_user_login_lower
         // violations under concurrent installs.
         if (accountId != null) {
@@ -771,9 +761,10 @@ public class GithubLifecycleListener implements IntegrationLifecycleListener {
                     installationId);
             // upsertUser is a native INSERT that doesn't return the generated id; re-fetch for the PK.
             return userRepository
-                    .findByLogin(accountLogin)
+                    .findByNativeIdAndProviderId(accountId, providerId)
                     .map(User::getId)
-                    .orElseThrow(() -> new IllegalStateException("User not found after upsert: login=" + accountLogin));
+                    .orElseThrow(() ->
+                            new IllegalStateException("Installation account was not found after its identity upsert"));
         }
 
         log.warn(

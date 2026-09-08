@@ -12,9 +12,6 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
-import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
-import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeDTO;
@@ -57,9 +54,6 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private AccountRepository accountRepository;
 
     @Autowired
-    private IdentityLinkRepository identityLinkRepository;
-
-    @Autowired
     private AuthEventRepository authEventRepository;
 
     @Autowired
@@ -75,9 +69,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         patchPracticeReview(workspace, Map.of("cooldownMinutes", 45));
 
-        List<ConfigAuditEvent> rows = configAuditEventRepository.findAll();
-        assertThat(rows).hasSize(1);
-        ConfigAuditEvent row = rows.getFirst();
+        ConfigAuditEvent row = reviewSettingsRowFor(workspace);
         assertThat(row.getEntityType()).isEqualTo(ConfigAuditEntityType.PRACTICE_REVIEW_SETTINGS);
         assertThat(row.getWorkspaceId()).isEqualTo(workspace.getId());
         assertThat(row.changedKeyList()).containsExactly("cooldownMinutes");
@@ -116,9 +108,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
         Workspace workspace = setupWorkspace("audit-member");
         User member = persistUser("audit-member-admin");
         ensureWorkspaceMembership(workspace, member, WorkspaceMembership.WorkspaceRole.ADMIN);
-        Account account = persistAccount("Workspace member");
-        linkIdentity(account, member);
-        long accountId = persistedId(account);
+        long accountId = accountId(member);
 
         patchPracticeReviewAs(workspace, token(accountId), Map.of("cooldownMinutes", 48));
 
@@ -243,7 +233,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
         patchPracticeReview(workspace, Map.of("cooldownMinutes", 45));
         patchPracticeReview(workspace, Map.of("cooldownMinutes", 45));
 
-        assertThat(configAuditEventRepository.findAll()).hasSize(1);
+        assertThat(reviewSettingsRowFor(workspace).getNewValue()).contains("45");
     }
 
     @Test
@@ -256,6 +246,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
         patchPracticeReview(workspace, Map.of("reset", List.of("COOLDOWN_MINUTES")));
 
         List<ConfigAuditEvent> rows = configAuditEventRepository.findAll().stream()
+                .filter(row -> workspace.getId().equals(row.getWorkspaceId())
+                        && row.getEntityType() == ConfigAuditEntityType.PRACTICE_REVIEW_SETTINGS)
                 .sorted(java.util.Comparator.comparing(ConfigAuditEvent::getId))
                 .toList();
         assertThat(rows).hasSize(2);
@@ -280,7 +272,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isOk()
                 .expectBody()
                 .jsonPath("$.content.length()")
-                .isEqualTo(1)
+                .isEqualTo(3)
                 .jsonPath("$.content[0].workspaceId")
                 .isEqualTo(mine.getId());
     }
@@ -327,7 +319,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isOk()
                 .expectBody()
                 .jsonPath("$.content.length()")
-                .isEqualTo(2);
+                .isEqualTo(6);
 
         webTestClient
                 .get()
@@ -340,7 +332,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isOk()
                 .expectBody()
                 .jsonPath("$.content.length()")
-                .isEqualTo(1)
+                .isEqualTo(3)
                 .jsonPath("$.content[0].workspaceId")
                 .isEqualTo(b.getId());
     }
@@ -396,13 +388,13 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         "entityType matches", "entityType", "WORKSPACE_LLM_CONNECTION", 1),
                 org.junit.jupiter.params.provider.Arguments.of(
                         "entityType matches the other kind", "entityType", "PRACTICE_REVIEW_SETTINGS", 1),
-                org.junit.jupiter.params.provider.Arguments.of("action matches", "action", "CREATED", 1),
+                org.junit.jupiter.params.provider.Arguments.of("action matches", "action", "CREATED", 3),
                 org.junit.jupiter.params.provider.Arguments.of("action excludes", "action", "DELETED", 0),
                 org.junit.jupiter.params.provider.Arguments.of("actorId excludes", "actorId", "999999", 0),
                 org.junit.jupiter.params.provider.Arguments.of("from excludes the past", "from", future, 0),
-                org.junit.jupiter.params.provider.Arguments.of("from includes the past", "from", past, 2),
+                org.junit.jupiter.params.provider.Arguments.of("from includes the past", "from", past, 4),
                 org.junit.jupiter.params.provider.Arguments.of("to excludes the present", "to", past, 0),
-                org.junit.jupiter.params.provider.Arguments.of("to includes the present", "to", future, 2));
+                org.junit.jupiter.params.provider.Arguments.of("to includes the present", "to", future, 4));
     }
 
     @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
@@ -450,7 +442,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 uri -> uri.queryParam("entityType", "WORKSPACE_LLM_CONNECTION")
                         .queryParam("entityType", "PRACTICE_REVIEW_SETTINGS"),
                 2);
-        assertFilterYields(workspace, uri -> uri.queryParam("action", "CREATED").queryParam("action", "DELETED"), 1);
+        assertFilterYields(workspace, uri -> uri.queryParam("action", "CREATED").queryParam("action", "DELETED"), 3);
     }
 
     @Test
@@ -579,18 +571,6 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
         account.setAppRole(Account.AppRole.APP_ADMIN);
         account.setStatus(Account.Status.ACTIVE);
         return accountRepository.save(account);
-    }
-
-    /** Wires an account to an SCM actor, which is what turns a workspace membership into roles. */
-    private void linkIdentity(Account account, User actor) {
-        IdentityProvider provider = ensureGitHubProvider();
-        IdentityLink link = new IdentityLink();
-        link.setAccount(account);
-        link.setProviderId(Objects.requireNonNull(provider.getId()));
-        link.setSubject(String.valueOf(actor.getNativeId()));
-        link.setUsernameAtSignup(actor.getLogin());
-        link.setExternalActorId(actor.getId());
-        identityLinkRepository.save(link);
     }
 
     private ConfigAuditEvent reviewSettingsRowFor(Workspace workspace) {

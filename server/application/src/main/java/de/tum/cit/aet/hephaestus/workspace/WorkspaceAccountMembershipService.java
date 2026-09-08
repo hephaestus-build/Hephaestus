@@ -110,9 +110,13 @@ public class WorkspaceAccountMembershipService {
         boolean admin =
                 current.map(member -> member.getRole() == WorkspaceRole.ADMIN).orElse(false)
                         || SecurityUtils.isSuperAdmin();
+        // An automatic App installation has no human owner until one is explicitly appointed.
+        // Instance-wide authority may fill only that initial vacancy, never take over an owned workspace.
+        boolean initializeOwner = SecurityUtils.isSuperAdmin()
+                && memberships.countByWorkspace_IdAndRoleAndSuspendedFalse(workspace.getId(), WorkspaceRole.OWNER) == 0;
         if (context == null
                 || !workspace.getId().equals(context.id())
-                || !(owner || (admin && role != WorkspaceRole.OWNER)))
+                || !(owner || initializeOwner || (admin && role != WorkspaceRole.OWNER)))
             throw new InsufficientWorkspacePermissionsException(
                     workspace.getWorkspaceSlug(), "You cannot manage the " + role + " role");
     }

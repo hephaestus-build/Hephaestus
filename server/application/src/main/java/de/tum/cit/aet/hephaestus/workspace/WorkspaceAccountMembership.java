@@ -21,11 +21,7 @@ import lombok.Setter;
 @NoArgsConstructor
 public class WorkspaceAccountMembership {
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "workspace_account_membership_seq")
-    @SequenceGenerator(
-            name = "workspace_account_membership_seq",
-            sequenceName = "workspace_account_membership_seq",
-            allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)

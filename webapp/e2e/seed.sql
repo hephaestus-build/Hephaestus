@@ -39,6 +39,11 @@ FROM account a
 JOIN identity_provider p ON p.type = 'GITHUB' AND p.server_url = 'https://github.com'
 WHERE a.primary_email = 'e2e@dev.invalid'
 ON CONFLICT (id) DO NOTHING;
+INSERT INTO workspace_account_membership (workspace_id, account_id, role, source, suspended, created_at)
+SELECT 1, id, 'ADMIN', 'MANUAL', false, now()
+FROM account WHERE primary_email = 'e2e@dev.invalid'
+ON CONFLICT (workspace_id, account_id) DO NOTHING;
+
 INSERT INTO workspace_membership (workspace_id, user_id, role, league_points, hidden, created_at)
 VALUES (1, 900001, 'ADMIN', 0, false, now())
 ON CONFLICT DO NOTHING;

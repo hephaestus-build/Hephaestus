@@ -38,6 +38,7 @@ import { Spinner } from "@/components/ui/spinner";
 export interface WorkspaceMembershipPanelProps {
 	members: WorkspaceAccountMembership[];
 	isOwner: boolean;
+	canInitializeOwner?: boolean;
 	isLoading: boolean;
 	error?: unknown;
 	isSaving: boolean;
@@ -62,6 +63,7 @@ const sourceLabels = {
 export function WorkspaceMembershipPanel({
 	members,
 	isOwner,
+	canInitializeOwner = false,
 	isLoading,
 	error,
 	isSaving,
@@ -92,6 +94,12 @@ export function WorkspaceMembershipPanel({
 					Add member
 				</Button>
 			</div>
+			{canInitializeOwner && !isLoading && !error && (
+				<p className="text-sm text-muted-foreground">
+					This workspace has no account owner. As an instance administrator, you can assign its
+					first owner.
+				</p>
+			)}
 			{error ? (
 				<QueryErrorAlert error={error} title="Couldn't load workspace access" onRetry={onRetry} />
 			) : isLoading ? (
@@ -189,7 +197,7 @@ export function WorkspaceMembershipPanel({
 					<MembershipForm
 						key={editing?.accountId ?? "new"}
 						member={editing}
-						isOwner={isOwner}
+						canAssignOwner={isOwner || canInitializeOwner}
 						isSaving={isSaving}
 						onCancel={() => setOpen(false)}
 						onAssign={async (request) => {
@@ -205,13 +213,13 @@ export function WorkspaceMembershipPanel({
 
 function MembershipForm({
 	member,
-	isOwner,
+	canAssignOwner,
 	isSaving,
 	onCancel,
 	onAssign,
 }: {
 	member: WorkspaceAccountMembership | null;
-	isOwner: boolean;
+	canAssignOwner: boolean;
 	isSaving: boolean;
 	onCancel: () => void;
 	onAssign: (request: AssignRoleRequest) => Promise<void>;
@@ -219,7 +227,7 @@ function MembershipForm({
 	const [accountId, setAccountId] = useState(member?.accountId.toString() ?? "");
 	const [role, setRole] = useState<AssignRoleRequest["role"]>(member?.role ?? "MEMBER");
 	const [saveError, setSaveError] = useState(false);
-	const items = isOwner ? roleItems : roleItems.filter((item) => item.value !== "OWNER");
+	const items = canAssignOwner ? roleItems : roleItems.filter((item) => item.value !== "OWNER");
 	return (
 		<form
 			className="space-y-4"
