@@ -69,6 +69,14 @@ workspace. Sharing a connection, login or installation is not a transfer.
   local exits, such as account deletion, identity unlinking, unenrollment or ending management, remain
   recorded even when GitHub cannot be reached.
 
+GitHub's team-membership and organization-removal endpoints address users by login, not native ID,
+and expose no atomic identity precondition. Hephaestus pins the native identity, resolves and checks
+its current login immediately before and after a write, and never substitutes an old username on retry.
+A changed login around an unconfirmed action stops automatic retries and preserves the historical
+login for manual inspection. This is not a provider-side compare-and-swap guarantee: the organization
+owner must inspect both identities and the approved scope after an identity-change warning before
+adopting access or accepting an unmanaged exception.
+
 ## Recovery
 
 | State | Operator or owner action |

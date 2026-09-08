@@ -165,9 +165,23 @@ public class GitHubAccessReconciliation {
                         input.workspaceId(), input.targetId(), person.githubUserId())
                 .orElseGet(() -> newMember(input, person, target));
         var before = GitHubAccessAudit.Membership.of(member);
+        String previousLogin = member.getGithubLogin();
         observed(member, observed);
         var pending = unresolved(member);
-        if (pending != null) return pending.getId();
+        if (pending != null) {
+            if (pending.getStatus() == GitHubAccessAction.Status.PENDING
+                    && previousLogin != null
+                    && !previousLogin.equalsIgnoreCase(observed.login())) {
+                pending.setStatus(GitHubAccessAction.Status.MANUAL_RECOVERY);
+                pending.setFailureCode(Reason.IDENTITY_CHANGED);
+                pending.setFailureReason(
+                        "An unconfirmed request used GitHub login " + previousLogin
+                                + ", but the linked native identity now uses " + observed.login()
+                                + ". Inspect both logins in the approved scope before resolving this action; automatic retries are stopped.");
+                member.setBlocker(pending.getFailureReason());
+            }
+            return pending.getId();
+        }
         if (!member.isManaged()
                 && !member.isRevocationRequested()
                 && observed.state() == GitHubAccessClient.State.ABSENT) rebind(input, member);
@@ -378,6 +392,7 @@ public class GitHubAccessReconciliation {
         var action = actions.findByIdAndWorkspace_IdAndTarget_Id(actionId, input.workspaceId(), input.targetId())
                 .orElseThrow();
         if (action.getStatus() != GitHubAccessAction.Status.PENDING) return;
+        if (failure.reason() == Reason.IDENTITY_CHANGED) action.setStatus(GitHubAccessAction.Status.MANUAL_RECOVERY);
         action.setFailureCode(failure.reason());
         action.setFailureReason(failure.getMessage());
         action.setRetryAt(failure.retryAt());

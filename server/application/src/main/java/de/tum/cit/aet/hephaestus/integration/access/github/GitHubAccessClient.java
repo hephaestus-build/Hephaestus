@@ -530,11 +530,27 @@ public class GitHubAccessClient {
         return user;
     }
 
+    // Username-addressed writes have no provider-side identity precondition. Keep the historical
+    // alias in a sanitized failure so an uncertain write cannot be retried against a different login.
+    @SuppressWarnings("PMD.PreserveStackTrace")
     private void verifyUsername(Session session, User expected) {
-        User current = get(session.token(), "/users/{login}", User.class, login(expected));
+        String expectedLogin = login(expected);
+        User current;
+        try {
+            current = get(session.token(), "/users/{login}", User.class, expectedLogin);
+        } catch (HttpClientErrorException.NotFound missing) {
+            throw changedUsername(expected);
+        }
         if (nativeId(current.id()) != nativeId(expected.id()) || !"User".equals(current.type()))
-            throw failure(
-                    Reason.IDENTITY_CHANGED, "A GitHub username now identifies somebody else; no change is authorized");
+            throw changedUsername(expected);
+    }
+
+    private GitHubAccessFailure changedUsername(User expected) {
+        return failure(
+                Reason.IDENTITY_CHANGED,
+                "GitHub login " + login(expected)
+                        + " no longer identifies linked native user " + nativeId(expected.id())
+                        + ". A prior request may have changed access; inspect this login and the approved scope before resolving any pending action.");
     }
 
     private List<Invitation> invitations(Session session) {

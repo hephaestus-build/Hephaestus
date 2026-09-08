@@ -639,6 +639,29 @@ class GitHubAccessIntegrationTest extends OrganizationalIdentityIntegrationTest 
         directories.saveAndFlush(current);
     }
 
+    @Test
+    void shouldStopRetryingAnUnconfirmedWriteWhenItsHistoricalLoginChanges() {
+        long id = activeTarget();
+        when(githubAccess.grant(any(), eq(61L)))
+                .thenThrow(
+                        new GitHubAccessFailure(GitHubAccessFailure.Reason.UNAVAILABLE, "The write response was lost"));
+        run(id, false, SyncJobStatus.FAILED);
+        when(githubAccess.inspect(any(), eq(61L)))
+                .thenReturn(new GitHubAccessClient.Membership(
+                        61, "renamed-developer", GitHubAccessClient.State.ABSENT, null, null));
+        run(id, false, SyncJobStatus.SUCCEEDED_WITH_WARNINGS);
+        run(id, false, SyncJobStatus.SUCCEEDED_WITH_WARNINGS);
+        verify(githubAccess).grant(any(), eq(61L));
+        assertThat(actions.findTop50ByWorkspace_IdAndTarget_IdOrderByCreatedAtDesc(workspace.getId(), id))
+                .singleElement()
+                .satisfies(action -> {
+                    assertThat(action.getStatus()).isEqualTo(GitHubAccessAction.Status.MANUAL_RECOVERY);
+                    assertThat(action.getFailureCode()).isEqualTo(GitHubAccessFailure.Reason.IDENTITY_CHANGED);
+                    assertThat(action.getFailureReason())
+                            .contains("developer", "renamed-developer", "automatic retries are stopped");
+                });
+    }
+
     private long activeTarget() {
         return activeTarget(configuration());
     }

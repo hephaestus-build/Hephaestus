@@ -424,6 +424,21 @@ class GitHubAccessClientTest extends BaseUnitTest {
         assertReason(() -> client.inventory(organization, mock(SyncExecutionHandle.class)), Reason.UNAVAILABLE);
     }
 
+    @Test
+    void shouldPreserveTheWrittenAliasForRecoveryWhenItsIdentityChangesAfterATeamWrite() {
+        inspectTeam(null);
+        userById();
+        username();
+        expect(HttpMethod.PUT, "/organizations/50/team/75/memberships/alice")
+                .andRespond(withSuccess("{\"state\":\"active\",\"role\":\"member\"}", MediaType.APPLICATION_JSON));
+        json(HttpMethod.GET, "/users/alice", "{\"id\":8,\"login\":\"alice\",\"type\":\"User\"}");
+        assertThatThrownBy(() -> client.grant(team, 7)).isInstanceOfSatisfying(GitHubAccessFailure.class, failure -> {
+            assertThat(failure.reason()).isEqualTo(Reason.IDENTITY_CHANGED);
+            assertThat(failure.getMessage())
+                    .contains("alice", "native user 7", "prior request may have changed access");
+        });
+    }
+
     private void inspectTeam(@org.jspecify.annotations.Nullable String state) {
         userById();
         username();
