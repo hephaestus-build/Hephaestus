@@ -62,6 +62,7 @@ public class WorkspaceAccountMembershipService {
         }
         membership.setRole(role);
         membership.setSource(WorkspaceAccountMembership.Source.MANUAL);
+        membership.setDirectorySubject(null);
         membership.setSuspended(false);
         membership.setExpiresAt(null);
         membership.setAccessRequestId(null);

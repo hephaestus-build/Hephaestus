@@ -1500,6 +1500,7 @@ erDiagram
         BIGINT workspace_id FK,UK "NOT NULL"
         BIGINT access_request_id FK
         TIMESTAMPTZ expires_at
+        VARCHAR(512) directory_subject
     }
 
     WorkspaceAgentBinding {

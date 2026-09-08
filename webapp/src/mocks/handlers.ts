@@ -61,6 +61,7 @@ export const handlers = [
 		),
 	),
 	http.get("*/user/identities", () => HttpResponse.json(linkedIdentities)),
+	http.get("*/user/workspace-access", () => HttpResponse.json([])),
 
 	// --- sessions ------------------------------------------------------------
 	http.get("*/user/sessions", () => HttpResponse.json(sessions)),

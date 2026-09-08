@@ -17,6 +17,7 @@ const RENAMED_ENTITY_TYPE_LABELS = {
 } satisfies Partial<Record<EntityType, string>>;
 
 export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
+	DIRECTORY_POLICY: "Directory access policy",
 	PRACTICE_REVIEW_SETTINGS: "Review settings",
 	AGENT_BINDING: "AI binding",
 	WORKSPACE_ACCESS_POLICY: "Workspace access policy",

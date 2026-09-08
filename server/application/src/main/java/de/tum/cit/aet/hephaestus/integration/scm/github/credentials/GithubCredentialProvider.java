@@ -89,6 +89,7 @@ public class GithubCredentialProvider implements ApiCredentialProvider {
             case ConnectionConfig.GitLabConfig ignored -> Optional.empty();
             case ConnectionConfig.SlackConfig ignored -> Optional.empty();
             case ConnectionConfig.OutlineConfig ignored -> Optional.empty();
+            case ConnectionConfig.KeycloakDirectoryConfig ignored -> Optional.empty();
         };
     }
 }

@@ -146,6 +146,32 @@ public class WorkspaceRegistryController {
 }
 ```
 
+## Directory access boundary
+
+Directory eligibility belongs to `workspace.directory`; the Keycloak adapter under
+`integration.directory` only captures complete evidence. An operator-approved exact issuer and group
+allowlist, a workspace owner's versioned approval, a healthy active connection and fresh evidence are
+all required for a grant. `DirectorySnapshot` owns the freshness window. The
+[operator runbook](../admin/directory-access) owns setup and recovery semantics.
+
+A directory policy references its workspace and connection through a composite foreign key. HTTP
+administration is a `@WorkspaceScopedController`; the directory sync adapter re-establishes and restores
+workspace context inside the existing connection job infrastructure. Mutation transactions lock the
+workspace, approved login-provider source and affected account, in that order, and recheck verified
+identity links before granting. Provider approval changes lock the same source row. An in-flight
+capture carries configuration and source versions and cannot overwrite newer policy decisions.
+
+`/user/workspace-access` is deliberately outside workspace routing: a signed-in account may not yet
+have any workspace. It returns only that current account's fresh, verified offers, not a searchable
+directory of workspaces or identities. Joining rechecks all eligibility under locks and returns the
+same unavailable result for an absent or ineligible offer. No account ID is accepted from the caller.
+
+`IdentityUnlinkParticipant` lets directory membership removal participate in the identity unlink
+transaction without coupling the account service to workspace implementation. It acquires no
+workspace lock after the account lock, avoiding the reverse lock order of a grant. Workspace purging
+removes policies before connections; account erasure clears approval attribution. Existing manual
+access, owner roles and suspension records are not inferred from SCM or directory roster changes.
+
 ## Testing
 
 Integration tests must create a workspace and grant membership before hitting scoped endpoints:

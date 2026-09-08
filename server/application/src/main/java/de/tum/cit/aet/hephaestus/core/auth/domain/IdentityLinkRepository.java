@@ -31,6 +31,13 @@ public interface IdentityLinkRepository extends JpaRepository<IdentityLink, Long
             @Param("subject") String subject,
             @Param("teamId") @Nullable String teamId);
 
+    @Query("""
+        SELECT il FROM IdentityLink il JOIN FETCH il.account
+        WHERE il.providerId = :providerId AND il.subject IN :subjects
+          AND il.teamId IS NULL AND il.disabledAt IS NULL
+        """)
+    List<IdentityLink> findActiveByProviderSubjects(Long providerId, List<String> subjects);
+
     @Modifying
     @Query("""
         UPDATE IdentityLink il

@@ -56,7 +56,9 @@ async function fetchSpecification(url: string, child: ReturnType<typeof spawn>):
 
 const jar = await executableJar();
 // Both HTTP connectors must be isolated from other worktrees, including the sandbox gateway.
-const [port, sandboxPort] = await Promise.all([freePort(), freePort()]);
+const port = await freePort();
+let sandboxPort = await freePort();
+while (sandboxPort === port) sandboxPort = await freePort();
 const child = spawn(
 	"java",
 	[

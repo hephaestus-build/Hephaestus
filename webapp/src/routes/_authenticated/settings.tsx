@@ -6,6 +6,10 @@ import {
 	getConsentStatusOptions,
 	getConsentStatusQueryKey,
 	getCurrentUserQueryKey,
+	getWorkspaceAccessOffersOptions,
+	getWorkspaceAccessOffersQueryKey,
+	joinDirectoryWorkspaceMutation,
+	listWorkspacesQueryKey,
 	getSlackUserPreferencesOptions,
 	getSlackUserPreferencesQueryKey,
 	getUserSettingsOptions,
@@ -28,6 +32,7 @@ import type {
 import type { LinkedAccountsSectionProps } from "@/components/settings/LinkedAccountsSection";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import type { SlackPreferencesSectionProps } from "@/components/settings/SlackPreferencesSection";
+import { WorkspaceAccessSection } from "@/components/settings/WorkspaceAccessSection";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
@@ -39,6 +44,26 @@ export const Route = createFileRoute("/_authenticated/settings")({
 function RouteComponent() {
 	const queryClient = useQueryClient();
 	const { logout, linkAccount, userProfile } = useAuth();
+	const offers = useQuery({ ...getWorkspaceAccessOffersOptions(), refetchInterval: 30_000 });
+	const joinWorkspace = useMutation({
+		...joinDirectoryWorkspaceMutation(),
+		onSuccess: async () => {
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: getWorkspaceAccessOffersQueryKey() }),
+				queryClient.invalidateQueries({ queryKey: listWorkspacesQueryKey() }),
+			]);
+			toast.success("Workspace access granted");
+		},
+		onError: (error) => {
+			toast.error(
+				problemDetailOf(
+					error,
+					"Couldn't join this workspace. Check your eligibility or ask its owner.",
+				),
+			);
+			void queryClient.invalidateQueries({ queryKey: getWorkspaceAccessOffersQueryKey() });
+		},
+	});
 	const userSettingsQueryKey = getUserSettingsQueryKey();
 	const consentQuery = useQuery(getConsentStatusOptions({}));
 	const accountConsent = consentQuery.data;
@@ -131,6 +156,8 @@ function RouteComponent() {
 		...unlinkIdentityMutation(),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: listLinkedIdentitiesQueryKey({}) });
+			void queryClient.invalidateQueries({ queryKey: getWorkspaceAccessOffersQueryKey() });
+			void queryClient.invalidateQueries({ queryKey: listWorkspacesQueryKey() });
 			// The primary identity (avatar, username) the app shows may have been the one removed.
 			void queryClient.invalidateQueries({ queryKey: getCurrentUserQueryKey() });
 			void queryClient.invalidateQueries({ queryKey: userSettingsQueryKey });
@@ -238,6 +265,21 @@ function RouteComponent() {
 	return (
 		<SettingsPage
 			accountId={userProfile?.id}
+			workspaceAccessSection={
+				<WorkspaceAccessSection
+					state={
+						offers.isPending
+							? { status: "loading" }
+							: offers.isError
+								? { status: "error", error: offers.error, onRetry: () => void offers.refetch() }
+								: { status: "ready", offers: offers.data }
+					}
+					joiningWorkspaceId={
+						joinWorkspace.isPending ? joinWorkspace.variables.path.workspaceId : undefined
+					}
+					onJoin={(workspaceId) => joinWorkspace.mutate({ path: { workspaceId } })}
+				/>
+			}
 			isLoading={isLoading || linkedIdentitiesQuery.isLoading}
 			settingsError={settingsError || linkedIdentitiesQuery.isError}
 			needsScmIdentity={linkedIdentitiesQuery.isSuccess && !hasScmIdentity}

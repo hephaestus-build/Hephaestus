@@ -17,15 +17,20 @@ import org.jspecify.annotations.Nullable;
     @JsonSubTypes.Type(value = ConnectionConfig.GitLabConfig.class, name = "GITLAB"),
     @JsonSubTypes.Type(value = ConnectionConfig.SlackConfig.class, name = "SLACK"),
     @JsonSubTypes.Type(value = ConnectionConfig.OutlineConfig.class, name = "OUTLINE"),
+    @JsonSubTypes.Type(value = ConnectionConfig.KeycloakDirectoryConfig.class, name = "KEYCLOAK_DIRECTORY"),
 })
 public sealed interface ConnectionConfig
         permits ConnectionConfig.GitHubAppConfig,
                 ConnectionConfig.GitHubPatConfig,
                 ConnectionConfig.GitLabConfig,
                 ConnectionConfig.SlackConfig,
-                ConnectionConfig.OutlineConfig {
+                ConnectionConfig.OutlineConfig,
+                ConnectionConfig.KeycloakDirectoryConfig {
     /** Enabled sync streams (subset of the source's catalog). */
     Set<String> enabledStreams();
+
+    record KeycloakDirectoryConfig(String registrationId, String issuer, Set<String> enabledStreams)
+            implements ConnectionConfig {}
 
     record GitHubAppConfig(
             @Nullable Long installationId,

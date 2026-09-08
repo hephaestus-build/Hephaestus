@@ -16,6 +16,11 @@ import org.springframework.stereotype.Repository;
 public interface LoginProviderRepository extends JpaRepository<LoginProvider, Long> {
     Optional<LoginProvider> findByRegistrationId(String registrationId);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT p FROM LoginProvider p WHERE p.registrationId = :registrationId")
+    Optional<LoginProvider> findByRegistrationIdForUpdate(String registrationId);
+
     boolean existsByRegistrationId(String registrationId);
 
     /** One login app per SCM instance (uq on {@code type + base_url}) — guards seeding against duplicates. */

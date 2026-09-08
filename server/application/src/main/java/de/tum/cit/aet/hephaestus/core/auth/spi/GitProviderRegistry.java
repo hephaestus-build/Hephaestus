@@ -26,6 +26,9 @@ public interface GitProviderRegistry {
      */
     long resolveProviderId(String providerTypeName, String baseUrl);
 
+    /** Read an existing provider without creating reference data from a query. */
+    java.util.Optional<Long> findProviderId(String providerTypeName, String baseUrl);
+
     /**
      * Resolve the provider <em>type</em> name (e.g. {@code GITHUB}, {@code GITLAB}) for a
      * {@code git_provider} row id. Used by read-side auth surfaces (profile, GDPR export)

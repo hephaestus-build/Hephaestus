@@ -44,6 +44,10 @@ public class WorkspaceAccountMembership {
     @Column(name = "source", nullable = false, length = 16)
     private Source source = Source.MANUAL;
 
+    /** Immutable directory subject, never an email or display name; present only for managed access. */
+    @Column(name = "directory_subject", length = 512)
+    private @org.jspecify.annotations.Nullable String directorySubject;
+
     /** A removal is retained as a suspension so synchronization cannot undo a manual decision. */
     @Column(name = "suspended", nullable = false)
     private boolean suspended;

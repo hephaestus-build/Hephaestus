@@ -55,6 +55,7 @@
 		"react-day-picker": "10.0.1",
 		"react-dom": "19.2.8",
 		"sonner": "2.0.8",
+		"spin-delay": "2.0.1",
 		"streamdown": "2.6.0",
 		"tailwind-merge": "3.6.0",
 		"use-sync-external-store": "1.6.0",

@@ -14,18 +14,22 @@ import { ReviewObservationRow } from "./ReviewObservationRow";
 const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
 const TIME = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
 const PROVIDER_ICONS = {
+	KEYCLOAK_DIRECTORY: undefined,
 	GITHUB: GithubIcon,
 	SLACK: SlackIcon,
 	GITLAB: GitlabIcon,
 	OUTLINE: OutlineIcon,
 } satisfies Record<
 	NonNullable<PracticeGroupReviewRun["reviewedWork"]["provider"]>,
-	typeof GithubIcon
+	typeof GithubIcon | undefined
 >;
 function providerMeta(run: PracticeGroupReviewRun) {
 	const provider = run.reviewedWork.provider;
-	return provider
-		? { label: getProviderLabel(provider), Icon: PROVIDER_ICONS[provider] }
+	return provider && PROVIDER_ICONS[provider]
+		? {
+				label: getProviderLabel(provider),
+				Icon: PROVIDER_ICONS[provider] ?? artifactKindIcon(run.reviewedWork.type),
+			}
 		: undefined;
 }
 function workIdentity(run: PracticeGroupReviewRun, providerLabel?: string) {

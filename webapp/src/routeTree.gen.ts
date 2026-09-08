@@ -49,6 +49,7 @@ import { Route as AuthenticatedAdminCatalogPracticesPracticeSlugRouteImport } fr
 import { Route as AuthenticatedAdminCatalogPracticesNewRouteImport } from './routes/_authenticated/admin.catalog.practices.new'
 import { Route as AuthenticatedWWorkspaceSlugAdminAccessRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/access'
 import { Route as AuthenticatedWWorkspaceSlugAdminAuditRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/audit'
+import { Route as AuthenticatedWWorkspaceSlugAdminDirectoryRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/directory'
 import { Route as AuthenticatedWWorkspaceSlugAdminIntegrationsRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/integrations'
 import { Route as AuthenticatedWWorkspaceSlugAdminMembersRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/members'
 import { Route as AuthenticatedWWorkspaceSlugAdminModelsRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/models'
@@ -311,6 +312,12 @@ const AuthenticatedWWorkspaceSlugAdminAuditRoute =
   AuthenticatedWWorkspaceSlugAdminAuditRouteImport.update({
     id: '/audit',
     path: '/audit',
+    getParentRoute: () => AuthenticatedWWorkspaceSlugAdminRouteRoute,
+  } as any)
+const AuthenticatedWWorkspaceSlugAdminDirectoryRoute =
+  AuthenticatedWWorkspaceSlugAdminDirectoryRouteImport.update({
+    id: '/directory',
+    path: '/directory',
     getParentRoute: () => AuthenticatedWWorkspaceSlugAdminRouteRoute,
   } as any)
 const AuthenticatedWWorkspaceSlugAdminIntegrationsRoute =
@@ -628,6 +635,7 @@ export interface FileRoutesByFullPath {
   '/admin/catalog/practices/new': typeof AuthenticatedAdminCatalogPracticesNewRoute
   '/w/$workspaceSlug/admin/access': typeof AuthenticatedWWorkspaceSlugAdminAccessRoute
   '/w/$workspaceSlug/admin/audit': typeof AuthenticatedWWorkspaceSlugAdminAuditRoute
+  '/w/$workspaceSlug/admin/directory': typeof AuthenticatedWWorkspaceSlugAdminDirectoryRoute
   '/w/$workspaceSlug/admin/integrations': typeof AuthenticatedWWorkspaceSlugAdminIntegrationsRouteWithChildren
   '/w/$workspaceSlug/admin/members': typeof AuthenticatedWWorkspaceSlugAdminMembersRoute
   '/w/$workspaceSlug/admin/models': typeof AuthenticatedWWorkspaceSlugAdminModelsRoute
@@ -705,6 +713,7 @@ export interface FileRoutesByTo {
   '/admin/catalog/practices/new': typeof AuthenticatedAdminCatalogPracticesNewRoute
   '/w/$workspaceSlug/admin/access': typeof AuthenticatedWWorkspaceSlugAdminAccessRoute
   '/w/$workspaceSlug/admin/audit': typeof AuthenticatedWWorkspaceSlugAdminAuditRoute
+  '/w/$workspaceSlug/admin/directory': typeof AuthenticatedWWorkspaceSlugAdminDirectoryRoute
   '/w/$workspaceSlug/admin/members': typeof AuthenticatedWWorkspaceSlugAdminMembersRoute
   '/w/$workspaceSlug/admin/models': typeof AuthenticatedWWorkspaceSlugAdminModelsRoute
   '/w/$workspaceSlug/admin/settings': typeof AuthenticatedWWorkspaceSlugAdminSettingsRoute
@@ -783,6 +792,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/catalog/practices/new': typeof AuthenticatedAdminCatalogPracticesNewRoute
   '/_authenticated/w/$workspaceSlug/admin/access': typeof AuthenticatedWWorkspaceSlugAdminAccessRoute
   '/_authenticated/w/$workspaceSlug/admin/audit': typeof AuthenticatedWWorkspaceSlugAdminAuditRoute
+  '/_authenticated/w/$workspaceSlug/admin/directory': typeof AuthenticatedWWorkspaceSlugAdminDirectoryRoute
   '/_authenticated/w/$workspaceSlug/admin/integrations': typeof AuthenticatedWWorkspaceSlugAdminIntegrationsRouteWithChildren
   '/_authenticated/w/$workspaceSlug/admin/members': typeof AuthenticatedWWorkspaceSlugAdminMembersRoute
   '/_authenticated/w/$workspaceSlug/admin/models': typeof AuthenticatedWWorkspaceSlugAdminModelsRoute
@@ -867,6 +877,7 @@ export interface FileRouteTypes {
     | '/admin/catalog/practices/new'
     | '/w/$workspaceSlug/admin/access'
     | '/w/$workspaceSlug/admin/audit'
+    | '/w/$workspaceSlug/admin/directory'
     | '/w/$workspaceSlug/admin/integrations'
     | '/w/$workspaceSlug/admin/members'
     | '/w/$workspaceSlug/admin/models'
@@ -944,6 +955,7 @@ export interface FileRouteTypes {
     | '/admin/catalog/practices/new'
     | '/w/$workspaceSlug/admin/access'
     | '/w/$workspaceSlug/admin/audit'
+    | '/w/$workspaceSlug/admin/directory'
     | '/w/$workspaceSlug/admin/members'
     | '/w/$workspaceSlug/admin/models'
     | '/w/$workspaceSlug/admin/settings'
@@ -1021,6 +1033,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/catalog/practices/new'
     | '/_authenticated/w/$workspaceSlug/admin/access'
     | '/_authenticated/w/$workspaceSlug/admin/audit'
+    | '/_authenticated/w/$workspaceSlug/admin/directory'
     | '/_authenticated/w/$workspaceSlug/admin/integrations'
     | '/_authenticated/w/$workspaceSlug/admin/members'
     | '/_authenticated/w/$workspaceSlug/admin/models'
@@ -1359,6 +1372,13 @@ declare module '@tanstack/react-router' {
       path: '/audit'
       fullPath: '/w/$workspaceSlug/admin/audit'
       preLoaderRoute: typeof AuthenticatedWWorkspaceSlugAdminAuditRouteImport
+      parentRoute: typeof AuthenticatedWWorkspaceSlugAdminRouteRoute
+    }
+    '/_authenticated/w/$workspaceSlug/admin/directory': {
+      id: '/_authenticated/w/$workspaceSlug/admin/directory'
+      path: '/directory'
+      fullPath: '/w/$workspaceSlug/admin/directory'
+      preLoaderRoute: typeof AuthenticatedWWorkspaceSlugAdminDirectoryRouteImport
       parentRoute: typeof AuthenticatedWWorkspaceSlugAdminRouteRoute
     }
     '/_authenticated/w/$workspaceSlug/admin/integrations': {
@@ -1862,6 +1882,7 @@ const AuthenticatedWWorkspaceSlugAdminPracticesRouteWithChildren =
 interface AuthenticatedWWorkspaceSlugAdminRouteRouteChildren {
   AuthenticatedWWorkspaceSlugAdminAccessRoute: typeof AuthenticatedWWorkspaceSlugAdminAccessRoute
   AuthenticatedWWorkspaceSlugAdminAuditRoute: typeof AuthenticatedWWorkspaceSlugAdminAuditRoute
+  AuthenticatedWWorkspaceSlugAdminDirectoryRoute: typeof AuthenticatedWWorkspaceSlugAdminDirectoryRoute
   AuthenticatedWWorkspaceSlugAdminIntegrationsRoute: typeof AuthenticatedWWorkspaceSlugAdminIntegrationsRouteWithChildren
   AuthenticatedWWorkspaceSlugAdminMembersRoute: typeof AuthenticatedWWorkspaceSlugAdminMembersRoute
   AuthenticatedWWorkspaceSlugAdminModelsRoute: typeof AuthenticatedWWorkspaceSlugAdminModelsRoute
@@ -1877,6 +1898,8 @@ const AuthenticatedWWorkspaceSlugAdminRouteRouteChildren: AuthenticatedWWorkspac
       AuthenticatedWWorkspaceSlugAdminAccessRoute,
     AuthenticatedWWorkspaceSlugAdminAuditRoute:
       AuthenticatedWWorkspaceSlugAdminAuditRoute,
+    AuthenticatedWWorkspaceSlugAdminDirectoryRoute:
+      AuthenticatedWWorkspaceSlugAdminDirectoryRoute,
     AuthenticatedWWorkspaceSlugAdminIntegrationsRoute:
       AuthenticatedWWorkspaceSlugAdminIntegrationsRouteWithChildren,
     AuthenticatedWWorkspaceSlugAdminMembersRoute:

@@ -299,6 +299,7 @@ public class Connection {
                     case ConnectionConfig.GitLabConfig ignored -> IntegrationKind.GITLAB;
                     case ConnectionConfig.SlackConfig ignored -> IntegrationKind.SLACK;
                     case ConnectionConfig.OutlineConfig ignored -> IntegrationKind.OUTLINE;
+                    case ConnectionConfig.KeycloakDirectoryConfig ignored -> IntegrationKind.KEYCLOAK_DIRECTORY;
                 };
         if (kind != expected) {
             throw new IllegalStateException("Connection kind=" + kind

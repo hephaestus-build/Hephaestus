@@ -26,6 +26,7 @@ public enum ConfigAuditEntityType {
     WORKSPACE_ROLE,
     WORKSPACE_ACCESS_POLICY,
     WORKSPACE_ACCESS_REQUEST,
+    DIRECTORY_POLICY,
     WORKSPACE_FEATURES,
     WORKSPACE_STATUS,
     /** The workspace's stored SCM access token (rotation only — the value is never recorded). */

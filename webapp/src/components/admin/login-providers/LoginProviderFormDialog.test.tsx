@@ -6,6 +6,7 @@ import type { LoginProviderView } from "@/api/types.gen";
 import { LoginProviderFormDialog } from "./LoginProviderFormDialog";
 
 const slackProvider: LoginProviderView = {
+	directoryGroupIds: [],
 	registrationId: "slack",
 	type: "SLACK",
 	displayName: "Slack",
@@ -19,6 +20,7 @@ const slackProvider: LoginProviderView = {
 };
 
 const outlineProvider: LoginProviderView = {
+	directoryGroupIds: [],
 	registrationId: "outline-acme",
 	type: "OUTLINE",
 	displayName: "ACME Outline",

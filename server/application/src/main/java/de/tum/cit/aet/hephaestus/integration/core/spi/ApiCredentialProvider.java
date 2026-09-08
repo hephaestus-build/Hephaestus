@@ -37,8 +37,17 @@ public interface ApiCredentialProvider {
         @JsonSubTypes.Type(value = BearerToken.class, name = "BEARER"),
         @JsonSubTypes.Type(value = InstallationCredential.class, name = "INSTALLATION_APP"),
         @JsonSubTypes.Type(value = OAuthSession.class, name = "OAUTH_SESSION"),
+        @JsonSubTypes.Type(value = ClientCredentials.class, name = "CLIENT_CREDENTIALS"),
     })
-    sealed interface CredentialBundle permits BearerToken, InstallationCredential, OAuthSession {}
+    sealed interface CredentialBundle permits BearerToken, InstallationCredential, OAuthSession, ClientCredentials {}
+
+    /** Separate, least-privilege directory credentials, not the interactive login client's secret. */
+    record ClientCredentials(String clientId, String clientSecret) implements CredentialBundle {
+        @Override
+        public String toString() {
+            return "ClientCredentials[clientId=***, clientSecret=***]";
+        }
+    }
 
     /**
      * Long-lived or short-lived bearer (PAT, Slack xoxb, OAuth access token).

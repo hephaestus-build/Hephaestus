@@ -55,6 +55,14 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
 
     @Override
     @Transactional(readOnly = true)
+    public java.util.Optional<Long> findProviderId(String providerTypeName, String baseUrl) {
+        IdentityProviderType type = IdentityProviderType.valueOf(providerTypeName);
+        String origin = type == IdentityProviderType.OIDC ? baseUrl : originOf(baseUrl);
+        return gitProviderRepository.findByTypeAndServerUrl(type, origin).map(IdentityProvider::getId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public String providerTypeName(@Nullable Long gitProviderId) {
         if (gitProviderId == null) {
             return UNKNOWN;

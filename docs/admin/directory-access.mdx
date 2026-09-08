@@ -1,0 +1,101 @@
+---
+title: Directory-managed workspace access
+sidebar_position: 8
+---
+
+# Directory-managed workspace access
+
+Directory management is an optional, read-only Keycloak integration. It keeps **Hephaestus workspace
+access** aligned with explicitly approved groups. It does not provision identities, change directory
+membership, invite people to GitHub, or make organizational sign-in itself an access policy.
+
+## Prepare the source
+
+1. Configure [organizational OpenID Connect sign-in](./production-setup#organizational-openid-connect-sign-in).
+   Use the exact issuer for the intended environment and realm. Directory management supports Keycloak
+   realm issuers over public HTTPS; an arbitrary OpenID Connect provider is not a Keycloak directory.
+2. Create a **separate confidential Keycloak client** with service accounts enabled and the client
+   credentials grant. Grant only the read permissions needed for the selected groups, their members,
+   and individual users and their group memberships. Never grant directory write or realm-admin access.
+   Keycloak permissions vary by version and fine-grained administration configuration: verify that the
+   client can actually see the complete selected population, not just an authorized subset.
+3. In **Instance admin → Login providers**, choose **Directory groups** on the organizational provider.
+   Approve immutable group IDs, one per line, after confirming their realm. This operation requires a
+   recent sign-in. Approval permits workspace owners to select those groups; it grants nobody access.
+   Select every qualifying group explicitly; Hephaestus does not infer eligibility by traversing
+   unselected parent or child groups.
+4. Give the workspace owner the dedicated directory client credentials through your normal secret
+   delivery process. The owner enters them in **Administration → Directory access**, selects the
+   approved groups, and saves the configuration.
+5. Have the owner run **Preview saved configuration**, inspect eligibility and proposed changes, and
+   explicitly **Approve this preview**. Administrators can inspect and reconcile a policy but cannot
+   configure, widen, approve, adopt, pause, resume or end one on the owner's behalf.
+
+Only exact issuer and verified subject links identify accounts. Email, display name, username and
+access-token group claims are not used to join identities. An eligible person with no linked account
+appears in the aggregate awaiting-identity count, not as a newly created account.
+
+## Permission and network checks
+
+The directory client exchanges its credentials at the realm token endpoint and makes only GET
+requests to the realm's administrative group/user endpoints. It reads each page until an empty page,
+including when the provider returns fewer items than requested. It independently checks previously
+eligible subjects before confirming absence, disabled status or departure from all selected groups.
+A missing group, malformed or repeated page, denied request or interrupted pass invalidates the
+whole capture. No partial capture is applied.
+
+The source uses the organizational sign-in HTTP protections: public HTTPS, bounded timeouts,
+private/reserved destination rejection at DNS resolution and no redirects. A private-network
+Keycloak deployment is not supported by bypassing these protections. The credentials are encrypted
+with the instance credential key; follow [credential key rotation](./credential-key-rotation) when
+rotating that key. Responses and job errors never expose tokens, directory subjects or client secrets.
+
+The server role owns directory reconciliation. Worker and webhook roles do not start directory
+clients or schedulers. Reads use the existing connection job lease, heartbeat, cancellation and
+abandoned-job recovery. The periodic scheduler considers active workspaces with active or paused
+policies every five minutes; administrators can also request a reconciliation and inspect its history.
+
+## Evidence and access lifecycle
+
+- A capture must finish within ten minutes. Evidence is usable for new access for fifteen minutes
+  **from the start of the read**, not from its completion.
+- Beginning a new read makes policy health unverified. An incomplete or failed read blocks new grants
+  even if an older snapshot has not expired. Existing access remains until a complete read confirms
+  departure or an owner explicitly changes it.
+- Saving configuration or changing source approval invalidates old evidence for new grants. The
+  approved groups remain the reconciliation policy until the owner approves a fresh draft preview.
+  An in-flight read cannot apply after its configuration or source approval changes.
+- **Pause new access** stops additions while complete reads continue to remove confirmed departures.
+  **Resume new access** requires a fresh read before additions restart.
+- **End management** removes directory-managed access immediately, including during a directory
+  outage. Owners, manual access and suspension records remain. Reconnecting requires credentials,
+  a new preview and owner approval; ending does not silently convert managed access into manual access.
+- Manually granted access is protected. **Adopt** is an explicit owner decision: it changes an eligible
+  non-owner's role to a directory-managed **Member**, including demoting an administrator. It never
+  lifts an existing suspension. Owners cannot be adopted or removed by directory reconciliation.
+- Ownership transfer changes who may manage the policy, not its historical approval attribution.
+  The new owner can revise or end it; the former owner loses owner-only controls when demoted.
+  Suspending a workspace stops offers and scheduled reads; resuming restores normal evidence checks.
+  Workspace deletion removes the policy and account memberships, clears connection credentials and
+  retains the existing connection/audit tombstone.
+- Disconnecting the relevant organizational identity removes its directory-managed access immediately.
+  Linking it again does not lift a suspension or recover access from stale evidence.
+
+## Recover safely
+
+| Symptom | Action |
+| --- | --- |
+| No approved source | Confirm exact issuer allowlisting, enabled organizational sign-in and instance-approved group IDs. |
+| Failed or stalled read | Inspect directory read history, client permissions, token endpoint availability and complete pagination. Cancel a stuck read, correct the cause, then retry. |
+| Stale evidence | Reconcile now; do not treat the last successful read as current eligibility. |
+| Source approval removed | Restore only the intended approval, then capture fresh evidence. Existing access is retained, not reported as revoked. Owners can end management when immediate removal is intended. |
+| Changed issuer or realm | End management and configure a separately approved source. Have developers explicitly link the new identity; never reuse subjects from the old realm. |
+| Too many pages or people | Narrow the selected groups rather than accepting a partial read. |
+| Eligible person has no offer | Confirm their verified organizational identity, selected groups, policy status and fresh evidence. Check for an explicit suspension. |
+
+Before activation, apply the additive database migration using the deployment's normal migration
+procedure. Back up the database and credential key together. To disable this feature, end management
+per workspace first if managed access must be removed; disabling the provider alone deliberately
+preserves existing access during failures. Do not roll back only the server binary across the access
+schema changes: use a coordinated database/application restore and preserve an administrator's
+working sign-in method.

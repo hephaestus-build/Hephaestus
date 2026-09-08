@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDeletionGuard;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.auth.spi.IdentityUnlinkParticipant;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.util.List;
@@ -39,6 +40,7 @@ public class AccountService {
     private final AuthEventLogger authEventLogger;
     private final Clock clock;
     private final List<AccountDeletionGuard> deletionGuards;
+    private final List<IdentityUnlinkParticipant> unlinkParticipants;
     private final LoginProviderService loginProviderService;
     private final GitProviderRegistry gitProviderRegistry;
 
@@ -50,7 +52,8 @@ public class AccountService {
             Clock clock,
             LoginProviderService loginProviderService,
             GitProviderRegistry gitProviderRegistry,
-            List<AccountDeletionGuard> deletionGuards) {
+            List<AccountDeletionGuard> deletionGuards,
+            List<IdentityUnlinkParticipant> unlinkParticipants) {
         this.accountRepository = accountRepository;
         this.identityLinkRepository = identityLinkRepository;
         this.issuedJwtRepository = issuedJwtRepository;
@@ -59,6 +62,7 @@ public class AccountService {
         this.loginProviderService = loginProviderService;
         this.gitProviderRegistry = gitProviderRegistry;
         this.deletionGuards = deletionGuards;
+        this.unlinkParticipants = unlinkParticipants;
     }
 
     public Account requireById(Long id) {
@@ -124,8 +128,11 @@ public class AccountService {
      */
     @Transactional
     public void unlinkIdentity(Long accountId, Long identityLinkId, @Nullable Long actingAccountId) {
-        // Write-lock the account's active links so two concurrent unlinks of different identities
-        // serialize — otherwise both pass the last-identity guard below and drain the account to zero.
+        // Admission and unlink share this lock, so a verified link cannot grant access after removal.
+        accountRepository
+                .findByIdForUpdate(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "account not found"));
+        // Keep active-link locking for the last-sign-in guard and other identity writers.
         List<IdentityLink> active = identityLinkRepository.findActiveByAccountIdForUpdate(accountId);
         IdentityLink target = active.stream()
                 .filter(il -> il.getId().equals(identityLinkId))
@@ -142,6 +149,8 @@ public class AccountService {
                     "You can't unlink your only sign-in method. Link another provider first, or delete your account.");
         }
         Long gitProviderId = target.getProviderId();
+        unlinkParticipants.forEach(
+                participant -> participant.beforeUnlink(accountId, gitProviderId, target.getSubject()));
         if (identityLinkRepository.deleteByIdAndAccountId(identityLinkId, accountId) == 0) {
             // Lost a race (concurrently removed) — nothing to do; surface as not-found.
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "identity link not found");

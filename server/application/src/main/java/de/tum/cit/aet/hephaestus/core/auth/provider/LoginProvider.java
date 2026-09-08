@@ -12,11 +12,14 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import java.util.Set;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 /**
  * An instance-scoped OAuth2 login provider (a sign-in option offered on the login page) — GitHub,
@@ -109,6 +112,11 @@ public class LoginProvider {
     /** True when the row was seeded from {@code hephaestus.auth.*} env config rather than created via the admin UI. */
     @Column(name = "seeded_from_env", nullable = false)
     private boolean seededFromEnv = false;
+
+    /** Explicit instance-operator approval for the optional read-only Keycloak directory adapter. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "directory_group_ids", columnDefinition = "jsonb", nullable = false)
+    private Set<String> directoryGroupIds = Set.of();
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

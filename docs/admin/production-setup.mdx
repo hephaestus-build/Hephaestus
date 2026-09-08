@@ -246,7 +246,8 @@ grant workspace membership. Account confirmation offers only the exact provider 
 linked to that account; two GitLab deployments or two institutional realms are not interchangeable.
 
 Organizational sign-in is optional and uses standard OpenID Connect, including providers such as
-Keycloak. It does not grant workspace membership, read directory groups, or change GitHub access.
+Keycloak. Sign-in itself does not grant workspace membership, read directory groups, or change GitHub access.
+[Directory-managed workspace access](./directory-access) is a separate, explicitly approved setup.
 The existing GitHub and GitLab sign-in methods remain available.
 
 1. Register a confidential OpenID Connect client with your identity provider. Enable the authorization

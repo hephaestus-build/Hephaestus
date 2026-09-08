@@ -170,7 +170,7 @@ public class WorkspaceActivationService {
                 }
                 yield false;
             }
-            case SLACK, OUTLINE -> false;
+            case SLACK, OUTLINE, KEYCLOAK_DIRECTORY -> false;
         };
     }
 
