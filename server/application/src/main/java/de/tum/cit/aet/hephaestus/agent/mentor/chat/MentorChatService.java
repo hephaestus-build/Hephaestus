@@ -360,17 +360,18 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             channel.completeWithError("Mentor turn timed out before completion.");
             outcome = MentorChatMetrics.Outcome.TIMEOUT;
         } catch (ClientDisconnectedException disconnect) {
-            // Not a turn failure: the runner subscription keeps draining and still finalises the row
-            // when the terminal chunk arrives, so do not poison the sandbox or interrupt the row.
-            log.info(
-                    "Mentor client disconnected mid-turn; runner draining to natural finish: {}",
-                    disconnect.getMessage());
-            try {
-                turnComplete.get(20, TimeUnit.SECONDS);
-            } catch (Exception drainEx) {
-                log.debug("Drain after client disconnect timed out / errored: {}", drainEx.toString());
-                if (!turnComplete.isDone()) {
-                    persistence.interrupt(cookie, state, disconnect);
+            if (clientHolder.get() == null) {
+                // No runner subscription exists to complete the persisted turn.
+                persistence.interrupt(cookie, state, disconnect);
+            } else {
+                log.info("Mentor client disconnected; runner draining: {}", disconnect.getMessage());
+                try {
+                    turnComplete.get(20, TimeUnit.SECONDS);
+                } catch (Exception drainEx) {
+                    log.debug("Drain after client disconnect timed out / errored: {}", drainEx.toString());
+                    if (!turnComplete.isDone()) {
+                        persistence.interrupt(cookie, state, disconnect);
+                    }
                 }
             }
             outcome = MentorChatMetrics.Outcome.CLIENT_DISCONNECT;
@@ -426,11 +427,6 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             throws InterruptedException, java.util.concurrent.ExecutionException, TimeoutException {
         AttachedSandbox sandbox = attachSandbox(spec);
 
-        // If the client disconnected during the (potentially seconds-long) cold-start
-        // attach, short-circuit BEFORE wiring up the runner subscription + 20s hello
-        // deadline. Without this, a dead client would hold an entire turn for the full
-        // hello timeout. The outer ClientDisconnectedException catch closes the channel
-        // and runs the finally — sandbox/client get cleaned up there.
         if (channel.isClientGone()) {
             throw new ClientDisconnectedException("Client disconnected during sandbox attach");
         }
@@ -444,23 +440,35 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                 // Per-thread event filter: the sandbox is shared by (userId, workspaceId), so
                 // a second tab in the same workspace would otherwise see this tab's events.
                 request.threadId());
-        // Publish to the disconnect hook BEFORE start(): if start() throws (rare — frame
-        // queue full, listener exception on the very first emit) the hook still finds the
-        // client and aborts cleanly. The hook's abort is idempotent on Pi's side.
+        // Publish before subscribing so a concurrent disconnect can abort the runner.
         clientHolder.set(client);
-        client.start();
-        // SSE lifecycle may have flipped the channel between bindLifecycle and clientHolder.set.
-        // Re-fire the abort AND short-circuit: without the throw, execution falls through into the
-        // 20s hello + 195s prompt deadline while still holding the per-thread lock — the exact cost
-        // the pre-attach guard at isClientGone() above was added to avoid.
-        if (channel.isClientGone()) {
-            abortRunnerOnDisconnect(client, request.threadId());
-            throw new ClientDisconnectedException("Client disconnected after runner start");
-        }
+        boolean handedOff = false;
+        try {
+            client.start();
+            if (channel.isClientGone()) {
+                abortRunnerOnDisconnect(client, request.threadId());
+                throw new ClientDisconnectedException("Client disconnected after runner start");
+            }
 
-        JsonNode hello = client.hello().get(20, TimeUnit.SECONDS);
-        verifyProtocol(hello);
-        return new RunnerHandle(sandbox, client);
+            JsonNode hello = client.hello().get(20, TimeUnit.SECONDS);
+            verifyProtocol(hello);
+            handedOff = true;
+            return new RunnerHandle(sandbox, client);
+        } catch (Exception failure) {
+            if (isPoisoning(failure)) {
+                try {
+                    sandbox.close(Duration.ofSeconds(5));
+                } catch (RuntimeException cleanupFailure) {
+                    failure.addSuppressed(cleanupFailure);
+                }
+            }
+            throw failure;
+        } finally {
+            if (!handedOff) {
+                clientHolder.compareAndSet(client, null);
+                client.close();
+            }
+        }
     }
 
     private static void closeFailedRestoreRunner(MentorRunnerClient client, AttachedSandbox sandbox) {

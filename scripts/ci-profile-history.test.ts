@@ -101,3 +101,21 @@ void test(
 		);
 	},
 );
+
+void test("verification profiling retains coverage and runs separately from integration history", () => {
+	const verification = workflow.getIn(["jobs", "server-verification"]);
+	assert.ok(isMap(verification));
+	assert.equal(verification.get("needs"), "server-integration");
+	const items = verification.get("steps");
+	assert.ok(isSeq(items));
+	const profile = items.items.find((item) => isMap(item) && item.get("id") === "profile");
+	assert.ok(isMap(profile));
+	assert.equal(profile.get("shell"), "bash");
+	assert.match(String(profile.get("run")), /vp run test:server:verification/);
+	assert.doesNotMatch(String(profile.get("run")), /skipCoverage|skipTests/);
+	assert.match(String(profile.get("run")), /-Dhephaestus\.test\.jvmArgs=.*StartFlightRecording/);
+	assert.equal(
+		items.items.some((item) => isMap(item) && item.get("id") === "history"),
+		false,
+	);
+});

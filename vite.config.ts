@@ -274,7 +274,9 @@ export default defineConfig({
 				`${mvnw} -pl application -am package -Dspring-boot.repackage.skip=true -Dsurefire.includedGroups=integration${integrationShard} -Dparallel=none --batch-mode`,
 			),
 			"test:server:mutation": run("node scripts/run-security-mutations.ts"),
-			"test:postgres-upgrade": run("node scripts/postgres-major-upgrade-test.ts"),
+			"test:postgres-upgrade": run("node scripts/postgres-major-upgrade-test.ts", {
+				dependsOn: ["prepare:server:generated"],
+			}),
 
 			// Webapp
 			// `vp check` is format plus lint; the format half is `gate:webapp-format`, so one failure

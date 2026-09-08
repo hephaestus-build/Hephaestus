@@ -45,15 +45,18 @@ sequenceDiagram
 
 1. **Every PR that changes shipped code carries a changeset.** `Verify changesets` fails the PR
    otherwise; [Writing changesets](#writing-changesets) has the rules.
-2. **The Version PR accumulates, and is checked.** On every push to `main`, `version-pr.yml`
-   maintains a PR titled `chore(release): version packages` that previews the version bump, the
+2. **The Version PR accumulates, and is checked.** After CI/CD succeeds for a push that is still the
+   tip of `main`, `version-pr.yml` maintains a PR titled `chore(release): version packages` that previews the version bump, the
    `CHANGELOG.md` section, and the `MIGRATION.md` section assembled from `.migration/` fragments at
    the `### Next release` anchor. Its updates are pushed with `GITHUB_TOKEN`, and a push made with
    that token starts no workflow run — so the same workflow dispatches CI/CD onto the Version PR's
    branch, `workflow_dispatch` being one of the two events that token may start. Every Version PR
    head commit gets one such run; `scripts/dispatch-version-pr-ci.ts` decides by asking whether the
-   head already has one, so a missed dispatch heals on the next push and an unchanged head costs
-   nothing. Every CI/CD run on that branch also carries the **release evidence preflight** below,
+   head already has one, so a missed dispatch heals on the next successful current-main CI completion
+   and an unchanged head costs nothing. Failed main runs do not update the Version PR; a successful
+   rerun or later successful tip resumes maintenance. Overtaken completions are skipped before
+   versioning, so release validation does not start alongside the same commit’s main validation.
+   Every CI/CD run on that branch also carries the **release evidence preflight** below,
    whichever event started it, and `CI Status Gate` fails there unless the preflight succeeded in the
    same run. More than one run can report that gate for a Version PR head — a dispatch and an
    approved `pull_request` run both did for v0.75.1 — and the ruleset is satisfied by either, so a
