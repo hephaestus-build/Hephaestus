@@ -12,7 +12,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 @Service
 @WorkspaceAgnostic("User-scoped preferences and research consent — not workspace-specific")
@@ -68,16 +67,12 @@ public class AccountPreferencesService {
         return toDTO(preferences);
     }
 
-    /** Updates research participation for a mirrored user; blank and unknown logins are ignored. */
+    /** Updates research participation for the verified actor; an erased actor is a no-op. */
     @Transactional
-    public void setForLogin(String login, boolean participate, ConsentSource source) {
-        if (!StringUtils.hasText(login)) {
-            log.warn("research-consent: setForLogin with blank login ignored (source={})", source);
-            return;
-        }
-        Optional<User> userOpt = userRepository.findByLogin(login);
+    public void setForUserId(long userId, boolean participate, ConsentSource source) {
+        Optional<User> userOpt = userRepository.findById(userId);
         if (userOpt.isEmpty()) {
-            log.warn("research-consent: no user for login={} (source={}); nothing to persist", login, source);
+            log.warn("research-consent: no user for userId={} (source={}); nothing to persist", userId, source);
             return;
         }
         User user = userOpt.get();

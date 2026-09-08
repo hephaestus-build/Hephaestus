@@ -22,16 +22,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /**
- * Owns the Hephaestus account-linking call-to-action: when a workspace member who has not yet linked their
- * identity opens the Hephaestus App Home, deliver a single CTA to their DM (via {@link SlackMessageService}) that deep-links
- * into the authenticated account-linking flow ({@code /auth/login?provider=slack&mode=link}). Linking there
- * attaches a {@code SLACK} identity to the signed-in account, after which {@link SlackMentorIdentityResolver}
- * can resolve the member's SCM work. The CTA is idempotently gated on "not yet linked", so an already-linked
- * member is never nudged.
- *
- * <p>This service owns only the CTA blocks and their DM delivery. The persistent Home tab — the privacy
- * disclosure and the research-participation consent toggle — is rendered by {@link SlackAppHomeService} via
- * {@code views.publish}, which reuses {@link #linkCtaBlocks()} to lead an unlinked member with the same CTA.
+ * Account-linking guidance shared by App Home and mentor DMs. A link alone is insufficient:
+ * mentoring also requires an active account and a project identity in the workspace.
  */
 @Service
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true", matchIfMissing = false)
@@ -42,7 +34,7 @@ public class SlackOnboardingService {
     /** Distinct from the interactivity action_ids: this button only opens a URL, it posts no payload. */
     private static final String LINK_ACTION_ID = "link_slack_identity";
 
-    private static final String FALLBACK_TEXT = "Connect your account to Hephaestus";
+    private static final String FALLBACK_TEXT = "Check your Hephaestus account access";
 
     private final SlackWorkspaceResolver workspaceResolver;
     private final SlackMentorIdentityResolver identityResolver;
@@ -63,14 +55,6 @@ public class SlackOnboardingService {
         this.authBasePath = authBasePath;
     }
 
-    /**
-     * Handle an {@code app_home_opened} event: surface the link CTA to an unlinked member. Best-effort: a
-     * missing connection, an already-linked member, or a Slack send failure is logged and swallowed, never
-     * thrown.
-     *
-     * @param teamId      the Slack {@code T…} workspace id from the verified event envelope
-     * @param slackUserId the {@code U…} member who opened the App Home
-     */
     public void onHomeOpened(String teamId, String slackUserId) {
         if (teamId == null || teamId.isBlank() || slackUserId == null || slackUserId.isBlank()) {
             return;
@@ -81,8 +65,8 @@ public class SlackOnboardingService {
             return;
         }
         long ws = workspaceId.get();
-        if (identityResolver.resolveDeveloperLogin(ws, teamId, slackUserId).isPresent()) {
-            log.debug("slack.onboarding: member={} already linked in workspace={} — no CTA", slackUserId, ws);
+        if (identityResolver.resolveDeveloper(ws, teamId, slackUserId).isPresent()) {
+            log.debug("slack.onboarding: member={} has account access in workspace={} — no CTA", slackUserId, ws);
             return;
         }
         try {
@@ -95,9 +79,10 @@ public class SlackOnboardingService {
 
     public List<LayoutBlock> linkCtaBlocks() {
         return asBlocks(
-                section(s -> s.text(markdownText("*Link your Hephaestus account.*\n"
-                        + "Connect your Slack identity to your Hephaestus profile so the mentor can find your "
-                        + "repositories, reviews, and issues."))),
+                section(s -> s.text(markdownText("*Check your Hephaestus account access.*\n"
+                        + "Link Slack to an active Hephaestus account with a project identity in this workspace. "
+                        + "If you have already linked your account, ask an administrator to check your account "
+                        + "status and workspace membership."))),
                 actions(a -> a.elements(asElements(button(b -> b.text(plainText("Link Hephaestus account"))
                         .url(linkUrl())
                         .actionId(LINK_ACTION_ID)

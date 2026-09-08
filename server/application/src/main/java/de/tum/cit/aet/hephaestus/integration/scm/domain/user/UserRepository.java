@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.user;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import java.time.Instant;
 import java.util.Collection;
@@ -34,7 +35,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("""
             SELECT u
             FROM User u
-            WHERE u.login ILIKE :login
+            WHERE LOWER(u.login) = LOWER(:login)
               AND u.provider.id = :providerId
         """)
     Optional<User> findByLoginAndProviderId(@Param("login") String login, @Param("providerId") Long providerId);
@@ -144,17 +145,16 @@ public interface UserRepository extends JpaRepository<User, Long> {
         return findAllByTeamIds(List.of(teamId));
     }
 
-    /**
-     * @return existing user object by current user login
-     */
+    /** A pinned actor id is authoritative; the login fallback applies only outside a pinned context. */
     default Optional<User> getCurrentUser() {
+        var actorId = CurrentScmIdentityHolder.getUserId();
+        if (actorId.isPresent()) {
+            return findById(actorId.get());
+        }
         var currentUserLogin = SecurityUtils.getCurrentUserLogin();
         return currentUserLogin.flatMap(this::findByLogin);
     }
 
-    /**
-     * @return existing user object by current user login
-     */
     default User getCurrentUserElseThrow() {
         return getCurrentUser().orElseThrow(() -> new EntityNotFoundException("User", "current authenticated user"));
     }
@@ -174,20 +174,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
             nativeQuery = true)
     boolean tryAcquireLoginLock(@Param("login") String login, @Param("providerId") Long providerId);
 
-    /**
-     * Acquire a transaction-scoped advisory lock on the given login.
-     * <p>
-     * Must be called before {@link #freeLoginConflicts} and {@link #upsertUser}
-     * to prevent cross-scope race conditions.
-     */
+    /** Serializes login checks, reassignment and upsert for a provider within the same transaction. */
     @Query(
             value = "SELECT pg_advisory_xact_lock(hashtext(CONCAT(:providerId\\:\\:text, ':', LOWER(:login))))",
             nativeQuery = true)
     void acquireLoginLock(@Param("login") String login, @Param("providerId") Long providerId);
 
     /**
-     * Rename any user that currently holds the target login (other than the given native_id
-     * on the same provider) by setting their login to {@code RENAMED_<their_id>}.
+     * Releases a login reassigned by current provider evidence. Requires {@link #acquireLoginLock};
+     * saved signup metadata is not sufficient evidence to rename another actor.
      */
     @Modifying
     @Query(value = """
@@ -200,11 +195,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("login") String login, @Param("nativeId") Long nativeId, @Param("providerId") Long providerId);
 
     /**
-     * Insert or update a user via {@code INSERT ... ON CONFLICT (provider_id, native_id) DO UPDATE}.
-     * <p>
-     * Must be called after {@link #freeLoginConflicts} within the same transaction.
-     * <p>
-     * The {@code id} column is auto-generated on insert. On conflict, the existing row is updated.
+     * Upserts by immutable provider/native id. Acquire the login lock first and either reject a
+     * conflicting login or release it using current provider evidence; never infer reassignment from saved metadata.
      */
     @Modifying
     @Query(value = """

@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetExhaustedException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUnpricedUsageBlockedException;
+import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -75,10 +76,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     private final WorkspaceAgentBindingRepository agentBindingRepository;
     private final WorkspaceContextBuilder workspaceContextBuilder;
     private final MentorPiAdapter mentorPiAdapter;
-    // Resolved lazily: the InteractiveSandboxService bean is part of the worker capability
-    // (DockerSandboxConfiguration, gated on the worker role). On a non-worker pod the bean is
-    // absent and this provider yields none — the controller + persistence still wire so the API
-    // surface loads, but attaching a live turn requires a worker. getObject() fails loudly there.
+    // Non-worker roles still expose the API, but only the worker capability can attach a live sandbox.
     private final ObjectProvider<InteractiveSandboxService> interactiveSandboxServiceProvider;
     private final PiEventToUiChunkTranslator translator;
     private final MentorTurnLock turnLock;
@@ -91,11 +89,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     private final LlmAdmissionService llmAdmissionService;
     private final MentorProxyCredentialRegistry proxyCredentialRegistry;
 
-    /**
-     * Submit a turn to the virtual-thread executor and return. {@code clientHolder} lets the
-     * SSE disconnect hook abort Pi even when the runner client is attached after bindLifecycle
-     * (which fires synchronously) — {@code session.abort()} is documented idempotent.
-     */
+    /** The holder lets a disconnect abort a runner attached after lifecycle callbacks were registered. */
     @Override
     public void start(MentorTurnRequest request, SseEmitter emitter) {
         MentorSseChannel channel = new MentorSseChannel(emitter, objectMapper, runnerTimeoutScheduler.scheduler());
@@ -106,8 +100,20 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         // Record-started fires here so started/completed balance on the executor-rejected branch.
         metrics.recordStarted();
         ExecutorService executor = turnExecutor.executor();
+        Long actorId = CurrentScmIdentityHolder.getUserId().orElse(null);
+        String actorLogin = CurrentScmIdentityHolder.getLogin().orElse(null);
         try {
-            executor.execute(() -> dispatchTurn(request, channel, clientHolder));
+            executor.execute(() -> {
+                // Spring propagates authentication, not our workspace-specific SCM identity.
+                if (actorId != null && actorLogin != null) {
+                    CurrentScmIdentityHolder.set(actorId, actorLogin);
+                }
+                try {
+                    dispatchTurn(request, channel, clientHolder);
+                } finally {
+                    CurrentScmIdentityHolder.clear();
+                }
+            });
         } catch (RejectedExecutionException rejected) {
             log.warn("Mentor turn rejected by executor (probably shutting down): {}", rejected.getMessage());
             metrics.recordCompleted(MentorChatMetrics.Outcome.REJECTED);
@@ -115,18 +121,16 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         }
     }
 
-    /**
-     * Transport-neutral entry for a non-HTTP surface (e.g. a Slack DM). Runs one turn for the developer
-     * identified by {@code developerLogin} against the caller-supplied {@link MentorChannel}. The shared turn
-     * body resolves the {@code User} from the SCM-identity holder, so — because there is no HTTP security
-     * context here — we set that holder on the turn thread and clear it afterwards. Mirrors {@link #start}.
-     */
+    /** Non-HTTP turns pin their verified actor on the worker thread because no request identity is available. */
     @Override
-    public void run(MentorTurnRequest request, MentorChannel channel, String developerLogin) {
+    public void run(MentorTurnRequest request, MentorChannel channel, long developerId) {
+        User developer = userRepository
+                .findById(developerId)
+                .orElseThrow(() -> new EntityNotFoundException("User", String.valueOf(developerId)));
         metrics.recordStarted();
         try {
             turnExecutor.executor().execute(() -> {
-                CurrentScmIdentityHolder.set(developerLogin);
+                CurrentScmIdentityHolder.set(developerId, developer.getLogin());
                 try {
                     dispatchTurn(request, channel, new AtomicReference<>());
                 } finally {
@@ -183,8 +187,6 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                 channel.completeWithConflict();
             }
         } catch (Throwable t) {
-            // Anything short of an Error is logged and swallowed: one turn's failure must not take the
-            // dispatch loop down with it.
             log.error(
                     "Mentor dispatchTurn escaped: workspaceId={}, threadId={}: {}",
                     key.workspaceId(),
@@ -197,7 +199,6 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             } catch (RuntimeException ignored) {
                 // Best-effort: the channel may already be closed.
             }
-            // Re-throw Error subclasses (OOME, StackOverflowError) — JVM stability over metrics tidy-up.
             if (t instanceof Error) throw (Error) t;
         }
     }
@@ -206,8 +207,6 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             MentorTurnRequest request,
             MentorChannel channel,
             AtomicReference<@Nullable MentorRunnerClient> clientHolder) {
-        // Push thread + workspace ids into MDC so every WARN/ERROR in this turn carries the
-        // correlation keys. Cleared in `finally` so the v-thread pool doesn't leak context.
         org.slf4j.MDC.put("mentorThreadId", request.threadId().toString());
         org.slf4j.MDC.put("mentorWorkspaceId", Long.toString(request.workspaceId()));
         try {
@@ -224,9 +223,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             MentorTurnRequest request,
             MentorChannel channel,
             AtomicReference<@Nullable MentorRunnerClient> clientHolder) {
-        // Both gates run before ANYTHING persists, so a refused turn leaves no partial rows and never
-        // warms a sandbox. Budget runs after admission: which purse applies depends on who pays for
-        // the bound model.
+        // Admission and budget checks precede persistence; the admitted model determines whose budget applies.
         MentorLlmConfig llmConfig = resolveWorkspaceLlmConfig(request.workspaceId());
 
         FundingSource mentorFunding =
@@ -284,9 +281,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             sandbox = runner.sandbox();
             client = runner.client();
 
-            // Per-sandbox FIFO: Pi's runtime is single-session, so a second open_thread on the same
-            // sandbox unsubscribes — and orphans — a turn already streaming. Serialising the
-            // open_thread → terminal-chunk window makes the second turn wait instead.
+            // Pi is single-session: keep the lock through the terminal chunk so a second turn cannot orphan this one.
             MentorTurnLock.SandboxKey sandboxKey = new MentorTurnLock.SandboxKey(request.workspaceId(), user.getId());
 
             try (var ignored = turnLock.acquireSandboxLock(sandboxKey)) {
@@ -352,9 +347,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             }
             outcome = errorChunkSeen.get() ? MentorChatMetrics.Outcome.ERROR : MentorChatMetrics.Outcome.SUCCESS;
         } catch (TimeoutException timeout) {
-            // Turn outlasted the prompt deadline (165s) + 30s grace; the future never resolved.
-            // Persistence sees an interrupted assistant row; the runner watchdog is what
-            // actually reclaims the Pi session.
+            // Interrupt persistence here; the runner watchdog reclaims the session after a missing terminal event.
             log.warn(
                     "Mentor turn timed out waiting for agent_end (threadId={}): {}",
                     request.threadId(),
@@ -525,7 +518,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         }
     }
 
-    /** Bound the cause-chain walk so a self-cycle (rare but seen in JDK 21 with virtual threads) doesn't infinite-loop. */
+    /** Bounds traversal of cyclic or unreasonably deep cause chains. */
     private static final int MAX_CAUSE_DEPTH = 32;
 
     private static boolean isPoisoning(Throwable e) {
@@ -536,7 +529,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                 return true;
             }
             Throwable next = cur.getCause();
-            if (next == cur) break; // self-cycle guard
+            if (next == cur) break;
             cur = next;
         }
         return false;
@@ -552,18 +545,14 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         try {
             List<UIMessageChunk> chunks = translator.translate(piEvent, state);
             for (UIMessageChunk chunk : chunks) {
-                // Defensive: once the turn is done, drop any trailing chunks. Pi shouldn't emit
-                // anything past agent_end, but a misbehaving runner / late delivery would
-                // otherwise hit a closed emitter and re-trigger finalise on an already-finalised row.
+                // Late chunks must not write to a closed channel or finalise the persisted turn twice.
                 if (turnComplete.isDone()) break;
                 if (chunk instanceof UIMessageChunk.Finish finish) {
                     UIMessageChunk.Finish toSend = finish;
                     try {
                         toSend = persistence.augmentFinishWithCost(finish, state);
                     } catch (RuntimeException costEx) {
-                        // DEBUG, not WARN: a missing price row is observable via the
-                        // `mentor_cost_recorded_ratio` gauge already; per-turn WARN under
-                        // sustained pricing-table drift would noise out actionable logs.
+                        // Cost-coverage metrics expose missing prices; avoid a warning on every affected turn.
                         log.debug("Cost augmentation failed — sending raw Finish: {}", costEx.toString());
                     }
                     channel.send(toSend);
@@ -576,11 +565,8 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     if (costUsd != null) metrics.recordCostUsd(costUsd);
                     turnComplete.complete(null);
                 } else if (chunk instanceof UIMessageChunk.Error err) {
-                    // Persistence sees `interrupted`; the wire already carries the Error chunk.
-                    // Failing the future exceptionally would re-emit a generic Error + [DONE]
-                    // (double-error on the wire) AND let the outer catch call interrupt again.
-                    // Complete normally and let runTurnInternal observe the interrupted row via
-                    // the Error-chunk-seen flag below to record the correct outcome metric.
+                    // Complete normally: the error is already sent and persisted. An exceptional future would
+                    // make the outer catch emit another error and interrupt the same row again.
                     channel.send(chunk);
                     persistence.interrupt(cookie, state, new IllegalStateException(err.errorText()));
                     errorChunkSeen.set(true);
@@ -590,11 +576,8 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                 }
             }
         } catch (ClientDisconnectedException disconnect) {
-            // Client gone but the runner subscription stays alive so persistence.finalise runs
-            // when Pi emits Finish. Do NOT fail turnComplete — let the natural terminal chunk
-            // close it. The outer ClientDisconnectedException catch in runTurn is for the
-            // SYNCHRONOUS send paths (Start, DataMentorStatus); inside the runner-event handler
-            // we only need to stop writing.
+            // Stop channel writes but keep the runner subscription alive until its terminal chunk
+            // finalises persistence; disconnection is not a second terminal result.
             log.debug(
                     "SSE send failed inside event handler (clientGone={}): {}",
                     channel.isClientGone(),
@@ -611,17 +594,13 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         if (hello == null
                 || !hello.has("protocolVersion")
                 || hello.get("protocolVersion").asInt(0) != MentorRunnerClient.PROTOCOL_VERSION) {
-            // Bound the message: a misbehaving runner could ship a 10MB hello frame and
-            // hello.get("protocolVersion") might be an unbounded JsonNode whose toString()
-            // would bloat the log line and (worse) flow into the user-facing error chunk.
+            // Do not stringify arbitrary runner JSON into logs or user-facing errors.
             JsonNode v = hello != null ? hello.get("protocolVersion") : null;
             String got = v == null ? "missing" : (v.isIntegralNumber() ? Integer.toString(v.asInt()) : "non-integer");
             throw new IllegalStateException("Runner protocol mismatch — expected version "
                     + MentorRunnerClient.PROTOCOL_VERSION + ", got " + got);
         }
-        // Fail-closed against PROTOCOL_ONLY drift: in stub mode the runner stubs every prompt,
-        // so a deploy that accidentally inherits MENTOR_RUNNER_PROTOCOL_ONLY=1 would silently
-        // serve canned answers to every user. The runner advertises the flag on hello.
+        // A protocol-only runner serves canned responses and must never accept user traffic.
         if (hello.path("protocolOnly").asBoolean(false)) {
             throw new IllegalStateException(
                     "Runner started in MENTOR_RUNNER_PROTOCOL_ONLY=1 — refusing to serve traffic");
@@ -629,12 +608,8 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     }
 
     /**
-     * Map an unchecked exception to a string the user can see in the chat. The raw
-     * {@code e.getMessage()} can leak workspace ids, exception class names, internal stack
-     * details ({@code "No LLM config for mentor in workspace 42"},
-     * {@code "runner error -32002: <internal>"}); the wire ends up as a chat-error toast in
-     * the webapp without any further filtering, so the controller is the right boundary.
-     * Raw message stays in the WARN log for ops.
+     * Only sanitized messages cross the channel boundary; raw exception messages may expose
+     * internal ids or upstream errors. The server log retains those details.
      */
     private static String userFacingError(Throwable e) {
         if (e instanceof LlmBudgetExhaustedException budget) {

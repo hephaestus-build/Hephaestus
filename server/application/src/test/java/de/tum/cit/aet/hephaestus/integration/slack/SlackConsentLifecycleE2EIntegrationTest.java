@@ -72,18 +72,11 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
-/**
- * <b>Scope split.</b> The pipeline is driven at the service layer (the outbound {@link SlackMessageService} and
- * {@link AgentJobService} are the only mocks) rather than over HTTP — REST authorization is covered by
- * {@code SlackChannelAdminControllerIntegrationTest}. It runs on the fast entity-derived schema (with the raw-JDBC
- * {@code slack_thread} columns added via {@link SlackConversationTestSupport}); the companion
- * {@code SlackConversationSchemaContractIntegrationTest} proves those same {@code bigint[]}/{@code VARCHAR(32)} paths
- * against the real Liquibase schema.
+/** Service-layer lifecycle test; HTTP authorization is covered by SlackChannelAdminControllerIntegrationTest.
+ * SlackConversationSchemaContractIntegrationTest covers the Liquibase schema.
  *
- * <p><b>Timing.</b> Forward-only ingest (hop 3) requires {@code ts > consent_announced_at ≈ now}, while detection
- * (hop 4) requires a thread quiescent for &gt;10 min. Those cannot coexist on one live timeline, so the settled
- * thread is seeded with aged timestamps while forward-only is proven on live ingest.
- */
+ * Ingest requires timestamps after consent, but review requires a settled thread.
+ * The review fixture therefore uses aged timestamps independently of the live-ingest fixture. */
 @TestPropertySource(properties = "hephaestus.integration.slack.conversation-ingest.enabled=true")
 class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
 
@@ -183,13 +176,12 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         practice = savePractice(workspace);
         job = newJob(workspace);
 
-        // Pure-lookup collaborators mocked so the REAL gates + persistence + erasure run.
         SlackWorkspaceResolver workspaceResolver = mock(SlackWorkspaceResolver.class);
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(workspaceId));
         SlackMentorIdentityResolver identityResolver = mock(SlackMentorIdentityResolver.class);
         when(identityResolver.resolveMemberId(workspaceId, TEAM, "U1")).thenReturn(Optional.of(u1MemberId));
         when(identityResolver.resolveMemberId(workspaceId, TEAM, "U2")).thenReturn(Optional.of(u2MemberId));
-        when(identityResolver.resolveDeveloperLogin(any(Long.class), any(), any()))
+        when(identityResolver.resolveActiveMemberId(any(Long.class), any(), any()))
                 .thenReturn(Optional.empty());
 
         slackMessageService = mock(SlackMessageService.class);
@@ -235,20 +227,18 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("register → activate → forward-only ingest → detect → person opt-out → revoke, asserted at every hop")
     void fullConsentLifecycleComposes() {
-        // Hop 1 — register lands in PENDING (announced_at null). A sibling C2 is registered for isolation.
+
         SlackMonitoredChannelDTO registered =
                 consentService.register(workspaceId, C1, "general").channel();
         assertThat(registered.consentState()).isEqualTo(ConsentState.PENDING);
         assertThat(currentChannel(C1).getConsentAnnouncedAt()).isNull();
         consentService.register(workspaceId, C2, "random");
 
-        // Hop 2 — admin activate: ACTIVE + announcement posted + stamped + audit PENDING→ACTIVE.
         consentService.transition(workspaceId, C1, ConsentState.ACTIVE, "pilot go");
         assertThat(currentChannel(C1).getConsentState()).isEqualTo(ConsentState.ACTIVE);
         Instant announcedAt = currentChannel(C1).getConsentAnnouncedAt();
         assertThat(announcedAt).isNotNull();
-        // The announcement text IS the consent: activating a channel silently, or posting some other
-        // notice, would start ingesting members' messages without telling them.
+
         var fallbackText = ArgumentCaptor.forClass(String.class);
         verify(slackMessageService).sendForWorkspace(eq(workspaceId), eq(C1), any(), fallbackText.capture());
         assertThat(fallbackText.getValue())
@@ -256,7 +246,6 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                 .contains("does not read earlier history");
         assertThat(auditToStates(C1)).containsExactly(ConsentState.ACTIVE);
 
-        // Hop 3 — forward-only ingest: ts strictly after the announcement is stored, ts before it is not.
         long announcedEpoch = announcedAt.getEpochSecond();
         String tsAfter = (announcedEpoch + 30) + ".000100";
         String tsBefore = (announcedEpoch - 300) + ".000100";
@@ -267,7 +256,6 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, C1, tsBefore))
                 .isFalse();
 
-        // Hop 4 — detection over a seeded settled deep thread with real bigint[] participants {U1,U2}.
         long baseSecond = Instant.now().getEpochSecond() - 1200; // 20 min ago → past quiescence
         String rootTs = baseSecond + ".000000";
         String lastTs = (baseSecond + 3) + ".000000";
@@ -293,7 +281,6 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         assertThat(captor.getValue().workspaceId()).isEqualTo(workspaceId);
         assertThat(captor.getValue().participantMemberIds()).containsExactlyInAnyOrder(u1MemberId, u2MemberId);
 
-        // Hop 5 — U1 opts out: ingestion stops AND U1's channel data is erased, U2's survives.
         handler.handleBlockActions(optOut("U1"));
         assertThat(participantConsentRepository.existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(
                         workspaceId, "U1"))
@@ -310,15 +297,11 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         assertThat(observationRepository.findById(u2Obs)).isPresent();
         assertThat(feedbackRepository.findById(u2Fb)).isPresent();
 
-        // Isolation prep: give the sibling C2 (registered PENDING in hop 1) an ACTIVE thread + message that revoking
-        // C1 must not touch.
         consentService.transition(workspaceId, C2, ConsentState.ACTIVE, "sibling active");
         support.seedThread(workspaceId, C2, "700.0", "700.0", 1, "{" + u2MemberId + "}");
         support.seedMessage(workspaceId, C2, "700.0", null, "sibling msg");
 
-        // Hop 6 — revoke C1: all C1 raw + derived rows gone; both audit rows survive; C2 untouched. The manually
-        // constructed service is not a @Transactional proxy, so wrap this call in one transaction — exactly the single
-        // tx the production `@Transactional transition → eraseChannel` runs in (the erasure port removes entities).
+        // This manually constructed service needs the transaction normally supplied by its Spring proxy.
         new TransactionTemplate(transactionManager)
                 .executeWithoutResult(
                         s -> consentService.transition(workspaceId, C1, ConsentState.REVOKED, "wind down"));
@@ -330,8 +313,6 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         assertThat(currentChannel(C2).getConsentState()).isEqualTo(ConsentState.ACTIVE);
         assertThat(messageCount(C2)).isEqualTo(1);
     }
-
-    // --- helpers ---
 
     private long threadCount(String channelId) {
         Long n = jdbcTemplate.queryForObject(

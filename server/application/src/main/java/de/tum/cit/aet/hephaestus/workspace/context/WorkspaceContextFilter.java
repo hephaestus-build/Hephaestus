@@ -44,11 +44,8 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Servlet filter that extracts workspace context from request path and populates ThreadLocal.
- * Only processes requests matching /workspaces/{slug} pattern.
- * Returns 404 for missing or non-ACTIVE workspaces.
- * Filter order is set to -5 to ensure it runs after Spring Security filters (typically -10)
- * but before controller execution.
+ * Scopes slugged workspace routes after authentication. Inactive workspaces are hidden except
+ * on lifecycle routes that must inspect or change their status.
  */
 @ConditionalOnServerRole
 @Component
@@ -130,7 +127,6 @@ public class WorkspaceContextFilter implements Filter {
         boolean isStatusPath = remainingPath.startsWith("/status");
 
         try {
-            // Look up workspace by slug
             var workspaceOpt = workspaceRepository.findByWorkspaceSlug(slug);
 
             if (workspaceOpt.isEmpty()) {
@@ -143,7 +139,6 @@ public class WorkspaceContextFilter implements Filter {
 
             var workspace = workspaceOpt.get();
 
-            // Check workspace status - only ACTIVE workspaces are accessible
             boolean isReadRequest = "GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method);
             boolean allowLifecycleDelete = isBasePath && "DELETE".equalsIgnoreCase(method);
             boolean allowNonActive = isStatusPath || (isBasePath && isReadRequest) || allowLifecycleDelete;
@@ -157,26 +152,18 @@ public class WorkspaceContextFilter implements Filter {
                 return;
             }
 
-            // Fetch user roles across ALL of the account's linked identities (ADR 0017), so a member
-            // signed in via one provider keeps access to workspaces they belong to under another.
             var currentUsers = currentAccountUsers.resolve();
-            // Resolve membership ONCE here (single DB round-trip) and reuse the matched member ids both for the
-            // role union and for pinning the workspace-provider identity below, instead of querying twice.
             MembershipResolution membership = fetchUserRoles(workspace, currentUsers);
             Set<WorkspaceRole> roles = membership.roles();
 
-            // Instance super-admin elevation: an APP_ADMIN reaches ANY active workspace as ADMIN even
-            // without an explicit membership or an SCM identity at all (the GitLab admin model), matching
-            // WorkspaceAccessService's APP_ADMIN elevation. Deliberately ADMIN, never OWNER — ownership is
-            // an explicit, member-granted role. Logged as elevated access.
+            // Instance admins may enter without membership, but elevation never grants ownership.
             if (roles.isEmpty() && SecurityUtils.isSuperAdmin()) {
                 log.info(
                         "Granted workspace access via instance-admin elevation: accountId={}, workspaceSlug={}",
                         SecurityUtils.getCurrentAccountId().orElse(null),
                         safeSlug);
                 roles = Set.of(WorkspaceRole.ADMIN);
-                // The single source of truth both audit trails read, so an action taken on this request
-                // is tagged the same way whichever viewer an operator opens.
+                // Both audit trails read this elevation marker.
                 WorkspaceElevationContext.set(workspace.getId());
                 SecurityUtils.getCurrentAccountId()
                         .ifPresent(accountId -> elevationAudit.recordElevatedAccess(accountId, workspace.getId()));
@@ -194,27 +181,22 @@ public class WorkspaceContextFilter implements Filter {
                 return;
             }
 
-            // installationId comes from the active GitHub App connection in the Connection registry.
             Long installationId = connectionService
                     .findActiveGitHubAppConfig(workspace.getId())
                     .map(ConnectionConfig.GitHubAppConfig::installationId)
                     .orElse(null);
             WorkspaceContext context = WorkspaceContext.fromWorkspace(workspace, roles, installationId);
 
-            // Overwrite detection: warn if context already set
             if (WorkspaceContextHolder.getContext() != null) {
                 log.warn("Detected context leak: reason=contextAlreadySet, workspaceSlug={}", safeSlug);
             }
 
             WorkspaceContextHolder.setContext(context);
 
-            // Pin the request's active SCM identity to the account's user FOR THIS workspace's provider
-            // (the linked identity that is a member here), so getCurrentUserLogin() and everything
-            // downstream resolve the provider-correct user — not whichever provider the session logged in
-            // with. Absent for a public workspace the account isn't a member of (falls back to the JWT).
+            // Pin the verified actor id; a session's display login may belong to a different provider.
             resolveWorkspaceIdentity(currentUsers, membership.memberUserIds())
-                    .map(User::getLogin)
-                    .ifPresent(CurrentScmIdentityHolder::set);
+                    .ifPresent(user -> CurrentScmIdentityHolder.set(
+                            java.util.Objects.requireNonNull(user.getId()), user.getLogin()));
 
             log.debug(
                     "Set workspace context: workspaceSlug={}, workspaceId={}, roles={}",
@@ -222,34 +204,20 @@ public class WorkspaceContextFilter implements Filter {
                     context.id(),
                     context.roles());
 
-            // Continue filter chain
             chain.doFilter(request, response);
         } finally {
-            // Always clear context to prevent leaks
             WorkspaceContextHolder.clearContext();
             WorkspaceElevationContext.clear();
             CurrentScmIdentityHolder.clear();
         }
     }
 
-    /**
-     * The resolved membership for the current request: the roles the account holds in this workspace
-     * (unioned across linked identities) and the set of the account's user ids that actually hold a
-     * membership row. Both are computed from a SINGLE membership query so the role union and the
-     * provider-identity pin never re-query.
-     */
+    /** Roles and eligible actor ids from one membership read, shared by authorization and identity pinning. */
     private record MembershipResolution(Set<WorkspaceRole> roles, Set<Long> memberUserIds) {
         static final MembershipResolution EMPTY = new MembershipResolution(Set.of(), Set.of());
     }
 
-    /**
-     * The account's SCM user that holds membership in this workspace — i.e. the identity for the
-     * workspace's provider. Returns empty when none of the account's identities is a member (e.g. a
-     * public workspace viewed by a non-member), leaving the JWT {@code preferred_username} authoritative.
-     *
-     * @param users the account's SCM users (one per linked identity)
-     * @param memberUserIds the user ids that hold a membership row (from the single membership query)
-     */
+    /** Chooses the first-linked actor that belongs to this workspace, independently of role strength. */
     private Optional<User> resolveWorkspaceIdentity(Collection<User> users, Set<Long> memberUserIds) {
         if (memberUserIds.isEmpty()) {
             return Optional.empty();
@@ -259,13 +227,6 @@ public class WorkspaceContextFilter implements Filter {
                 .findFirst();
     }
 
-    /**
-     * Resolve workspace membership for the current authenticated user via a single query.
-     *
-     * @param workspace Workspace entity
-     * @param users the account's SCM users (one per linked identity); roles are unioned across them
-     * @return the roles and matched member user ids (empty if no membership or not authenticated)
-     */
     private MembershipResolution fetchUserRoles(Workspace workspace, Collection<User> users) {
         try {
             Set<Long> userIds = users.stream()
@@ -277,10 +238,6 @@ public class WorkspaceContextFilter implements Filter {
                 return MembershipResolution.EMPTY;
             }
 
-            // Single membership query, reused for both the role union and the member-id set below.
-            // Union the roles the account holds across every linked identity (each identity mirrors a
-            // distinct SCM user, but they belong to the SAME account, so unioning never widens access
-            // beyond what the account already owns).
             var memberships = workspaceMembershipRepository.findByWorkspace_IdAndUser_IdIn(workspace.getId(), userIds);
             Set<WorkspaceRole> roles = memberships.stream()
                     .map(WorkspaceMembership::getRole)
@@ -393,12 +350,6 @@ public class WorkspaceContextFilter implements Filter {
         return true;
     }
 
-    /**
-     * Send a 404 JSON error response for workspace not found.
-     *
-     * @param response HTTP response
-     * @param slug Workspace slug
-     */
     private void sendWorkspaceNotFoundError(HttpServletResponse response, String slug) throws IOException {
         ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
         problem.setTitle("Resource not found");

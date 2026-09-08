@@ -12,9 +12,13 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSettingsService;
+import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
 import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -41,6 +45,11 @@ class ConfigAuditProducerIntegrationTest extends AbstractWorkspaceIntegrationTes
     @Autowired
     ConfigAuditProducerIntegrationTest(EntityManager entityManager) {
         this.entityManager = entityManager;
+    }
+
+    @AfterEach
+    void clearWorkspaceContext() {
+        WorkspaceContextHolder.clearContext();
     }
 
     @Test
@@ -124,6 +133,8 @@ class ConfigAuditProducerIntegrationTest extends AbstractWorkspaceIntegrationTes
         Workspace workspace =
                 createWorkspace(slug, "Audit Workspace", slug + "-org", AccountType.ORG, persistUser(slug + "-owner"));
         ensureAdminMembership(workspace);
+        WorkspaceContextHolder.setContext(
+                WorkspaceContext.fromWorkspace(workspace, Set.of(WorkspaceMembership.WorkspaceRole.ADMIN), null));
         return workspace;
     }
 

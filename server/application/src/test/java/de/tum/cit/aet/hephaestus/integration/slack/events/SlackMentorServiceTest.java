@@ -82,14 +82,14 @@ class SlackMentorServiceTest extends BaseUnitTest {
     @Test
     void enabledWorkspace_acceptsDmWithoutConsultingOperationalReadiness() {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
-        when(identityResolver.resolveDeveloperLogin(WORKSPACE, TEAM, USER)).thenReturn(Optional.of("alice"));
+        when(identityResolver.resolveActiveMemberId(WORKSPACE, TEAM, USER)).thenReturn(Optional.of(314L));
         UUID threadId = UUID.randomUUID();
-        when(threadLinker.findOrCreateThread(WORKSPACE, TEAM, CHANNEL, "100.1", USER, "alice"))
+        when(threadLinker.findOrCreateThread(WORKSPACE, TEAM, CHANNEL, "100.1", USER, 314L))
                 .thenReturn(threadId);
         SlackMentorService service = service();
         service.handleDm(TEAM, CHANNEL, USER, "Can you review my work?", "100.1", "100.1");
 
-        verify(mentorTurnRunner).run(any(), any(), eq("alice"));
+        verify(mentorTurnRunner).run(any(), any(), eq(314L));
         verify(mentorReadinessQuery, never()).isReady(WORKSPACE);
     }
 
@@ -107,7 +107,7 @@ class SlackMentorServiceTest extends BaseUnitTest {
                         eq("100.1"),
                         eq(List.of()),
                         eq(KeywordSlackMentorInputGuard.SELF_HARM_RESPONSE));
-        verify(mentorTurnRunner, never()).run(any(), any(), any());
+        verify(mentorTurnRunner, never()).run(any(), any(), anyLong());
         verifyNoInteractions(identityResolver);
     }
 
@@ -120,14 +120,14 @@ class SlackMentorServiceTest extends BaseUnitTest {
 
         verify(slackMessageService, never())
                 .sendForWorkspace(anyLong(), anyString(), anyString(), anyList(), anyString());
-        verify(mentorTurnRunner, never()).run(any(), any(), any());
+        verify(mentorTurnRunner, never()).run(any(), any(), anyLong());
         verifyNoInteractions(identityResolver);
     }
 
     @Test
     void unlinkedMember_getsSelfServeAccountLinkCta() {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
-        when(identityResolver.resolveDeveloperLogin(WORKSPACE, TEAM, USER)).thenReturn(Optional.empty());
+        when(identityResolver.resolveActiveMemberId(WORKSPACE, TEAM, USER)).thenReturn(Optional.empty());
         when(onboardingService.linkCtaBlocks()).thenReturn(List.of());
 
         SlackMentorService service = service();
@@ -140,18 +140,19 @@ class SlackMentorServiceTest extends BaseUnitTest {
                         eq(CHANNEL),
                         eq("100.1"),
                         eq(List.of()),
-                        eq("Connect your Slack account to Hephaestus so the mentor can find your work."));
-        verify(mentorTurnRunner, never()).run(any(), any(), any());
+                        eq(
+                                "Check your Hephaestus account status, Slack link, and workspace membership to use the mentor."));
+        verify(mentorTurnRunner, never()).run(any(), any(), anyLong());
     }
 
     @Test
     void linkedMemberMessages_runMentorTurnsWithoutSlackSpecificQuota() {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
-        when(identityResolver.resolveDeveloperLogin(WORKSPACE, TEAM, USER)).thenReturn(Optional.of("alice"));
+        when(identityResolver.resolveActiveMemberId(WORKSPACE, TEAM, USER)).thenReturn(Optional.of(314L));
         UUID threadId = UUID.randomUUID();
-        when(threadLinker.findOrCreateThread(WORKSPACE, TEAM, CHANNEL, "100.1", USER, "alice"))
+        when(threadLinker.findOrCreateThread(WORKSPACE, TEAM, CHANNEL, "100.1", USER, 314L))
                 .thenReturn(threadId);
-        when(threadLinker.findOrCreateThread(WORKSPACE, TEAM, CHANNEL, "100.2", USER, "alice"))
+        when(threadLinker.findOrCreateThread(WORKSPACE, TEAM, CHANNEL, "100.2", USER, 314L))
                 .thenReturn(threadId);
 
         SlackMentorService service = service();
@@ -160,7 +161,7 @@ class SlackMentorServiceTest extends BaseUnitTest {
         service.handleDm(TEAM, CHANNEL, USER, "and my PR practice?", "100.2", "100.2");
 
         ArgumentCaptor<MentorTurnRequest> requestCaptor = ArgumentCaptor.forClass(MentorTurnRequest.class);
-        verify(mentorTurnRunner, times(2)).run(requestCaptor.capture(), any(), eq("alice"));
+        verify(mentorTurnRunner, times(2)).run(requestCaptor.capture(), any(), eq(314L));
         assertThat(requestCaptor.getAllValues())
                 .allSatisfy(request -> assertThat(request.threadId()).isEqualTo(threadId));
         assertThat(requestCaptor.getAllValues().stream()
