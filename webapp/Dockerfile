@@ -2,7 +2,7 @@
 FROM ghcr.io/pnpm/pnpm:12.3.4@sha256:b81d53184f670fe19d1a33f9d5041907d314b31d596838e8133cbd83d45be043 AS build
 WORKDIR /repo
 # renovate: datasource=node-version depName=node
-ARG NODE_VERSION=24.19.0
+ARG NODE_VERSION=24.20.0
 RUN pnpm runtime set node ${NODE_VERSION} -g
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .oxfmtrc.json /repo/
 COPY patches/ /repo/patches/
