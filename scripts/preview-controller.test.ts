@@ -58,6 +58,7 @@ interface GitHubOptions {
 	files?: { filename: string }[];
 	resolvedPull?: typeof pull;
 	statuses?: Record<number, Status[]>;
+	behindFiles?: { filename: string }[];
 	defaultStatuses?: Status[];
 }
 
@@ -68,6 +69,7 @@ const makeGitHub = ({
 	files = [],
 	resolvedPull = pull,
 	statuses = {},
+	behindFiles = [],
 	defaultStatuses = [],
 }: GitHubOptions = {}): GitHubApi => ({
 	paginate: async <T>(
@@ -80,7 +82,13 @@ const makeGitHub = ({
 		},
 		repos: {
 			compareCommitsWithBasehead: (params) => {
-				// The whole stack, not this layer's diff: always default branch to head SHA.
+				// Two directions, and they answer different questions. `main...head` is the whole
+				// stack this pull request would deploy, not just its own layer's diff. `head...main`
+				// is what the default branch has that this branch does not, which is what decides
+				// whether a restored staging schema still fits it.
+				if (params.basehead === `${resolvedPull.head.sha}...main`) {
+					return Promise.resolve({ data: { files: behindFiles } });
+				}
 				assert.equal(params.basehead, `main...${resolvedPull.head.sha}`);
 				return Promise.resolve({ data: { files } });
 			},
@@ -704,5 +712,46 @@ void describe("preview teardown reporting", () => {
 		});
 		assert.equal(core.outputs.get("stale"), "true");
 		assert.equal(core.outputs.get("closed"), "false");
+	});
+});
+
+void describe("preview schema drift", () => {
+	void it("refuses a branch the restored schema would no longer fit", async () => {
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [
+					{ filename: "server/application/src/main/resources/db/changelog/0001_drop.xml" },
+				],
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "false");
+		// The reason has to name the file and the remedy; the failure it replaces was a container
+		// exiting its healthcheck ten minutes later with nothing on the pull request.
+		assert.match(core.outputs.get("reason") ?? "", /behind main/);
+		assert.match(core.outputs.get("reason") ?? "", /0001_drop\.xml/);
+		assert.match(core.outputs.get("reason") ?? "", /Update the branch/);
+		assert.equal(core.outputs.get("announce"), "true");
+	});
+
+	void it("deploys a branch that is merely behind on code, which is almost every branch", async () => {
+		// Matching on Java too would refuse a preview after any merge at all.
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [
+					{ filename: "server/application/src/main/java/de/tum/cit/aet/hephaestus/Foo.java" },
+					{ filename: "webapp/src/routes/index.tsx" },
+					{ filename: "docs/contributor/ci-cd.mdx" },
+				],
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "true");
 	});
 });

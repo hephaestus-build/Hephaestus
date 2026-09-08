@@ -73,6 +73,13 @@ interface ControllerInput {
 }
 
 const PREVIEW_LABEL = "preview";
+/**
+ * The changelog alone decides whether a restored staging database still fits an older application.
+ * Entities are deliberately not listed: `db:check-drift` keeps them moving with the changelog, so
+ * the changelog is the whole signal, and matching on Java would refuse a preview for any merge.
+ */
+const SCHEMA_PATHS = ["server/application/src/main/resources/db/"] as const;
+
 const TRUSTED_ASSOCIATIONS = new Set(["COLLABORATOR", "MEMBER", "OWNER"]);
 // GitHub's comparison endpoint reports at most this many files and gives no truncation flag.
 const COMPARE_FILE_LIMIT = 300;
@@ -178,6 +185,27 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 			`PR #${number} changes ${files.length}+ files, too many for GitHub to report in one comparison, so deployment policy cannot be verified.`,
 		);
 	}
+	// A preview restores staging's database — the default branch's schema — into an application
+	// built from this pull request. Hibernate boots with `ddl-auto: validate`, so a branch that
+	// predates a schema change on the default branch maps entities to tables the restored database
+	// no longer has, and the container exits its healthcheck with nothing on the pull request to
+	// say why. Naming it here costs a comparison; discovering it costs the whole deployment.
+	const behind = await github.rest.repos.compareCommitsWithBasehead({
+		owner,
+		repo,
+		basehead: `${pull.head.sha}...${defaultBranch}`,
+	});
+	const missingSchemaChange = (behind.data.files ?? []).find((file) =>
+		SCHEMA_PATHS.some((path) => file.filename.startsWith(path)),
+	);
+	if (missingSchemaChange) {
+		return skip(
+			`PR #${number} is behind ${defaultBranch} on \`${missingSchemaChange.filename}\`. A preview ` +
+				`restores ${defaultBranch}'s schema, which this branch's entities no longer match, so the ` +
+				`application would fail validation on boot. Update the branch to preview it.`,
+		);
+	}
+
 	const protectedFile = files.find(
 		(file) =>
 			file.filename.startsWith("docker/preview/") ||
