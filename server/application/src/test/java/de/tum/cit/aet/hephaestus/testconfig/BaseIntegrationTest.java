@@ -13,7 +13,9 @@ import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-@AutoConfigureWebTestClient
+// A hang guard, not a latency budget: the 5s default failed whole suites whenever one request
+// crossed it under CI load, reported as "Timeout on blocking read" with no failing assertion.
+@AutoConfigureWebTestClient(timeout = "30s")
 @Import({
     TestSecurityConfig.class,
     TestAsyncConfiguration.class,
