@@ -10,7 +10,7 @@ import { parseSummary, regressions } from "./check-ci-performance.ts";
 import type { TestSummary } from "./summarize-test-results.ts";
 
 const summary = (startup: number, wall = 200): TestSummary => ({
-	schemaVersion: 2,
+	schemaVersion: 3,
 	name: "profile",
 	files: 1,
 	tests: 1,
@@ -21,8 +21,6 @@ const summary = (startup: number, wall = 200): TestSummary => ({
 	slowest: [],
 	performance: {
 		wallTimeSeconds: wall,
-		cpuTimeSeconds: 150,
-		maxRssKilobytes: 500_000,
 		contextStarts: 10,
 		contextStartupSeconds: startup,
 		contextCacheMisses: 10,
@@ -122,4 +120,11 @@ await test("CLI warns on sustained regressions but fails for corrupt or failed-t
 	await writeFile(current, JSON.stringify(summary(100)));
 	await writeFile(path.join(history, "0.json"), "not json");
 	assert.notEqual(run().status, 0);
+});
+
+await test("rejects profiles from the old process-accounting schema", () => {
+	assert.throws(
+		() => parseSummary(JSON.stringify({ ...summary(10), schemaVersion: 2 })),
+		/Invalid CI metrics summary/,
+	);
 });

@@ -132,7 +132,7 @@ void test("profile history excludes incompatible process-accounting baselines", 
 	);
 });
 
-void test("both profile tiers finish their Gradle process for resource accounting", () => {
+void test("both profile tiers use a fresh Gradle process", () => {
 	for (const job of ["server-integration", "server-verification"]) {
 		const items = workflow.getIn(["jobs", job, "steps"]);
 		assert.ok(isSeq(items));

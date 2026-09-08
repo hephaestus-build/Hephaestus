@@ -25,18 +25,6 @@ const metrics: Metric[] = [
 		value: (summary) => summary.testTimeSeconds,
 		tolerance: 0.15,
 	},
-	{
-		name: "CPU time",
-		unit: "s",
-		value: (summary) => summary.performance?.cpuTimeSeconds ?? 0,
-		tolerance: 0.25,
-	},
-	{
-		name: "max RSS",
-		unit: "KiB",
-		value: (summary) => summary.performance?.maxRssKilobytes ?? 0,
-		tolerance: 0.25,
-	},
 ];
 
 const median = (values: number[]): number => {
@@ -119,14 +107,14 @@ export function parseSummary(json: string): TestSummary {
 	};
 	if (
 		!isRecord(value) ||
-		value.schemaVersion !== 2 ||
+		value.schemaVersion !== 3 ||
 		typeof value.name !== "string" ||
 		!isRecord(value.performance)
 	) {
 		throw new Error("Invalid CI metrics summary");
 	}
 	const summary: TestSummary = {
-		schemaVersion: 2,
+		schemaVersion: 3,
 		name: value.name,
 		files: number(value, "files"),
 		tests: number(value, "tests"),
@@ -137,8 +125,6 @@ export function parseSummary(json: string): TestSummary {
 		slowest: [],
 		performance: {
 			wallTimeSeconds: number(value.performance, "wallTimeSeconds"),
-			cpuTimeSeconds: number(value.performance, "cpuTimeSeconds"),
-			maxRssKilobytes: number(value.performance, "maxRssKilobytes"),
 			contextStarts: number(value.performance, "contextStarts"),
 			contextStartupSeconds: number(value.performance, "contextStartupSeconds"),
 			contextCacheMisses: number(value.performance, "contextCacheMisses"),
