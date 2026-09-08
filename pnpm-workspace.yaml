@@ -54,5 +54,4 @@ overrides:
   "uuid@<11.1.1": 11.1.1
 
 patchedDependencies:
-  "zod@4.4.3": patches/zod@4.4.3.patch
   "storybook@10.4.0": patches/storybook@10.4.0.patch
