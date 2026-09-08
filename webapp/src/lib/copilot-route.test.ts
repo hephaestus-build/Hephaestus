@@ -16,7 +16,7 @@ describe("isCopilotExcludedRoute", () => {
 		expect(isCopilotExcludedRoute(pathname)).toBe(true);
 	});
 
-	it.each(["/", "/administrator", "/w/acme", "/w/acme/user/ada", "/w/acme/achievements"])(
+	it.each(["/", "/administrator", "/w/acme", "/w/acme/user/ada", "/w/acme/teams"])(
 		"allows %s",
 		(pathname) => {
 			expect(isCopilotExcludedRoute(pathname)).toBe(false);

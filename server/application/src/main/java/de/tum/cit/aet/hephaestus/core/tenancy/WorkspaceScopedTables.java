@@ -50,7 +50,6 @@ public class WorkspaceScopedTables {
             "workspace_slug_history",
             "user",
             "user_preferences",
-            "user_achievement",
             // Synced upstream identity (workspace linked separately via FK)
             "organization",
             "identity_provider",

@@ -27,9 +27,10 @@ function newRouter(url?: string) {
 
 // `routesById` is keyed by generated route id, and its value type does not survive `Object.values`,
 // so `Object.values` widens to `any` and `fullPath` is narrowed on the way out rather than asserted.
-const adminUrls = Object.values(newRouter().routesById)
+const routePaths = Object.values(newRouter().routesById)
 	.map((route) => (isRecord(route) ? route.fullPath : undefined))
-	.filter((fullPath): fullPath is string => typeof fullPath === "string")
+	.filter((fullPath): fullPath is string => typeof fullPath === "string");
+const adminUrls = routePaths
 	.filter((fullPath) => fullPath.startsWith("/w/$workspaceSlug/admin/"))
 	.map((fullPath) => fullPath.replace("$workspaceSlug", "acme"));
 
@@ -56,7 +57,15 @@ describe("workspace-admin route gate", () => {
 		// A filter that matched nothing would leave every case below vacuously green.
 		expect(adminUrls.length).toBeGreaterThanOrEqual(19);
 		expect(adminUrls).toContain("/w/acme/admin/settings");
-		expect(adminUrls).toContain("/w/acme/admin/achievement-designer");
+	});
+
+	it.each([
+		"/w/$workspaceSlug/achievements",
+		"/w/$workspaceSlug/user/$username/achievements",
+		"/w/$workspaceSlug/admin/achievements",
+		"/w/$workspaceSlug/admin/achievement-designer",
+	])("does not register the retired route %s", (path) => {
+		expect(routePaths).not.toContain(path);
 	});
 
 	it.each(adminUrls)("redirects a MEMBER away from %s", async (url) => {

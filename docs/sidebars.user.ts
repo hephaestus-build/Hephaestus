@@ -17,7 +17,7 @@ const sidebars: SidebarsConfig = {
 		{
 			type: "category",
 			label: "Optional features",
-			items: ["leaderboard", "achievements"],
+			items: ["leaderboard"],
 		},
 		{ type: "doc", id: "accessibility", label: "Accessibility" },
 	],

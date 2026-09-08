@@ -194,7 +194,6 @@ export default defineConfig({
 			"format:docs:check": group(["gate:docs-format"]),
 			"format:config": run(configFormatCommand("--write")),
 			"format:config:check": group(["gate:config-format"]),
-			"format:achievements": run("node scripts/format-achievements.ts"),
 
 			// Lint and typecheck
 			lint: group(["gate:server-lint", "lint:webapp", "gate:agents-lint", "gate:docs-lint"]),

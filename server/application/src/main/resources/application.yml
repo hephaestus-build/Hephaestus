@@ -794,8 +794,7 @@ logging:
         # Liquibase logs every changeset at INFO on each boot (the bulk of startup noise).
         # WARN keeps real migration problems (validation/checksum/lock-wait).
         liquibase: WARN
-        # Hibernate HHH100503 (batch-on-release) was a symptom of the achievement lock
-        # contention fixed separately; WARN keeps genuine batch problems visible.
+        # Keep genuine Hibernate batch problems visible without per-batch bookkeeping.
         org.hibernate.orm.jdbc.batch: WARN
         # Webhook receipts and per-event bookkeeping are logged at DEBUG at the source, so
         # per-repo sync rollups stay the only INFO. Flip the package to DEBUG to restore the

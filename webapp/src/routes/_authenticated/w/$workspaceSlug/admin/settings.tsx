@@ -125,7 +125,6 @@ function AdminSettings() {
 					}}
 					features={{
 						mentorEnabled: workspaceData.mentorEnabled,
-						achievementsEnabled: workspaceData.achievementsEnabled,
 						leaderboardEnabled: workspaceData.leaderboardEnabled,
 						progressionEnabled: workspaceData.progressionEnabled,
 						leaguesEnabled: workspaceData.leaguesEnabled,
