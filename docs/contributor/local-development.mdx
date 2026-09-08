@@ -439,15 +439,21 @@ spec. Commit both with the change.
 
 ### Updating Java dependencies
 
-Edit `server/gradle/libs.versions.toml`, then resolve the graphs and exercise the changed tools:
+Edit `server/gradle/libs.versions.toml`, then resolve the graphs and exercise the changed tools.
+Set `GRADLE_USER_HOME` to an empty temporary directory and disable configuration caching when
+generating metadata, so cached resolution cannot omit parent POM or module-descriptor checksums:
 
 ```sh
-./server/gradlew -p server :application:dependencies :generated-clients:dependencies --write-locks --write-verification-metadata sha256
-./server/gradlew -p server :application:check :application:bootJar --write-verification-metadata sha256
+./server/gradlew -p server --no-configuration-cache \
+  :application:dependencies :generated-clients:dependencies \
+  --write-locks --write-verification-metadata sha256
+./server/gradlew -p server --no-configuration-cache \
+  :application:check :application:bootJar --write-locks --write-verification-metadata sha256
 ```
 
 Review the dependency-lock diffs and independently verify newly trusted artifacts against their
 publisher before committing `server/gradle/verification-metadata.xml`. Metadata generation records
 what was downloaded; it does not establish trust. Run the checks again without metadata-writing
-flags to prove normal checksum enforcement. Exercise changed generators, formatters, Liquibase or
-mutation tooling as well: their classpaths are separate from the application runtime.
+flags, still without configuration caching and with another empty Gradle user home, to verify fresh
+downloads. Exercise changed generators, formatters, Liquibase or mutation tooling as well: their
+classpaths are separate from the application runtime. Restore your usual Gradle user home afterward.

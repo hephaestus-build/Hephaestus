@@ -1,5 +1,5 @@
 [versions]
-pmd = "7.17.0"
+pmd = "7.27.0"
 jacoco = "0.8.15"
 pitest = "1.30.0"
 pitest-junit5 = "1.2.3"
@@ -31,6 +31,7 @@ nullaway = "0.14.1"
 shedlock = "7.10.0"
 bucket4j = "8.19.0"
 bcprov = "1.85.2"
+bouncycastle-lts = "2.73.11"
 bcutil = "1.85"
 bcpkix = "1.85"
 
@@ -41,6 +42,7 @@ tomcat-embed-core = { module = "org.apache.tomcat.embed:tomcat-embed-core", vers
 okhttp-bom = { module = "com.squareup.okhttp3:okhttp-bom", version.ref = "okhttp" }
 archunit-core = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
 bcprov = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bcprov" }
+bouncycastle-lts = { module = "org.bouncycastle:bcprov-lts8on", version.ref = "bouncycastle-lts" }
 bcutil = { module = "org.bouncycastle:bcutil-jdk18on", version.ref = "bcutil" }
 bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bcpkix" }
 liquibase-core = { module = "org.liquibase:liquibase-core", version.ref = "liquibase" }

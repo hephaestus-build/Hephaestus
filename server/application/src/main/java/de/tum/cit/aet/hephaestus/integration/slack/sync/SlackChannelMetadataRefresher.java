@@ -105,7 +105,7 @@ public class SlackChannelMetadataRefresher {
                             workspaceId, channelId, "bot removed from channel — detected by sync");
                 }
             }
-            case ConversationLookup.NotFound(var error) -> {
+            case ConversationLookup.NotFound(var ignored) -> {
                 if (channel.getConsentState() == ConsentState.ACTIVE) {
                     consentService.pauseForPlatformEvent(
                             workspaceId, channelId, "channel no longer exists — detected by sync");

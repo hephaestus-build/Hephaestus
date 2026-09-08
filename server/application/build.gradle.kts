@@ -94,6 +94,7 @@ dependencies {
     constraints {
         implementation(libs.archunit.core)
         implementation(libs.bcprov)
+        implementation(libs.bouncycastle.lts)
         implementation(libs.bcutil)
         implementation(libs.bcpkix)
     }
