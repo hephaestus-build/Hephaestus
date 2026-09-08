@@ -212,3 +212,40 @@ void describe("issue classification across practices", () => {
 		});
 	}
 });
+
+void it("linked-work analysis reads only explicitly supplied context, never a repository-derived fallback", async () => {
+	const root = await createTempDir("linked-work-context-");
+	const analyse = await loadScript("honours-linked-issue-acceptance-criteria");
+	try {
+		const legacy = join(root, "inputs", "context");
+		const context = join(root, "areas/linked work");
+		const repo = join(root, "inputs", "sources", "scm", "repo");
+		await mkdir(legacy, { recursive: true });
+		await mkdir(context, { recursive: true });
+		await writeFile(
+			join(legacy, "linked_work_items.json"),
+			JSON.stringify({ workItems: [{ bodyExcerpt: "- [ ] WRONG CONTEXT" }] }),
+		);
+		await writeFile(
+			join(context, "linked_work_items.json"),
+			JSON.stringify({ workItems: [{ bodyExcerpt: "Acceptance criteria\n- [ ] one\n- [ ] two" }] }),
+		);
+		const metadata = {
+			source_branch: "fix-example",
+			title: "Fixes #12",
+			pr_number: 1,
+			pr_url: "https://example.invalid/pull/1",
+			repository_full_name: "owner/project",
+			target_branch: "main",
+			commit_sha: "a".repeat(40),
+		};
+		const explicit = await analyse(repo, new Map(), metadata, context);
+		assert.equal(explicit.metrics.acceptanceCriteriaCheckboxes, 2);
+		const absent = await analyse(repo, new Map(), metadata);
+		assert.equal(absent.metrics.linkedItemsFilePresent, 0);
+		const missing = await analyse(repo, new Map(), metadata, join(root, "missing"));
+		assert.equal(missing.metrics.linkedItemsFilePresent, 0);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});

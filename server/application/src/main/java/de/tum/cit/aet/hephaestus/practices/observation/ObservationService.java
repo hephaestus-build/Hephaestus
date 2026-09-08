@@ -26,15 +26,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service for reading practice observations scoped to the authenticated developer.
- *
- * <p>All methods resolve the current user from the security context via
- * {@link UserRepository#getCurrentUser()}. If the user is not yet synced as a
- * developer (e.g., first login before any PR activity), list/summary endpoints
- * return empty results rather than failing.
- *
- * <p>For single-observation access, developer ownership is enforced in SQL — a
- * non-owner receives 404 (not 403) to avoid leaking observation existence.
+ * Developer-scoped observation reads and workspace-scoped supporting queries.
+ * Pull-request reads intentionally include observations about other developers.
  */
 @Service
 @RequiredArgsConstructor
@@ -134,8 +127,7 @@ public class ObservationService {
             List.of(FeedbackChannel.IN_CONTEXT.name(), FeedbackChannel.IN_CHAT.name());
 
     /**
-     * Single observation detail. Ownership is enforced in the SQL query itself —
-     * an observation belonging to another developer simply won't be returned.
+     * Missing and unowned observations both raise not-found to avoid disclosing their existence.
      *
      * @return the observation if it exists and belongs to the current user
      * @throws EntityNotFoundException if no user, or observation not found/not owned

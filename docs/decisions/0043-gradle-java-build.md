@@ -45,7 +45,7 @@ consumers. [CI documentation](../contributor/ci-cd.mdx#caches) owns cache trust 
 - Source builders use `gradlew` or `gradlew.bat`; generated outputs live under `build/`.
 - Dependency and plugin updates require lockfile and verification-metadata review; generating
   checksums records downloaded bytes but does not establish publisher trust.
-- Runtime behavior, HTTP contracts and released Liquibase migrations do not change.
+- HTTP contracts and released Liquibase migrations do not change.
 
 ## Alternatives
 

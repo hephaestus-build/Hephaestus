@@ -323,18 +323,8 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     Optional<AgentJobLlmUsage> findLlmUsageById(@Param("id") UUID id);
 
     /**
-     * Finished jobs at least one feedback lane has no record of having run — the work
-     * {@code FeedbackLanePreparationSweeper} recovers after a rejected async submission dropped the
-     * event.
-     *
-     * <p>Bounded on both sides of the window on purpose. The upper bound leaves the listener its own
-     * chance first, so the sweeper is a backstop rather than a competitor; the lower bound stops the
-     * sweep from walking all of history, which also means a lane left unprepared for longer than the
-     * window is never recovered — it is a recovery path, not a reconciliation of the whole ledger.
-     *
-     * <p>Both marks are set even when a lane prepares nothing, so a job the sweeper handles is
-     * off this list on the next pass whatever the lanes decided. That is what keeps an hourly sweep
-     * from re-routing every recent job forever.
+     * Completed pull-request and issue reviews with unfinished preparation in {@code [from, until)}.
+     * A successful empty result has a completion mark and is excluded.
      */
     @WorkspaceAgnostic("Cross-tenant recovery sweep over jobs whose feedback lanes have no completion mark")
     @Query("SELECT new de.tum.cit.aet.hephaestus.agent.job.UnpreparedFeedbackLanes("
@@ -349,14 +339,9 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
             @Param("from") Instant from, @Param("until") Instant until, Pageable pageable);
 
     /**
-     * Records that the conversational lane ran for this job. Written by the lane itself and by the
-     * sweeper that recovered it, so they cannot disagree about which one it was: the mark says the lane
-     * ran, not who drove it.
+     * Records successful preparation, including an empty result, without overwriting its first completion time.
      *
-     * <p>{@code IS NULL}-fenced so a sweeper racing a slow listener leaves the first completion's
-     * instant standing rather than backdating or advancing it.
-     *
-     * @return 1 when this call is the one that recorded the lane, 0 when it was already recorded
+     * @return 1 if recorded, 0 if already recorded or the job no longer exists
      */
     @WorkspaceAgnostic("ID-based lane completion mark; job ID from the lane's own event or the recovery sweep")
     @Modifying(flushAutomatically = true, clearAutomatically = true)

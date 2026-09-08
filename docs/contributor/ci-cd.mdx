@@ -701,3 +701,63 @@ Extend the pipeline at the ownership boundary that changed; do not copy an exist
 5. Pass the change-detection output from `cicd.yml` to every reusable workflow that needs it.
 
 `scripts/ci-contract.test.ts` owns the workflow invariants; extend it when the service introduces one.
+
+## Chromatic visual coverage
+
+The Stories job reports visual coverage separately from interaction tests and the
+**Preview / Storybook** publication link. Publication is not visual approval: the final job
+verdict also requires a passing coverage report.
+
+| Verdict | Meaning and action |
+| --- | --- |
+| `tested-build` | The returned build has captured snapshots and passed without errors. It may be a reused approved build, not new captures in this CI run. |
+| `inherited` | The returned build reused baseline snapshots without new captures. Valid TurboSnap coverage, but not a newly tested recovery baseline. |
+| `quota-skipped` | An account limit blocked coverage. The job fails; an account owner must resolve the limit. |
+| `failed` | Visual differences or component/interaction errors need review. Fix errors; accept only intentional, inspected differences. |
+| `unavailable` | Chromatic failed or returned insufficient coverage evidence. The job fails; inspect the build, action logs and account limits before retrying. |
+| `policy-skipped` | Fork PRs and `dependabot/` or `renovate/` branches do not run credentialed visual tests. Interaction tests still run; this is not visual approval. |
+
+`scripts/report-chromatic.ts` interprets the action's public outputs and
+[CLI exit codes](https://www.chromatic.com/docs/cli/#exit-codes). Counts describe the returned
+build, which Chromatic can reuse; they do not establish when snapshots were captured. Accepted
+builds can retain nonzero change counts. Missing outputs fail closed, and account limits are not
+always distinguishable from other failures. Review this contract when updating the action.
+
+For visual verification of a fork contribution, a maintainer can review it and run a trusted
+same-repository branch. Do not expose project secrets to forks or use `pull_request_target`
+to bypass the policy.
+
+### Recovering quota and the baseline
+
+1. An account owner checks the project's current quota/billing and the linked build's results.
+   Resolve any account limit before retrying.
+2. Coordinate one full run on the current `main` commit after confirming snapshot capacity.
+   From the repository root:
+
+   ```bash
+   vp run --filter webapp build-storybook
+   cd webapp
+   vp exec chromatic --storybook-build-dir=storybook-static --only-changed=false --force-rebuild
+   ```
+
+   Supply `CHROMATIC_PROJECT_TOKEN` through the environment, never a committed file or command
+   argument. `--force-rebuild` prevents same-commit build reuse; `--only-changed=false` requests
+   full snapshots instead of TurboSnap inheritance.
+3. Verify in Chromatic that the build captured snapshots and completed testing. Inspect every
+   difference and component/interaction error. CI never auto-accepts, including on `main`:
+   manually accept only intentional, inspected differences, then rerun the check. Never accept
+   a publish-only, limited, errored or untested build as the recovery baseline.
+4. Reproduce component failures with the affected stories. Fix defects with story or regression
+   coverage, or link a scoped defect with reproduction details. For earlier errors that no longer
+   reproduce, record the verification evidence rather than assuming a successful upload fixed them.
+5. Record the `main` commit, build URL, captured/inherited counts, quota check and error dispositions
+   in the issue tracking the recovery. Then rerun affected PRs.
+
+### Snapshot consumption and global changes
+
+[TurboSnap](https://www.chromatic.com/docs/turbosnap/) reuses unchanged baseline snapshots.
+`webapp/chromatic.config.json` owns external-file invalidation: global styles, public files, assets
+and build configuration intentionally trigger full snapshots. Budget for those runs; do not narrow
+`externals` or broaden `untraced` to reduce quota use or latency. Follow
+[Chromatic's external-file guidance](https://www.chromatic.com/docs/turbosnap/setup/#configure-external-files)
+when changing these boundaries, and preserve dependency stats from the single Storybook build.

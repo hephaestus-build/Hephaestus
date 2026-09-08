@@ -49,6 +49,19 @@ environment's `url`, `username`, and `password`. Make it readable only by the im
 user and the operator, then mount it read-only. Do not put credentials in command arguments, shell
 history, or the repository.
 
+Read that user from the image rather than assuming it, and give the file to it:
+
+```bash
+docker inspect --format '{{.Config.User}}' "$CANDIDATE_IMAGE"   # e.g. 1002:1001
+chown 1002:1001 "$LIQUIBASE_DEFAULTS_FILE" && chmod 0600 "$LIQUIBASE_DEFAULTS_FILE"
+```
+
+A file left owned by `root` with mode `0600` is the natural reading of "protected" and is the one
+shape that fails: the container cannot read it and Liquibase aborts with
+`java.nio.file.AccessDeniedException: /run/secrets/liquibase.properties`, which names the mount
+rather than the permission. Prove the plumbing first with the read-only `status` command — same
+image, mount and network, no writes — and only then run the synchronization below.
+
 ```bash
 docker run --rm --network "$DATABASE_NETWORK" \
   --mount "type=bind,src=$LIQUIBASE_DEFAULTS_FILE,dst=/run/secrets/liquibase.properties,readonly" \
@@ -75,8 +88,8 @@ They must have author `hephaestus-release`, non-null checksums, and ids `baselin
 `baseline_v0_77_4-audit`, `baseline_v0_77_4-seed`, and `baseline_v0_77_4-tag`. The last row carries tag
 `baseline_v0_77_4`. A `dev` synchronization has three entries because it excludes audit triggers.
 
-Start the candidate and verify readiness, authenticated workspace reads, consent, operator settings,
-and partition maintenance. The baseline must execute no DDL on this synchronized database. Later
+Use the [guarded startup sequence](production-operations-runbook#silent-deployment-checklist), then verify
+readiness, authenticated workspace reads, consent, operator settings, and partition maintenance. The baseline must execute no DDL on this synchronized database. Later
 migrations, if present in the candidate, still run normally; do not synchronize beyond the baseline tag.
 
 ## Stale lock recovery

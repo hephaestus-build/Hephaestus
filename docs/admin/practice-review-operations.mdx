@@ -144,6 +144,9 @@ behaviors matter independently of their exact defaults:
 
 - **Background task cadences are fixed in code.** Their thresholds may be configurable even when their
   polling schedules are not.
+- **Feedback preparation recovery has a bounded window.** The sweeper selects recent completed pull
+  request and issue reviews with missing preparation marks. Older unfinished preparation is not
+  automatically recovered. A successful empty result is complete; recovery does not rerun the model.
 - **Retryable occurrences eventually lapse.** A workspace left misconfigured can accumulate retries and
   then go quiet when their deadline passes.
 - **Nothing is ever deleted from the occurrence ledger**, in any state, including retired rows. It is the

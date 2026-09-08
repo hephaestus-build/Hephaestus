@@ -277,7 +277,7 @@ void test("a citation must name a source this run staged, and the artifact that 
 	);
 	assert.throws(
 		() => validateEvidenceSources(observation, new Set(["scm.pull-request.diff"]), new Map()),
-		/was not staged.*inputs\/manifest\.json/,
+		/was not staged.*task-declared manifest/,
 	);
 });
 

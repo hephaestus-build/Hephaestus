@@ -12,81 +12,99 @@ holds bounded evidence copies that may become irreproducible after upstream cont
 | Data | Where | Priority |
 | --- | --- | --- |
 | PostgreSQL database | Compose-managed `postgresql-data` volume mounted by `postgres` | **Everything.** Accounts, workspaces, observations, feedback, encrypted provider tokens, JWT signing keys. |
-| `release-lock.env` | `/opt/hephaestus/docker/self-host/release-lock.env` | The signed image digests matching the database backup. |
 | `.env` | `/opt/hephaestus/docker/self-host/.env` | **Equal priority.** Its encryption keys protect values inside the database backup. Without them, provider credentials and signing material are unreadable. |
-| TLS certificates | `./letsencrypt/` | Optional — Let's Encrypt re-issues on first boot (rate limits permitting). |
+| Signed release lock and deployment overrides | `release-lock.env` and any operator-owned Compose/configuration files | Restore the exact release and configuration associated with the database, not the latest release. |
+| TLS certificates | `letsencrypt` volume mounted by `reverse-proxy` | Optional — Let's Encrypt re-issues when permitted to connect (rate limits permitting). |
 | Context Fabric | `git-repos` volume | Back up when replayable evidence is required. Skipping it discards repository clones and bounded replay/CAS content; durable job provenance remains in PostgreSQL, but the exact source bytes may be unrecoverable. |
-| NATS JetStream | `nats-data` volume | Pending events; preserve for reconciliation with the restored database. |
+| NATS JetStream | `nats-data` volume | Preserve broker snapshots or cold copies when event-gap recovery/forensics requires them. Never replay a store divergent from PostgreSQL without the runbook recovery checks. |
+
+For production backup automation and recovery gates, start with the
+[production operations runbook](./production-operations-runbook#backup-restore-and-postgresql--jetstream).
+The logical dump below is the minimal fallback, not arbitrary point-in-time recovery.
 
 ## Backup
 
-PostgreSQL MVCC gives a consistent database snapshot while the application runs. Do not deploy or
-rotate encryption keys until the database, configuration and release lock have all been captured:
+A logical dump can run while the application runs: PostgreSQL supplies a consistent database snapshot,
+not a coordinated snapshot of external writes, JetStream or rotating secrets. For a deployment rollback
+point, first stop application writers and key rotation as the runbook requires. Do not deploy or rotate
+keys until the database, configuration and release lock have all been captured.
+
+Run each shell block as a unit and **stop on any failure**. Do not enable shell tracing around secrets.
 
 ```bash
 (
-set -euC
+set -eu
 umask 077
 cd /opt/hephaestus/docker/self-host
 dc() { docker compose --env-file .env --env-file release-lock.env "$@"; }
-backup="hephaestus-$(date -u +%Y%m%dT%H%M%SZ)"
-dc exec -T postgres pg_dump -U root -Fc hephaestus > "$backup.dump"
-cat .env > "$backup.env"
-cat release-lock.env > "$backup.release-lock.env"
+backup_dir=$(mktemp -d "/var/tmp/hephaestus-backup-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")
+dc exec -T postgres pg_dump -U root -Fc hephaestus > "$backup_dir/hephaestus.dump"
+test -s "$backup_dir/hephaestus.dump"
+dc exec -T postgres pg_restore --list < "$backup_dir/hephaestus.dump" >/dev/null
+cp .env release-lock.env "$backup_dir/"
+(cd "$backup_dir" && sha256sum hephaestus.dump .env release-lock.env > SHA256SUMS)
+printf 'Backup directory: %s\n' "$backup_dir"
 )
 ```
 
-Copy all three files **off-host**, encrypted. Schedule backups to meet your acceptable data-loss
-window and rehearse restores regularly.
+Include operator-owned overrides and every active/prior credential key version the snapshot needs;
+see [credential key rotation](./credential-key-rotation). Ship the complete directory **off the host**,
+encrypted, and verify its checksums there. Treat checksums as corruption detection, not authenticity: use
+a trusted backup destination. Perform an isolated restore; `pg_restore --list` reads the archive inventory,
+not every data block, and is not proof of recoverability. Set schedule, retention and freshness alerts
+against your recovery objectives. The private `/var/tmp` directory is temporary staging, not the backup
+repository: after verification and any ongoing recovery, remove its plaintext copies according to retention.
 
 ## Restore
 
-On a fresh host, complete install steps 1–2 first, restoring the saved `release-lock.env` and `.env` (same
-`POSTGRES_PASSWORD` and both `HEPHAESTUS_SECURITY_*ENCRYPTION_KEY` values). Replace
-`hephaestus-TIMESTAMP.dump` below with the timestamped dump from that backup:
+**Before any application startup**, complete the runbook
+[pre-boot isolation](./production-operations-runbook#pre-boot-isolation--mandatory-for-every-restore).
+
+On a fresh host, prepare the supported prerequisites, then check out **the backup's release**, verify
+its published signed lock, and restore the matching `.env` and operator overrides before starting
+PostgreSQL. Do not follow the install guide's latest-release selection for recovery. Preserve the general
+encryption key and all active/prior credential keys **and version numbers** needed by this snapshot;
+keep credential rotation disabled. Apply isolation settings to the restored configuration.
+
+The commands below replace the named database. Preserve the failed database separately if it is needed
+for investigation; do not run them until the instance, backup and permitted data loss are confirmed.
+Set `BACKUP_DIR` to the absolute path printed by the backup command (or its restored off-host copy):
 
 ```bash
 (
 set -eu
 cd /opt/hephaestus/docker/self-host
+BACKUP_DIR=/absolute/path/to/backup-directory
 dc() { docker compose --env-file .env --env-file release-lock.env "$@"; }
-dc up -d --wait postgres
+(cd "$BACKUP_DIR" && sha256sum -c SHA256SUMS)
+cmp "$BACKUP_DIR/release-lock.env" release-lock.env
+test -s "$BACKUP_DIR/hephaestus.dump"
 dc stop application-server webhook-server
-
-test -s hephaestus-TIMESTAMP.dump
-dc exec -T postgres pg_restore --list < hephaestus-TIMESTAMP.dump >/dev/null
+dc up -d --wait --wait-timeout 120 postgres
+dc exec -T postgres pg_restore --list < "$BACKUP_DIR/hephaestus.dump" >/dev/null
 dc exec -T postgres dropdb -U root --if-exists hephaestus
 dc exec -T postgres createdb -U root hephaestus
 dc exec -T postgres pg_restore -U root -d hephaestus --no-owner --no-acl --single-transaction \
-  < hephaestus-TIMESTAMP.dump
+  < "$BACKUP_DIR/hephaestus.dump"
 )
 ```
+
+Complete [broker recovery](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers)
+then complete **Prove silence**, **Inspect and decide**, and **Release deliberately** in the
+[silent checklist](./production-operations-runbook#silent-deployment-checklist) before restoring normal access.
+Verify sign-in, workspace relationships and activity up to the recovery timestamp.
 
 ### Before restarting services
 
-Writes after the backup are outside its recovery point. Restoring PostgreSQL does not restore
-external credentials or event queues. Keep application services stopped while you reconcile:
-
-- **Sessions and credentials:** use the matching encryption configuration; do not delete unreadable
-  signing keys. Reapply access revocations and review credential rotations since the recovery point.
-- **NATS JetStream:** preserve `nats-data`. Queued events may already have been processed or may fall
-  after the recovery point; decide which can safely replay against the restored database. Provider
-  sync cannot recover every event or content that has changed or been deleted.
-- **Release:** use the signed release lock saved with the backup, not an older application image.
-  Upgrade only after verifying recovery.
-
-Then resume the stack:
-
-```bash
-(
-set -eu
-cd /opt/hephaestus/docker/self-host
-docker compose --env-file .env --env-file release-lock.env up -d --wait
-)
-```
-
-Sign in, open a workspace, and check that activity through the backup timestamp is present. Users
-whose sessions were created after the backup must sign in again.
+- **Access and erasure:** a restore rewinds account suspensions, session revocations, recipient consent
+  and deletions as well as application data. Reapply post-backup security/privacy decisions from the
+  restricted incident record before reopening access or delivery. Sessions issued after the snapshot
+  must sign in again, but sessions revoked after it can become valid again. Do not erase signing keys
+  as a generic restore step; diagnose missing encryption keys separately from corrupt signing data.
+- **NATS JetStream:** follow the [runbook broker recovery procedure](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers) before starting consumers.
+  Ingest deduplication cannot prevent external duplicates after PostgreSQL loses delivery history;
+  scheduled sync cannot recover every event in the gap.
+- **Restore into an older app version:** don't. Restore with the same signed release lock the backup was taken from, then upgrade.
 
 ## Unsupported PostgreSQL versions
 

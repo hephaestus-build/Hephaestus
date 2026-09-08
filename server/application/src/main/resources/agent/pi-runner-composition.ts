@@ -1,14 +1,10 @@
-// Coherence rules the composed-feedback envelope must satisfy for the server to deliver what it
-// carries. Kept apart from pi-runner.ts so they can be exercised without starting a review.
-
-/** The lanes feedback can land on. Widening this fails to compile until every lane is bounded. */
 export const CHANNELS = ["IN_CONTEXT", "IN_APP", "IN_CHAT"] as const;
 export type Channel = (typeof CHANNELS)[number];
 
 export const ACTIONS = ["NEW", "SUPERSEDE", "WITHHOLD"] as const;
 export type FeedbackAction = (typeof ACTIONS)[number];
 
-/** A unit carries more than this; the tool schema in pi-runner.ts is the definition of the rest. */
+/** Partial view for coherence checks; pi-runner.ts owns the complete tool schema. */
 export interface ComposedFeedbackUnit {
 	action?: FeedbackAction;
 	channel?: Channel;
@@ -31,11 +27,7 @@ export interface ComposedFeedbackEnvelope {
 	lead?: string | null;
 }
 
-/**
- * What the composer is told about the practices the review never settled. It is not a finding and it
- * is not a clean bill: the developer's page records them as unevaluated, and anything written about
- * them would be a verdict the review cannot support.
- */
+/** Unevaluated practices support neither positive nor negative claims. */
 export function notReachedNote(notReached: readonly string[]): string {
 	if (notReached.length === 0) return "";
 	const subject =
