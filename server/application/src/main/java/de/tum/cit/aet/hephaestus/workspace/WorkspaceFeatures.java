@@ -31,12 +31,6 @@ public class WorkspaceFeatures {
     @Column(name = "mentor_enabled", nullable = false)
     private Boolean mentorEnabled = false;
 
-    // Storage-only during retirement; see the achievement package.
-    @NotNull
-    @ColumnDefault("false")
-    @Column(name = "achievements_enabled", nullable = false)
-    private Boolean achievementsEnabled = false;
-
     @NotNull
     @ColumnDefault("false")
     @Column(name = "leaderboard_enabled", nullable = false)

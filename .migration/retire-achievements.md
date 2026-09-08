@@ -9,6 +9,6 @@ Achievement pages, unlock notifications, the skill-tree designer, and achievemen
 
 Remove clients of `/workspaces/{workspaceSlug}/users/{login}/achievements` and its `/definitions`, `/recalculate`, and `/reload` endpoints. Workspace responses no longer include `achievementsEnabled`; stop sending that property to the workspace feature-update endpoint. There are no replacement achievement endpoints or redirects.
 
-Stored achievement progress and the old workspace flag are retained in the database, but the application no longer evaluates or serves achievements. No data-drop migration is included. Activity history, practice feedback, leaderboards, leagues, and XP progression are unaffected.
+The upgrade permanently drops `user_achievement` and `workspace.achievements_enabled`. There is no data export, retained achievement storage, or replacement feature in the application. Activity history, practice feedback, leaderboards, leagues, and XP progression remain available.
 
-Retained progress is contributor-global, not workspace-owned. Workspace purge and sign-in account deletion do not erase it; operators must handle verified erasure explicitly. The [personal-data map](https://docs.hephaestus.build/admin/dsms/personal-data-map) documents the retained store.
+Before upgrading, back up the database and stop every application runtime role (`server`, `worker`, and `webhook`). Start only the upgraded version after migration; a rolling deployment with older versions is not supported for this removal. Returning to an older version requires restoring the pre-upgrade database backup; Liquibase cannot recover deleted progress.
