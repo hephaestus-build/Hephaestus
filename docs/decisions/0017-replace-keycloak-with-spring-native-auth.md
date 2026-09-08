@@ -33,7 +33,7 @@ ADR 0016 (Stage A) already added `User.keycloak_subject` and explicitly anticipa
 
 ## Considered options
 
-1. **Replace Keycloak with Spring Security 7 native auth (this ADR).** `oauth2Login` federates upstream, custom `AuthSuccessHandler` mints a short-lived ES256 cookie-JWT via Spring's `NimbusJwtEncoder` + DB-backed `JWKSource`. Workspace-scoped IdPs ride `Connection` rows of new `kind=OIDC_LOGIN_*`. Revocation via the `issued_jwt` table (per-request, negative-cached check). No Keycloak.
+1. **Replace Keycloak with Spring Security 7 native auth (this ADR).** `oauth2Login` federates upstream, custom `AuthSuccessHandler` mints an ES256 cookie-JWT via Spring's `NimbusJwtEncoder` + DB-backed `JWKSource`. Workspace-scoped IdPs ride `Connection` rows of new `kind=OIDC_LOGIN_*`. Revocation via the `issued_jwt` table (per-request, negative-cached check). No Keycloak.
 
 2. **Replace Keycloak with Spring Authorization Server.** Hephaestus becomes its own OAuth 2.1 / OIDC server. SAS handles `/oauth2/authorize`, `/token`, `/jwks`, federation to upstream. Cleaner long-term *if* we ever need third-party OAuth clients — but SAS docs explicitly treat the "BFF for own SPA" case as a legacy edge ([SAS issue #297](https://github.com/spring-projects/spring-authorization-server/issues/297)). SAS adds ~6 endpoints we don't need and forces a custom cookie wrapper around `/token` anyway. Net code we own is ~the same; attack surface is larger.
 

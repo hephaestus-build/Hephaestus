@@ -13,18 +13,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseCookie;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-/**
- * Proves StaleAuthCookieFilter: a logged-out browser still presenting an INVALID access cookie must
- * not be 401'd on a public endpoint (or the login page can't load its sign-in options — the symptom
- * this filter exists to kill), while a protected endpoint still 401s and a VALID cookie is untouched.
- *
- * <p>Runs over the LIVE security chain (real RevocationAwareJwtDecoder + real ES256 cookie-JWT), the
- * same setup as {@code SessionRefreshLifecycleIntegrationTest}.
- */
-class StaleAuthCookieEvictionIntegrationTest extends RealAuthIntegrationTest {
+/** Invalid cookies leave public reads usable without allowing access to protected endpoints. */
+class StaleAuthCookieIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private WebTestClient webTestClient;
@@ -42,7 +34,7 @@ class StaleAuthCookieEvictionIntegrationTest extends RealAuthIntegrationTest {
     private String cookieName;
 
     @Test
-    void staleCookieDoesNotBlockPublicEndpointAndIsCleared() {
+    void shouldIgnoreStaleCookieWithoutOverwritingANewerSession() {
         var result = webTestClient
                 .get()
                 .uri("/identity-providers")
@@ -52,28 +44,20 @@ class StaleAuthCookieEvictionIntegrationTest extends RealAuthIntegrationTest {
                 .isOk()
                 .returnResult(Void.class);
 
-        // The dead cookie is cleared so the browser stops resending it — self-healing. A clear is an
-        // empty value with a non-positive Max-Age (Tomcat may serialise it as Max-Age=0 or as a past
-        // Expires, surfaced as Duration.ZERO or -1s respectively — both mean "drop it now").
-        ResponseCookie cleared = result.getResponseCookies().getFirst(cookieName);
-        assertThat(cleared).as("stale cookie must be cleared").isNotNull();
-        assertThat(cleared.getValue()).as("clearing cookie has an empty value").isEmpty();
-        assertThat(cleared.getMaxAge())
-                .as("clearing cookie is not kept alive")
-                .isLessThanOrEqualTo(java.time.Duration.ZERO);
+        assertThat(result.getResponseCookies().getFirst(cookieName)).isNull();
     }
 
     @Test
     void staleCookieOnProtectedEndpointStill401sAsUnauthenticated() {
-        // The eviction must NOT silently authenticate: a protected endpoint still rejects the request
-        // (401 = the correct "logged out" signal the SPA expects, not a 500 bad-token error).
-        webTestClient
+        var result = webTestClient
                 .get()
                 .uri("/user")
                 .header(HttpHeaders.COOKIE, cookieName + "=not-a-valid-jwt")
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .returnResult(Void.class);
+        assertThat(result.getResponseCookies().getFirst(cookieName)).isNull();
     }
 
     @Test

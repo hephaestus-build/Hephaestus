@@ -1779,8 +1779,10 @@ paths:
     post:
       operationId: refresh
       responses:
-        "200":
-          description: OK
+        "204":
+          description: Session renewal completed
+        "401":
+          description: Session has ended
       summary: "Rotate the access token (new jti, old revoked)"
       tags:
       - Auth

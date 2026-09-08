@@ -6,10 +6,6 @@ import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 
 import { isAppAdmin, resolveCurrentUser, safeReturnTo } from "./guard";
-
-// `safeReturnTo` is the single open-redirect defense for the post-login `?returnTo` param.
-// A regression here is a security bug (open redirect / XSS via javascript: URLs), so the
-// accept/reject matrix below is exhaustive on the interesting branches.
 describe("safeReturnTo", () => {
 	describe("accepts same-origin absolute paths", () => {
 		it.each(["/", "/dashboard", "/w/acme/overview", "/a/b?x=1&y=2", "/path#frag", "/with-dash_x"])(
@@ -50,9 +46,6 @@ describe("safeReturnTo", () => {
 			expect(safeReturnTo("/ /evil")).toBe("/");
 			expect(safeReturnTo("/foo bar")).toBe("/");
 		});
-
-		// decode-then-check: an attacker percent-encodes the dangerous bytes so a naive
-		// (encoded) same-origin check passes, then a downstream parser decodes them.
 		describe("decode-then-check defeats percent-encoded escapes", () => {
 			it.each([
 				["encoded protocol-relative //evil", "/%2f%2fevil.com"],
@@ -73,13 +66,10 @@ describe("safeReturnTo", () => {
 			});
 
 			it("preserves the original value for a safe path with legitimately-encoded query bytes", () => {
-				// `%26` is an encoded ampersand inside a query value — decoding it is only for the
-				// safety check; the returned value must stay encoded so the destination is intact.
 				expect(safeReturnTo("/search?q=a%26b")).toBe("/search?q=a%26b");
 			});
 
 			it("does not loop forever on a decode bomb / malformed encoding", () => {
-				// A lone `%` is malformed (decodeURIComponent throws) — must fall back safely, not hang.
 				expect(safeReturnTo("/foo%")).toBe("/foo%");
 				expect(safeReturnTo("/%2525252f%2525252fevil")).toBe("/");
 			});
@@ -88,8 +78,6 @@ describe("safeReturnTo", () => {
 });
 
 describe("isAppAdmin", () => {
-	// The authoritative (and only) source is the `appRole` field from GET /user; the client is not a
-	// security boundary (every admin endpoint is enforced server-side by hasAuthority('app_admin')).
 	it("is true when appRole is APP_ADMIN", () => {
 		expect(isAppAdmin({ appRole: "APP_ADMIN" })).toBe(true);
 	});
@@ -101,16 +89,11 @@ describe("isAppAdmin", () => {
 	});
 });
 
-/**
- * The guard runs on every authenticated navigation, so what it does with a *stale* cache is the
- * whole design: answer from it, refresh behind it, and never let the refresh decide the navigation.
- */
 describe("resolveCurrentUser", () => {
 	function client() {
 		return new QueryClient({ defaultOptions: { queries: { retry: false } } });
 	}
 
-	/** Installs the answer to `GET /user` and counts how often it is asked for. */
 	function serve(answer: () => Response) {
 		const asked = { times: 0 };
 		server.use(
@@ -125,7 +108,6 @@ describe("resolveCurrentUser", () => {
 	const asAppRole = (appRole: "APP_ADMIN" | "APP_USER") => () =>
 		HttpResponse.json({ ...currentUser, appRole });
 
-	/** Marks the cached user stale without refetching, the way a mutation or a 401 handler would. */
 	const goStale = (queryClient: QueryClient) =>
 		queryClient.invalidateQueries({ refetchType: "none" });
 
@@ -135,10 +117,23 @@ describe("resolveCurrentUser", () => {
 		expect(await resolveCurrentUser(client())).toMatchObject({ appRole: "APP_ADMIN" });
 	});
 
-	it("answers null rather than throwing when the probe fails", async () => {
+	it("answers null only when the server confirms the session is unauthenticated", async () => {
 		serve(() => new HttpResponse(null, { status: 401 }));
 
 		expect(await resolveCurrentUser(client())).toBeNull();
+	});
+
+	it.each([403, 503])(
+		"surfaces HTTP %i on a cold load instead of asking for sign-in",
+		async (status) => {
+			serve(() => new HttpResponse(null, { status }));
+			await expect(resolveCurrentUser(client())).rejects.toThrow("Could not verify your session.");
+		},
+	);
+
+	it("surfaces a connection failure on a cold load", async () => {
+		serve(() => HttpResponse.error());
+		await expect(resolveCurrentUser(client())).rejects.toThrow("Could not verify your session.");
 	});
 
 	it("answers from a stale cache and refreshes behind it", async () => {
@@ -147,10 +142,7 @@ describe("resolveCurrentUser", () => {
 		await resolveCurrentUser(queryClient);
 		await goStale(queryClient);
 		const revoked = serve(asAppRole("APP_USER"));
-
-		// The stale answer is still instant — the navigation never waits on the network…
 		expect(await resolveCurrentUser(queryClient)).toMatchObject({ appRole: "APP_ADMIN" });
-		// …and the revocation fetched behind it lands for the next one.
 		await vi.waitFor(() => expect(revoked.times).toBe(1));
 		expect(await resolveCurrentUser(queryClient)).toMatchObject({ appRole: "APP_USER" });
 	});
