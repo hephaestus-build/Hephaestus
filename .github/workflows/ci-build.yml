@@ -93,6 +93,14 @@ jobs:
           path: server
           merge-multiple: true
           digest-mismatch: error
+      # `setup-caches` already asks setup-gradle to validate the wrapper, and this repeats it as its
+      # own step because that is the only form a reader — or OpenSSF Scorecard — can see. Scorecard's
+      # Binary-Artifacts check matches `gradle/actions/wrapper-validation@` and
+      # `gradle/wrapper-validation-action@` literally, and accepts no other spelling, so without this
+      # the committed `gradle-wrapper.jar` scores as an unvetted executable in the tree.
+      - name: Validate the Gradle wrapper
+        if: steps.reuse.outputs.artifact-id == ''
+        uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
       - uses: ./.github/actions/setup-caches
         if: steps.reuse.outputs.artifact-id == ''
       - name: Package the server
