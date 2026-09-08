@@ -1,11 +1,14 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static de.tum.cit.aet.hephaestus.architecture.HephaestusArchitectureTest.classes;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-class PracticeReviewModuleBoundaryTest extends HephaestusArchitectureTest {
+@Tag("architecture")
+class PracticeReviewModuleBoundaryTest {
 
     @Test
     void shouldKeepScmPersistenceOutOfObservationAdmission() {
