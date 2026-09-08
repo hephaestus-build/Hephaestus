@@ -68,7 +68,7 @@ void test("compatibility overrides receive same-major fixes without restricting 
 	const rules = config.packageRules.filter(isRecord);
 	for (const [selector, versions] of [
 		["js-yaml@>=4.0.0", "4.x"],
-		["markdown-it@<=14.1.1", "14.x"],
+		["markdown-it@<14.3.1", "14.x"],
 		["uuid@<11.1.1", "11.x"],
 	]) {
 		const rule = rules.find(
