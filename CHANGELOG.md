@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.78.0
+
+### Minor Changes
+
+- Require PostgreSQL 18 and initialize new databases from a compact v0.77.4 baseline instead of replaying the full migration history.
+
+  **Operators:** If you run PostgreSQL 17, complete the documented PostgreSQL 18 upgrade using v0.77.4 before installing this release. All existing installations must back up their database, verify the v0.77.4 cut-point, and synchronize the baseline before starting this release. Fresh installations initialize automatically.
+
+### Patch Changes
+
+- Account exports now record a failed attempt after a database transaction rolls back, instead of remaining queued or processing when generation fails. Successful exports are counted only after their data commits.
+- Stops a sync started in one workspace from appearing to run in another. Switching workspace kept the integration overview's cards mounted, so a sync the new workspace had never asked for could still show as pending on the matching integration.
+
+  The certificate migration in the pull-based deployment guide no longer risks the certificates a host is already serving: the copy refuses when the volume already holds an ACME store, instead of overwriting it and warning about it afterwards.
+
+- GitLab sign-in options show the GitLab icon even when their login provider has a custom registration name.
+- Practice reviews no longer treat a substantive issue body as a repetition of its title solely because the title is missing, empty, or contains no Latin letters or digits.
+- Short practice-review timeouts now reserve time for the review to finish and save its result before the sandbox deadline, instead of extending the work budget beyond the available shutdown time.
+- Updates the cryptography libraries used for secure Docker connections to maintained releases without requiring operator configuration changes.
+- Release a mentor conversation promptly when its browser connection closes before the response starts, so a new message does not wait for an inactive turn to time out.
+- Practice reviews continue when a preparation step fails. Completed observations are preserved, and practices that could not be reviewed remain explicitly unevaluated.
+- Profiles now show a retry action when workspace settings or activity cannot load, instead of silently showing missing activity. The loaded developer profile remains visible.
+
+  Changing an activity filter now shows loading placeholders instead of presenting the previous range’s results under the new selection.
+
+- Workspace administrators can replace GitHub and GitLab personal access tokens directly from the integration page, restoring connections whose stored token can no longer be read without removing repositories or synced work.
+- Outline connection forms no longer carry a previously entered server URL or token into another workspace or a new connection.
+- Keeps the recovery pass for practices nothing observed when the first pass runs long. The pass that retries them was being given the review time left unspent, which is none after an overrun — so on exactly the slow reviews where practices are most likely still unobserved, no retry ran at all, even with minutes left before the review's deadline. It now keeps the share reserved for it whenever that time genuinely exists, and is skipped only when it does not.
+- Practice reviews no longer start another analysis or composition turn after its available time has expired. Admitted observations remain available for delivery if feedback composition cannot start or finish.
+- Practice review output archives reject nested path traversal and ambiguous file paths.
+- Keep review requests and profile data tied to the work and developer currently open, even when you navigate while a request is running. Bookmarked practice-group pages now respect disabled practice reviews, filters preserve your scroll position and bookmarked custom dates survive Back navigation, and responding to feedback refreshes the group's cached review filters.
+- Active sessions renew reliably when you resume activity after an idle renewal check. Inactive sessions still expire normally.
+- Protects instances with API documentation enabled against unbounded locale-cache growth. API documentation remains disabled by default, and no operator configuration change is required.
+- Keeps unhighlighted code in practice feedback and legal pages readable in light and dark themes while preserving line wrapping. Updates interface icons and motion dependencies without changing operator configuration.
+- Opening a bookmarked leaderboard interval or using Back preserves its exact dates instead of silently resetting them. Custom dates near weekly and monthly boundaries remain editable, and All time is recognized consistently across time zones.
+- Practice review activity no longer reports an all-clear when a completed review has no record of whether it reached a practice. Existing observations remain visible, and missing coverage is explained separately from practices the review explicitly did not reach.
+- Switching workspaces now resets integration job-history pages and pending form state. A token replacement still refreshes the workspace it was submitted for, without disabling another workspace's token form or showing its previous job history.
+
 ## 0.77.4
 
 ### Patch Changes
