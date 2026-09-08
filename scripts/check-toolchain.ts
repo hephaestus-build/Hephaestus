@@ -12,6 +12,7 @@ import packageArgument from "npm-package-arg";
 import { parse } from "yaml";
 
 import { asRecord, isRecord } from "./lib/json.ts";
+import { maskOptionalRuntimePeerMetadata } from "./lib/optional-runtime-peer.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 import { BUNDLED_PINS, bundledVersions, CATALOG_FILE } from "./lib/toolchain-pins.ts";
@@ -447,7 +448,11 @@ for (const file of tracked) {
 	const content = readFileSync(file);
 	if (content.includes(0)) continue;
 	const text = content.toString("utf8");
-	if (forbiddenWord.test(text)) {
+	const runtimeText =
+		file === "pnpm-lock.yaml"
+			? maskOptionalRuntimePeerMetadata(text, (name) => forbiddenWord.test(name))
+			: text;
+	if (forbiddenWord.test(runtimeText)) {
 		throw new Error(`${file} still references the retired package manager or runtime`);
 	}
 	if (!isImageBuild(file) && forbiddenCommand.test(text)) {

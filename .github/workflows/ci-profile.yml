@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
+    inputs:
+      suite:
+        description: "Server tier to profile"
+        type: choice
+        default: all
+        options: [all, integration, verification]
 
 concurrency:
   group: ci-profile-${{ github.ref }}
@@ -14,10 +20,12 @@ permissions: {}
 jobs:
   server-integration:
     name: "Server integration profile"
+    if: github.event_name != 'workflow_dispatch' || inputs.suite != 'verification'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -32,51 +40,105 @@ jobs:
           cache-type: application-server-reactor
           os: ${{ runner.os }}
 
-      - name: Restore performance history
-        if: github.ref_name == github.event.repository.default_branch
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Find performance history
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        id: history
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
+          script: |
+            const repository = context.repo;
+            for await (const { data } of github.paginate.iterator(github.rest.actions.listWorkflowRuns, {
+              ...repository,
+              workflow_id: 'ci-profile.yml',
+              branch: context.payload.repository.default_branch,
+              status: 'completed',
+              per_page: 100,
+            })) {
+              for (const run of data) {
+                if (run.id === context.runId || run.head_branch !== context.payload.repository.default_branch || run.head_repository?.full_name !== `${repository.owner}/${repository.repo}`) continue;
+                const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                  ...repository,
+                  run_id: run.id,
+                  per_page: 100,
+                });
+                const history = artifacts.find((artifact) => artifact.name === 'ci-profile-history-jfr' && !artifact.expired);
+                if (history) {
+                  core.setOutput('run-id', run.id);
+                  return;
+                }
+              }
+            }
+            core.info('No retained profile history; collecting a new baseline.');
+
+      - name: Restore performance history
+        if: steps.history.outputs.run-id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ci-profile-history-jfr
+          run-id: ${{ steps.history.outputs.run-id }}
+          github-token: ${{ github.token }}
           path: ci-profile-history
-          key: ci-profile-history-${{ github.run_id }}
-          restore-keys: ci-profile-history-
 
       - name: Run integration suite with JFR
+        id: profile
+        shell: bash
         run: |
-          mkdir -p ci-metrics
+          mkdir -p ci-metrics/maven
           /usr/bin/time -v -o ci-metrics/server-integration-resource.txt \
             vp run test:server:integration \
-            -DargLine=-XX:StartFlightRecording=filename=target/integration-profile.jfr,settings=profile,dumponexit=true \
+            '-Dhephaestus.test.jvmArgs=-XX:StartFlightRecording=filename=target/integration-profile.jfr,settings=profile,dumponexit=true -Xlog:jfr+startup=off' \
             -Dlogging.level.org.springframework.test.context.cache=DEBUG \
+            -Dprofile=server-integration -DprofileFormat=JSON \
+            -Dmaven-profiler-report-directory=../ci-metrics/maven \
             2>&1 | tee ci-metrics/server-integration.log
 
+      - name: Validate profile artifacts
+        id: recording
+        if: ${{ !cancelled() && steps.profile.outcome == 'success' }}
+        run: |
+          jq -e '.projects | length > 0' ci-metrics/maven/*.json > /dev/null
+          jfr summary server/application/target/integration-profile.jfr > ci-metrics/jfr-summary.txt
+          jfr print --events hephaestus.test.DatabaseCleanup \
+            server/application/target/integration-profile.jfr > ci-metrics/database-cleanup.jfr.txt
+
       - name: Summarize integration results
+        id: summary
         if: always()
-        continue-on-error: true
         run: >-
           vp run report:test-results "Server Integration Profile"
           server/application/target/surefire-reports ci-metrics/server-integration-profile.json
           ci-metrics/server-integration.log ci-metrics/server-integration-resource.txt
 
       - name: Enforce performance budgets
-        if: success() && github.ref_name == github.event.repository.default_branch
+        if: success() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         run: |
+          # Do not compare a rerun against its own previous attempt.
+          rm -f "ci-profile-history/${{ github.run_id }}.json"
           node scripts/check-ci-performance.ts ci-metrics/server-integration-profile.json ci-profile-history
+
+      # Keep budget failures in history so sustained regressions remain detectable.
+      - name: Record completed profile
+        id: record
+        if: ${{ !cancelled() && steps.profile.outcome == 'success' && steps.recording.outcome == 'success' && steps.summary.outcome == 'success' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+        run: |
           mkdir -p ci-profile-history
           cp ci-metrics/server-integration-profile.json "ci-profile-history/${{ github.run_id }}.json"
 
-      - name: Extract database cleanup timings
-        if: always()
-        continue-on-error: true
-        run: >-
-          jfr print --events hephaestus.test.DatabaseCleanup
-          server/application/target/integration-profile.jfr
-          > ci-metrics/database-cleanup.jfr.txt
+      - name: Save performance history
+        if: ${{ !cancelled() && steps.record.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-profile-history-jfr
+          path: ci-profile-history
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
 
       - name: Upload profile
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: server-integration-profile-${{ github.run_id }}
+          name: server-integration-profile-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             server/application/target/integration-profile.jfr
             server/application/target/surefire-reports
@@ -84,5 +146,92 @@ jobs:
             ci-metrics/server-integration.log
             ci-metrics/server-integration-resource.txt
             ci-metrics/database-cleanup.jfr.txt
+            ci-metrics/jfr-summary.txt
+            ci-metrics/maven
           if-no-files-found: warn
           retention-days: 14
+
+  server-verification:
+    name: "Server unit and architecture profile"
+    needs: server-integration
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.suite != 'integration') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+      - uses: ./.github/actions/setup-caches
+        with:
+          cache-type: application-server-reactor
+          os: ${{ runner.os }}
+
+      - name: Run unit and architecture verification with JFR
+        id: profile
+        shell: bash
+        run: |
+          mkdir -p ci-metrics/maven
+          /usr/bin/time -v -o ci-metrics/server-verification-resource.txt \
+            vp run test:server:verification \
+            '-Dhephaestus.test.jvmArgs=-XX:StartFlightRecording=filename=target/verification-profile.jfr,settings=profile,dumponexit=true -Xlog:jfr+startup=off' \
+            -Dprofile=server-verification -DprofileFormat=JSON \
+            -Dmaven-profiler-report-directory=../ci-metrics/maven \
+            2>&1 | tee ci-metrics/server-verification.log
+
+      - name: Validate profile artifacts
+        if: ${{ !cancelled() && steps.profile.outcome == 'success' }}
+        run: |
+          jq -e '.projects | length > 0' ci-metrics/maven/*.json > /dev/null
+          jfr summary server/application/target/verification-profile.jfr > ci-metrics/jfr-summary.txt
+
+      - name: Summarize verification results
+        if: ${{ !cancelled() }}
+        run: >-
+          vp run report:test-results "Server Unit and Architecture Profile"
+          server/application/target/surefire-reports ci-metrics/server-verification-profile.json
+          ci-metrics/server-verification.log ci-metrics/server-verification-resource.txt verification
+
+      - name: Upload profile
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: server-verification-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            server/application/target/verification-profile.jfr
+            server/application/target/surefire-reports
+            ci-metrics
+          if-no-files-found: error
+          retention-days: 14
+
+  pr-latency:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    name: Pull-request latency budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - name: Measure completed PR verdicts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/report-ci-latency.ts
+      - name: Upload latency evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr-latency-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tmp/ci-metrics/ci-latency.json
+          if-no-files-found: error
+          retention-days: 30

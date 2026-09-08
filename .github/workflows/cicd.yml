@@ -264,6 +264,7 @@ jobs:
             quality-config:
               - '.github/workflows/cicd.yml'
               - '.github/workflows/ci-quality-gates.yml'
+              - '.github/workflows/ci-quality-leg.yml'
               - 'vite.config.ts'
               - '.vite-hooks/**'
               - '.java-version'
@@ -314,6 +315,7 @@ jobs:
               - 'package.json'
               - 'scripts/run-mvnw.ts'
               - '.github/workflows/ci-quality-gates.yml'
+              - '.github/workflows/ci-quality-leg.yml'
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: webapp_image_source
@@ -346,7 +348,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: reviewdog/action-actionlint@dbe5299849118fd6f099ba563d263d770955a64a # v1.73.2
+      - uses: reviewdog/action-actionlint@d290e336d5a743810aef4404f757dc862276d2ae # v1.73.4
         env:
           SHELLCHECK_OPTS: --severity=warning
         with:
@@ -371,7 +373,7 @@ jobs:
         with:
           persist-credentials: false
       - id: zizmor
-        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        uses: zizmorcore/zizmor-action@70fb788f84895a7701f5643d103d587e460b5c99 # v0.6.3
         with:
           min-confidence: medium
           # renovate: datasource=github-releases depName=zizmorcore/zizmor
@@ -648,7 +650,7 @@ jobs:
   all-ci-passed:
     name: "CI Status Gate"
     timeout-minutes: 10
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     permissions:
       actions: read
       statuses: write

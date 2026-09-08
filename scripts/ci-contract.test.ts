@@ -394,6 +394,19 @@ void describe("CI contract", () => {
 		);
 	});
 
+	void test("required tooling CI renders docs after its checks", async () => {
+		const tasks = await loadTasks();
+		const tooling = asRecord(tasks["ci:tooling"], "ci:tooling");
+		assert.deepEqual(commandsOf(tooling), ["vp run verification:docs-build"]);
+		const dependencies = asArray(tooling.dependsOn, "ci:tooling.dependsOn").map((dependency) =>
+			asString(dependency, "ci:tooling dependency"),
+		);
+		const checks = taskClosure(tasks, dependencies);
+		assert.ok(checks.has("gate:docs-lint"));
+		assert.ok(!checks.has("docs:build"), "docs must render after, not alongside, the checks");
+		assert.ok(taskClosure(tasks, ["ci:tooling"]).has("docs:build"));
+	});
+
 	void test("every local gate runs in a workflow, and every CI gate is a local gate", async () => {
 		const tasks = await loadTasks();
 		const local = taskClosure(tasks, ["quality"]);
@@ -475,6 +488,16 @@ void describe("CI contract", () => {
 		assert.ok(isMap(matrix), "server-integration runs no matrix");
 		const selectors = matrixValues(matrix, "tests");
 		assert.equal(selectors.length, 2, "The tier is sharded in two");
+		const startup = "de/tum/cit/aet/hephaestus/StartupBudgetIntegrationTest";
+		assert.ok(surefireSelects(selectors[0] ?? "", startup));
+		assert.ok(!surefireSelects(selectors[1] ?? "", startup));
+		const startupSource = await readFile(
+			`server/application/src/test/java/${startup}.java`,
+			"utf8",
+		);
+		assert.match(startupSource, /@Tag\("integration"\)/);
+		assert.doesNotMatch(startupSource, /@Tag\("architecture"\)/);
+
 		for (const selector of selectors)
 			assert.doesNotMatch(
 				selector,
@@ -1616,6 +1639,16 @@ void describe("CI contract", () => {
 		);
 
 		const scanPath = ["jobs", "security-scan"];
+		const secretScan = stepInputs(namedStep(workflow, scanPath, "Secret detection"));
+		assert.equal(
+			secretScan.get("base"),
+			`\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || '' }}`,
+		);
+		assert.equal(
+			secretScan.get("head"),
+			`\${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}`,
+		);
+		assert.ok(String(secretScan.get("extra_args")).split(" ").includes("--fail-on-scan-errors"));
 		const report = stepInputs(namedStep(workflow, scanPath, "Trivy dependency scan"));
 		assert.equal(report.get("format"), "sarif");
 		assert.ok(
@@ -1859,11 +1892,11 @@ void describe("CI contract", () => {
 	void test("resolves every commit's author without checking out the pull request", async () => {
 		const identity = job(
 			await readFile(".github/workflows/pull-request.yml", "utf8"),
-			"verify-commit-identity",
+			"validate-pr",
 		);
 		// The workflow's trigger is justified to Zizmor by the claim that it checks out and runs no
 		// pull-request code; a job that reads the pull request's own commits is where that slips.
-		assert.doesNotMatch(identity, /uses: actions\/checkout@/);
+		assert.match(identity, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
 		assert.match(identity, /uses: actions\/github-script@/);
 	});
 
@@ -2062,26 +2095,25 @@ void test("a workflow triggered by main does not cancel the run main is judged b
 	}
 });
 
-// A toolchain claim is a job: every leg of the task graph is one matrix entry of one job, the Vite+
-// shell and the hook dispatcher run on Windows as one of them, and the documented first command of
-// a contributor runs from a clone that has nothing but the launcher.
 void test("proves the toolchain on Windows and from a clean clone", async () => {
 	const source = await readFile(".github/workflows/ci-quality-gates.yml", "utf8");
-	const workflow = parseDocument(source);
+	const legSource = await readFile(".github/workflows/ci-quality-leg.yml", "utf8");
+	const workflow = parseDocument(legSource);
 	const qualityPath = ["jobs", "quality"];
-	const quality = job(source, "quality");
-	assert.match(quality, /runs-on: \$\{\{ matrix\.os \}\}/);
+	const quality = job(legSource, "quality");
+	assert.match(quality, /runs-on: .*inputs\.leg == 'windows'.*'windows-latest'.*'ubuntu-latest'/);
 	assert.match(quality, /shell: bash/);
-	assert.match(quality, /run: vp run \$\{\{ matrix\.flags \}\} ci:\$\{\{ matrix\.leg \}\}/);
-	assert.match(quality, /- leg: windows\n(?:\s+\S[^\n]*\n)*?\s+os: windows-latest/);
-	// The task cache is a Linux-only trust: the Windows leg neither restores nor saves it.
-	assert.doesNotMatch(quality, /- leg: windows\n(?:\s+\S[^\n]*\n)*?\s+cache: true/);
-	assert.match(quality, /- leg: windows\n(?:\s+\S[^\n]*\n)*?\s+flags: --no-cache/);
+	assert.match(quality, /windows\) vp run --no-cache ci:windows/);
+	for (const name of ["Restore Vite task cache", "Save Vite task cache"])
+		assert.match(
+			String(namedStep(workflow, qualityPath, name).get("if")),
+			/inputs\.leg != 'windows'/,
+		);
 	const install = job(source, "clean-install");
 	assert.doesNotMatch(install, /setup-toolchain|pnpm\/setup/);
 	assert.match(install, /vp install --frozen-lockfile/);
 	assert.match(install, /vp run gate:toolchain/);
-	const hookCondition = "env.RUN == 'true' && matrix.hooks && !cancelled()";
+	const hookCondition = "(inputs.leg == 'tooling' || inputs.leg == 'windows') && !cancelled()";
 	for (const name of ["Commit-msg hook", "Pre-push hook"])
 		assert.equal(namedStep(workflow, qualityPath, name).get("if"), hookCondition);
 	const commitHook = runScript(workflow, qualityPath, "Commit-msg hook");
@@ -2096,10 +2128,55 @@ void test("proves the toolchain on Windows and from a clean clone", async () => 
 	assert.doesNotMatch(prePushHook, /^\s*vp run check\s*$/m);
 });
 
+void test(
+	"quality dispatch selects one task and rejects an unknown leg",
+	{ skip: !bashRunsRunnerSteps() },
+	async () => {
+		const workflow = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
+		const script = runScript(workflow, ["jobs", "quality"], "Quality gates");
+		const probe = `vp() { printf 'command=%s\\n' "$*" >> "$GITHUB_OUTPUT"; }\n${script}`;
+		for (const leg of ["server", "tooling", "webapp", "windows"]) {
+			const result = await runStep(probe, { LEG: leg });
+			assert.equal(result.failed, false, result.diagnosis);
+			assert.equal(
+				result.outputs.command,
+				`run ${leg === "windows" ? "--no-cache " : ""}ci:${leg}`,
+			);
+		}
+		const invalid = await runStep(probe, { LEG: "unknown" });
+		assert.equal(invalid.failed, true);
+		assert.deepEqual(invalid.outputs, {});
+		const failed = await runStep(`vp() { return 1; }\n${script}`, { LEG: "server" });
+		assert.equal(failed.failed, true, "a failing quality task must fail the job");
+	},
+);
+
+void test("unchanged quality legs are skipped before runner allocation", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/ci-quality-gates.yml", "utf8"));
+	for (const [leg, scope] of [
+		["server", "application_server"],
+		["tooling", "tooling"],
+		["webapp", "webapp"],
+		["windows", "tooling"],
+	]) {
+		assert.equal(
+			workflow.getIn(["jobs", leg, "if"]),
+			`inputs.should_skip != 'true' && inputs.${scope}_changed == 'true'`,
+		);
+		assert.equal(workflow.getIn(["jobs", leg, "uses"]), "./.github/workflows/ci-quality-leg.yml");
+		assert.equal(workflow.getIn(["jobs", leg, "with", "leg"]), leg);
+	}
+});
+
 void test("a change to the task graph or the hooks selects every quality leg", async () => {
 	const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
 	const filter = pathFilter(orchestrator, "quality-config");
-	for (const entry of ["vite.config.ts", ".vite-hooks/**", ".java-version"])
+	for (const entry of [
+		"vite.config.ts",
+		".vite-hooks/**",
+		".java-version",
+		".github/workflows/ci-quality-leg.yml",
+	])
 		assert.match(
 			filter,
 			new RegExp(`'${escapeRegExp(entry)}'`),
@@ -2193,4 +2270,40 @@ void test("every Semgrep rule ships a positive and a negative fixture", async ()
 			assert.match(fixtures, new RegExp(`ok: ${id}$`, "m"), `${id} has no compliant example`);
 		}
 	}
+});
+
+void test("CodeQL selects languages with native change detection", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/codeql.yml", "utf8"));
+	assert.equal(workflow.getIn(["jobs", "analyze", "needs"]), "changes");
+	assert.equal(
+		workflow.getIn(["jobs", "analyze", "if"]),
+		"needs.changes.outputs.languages != '[]'",
+	);
+	assert.equal(
+		workflow.getIn(["jobs", "analyze", "strategy", "matrix", "language"]),
+		`\${{ fromJSON(needs.changes.outputs.languages) }}`,
+	);
+	assert.equal(
+		workflow.getIn(["jobs", "changes", "outputs", "languages"]),
+		`\${{ steps.filter.outputs.changes || '["actions","java-kotlin","javascript-typescript"]' }}`,
+	);
+	const steps = workflow.getIn(["jobs", "changes", "steps"]);
+	assert.ok(isSeq(steps));
+	const selection = steps.items.find((item) => isMap(item) && item.get("id") === "filter");
+	assert.ok(isMap(selection));
+	assert.equal(
+		selection.get("if"),
+		"github.event_name == 'pull_request' || github.event_name == 'merge_group'",
+	);
+	const filter = step(workflow, ["jobs", "changes"], "dorny/paths-filter");
+	const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CodeQL filters");
+	assert.deepEqual(Object.keys(filters), ["actions", "java-kotlin", "javascript-typescript"]);
+	for (const [language, patterns] of Object.entries(filters)) {
+		const paths = asArray(patterns, language);
+		assert.ok(
+			paths.some((pattern) => typeof pattern === "string" && pattern.startsWith(".github/")),
+		);
+	}
+	assert.ok(asArray(filters["java-kotlin"], "Java paths").includes("server/**"));
+	assert.ok(asArray(filters["javascript-typescript"], "JS paths").includes("pnpm-lock.yaml"));
 });

@@ -1,5 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { parseArgs } from "node:util";
+
+const { values } = parseArgs({ options: { "target-image": { type: "string" } } });
+const targetImage = values["target-image"];
+if (targetImage !== undefined && targetImage.trim() === "")
+	throw new Error("--target-image must name an existing local PostgreSQL image");
 
 const id = `postgres-restore-${randomUUID().slice(0, 8)}`;
 const source = `${id}-source`;
@@ -84,23 +90,14 @@ function fingerprint(container: string): string {
 }
 
 try {
-	run("docker", ["build", "-t", `${id}:18`, "docker/postgres"]);
+	if (targetImage !== undefined) docker("image", "inspect", targetImage);
+	else run("docker", ["build", "-t", `${id}:18`, "docker/postgres"]);
 	docker("volume", "create", volume);
 
-	const sourcePort = start(source, volume, "/var/lib/postgresql", `${id}:18`);
+	const sourcePort = start(source, volume, "/var/lib/postgresql", targetImage ?? `${id}:18`);
 	if (sql(source, "SHOW server_version_num").slice(0, 2) !== "18")
 		throw new Error("source is not PostgreSQL 18");
 
-	// Single-module liquibase:update resolves reactor dependencies from the local repository.
-	run("node", [
-		"scripts/run-mvnw.ts",
-		"-pl",
-		"generated-clients",
-		"-am",
-		"install",
-		"-DskipTests",
-		"--quiet",
-	]);
 	run("node", [
 		"scripts/run-mvnw.ts",
 		"-f",
@@ -143,7 +140,7 @@ try {
 	docker("volume", "rm", volume);
 	docker("volume", "create", volume);
 
-	start(target, volume, "/var/lib/postgresql", `${id}:18`);
+	start(target, volume, "/var/lib/postgresql", targetImage ?? `${id}:18`);
 	docker("exec", target, "dropdb", "-U", "root", "hephaestus");
 	docker("exec", target, "createdb", "-U", "root", "hephaestus");
 	const restore = spawnSync(
@@ -191,5 +188,5 @@ try {
 } finally {
 	for (const container of [source, target]) spawnSync("docker", ["rm", "-f", container]);
 	spawnSync("docker", ["volume", "rm", "-f", volume]);
-	spawnSync("docker", ["rmi", "-f", `${id}:18`]);
+	if (targetImage === undefined) spawnSync("docker", ["rmi", "-f", `${id}:18`]);
 }

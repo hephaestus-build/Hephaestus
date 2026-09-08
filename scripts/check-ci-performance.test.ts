@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { regressions } from "./check-ci-performance.ts";
+import { parseSummary, regressions } from "./check-ci-performance.ts";
 import type { TestSummary } from "./summarize-test-results.ts";
 
 const summary = (startup: number, wall = 200): TestSummary => ({
@@ -41,4 +41,45 @@ await test("signals only three consecutive misses against five prior profiles", 
 		"context startup exceeded 120s in three consecutive profiles",
 		"wall time exceeded variance limit 240.0 three times",
 	]);
+});
+
+await test("rejects incomplete, failed, and nonfinite profiles before comparison", () => {
+	for (const invalid of [
+		{ ...summary(100), files: 0 },
+		{ ...summary(100), tests: 0 },
+		{ ...summary(100), skipped: 1 },
+		{ ...summary(100), failures: 1 },
+		{ ...summary(100), errors: 1 },
+		{ ...summary(100), testTimeSeconds: -1 },
+		{ ...summary(100), testTimeSeconds: Infinity },
+		{ ...summary(100), tests: 1.5 },
+		summary(100, 0),
+	]) {
+		assert.throws(() => regressions(invalid, []));
+		assert.throws(() => regressions(summary(100), [invalid]));
+	}
+});
+
+await test("validates numeric fields in persisted profiles", () => {
+	assert.deepEqual(parseSummary(JSON.stringify(summary(100))), summary(100));
+	assert.throws(
+		() =>
+			parseSummary(
+				JSON.stringify(summary(100)).replace('"wallTimeSeconds":200', '"wallTimeSeconds":1e999'),
+			),
+		/Invalid CI metrics field/,
+	);
+	assert.throws(
+		() => parseSummary(JSON.stringify({ ...summary(100), testTimeSeconds: -1 })),
+		/Invalid CI metrics field/,
+	);
+});
+
+await test("missing Spring logs cannot appear as a faster profile", () => {
+	for (const key of ["contextStarts", "contextCacheMisses"] as const) {
+		const current = summary(100);
+		assert.ok(current.performance);
+		current.performance[key] = 0;
+		assert.throws(() => regressions(current, []), /no Spring context measurements/);
+	}
 });

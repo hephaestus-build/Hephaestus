@@ -61,15 +61,20 @@ function testCases(node: unknown): JUnitNode[] {
 }
 
 export function parseJUnit(xml: string): TestCase[] {
-	return testCases(xmlParser.parse(xml)).map((testCase) => ({
-		className: typeof testCase.classname === "string" ? testCase.classname : "unknown class",
-		name: typeof testCase.name === "string" ? testCase.name : "unnamed test",
-		timeSeconds:
-			typeof testCase.time === "number" && Number.isFinite(testCase.time) ? testCase.time : 0,
-		failed: "failure" in testCase,
-		errored: "error" in testCase,
-		skipped: "skipped" in testCase,
-	}));
+	return testCases(xmlParser.parse(xml)).map((testCase) => {
+		const skipped = "skipped" in testCase;
+		const time = testCase.time === undefined && skipped ? 0 : testCase.time;
+		if (typeof time !== "number" || !Number.isFinite(time) || time < 0)
+			throw new Error(`Invalid JUnit testcase time: ${String(testCase.time)}`);
+		return {
+			className: typeof testCase.classname === "string" ? testCase.classname : "unknown class",
+			name: typeof testCase.name === "string" ? testCase.name : "unnamed test",
+			timeSeconds: time,
+			failed: "failure" in testCase,
+			errored: "error" in testCase,
+			skipped,
+		};
+	});
 }
 
 export function summarize(name: string, documents: string[]): TestSummary {
@@ -108,21 +113,52 @@ export function parsePerformance(
 	const elapsed = resourceUsage.match(
 		/Elapsed \(wall clock\) time .*: (?:(\d+):)?(\d+):(\d+(?:\.\d+)?)/,
 	);
+	if (elapsed === null) throw new Error("Missing or invalid elapsed resource time");
 	const value = (label: string): number => {
 		const match = resourceUsage.match(new RegExp(`${label}: (\\d+(?:\\.\\d+)?)`));
-		return match === null ? 0 : Number(match[1]);
+		if (match === null) throw new Error(`Missing or invalid resource metric: ${label}`);
+		const result = Number(match[1]);
+		if (!Number.isFinite(result)) throw new Error(`Invalid resource metric: ${label}`);
+		return result;
 	};
 	return {
-		wallTimeSeconds:
-			elapsed === null
-				? 0
-				: Number(elapsed[1] ?? 0) * 3600 + Number(elapsed[2]) * 60 + Number(elapsed[3]),
+		wallTimeSeconds: Number(elapsed[1] ?? 0) * 3600 + Number(elapsed[2]) * 60 + Number(elapsed[3]),
 		cpuTimeSeconds: value("User time \\(seconds\\)") + value("System time \\(seconds\\)"),
 		maxRssKilobytes: value("Maximum resident set size \\(kbytes\\)"),
 		contextStarts: starts.length,
 		contextStartupSeconds: starts.reduce((total, seconds) => total + seconds, 0),
 		contextCacheMisses: [...cacheMisses.values()].reduce((total, misses) => total + misses, 0),
 	};
+}
+
+export function validateProfile(
+	summary: TestSummary,
+	kind: "integration" | "verification" = "integration",
+): void {
+	const counts = [summary.files, summary.tests, summary.failures, summary.errors, summary.skipped];
+	if (counts.some((value) => !Number.isSafeInteger(value) || value < 0))
+		throw new Error("Invalid profile test counts");
+	if (summary.files === 0 || summary.tests <= summary.skipped)
+		throw new Error("Profile contains no executed tests");
+	if (summary.failures !== 0 || summary.errors !== 0)
+		throw new Error("Failed tests cannot enter performance history");
+	const performance = summary.performance;
+	if (performance === undefined) throw new Error("Performance metrics are missing");
+	if (
+		[summary.testTimeSeconds, ...Object.values(performance)].some(
+			(value) => !Number.isFinite(value) || value < 0,
+		)
+	)
+		throw new Error("Profile metrics must be finite and nonnegative");
+	if (performance.wallTimeSeconds === 0 || performance.maxRssKilobytes === 0)
+		throw new Error("Profile wall time and resident memory must be positive");
+	if (
+		kind === "integration" &&
+		(performance.contextStarts === 0 || performance.contextCacheMisses === 0)
+	)
+		throw new Error("Profile contains no Spring context measurements");
+	if (![performance.contextStarts, performance.contextCacheMisses].every(Number.isSafeInteger))
+		throw new Error("Invalid profile context counts");
 }
 
 export function markdown(summary: TestSummary): string {
@@ -160,13 +196,17 @@ async function xmlFiles(path: string): Promise<string[]> {
 }
 
 async function main(): Promise<void> {
-	const [name, input, output, logPath, resourcePath] = process.argv.slice(2);
+	const [name, input, output, logPath, resourcePath, kind = "integration"] = process.argv.slice(2);
+	if (kind !== "integration" && kind !== "verification")
+		throw new Error(`Unknown profile kind: ${kind}`);
 	if (name === undefined || input === undefined || output === undefined) {
 		throw new Error("Usage: summarize-test-results <name> <report-directory> <output-json>");
 	}
 	const files = await xmlFiles(resolve(input));
 	const documents = await Promise.all(files.map((file) => readFile(file, "utf8")));
 	const summary = summarize(name, documents);
+	if ((logPath === undefined) !== (resourcePath === undefined))
+		throw new Error("Profiling requires both log and resource usage files");
 	if (logPath !== undefined && resourcePath !== undefined) {
 		summary.performance = parsePerformance(
 			await readFile(logPath, "utf8"),
@@ -180,6 +220,7 @@ async function main(): Promise<void> {
 		await appendFile(process.env.GITHUB_STEP_SUMMARY, rendered);
 	}
 	process.stdout.write(rendered);
+	if (summary.performance !== undefined) validateProfile(summary, kind);
 	if (files.length === 0) {
 		process.stderr.write(`No JUnit XML reports found below ${input}\n`);
 	}
