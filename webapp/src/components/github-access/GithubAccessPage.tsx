@@ -45,7 +45,7 @@ export function GithubAccessPage({
 				establish eligibility.
 			</p>
 			{state.status === "loading" ? (
-				<div className="space-y-4" aria-label="Loading your GitHub access">
+				<div className="space-y-4" role="group" aria-label="Loading your GitHub access">
 					<Skeleton className="h-40 w-full" />
 					<Skeleton className="h-40 w-full" />
 				</div>

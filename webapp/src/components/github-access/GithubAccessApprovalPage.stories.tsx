@@ -26,7 +26,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Review: Story = {};
-export const Loading: Story = { args: { state: { status: "loading" } } };
+export const Loading: Story = {
+	args: { state: { status: "loading" } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("group", { name: "Loading approval" })).toBeVisible();
+	},
+};
 export const InvalidLink: Story = { args: { state: { status: "invalid" } } };
 export const SignedOut: Story = { args: { state: { status: "signed-out", onSignIn: fn() } } };
 export const ErrorState: Story = {

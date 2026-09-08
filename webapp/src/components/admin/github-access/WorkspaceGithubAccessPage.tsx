@@ -121,7 +121,7 @@ export function WorkspaceGithubAccessPage(props: WorkspaceGithubAccessPageProps)
 				}
 			/>
 			{state.status === "loading" ? (
-				<div aria-label="Loading GitHub access" className="space-y-6">
+				<div role="group" aria-label="Loading GitHub access" className="space-y-6">
 					<Skeleton className="h-24 w-full" />
 					<Skeleton className="h-64 w-full" />
 					<Skeleton className="h-64 w-full" />

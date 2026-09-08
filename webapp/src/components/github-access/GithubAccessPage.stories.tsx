@@ -37,7 +37,12 @@ export const Invitation: Story = {
 		);
 	},
 };
-export const Loading: Story = { args: { state: { status: "loading" } } };
+export const Loading: Story = {
+	args: { state: { status: "loading" } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("group", { name: "Loading your GitHub access" })).toBeVisible();
+	},
+};
 export const ErrorState: Story = {
 	args: { state: { status: "error", error: new Error("Service unavailable"), onRetry: fn() } },
 };

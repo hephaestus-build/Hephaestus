@@ -39,7 +39,7 @@ export function GithubAccessApprovalPage({
 				description="Review the workspace asking to manage a scope in your GitHub organization."
 			/>
 			{state.status === "loading" ? (
-				<div aria-label="Loading approval">
+				<div role="group" aria-label="Loading approval">
 					<Skeleton className="h-48 w-full" />
 				</div>
 			) : state.status === "invalid" ? (
