@@ -181,3 +181,39 @@ await test("profile CLI preserves diagnostics and fails when no tests were repor
 	});
 	assert.equal(ordinary.status, 0);
 });
+
+await test("verification profiles allow no Spring contexts but still require successful executed tests", async (context) => {
+	const directory = await mkdtemp(join(tmpdir(), "verification-profile-"));
+	context.after(() => rm(directory, { recursive: true, force: true }));
+	const reports = join(directory, "reports");
+	await mkdir(reports);
+	const log = join(directory, "run.log");
+	const resources = join(directory, "resources.txt");
+	await writeFile(log, "");
+	await writeFile(
+		resources,
+		"User time (seconds): 1\nSystem time (seconds): 1\nElapsed (wall clock) time (h:mm:ss or m:ss): 0:02\nMaximum resident set size (kbytes): 100",
+	);
+	const script = fileURLToPath(new URL("./summarize-test-results.ts", import.meta.url));
+	for (const [kind, body, valid] of [
+		["verification", "", true],
+		["integration", "", false],
+		["verification", "<skipped/>", false],
+		["verification", "<failure/>", false],
+		["unknown", "", false],
+	] as const) {
+		await writeFile(
+			join(reports, "TEST-example.xml"),
+			`<testsuite><testcase classname="Example" name="test" time="1">${body}</testcase></testsuite>`,
+		);
+		const result = spawnSync(
+			process.execPath,
+			[script, "profile", reports, join(directory, "summary.json"), log, resources, kind],
+			{
+				encoding: "utf8",
+				env: { ...process.env, GITHUB_STEP_SUMMARY: join(directory, "step-summary.md") },
+			},
+		);
+		assert.equal(result.status, valid ? 0 : 1, `${kind} ${body}: ${result.stderr}`);
+	}
+});

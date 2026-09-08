@@ -56,8 +56,16 @@ void describe("dispatching CI for a Version PR head", () => {
 	});
 });
 
-void test("cancelled validation is recoverable but failed validation is not retried blindly", () => {
-	assert.equal(needsDispatch(SHA, [{ headSha: SHA, conclusion: "cancelled" }]), true);
+void test("cancelled and approval-blocked validation recover without retrying real failures", () => {
+	for (const conclusion of ["cancelled", "action_required"])
+		assert.equal(needsDispatch(SHA, [{ headSha: SHA, conclusion }]), true);
+	assert.equal(
+		needsDispatch(SHA, [
+			{ headSha: SHA, conclusion: "action_required" },
+			{ headSha: SHA, conclusion: "success" },
+		]),
+		false,
+	);
 	for (const conclusion of [null, "success", "failure"])
 		assert.equal(needsDispatch(SHA, [{ headSha: SHA, conclusion }]), false);
 });

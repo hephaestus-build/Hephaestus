@@ -171,25 +171,10 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             nativeQuery = true)
     int updateState(@Param("id") UUID id, @Param("state") String state);
 
-    // --- supersession ---
-    //
-    // A thread is a CHAIN of rows over time, so `thread_key` is deliberately not unique. The uniqueness
-    // that matters is "at most one live PREPARED unit per thread", and it is held by the compare-and-set
-    // below rather than by a constraint — a constraint would have to refuse the second write, and the
-    // right answer to a second write is to retire the first.
-
     /**
-     * The newest unit on one continuity thread, whatever became of it — the row a supersession is aimed
-     * at.
-     *
-     * <p><b>Newest, not newest-still-queued.</b> Deliberately unfiltered by delivery state, because the
-     * caller has to be able to tell the three zero-row outcomes apart: the thread was read, the thread was
-     * already retired by a run racing this one, or the thread does not exist. A query that pre-filtered to
-     * {@code PREPARED} would answer all three with the same empty optional.
-     *
-     * <p>Recipient-scoped as well as workspace-scoped even though the key digests both: a key is a hash,
-     * and a predicate is what makes "one person's queue is never another's" a property of the SQL rather
-     * than of the digest holding.
+     * Finds the newest row regardless of delivery state so callers can distinguish a delivered row
+     * from one already superseded. Thread keys group related feedback, not unique PREPARED items.
+     * Recipient and workspace predicates enforce isolation independently of the key's hash.
      */
     @Query(value = """
         SELECT f.id FROM feedback f
@@ -207,19 +192,10 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             @Param("threadKey") String threadKey);
 
     /**
-     * Retires a queued unit so a newer one can take its place (compare-and-set).
+     * Atomically retires a selected PREPARED row without overwriting a concurrent delivery.
+     * Native because {@link Feedback} is {@code @Immutable}.
      *
-     * <p><b>The {@code PREPARED} predicate is the whole rule, and it lives here rather than in a prior
-     * read on purpose.</b> A read-then-write cannot express "only if nobody has read it yet": the
-     * recipient's own page flips the row to DELIVERED in an unrelated transaction, and between a check and
-     * an update there is room for exactly that. Two runs racing therefore both aim at the same row and
-     * exactly one is told it won; the loser sees rowcount 0 and treats it as an ordinary outcome. It also
-     * follows that a DELIVERED unit can never be retired by this path — nothing that has been received may
-     * be un-said.
-     *
-     * <p>Native because {@link Feedback} is {@code @Immutable} — the ORM cannot update it.
-     *
-     * @return {@code 1} when this caller retired the unit, {@code 0} when it was no longer queued
+     * @return 1 if retired, 0 if absent or no longer PREPARED
      */
     @Modifying(flushAutomatically = true)
     @Transactional

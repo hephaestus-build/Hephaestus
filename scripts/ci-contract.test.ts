@@ -1,15 +1,16 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, glob, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmod, glob, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
 
-import { type Document, isMap, isScalar, isSeq, parseDocument, type YAMLMap } from "yaml";
+import { type Document, isMap, isScalar, isSeq, parseDocument, visit, type YAMLMap } from "yaml";
 
 import { evaluate as evaluateVulnerabilityPolicy } from "./check-release-vulnerabilities.ts";
 import { versionBranch } from "./dispatch-version-pr-ci.ts";
+import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 import { planRelease, releaseOutputs } from "./plan-release.ts";
@@ -249,7 +250,7 @@ async function runStep(
 	await writeFile(outputFile, "");
 	const run = spawnSync("bash", ["--noprofile", "--norc", "-e", "-c", shell], {
 		encoding: "utf8",
-		env: { ...process.env, ...environment, GITHUB_OUTPUT: outputFile },
+		env: environmentForGitFixture({ ...environment, GITHUB_OUTPUT: outputFile }),
 	});
 	assert.equal(run.error, undefined);
 	const outputs = (await readFile(outputFile, "utf8"))
@@ -392,6 +393,19 @@ void describe("CI contract", () => {
 			[...CI_ONLY_GATES].toSorted(),
 			"every gate must be reachable from quality or listed as CI-only",
 		);
+	});
+
+	void test("required tooling CI renders docs after its checks", async () => {
+		const tasks = await loadTasks();
+		const tooling = asRecord(tasks["ci:tooling"], "ci:tooling");
+		assert.deepEqual(commandsOf(tooling), ["vp run verification:docs-build"]);
+		const dependencies = asArray(tooling.dependsOn, "ci:tooling.dependsOn").map((dependency) =>
+			asString(dependency, "ci:tooling dependency"),
+		);
+		const checks = taskClosure(tasks, dependencies);
+		assert.ok(checks.has("gate:docs-lint"));
+		assert.ok(!checks.has("docs:build"), "docs must render after, not alongside, the checks");
+		assert.ok(taskClosure(tasks, ["ci:tooling"]).has("docs:build"));
 	});
 
 	void test("every local gate runs in a workflow, and every CI gate is a local gate", async () => {
@@ -1314,7 +1328,7 @@ void describe("CI contract", () => {
 		assert.match(preflight, /max-age-hours: "24"/);
 		assert.match(
 			preflight,
-			/if: \$\{\{ \(github\.event_name == 'workflow_dispatch' && inputs\.release-preflight\) \|\| needs\.detect-changes\.outputs\.version-branch == 'true' \}\}/,
+			/if: \$\{\{ \(github\.event_name == 'workflow_dispatch' && inputs\.release-preflight\) \|\| needs\.detect-changes\.outputs\.release-candidate == 'true' \}\}/,
 		);
 		assert.match(cicd, /^ {6}release-preflight:$/m);
 		assert.match(job(cicd, "all-ci-passed"), /needs: \[[^\]]*Release-preflight\]/);
@@ -1357,23 +1371,73 @@ void describe("CI contract", () => {
 		);
 	});
 
+	void test("merge groups require release evidence when their aggregate tree changes the version", async (context) => {
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const candidateStep = namedStep(
+			workflow,
+			["jobs", "detect-changes"],
+			"Detect the release candidate",
+		);
+		assert.equal(
+			candidateStep.getIn(["env", "MERGE_BASE_SHA"]),
+			`\${{ github.event.merge_group.base_sha }}`,
+		);
+		const directory = await mkdtemp(path.join(tmpdir(), "release-candidate-"));
+		context.after(() => rm(directory, { recursive: true, force: true }));
+		const env = environmentForGitFixture();
+		const git = (...args: string[]) => {
+			const result = spawnSync("git", args, { cwd: directory, env, encoding: "utf8" });
+			assert.equal(result.status, 0, result.stderr);
+			return result.stdout.trim();
+		};
+		await mkdir(path.join(directory, ".changeset"));
+		await writeFile(path.join(directory, ".changeset/config.json"), '{"baseBranch":"main"}');
+		await writeFile(path.join(directory, "package.json"), '{"version":"0.1.0"}');
+		git("init", "-q");
+		git("add", ".");
+		git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "base");
+		const base = git("rev-parse", "HEAD");
+		const output = path.join(directory, "output");
+		const detect = async (sha: string) => {
+			await writeFile(output, "");
+			const result = spawnSync(
+				"bash",
+				["--noprofile", "--norc", "-e", "-c", String(candidateStep.get("run"))],
+				{
+					cwd: directory,
+					encoding: "utf8",
+					env: {
+						...env,
+						HEAD_BRANCH: "gh-readonly-queue/main/pr-1-example",
+						MERGE_BASE_SHA: sha,
+						GITHUB_OUTPUT: output,
+					},
+				},
+			);
+			return { status: result.status, output: await readFile(output, "utf8") };
+		};
+		assert.deepEqual(await detect(base), { status: 0, output: "release-candidate=false\n" });
+		await writeFile(path.join(directory, "package.json"), '{"version":"0.2.0"}');
+		assert.deepEqual(await detect(base), { status: 0, output: "release-candidate=true\n" });
+		assert.notEqual((await detect("0".repeat(40))).status, 0);
+		await writeFile(path.join(directory, "package.json"), "{}");
+		assert.notEqual((await detect(base)).status, 0);
+	});
+
 	void test("fails the CI gate on the Version PR when its release evidence preflight did not", async () => {
-		// #1745's guarantee is that a green Version PR gate means the release will clear its evidence
-		// gate. Two runs reported that gate for #1757's head — the dispatch, where the preflight
-		// succeeded, and a pull_request run, where it skipped — and the ruleset is satisfied by
-		// either, so the guarantee held only for as long as the dispatch was the sole reporter. Every
-		// run on that branch now runs the preflight, and the gate treats a preflight that is anything
-		// other than successful as the missing answer it is.
+		// Every run that can satisfy the gate must require the candidate's own release evidence.
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const detection = ["jobs", "detect-changes"];
 
 		// One home for the branch name: the workflow reads it out of the same `.changeset/config.json`
 		// `versionBranch()` reads, so this runs the workflow's own shell and requires the two to agree
 		// rather than restating either. A base-branch rename moves both or fails here.
-		const detect = runScript(workflow, detection, "Detect the Version PR branch");
+		const detect = runScript(workflow, detection, "Detect the release candidate");
 		const branch = versionBranch(JSON.parse(await readFile(".changeset/config.json", "utf8")));
 		const detected = async (head: string): Promise<string | undefined> =>
-			(await runStep(detect, { HEAD_BRANCH: head })).outputs["version-branch"];
+			(await runStep(detect, { HEAD_BRANCH: head, MERGE_BASE_SHA: "" })).outputs[
+				"release-candidate"
+			];
 		assert.equal(await detected(branch), "true");
 		for (const other of ["main", `${branch}-old`, "changeset-release/release-1.0", "renovate/vite"])
 			assert.equal(await detected(other), "false", `${other} is not the Version PR's branch`);
@@ -1382,11 +1446,11 @@ void describe("CI contract", () => {
 		// every event, and a duplicate-run skip must not take the image builds it needs away.
 		assert.match(
 			String(workflow.getIn(["jobs", "Release-preflight", "if"])),
-			/needs\.detect-changes\.outputs\.version-branch == 'true'/,
+			/needs\.detect-changes\.outputs\.release-candidate == 'true'/,
 		);
 		assert.match(
 			String(workflow.getIn([...detection, "outputs", "should_skip"])),
-			/steps\.version_branch\.outputs\.version-branch != 'true'/,
+			/steps\.release_candidate\.outputs\.release-candidate != 'true'/,
 		);
 
 		// The verdict itself, run rather than read. Its needs are the jobs it judges, so a new one is
@@ -1406,7 +1470,11 @@ void describe("CI contract", () => {
 		// something an expected verdict should have to spell out.
 		const verdict = async (results: Record<string, string>, onVersionBranch: boolean) => {
 			const run = await runStep(
-				render(evaluate, { ...green, ...results }, { "version-branch": String(onVersionBranch) }),
+				render(
+					evaluate,
+					{ ...green, ...results },
+					{ "release-candidate": String(onVersionBranch) },
+				),
 			);
 			return { failed: run.failed, outputs: run.outputs };
 		};
@@ -1434,7 +1502,7 @@ void describe("CI contract", () => {
 		// `linux/amd64` alone and could not, which is what blocked v0.75.1.
 		const architectures = String(workflow.getIn([...detection, "outputs", "single-arch"]));
 		const shape =
-			/^\$\{\{ \(github\.event_name == '(\w+)' \|\| github\.event_name == '(\w+)'\) && steps\.version_branch\.outputs\.version-branch != 'true' }}$/.exec(
+			/^\$\{\{ \(github\.event_name == '(\w+)' \|\| github\.event_name == '(\w+)'\) && steps\.release_candidate\.outputs\.release-candidate != 'true' }}$/.exec(
 				architectures,
 			);
 		assert.ok(shape, `this test cannot evaluate \`${architectures}\``);
@@ -1467,7 +1535,7 @@ void describe("CI contract", () => {
 		const complete = String(workflow.getIn([...detection, "outputs", "all-images"]));
 		assert.match(
 			complete,
-			/^\$\{\{ steps\.alias_base\.outputs\.commit == '' \|\| steps\.version_branch\.outputs\.version-branch == 'true' }}$/,
+			/^\$\{\{ steps\.alias_base\.outputs\.commit == '' \|\| steps\.release_candidate\.outputs\.release-candidate == 'true' }}$/,
 		);
 		// A run builds every image when it resolved no commit to alias from, so which events can
 		// resolve one is read from the resolver's own condition rather than restated here.
@@ -1746,16 +1814,18 @@ void describe("CI contract", () => {
 				/pnpm install --frozen-lockfile/,
 				`${file} must install through setup-toolchain`,
 			);
-			const setupCalls = source.match(/uses: \.\/\.github\/actions\/setup-toolchain/g) ?? [];
-			const explicitModes =
-				source.match(
-					/uses: \.\/\.github\/actions\/setup-toolchain\n\s+with:\n\s+install: "(?:none|frozen)"/g,
-				) ?? [];
-			assert.equal(
-				explicitModes.length,
-				setupCalls.length,
-				`${file} must select an explicit setup-toolchain install mode`,
-			);
+			visit(parseDocument(source), {
+				Map(_key, node) {
+					if (node.get("uses") !== "./.github/actions/setup-toolchain") return;
+					const options = node.get("with");
+					assert.ok(isMap(options), `${file} must configure setup-toolchain`);
+					const mode = options.get("install");
+					assert.ok(
+						mode === "none" || mode === "frozen",
+						`${file} must select an explicit setup-toolchain install mode`,
+					);
+				},
+			});
 		}
 		for (const file of [
 			".github/workflows/ci-build.yml",
@@ -1877,11 +1947,11 @@ void describe("CI contract", () => {
 	void test("resolves every commit's author without checking out the pull request", async () => {
 		const identity = job(
 			await readFile(".github/workflows/pull-request.yml", "utf8"),
-			"verify-commit-identity",
+			"validate-pr",
 		);
 		// The workflow's trigger is justified to Zizmor by the claim that it checks out and runs no
 		// pull-request code; a job that reads the pull request's own commits is where that slips.
-		assert.doesNotMatch(identity, /uses: actions\/checkout@/);
+		assert.match(identity, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
 		assert.match(identity, /uses: actions\/github-script@/);
 	});
 
@@ -2080,26 +2150,25 @@ void test("a workflow triggered by main does not cancel the run main is judged b
 	}
 });
 
-// A toolchain claim is a job: every leg of the task graph is one matrix entry of one job, the Vite+
-// shell and the hook dispatcher run on Windows as one of them, and the documented first command of
-// a contributor runs from a clone that has nothing but the launcher.
 void test("proves the toolchain on Windows and from a clean clone", async () => {
 	const source = await readFile(".github/workflows/ci-quality-gates.yml", "utf8");
-	const workflow = parseDocument(source);
+	const legSource = await readFile(".github/workflows/ci-quality-leg.yml", "utf8");
+	const workflow = parseDocument(legSource);
 	const qualityPath = ["jobs", "quality"];
-	const quality = job(source, "quality");
-	assert.match(quality, /runs-on: \$\{\{ matrix\.os \}\}/);
+	const quality = job(legSource, "quality");
+	assert.match(quality, /runs-on: .*inputs\.leg == 'windows'.*'windows-latest'.*'ubuntu-latest'/);
 	assert.match(quality, /shell: bash/);
-	assert.match(quality, /run: vp run \$\{\{ matrix\.flags \}\} ci:\$\{\{ matrix\.leg \}\}/);
-	assert.match(quality, /- leg: windows\n(?:\s+\S[^\n]*\n)*?\s+os: windows-latest/);
-	// The task cache is a Linux-only trust: the Windows leg neither restores nor saves it.
-	assert.doesNotMatch(quality, /- leg: windows\n(?:\s+\S[^\n]*\n)*?\s+cache: true/);
-	assert.match(quality, /- leg: windows\n(?:\s+\S[^\n]*\n)*?\s+flags: --no-cache/);
+	assert.match(quality, /windows\) vp run --no-cache ci:windows/);
+	for (const name of ["Restore Vite task cache", "Save Vite task cache"])
+		assert.match(
+			String(namedStep(workflow, qualityPath, name).get("if")),
+			/inputs\.leg != 'windows'/,
+		);
 	const install = job(source, "clean-install");
 	assert.doesNotMatch(install, /setup-toolchain|pnpm\/setup/);
 	assert.match(install, /vp install --frozen-lockfile/);
 	assert.match(install, /vp run gate:toolchain/);
-	const hookCondition = "env.RUN == 'true' && matrix.hooks && !cancelled()";
+	const hookCondition = "(inputs.leg == 'tooling' || inputs.leg == 'windows') && !cancelled()";
 	for (const name of ["Commit-msg hook", "Pre-push hook"])
 		assert.equal(namedStep(workflow, qualityPath, name).get("if"), hookCondition);
 	const commitHook = runScript(workflow, qualityPath, "Commit-msg hook");
@@ -2114,10 +2183,55 @@ void test("proves the toolchain on Windows and from a clean clone", async () => 
 	assert.doesNotMatch(prePushHook, /^\s*vp run check\s*$/m);
 });
 
+void test(
+	"quality dispatch selects one task and rejects an unknown leg",
+	{ skip: !bashRunsRunnerSteps() },
+	async () => {
+		const workflow = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
+		const script = runScript(workflow, ["jobs", "quality"], "Quality gates");
+		const probe = `vp() { printf 'command=%s\\n' "$*" >> "$GITHUB_OUTPUT"; }\n${script}`;
+		for (const leg of ["server", "tooling", "webapp", "windows"]) {
+			const result = await runStep(probe, { LEG: leg });
+			assert.equal(result.failed, false, result.diagnosis);
+			assert.equal(
+				result.outputs.command,
+				`run ${leg === "windows" ? "--no-cache " : ""}ci:${leg}`,
+			);
+		}
+		const invalid = await runStep(probe, { LEG: "unknown" });
+		assert.equal(invalid.failed, true);
+		assert.deepEqual(invalid.outputs, {});
+		const failed = await runStep(`vp() { return 1; }\n${script}`, { LEG: "server" });
+		assert.equal(failed.failed, true, "a failing quality task must fail the job");
+	},
+);
+
+void test("unchanged quality legs are skipped before runner allocation", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/ci-quality-gates.yml", "utf8"));
+	for (const [leg, scope] of [
+		["server", "application_server"],
+		["tooling", "tooling"],
+		["webapp", "webapp"],
+		["windows", "tooling"],
+	]) {
+		assert.equal(
+			workflow.getIn(["jobs", leg, "if"]),
+			`inputs.should_skip != 'true' && inputs.${scope}_changed == 'true'`,
+		);
+		assert.equal(workflow.getIn(["jobs", leg, "uses"]), "./.github/workflows/ci-quality-leg.yml");
+		assert.equal(workflow.getIn(["jobs", leg, "with", "leg"]), leg);
+	}
+});
+
 void test("a change to the task graph or the hooks selects every quality leg", async () => {
 	const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
 	const filter = pathFilter(orchestrator, "quality-config");
-	for (const entry of ["vite.config.ts", ".vite-hooks/**", ".java-version"])
+	for (const entry of [
+		"vite.config.ts",
+		".vite-hooks/**",
+		".java-version",
+		".github/workflows/ci-quality-leg.yml",
+	])
 		assert.match(
 			filter,
 			new RegExp(`'${escapeRegExp(entry)}'`),
@@ -2248,3 +2362,81 @@ void test("CodeQL selects languages with native change detection", async () => {
 	assert.ok(asArray(filters["java-kotlin"], "Java paths").includes("server/**"));
 	assert.ok(asArray(filters["javascript-typescript"], "JS paths").includes("pnpm-lock.yaml"));
 });
+
+void test("Stories enforces visual evidence independently of preview publication", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/ci-quality-gates.yml", "utf8"));
+	const jobPath = ["jobs", "webapp-stories"];
+	assert.equal(
+		workflow.getIn([...jobPath, "env", "CHROMATIC_POLICY_SKIP"]),
+		`\${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || startsWith(github.head_ref || github.ref_name, 'dependabot/') || startsWith(github.head_ref || github.ref_name, 'renovate/') }}`,
+	);
+	const chromatic = namedStep(workflow, jobPath, "Chromatic visual testing");
+	assert.equal(chromatic.get("if"), "success() && env.CHROMATIC_POLICY_SKIP != 'true'");
+	assert.equal(chromatic.getIn(["with", "autoAcceptChanges"]), false);
+	assert.equal(chromatic.getIn(["with", "exitZeroOnChanges"]), false);
+	assert.equal(chromatic.getIn(["with", "exitOnceUploaded"]), false);
+	assert.equal(chromatic.getIn(["with", "skip"]), false);
+	const report = namedStep(workflow, jobPath, "Report Chromatic visual coverage");
+	assert.equal(report.get("if"), "always()");
+	assert.equal(report.get("continue-on-error"), true);
+	assert.equal(report.get("run"), "node scripts/report-chromatic.ts");
+	assert.equal(report.getIn(["env", "CHROMATIC_OUTCOME"]), `\${{ steps.chromatic.outcome }}`);
+	for (const [name, output] of Object.entries({
+		CODE: "code",
+		CAPTURED: "actualCaptureCount",
+		INHERITED: "inheritedCaptureCount",
+		TESTS: "testCount",
+		ERRORS: "errorCount",
+		CHANGES: "changeCount",
+		INTERACTIONS: "interactionTestFailuresCount",
+		BUILD_URL: "buildUrl",
+	}))
+		assert.equal(
+			report.getIn(["env", `CHROMATIC_${name}`]),
+			`\${{ steps.chromatic.outputs.${output} }}`,
+		);
+	const gate = namedStep(workflow, jobPath, "Evaluate stories checks");
+	assert.equal(gate.get("if"), "always()");
+	assert.equal(gate.getIn(["env", "CHROMATIC"]), `\${{ steps.visual_coverage.outcome }}`);
+});
+
+void test("global styles and assets retain full-snapshot invalidation", async () => {
+	const config: unknown = JSON.parse(await readFile("webapp/chromatic.config.json", "utf8"));
+	assert.ok(
+		config &&
+			typeof config === "object" &&
+			"externals" in config &&
+			Array.isArray(config.externals),
+	);
+	for (const pattern of [
+		"webapp/public/**",
+		"webapp/src/assets/**",
+		"webapp/**/*.css",
+		"webapp/**/*.scss",
+		"webapp/**/*.sass",
+		"webapp/tailwind.config.*",
+		"webapp/vite.*",
+		"webapp/components.json",
+	])
+		assert.ok(config.externals.includes(pattern), `${pattern} must invalidate snapshots`);
+});
+
+void test(
+	"Stories final verdict rejects every incomplete or failed leg",
+	{ skip: !bashRunsRunnerSteps() },
+	async () => {
+		const workflow = parseDocument(
+			await readFile(".github/workflows/ci-quality-gates.yml", "utf8"),
+		);
+		const command = runScript(workflow, ["jobs", "webapp-stories"], "Evaluate stories checks");
+		for (const stories of ["success", "failure", "skipped"])
+			for (const coverage of ["success", "failure", "skipped", "cancelled", ""]) {
+				const result = await runStep(command, { STORYBOOK_TESTS: stories, CHROMATIC: coverage });
+				assert.equal(
+					result.failed,
+					stories !== "success" || coverage !== "success",
+					result.diagnosis,
+				);
+			}
+	},
+);

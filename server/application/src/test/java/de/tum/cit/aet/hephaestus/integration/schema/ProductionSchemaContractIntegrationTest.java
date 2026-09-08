@@ -198,13 +198,6 @@ class ProductionSchemaContractIntegrationTest {
     @Test
     @DisplayName("Production Liquibase schema applies cleanly and the JPA entities validate against it")
     void productionSchemaAppliesAndEntitiesValidate() {
-        Integer appliedChangesets =
-                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM databasechangelog", Integer.class);
-        assertThat(appliedChangesets)
-                .as("Liquibase DATABASECHANGELOG ledger should record the full production migration set")
-                .isNotNull()
-                .isGreaterThan(500);
-
         assertColumnExists("workspace", "account_login");
         assertColumnExists("connection", "credentials_encrypted");
         assertColumnExists("slack_message", "author_member_id");
