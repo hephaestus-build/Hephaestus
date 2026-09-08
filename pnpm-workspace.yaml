@@ -41,7 +41,7 @@ overrides:
   # unplugin 3.1+ declares an optional peer on the retired runtime's types package, whose name
   # would re-enter the lockfile and fail gate:toolchain's repository-wide token ban.
   "@tanstack/router-plugin>unplugin": 3.0.0
-  mermaid: 11.16.1
+  mermaid: 11.17.2
   vitest: "catalog:"
   "@vitest/browser": "catalog:"
   "@vitest/runner": "catalog:"
