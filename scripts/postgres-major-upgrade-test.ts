@@ -5,6 +5,12 @@
 // up healthy and empty.
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { parseArgs } from "node:util";
+
+const { values } = parseArgs({ options: { "target-image": { type: "string" } } });
+const targetImage = values["target-image"];
+if (targetImage !== undefined && targetImage.trim() === "")
+	throw new Error("--target-image must name an existing local PostgreSQL image");
 
 const id = `postgres-upgrade-${randomUUID().slice(0, 8)}`;
 const source = `${id}-17`;
@@ -91,6 +97,7 @@ function fingerprint(container: string): string {
 }
 
 try {
+	if (targetImage !== undefined) docker("image", "inspect", targetImage);
 	run("docker", [
 		"build",
 		"--build-arg",
@@ -101,24 +108,13 @@ try {
 		`${id}:17`,
 		"docker/postgres",
 	]);
-	run("docker", ["build", "-t", `${id}:18`, "docker/postgres"]);
+	if (targetImage === undefined) run("docker", ["build", "-t", `${id}:18`, "docker/postgres"]);
 	docker("volume", "create", volume);
 
 	const sourcePort = start(source, volume, "/var/lib/postgresql/data", `${id}:17`);
 	if (sql(source, "SHOW server_version_num").slice(0, 2) !== "17")
 		throw new Error("source is not PostgreSQL 17");
 
-	// liquibase:update is a single-module invocation, so the reactor sibling the application
-	// depends on must be installed to the local repository first — a warm CI cache is not a given.
-	run("node", [
-		"scripts/run-mvnw.ts",
-		"-pl",
-		"generated-clients",
-		"-am",
-		"install",
-		"-DskipTests",
-		"--quiet",
-	]);
 	run("node", [
 		"scripts/run-mvnw.ts",
 		"-f",
@@ -168,7 +164,7 @@ try {
 			"POSTGRES_USER=root",
 			"-e",
 			"POSTGRES_PASSWORD=root",
-			`${id}:18`,
+			targetImage ?? `${id}:18`,
 		],
 		{ encoding: "utf8", timeout: 120_000, maxBuffer: 64 * 1024 * 1024 },
 	);
@@ -184,7 +180,7 @@ try {
 	docker("volume", "rm", volume);
 	docker("volume", "create", volume);
 
-	start(target, volume, "/var/lib/postgresql", `${id}:18`);
+	start(target, volume, "/var/lib/postgresql", targetImage ?? `${id}:18`);
 	docker("exec", target, "dropdb", "-U", "root", "hephaestus");
 	docker("exec", target, "createdb", "-U", "root", "hephaestus");
 	const restore = spawnSync(
@@ -233,5 +229,6 @@ try {
 } finally {
 	for (const container of [source, target]) spawnSync("docker", ["rm", "-f", container]);
 	spawnSync("docker", ["volume", "rm", "-f", volume]);
-	for (const image of [`${id}:17`, `${id}:18`]) spawnSync("docker", ["rmi", "-f", image]);
+	for (const image of targetImage === undefined ? [`${id}:17`, `${id}:18`] : [`${id}:17`])
+		spawnSync("docker", ["rmi", "-f", image]);
 }

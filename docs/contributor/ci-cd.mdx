@@ -121,8 +121,9 @@ a stacked layer is approved while it still targets the layer below, because reta
 lower layer merges must not depend on receiving a subsequent event. The `edited` trigger also
 re-evaluates explicit base changes.
 
-The Version PR carries checks like any other pull request. Its updates are pushed with
-`GITHUB_TOKEN`, which starts no workflow run, so `version-pr.yml` dispatches CI/CD on the Version
+The Version PR is maintained after CI/CD succeeds for the current tip of `main`; failed or
+overtaken main runs do not update it. It carries checks like any other pull request. Its updates are
+pushed with `GITHUB_TOKEN`, which starts no workflow run, so `version-pr.yml` dispatches CI/CD on the Version
 PR's branch instead — `workflow_dispatch` being one of the two events that token may start. The
 dispatched run reports `CI Status Gate` onto the branch head, which is the pull request's head
 commit, so the commit whose merge cuts a release is validated before it lands. `Verify changesets`
@@ -375,7 +376,7 @@ why the label is the authority, and which alternatives were priced and declined,
 | `cleanup-preview.yml` | Label removed, PR closed or drafted | Removes and verifies resources, then retains a cleanup tombstone |
 | `reconcile-previews.yml` | Nightly, manual | Re-sends teardown for any preview environment whose pull request is closed, drafted or unlabelled |
 | `cd-docs.yml`, `cd-docs-teardown.yml` | `docs/**` on push and pull requests; PR closed | Publishes the docs site and its pull-request previews |
-| `version-pr.yml` | Push to main | Maintains the accumulating Version PR (changesets) and dispatches CI/CD on its branch, release evidence preflight included |
+| `version-pr.yml` | Successful CI/CD completion for the current main tip | Maintains the accumulating Version PR (changesets) and dispatches CI/CD on its branch, release evidence preflight included |
 | `release.yml` | Successful CI/CD push on `main` | Publishes the release and promotes the moving series and latest image tags |
 | `release-upgrade.yml` | Called by `release.yml`, weekly | Boots the previous stable release with seeded data, then the candidate against the same database |
 | `promote.yml` | Manual dispatch, or automatically for staging | Signs the channel a host follows; hosts pull and apply it themselves |
@@ -563,10 +564,13 @@ or mixed attempts. Keep raw API evidence under `tmp/`, not in committed performa
 
 Normal PR test jobs retain Surefire reports for 14 days, separately for each suite, shard and
 attempt. Use those reports and GitHub's step timings before rerunning tests with instrumentation.
-Deep profiling stays in the manual/weekly workflow, not on the PR critical path.
+Deep profiling stays in the manual/weekly workflow, not on the PR critical path. Select
+`integration`, `verification` (unit and architecture, including coverage), or `all` when dispatching
+`CI profile`. Weekly runs profile both tiers sequentially so diagnostics do not occupy two heavy
+runners at once. Each tier retains its JFR recording, Maven phase report, resource usage and JUnit
+results for 14 days. Verification profiles are diagnostic artifacts, not integration-history samples.
 
-`CI profile` records JFR, Maven phase timings, resource usage, JUnit results and Spring context-cache
-metrics. It signals
+The integration profile additionally records Spring context-cache metrics. It signals
 a sustained regression after three consecutive profiles exceed variance limits against five earlier
 default-branch profiles or absolute Spring-context limits. Only successful test runs with a readable
 JFR recording and valid summaries enter history, including runs whose performance budget fails.
@@ -577,8 +581,9 @@ artifacts without changing or enforcing the baseline.
 
 The workflow's `Run integration suite with JFR` step owns the invocation. Additional test-JVM flags
 use `-Dhephaestus.test.jvmArgs=...`; Surefire and Failsafe compose these with JaCoCo's late-bound
-arguments and the configured memory limits. Missing recordings, Maven reports, resource metrics
-or Spring-context measurements fail the profile rather than becoming zero-valued baselines.
+arguments and the configured memory limits. Missing recordings, Maven reports or resource metrics
+fail the profile rather than becoming zero-valued baselines. Integration profiles also require
+Spring-context measurements; unit/architecture profiles do not require a Spring application to boot.
 For local shard profiling, use the same `HEPHAESTUS_INTEGRATION_TESTS` selector as the CI matrix
 and the Java version pinned in `.java-version`. Compare the same suite, runtime and cache state;
 the weekly whole-tier baseline is not comparable to one shard.
