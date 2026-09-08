@@ -23,6 +23,19 @@ GitHub, GitLab, Slack, and Outline adapters provide project work and context for
 and mentoring. The [practice-review pipeline](./practice-review-pipeline.mdx) defines how reviewed
 work becomes observations and delivered feedback.
 
+## Practice review module boundaries
+
+`agent` owns review execution and orchestration; `practices` owns revisions, observations, feedback,
+and the review gate. The [practice review pipeline](./practice-review-pipeline) owns their lifecycle
+and refusal semantics.
+
+Observation admission uses `integration.scm.ReviewTargetQuery` for SCM identity rather than SCM
+entities or repositories. Identity lookup does not authorize workspace access or feedback delivery.
+
+The integration modules are [open](https://docs.spring.io/spring-modulith/reference/fundamentals.html#modules.open),
+so Modulith verification does not enforce their persistence encapsulation.
+`PracticeReviewModuleBoundaryTest` guards the SCM admission boundary, not the entire review pipeline.
+
 ## AI mentor architecture
 
 Heph uses a Pi sandbox and streams responses to the client over SSE.

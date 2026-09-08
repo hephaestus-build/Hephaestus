@@ -40,43 +40,18 @@ class PracticePiAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    void precomputeReferencesContextTarget() {
-        String step = PracticePiAdapter.buildPrecomputeStep();
-        assertThat(step)
-                .contains("/workspace/" + SandboxLayout.CONTEXT_PREFIX + "diff.patch")
-                .contains("/workspace/" + SandboxLayout.CONTEXT_PREFIX + "metadata.json")
-                // scripts receive the materialised context dir so they can read project_inventory.json etc.
-                .contains("--context /workspace/" + SandboxLayout.CONTEXT_PREFIX)
-                .doesNotContain("/workspace/.context/");
+    void shouldStagePrecomputeBootstrapWithItsRunner() {
+        var spec = adapter.buildSandboxSpec(proxyRequest());
+        assertThat(spec.inputFiles()).containsKeys("pi-precompute.sh", "pi-precompute.ts", "pi-task-paths.ts");
+        assertThat(spec.command())
+                .anySatisfy(command -> assertThat(command).contains("sh /workspace/pi-precompute.sh 30 && "));
     }
 
     @Test
-    void precomputeIsBestEffortNonFatal() {
-        // The precompute fragment is interpolated verbatim into the agent's sh -c command. Its robustness
-        // properties are load-bearing: a failed (or absent) precompute must NOT abort the whole agent run.
-        String step = PracticePiAdapter.buildPrecomputeStep();
-        assertThat(step)
-                // Non-fatal contract: a failed runner falls into the '|| { … ; true; }' guard and continues.
-                .contains("|| {")
-                .contains("; true; }")
-                // Zero-script tolerance: Node is reached via ';' (not '&&') after the sed strip, so a missing
-                // '*.ts' / failed cp still lets the runner start.
-                .contains("2>/dev/null ; env -i HOME=/home/agent PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp node")
-                // env -i re-resolves node from its own PATH, which must cover /usr/local/bin (node:24-slim).
-                .contains("PATH=/usr/local/bin:")
-                // The output dir must exist before the sed redirect writes diff_clean.patch into it.
-                .contains("mkdir -p /workspace/work/precompute-stage/practices /workspace/work/precompute-out")
-                .contains("--permission")
-                .contains("--allow-fs-read=/workspace")
-                .contains("--allow-fs-read=/opt/precompute")
-                .contains("'--allow-fs-write=/workspace/work/precompute-out*'")
-                .contains("--allow-child-process /opt/precompute/runner.ts")
-                // The runner gets the repo mount, the cleaned diff, and writes into the precompute-out dir.
-                .contains("--repo " + SandboxLayout.REPO_MOUNT)
-                .contains("/diff_clean.patch")
-                .contains("--output /workspace/work/precompute-out")
-                // The agent-facing [L<n>] line annotations are stripped to a raw diff for the static parser.
-                .contains("sed 's/^\\[L[0-9]*\\] //'");
+    void shouldCapPrecomputeAtThirtySecondsAndOneTenthOfTheJobDeadline() {
+        assertThat(PracticePiAdapter.buildPrecomputeStep(600)).contains("pi-precompute.sh 30 &&");
+        assertThat(PracticePiAdapter.buildPrecomputeStep(120)).contains("pi-precompute.sh 12 &&");
+        assertThat(PracticePiAdapter.buildPrecomputeStep(61)).contains("pi-precompute.sh 6 &&");
     }
 
     @Test

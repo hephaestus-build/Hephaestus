@@ -22,7 +22,7 @@ ARG NODE_VERSION
 ARG SOURCE_COMMIT
 RUN echo "source commit: ${SOURCE_COMMIT:-<unset — local build>}" && \
     apt-get update -qq && apt-get upgrade -y -qq && \
-    apt-get install -y --no-install-recommends git findutils tree jq ca-certificates grep && \
+    apt-get install -y --no-install-recommends git findutils tree jq ca-certificates grep coreutils util-linux && \
     rm -rf /var/lib/apt/lists/*
 
 RUN groupmod --new-name agent node && \

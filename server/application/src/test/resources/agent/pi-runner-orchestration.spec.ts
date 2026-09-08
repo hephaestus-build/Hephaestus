@@ -121,7 +121,7 @@ if (scenario) {
 										citations: [
 											{
 												sourceKind: "scm.pull-request.diff",
-												artifactPath: "inputs/diff.patch",
+												artifactPath: "evidence/diff.patch",
 												path: "src/Auth.java",
 												side: "NEW",
 												startLine: 10,
@@ -160,17 +160,18 @@ if (scenario) {
 			() => {
 				const cwd = mkdtempSync(join(tmpdir(), "pi-orchestration-"));
 				try {
-					mkdirSync(join(cwd, "inputs/practices"), { recursive: true });
+					mkdirSync(join(cwd, "catalog/practices"), { recursive: true });
+					mkdirSync(join(cwd, "evidence"), { recursive: true });
 					writeFileSync(join(cwd, "AGENTS.md"), "Review the staged evidence.");
 					writeFileSync(join(cwd, "feedback-composer.md"), "Compose from admitted observations.");
 					writeFileSync(join(cwd, "events"), "");
 					writeFileSync(
-						join(cwd, "inputs/diff.patch"),
+						join(cwd, "evidence/diff.patch"),
 						"diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10,0 +10,1 @@\n[L10] + insecure();\n",
 					);
 					if (stage.startsWith("composer")) {
 						writeFileSync(
-							join(cwd, "inputs/feedback-composition.json"),
+							join(cwd, "evidence/composition.json"),
 							JSON.stringify({
 								enabled: true,
 								channels: { IN_APP: { enabled: true, maxUnits: 1 } },
@@ -178,19 +179,19 @@ if (scenario) {
 						);
 					}
 					writeFileSync(
-						join(cwd, "inputs/manifest.json"),
+						join(cwd, "evidence/manifest.json"),
 						JSON.stringify({
 							sources: [
 								{
 									kind: "scm.pull-request.diff",
 									state: { availability: "AVAILABLE" },
-									artifacts: [{ path: "inputs/diff.patch" }],
+									artifacts: [{ path: "evidence/diff.patch" }],
 								},
 							],
 						}),
 					);
 					writeFileSync(
-						join(cwd, "inputs/practices/index.json"),
+						join(cwd, "catalog/practices/index.json"),
 						JSON.stringify(
 							stage === "retry-init"
 								? [{ slug: "test-practice" }, { slug: "missing-practice" }]
@@ -204,7 +205,16 @@ if (scenario) {
 					writeFileSync(
 						join(cwd, "task.json"),
 						JSON.stringify({
-							schemaVersion: 1,
+							schemaVersion: 2,
+							paths: {
+								contextRoot: "evidence",
+								repositoryRoot: "repos/primary",
+								manifest: "evidence/manifest.json",
+								practiceIndex: "catalog/practices/index.json",
+								compositionRequest: "evidence/composition.json",
+								preparedFeedback: "history/prepared.json",
+								precomputeScripts: "scripts/practices",
+							},
 							task: { kind: "practice_review", prompt: "Review the practice." },
 						}),
 					);

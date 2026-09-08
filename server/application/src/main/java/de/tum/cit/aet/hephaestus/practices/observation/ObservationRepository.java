@@ -32,16 +32,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public interface ObservationRepository extends JpaRepository<Observation, UUID> {
     /**
-     * Excludes observations about an artifact in a repository a workspace team has hidden from contributions.
-     *
-     * <p>One text, concatenated into every native query that needs it, because five hand-kept copies is five
-     * chances for one of them to be forgotten — which is exactly what happened to the review-runs queries.
-     * Adding a surface now means adding this constant to it, and a surface that omits it omits it visibly.
-     *
-     * <p>Binds to the aliases {@code f} (the observation) and {@code p} (its practice), so every query using
-     * it must name those two the same way. Native rather than JPQL: it reaches the integration module's
-     * {@code issue} table and the workspace module's team settings, neither of which the practices module may
-     * hold an entity reference to.
+     * Excludes observations about artifacts in repositories hidden from contributions in this workspace.
+     * Requires the observation alias {@code f}. Native SQL crosses integration and workspace tables
+     * without introducing cross-module entity references.
      */
     String HIDDEN_REPOSITORY_GUARD = """
                   AND NOT EXISTS (
@@ -61,16 +54,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
     Optional<Observation> findByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
 
     /**
-     * The {@link #findByIdAndWorkspaceId} answer for a whole set of ids, in one round trip.
-     *
-     * <p>Same workspace predicate and the same entity graph as the single-id form. The graph is the point
-     * as much as the batching is: {@code ReviewClaimCurrentness} compares the evaluated
-     * {@code practiceRevision} against {@code practice.currentRevision}, so a batch that dropped it would
-     * trade one N+1 for a lazier one.
-     *
-     * <p>An id with no row in the result is an id the caller may not read — an observation that does not
-     * exist and one belonging to another workspace collapse into the same absence the single-id
-     * {@link Optional} reports empty. Callers guard an empty {@code ids}.
+     * Loads both practice revisions for batched currentness checks without per-observation lazy loads.
+     * Callers must guard an empty {@code ids} collection.
      */
     @EntityGraph(attributePaths = {"practice.currentRevision", "practiceRevision"})
     @Query("SELECT f FROM Observation f WHERE f.id IN :ids AND f.workspaceId = :workspaceId")
@@ -110,11 +95,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         Long getProblems();
 
         Long getNotApplicable();
-        /**
-         * Runs where the practice looked and could not settle the question. Counted apart from
-         * {@link #getNotApplicable()}: both are silence on the artifact, but an operator reading a review
-         * summary needs "nothing here to judge" told apart from "we could not tell".
-         */
+
         Long getInconclusive();
     }
 
@@ -502,12 +483,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
     List<DeveloperPracticeSummaryProjection> findSummaryByDeveloperAndWorkspace(
             @Param("aboutUserId") Long aboutUserId, @Param("workspaceId") Long workspaceId);
 
-    /**
-     * Single observation by ID within a workspace, restricted to a specific about-user.
-     *
-     * <p>Ownership is enforced in the query (not in Java) to avoid lazy-load
-     * fragility and to keep the auth check atomic with the fetch.
-     */
+    /** Developer and workspace predicates restrict the selected data; they do not authorize the caller. */
     @EntityGraph(attributePaths = {"practice.currentRevision", "practiceRevision"})
     @Query("""
         SELECT f FROM Observation f
@@ -667,7 +643,6 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
     /**
      * The runs (agent jobs) that produced ≥1 correlation-keyed observation for a target, newest first by the
      * run's latest detection. Pass {@code PageRequest.of(0, 2)} to get the two most-recent runs to diff.
-     * Workspace-scoped via {@code Practice.workspace}.
      *
      * <p>A {@code BACKFILL} run is never one of the two. The diff is read as "did this get fixed between
      * the two times we looked", and a sweep that looked at the artifact long after the fact would answer
@@ -992,10 +967,6 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
     /**
      * One person's own measurements of one practice inside a window — the evidence a process-level
      * message about that practice stands on.
-     *
-     * <p>Workspace-scoped through the practice, exactly as every other read here: {@code observation}
-     * carries no workspace column of its own, so the join IS the tenancy predicate and dropping it would
-     * make a pattern about one workspace citable in another.
      *
      * <p>Deliberately NOT deduped to each artifact's latest run: whether a problem recurred across
      * separate pieces of work is the question, and a re-review of the same pull request is the same

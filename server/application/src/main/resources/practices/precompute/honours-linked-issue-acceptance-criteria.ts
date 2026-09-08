@@ -1,15 +1,8 @@
-import { readFile } from "node:fs/promises";
-// Precompute HINTS for honours-linked-issue-acceptance-criteria: surface the LINK between this change and a
-// tracker issue, plus (when the linked issue's body is projected into context) whether that issue carries a
-// checkable acceptance-criteria block. FACTS only — closing-ref candidates + AC-block presence. The LLM maps
-// each criterion to done/deferred. No observation. This practice over-NAs when the linked-issue fact is absent, so
-// the point is to make BOTH the link and the issue's done-artifact visible when they exist.
+// Surface linked-issue references and acceptance-criteria blocks, not compliance verdicts.
 import { readContextJson } from "../lib/context.ts";
 import { isJsonObject } from "../lib/practice-contract.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
-// Closing-keyword grammar shared by GitHub/GitLab: close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved
-// followed by an issue reference. Generalised — adding a host = adding a URL row, no engine change.
 const CLOSE_KEYWORD = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b/gi;
 // "closes #12", "fixes GH-12", "resolves group/proj#12" — capture the trailing issue number.
 const CLOSE_REF = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+(?:[\w./~-]*[#!]|GH-)(\d+)/gi;
@@ -28,8 +21,6 @@ function collect(re: RegExp, text: string, into: Set<string>): void {
 	}
 }
 
-// A linked work item, as projected by the SCM connector into inputs/context/linked_work_items.json (optional).
-// Shape is intentionally loose: we only read body/title-ish fields and never assume it exists.
 interface LinkedWorkItem {
 	number?: number | string;
 	iid?: number | string;
@@ -74,36 +65,6 @@ function unwrapLinkedItems(data: unknown): LinkedWorkItem[] | null {
 	return [toLinkedWorkItem(data)];
 }
 
-// Repo-mount-derived fallback for linked_work_items.json (.../inputs/sources/scm/repo → .../inputs/context/...).
-// Only used when the runner did not pass --context (or it failed to resolve), so we are not coupled to the
-// REPO_MOUNT string layout in the normal path.
-async function readLinkedItemsFromRepoPath(repoPath: string): Promise<LinkedWorkItem[] | null> {
-	const idx = repoPath.lastIndexOf("/inputs/");
-	if (idx < 0) return null;
-	try {
-		const data: unknown = JSON.parse(
-			await readFile(`${repoPath.slice(0, idx)}/inputs/context/linked_work_items.json`, "utf8"),
-		);
-		return unwrapLinkedItems(data);
-	} catch {
-		// absent or unreadable — that itself is the over-NA condition; fall through.
-		return null;
-	}
-}
-
-// Prefer the runner-supplied --context dir (lib/context.ts), falling back to the repoPath-derived path so an
-// older invocation without --context still resolves.
-async function readLinkedItems(
-	repoPath: string,
-	contextDir: string | undefined,
-): Promise<LinkedWorkItem[] | null> {
-	const fromContext = unwrapLinkedItems(
-		await readContextJson(contextDir, "linked_work_items.json"),
-	);
-	if (fromContext !== null) return fromContext;
-	return readLinkedItemsFromRepoPath(repoPath);
-}
-
 // A checkable acceptance-criteria artifact: an AC/DoD heading or a "- [ ]" checklist in the issue body.
 function acFacts(body: string): { heading: boolean; boxes: number } {
 	const heading =
@@ -115,7 +76,7 @@ function acFacts(body: string): { heading: boolean; boxes: number } {
 }
 
 export default async function honoursLinkedIssueAcceptanceCriteria(
-	repoPath: string,
+	_repoPath: string,
 	_diff: Map<string, DiffFile>,
 	meta: PullRequestMetadata,
 	contextDir?: string,
@@ -141,7 +102,7 @@ export default async function honoursLinkedIssueAcceptanceCriteria(
 	const keywordHits = (`${title}\n${body}`.match(CLOSE_KEYWORD) ?? []).length;
 	CLOSE_KEYWORD.lastIndex = 0;
 
-	const linked = await readLinkedItems(repoPath, contextDir);
+	const linked = unwrapLinkedItems(await readContextJson(contextDir, "linked_work_items.json"));
 	const linkedIssueBodyPresent = linked?.some(
 		(i) => (i.bodyExcerpt ?? i.body ?? i.description ?? "").trim().length > 0,
 	);

@@ -518,14 +518,14 @@ export function validateEvidenceSources(
 		if (!availableSourceKinds.has(sourceKind)) {
 			throw new Error(
 				`evidence source '${sourceKind}' was not available; copy one of these source kinds from ` +
-					`inputs/manifest.json: ${describeAvailableSources(availableSourceKinds)}`,
+					`the task-declared manifest: ${describeAvailableSources(availableSourceKinds)}`,
 			);
 		}
 		const artifactSource = artifactSources.get(citation.artifactPath);
 		if (artifactSource !== sourceKind) {
 			throw new Error(
 				artifactSource === undefined
-					? `artifact '${citation.artifactPath}' was not staged; copy an artifact path from inputs/manifest.json`
+					? `artifact '${citation.artifactPath}' was not staged; copy an artifact path from the task-declared manifest`
 					: `artifact '${citation.artifactPath}' belongs to evidence source '${artifactSource}', not '${sourceKind}'`,
 			);
 		}
@@ -576,7 +576,7 @@ export function validateSearchScope(
 		if (!availableSourceKinds.has(sourceKind)) {
 			throw new Error(
 				`searched source '${sourceKind}' was not available; copy one of these source kinds from ` +
-					`inputs/manifest.json: ${describeAvailableSources(availableSourceKinds)}`,
+					`the task-declared manifest: ${describeAvailableSources(availableSourceKinds)}`,
 			);
 		}
 	}
@@ -610,7 +610,7 @@ export function validateInapplicabilityScope(
 		if (!availableSourceKinds.has(sourceKind)) {
 			throw new Error(
 				`consulted source '${sourceKind}' was not available; copy one of these source kinds from ` +
-					`inputs/manifest.json: ${describeAvailableSources(availableSourceKinds)}`,
+					`the task-declared manifest: ${describeAvailableSources(availableSourceKinds)}`,
 			);
 		}
 	}
