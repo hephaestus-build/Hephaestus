@@ -45,15 +45,19 @@ so when it does. Always read them and test in staging first. This caveat ends wi
 
 ## Upgrade guarantee
 
-**Any 1.x can be upgraded to any later 1.y**, and today **any 0.x to any later 0.y**, in a single step: take
-the release's Compose files and images, and on startup Liquibase applies every not-yet-applied changeset
-from the intervening releases in changelog order. You do not need to step through intermediate releases.
+Within the same migration baseline, **any 1.x can be upgraded to any later 1.y**, and today
+**any 0.x to any later 0.y**, without stepping through intermediate releases. Read the intervening
+release notes and complete required manual transitions before starting the target release.
 
-This rests on the migration chain being append-only. CI enforces that mechanically — a released changelog
-can never be edited, renamed, or deleted, and `master.xml` only grows — and replays the whole chain against
-an empty database on every change. What CI does *not* prove is that a migration is safe against real
-existing data (an empty-database replay can't), so data-affecting migrations stay a review responsibility.
-Take a database backup before upgrading. Downgrades are not supported.
+**Crossing the v0.77.4 baseline is a required manual transition.** Existing installations must finish
+its migrations on PostgreSQL 18, then follow the [baseline synchronization runbook](./liquibase-baseline-runbook).
+The target release refuses an unsynchronized existing schema; starting it does not replay archived migrations.
+Fresh installations apply the baseline automatically.
+
+The baseline and subsequent migration chain are append-only; CI enforces immutability and replays the
+chain against an empty database. These checks do not prove compatibility with your production data.
+Rehearse the upgrade against an isolated production-data copy and take a verified backup before upgrading.
+Downgrades are not supported.
 
 ## Deprecation policy
 

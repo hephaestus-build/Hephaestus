@@ -88,8 +88,8 @@ They must have author `hephaestus-release`, non-null checksums, and ids `baselin
 `baseline_v0_77_4-audit`, `baseline_v0_77_4-seed`, and `baseline_v0_77_4-tag`. The last row carries tag
 `baseline_v0_77_4`. A `dev` synchronization has three entries because it excludes audit triggers.
 
-Start the candidate and verify readiness, authenticated workspace reads, consent, operator settings,
-and partition maintenance. The baseline must execute no DDL on this synchronized database. Later
+Use the [guarded startup sequence](production-operations-runbook#silent-deployment-checklist), then verify
+readiness, authenticated workspace reads, consent, operator settings, and partition maintenance. The baseline must execute no DDL on this synchronized database. Later
 migrations, if present in the candidate, still run normally; do not synchronize beyond the baseline tag.
 
 ## Stale lock recovery
