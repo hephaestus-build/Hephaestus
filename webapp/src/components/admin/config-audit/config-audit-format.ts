@@ -17,6 +17,8 @@ const RENAMED_ENTITY_TYPE_LABELS = {
 } satisfies Partial<Record<EntityType, string>>;
 
 export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
+	GITHUB_ACCESS_POLICY: "GitHub access policy",
+	GITHUB_ACCESS_MEMBERSHIP: "GitHub access membership",
 	DIRECTORY_POLICY: "Directory access policy",
 	PRACTICE_REVIEW_SETTINGS: "Review settings",
 	AGENT_BINDING: "AI binding",

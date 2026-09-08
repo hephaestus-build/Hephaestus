@@ -116,7 +116,7 @@ public final class ConsumerSubjectMath {
         }
         return switch (kind) {
             case GITHUB -> buildSubjectPrefix("github", "?/?") + ".>";
-            case GITLAB, SLACK, OUTLINE, KEYCLOAK_DIRECTORY ->
+            case GITLAB, SLACK, OUTLINE, KEYCLOAK_DIRECTORY, GITHUB_ACCESS ->
                 throw new UnsupportedOperationException("Installation-aware subject filter not yet supported for kind="
                         + kind + " (only GITHUB publishes installation events today)");
         };
@@ -135,7 +135,7 @@ public final class ConsumerSubjectMath {
             case GITLAB -> Optional.of("gitlab");
             case OUTLINE -> Optional.of("outline");
             case SLACK -> Optional.of("slack");
-            case KEYCLOAK_DIRECTORY -> Optional.empty();
+            case KEYCLOAK_DIRECTORY, GITHUB_ACCESS -> Optional.empty();
         };
     }
 

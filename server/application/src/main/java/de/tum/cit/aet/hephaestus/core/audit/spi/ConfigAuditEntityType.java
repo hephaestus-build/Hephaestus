@@ -27,6 +27,8 @@ public enum ConfigAuditEntityType {
     WORKSPACE_ACCESS_POLICY,
     WORKSPACE_ACCESS_REQUEST,
     DIRECTORY_POLICY,
+    GITHUB_ACCESS_POLICY,
+    GITHUB_ACCESS_MEMBERSHIP,
     WORKSPACE_FEATURES,
     WORKSPACE_STATUS,
     /** The workspace's stored SCM access token (rotation only — the value is never recorded). */

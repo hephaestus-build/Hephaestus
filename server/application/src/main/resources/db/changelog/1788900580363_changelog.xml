@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1788900580363-1" author="hephaestus">
+        <createTable tableName="github_access_action">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="github_access_actionPK"/>
+            </column>
+            <column name="attempts" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="configuration_version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="confirmed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="directory_capture_started_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="directory_configuration_version" type="BIGINT"/>
+            <column name="directory_source_version" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="failure_code" type="VARCHAR(32)"/>
+            <column name="failure_reason" type="VARCHAR(512)"/>
+            <column name="github_user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_attempt_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="organization_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider_state" type="VARCHAR(32)"/>
+            <column name="retry_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="scope_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="type" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="membership_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1788900580363-2" author="hephaestus">
+        <createTable tableName="github_access_membership">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="github_access_membershipPK"/>
+            </column>
+            <column name="account_id" type="BIGINT"/>
+            <column name="blocker" type="VARCHAR(512)"/>
+            <column name="confirmed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="directory_identity_link_id" type="BIGINT"/>
+            <column name="directory_subject" type="VARCHAR(512)"/>
+            <column name="enrolled" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="exception_reason" type="VARCHAR(512)"/>
+            <column name="external_state" type="VARCHAR(32)"/>
+            <column name="github_identity_link_id" type="BIGINT"/>
+            <column name="github_login" type="VARCHAR(100)"/>
+            <column name="github_user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="invitation_id" type="BIGINT"/>
+            <column name="managed" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="manual_exception" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revocation_requested" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1788900580363-3" author="hephaestus">
+        <createTable tableName="github_access_target">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="github_access_targetPK"/>
+            </column>
+            <column name="approved_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="approved_by_account_id" type="BIGINT"/>
+            <column name="approved_group_ids" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="authority_held" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner_authorization" type="JSONB"/>
+            <column name="configuration_version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="connection_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="directory_provider_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="draft_group_ids" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="failure_code" type="VARCHAR(32)"/>
+            <column name="failure_reason" type="VARCHAR(512)"/>
+            <column name="handoff_expires_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="handoff_hash" type="VARCHAR(64)"/>
+            <column name="handoff_issued_by_account_id" type="BIGINT"/>
+            <column name="issuer" type="VARCHAR(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_attempt_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="last_confirmed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="organization_id" type="BIGINT"/>
+            <column name="organization_login" type="VARCHAR(100)"/>
+            <column name="paused" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="pending_installation_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="preview" type="JSONB"/>
+            <column name="registration_id" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="requested_organization" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="requested_team" type="VARCHAR(100)"/>
+            <column name="retry_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="scope_id" type="BIGINT"/>
+            <column name="scope_name" type="VARCHAR(255)"/>
+            <column name="status" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1788900580363-4" author="hephaestus">
+        <addUniqueConstraint columnNames="id, target_id, workspace_id" constraintName="uq_github_access_membership_scope" tableName="github_access_membership"/>
+    </changeSet>
+    <changeSet id="1788900580363-5" author="hephaestus">
+        <addUniqueConstraint columnNames="target_id, github_user_id" constraintName="uq_github_access_membership_target_user" tableName="github_access_membership"/>
+    </changeSet>
+    <changeSet id="1788900580363-6" author="hephaestus">
+        <addUniqueConstraint columnNames="connection_id" constraintName="uq_github_access_target_connection" tableName="github_access_target"/>
+    </changeSet>
+    <changeSet id="1788900580363-7" author="hephaestus">
+        <addUniqueConstraint columnNames="handoff_hash" constraintName="uq_github_access_target_handoff" tableName="github_access_target"/>
+    </changeSet>
+    <changeSet id="1788900580363-8" author="hephaestus">
+        <addUniqueConstraint columnNames="id, workspace_id" constraintName="uq_github_access_target_id_workspace" tableName="github_access_target"/>
+    </changeSet>
+    <changeSet id="1788900580363-9" author="hephaestus">
+        <createIndex indexName="idx_github_access_action_target_status" tableName="github_access_action">
+            <column name="workspace_id"/>
+            <column name="target_id"/>
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1788900580363-10" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="membership_id" baseTableName="github_access_action" constraintName="fk_github_access_action_membership" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="github_access_membership" validate="true"/>
+    </changeSet>
+    <changeSet id="1788900580363-11" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="target_id" baseTableName="github_access_action" constraintName="fk_github_access_action_target" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="github_access_target" validate="true"/>
+    </changeSet>
+    <changeSet id="1788900580363-12" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="github_access_action" constraintName="fk_github_access_action_workspace" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
+    <changeSet id="1788900580363-13" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="target_id" baseTableName="github_access_membership" constraintName="fk_github_access_membership_target" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="github_access_target" validate="true"/>
+    </changeSet>
+    <changeSet id="1788900580363-14" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="github_access_membership" constraintName="fk_github_access_membership_workspace" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
+    <changeSet id="1788900580363-15" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="github_access_target" constraintName="fk_github_access_target_workspace" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
+    <changeSet id="1788900580363-16" author="hephaestus">
+        <comment>Native authority is acquired atomically; different workspaces cannot overlap organization and team scopes.</comment>
+        <sql>
+            ALTER TABLE github_access_target ADD CONSTRAINT ck_github_access_target_native_scope
+                CHECK ((organization_id IS NULL OR organization_id &gt; 0)
+                    AND (scope_id IS NULL OR (scope_id &gt;= 0 AND scope_id &lt; 9223372036854775807))
+                    AND (NOT authority_held OR (organization_id IS NOT NULL AND scope_id IS NOT NULL)));
+            ALTER TABLE github_access_target ADD CONSTRAINT ex_github_access_authority
+                EXCLUDE USING gist (organization_id WITH =,
+                    (CASE WHEN scope_id = 0 THEN int8range(NULL, NULL)
+                        ELSE int8range(scope_id, scope_id, '[]') END) WITH &amp;&amp;,
+                    workspace_id WITH &lt;&gt;) WHERE (authority_held);
+            CREATE UNIQUE INDEX uq_github_access_held_scope ON github_access_target (workspace_id, organization_id, scope_id)
+                WHERE authority_held;
+            ALTER TABLE github_access_target ADD CONSTRAINT ck_github_access_target_status CHECK (status IN ('DRAFT','ACTIVE','ENDING','ENDED'));
+            ALTER TABLE github_access_target ADD CONSTRAINT ck_github_access_target_groups CHECK (jsonb_typeof(draft_group_ids) = 'array' AND jsonb_typeof(approved_group_ids) = 'array');
+            ALTER TABLE github_access_target ADD CONSTRAINT ck_github_access_target_configuration CHECK (configuration_version &gt; 0 AND pending_installation_id &gt; 0);
+            ALTER TABLE github_access_action ADD CONSTRAINT ck_github_access_action_scope CHECK (organization_id &gt; 0 AND scope_id &gt;= 0 AND github_user_id &gt; 0 AND configuration_version &gt; 0);
+            ALTER TABLE github_access_action ADD CONSTRAINT ck_github_access_action_type CHECK (type IN ('GRANT','REVOKE'));
+            ALTER TABLE github_access_action ADD CONSTRAINT ck_github_access_action_status CHECK (status IN ('PENDING','CONFIRMED','INVALIDATED','MANUAL_RECOVERY'));
+            ALTER TABLE github_access_membership ADD CONSTRAINT ck_github_access_membership_native_id CHECK (github_user_id &gt; 0);
+            CREATE UNIQUE INDEX uq_github_access_unresolved_action ON github_access_action (membership_id)
+                WHERE status IN ('PENDING', 'MANUAL_RECOVERY');
+        </sql>
+    </changeSet>
+    <changeSet id="1788900580363-17" author="hephaestus">
+        <addForeignKeyConstraint baseTableName="github_access_target" baseColumnNames="connection_id,workspace_id" constraintName="sfk_github_access_target_connection_workspace" referencedTableName="connection" referencedColumnNames="id,workspace_id"/>
+        <addForeignKeyConstraint baseTableName="github_access_target" baseColumnNames="directory_provider_id" constraintName="sfk_github_access_target_directory_provider" referencedTableName="identity_provider" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="github_access_target" baseColumnNames="approved_by_account_id" constraintName="sfk_github_access_target_approver" referencedTableName="account" referencedColumnNames="id" onDelete="SET NULL"/>
+        <addForeignKeyConstraint baseTableName="github_access_target" baseColumnNames="handoff_issued_by_account_id" constraintName="sfk_github_access_target_handoff_issuer" referencedTableName="account" referencedColumnNames="id" onDelete="SET NULL"/>
+        <addForeignKeyConstraint baseTableName="github_access_membership" baseColumnNames="target_id,workspace_id" constraintName="sfk_github_access_membership_target_workspace" referencedTableName="github_access_target" referencedColumnNames="id,workspace_id"/>
+        <addForeignKeyConstraint baseTableName="github_access_membership" baseColumnNames="account_id" constraintName="sfk_github_access_membership_account" referencedTableName="account" referencedColumnNames="id" onDelete="SET NULL"/>
+        <addForeignKeyConstraint baseTableName="github_access_action" baseColumnNames="membership_id,target_id,workspace_id" constraintName="sfk_github_access_action_membership_scope" referencedTableName="github_access_membership" referencedColumnNames="id,target_id,workspace_id"/>
+        <addForeignKeyConstraint baseTableName="github_access_action" baseColumnNames="target_id,workspace_id" constraintName="sfk_github_access_action_target_workspace" referencedTableName="github_access_target" referencedColumnNames="id,workspace_id"/>
+    </changeSet>
+    <changeSet id="1788900580363-18" author="hephaestus">
+        <sql>
+            ALTER TABLE connection DROP CONSTRAINT ck_connection_kind;
+            ALTER TABLE connection ADD CONSTRAINT ck_connection_kind CHECK (kind IN ('GITHUB', 'GITLAB', 'SLACK', 'OUTLINE', 'KEYCLOAK_DIRECTORY', 'GITHUB_ACCESS'));
+            ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+            ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('LOGIN', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'APP_ROLE_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'GITHUB_ACCESS_AUTHORIZED', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED'));
+            ALTER TABLE config_audit_event DROP CONSTRAINT ck_config_audit_event_entity_type;
+            ALTER TABLE config_audit_event ADD CONSTRAINT ck_config_audit_event_entity_type CHECK (entity_type IN ('PRACTICE_REVIEW_SETTINGS', 'AGENT_BINDING', 'AGENT_CONFIG', 'AI_CONFIG_BINDING', 'WORKSPACE_ROLE', 'WORKSPACE_FEATURES', 'WORKSPACE_STATUS', 'WORKSPACE_TOKEN', 'WORKSPACE_VISIBILITY', 'PRACTICE_ACTIVE', 'PRACTICE_USAGE', 'PRACTICE_DEFINITION', 'PRACTICE_GROUP', 'PRACTICE_AREA', 'CURATED_PRACTICE', 'CURATED_PRACTICE_GROUP', 'CURATED_PRACTICE_AREA', 'WORKSPACE_INSTANCE_LLM_BUDGET', 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET', 'WORKSPACE_LLM_BUDGET', 'WORKSPACE_BYO_LLM_BUDGET', 'REVIEW_BACKFILL_RUN', 'REVIEW_SWEEP_SCHEDULE', 'WORKSPACE_LLM_CONNECTION', 'WORKSPACE_LLM_MODEL', 'DIRECTORY_POLICY', 'WORKSPACE_ACCESS_POLICY', 'WORKSPACE_ACCESS_REQUEST', 'GITHUB_ACCESS_POLICY', 'GITHUB_ACCESS_MEMBERSHIP'));
+        </sql>
+    </changeSet>
+</databaseChangeLog>

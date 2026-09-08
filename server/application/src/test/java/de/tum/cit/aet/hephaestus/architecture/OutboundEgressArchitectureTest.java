@@ -4,6 +4,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.tngtech.archunit.lang.ArchRule;
+import de.tum.cit.aet.hephaestus.integration.access.github.GitHubAccessClient;
 import de.tum.cit.aet.hephaestus.integration.core.egress.EgressExempt;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGateway;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
@@ -78,7 +79,9 @@ class OutboundEgressArchitectureTest extends HephaestusArchitectureTest {
                 .haveFullyQualifiedName(SlackMessageService.class.getName())
                 .orShould()
                 .haveFullyQualifiedName("de.tum.cit.aet.hephaestus.integration.core.email.SmtpEmailGateway")
-                .because("gateway status is limited to the reviewed SPI, Slack and SMTP client surfaces");
+                .orShould()
+                .haveFullyQualifiedName(GitHubAccessClient.class.getName())
+                .because("gateway status is limited to the reviewed delivery and membership client surfaces");
 
         rule.check(classes);
     }
@@ -96,6 +99,20 @@ class OutboundEgressArchitectureTest extends HephaestusArchitectureTest {
                 .because("delivery writers must not self-exempt outside the declared control-plane allowlist");
 
         rule.check(classes);
+    }
+
+    @Test
+    void shouldKeepMembershipTransportInsideTheReviewedAccessClient() {
+        noClasses()
+                .that()
+                .resideInAPackage("..integration.access.github..")
+                .and()
+                .doNotHaveFullyQualifiedName(GitHubAccessClient.class.getName())
+                .should()
+                .dependOnClassesThat()
+                .areAssignableTo(RestClient.class)
+                .because("membership writes have one reviewed, Silent Mode guarded provider boundary")
+                .check(classes);
     }
 
     @Test

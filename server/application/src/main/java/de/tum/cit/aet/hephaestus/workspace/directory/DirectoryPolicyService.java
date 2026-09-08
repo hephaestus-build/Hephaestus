@@ -263,7 +263,8 @@ public class DirectoryPolicyService {
                 .filter(ClientCredentials.class::isInstance)
                 .map(ClientCredentials.class::cast)
                 .orElseThrow(() -> new IllegalArgumentException("Ask the owner to rotate the directory credentials"));
-        Set<String> previous = new HashSet<>();
+        // External departures remain observable while a provider outage delays their revocation.
+        Set<String> previous = new HashSet<>(managedAccess.retainedSubjects(workspaceId, source.providerId()));
         DirectorySnapshot last = policy.getActiveSnapshot();
         if (last != null) previous.addAll(last.eligibleSubjects().keySet());
         memberships.findByWorkspace_Id(workspaceId).stream()

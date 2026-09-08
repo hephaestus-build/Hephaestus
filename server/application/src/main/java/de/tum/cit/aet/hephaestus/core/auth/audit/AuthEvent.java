@@ -128,6 +128,7 @@ public class AuthEvent {
         // An instance admin reached a workspace they are not a member of. One marker per access
         // window, not per request — see WorkspaceElevationAuditAdapter.
         WORKSPACE_ELEVATION,
+        GITHUB_ACCESS_AUTHORIZED,
         // Instance LLM catalog: GLOBAL, so the workspace-scoped config trail cannot carry it.
         LLM_CONNECTION_CREATED,
         LLM_CONNECTION_UPDATED,

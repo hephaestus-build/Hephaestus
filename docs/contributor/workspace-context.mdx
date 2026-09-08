@@ -172,6 +172,43 @@ workspace lock after the account lock, avoiding the reverse lock order of a gran
 removes policies before connections; account erasure clears approval attribution. Existing manual
 access, owner roles and suspension records are not inferred from SCM or directory roster changes.
 
+## GitHub access authority
+
+`workspace.access` owns directory-backed external membership intent; `integration.access.github`
+absorbs GitHub's identity, installation, invitation and permission semantics. It is separate from the
+repository integration and reuses connection encryption, jobs, leases and audit ledgers. The
+[operator runbook](../admin/github-access) owns App setup, supported scopes and recovery procedures.
+GitLab, Slack and Outline have no external membership provisioning adapter.
+
+Every target, membership and action carries its workspace. Composite foreign keys bind connections,
+targets and action subjects to that same workspace. A PostgreSQL exclusion constraint arbitrates
+cross-workspace organization-wide/team scope overlap, including concurrent claims. Authority remains
+held until all managed access and unresolved actions are accounted for; deleting a connection or an
+originating account cannot release that constraint.
+
+Two separate approvals are required: a currently linked GitHub organization owner consumes an expiring,
+single-use handoff, and a current workspace owner approves an exact inventory and directory capture.
+The handoff endpoint is current-account scoped rather than workspace-member scoped, so an organization
+owner need not join the requesting workspace. Its capability travels in a fragment and POST body,
+never a query parameter. The recipient route remains outside the authenticated route subtree to avoid
+copying the capability into a login return URL. Recent genuine authentication is enforced by the
+existing step-up boundary; possession of an installation ID is not proof of organization ownership.
+
+Reconciliation snapshots addresses, then locks workspace, directory provider, affected accounts in
+ascending order and target before deciding a write. The provider-before-account order matches directory
+capture even when the same account and provider appear in different workspaces. It commits an action's intent before provider I/O, reacquires locks and
+revalidates policy, identity links, directory capture and organization-owner authority before executing.
+A retry reads provider state first. Unknown grants require explicit adoption or an unmanaged exception;
+a requested removal remains pending until absence is confirmed. Each target runs as an independent
+connection job. Provider failures retain no response bodies or credentials in their exception causes.
+
+Identity unlink and account erasure participate under the existing account lock without acquiring a
+workspace lock in reverse order. Their minimal pending-removal records survive loss of attribution.
+`DirectorySubjectRetention` keeps externally tracked subjects in subsequent directory captures, even
+after directory-managed workspace membership is gone, so a provider outage cannot erase a departure.
+Incomplete or stale captures are not departure evidence. All network and scheduling beans are server
+role gated; lifecycle guards remain available wherever account or workspace data can be erased.
+
 ## Testing
 
 Integration tests must create a workspace and grant membership before hitting scoped endpoints:

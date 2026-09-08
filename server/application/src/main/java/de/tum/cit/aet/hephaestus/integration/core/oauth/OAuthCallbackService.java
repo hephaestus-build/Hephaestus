@@ -170,6 +170,9 @@ public class OAuthCallbackService {
      */
     private static ConnectionConfig defaultConfig(IntegrationKind kind) {
         return switch (kind) {
+            case GITHUB_ACCESS ->
+                throw new IllegalArgumentException(
+                        "GitHub access requires an organization-owner handoff, not the normal integration callback");
             case KEYCLOAK_DIRECTORY ->
                 throw new IllegalArgumentException("Directory connections do not use an OAuth callback");
             case GITHUB -> new ConnectionConfig.GitHubAppConfig(null, null, null, new HashSet<>());

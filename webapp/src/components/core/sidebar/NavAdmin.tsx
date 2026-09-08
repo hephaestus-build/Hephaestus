@@ -69,6 +69,9 @@ export function NavAdmin({
 		matchRoute({ to: "/w/$workspaceSlug/admin/settings", fuzzy: false }),
 	);
 	const onAccess = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/access", fuzzy: true }));
+	const onGithubAccess = Boolean(
+		matchRoute({ to: "/w/$workspaceSlug/admin/github-access", fuzzy: true }),
+	);
 	const onDirectory = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/directory", fuzzy: true }));
 	const onMembers = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/members", fuzzy: true }));
 	const onTeams = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/teams", fuzzy: true }));
@@ -159,6 +162,16 @@ export function NavAdmin({
 					>
 						<Users />
 						<span>Teams</span>
+					</SidebarMenuButton>
+				</SidebarMenuItem>
+				<SidebarMenuItem>
+					<SidebarMenuButton
+						tooltip="GitHub access"
+						isActive={onGithubAccess}
+						render={<Link to="/w/$workspaceSlug/admin/github-access" params={{ workspaceSlug }} />}
+					>
+						<GithubIcon />
+						<span>GitHub access</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
 				<AdminNavSection

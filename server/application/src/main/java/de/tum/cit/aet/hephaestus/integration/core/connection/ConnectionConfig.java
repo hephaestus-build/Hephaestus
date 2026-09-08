@@ -12,6 +12,7 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes({
+    @JsonSubTypes.Type(value = ConnectionConfig.GitHubAccessConfig.class, name = "GITHUB_ACCESS"),
     @JsonSubTypes.Type(value = ConnectionConfig.GitHubAppConfig.class, name = "GITHUB_APP"),
     @JsonSubTypes.Type(value = ConnectionConfig.GitHubPatConfig.class, name = "GITHUB_PAT"),
     @JsonSubTypes.Type(value = ConnectionConfig.GitLabConfig.class, name = "GITLAB"),
@@ -20,7 +21,8 @@ import org.jspecify.annotations.Nullable;
     @JsonSubTypes.Type(value = ConnectionConfig.KeycloakDirectoryConfig.class, name = "KEYCLOAK_DIRECTORY"),
 })
 public sealed interface ConnectionConfig
-        permits ConnectionConfig.GitHubAppConfig,
+        permits ConnectionConfig.GitHubAccessConfig,
+                ConnectionConfig.GitHubAppConfig,
                 ConnectionConfig.GitHubPatConfig,
                 ConnectionConfig.GitLabConfig,
                 ConnectionConfig.SlackConfig,
@@ -28,6 +30,9 @@ public sealed interface ConnectionConfig
                 ConnectionConfig.KeycloakDirectoryConfig {
     /** Enabled sync streams (subset of the source's catalog). */
     Set<String> enabledStreams();
+
+    /** The target owns policy and authority. The connection owns only its encrypted credential and job lease. */
+    record GitHubAccessConfig(Set<String> enabledStreams) implements ConnectionConfig {}
 
     record KeycloakDirectoryConfig(String registrationId, String issuer, Set<String> enabledStreams)
             implements ConnectionConfig {}

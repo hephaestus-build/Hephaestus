@@ -36,6 +36,7 @@ export const EVENT_TYPE_LABELS: Record<AuthEventType, string> = {
 	EXPORT_REQUESTED: "Data export requested",
 	APP_ROLE_CHANGED: "Instance role changed",
 	RESEARCH_CONSENT_REVOKED: "Research consent revoked",
+	GITHUB_ACCESS_AUTHORIZED: "GitHub access authorized",
 	WORKSPACE_ELEVATION: "Workspace reached as instance admin",
 	LLM_CONNECTION_CREATED: "Provider connected",
 	LLM_CONNECTION_UPDATED: "Provider updated",

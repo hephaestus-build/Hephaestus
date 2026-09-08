@@ -1,5 +1,5 @@
 import { type DefaultError, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 
 import {
@@ -33,6 +33,7 @@ import type { LinkedAccountsSectionProps } from "@/components/settings/LinkedAcc
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import type { SlackPreferencesSectionProps } from "@/components/settings/SlackPreferencesSection";
 import { WorkspaceAccessSection } from "@/components/settings/WorkspaceAccessSection";
+import { buttonVariants } from "@/components/ui/button";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
@@ -266,19 +267,24 @@ function RouteComponent() {
 		<SettingsPage
 			accountId={userProfile?.id}
 			workspaceAccessSection={
-				<WorkspaceAccessSection
-					state={
-						offers.isPending
-							? { status: "loading" }
-							: offers.isError
-								? { status: "error", error: offers.error, onRetry: () => void offers.refetch() }
-								: { status: "ready", offers: offers.data }
-					}
-					joiningWorkspaceId={
-						joinWorkspace.isPending ? joinWorkspace.variables.path.workspaceId : undefined
-					}
-					onJoin={(workspaceId) => joinWorkspace.mutate({ path: { workspaceId } })}
-				/>
+				<div className="space-y-4">
+					<Link className={buttonVariants({ variant: "outline" })} to="/github-access">
+						Your GitHub access and invitations
+					</Link>
+					<WorkspaceAccessSection
+						state={
+							offers.isPending
+								? { status: "loading" }
+								: offers.isError
+									? { status: "error", error: offers.error, onRetry: () => void offers.refetch() }
+									: { status: "ready", offers: offers.data }
+						}
+						joiningWorkspaceId={
+							joinWorkspace.isPending ? joinWorkspace.variables.path.workspaceId : undefined
+						}
+						onJoin={(workspaceId) => joinWorkspace.mutate({ path: { workspaceId } })}
+					/>
+				</div>
 			}
 			isLoading={isLoading || linkedIdentitiesQuery.isLoading}
 			settingsError={settingsError || linkedIdentitiesQuery.isError}

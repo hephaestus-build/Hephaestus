@@ -11,6 +11,8 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceAccountMembership.Source;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceAccountMembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.audit.WorkspaceAuditSnapshots.AccountMembershipSnapshot;
+import de.tum.cit.aet.hephaestus.workspace.spi.DirectorySubjectRetention;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -28,6 +30,14 @@ public class DirectoryMembershipAdapter implements IdentityUnlinkParticipant {
     private final AccountIdentityQuery identities;
     private final ConfigAuditPort audit;
     private final DirectoryPolicyRepository policies;
+    private final List<DirectorySubjectRetention> retainedSubjects;
+
+    public List<String> retainedSubjects(long workspaceId, long providerId) {
+        return retainedSubjects.stream()
+                .flatMap(retention -> retention.retainedSubjects(workspaceId, providerId).stream())
+                .distinct()
+                .toList();
+    }
 
     @Override
     public void beforeUnlink(Long accountId, Long providerId, String subject) {

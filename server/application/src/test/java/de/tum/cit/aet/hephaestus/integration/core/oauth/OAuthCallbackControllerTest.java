@@ -467,6 +467,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                                 null,
                                 ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
                                 Set.of());
+                    case GITHUB_ACCESS -> new ConnectionConfig.GitHubAccessConfig(Set.of());
                     case KEYCLOAK_DIRECTORY ->
                         new ConnectionConfig.KeycloakDirectoryConfig(
                                 "organization", "https://identity.example.com/realms/team", Set.of());

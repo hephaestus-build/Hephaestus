@@ -158,6 +158,10 @@ public class ConnectionController {
             @RequestBody @Valid @NotNull UpdateConnectionStatusRequestDTO body,
             @Nullable Authentication authentication) {
         Connection connection = admin.findInWorkspaceOrThrow(workspace.id(), id);
+        if (connection.getKind() == IntegrationKind.GITHUB_ACCESS) {
+            throw new IllegalArgumentException(
+                    "Manage GitHub access through its target policy so pending removals and authority are preserved");
+        }
         if (connection.getKind() == IntegrationKind.KEYCLOAK_DIRECTORY) {
             throw new IllegalArgumentException(
                     "Manage directory availability and teardown through the workspace directory policy");
