@@ -1,10 +1,8 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
@@ -15,35 +13,23 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.MockSecurityContextUtils;
 import java.util.List;
 import java.util.Optional;
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.util.ReflectionTestUtils;
 
-/**
- * Resolution of the current account's SCM user mirrors. The load-bearing security property: identities
- * are resolved <em>within their own provider</em> (by wired actor id, else by {@code (provider, login)}),
- * NEVER by login alone — {@code user} uniqueness is provider-scoped ({@code uk_user_provider_login}), so a
- * login-only match would union a different person's namesake (and their workspace memberships) into the
- * account. See the cross-provider isolation test.
- */
 class CurrentAccountUsersTest extends BaseUnitTest {
-
-    private static final long GITHUB = 1L;
-    private static final long GITLAB = 2L;
-
-    private AccountIdentityQuery accountIdentityQuery;
-    private UserRepository userRepository;
-    private CurrentAccountUsers currentAccountUsers;
+    private AccountIdentityQuery identities;
+    private UserRepository users;
+    private CurrentAccountUsers resolver;
 
     @BeforeEach
     void setUp() {
-        accountIdentityQuery = mock(AccountIdentityQuery.class);
-        userRepository = mock(UserRepository.class);
-        currentAccountUsers = new CurrentAccountUsers(accountIdentityQuery, userRepository);
+        identities = mock(AccountIdentityQuery.class);
+        users = mock(UserRepository.class);
+        resolver = new CurrentAccountUsers(identities, users);
     }
 
     @AfterEach
@@ -51,74 +37,82 @@ class CurrentAccountUsersTest extends BaseUnitTest {
         SecurityContextHolder.clearContext();
     }
 
-    private static void authenticateAccount(long accountId) {
-        SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
-                "login", Long.toString(accountId), new String[0], "token"));
-    }
-
-    private static IdentityLinkView link(long providerId, String login, @Nullable Long externalActorId) {
-        return new IdentityLinkView(1L, providerId, "subject", login, "Display", null, null, externalActorId, null);
+    private static IdentityLinkView link(long provider, String subject) {
+        return new IdentityLinkView(1L, provider, subject, "old-login", null, null, null, 999L, null);
     }
 
     private static User user(long id, String login) {
-        User u = new User();
-        u.setLogin(login);
-        ReflectionTestUtils.setField(u, "id", id);
-        return u;
+        User user = new User();
+        user.setId(id);
+        user.setLogin(login);
+        return user;
     }
 
     @Test
-    void resolvesEachIdentityWithinItsOwnProviderNeverByLoginAlone() {
-        authenticateAccount(42L);
-        // The account is linked ONLY to GitHub login "alice".
-        when(accountIdentityQuery.activeLinksForAccount(42L)).thenReturn(List.of(link(GITHUB, "alice", null)));
-        when(userRepository.findByLoginAndProviderId("alice", GITHUB)).thenReturn(Optional.of(user(100L, "alice")));
-        // A DIFFERENT person also called "alice" exists on GitLab — the cross-provider namesake. If
-        // resolution ever keyed on login alone, this stranger's user (and workspaces) would be unioned in.
-        lenient()
-                .when(userRepository.findByLoginAndProviderId("alice", GITLAB))
-                .thenReturn(Optional.of(user(200L, "alice")));
+    void shouldResolveRenamedUserBySubjectWhenUsernameAndActorReferenceAreStale() {
+        when(identities.activeLinksForAccount(42L)).thenReturn(List.of(link(1L, "123")));
+        when(users.findByNativeIdAndProviderId(123L, 1L)).thenReturn(Optional.of(user(7L, "new-login")));
 
-        List<User> resolved = currentAccountUsers.resolve();
-
-        assertThat(resolved).extracting(User::getId).containsExactly(100L);
-        verify(userRepository).findByLoginAndProviderId("alice", GITHUB);
-        // The GitLab namesake is never fetched — the account isn't linked to that provider.
-        verify(userRepository, never()).findByLoginAndProviderId("alice", GITLAB);
+        assertThat(resolver.resolve(42L)).extracting(User::getLogin).containsExactly("new-login");
     }
 
     @Test
-    void prefersTheWiredExternalActorIdOverProviderLoginLookup() {
-        authenticateAccount(7L);
-        when(accountIdentityQuery.activeLinksForAccount(7L)).thenReturn(List.of(link(GITHUB, "bob", 500L)));
-        when(userRepository.findById(500L)).thenReturn(Optional.of(user(500L, "bob")));
+    void shouldKeepEqualSubjectsOnDifferentProvidersSeparate() {
+        when(identities.activeLinksForAccount(42L)).thenReturn(List.of(link(1L, "123"), link(2L, "123")));
+        when(users.findByNativeIdAndProviderId(123L, 1L)).thenReturn(Optional.of(user(7L, "alice")));
+        when(users.findByNativeIdAndProviderId(123L, 2L)).thenReturn(Optional.of(user(8L, "alice")));
 
-        List<User> resolved = currentAccountUsers.resolve();
-
-        assertThat(resolved).extracting(User::getId).containsExactly(500L);
-        verify(userRepository).findById(500L);
-        verify(userRepository, never()).findByLoginAndProviderId(ArgumentMatchers.any(), ArgumentMatchers.any());
+        assertThat(resolver.resolve(42L)).extracting(User::getId).containsExactly(7L, 8L);
     }
 
     @Test
-    void unionsAcrossAllLinkedIdentitiesDedupedByUserId() {
-        authenticateAccount(9L);
-        when(accountIdentityQuery.activeLinksForAccount(9L))
-                .thenReturn(List.of(link(GITHUB, "carol", null), link(GITLAB, "carol-gl", null)));
-        when(userRepository.findByLoginAndProviderId("carol", GITHUB)).thenReturn(Optional.of(user(11L, "carol")));
-        when(userRepository.findByLoginAndProviderId("carol-gl", GITLAB))
-                .thenReturn(Optional.of(user(22L, "carol-gl")));
+    void shouldNotUseReassignedUsernameWhenVerifiedSubjectHasNoActor() {
+        when(identities.activeLinksForAccount(42L)).thenReturn(List.of(link(1L, "123")));
+        when(users.findByNativeIdAndProviderId(123L, 1L)).thenReturn(Optional.empty());
 
-        assertThat(currentAccountUsers.resolve()).extracting(User::getId).containsExactly(11L, 22L);
+        assertThat(resolver.resolve(42L)).isEmpty();
     }
 
     @Test
-    void fallsBackToSingleCurrentUserWhenTokenCarriesNoAccountId() {
-        // No authentication → no account id (legacy token). Behaviour must be no worse than the previous
-        // single-identity resolution.
-        when(userRepository.getCurrentUser()).thenReturn(Optional.of(user(1L, "legacy")));
+    void shouldDeduplicateActorsAcrossRepeatedLinks() {
+        when(identities.activeLinksForAccount(42L)).thenReturn(List.of(link(1L, "123"), link(1L, "123")));
+        when(users.findByNativeIdAndProviderId(123L, 1L)).thenReturn(Optional.of(user(7L, "alice")));
 
-        assertThat(currentAccountUsers.resolve()).extracting(User::getId).containsExactly(1L);
-        verify(accountIdentityQuery, never()).activeLinksForAccount(ArgumentMatchers.anyLong());
+        assertThat(resolver.resolve(42L)).extracting(User::getId).containsExactly(7L);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"U123", "", "0", "-1", "9223372036854775808"})
+    void shouldNotResolveNonScmOrInvalidSubjects(String subject) {
+        when(identities.activeLinksForAccount(42L)).thenReturn(List.of(link(1L, subject)));
+
+        assertThat(resolver.resolve(42L)).isEmpty();
+        verifyNoInteractions(users);
+    }
+
+    @Test
+    void shouldResolveAuthenticatedAccountWithoutDependingOnLoginClaim() {
+        SecurityContextHolder.setContext(
+                MockSecurityContextUtils.createSecurityContext("someone-else", "42", new String[0], "token"));
+        when(identities.activeLinksForAccount(42L)).thenReturn(List.of(link(1L, "123")));
+        when(users.findByNativeIdAndProviderId(123L, 1L)).thenReturn(Optional.of(user(7L, "alice")));
+
+        assertThat(resolver.resolve()).extracting(User::getId).containsExactly(7L);
+    }
+
+    @Test
+    void shouldNotFallBackToLoginWhenAccountHasNoActiveLinks() {
+        SecurityContextHolder.setContext(
+                MockSecurityContextUtils.createSecurityContext("alice", "42", new String[0], "token"));
+        when(identities.activeLinksForAccount(42L)).thenReturn(List.of());
+
+        assertThat(resolver.resolve()).isEmpty();
+        verifyNoInteractions(users);
+    }
+
+    @Test
+    void shouldResolveNothingWithoutAuthenticatedAccount() {
+        assertThat(resolver.resolve()).isEmpty();
+        verifyNoInteractions(users, identities);
     }
 }

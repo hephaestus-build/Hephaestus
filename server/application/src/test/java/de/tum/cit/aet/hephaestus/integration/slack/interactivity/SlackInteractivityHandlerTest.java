@@ -94,31 +94,31 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
 
     @Test
     void appHomeResearchOptOut_setsResearchFalse_republishesHome_only() {
-        when(identityResolver.resolveDeveloperLogin(WORKSPACE_ID, TEAM, USER)).thenReturn(Optional.of("octocat"));
+        when(identityResolver.resolveActiveMemberId(WORKSPACE_ID, TEAM, USER)).thenReturn(Optional.of(314L));
 
         handler.handleBlockActions(blockActions(SlackAppHomeService.ACTION_RESEARCH_OPT_OUT, "false"));
 
         verify(participantConsentService).recordResearchDecision(WORKSPACE_ID, USER, false);
-        verify(researchParticipationCommand).setForLogin("octocat", false, ConsentSource.SLACK_APP_HOME);
+        verify(researchParticipationCommand).setForUserId(314L, false, ConsentSource.SLACK_APP_HOME);
         verify(appHomeService).onHomeOpened(TEAM, USER);
         verifyNoInteractions(personErasureService, messageService);
     }
 
     @Test
     void appHomeResearchOptIn_setsResearchTrue() {
-        when(identityResolver.resolveDeveloperLogin(WORKSPACE_ID, TEAM, USER)).thenReturn(Optional.of("octocat"));
+        when(identityResolver.resolveActiveMemberId(WORKSPACE_ID, TEAM, USER)).thenReturn(Optional.of(314L));
 
         handler.handleBlockActions(blockActions(SlackAppHomeService.ACTION_RESEARCH_OPT_IN, "true"));
 
         verify(participantConsentService).recordResearchDecision(WORKSPACE_ID, USER, true);
-        verify(researchParticipationCommand).setForLogin("octocat", true, ConsentSource.SLACK_APP_HOME);
+        verify(researchParticipationCommand).setForUserId(314L, true, ConsentSource.SLACK_APP_HOME);
         verify(appHomeService).onHomeOpened(TEAM, USER);
         verifyNoInteractions(personErasureService);
     }
 
     @Test
     void appHomeResearchOptOut_unlinkedUser_recordsResearchBit_noResearchCommand_notThrown() {
-        when(identityResolver.resolveDeveloperLogin(WORKSPACE_ID, TEAM, USER)).thenReturn(Optional.empty());
+        when(identityResolver.resolveActiveMemberId(WORKSPACE_ID, TEAM, USER)).thenReturn(Optional.empty());
 
         handler.handleBlockActions(blockActions(SlackAppHomeService.ACTION_RESEARCH_OPT_OUT, "false"));
 
@@ -176,7 +176,7 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
                 messageService);
     }
 
-    /** Runs Slack follow-ups inline so the tests can verify them synchronously. */
+    /** Runs asynchronous follow-ups inline. */
     private static ExecutorService directExecutor() {
         return new AbstractExecutorService() {
             @Override
