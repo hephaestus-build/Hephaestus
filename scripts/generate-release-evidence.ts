@@ -138,37 +138,62 @@ async function resolvePlatformDigests(
 export async function captureSubject(subject: Subject, directory: string): Promise<void> {
 	const reference = `${subject.repository}@${subject.digest}`;
 	const stem = path.join(directory, evidenceStem(subject));
-	// Scan the registry artefact, never a daemon copy of it: a daemon pull re-serializes an OCI
-	// manifest as Docker schema 2, so the SBOM would record a locally computed manifestDigest instead
-	// of the released one. `--platform` makes Syft fail loudly if the digest is not this platform's.
-	await run("syft", [
-		"--from",
-		"registry",
-		reference,
-		"--platform",
-		subject.platform,
-		"--scope",
-		"squashed",
-		"-o",
-		`syft-json=${stem}.syft.json`,
-		"-o",
-		`spdx-json=${stem}.spdx.json`,
-		"-o",
-		`cyclonedx-json=${stem}.cdx.json`,
-	]);
-	await run("trivy", [
-		"image",
-		"--skip-db-update",
-		"--scanners",
-		"vuln,license",
-		"--format",
-		"json",
-		"--output",
-		`${stem}.trivy.json`,
-		reference,
-	]);
-	// Both evidence consumers receive the same digest-bound scan, in the bundle's report paths.
-	await copyFile(`${stem}.trivy.json`, `${stem}.license.json`);
+	const timings: { tool: string; durationSeconds: number; success: boolean }[] = [];
+	const scan = async (tool: string, args: string[]): Promise<void> => {
+		const startedAt = performance.now();
+		let success = false;
+		try {
+			await run(tool, args);
+			success = true;
+		} finally {
+			const durationSeconds = Math.round((performance.now() - startedAt) / 10) / 100;
+			timings.push({ tool, durationSeconds, success });
+			console.info(
+				`${evidenceStem(subject)}: ${tool} ${success ? "completed" : "failed"} in ${durationSeconds}s`,
+			);
+		}
+	};
+	try {
+		// Scan the registry artefact, never a daemon copy of it: a daemon pull re-serializes an OCI
+		// manifest as Docker schema 2, so the SBOM would record a locally computed manifestDigest instead
+		// of the released one. `--platform` makes Syft fail loudly if the digest is not this platform's.
+		await scan("syft", [
+			"--from",
+			"registry",
+			reference,
+			"--platform",
+			subject.platform,
+			"--scope",
+			"squashed",
+			"-o",
+			`syft-json=${stem}.syft.json`,
+			"-o",
+			`spdx-json=${stem}.spdx.json`,
+			"-o",
+			`cyclonedx-json=${stem}.cdx.json`,
+		]);
+		await scan("trivy", [
+			"image",
+			"--skip-db-update",
+			"--scanners",
+			"vuln,license",
+			"--format",
+			"json",
+			"--output",
+			`${stem}.trivy.json`,
+			reference,
+		]);
+		// Both evidence consumers receive the same digest-bound scan, in the bundle's report paths.
+		await copyFile(`${stem}.trivy.json`, `${stem}.license.json`);
+	} finally {
+		try {
+			await writeFile(`${stem}.timings.json`, `${JSON.stringify({ subject, timings }, null, 2)}\n`);
+		} catch (error) {
+			console.warn(
+				`Could not save advisory timings for ${evidenceStem(subject)}: ${String(error)}`,
+			);
+		}
+	}
 }
 
 /**

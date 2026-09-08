@@ -131,6 +131,11 @@ conversions; then the SPDX predicate is attached as a Cosign attestation and the
 build provenance are verified. SBOMs, reports, the policy, checksums and `manifest.json` are release
 assets.
 
+Each subject also has a `.timings.json` diagnostic with its digest, platform and elapsed Syft and
+Trivy time, including failed invocations. Timings use a monotonic clock around the existing scans;
+they add no scanner work or latency threshold. They are advisory, not security evidence: failure to
+save them warns without changing the scan result. The same durations appear in the job log.
+
 Upstream NATS, Traefik, nginx, and Alpine images are versioned and digest-pinned in the production
 Compose topology. They receive the same per-platform SBOM, license, vulnerability, and index-membership
 evidence as first-party images. Hephaestus requires its own signatures and build provenance only for
