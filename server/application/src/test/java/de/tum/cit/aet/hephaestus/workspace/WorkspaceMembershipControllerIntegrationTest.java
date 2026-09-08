@@ -22,6 +22,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** Real signed sessions exercise SQL-backed account authorization without any SCM identity fixtures. */
 class WorkspaceMembershipControllerIntegrationTest extends RealAuthIntegrationTest {
@@ -42,6 +43,9 @@ class WorkspaceMembershipControllerIntegrationTest extends RealAuthIntegrationTe
 
     @Autowired
     private JwtPrincipalFactory principals;
+
+    @Autowired
+    private TransactionTemplate transactions;
 
     @Test
     void shouldReturnMembershipWhenAccountHasNoScmIdentity() {
@@ -321,6 +325,108 @@ class WorkspaceMembershipControllerIntegrationTest extends RealAuthIntegrationTe
                 .exchange()
                 .expectStatus()
                 .isOk();
+    }
+
+    @Test
+    void shouldLeaveDeletionRetryableWhenAnotherTransactionOwnsTheWorkspaceLock() throws Exception {
+        var owner = account("Deleting owner");
+        var successor = account("Remaining owner");
+        var workspace = workspace("busy-owner-deletion", owner);
+        membership(workspace, successor, WorkspaceRole.OWNER);
+        var session = token(owner);
+        var locked = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            var change = executor.submit(() -> transactions.executeWithoutResult(ignored -> {
+                workspaces.findByIdForUpdate(workspace.getId()).orElseThrow();
+                locked.countDown();
+                try {
+                    assertThat(release.await(20, TimeUnit.SECONDS)).isTrue();
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+            }));
+            try {
+                assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
+                client.delete()
+                        .uri("/user")
+                        .header("X-Confirm-Delete", id(owner).toString())
+                        .headers(headers -> headers.setBearerAuth(session))
+                        .exchange()
+                        .expectStatus()
+                        .isEqualTo(409)
+                        .expectBody()
+                        .jsonPath("$.detail")
+                        .isEqualTo(
+                                "Workspace access is being changed. Retry account deletion after that change completes.");
+                assertThat(accounts.findById(id(owner)).orElseThrow().getStatus())
+                        .isEqualTo(Account.Status.ACTIVE);
+                assertThat(memberships
+                                .findByWorkspace_IdAndAccountId(workspace.getId(), id(owner))
+                                .orElseThrow()
+                                .isSuspended())
+                        .isFalse();
+            } finally {
+                release.countDown();
+            }
+            change.get(10, TimeUnit.SECONDS);
+        }
+        client.delete()
+                .uri("/user")
+                .header("X-Confirm-Delete", id(owner).toString())
+                .headers(headers -> headers.setBearerAuth(session))
+                .exchange()
+                .expectStatus()
+                .isNoContent();
+        assertThat(accounts.findById(id(owner)).orElseThrow().getStatus()).isEqualTo(Account.Status.DELETING);
+        assertThat(memberships.countByWorkspace_IdAndRoleAndSuspendedFalse(workspace.getId(), WorkspaceRole.OWNER))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldRetainAnOwnerWhenBothOwnersConcurrentlyDeleteTheirAccounts() throws Exception {
+        var first = account("First deleting owner");
+        var second = account("Second deleting owner");
+        var workspace = workspace("competing-owner-deletion", first);
+        membership(workspace, second, WorkspaceRole.OWNER);
+        var firstSession = token(first);
+        var secondSession = token(second);
+        var start = new CountDownLatch(1);
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var firstDeletion = executor.submit(() -> {
+                start.await();
+                return client.delete()
+                        .uri("/user")
+                        .header("X-Confirm-Delete", id(first).toString())
+                        .headers(headers -> headers.setBearerAuth(firstSession))
+                        .exchange()
+                        .returnResult(Void.class)
+                        .getStatus()
+                        .value();
+            });
+            var secondDeletion = executor.submit(() -> {
+                start.await();
+                return client.delete()
+                        .uri("/user")
+                        .header("X-Confirm-Delete", id(second).toString())
+                        .headers(headers -> headers.setBearerAuth(secondSession))
+                        .exchange()
+                        .returnResult(Void.class)
+                        .getStatus()
+                        .value();
+            });
+            start.countDown();
+            assertThat(List.of(firstDeletion.get(15, TimeUnit.SECONDS), secondDeletion.get(15, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(204, 409);
+        }
+        assertThat(memberships.countByWorkspace_IdAndRoleAndSuspendedFalse(workspace.getId(), WorkspaceRole.OWNER))
+                .isEqualTo(1);
+        assertThat(List.of(
+                        accounts.findById(id(first)).orElseThrow(),
+                        accounts.findById(id(second)).orElseThrow()))
+                .extracting(Account::getStatus)
+                .containsExactlyInAnyOrder(Account.Status.ACTIVE, Account.Status.DELETING);
     }
 
     @Test
