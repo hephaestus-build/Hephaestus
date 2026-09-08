@@ -1,0 +1,9 @@
+#### 🔴 Account-based workspace access
+
+Before upgrading, have at least one existing owner of each workspace sign in with their existing GitHub or GitLab identity. Their account must be active and the identity must remain connected. Do not create links by matching email addresses or usernames. The migration stops if a workspace with an owner has no verified active owner account; resolve the missing link through normal sign-in on the previous version before retrying.
+
+Back up the database and stop all runtime roles before upgrading. Upgrade server, worker and webhook together. Verify an owner's private-workspace access and a non-member's denial before reopening access. Do not run the previous version alongside the new version. To roll back, stop all roles and restore the complete pre-upgrade database backup with the previous release; a binary-only rollback would restore the old authorization rules.
+
+The migration retains the strongest existing role per verified account and workspace, marked as retained during upgrade. Unlinked source-control contributors remain in leaderboards and historical work but do not gain account access. Owners can grant an existing account access from Workspace admin → Members; the member's stable account ID is shown in User settings. Suspension is sticky until an explicit role assignment restores access.
+
+Custom clients must update membership operations: `/workspaces/{slug}/members` is an administrator-only account roster; role assignment takes `accountId`, not `userId`; deleting `/members/{accountId}` suspends access. Read source-control rosters at `/workspaces/{slug}/contributors`, and update leaderboard visibility at `/contributors/{userId}/hidden`. The member response no longer represents a source-control user. Instance workspace summaries use `ownerDisplayName`, not `ownerLogin`.

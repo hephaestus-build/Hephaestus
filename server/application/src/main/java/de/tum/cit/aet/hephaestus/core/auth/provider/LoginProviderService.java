@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.OidcIssuerPolicy;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.ServerUrlValidator;
@@ -62,6 +63,7 @@ public class LoginProviderService {
     // Outline is plain OAuth2, NOT OIDC — scope must NOT contain "openid" (see sanitizeScopesOrThrow).
     // "read" is Outline's read-everything scope, sufficient for the POST /api/auth.info identity probe.
     static final String OUTLINE_SCOPES = "read";
+    static final String OIDC_SCOPES = "openid profile email";
     private static final String GITHUB_COM = "https://github.com";
     // The single Slack instance. Canonical origin the seeded identity_provider + SlackMentorIdentityResolver key on.
     private static final String SLACK_COM = "https://slack.com";
@@ -74,6 +76,7 @@ public class LoginProviderService {
     private final AuthEventLogger authEventLogger;
     private final ObjectMapper objectMapper;
     private final OutlineOriginPolicy outlineOriginPolicy;
+    private final OidcIssuerPolicy oidcIssuerPolicy;
 
     public LoginProviderService(
             LoginProviderRepository repository,
@@ -81,13 +84,15 @@ public class LoginProviderService {
             AuthProperties authProperties,
             AuthEventLogger authEventLogger,
             ObjectMapper objectMapper,
-            OutlineOriginPolicy outlineOriginPolicy) {
+            OutlineOriginPolicy outlineOriginPolicy,
+            OidcIssuerPolicy oidcIssuerPolicy) {
         this.repository = repository;
         this.registrationCache = registrationCache;
         this.authProperties = authProperties;
         this.authEventLogger = authEventLogger;
         this.objectMapper = objectMapper;
         this.outlineOriginPolicy = outlineOriginPolicy;
+        this.oidcIssuerPolicy = oidcIssuerPolicy;
     }
 
     /** Enabled providers for the login page / discovery, stable order. */
@@ -171,7 +176,14 @@ public class LoginProviderService {
             changed.add("displayName");
         }
         if (patch.baseUrl() != null && !patch.baseUrl().isBlank()) {
-            provider.setBaseUrl(resolveBaseUrl(provider.getType(), patch.baseUrl()));
+            String baseUrl = resolveBaseUrl(provider.getType(), patch.baseUrl());
+            if (provider.getType() == LoginProvider.ProviderType.OIDC
+                    && !provider.getBaseUrl().equals(baseUrl)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "An OIDC issuer is immutable; add a separate login provider to change realms");
+            }
+            provider.setBaseUrl(baseUrl);
             changed.add("baseUrl");
         }
         if (patch.clientId() != null && !patch.clientId().isBlank()) {
@@ -380,6 +392,13 @@ public class LoginProviderService {
             return SLACK_COM;
         }
         String value = baseUrl == null ? "" : baseUrl.trim();
+        if (type == LoginProvider.ProviderType.OIDC) {
+            if (!oidcIssuerPolicy.allows(value)) {
+                throw new ResponseStatusException(
+                        HttpStatus.UNPROCESSABLE_ENTITY, "OIDC issuer is not approved by the instance operator");
+            }
+            return value;
+        }
         try {
             ServerUrlValidator.validate(value);
         } catch (IllegalArgumentException e) {
@@ -395,7 +414,9 @@ public class LoginProviderService {
 
     private boolean isApproved(LoginProvider provider) {
         return (provider.getType() != LoginProvider.ProviderType.OUTLINE
-                || outlineOriginPolicy.allows(provider.getBaseUrl()));
+                        || outlineOriginPolicy.allows(provider.getBaseUrl()))
+                && (provider.getType() != LoginProvider.ProviderType.OIDC
+                        || oidcIssuerPolicy.allows(provider.getBaseUrl()));
     }
 
     private static String resolveScopes(LoginProvider.ProviderType type, @Nullable String scopes) {
@@ -407,6 +428,7 @@ public class LoginProviderService {
             case GITLAB -> GITLAB_SCOPES;
             case SLACK -> SLACK_SCOPES;
             case OUTLINE -> OUTLINE_SCOPES;
+            case OIDC -> OIDC_SCOPES;
         };
     }
 
@@ -419,6 +441,11 @@ public class LoginProviderService {
      */
     private static String sanitizeScopesOrThrow(LoginProvider.ProviderType type, String scopes) {
         String trimmed = scopes.trim();
+        if (type == LoginProvider.ProviderType.OIDC
+                && !java.util.Arrays.asList(trimmed.split("\\s+")).contains("openid")) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_ENTITY, "OIDC login requires the 'openid' scope");
+        }
         if (type == LoginProvider.ProviderType.GITLAB || type == LoginProvider.ProviderType.OUTLINE) {
             String replacement = type == LoginProvider.ProviderType.GITLAB ? "'read_user'" : "'read'";
             for (String scope : trimmed.split("\\s+")) {
@@ -445,6 +472,7 @@ public class LoginProviderService {
     private void requireNotLastEnabled(String registrationId, String verb) {
         List<LoginProvider> enabled = repository.findByEnabledTrueOrderByDisplayNameAsc().stream()
                 .filter(p -> p.getType() != null && !p.getType().isLinkOnly())
+                .filter(this::isApproved)
                 .toList();
         boolean isLast = enabled.stream().allMatch(p -> p.getRegistrationId().equals(registrationId));
         if (!enabled.isEmpty() && isLast) {

@@ -27,6 +27,8 @@ const OWN_IMAGE_PREFIX = "ghcr.io/hephaestus-build/";
  * added to the reference and not considered here fails the build.
  */
 const DELIBERATELY_OMITTED = new Set([
+	// Organizational login stays unavailable in previews; staging issuer approval must not leak into a clone.
+	"HEPHAESTUS_AUTH_OIDC_ALLOWED_ISSUERS",
 	"GITLAB_DEFAULT_SERVER_URL",
 	"GITLAB_OAUTH_BASE_URL",
 	"GITLAB_OAUTH_CLIENT_ID",

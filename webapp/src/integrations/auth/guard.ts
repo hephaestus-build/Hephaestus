@@ -6,7 +6,7 @@ import {
 	getCurrentUserOptions,
 } from "@/api/@tanstack/react-query.gen";
 import { getCurrentUser } from "@/api/sdk.gen";
-import type { CurrentUserView, WorkspaceMembership } from "@/api/types.gen";
+import type { CurrentUserView, WorkspaceAccountMembership } from "@/api/types.gen";
 import { QUERY_STALE_TIME_MS } from "@/integrations/tanstack-query/query-defaults";
 import { isRecord } from "@/lib/is-record";
 
@@ -66,7 +66,7 @@ export function workspaceMembershipQueryOptions(workspaceSlug: string) {
 export async function resolveWorkspaceMembership(
 	queryClient: QueryClient,
 	workspaceSlug: string,
-): Promise<WorkspaceMembership | null> {
+): Promise<WorkspaceAccountMembership | null> {
 	try {
 		return await queryClient.query(workspaceMembershipQueryOptions(workspaceSlug));
 	} catch {

@@ -30,6 +30,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("agent.job.DeferredIssueEventIntegrationTest", "issue-event-transaction"),
             assignment("agent.job.IssueUpdateCoalescerIntegrationTest", "issue-coalescer-transaction"),
             assignment("testconfig.RealAuthIntegrationTest", "real-auth"),
+            assignment("core.auth.oauth.OrganizationalOidcLoginIntegrationTest", "organizational-oidc"),
+            assignment("core.auth.web.LoginProviderAdminControllerIntegrationTest", "oidc-provider-admin"),
             assignment("StartupBudgetIntegrationTest", "startup"),
             assignment("core.auth.dev.DevLoginIntegrationTest", "dev-login"),
             assignment("integration.scm.github.BaseGitHubLiveIntegrationTest", "github-live"),
@@ -54,6 +56,10 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "issue-coalescer-transaction",
                     "real proxied job submission with controlled issue admission and bounded database lock waits"),
             Map.entry("real-auth", "real OAuth and authentication wiring without test security"),
+            Map.entry(
+                    "organizational-oidc",
+                    "real signed OIDC callbacks with an exact issuer allowlist and fixture-only outbound HTTP"),
+            Map.entry("oidc-provider-admin", "HTTP provider administration with an explicit approved issuer policy"),
             Map.entry("startup", "production main-method startup instrumentation"),
             Map.entry("dev-login", "dev-login feature-property behavior"),
             Map.entry("github-live", "explicitly selected live GitHub profile and credentials"),
@@ -81,6 +87,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "testconfig.RealAuthIntegrationTest");
 
     private static final Set<String> PROPERTY_SOURCE_TESTS = names(
+            "core.auth.oauth.OrganizationalOidcLoginIntegrationTest",
+            "core.auth.web.LoginProviderAdminControllerIntegrationTest",
             "agent.job.IssueUpdateCoalescerIntegrationTest",
             "core.auth.dev.DevLoginIntegrationTest",
             "integration.outline.OutlineFrameworkRegistrationIntegrationTest",
@@ -94,8 +102,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> DIRTY_CONTEXT_TESTS = Set.of();
 
-    private static final Set<String> MOCKITO_BEAN_TESTS =
-            names("integration.slack.SlackConsentLifecycleE2EIntegrationTest");
+    private static final Set<String> MOCKITO_BEAN_TESTS = names(
+            "integration.slack.SlackConsentLifecycleE2EIntegrationTest",
+            "core.auth.oauth.OrganizationalOidcLoginIntegrationTest");
 
     @Test
     void shouldMatchReviewedContextDeclarationsWhenArchitectureTestsRun() {

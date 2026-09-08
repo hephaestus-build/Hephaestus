@@ -10,7 +10,7 @@ import type {
 	ReviewObservationDetail,
 	ReviewRunSummary,
 	ReviewSubject,
-	WorkspaceMembership,
+	WorkspaceContributor,
 } from "@/api/types.gen";
 
 // The only thing written by hand is REVIEW_FIXTURE: reviews, their observations and the feedback
@@ -27,12 +27,12 @@ const alan: ReviewSubject = { id: 11, login: "alan", name: "Alan Turing" };
 const katherine: ReviewSubject = { id: 14, login: "katherine", name: "Katherine Johnson" };
 const barbara: ReviewSubject = { id: 18, login: "barbara", name: "Barbara Liskov" };
 
-export const workspaceMembers: WorkspaceMembership[] = [
-	{ userId: ada.id, userLogin: ada.login, userName: ada.name, role: "MEMBER" },
-	{ userId: grace.id, userLogin: grace.login, userName: grace.name, role: "ADMIN" },
-	{ userId: alan.id, userLogin: alan.login, userName: alan.name, role: "MEMBER" },
-	{ userId: katherine.id, userLogin: katherine.login, userName: katherine.name, role: "MEMBER" },
-	{ userId: barbara.id, userLogin: barbara.login, userName: barbara.name, role: "MEMBER" },
+export const workspaceMembers: WorkspaceContributor[] = [
+	{ userId: ada.id, userLogin: ada.login, userName: ada.name },
+	{ userId: grace.id, userLogin: grace.login, userName: grace.name },
+	{ userId: alan.id, userLogin: alan.login, userName: alan.name },
+	{ userId: katherine.id, userLogin: katherine.login, userName: katherine.name },
+	{ userId: barbara.id, userLogin: barbara.login, userName: barbara.name },
 ];
 
 // ---------------------------------------------------------------------------------------------
@@ -1168,7 +1168,7 @@ export function manyObservations(count: number): ReviewObservation[] {
  * A workspace large enough that the person facet, which filters one fetched page in the browser
  * because the endpoint takes no name, cannot reach everybody.
  */
-export function manyMembers(count: number): WorkspaceMembership[] {
+export function manyMembers(count: number): WorkspaceContributor[] {
 	return Array.from({ length: count }, (_, index) => {
 		const source = cycled(workspaceMembers, index);
 		const cycle = Math.floor(index / workspaceMembers.length);

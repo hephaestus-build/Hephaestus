@@ -77,10 +77,20 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
         user.setCreatedAt(Instant.now());
         user.setUpdatedAt(Instant.now());
         user = userRepository.save(user);
-        if (java.util.Set.of("admin", "mentor", "testuser").contains(login)) {
-            TestUserFactory.ensureAccountForUser(fixtureAccounts, fixtureIdentities, user);
-        }
+        TestUserFactory.ensureAccountForUser(fixtureAccounts, fixtureIdentities, user);
         return user;
+    }
+
+    protected Long accountId(User actor) {
+        TestUserFactory.ensureAccountForUser(fixtureAccounts, fixtureIdentities, actor);
+        return java.util.Objects.requireNonNull(fixtureIdentities
+                .findActiveByProviderSubject(
+                        java.util.Objects.requireNonNull(actor.getProvider().getId()),
+                        actor.getNativeId().toString(),
+                        null)
+                .orElseThrow()
+                .getAccount()
+                .getId());
     }
 
     protected Workspace createWorkspace(

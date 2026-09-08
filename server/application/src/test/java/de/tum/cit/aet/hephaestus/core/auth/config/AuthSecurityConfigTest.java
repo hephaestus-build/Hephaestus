@@ -93,4 +93,34 @@ class AuthSecurityConfigTest extends BaseUnitTest {
                 .containsKey("code_challenge")
                 .containsEntry("code_challenge_method", "S256");
     }
+
+    @Test
+    void shouldIncludePkceAndNonceForAnOrganizationalSignIn() {
+        ClientRegistration organization = ClientRegistration.withRegistrationId("organization")
+                .clientId("client-id")
+                .clientSecret("client-secret")
+                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .redirectUri("{baseUrl}/login/oauth2/code/{registrationId}")
+                .scope("openid", "profile", "email")
+                .issuerUri("https://identity.example.com/realms/team")
+                .authorizationUri("https://identity.example.com/authorize")
+                .tokenUri("https://identity.example.com/token")
+                .jwkSetUri("https://identity.example.com/keys")
+                .userNameAttributeName("sub")
+                .build();
+        OAuth2AuthorizationRequestResolver resolver =
+                AuthSecurityConfig.pkceResolver(new InMemoryClientRegistrationRepository(organization));
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/oauth2/authorization/organization");
+        request.setServletPath("/oauth2/authorization/organization");
+
+        OAuth2AuthorizationRequest authorization = resolver.resolve(request);
+
+        assertThat(authorization).isNotNull();
+        assertThat(authorization.getState()).isNotBlank();
+        assertThat(authorization.getAdditionalParameters())
+                .containsKey("nonce")
+                .containsKey("code_challenge")
+                .containsEntry("code_challenge_method", "S256");
+    }
 }

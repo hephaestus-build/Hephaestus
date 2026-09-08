@@ -1,22 +1,20 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProviderAvailability;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceListItemDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceProvidersDTO;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
@@ -42,9 +40,8 @@ public class WorkspaceQueryService {
             .thenComparing(Workspace::getWorkspaceSlug, String.CASE_INSENSITIVE_ORDER);
 
     private final WorkspaceRepository workspaceRepository;
-    private final WorkspaceMembershipRepository workspaceMembershipRepository;
+    private final WorkspaceAccountMembershipRepository accountMemberships;
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
-    private final CurrentAccountUsers currentAccountUsers;
     private final ConnectionService connectionService;
 
     /**
@@ -58,16 +55,14 @@ public class WorkspaceQueryService {
 
     public WorkspaceQueryService(
             WorkspaceRepository workspaceRepository,
-            WorkspaceMembershipRepository workspaceMembershipRepository,
+            WorkspaceAccountMembershipRepository accountMemberships,
             RepositoryToMonitorRepository repositoryToMonitorRepository,
-            CurrentAccountUsers currentAccountUsers,
             ConnectionService connectionService,
             WorkspaceProperties workspaceProperties,
             List<WorkspaceProviderAvailability> providerAvailabilityList) {
         this.workspaceRepository = workspaceRepository;
-        this.workspaceMembershipRepository = workspaceMembershipRepository;
+        this.accountMemberships = accountMemberships;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
-        this.currentAccountUsers = currentAccountUsers;
         this.connectionService = connectionService;
         this.workspaceProperties = workspaceProperties;
         Map<IntegrationKind, WorkspaceProviderAvailability> map = new EnumMap<>(IntegrationKind.class);
@@ -149,49 +144,15 @@ public class WorkspaceQueryService {
      * @return list of accessible workspaces for the current user
      */
     public List<Workspace> findAccessibleWorkspaces() {
-        // Union across ALL of the account's linked identities (ADR 0017): a single account can mirror
-        // several SCM users (one per provider login), so a member signed in via one provider must still
-        // see workspaces they belong to under another. See CurrentAccountUsers.
-        return findAccessibleWorkspaces(currentAccountUsers.resolve());
-    }
-
-    /**
-     * Returns workspaces the given SCM users can see: the UNION of their memberships + publicly viewable
-     * workspaces. An empty user set yields only the publicly viewable workspaces. Only ACTIVE workspaces
-     * are included - SUSPENDED and PURGED workspaces are excluded. Passing several users is how a single
-     * account's multiple linked identities are unioned.
-     *
-     * @param currentUsers the SCM users (the account's identity mirrors) to check accessibility for
-     * @return list of accessible workspaces
-     */
-    public List<Workspace> findAccessibleWorkspaces(Collection<User> currentUsers) {
-        // Always include public, active workspaces
         List<Workspace> publicWorkspaces =
                 workspaceRepository.findByStatusAndIsPubliclyViewableTrue(Workspace.WorkspaceStatus.ACTIVE);
-
-        Set<Long> userIds = currentUsers.stream()
-                .filter(u -> u != null && u.getId() != null)
-                .map(User::getId)
-                .collect(Collectors.toSet());
-
-        if (userIds.isEmpty()) {
-            return publicWorkspaces.stream()
-                    .sorted(ACCESSIBLE_WORKSPACE_COMPARATOR)
-                    .toList();
-        }
-
-        // Fetch memberships across every identity and load workspaces by ID
-        var memberships = workspaceMembershipRepository.findByUser_IdIn(userIds);
-        var workspaceIds = memberships.stream()
-                .map(WorkspaceMembership::getWorkspace)
-                .map(Workspace::getId)
-                .distinct()
-                .toList();
-
-        List<Workspace> memberWorkspaces = workspaceIds.isEmpty()
-                ? List.of()
-                : workspaceRepository.findAllById(workspaceIds).stream()
-                        .filter(w -> w.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
+        List<Workspace> memberWorkspaces =
+                SecurityUtils.getCurrentAccountId()
+                        .map(accountMemberships::findActiveByAccountId)
+                        .orElseGet(List::of)
+                        .stream()
+                        .map(WorkspaceAccountMembership::getWorkspace)
+                        .filter(workspace -> workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
                         .toList();
 
         // Merge and de-duplicate by ID to avoid duplicate entities with different instances

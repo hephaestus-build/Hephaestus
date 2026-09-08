@@ -168,7 +168,8 @@ public class LoginProviderAdminController {
 
             @Nullable
             @Schema(
-                    description = "Instance base URL (GitLab only; GitHub is always github.com)",
+                    description =
+                            "Exact issuer URL for OIDC, including its realm path; instance origin for GitLab/Outline. GitHub/Slack use fixed hosts.",
                     example = "https://gitlab.example.com")
             String baseUrl,
 

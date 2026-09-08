@@ -31,8 +31,8 @@ export function useWorkspaceAccess() {
 		isAdmin: hasMinimumWorkspaceRole(role, "ADMIN"),
 		// The account's SCM identity for THIS workspace's provider, so prefer these over the global
 		// `username` on the current user.
-		userLogin: membershipQuery.data?.userLogin,
-		userName: membershipQuery.data?.userName,
+		userLogin: membershipQuery.data?.scmUserLogin,
+		userName: membershipQuery.data?.displayName,
 		isLoading: workspacesLoading || membershipQuery.isLoading,
 		error: membershipQuery.error,
 	};

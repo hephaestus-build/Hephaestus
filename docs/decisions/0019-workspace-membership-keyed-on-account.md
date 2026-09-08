@@ -1,84 +1,63 @@
 # ADR 0019: Workspace membership is keyed on `Account`, not the SCM `User`
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-06-09
 **Authors:** Hephaestus maintainers
-**Finishes:** [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md) (the `workspace_membership.user_id → account_id` rename it specifies but never implemented)
 **Builds on:** [ADR 0004](0004-sql-layer-tenancy-via-statement-inspector.md), [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md)
-
-> **Scope note.** This ADR is intentionally carved out of the practice-review-config / dev-login
-> work (branch `1011-practice-review-mentor-config`). That branch ships the **dev/test login** and
-> the **instance super-admin workspace elevation** — both forward-compatible with this change — but
-> NOT the membership re-key, which is an irreversible, suite-untested PK migration and must land as its
-> own PR with this ADR.
 
 ## Context
 
-ADR 0017 established `Account` as the Hephaestus-native principal and documents (auth-glossary §13,
-ADR 0017 §Data-model split) that `workspace_membership.user_id` should be **renamed to `account_id`**.
-The code never finished it: `workspace.WorkspaceMembership` is still `@EmbeddedId (workspace_id, user_id)`
-with a `@ManyToOne` to the **SCM** `integration.scm.domain.user.User` (NOT NULL FK). Consequences:
-
-- **A workspace cannot have a member without a GitHub/GitLab identity.** This blocks SCM-less workspaces
-  and forces any non-OAuth principal (a dev/test account, a future SERVICE principal — Issue #1324) to
-  synthesise a fake SCM `User` just to hold a role.
-- **`WorkspaceContextFilter` couples authorization to SCM identity** — it resolves the account → SCM
-  users (`CurrentAccountUsers`, cross-provider union) → membership. The "auto-heal first identity as
-  ADMIN on a zero-membership workspace" hack exists only to paper over the seeding gap, and is a latent
-  privilege-escalation footgun.
-- The cross-module SPI `core.auth.spi.AccountWorkspaceMembershipQuery` must launder every query through
-  `login → User → membership` and its Javadoc apologises for it. When the contract apologises, the model
-  is wrong.
-
-This is the canonical multi-tenant inversion (WorkOS/Auth0/Logto/Azure): **authentication identity is
-global; membership joins that identity to a tenant; roles live on the membership.** SCM logins are just
-linked credentials (`IdentityLink`). Keying membership on a *credential* (`User` = one SCM login) rather
-than the *identity* (`Account`) is the defect.
+An account is the person signing in. An SCM user is a provider-specific projection used for work
+attribution. Using the SCM user as the workspace authorization key prevents organizational accounts
+without GitHub or GitLab from joining and makes authorization change when an attribution link changes.
+A provider username, email or cached actor reference is not evidence of account ownership.
 
 ## Decision
 
-Re-key `workspace_membership` to **`(workspace_id, account_id)`** (FK → `account.id`). The SCM `User`
-(to be renamed `ExternalActor` per ADR 0017) stays an **attribution projection** — PR authorship, review
-attribution, team membership, leaderboard points — which are genuinely SCM-actor facts and must NOT move
-to the account.
+Keep the two facts separate:
 
-Split the two natural keys the membership row currently conflates:
+- `workspace_account_membership` holds account access, with a unique `(workspace_id, account_id)`
+  constraint and foreign keys to the workspace and account. It carries role, source and suspension.
+- The existing `workspace_membership` table retains SCM contributor facts: leaderboard visibility,
+  league points and provider membership. Its legacy role is not consulted for account authorization.
 
-- **Authorization fact** (`role`) → keyed on `account_id`.
-- **SCM-attribution facts** (`league_points`, `hidden`) → keyed on the SCM actor. v1 may keep them on the
-  membership row behind a **nullable `external_actor_id`** (account-only members have it `NULL` and never
-  appear on the leaderboard); a later step may extract a `workspace_contributor_stats(workspace_id,
-  user_id, …)` table. The non-negotiable part is the **PK = `account_id`**.
+This additive split avoids changing the key or losing contributor history in a released table.
+Account IDs cross the authentication module boundary through its existing identity-query SPI; the
+workspace module does not need to expose authentication entities.
 
-`workspace → core.auth` is a permitted Modulith dependency (the forbidden direction is `core.auth →
-integration`), so `WorkspaceMembership → Account` is legal and the change *removes* the SPI laundering.
+Accounts without an SCM link have no SCM attribution surface. No synthetic actor is created to grant
+access. The first eligible verified linked actor is selected independently of the account's role.
+Workspace creation grants ownership to the verified creator account. Instance-admin elevation gives
+ADMIN access, not ownership, without creating a membership row.
 
-## Migration shape (detail belongs in the implementing PR)
+Manual role changes and suspension lock the workspace, recheck current caller authority, and preserve
+the final active owner. Ordinary SCM synchronization cannot override manual or migrated access, undo
+suspension, or grant ownership. Its account targets are resolved by provider and immutable subject.
+An incomplete snapshot is not an empty membership set.
 
-The suite runs `ddl-auto:create`, so the changelog is **untested by CI** — a PK swap that passes every
-test can still brick prod boot. Use **expand/contract**: add nullable `account_id` (+ `external_actor_id`)
-→ backfill from the `user_id → identity_link → account_id` graph → **reconcile orphan members with no
-`IdentityLink`** (PAT bots, the synthetic `admin` user — the correctness cliff: one unmapped row fails
-prod boot) → flip NOT NULL + swap the PK. Gate it with a **Testcontainers `liquibase:update` test** (the
-de-risking the suite lacks today). The implementing PR owns the SQL and the per-orphan drop-vs-provision
-policy.
+## Migration and operations
 
-Authorization moves to `account_id`; SCM-actor facts (leaderboard points, team membership, PR/activity
-attribution) stay keyed on the SCM actor. An account with no SCM identity is a valid member with no
-attribution surface — the SCM-less semantics, by *absence*, not synthesis. `WorkspaceContextFilter`'s
-auto-heal hack is deleted (the founder's account is seeded directly); the super-admin elevation from the
-dev-login PR stays.
+The forward migration adds the account table and retains the old contributor table. It backfills only
+active accounts with non-disabled links matching the contributor's provider ID and native subject.
+Multiple linked contributors collapse to the strongest existing role, marked `MIGRATED`. Unlinked
+contributors keep their historical facts but receive no account access. No email or username matching
+is performed.
+
+A workspace with an existing owner must have at least one verified active owner account before the
+backfill can proceed. A Liquibase precondition stops the migration otherwise, rather than silently
+orphaning the workspace or inventing an owner. Real PostgreSQL migration tests cover successful
+backfill and this refusal, separately from Hibernate-created test schemas.
+
+All runtime roles must upgrade together while stopped. Rolling back requires restoring the complete
+pre-upgrade database with the previous release; a binary-only rollback reintroduces the old access
+rules. The release's account-membership migration guide owns the operator steps and HTTP changes.
 
 ## Consequences
 
-- **Enables** SCM-less workspaces, a first-class dev/test login, and the SERVICE principal (#1324) — all
-  without fake SCM rows.
-- **Closes** the auto-heal privilege footgun and the cross-provider-union escalation surface; the
-  super-admin elevation (this PR) and its audit tagging (#1323) compose cleanly.
-- **Risk** concentrated in the migration's orphan reconciliation; gated by the new `liquibase:update` test.
+Organizational sign-in and workspace access are independent. An owner may grant account access
+without requiring source control. Linking or unlinking an SCM identity changes attribution, not a
+manual membership. Provider-derived access has explicit provenance and cannot silently replace a
+manual grant. Account deletion must transfer final ownership before proceeding.
 
-## Sources
-
-WorkOS/Auth0/Logto/Clerk multi-tenant guides; GitHub org-roles & GitLab admin/members docs (instance
-admins reach any group without membership — the model the super-admin elevation adopts). See the design
-review in the originating branch.
+The additive migration retains an intentionally legacy contributor table name. Renaming or dropping
+that table is not necessary for the authorization split and is not part of this decision.

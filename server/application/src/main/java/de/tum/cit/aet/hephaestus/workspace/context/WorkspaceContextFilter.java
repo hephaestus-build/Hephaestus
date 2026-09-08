@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.CurrentAccountUsers;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceAccountMembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
@@ -60,6 +61,7 @@ public class WorkspaceContextFilter implements Filter {
 
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceMembershipRepository workspaceMembershipRepository;
+    private final WorkspaceAccountMembershipRepository accountMemberships;
     private final CurrentAccountUsers currentAccountUsers;
     private final WorkspaceMembershipAutoSeeder membershipAutoSeeder;
     private final WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository;
@@ -70,6 +72,7 @@ public class WorkspaceContextFilter implements Filter {
     public WorkspaceContextFilter(
             WorkspaceRepository workspaceRepository,
             WorkspaceMembershipRepository workspaceMembershipRepository,
+            WorkspaceAccountMembershipRepository accountMemberships,
             CurrentAccountUsers currentAccountUsers,
             WorkspaceMembershipAutoSeeder membershipAutoSeeder,
             WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository,
@@ -78,6 +81,7 @@ public class WorkspaceContextFilter implements Filter {
             WorkspaceElevationAudit elevationAudit) {
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
+        this.accountMemberships = accountMemberships;
         this.currentAccountUsers = currentAccountUsers;
         this.membershipAutoSeeder = membershipAutoSeeder;
         this.workspaceSlugHistoryRepository = workspaceSlugHistoryRepository;
@@ -172,7 +176,7 @@ public class WorkspaceContextFilter implements Filter {
             boolean isPublicRead = Boolean.TRUE.equals(workspace.getIsPubliclyViewable()) && isReadRequest;
 
             if (roles.isEmpty() && !isPublicRead) {
-                if (currentUsers.isEmpty()) {
+                if (SecurityUtils.getCurrentAccountId().isEmpty()) {
                     sendWorkspaceUnauthorizedError(httpResponse, slug);
                 } else {
                     log.debug("Denied workspace access: reason=notMember, workspaceSlug={}", safeSlug);
@@ -233,16 +237,17 @@ public class WorkspaceContextFilter implements Filter {
                     .filter(u -> u != null && u.getId() != null)
                     .map(User::getId)
                     .collect(Collectors.toSet());
-            if (userIds.isEmpty()) {
-                log.debug("Skipped role fetch: reason=noAuthenticatedUser");
-                return MembershipResolution.EMPTY;
-            }
-
-            var memberships = workspaceMembershipRepository.findByWorkspace_IdAndUser_IdIn(workspace.getId(), userIds);
-            Set<WorkspaceRole> roles = memberships.stream()
-                    .map(WorkspaceMembership::getRole)
-                    .filter(role -> role != null)
-                    .collect(Collectors.toSet());
+            var accountId = SecurityUtils.getCurrentAccountId().orElse(null);
+            if (accountId == null) return MembershipResolution.EMPTY;
+            var accountMembership = accountMemberships
+                    .findByWorkspace_IdAndAccountId(workspace.getId(), accountId)
+                    .filter(membership -> !membership.isSuspended());
+            Set<WorkspaceRole> roles = accountMembership
+                    .map(membership -> Set.of(membership.getRole()))
+                    .orElseGet(Set::of);
+            var memberships = userIds.isEmpty()
+                    ? java.util.List.<WorkspaceMembership>of()
+                    : workspaceMembershipRepository.findByWorkspace_IdAndUser_IdIn(workspace.getId(), userIds);
             Set<Long> memberUserIds = memberships.stream()
                     .map(membership -> membership.getId().getUserId())
                     .collect(Collectors.toSet());
@@ -260,8 +265,13 @@ public class WorkspaceContextFilter implements Filter {
                             "Auto-added user to workspace: workspaceSlug={}, role={}",
                             LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()),
                             created.getRole());
-                    return new MembershipResolution(
-                            Set.of(created.getRole()), Set.of(created.getId().getUserId()));
+                    return accountMemberships
+                            .findByWorkspace_IdAndAccountId(workspace.getId(), accountId)
+                            .filter(membership -> !membership.isSuspended())
+                            .map(membership -> new MembershipResolution(
+                                    Set.of(membership.getRole()),
+                                    Set.of(created.getId().getUserId())))
+                            .orElse(MembershipResolution.EMPTY);
                 }
             } catch (IllegalArgumentException ex) {
                 log.debug(
@@ -316,14 +326,10 @@ public class WorkspaceContextFilter implements Filter {
         // Avoid leaking workspace existence for private workspaces when the user lacks membership.
         // Checked across all of the account's linked identities (same union semantics as access control).
         boolean isPublic = Boolean.TRUE.equals(workspace.getIsPubliclyViewable());
-        Set<Long> currentUserIds = currentAccountUsers.resolve().stream()
-                .filter(u -> u != null && u.getId() != null)
-                .map(User::getId)
-                .collect(Collectors.toSet());
-        boolean hasMembership = !currentUserIds.isEmpty()
-                && !workspaceMembershipRepository
-                        .findByWorkspace_IdAndUser_IdIn(workspace.getId(), currentUserIds)
-                        .isEmpty();
+        boolean hasMembership = SecurityUtils.getCurrentAccountId()
+                .flatMap(accountId -> accountMemberships.findByWorkspace_IdAndAccountId(workspace.getId(), accountId))
+                .filter(membership -> !membership.isSuspended())
+                .isPresent();
 
         if (!isPublic && !hasMembership) {
             return false;

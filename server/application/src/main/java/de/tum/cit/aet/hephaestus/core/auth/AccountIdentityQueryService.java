@@ -2,10 +2,12 @@ package de.tum.cit.aet.hephaestus.core.auth;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -16,9 +18,34 @@ import org.springframework.transaction.annotation.Transactional;
 public class AccountIdentityQueryService implements AccountIdentityQuery {
 
     private final IdentityLinkRepository identityLinkRepository;
+    private final AccountRepository accountRepository;
 
-    public AccountIdentityQueryService(IdentityLinkRepository identityLinkRepository) {
+    public AccountIdentityQueryService(
+            IdentityLinkRepository identityLinkRepository, AccountRepository accountRepository) {
         this.identityLinkRepository = identityLinkRepository;
+        this.accountRepository = accountRepository;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<AccountView> account(Long accountId) {
+        return accountRepository
+                .findById(accountId)
+                .map(account -> new AccountView(
+                        Objects.requireNonNull(account.getId()),
+                        account.getDisplayName(),
+                        account.getStatus() == Account.Status.ACTIVE));
+    }
+
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public Optional<AccountView> accountForUpdate(Long accountId) {
+        return accountRepository
+                .findByIdForUpdate(accountId)
+                .map(account -> new AccountView(
+                        Objects.requireNonNull(account.getId()),
+                        account.getDisplayName(),
+                        account.getStatus() == Account.Status.ACTIVE));
     }
 
     @Override

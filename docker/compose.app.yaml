@@ -182,6 +182,7 @@ services:
       GITLAB_OAUTH_CLIENT_SECRET: ${GITLAB_OAUTH_CLIENT_SECRET:-}
       GITLAB_OAUTH_BASE_URL: ${GITLAB_OAUTH_BASE_URL:-https://gitlab.com}
       GITLAB_OAUTH_DISPLAY_NAME: ${GITLAB_OAUTH_DISPLAY_NAME:-GitLab}
+      HEPHAESTUS_AUTH_OIDC_ALLOWED_ISSUERS: ${HEPHAESTUS_AUTH_OIDC_ALLOWED_ISSUERS:-}
       GH_APP_INSTALLATION_URL: ${GH_APP_INSTALLATION_URL:-}
       # Default on: the integration event flow needs NATS in prod (the code-level fallback is off for local dev).
       NATS_ENABLED: ${NATS_ENABLED:-true}

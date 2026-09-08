@@ -23,18 +23,20 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 
-type ProviderType = "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+type ProviderType = CreateLoginProviderRequest["type"];
 
 const PROVIDER_TYPE_ITEMS: { value: ProviderType; label: string }[] = [
 	{ value: "GITHUB", label: "GitHub" },
 	{ value: "GITLAB", label: "GitLab / self-hosted GitLab" },
 	{ value: "SLACK", label: "Slack / Sign in with Slack" },
 	{ value: "OUTLINE", label: "Outline (link-only)" },
+	{ value: "OIDC", label: "Organization / OpenID Connect" },
 ];
 
 function scopesPlaceholder(type: ProviderType): string {
-	if (type === "SLACK") return "openid profile email";
+	if (type === "SLACK" || type === "OIDC") return "openid profile email";
 	if (type === "OUTLINE") return "read";
 	return "Defaulted by provider type if blank";
 }
@@ -97,9 +99,10 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 	const [scopes, setScopes] = useState(editing?.scopes ?? "");
 	const [errors, setErrors] = useState<{ registrationId?: string; baseUrl?: string }>({});
 
-	const needsBaseUrl = type === "GITLAB" || type === "OUTLINE";
+	const needsBaseUrl = type === "GITLAB" || type === "OUTLINE" || type === "OIDC";
 	const isSlack = type === "SLACK";
 	const isOutline = type === "OUTLINE";
+	const isOidc = type === "OIDC";
 
 	const redirectUri =
 		editing?.redirectUri ??
@@ -114,7 +117,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 		if (needsBaseUrl && (!isEdit || baseUrl.trim())) {
 			const value = baseUrl.trim();
 			if (!isEdit && !value) {
-				next.baseUrl = "An instance base URL is required.";
+				next.baseUrl = isOidc ? "An issuer URL is required." : "An instance base URL is required.";
 			} else if (value && !value.startsWith("https://")) {
 				next.baseUrl = "Must be an HTTPS URL.";
 			}
@@ -125,13 +128,14 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 
 	const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
+		if (isSubmitting) return;
 		if (!validate()) {
 			return;
 		}
 		if (isEdit) {
 			const body: UpdateLoginProviderRequest = {
 				displayName: displayName.trim() || undefined,
-				baseUrl: needsBaseUrl ? baseUrl.trim() || undefined : undefined,
+				baseUrl: needsBaseUrl && !isOidc ? baseUrl.trim() || undefined : undefined,
 				clientId: clientId.trim() || undefined,
 				clientSecret: clientSecret.trim() || undefined,
 				scopes: scopes.trim() || undefined,
@@ -216,6 +220,14 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 						<code className="break-all">{redirectUri}</code>
 					</FieldDescription>
 				)}
+				{isOidc && (
+					<FieldDescription>
+						Use an OpenID Connect client approved by your instance operator. Register this callback
+						URI with your identity provider: <code className="break-all">{redirectUri}</code>.
+						Existing users should connect this identity from Settings rather than creating a
+						separate account.
+					</FieldDescription>
+				)}
 			</Field>
 
 			<Field>
@@ -230,20 +242,30 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 
 			{needsBaseUrl && (
 				<Field data-invalid={errors.baseUrl ? "true" : undefined}>
-					<FieldLabel htmlFor="lp-base-url">Instance base URL</FieldLabel>
+					<FieldLabel htmlFor="lp-base-url">
+						{isOidc ? "Issuer URL" : "Instance base URL"}
+					</FieldLabel>
 					<Input
 						id="lp-base-url"
 						type="url"
 						value={baseUrl}
 						onChange={(e) => setBaseUrl(e.target.value)}
-						placeholder={isOutline ? "https://outline.example.com" : "https://gitlab.example.com"}
+						placeholder={
+							isOidc
+								? "https://identity.example.com/realms/team"
+								: isOutline
+									? "https://outline.example.com"
+									: "https://gitlab.example.com"
+						}
+						readOnly={isEdit && isOidc}
 						required={!isEdit}
 						aria-invalid={errors.baseUrl ? "true" : undefined}
 						aria-describedby="lp-base-url-description"
 					/>
 					<FieldDescription id="lp-base-url-description">
-						HTTPS only. GitHub and Slack are always at a fixed host, so this field applies to
-						self-hosted GitLab and Outline instances.
+						{isOidc
+							? "Copy the exact HTTPS issuer, including its realm path and any trailing slash. It must be approved by your instance operator and cannot change after creation."
+							: "HTTPS only. GitHub and Slack are always at a fixed host, so this field applies to self-hosted GitLab and Outline instances."}
 					</FieldDescription>
 					{errors.baseUrl && <FieldError>{errors.baseUrl}</FieldError>}
 				</Field>
@@ -293,7 +315,14 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 					Cancel
 				</Button>
 				<Button type="submit" disabled={isSubmitting}>
-					{isEdit ? "Save changes" : "Add provider"}
+					{isSubmitting && <Spinner />}
+					{isSubmitting
+						? isEdit
+							? "Saving…"
+							: "Adding…"
+						: isEdit
+							? "Save changes"
+							: "Add provider"}
 				</Button>
 			</DialogFooter>
 		</form>

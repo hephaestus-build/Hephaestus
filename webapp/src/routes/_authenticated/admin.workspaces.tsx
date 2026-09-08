@@ -39,7 +39,7 @@ function AdminWorkspacesPage() {
 					ws.displayName,
 					ws.workspaceSlug,
 					ws.accountLogin,
-					ws.ownerLogin,
+					ws.ownerDisplayName,
 					ws.status,
 					ws.providerType,
 				]
@@ -92,7 +92,7 @@ function AdminWorkspacesPage() {
 					impersonateTarget?.ownerAccountId != null
 						? {
 								id: impersonateTarget.ownerAccountId,
-								displayName: impersonateTarget.ownerLogin ?? impersonateTarget.displayName,
+								displayName: impersonateTarget.ownerDisplayName ?? impersonateTarget.displayName,
 							}
 						: null
 				}

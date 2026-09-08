@@ -4,11 +4,9 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.dto.AdminWorkspaceViewDTO;
 import java.util.List;
-import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,13 +21,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class WorkspaceAdminService {
 
     private final WorkspaceRepository workspaceRepository;
-    private final WorkspaceMembershipRepository membershipRepository;
+    private final WorkspaceAccountMembershipRepository membershipRepository;
     private final ConnectionService connectionService;
     private final AccountIdentityQuery accountIdentityQuery;
 
     public WorkspaceAdminService(
             WorkspaceRepository workspaceRepository,
-            WorkspaceMembershipRepository membershipRepository,
+            WorkspaceAccountMembershipRepository membershipRepository,
             ConnectionService connectionService,
             AccountIdentityQuery accountIdentityQuery) {
         this.workspaceRepository = workspaceRepository;
@@ -48,17 +46,17 @@ public class WorkspaceAdminService {
                 .findActiveProviderKind(ws.getId())
                 .map(IdentityProviderType::from)
                 .orElse(null);
-        User owner = membershipRepository.findUsersByWorkspaceIdAndRole(ws.getId(), WorkspaceRole.OWNER).stream()
+        var owner = membershipRepository.findByWorkspace_Id(ws.getId()).stream()
+                .filter(member -> !member.isSuspended() && member.getRole() == WorkspaceRole.OWNER)
                 .findFirst()
                 .orElse(null);
-        Long ownerAccountId = owner != null
-                ? accountIdentityQuery
-                        .resolveAccountId(
-                                Objects.requireNonNull(owner.getProvider().getId()),
-                                owner.getNativeId().toString(),
-                                null)
-                        .orElse(null)
-                : null;
+        Long ownerAccountId = owner == null ? null : owner.getAccountId();
+        String ownerName = ownerAccountId == null
+                ? null
+                : accountIdentityQuery
+                        .account(ownerAccountId)
+                        .map(AccountIdentityQuery.AccountView::displayName)
+                        .orElse(null);
         return new AdminWorkspaceViewDTO(
                 ws.getId(),
                 ws.getWorkspaceSlug(),
@@ -66,9 +64,11 @@ public class WorkspaceAdminService {
                 ws.getStatus().name(),
                 ws.getAccountLogin(),
                 providerType,
-                owner != null ? owner.getLogin() : null,
+                ownerName,
                 ownerAccountId,
-                membershipRepository.countByWorkspace_Id(ws.getId()),
+                membershipRepository.findByWorkspace_Id(ws.getId()).stream()
+                        .filter(member -> !member.isSuspended())
+                        .count(),
                 ws.getCreatedAt());
     }
 }

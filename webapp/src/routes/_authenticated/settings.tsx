@@ -38,10 +38,17 @@ export const Route = createFileRoute("/_authenticated/settings")({
 
 function RouteComponent() {
 	const queryClient = useQueryClient();
-	const { logout, linkAccount } = useAuth();
+	const { logout, linkAccount, userProfile } = useAuth();
 	const userSettingsQueryKey = getUserSettingsQueryKey();
 	const consentQuery = useQuery(getConsentStatusOptions({}));
 	const accountConsent = consentQuery.data;
+	const linkedIdentitiesQuery = useQuery({
+		...listLinkedIdentitiesOptions({}),
+	});
+	const hasScmIdentity =
+		linkedIdentitiesQuery.data?.some(
+			(identity) => identity.providerType === "GITHUB" || identity.providerType === "GITLAB",
+		) ?? false;
 
 	const {
 		data: settings,
@@ -50,11 +57,8 @@ function RouteComponent() {
 		refetch: refetchSettings,
 	} = useQuery({
 		...getUserSettingsOptions({}),
+		enabled: hasScmIdentity,
 		retry: 1,
-	});
-
-	const linkedIdentitiesQuery = useQuery({
-		...listLinkedIdentitiesOptions({}),
 	});
 
 	const identityProvidersQuery = useQuery({
@@ -129,6 +133,7 @@ function RouteComponent() {
 			void queryClient.invalidateQueries({ queryKey: listLinkedIdentitiesQueryKey({}) });
 			// The primary identity (avatar, username) the app shows may have been the one removed.
 			void queryClient.invalidateQueries({ queryKey: getCurrentUserQueryKey() });
+			void queryClient.invalidateQueries({ queryKey: userSettingsQueryKey });
 			toast.success("Account disconnected.");
 		},
 		onError: (error: DefaultError) => {
@@ -232,8 +237,10 @@ function RouteComponent() {
 
 	return (
 		<SettingsPage
-			isLoading={isLoading}
-			settingsError={settingsError}
+			accountId={userProfile?.id}
+			isLoading={isLoading || linkedIdentitiesQuery.isLoading}
+			settingsError={settingsError || linkedIdentitiesQuery.isError}
+			needsScmIdentity={linkedIdentitiesQuery.isSuccess && !hasScmIdentity}
 			onRetrySettings={() => void refetchSettings()}
 			practiceFeedbackProps={{
 				practiceFeedbackDeliveryEnabled: settings?.practiceFeedbackDeliveryEnabled ?? true,

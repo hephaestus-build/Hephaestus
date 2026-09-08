@@ -53,6 +53,15 @@ class AccountWorkspaceMembershipQueryIntegrationTest extends BaseIntegrationTest
     @Autowired
     private WorkspaceMembershipRepository memberships;
 
+    @Autowired
+    private WorkspaceAccountMembershipRepository accountMemberships;
+
+    @Autowired
+    private WorkspaceAccountMembershipSync accountSync;
+
+    @Autowired
+    private WorkspaceAccountMembershipErasure erasure;
+
     @Test
     void shouldReturnOnlyVerifiedActorsWhenUsernamesAreReassignedOrSharedAcrossProviders() {
         var github = providers.saveAndFlush(
@@ -84,6 +93,7 @@ class AccountWorkspaceMembershipQueryIntegrationTest extends BaseIntegrationTest
 
         link.setExternalActorId(reclaimedLogin.getId());
         identities.saveAndFlush(link);
+        accountMembership(ownedWorkspace, accountId);
 
         assertThat(query.membershipsForAccount(accountId)).singleElement().satisfies(view -> {
             assertThat(view.workspaceId()).isEqualTo(ownedWorkspace.getId());
@@ -95,7 +105,10 @@ class AccountWorkspaceMembershipQueryIntegrationTest extends BaseIntegrationTest
 
         link.setDisabledAt(Instant.now());
         identities.saveAndFlush(link);
-        assertThat(query.membershipsForAccount(accountId)).isEmpty();
+        assertThat(query.membershipsForAccount(accountId)).singleElement().satisfies(view -> {
+            assertThat(view.workspaceId()).isEqualTo(ownedWorkspace.getId());
+            assertThat(view.memberId()).isNull();
+        });
         assertThat(preferenceQuery.preferencesForAccount(accountId)).isEmpty();
     }
 
@@ -141,6 +154,7 @@ class AccountWorkspaceMembershipQueryIntegrationTest extends BaseIntegrationTest
         firstLink.setProviderId(Objects.requireNonNull(secondProvider.getId()));
         firstLink.setSubject(firstLinkedActor.getNativeId().toString());
         identities.saveAndFlush(firstLink);
+        var humanMembership = accountMembership(workspace, accountId);
         assertThat(query.membershipsForAccount(accountId))
                 .singleElement()
                 .extracting(AccountWorkspaceMembershipQuery.WorkspaceMembershipView::memberId)
@@ -153,6 +167,12 @@ class AccountWorkspaceMembershipQueryIntegrationTest extends BaseIntegrationTest
         identities.saveAndFlush(laterLink);
         laterMembership.setRole(WorkspaceMembership.WorkspaceRole.OWNER);
         memberships.saveAndFlush(laterMembership);
+        assertThat(query.membershipsForAccount(accountId))
+                .singleElement()
+                .extracting(AccountWorkspaceMembershipQuery.WorkspaceMembershipView::role)
+                .isEqualTo("MEMBER");
+        humanMembership.setRole(WorkspaceMembership.WorkspaceRole.OWNER);
+        accountMemberships.saveAndFlush(humanMembership);
 
         assertThat(query.membershipsForAccount(accountId)).singleElement().satisfies(view -> {
             assertThat(view.workspaceId()).isEqualTo(workspace.getId());
@@ -160,12 +180,91 @@ class AccountWorkspaceMembershipQueryIntegrationTest extends BaseIntegrationTest
             assertThat(view.memberId()).isEqualTo(firstLinkedActor.getId());
         });
 
+        humanMembership.setRole(WorkspaceMembership.WorkspaceRole.MEMBER);
+        accountMemberships.saveAndFlush(humanMembership);
         laterMembership.setRole(WorkspaceMembership.WorkspaceRole.MEMBER);
         memberships.saveAndFlush(laterMembership);
         assertThat(query.membershipsForAccount(accountId)).singleElement().satisfies(view -> {
             assertThat(view.role()).isEqualTo("MEMBER");
             assertThat(view.memberId()).isEqualTo(firstLinkedActor.getId());
         });
+    }
+
+    @Test
+    void shouldReconcileOnlyScmManagedAccessAndNeverRestoreASuspension() {
+        var provider = provider("https://identity-sync.example.com");
+        var actor = actor(provider, 42L, "sync-member");
+        var workspace = membership(actor, "identity-sync");
+        var account = accounts.saveAndFlush(new Account("Sync member"));
+        var accountId = Objects.requireNonNull(account.getId());
+        var link = new IdentityLink();
+        link.setAccount(account);
+        link.setProviderId(Objects.requireNonNull(provider.getId()));
+        link.setSubject("42");
+        identities.saveAndFlush(link);
+        var desired = java.util.Map.of(Objects.requireNonNull(actor.getId()), WorkspaceMembership.WorkspaceRole.OWNER);
+
+        accountSync.synchronize(workspace, desired);
+        var access = accountMemberships
+                .findByWorkspace_IdAndAccountId(workspace.getId(), accountId)
+                .orElseThrow();
+        assertThat(access.getRole()).isEqualTo(WorkspaceMembership.WorkspaceRole.ADMIN);
+        assertThat(access.getSource()).isEqualTo(WorkspaceAccountMembership.Source.SCM);
+        access.setSuspended(true);
+        accountMemberships.saveAndFlush(access);
+        accountSync.synchronize(workspace, desired);
+        assertThat(accountMemberships
+                        .findByWorkspace_IdAndAccountId(workspace.getId(), accountId)
+                        .orElseThrow()
+                        .isSuspended())
+                .isTrue();
+        accountSync.synchronize(workspace, java.util.Map.of());
+        assertThat(accountMemberships.findByWorkspace_IdAndAccountId(workspace.getId(), accountId))
+                .isPresent();
+
+        access.setSuspended(false);
+        access.setSource(WorkspaceAccountMembership.Source.MANUAL);
+        accountMemberships.saveAndFlush(access);
+        accountSync.synchronize(workspace, java.util.Map.of());
+        assertThat(accountMemberships.findByWorkspace_IdAndAccountId(workspace.getId(), accountId))
+                .isPresent();
+        access.setSource(WorkspaceAccountMembership.Source.SCM);
+        accountMemberships.saveAndFlush(access);
+        accountSync.synchronize(workspace, java.util.Map.of());
+        assertThat(accountMemberships.findByWorkspace_IdAndAccountId(workspace.getId(), accountId))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldEraseOnlyTheRequestedWorkspaceOrAccountMemberships() {
+        var provider = provider("https://identity-erasure.example.com");
+        var actor = actor(provider, 12L, "erasure-member");
+        var first = membership(actor, "erasure-first");
+        var second = membership(actor, "erasure-second");
+        var account = accounts.saveAndFlush(new Account("Erased member"));
+        var other = accounts.saveAndFlush(new Account("Remaining member"));
+        var id = Objects.requireNonNull(account.getId());
+        var otherId = Objects.requireNonNull(other.getId());
+        accountMembership(first, id);
+        accountMembership(second, id);
+        accountMembership(second, otherId);
+
+        erasure.deleteWorkspaceData(first.getId());
+        assertThat(accountMemberships.findByWorkspace_IdAndAccountId(first.getId(), id))
+                .isEmpty();
+        assertThat(accountMemberships.findByWorkspace_IdAndAccountId(second.getId(), id))
+                .isPresent();
+        erasure.eraseAccount(id);
+        assertThat(accountMemberships.findActiveByAccountId(id)).isEmpty();
+        assertThat(accountMemberships.findByWorkspace_IdAndAccountId(second.getId(), otherId))
+                .isPresent();
+    }
+
+    private WorkspaceAccountMembership accountMembership(Workspace workspace, Long accountId) {
+        var membership = new WorkspaceAccountMembership();
+        membership.setWorkspace(workspace);
+        membership.setAccountId(accountId);
+        return accountMemberships.saveAndFlush(membership);
     }
 
     private IdentityProvider provider(String url) {

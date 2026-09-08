@@ -139,6 +139,10 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
             log.warn("auth.success: refused link because the identity is already linked to another account");
             redirectToApp(request, response, "/auth/error?code=identity_already_linked");
             return;
+        } catch (org.springframework.security.oauth2.core.OAuth2AuthenticationException e) {
+            log.warn("auth.success: provider identity is no longer valid for this sign-in");
+            redirectToApp(request, response, "/auth/error?code=oauth_failure");
+            return;
         }
         Account account = provisioned.account();
 

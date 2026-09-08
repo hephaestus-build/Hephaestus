@@ -238,6 +238,59 @@ The login provider is instance-agnostic: gitlab.com works out of the box, and an
 
 This env-seeds **one** default GitLab login provider (registration id `gitlab`). Additional GitLab instances are added at runtime by an instance admin under **Instance admin → Login providers** — no redeploy.
 
+### Organizational OpenID Connect sign-in
+
+Organizational sign-in is optional and uses standard OpenID Connect, including providers such as
+Keycloak. It does not grant workspace membership, read directory groups, or change GitHub access.
+The existing GitHub and GitLab sign-in methods remain available.
+
+1. Register a confidential OpenID Connect client with your identity provider. Enable the authorization
+   code flow and S256 PKCE. The provider must support RS256-signed ID tokens and publish OpenID Connect
+   discovery metadata over public HTTPS.
+2. Set `HEPHAESTUS_AUTH_OIDC_ALLOWED_ISSUERS` on the application server to the exact approved issuer
+   URLs, separated by commas, and restart that role. For example:
+   `https://identity.example.com/realms/team`. The realm path, case and any trailing slash are part of
+   the issuer identity. Do not replace a test issuer with a production issuer under the same identity.
+3. In **Instance admin → Login providers**, add **Organization / OpenID Connect**. Enter a stable
+   registration ID, a recognizable display name, the exact issuer URL, and the client credentials.
+   Leave scopes blank for `openid profile email`, or keep `openid` in any custom scope set.
+4. Register the displayed callback URI with the identity provider. For registration ID `organization`,
+   the reference deployment uses `https://<hostname>/api/login/oauth2/code/organization`.
+5. Existing users should sign in through their existing method and choose **User settings → Connected
+   Accounts → Connect** for the organization. Signing in with a previously unlinked identity creates
+   a separate account; matching email addresses or usernames do not merge accounts.
+
+The issuer URL cannot be edited after creation. Add a separate provider for a replacement realm and
+have users explicitly link it before retiring the old one. Rotate client credentials by editing the
+provider; leave the secret field blank to preserve the current secret. Disabling and re-enabling a
+provider retains its identity links. Removing an issuer from the operator allowlist makes its provider
+unavailable without transferring its identities to another realm.
+
+Organizational bootstrap administrators must be identified by `registration-id:subject`, using the
+validated ID token subject. Organizational usernames and email addresses cannot grant instance-admin
+access because they can change or be reassigned.
+
+Keep a working sign-in method for administrators while changing providers. Hephaestus refuses to
+remove the last enabled, approved primary provider, and users cannot disconnect their last available
+sign-in method. Slack and Outline links do not count as sign-in methods. Removing an allowlist entry
+is an operator action outside the administration guard: retain another working provider or restore
+the exact issuer approval if you lose access.
+
+Discovery is fetched on sign-in, not while rendering the login page. Check that the configured issuer
+matches the discovery document exactly, that its authorization/token/key endpoints are reachable over
+HTTPS, and that the callback URI and client credentials match. Discovery, token, userinfo and key
+requests reject private/reserved destinations at DNS resolution and do not follow HTTP redirects.
+An unavailable organizational provider does not prevent the other sign-in options from being listed.
+
+### Account-based workspace access
+
+Workspace owners manage account IDs in **Workspace admin → Members**. Organizational accounts do not
+need an SCM identity to hold a role. Source-control contributors and leaderboard visibility remain
+separate from access. Upgrade preflight, verified-owner recovery and coordinated rollback are in the
+release's [migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md).
+Review that entry before upgrading an existing deployment; do not use the original native-auth
+cutover's username bridge or binary-only rollback procedure.
+
 ### Practice review
 
 Practice review has its own page: **[Practice Review](./practice-review)** covers the deployment

@@ -1,17 +1,18 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -37,16 +38,19 @@ class ReviewRequestAuthorityTest extends BaseUnitTest {
     private static final long BYSTANDER_ID = 3L;
 
     @Mock
-    private WorkspaceMembershipRepository memberships;
+    private AccountWorkspaceMembershipQuery memberships;
+
+    @Mock
+    private AccountIdentityQuery identities;
+
+    @Mock
+    private UserRepository users;
 
     private ReviewRequestAuthority authority;
 
     @BeforeEach
     void setUp() {
-        authority = new ReviewRequestAuthority(memberships);
-        lenient()
-                .when(memberships.findByWorkspace_IdAndUser_Id(anyLong(), anyLong()))
-                .thenReturn(Optional.empty());
+        authority = new ReviewRequestAuthority(memberships, identities, users);
     }
 
     @Test
@@ -88,9 +92,10 @@ class ReviewRequestAuthorityTest extends BaseUnitTest {
     /** Standing is per workspace: admin somewhere else is not admin here. */
     @Test
     void adminOfADifferentWorkspaceMayNot() {
-        lenient()
-                .when(memberships.findByWorkspace_IdAndUser_Id(99L, BYSTANDER_ID))
-                .thenReturn(Optional.of(membership(WorkspaceRole.OWNER)));
+        givenMembership(BYSTANDER_ID, WorkspaceRole.OWNER);
+        when(memberships.membershipsForAccount(BYSTANDER_ID))
+                .thenReturn(List.of(new AccountWorkspaceMembershipQuery.WorkspaceMembershipView(
+                        99L, "other", "Other", "OWNER", BYSTANDER_ID)));
 
         assertThat(authority.mayRequest(WORKSPACE_ID, artifact(), user(BYSTANDER_ID)))
                 .isFalse();
@@ -126,6 +131,7 @@ class ReviewRequestAuthorityTest extends BaseUnitTest {
      */
     @Test
     void anAdminUnderOneOfTheirLinkedIdentitiesMayAsk() {
+        when(users.findById(999L)).thenReturn(Optional.empty());
         givenMembership(BYSTANDER_ID, WorkspaceRole.ADMIN);
 
         Optional<User> standing =
@@ -165,17 +171,19 @@ class ReviewRequestAuthorityTest extends BaseUnitTest {
     private User user(long id) {
         User user = new User();
         user.setId(id);
+        user.setNativeId(id);
+        var provider = new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com");
+        provider.setId(1L);
+        user.setProvider(provider);
         user.setLogin("user-" + id);
         return user;
     }
 
     private void givenMembership(long userId, WorkspaceRole role) {
-        when(memberships.findByWorkspace_IdAndUser_Id(WORKSPACE_ID, userId)).thenReturn(Optional.of(membership(role)));
-    }
-
-    private WorkspaceMembership membership(WorkspaceRole role) {
-        WorkspaceMembership membership = new WorkspaceMembership();
-        membership.setRole(role);
-        return membership;
+        when(users.findById(userId)).thenReturn(Optional.of(user(userId)));
+        when(identities.resolveActiveAccountId(1L, Long.toString(userId), null)).thenReturn(Optional.of(userId));
+        when(memberships.membershipsForAccount(userId))
+                .thenReturn(List.of(new AccountWorkspaceMembershipQuery.WorkspaceMembershipView(
+                        WORKSPACE_ID, "workspace", "Workspace", role.name(), userId)));
     }
 }

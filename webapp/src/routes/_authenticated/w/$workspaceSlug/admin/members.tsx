@@ -6,6 +6,11 @@ import { z } from "zod";
 
 import {
 	getAllTeamsOptions,
+	listMembersOptions,
+	listMembersQueryKey,
+	assignRoleMutation,
+	removeMemberMutation,
+	getCurrentUserMembershipQueryKey,
 	getUsersWithTeamsOptions,
 	getUsersWithTeamsQueryKey,
 	updateMemberVisibilityMutation,
@@ -15,7 +20,9 @@ import { adaptApiUserTeams } from "@/components/admin/types";
 import type { UsersTableView } from "@/components/admin/UsersTable";
 import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
+import { workspaceMembershipQueryOptions } from "@/integrations/auth/guard";
 import { workspaceAdminHead } from "@/lib/page-title";
+import { problemDetailOf } from "@/lib/problem-detail";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/members")({
 	head: workspaceAdminHead("Members"),
@@ -73,6 +80,36 @@ function AdminMembersContainer() {
 	});
 
 	const queryClient = useQueryClient();
+	const accountMembers = useQuery({
+		...listMembersOptions({ path: { workspaceSlug: workspaceSlug ?? "" } }),
+		enabled: Boolean(workspaceSlug),
+	});
+	const currentMembership = useQuery({
+		...workspaceMembershipQueryOptions(workspaceSlug ?? ""),
+		enabled: Boolean(workspaceSlug),
+	});
+	const refreshMemberships = async () => {
+		await Promise.all([
+			queryClient.invalidateQueries({
+				queryKey: listMembersQueryKey({ path: { workspaceSlug: workspaceSlug ?? "" } }),
+			}),
+			queryClient.invalidateQueries({
+				queryKey: getCurrentUserMembershipQueryKey({
+					path: { workspaceSlug: workspaceSlug ?? "" },
+				}),
+			}),
+		]);
+	};
+	const assignMembership = useMutation({
+		...assignRoleMutation(),
+		onSuccess: refreshMemberships,
+		onError: (error) => toast.error(problemDetailOf(error, "Couldn't update workspace access.")),
+	});
+	const suspendMembership = useMutation({
+		...removeMemberMutation(),
+		onSuccess: refreshMemberships,
+		onError: (error) => toast.error(problemDetailOf(error, "Couldn't suspend workspace access.")),
+	});
 	const toggleHidden = useMutation({
 		...updateMemberVisibilityMutation(),
 		onSuccess: () => {
@@ -124,6 +161,21 @@ function AdminMembersContainer() {
 
 	return (
 		<AdminMembersPage
+			accountMemberships={{
+				members: accountMembers.data ?? [],
+				isOwner: currentMembership.data?.role === "OWNER",
+				isLoading: accountMembers.isLoading,
+				error: accountMembers.error,
+				isSaving: assignMembership.isPending || suspendMembership.isPending,
+				onRetry: () => void accountMembers.refetch(),
+				onAssign: async (body) => {
+					if (!workspaceSlug) return;
+					await assignMembership.mutateAsync({ path: { workspaceSlug }, body });
+				},
+				onSuspend: (accountId) => {
+					if (workspaceSlug) suspendMembership.mutate({ path: { workspaceSlug, accountId } });
+				},
+			}}
 			users={users}
 			teams={teams}
 			isLoading={isLoading || !workspaceSlug}

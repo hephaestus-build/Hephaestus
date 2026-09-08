@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 public enum IdentityProviderType {
     GITHUB,
     GITLAB,
+    OIDC,
     SLACK,
     OUTLINE;
 

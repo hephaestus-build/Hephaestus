@@ -72,6 +72,7 @@ public class AccountWebController {
     public record IdentityViewDTO(
             Long id,
             String providerType,
+            @Nullable String serverUrl,
             String subject,
             @Nullable String username,
             @Nullable String displayName,
@@ -151,6 +152,7 @@ public class AccountWebController {
         return new IdentityViewDTO(
                 il.getId(),
                 providerType,
+                gitProviderRegistry.providerServerUrl(il.getProviderId()),
                 il.getSubject(),
                 il.getUsernameAtSignup(),
                 il.getDisplayName(),

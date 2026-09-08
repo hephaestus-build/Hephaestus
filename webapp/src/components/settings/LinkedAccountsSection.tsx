@@ -39,6 +39,7 @@ import {
 	ItemMedia,
 	ItemTitle,
 } from "@/components/ui/item";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { asDate } from "@/lib/dates";
 import { getProviderLabel } from "@/lib/provider";
@@ -73,6 +74,14 @@ const LINK_ONLY_RATIONALE: Record<string, string> = {
 function getProviderIcon(providerType?: string): LucideIcon | BrandIcon {
 	if (!providerType) return LinkIcon;
 	return PROVIDER_ICONS[providerType.toUpperCase()] ?? LinkIcon;
+}
+
+function matchesProvider(identity: IdentityView, provider: IdentityProviderView): boolean {
+	return (
+		Boolean(identity.serverUrl) &&
+		identity.providerType?.toUpperCase() === provider.providerType?.toUpperCase() &&
+		identity.serverUrl === provider.baseUrl
+	);
 }
 
 function formatLastLogin(lastLoginAt?: Date): string | undefined {
@@ -129,19 +138,11 @@ export function LinkedAccountsSection({
 	error,
 	onRetry,
 }: LinkedAccountsSectionProps) {
-	const linkedProviderTypes = new Set(
-		identities
-			.map((identity) => identity.providerType?.toUpperCase())
-			.filter((type): type is string => Boolean(type)),
-	);
-
-	// Providers the account can still link: not already represented among the linked identities
-	// (compared by provider type). The synthetic DEV sign-in is not a federated identity — it is never
-	// offered as something to "connect".
+	// Two realms or self-hosted instances of the same provider type are distinct identities.
 	const linkableProviders = providers.filter((provider) => {
 		const type = provider.providerType?.toUpperCase();
 		if (type === "DEV") return false;
-		return !type || !linkedProviderTypes.has(type);
+		return !identities.some((identity) => matchesProvider(identity, provider));
 	});
 
 	// Slack and Outline link an identity but are never a way in, so they cannot be offered among the
@@ -158,7 +159,13 @@ export function LinkedAccountsSection({
 	);
 
 	// Lockout guard: the account's only remaining sign-in method cannot be removed.
-	const isOnlyIdentity = identities.length <= 1;
+	const signInIdentities = identities.filter((identity) =>
+		providers.some(
+			(provider) =>
+				!LINK_ONLY_PROVIDER_TYPES.has(provider.providerType?.toUpperCase() ?? "") &&
+				matchesProvider(identity, provider),
+		),
+	);
 
 	// Focus restoration: when a disconnect succeeds, the row and its trigger unmount and focus
 	// would otherwise drop to <body>. Move focus to the section heading so keyboard/SR users
@@ -194,8 +201,20 @@ export function LinkedAccountsSection({
 			</div>
 
 			{isLoading ? (
-				<div className="flex justify-center py-6">
-					<Spinner aria-label="Loading connected accounts" />
+				<div className="space-y-2" aria-busy="true" aria-label="Loading connected accounts">
+					{[0, 1].map((row) => (
+						<div
+							key={row}
+							className="flex items-center gap-4 rounded-lg border p-4"
+							aria-hidden="true"
+						>
+							<Skeleton className="size-8 rounded-md" />
+							<div className="flex-1 space-y-2">
+								<Skeleton className="h-4 w-40" />
+								<Skeleton className="h-3 w-56 max-w-full" />
+							</div>
+						</div>
+					))}
 				</div>
 			) : isError ? (
 				<QueryErrorAlert
@@ -247,6 +266,11 @@ export function LinkedAccountsSection({
 												)}
 											</ItemTitle>
 											{lastLogin && <ItemDescription>Last sign-in {lastLogin}</ItemDescription>}
+											{identity.serverUrl && (
+												<ItemDescription className="break-all">
+													{identity.serverUrl}
+												</ItemDescription>
+											)}
 										</ItemContent>
 										{identityId != null && (
 											<ItemActions>
@@ -254,7 +278,9 @@ export function LinkedAccountsSection({
 													identityId={identityId}
 													name={name}
 													providerType={identity.providerType}
-													isOnlyIdentity={isOnlyIdentity}
+													isOnlyIdentity={
+														!signInIdentities.some((other) => other.id !== identityId)
+													}
 													isUnlinking={unlinkingId === identityId}
 													onConfirm={() => onUnlink(identityId)}
 												/>

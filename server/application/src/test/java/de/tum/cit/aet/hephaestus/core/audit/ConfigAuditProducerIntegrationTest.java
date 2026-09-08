@@ -29,10 +29,17 @@ import org.springframework.transaction.annotation.Transactional;
  * transaction, so an unexercised producer is a latent 500 rather than merely a missing row — and it
  * drops an UPDATE whose diff is empty, which is silent when a snapshot is built so it never differs.
  */
+@de.tum.cit.aet.hephaestus.testconfig.WithAdminUser
 class ConfigAuditProducerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private WorkspaceMembershipService membershipService;
+
+    @Autowired
+    private de.tum.cit.aet.hephaestus.workspace.WorkspaceAccountMembershipService accountMembershipService;
+
+    @Autowired
+    private de.tum.cit.aet.hephaestus.workspace.WorkspaceAccountMembershipSync accountSync;
 
     @Autowired
     private WorkspaceSettingsService settingsService;
@@ -58,10 +65,10 @@ class ConfigAuditProducerIntegrationTest extends AbstractWorkspaceIntegrationTes
         Workspace workspace = workspace("audit-producer-role");
         User member = persistUser("audit-producer-role-member");
 
-        membershipService.assignRole(workspace.getId(), member.getId(), WorkspaceMembership.WorkspaceRole.MEMBER);
-        membershipService.assignRole(workspace.getId(), member.getId(), WorkspaceMembership.WorkspaceRole.ADMIN);
+        accountMembershipService.assign(workspace.getId(), accountId(member), WorkspaceMembership.WorkspaceRole.MEMBER);
+        accountMembershipService.assign(workspace.getId(), accountId(member), WorkspaceMembership.WorkspaceRole.ADMIN);
 
-        assertThat(actionsFor(workspace, ConfigAuditEntityType.WORKSPACE_ROLE))
+        assertThat(actionsForMember(workspace, member))
                 .containsExactly(ConfigAuditAction.CREATED, ConfigAuditAction.UPDATED);
     }
 
@@ -70,12 +77,12 @@ class ConfigAuditProducerIntegrationTest extends AbstractWorkspaceIntegrationTes
     void revokingAMembershipIsRecorded() {
         Workspace workspace = workspace("audit-producer-revoke");
         User member = persistUser("audit-producer-revoke-member");
-        membershipService.assignRole(workspace.getId(), member.getId(), WorkspaceMembership.WorkspaceRole.ADMIN);
+        accountMembershipService.assign(workspace.getId(), accountId(member), WorkspaceMembership.WorkspaceRole.ADMIN);
 
-        membershipService.removeMembership(workspace.getId(), member.getId());
+        accountMembershipService.suspend(workspace.getId(), accountId(member));
 
-        assertThat(actionsFor(workspace, ConfigAuditEntityType.WORKSPACE_ROLE))
-                .containsExactly(ConfigAuditAction.CREATED, ConfigAuditAction.DELETED);
+        assertThat(actionsForMember(workspace, member))
+                .containsExactly(ConfigAuditAction.CREATED, ConfigAuditAction.UPDATED);
     }
 
     @Test
@@ -83,12 +90,12 @@ class ConfigAuditProducerIntegrationTest extends AbstractWorkspaceIntegrationTes
     void hidingAMemberIsRecordedBecauseItOutlivesOrgRemoval() {
         Workspace workspace = workspace("audit-producer-hidden");
         User member = persistUser("audit-producer-hidden-member");
-        membershipService.assignRole(workspace.getId(), member.getId(), WorkspaceMembership.WorkspaceRole.MEMBER);
+        membershipService.createMembership(workspace, member.getId(), WorkspaceMembership.WorkspaceRole.MEMBER);
 
         membershipService.updateMemberVisibility(workspace.getId(), member.getId(), true);
 
         assertThat(snapshotsFor(workspace, ConfigAuditEntityType.WORKSPACE_ROLE))
-                .as("hidden decides whether access survives leaving the org")
+                .as("hidden preferences survive organization synchronization")
                 .anyMatch(newValue -> newValue.contains("\"hidden\":true"));
     }
 
@@ -97,12 +104,12 @@ class ConfigAuditProducerIntegrationTest extends AbstractWorkspaceIntegrationTes
     void aRoleChangedByOrgSyncIsRecorded() {
         Workspace workspace = workspace("audit-producer-sync");
         User member = persistUser("audit-producer-sync-member");
-        membershipService.assignRole(workspace.getId(), member.getId(), WorkspaceMembership.WorkspaceRole.MEMBER);
+        accountSync.synchronize(workspace, Map.of(member.getId(), WorkspaceMembership.WorkspaceRole.MEMBER));
 
         membershipService.syncWorkspaceMembers(
                 workspace, Map.of(member.getId(), WorkspaceMembership.WorkspaceRole.ADMIN));
 
-        assertThat(actionsFor(workspace, ConfigAuditEntityType.WORKSPACE_ROLE)).contains(ConfigAuditAction.UPDATED);
+        assertThat(actionsForMember(workspace, member)).contains(ConfigAuditAction.UPDATED);
     }
 
     @Test
@@ -136,6 +143,14 @@ class ConfigAuditProducerIntegrationTest extends AbstractWorkspaceIntegrationTes
         WorkspaceContextHolder.setContext(
                 WorkspaceContext.fromWorkspace(workspace, Set.of(WorkspaceMembership.WorkspaceRole.ADMIN), null));
         return workspace;
+    }
+
+    private List<ConfigAuditAction> actionsForMember(Workspace workspace, User member) {
+        var id = accountId(member).toString();
+        return rowsFor(workspace, ConfigAuditEntityType.WORKSPACE_ROLE).stream()
+                .filter(row -> id.equals(row.getEntityId()))
+                .map(ConfigAuditEvent::getAction)
+                .toList();
     }
 
     private List<ConfigAuditAction> actionsFor(Workspace workspace, ConfigAuditEntityType entityType) {

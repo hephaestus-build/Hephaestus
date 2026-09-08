@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { listMembersOptions } from "@/api/@tanstack/react-query.gen";
+import { listWorkspaceContributorsOptions } from "@/api/@tanstack/react-query.gen";
 import {
 	MEMBER_PAGE_SIZE,
 	type PersonOption,
@@ -18,7 +18,10 @@ import { firstNonBlank } from "@/lib/text";
  */
 export function useReviewPeople(workspaceSlug: string): ReviewPeople {
 	const membersQuery = useQuery({
-		...listMembersOptions({ path: { workspaceSlug }, query: { size: MEMBER_PAGE_SIZE } }),
+		...listWorkspaceContributorsOptions({
+			path: { workspaceSlug },
+			query: { size: MEMBER_PAGE_SIZE },
+		}),
 	});
 	const options: PersonOption[] = (membersQuery.data ?? [])
 		.filter((member): member is typeof member & { userId: number } => member.userId != null)

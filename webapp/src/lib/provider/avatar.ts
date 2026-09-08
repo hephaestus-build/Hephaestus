@@ -8,7 +8,7 @@ import type { ProviderType } from "./provider-terms";
  *   from the API. Returns `null` so callers render a fallback (e.g. initials).
  */
 export function getWorkspaceAvatarUrl(
-	provider: ProviderType | "SLACK" | "OUTLINE",
+	provider: ProviderType | "SLACK" | "OUTLINE" | "OIDC",
 	accountLogin: string,
 ): string | null {
 	if (provider === "GITHUB") {

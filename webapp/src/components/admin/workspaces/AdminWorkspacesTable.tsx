@@ -104,7 +104,7 @@ export function AdminWorkspacesTable({
 									<span className="text-muted-foreground">—</span>
 								)}
 							</TableCell>
-							<TableCell className="text-muted-foreground">{ws.ownerLogin ?? "—"}</TableCell>
+							<TableCell className="text-muted-foreground">{ws.ownerDisplayName ?? "—"}</TableCell>
 							<TableCell className="text-right tabular-nums">{ws.memberCount}</TableCell>
 							<TableCell className="whitespace-nowrap text-sm text-muted-foreground">
 								{formatDate(ws.createdAt)}
@@ -117,7 +117,7 @@ export function AdminWorkspacesTable({
 									title={
 										ws.ownerAccountId == null
 											? "The workspace owner has not signed in, so there is no account to impersonate."
-											: `View ${ws.displayName} as ${ws.ownerLogin ?? "its owner"}`
+											: `View ${ws.displayName} as ${ws.ownerDisplayName ?? "its owner"}`
 									}
 									onClick={() => onImpersonateOwner(ws)}
 								>

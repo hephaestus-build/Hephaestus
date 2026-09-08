@@ -2,7 +2,9 @@ package de.tum.cit.aet.hephaestus.workspace.audit;
 
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceAccountMembership;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceFeatures;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import java.time.Instant;
 import org.jspecify.annotations.Nullable;
 
@@ -42,6 +44,15 @@ public final class WorkspaceAuditSnapshots {
             boolean tokenSet,
             @Nullable String providerKind,
             @Nullable Instant rotatedAt) implements ConfigAuditSnapshot {}
+
+    public record AccountMembershipSnapshot(
+            Long accountId, WorkspaceRole role, WorkspaceAccountMembership.Source source, boolean suspended)
+            implements ConfigAuditSnapshot {
+        public static AccountMembershipSnapshot of(WorkspaceAccountMembership membership) {
+            return new AccountMembershipSnapshot(
+                    membership.getAccountId(), membership.getRole(), membership.getSource(), membership.isSuspended());
+        }
+    }
 
     public record RoleSnapshot(@Nullable String role, boolean hidden) implements ConfigAuditSnapshot {}
 
