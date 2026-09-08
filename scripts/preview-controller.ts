@@ -18,6 +18,8 @@ interface PullRequest {
 
 interface PullRequestFile {
 	readonly filename: string;
+	/** The blob after the change, which is how a cherry-pick is told from a missing migration. */
+	readonly sha?: string;
 }
 
 interface Deployment {
@@ -41,6 +43,7 @@ export interface GitHubApi {
 		};
 		readonly repos: {
 			readonly compareCommitsWithBasehead: ApiMethod<{ files?: PullRequestFile[] }>;
+			readonly getContent: ApiMethod<{ sha?: string }>;
 			readonly createDeployment: ApiMethod<Deployment>;
 			readonly createDeploymentStatus: ApiMethod<unknown>;
 			readonly deleteDeployment: ApiMethod<unknown>;
@@ -79,6 +82,34 @@ const PREVIEW_LABEL = "preview";
  * the changelog is the whole signal, and matching on Java would refuse a preview for any merge.
  */
 const SCHEMA_PATHS = ["server/application/src/main/resources/db/"] as const;
+
+/** A file under `db/` that actually shapes the schema. Prose there changes nothing. */
+function isSchemaChange(filename: string): boolean {
+	if (!SCHEMA_PATHS.some((path) => filename.startsWith(path))) return false;
+	return !filename.endsWith(".md") && !filename.endsWith(".mmd");
+}
+
+/**
+ * Whether the branch already carries this exact file content. Compared by blob, because a branch
+ * that cherry-picked a migration satisfies the schema while its ancestry still reports the file as
+ * one the default branch introduced since they diverged.
+ */
+async function branchHasBlob(
+	github: GitHubApi,
+	owner: string,
+	repo: string,
+	ref: string,
+	file: PullRequestFile,
+): Promise<boolean> {
+	if (file.sha === undefined) return false;
+	try {
+		const content = await github.rest.repos.getContent({ owner, repo, path: file.filename, ref });
+		return content.data.sha === file.sha;
+	} catch {
+		// Absent from the branch, which is exactly the case this guard exists for.
+		return false;
+	}
+}
 
 const TRUSTED_ASSOCIATIONS = new Set(["COLLABORATOR", "MEMBER", "OWNER"]);
 // GitHub's comparison endpoint reports at most this many files and gives no truncation flag.
@@ -185,27 +216,6 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 			`PR #${number} changes ${files.length}+ files, too many for GitHub to report in one comparison, so deployment policy cannot be verified.`,
 		);
 	}
-	// A preview restores staging's database — the default branch's schema — into an application
-	// built from this pull request. Hibernate boots with `ddl-auto: validate`, so a branch that
-	// predates a schema change on the default branch maps entities to tables the restored database
-	// no longer has, and the container exits its healthcheck with nothing on the pull request to
-	// say why. Naming it here costs a comparison; discovering it costs the whole deployment.
-	const behind = await github.rest.repos.compareCommitsWithBasehead({
-		owner,
-		repo,
-		basehead: `${pull.head.sha}...${defaultBranch}`,
-	});
-	const missingSchemaChange = (behind.data.files ?? []).find((file) =>
-		SCHEMA_PATHS.some((path) => file.filename.startsWith(path)),
-	);
-	if (missingSchemaChange) {
-		return skip(
-			`PR #${number} is behind ${defaultBranch} on \`${missingSchemaChange.filename}\`. A preview ` +
-				`restores ${defaultBranch}'s schema, which this branch's entities no longer match, so the ` +
-				`application would fail validation on boot. Update the branch to preview it.`,
-		);
-	}
-
 	const protectedFile = files.find(
 		(file) =>
 			file.filename.startsWith("docker/preview/") ||
@@ -235,6 +245,42 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		if (LIVE_STATES.has(statuses.data[0]?.state ?? "")) {
 			return skip(`PR #${number} already has a current preview deployment.`, true);
 		}
+	}
+
+	// A preview restores the default branch's schema into an application built from this branch, and
+	// the application boots with `ddl-auto: validate`. A branch missing one of the default branch's
+	// migrations may therefore map entities the restored database no longer has. Saying so here
+	// costs one comparison; discovering it costs a deployment, ten minutes, and a container that
+	// exits its healthcheck with nothing on the pull request to explain it.
+	//
+	// It sits after the checks above on purpose: a head that already has a live preview needs no
+	// deployment, and refusing here would replace a working preview's comment with a refusal.
+	const behind = await github.rest.repos.compareCommitsWithBasehead({
+		owner,
+		repo,
+		basehead: `${pull.head.sha}...${defaultBranch}`,
+	});
+	const behindFiles = behind.data.files ?? [];
+	// The comparison reports at most COMPARE_FILE_LIMIT files and flags no truncation, so a
+	// saturated response cannot be read as "no migration is missing".
+	if (behindFiles.length >= COMPARE_FILE_LIMIT) {
+		return skip(
+			`PR #${number} is behind ${defaultBranch} by ${behindFiles.length}+ files, too many for ` +
+				`GitHub to report in one comparison, so schema compatibility cannot be verified. Update ` +
+				`the branch to preview it.`,
+		);
+	}
+	for (const file of behindFiles) {
+		if (!isSchemaChange(file.filename)) continue;
+		// The comparison says what the default branch changed since the branches diverged; it says
+		// nothing about this branch's tree. A cherry-picked or independently applied migration is
+		// present here under a different commit, so the blob decides, not the ancestry.
+		if (await branchHasBlob(github, owner, repo, pull.head.sha, file)) continue;
+		return skip(
+			`PR #${number} is missing ${defaultBranch}'s \`${file.filename}\`. A preview restores ` +
+				`${defaultBranch}'s schema, so this branch's entities may not match it. Update the ` +
+				`branch to preview it.`,
+		);
 	}
 
 	const maxActive = maxActivePreviews();

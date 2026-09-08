@@ -58,7 +58,8 @@ interface GitHubOptions {
 	files?: { filename: string }[];
 	resolvedPull?: typeof pull;
 	statuses?: Record<number, Status[]>;
-	behindFiles?: { filename: string }[];
+	behindFiles?: { filename: string; sha?: string }[];
+	branchBlobs?: Record<string, string>;
 	defaultStatuses?: Status[];
 }
 
@@ -70,6 +71,7 @@ const makeGitHub = ({
 	resolvedPull = pull,
 	statuses = {},
 	behindFiles = [],
+	branchBlobs = {},
 	defaultStatuses = [],
 }: GitHubOptions = {}): GitHubApi => ({
 	paginate: async <T>(
@@ -91,6 +93,11 @@ const makeGitHub = ({
 				}
 				assert.equal(params.basehead, `main...${resolvedPull.head.sha}`);
 				return Promise.resolve({ data: { files } });
+			},
+			getContent: (params: Record<string, unknown>) => {
+				const sha = branchBlobs[String(params.path)];
+				if (sha === undefined) return Promise.reject(new Error("404"));
+				return Promise.resolve({ data: { sha } });
 			},
 			createDeployment: () =>
 				Promise.resolve({ data: { environment: "preview/pr-7", id: 2, sha: "head-sha" } }),
@@ -716,29 +723,108 @@ void describe("preview teardown reporting", () => {
 });
 
 void describe("preview schema drift", () => {
-	void it("refuses a branch the restored schema would no longer fit", async () => {
+	const migration = {
+		filename: "server/application/src/main/resources/db/changelog/0001_drop.xml",
+		sha: "blob-1",
+	};
+
+	void it("refuses a branch missing one of the default branch's migrations", async () => {
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({ behindFiles: [migration] }),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "false");
+		assert.match(core.outputs.get("reason") ?? "", /0001_drop\.xml/);
+		assert.match(core.outputs.get("reason") ?? "", /Update the branch/);
+		assert.equal(core.outputs.get("announce"), "true");
+	});
+
+	void it("deploys a branch that already carries the migration under another commit", async () => {
+		// A cherry-pick satisfies the schema while its ancestry still reports the file, so the blob
+		// decides. Refusing here would ground a branch whose schema is fine.
 		const core = makeCore();
 		await resolve({
 			github: makeGitHub({
-				behindFiles: [
-					{ filename: "server/application/src/main/resources/db/changelog/0001_drop.xml" },
-				],
+				behindFiles: [migration],
+				branchBlobs: { [migration.filename]: "blob-1" },
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "true");
+	});
+
+	void it("refuses when the branch carries an older revision of that file", async () => {
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [migration],
+				branchBlobs: { [migration.filename]: "an-older-blob" },
 			}),
 			context: makeContext(),
 			core,
 		});
 
 		assert.equal(core.outputs.get("eligible"), "false");
-		// The reason has to name the file and the remedy; the failure it replaces was a container
-		// exiting its healthcheck ten minutes later with nothing on the pull request.
-		assert.match(core.outputs.get("reason") ?? "", /behind main/);
-		assert.match(core.outputs.get("reason") ?? "", /0001_drop\.xml/);
-		assert.match(core.outputs.get("reason") ?? "", /Update the branch/);
-		assert.equal(core.outputs.get("announce"), "true");
+	});
+
+	void it("cannot verify a comparison GitHub truncated, and says so rather than admitting it", async () => {
+		// The response caps at COMPARE_FILE_LIMIT and flags no truncation, so a saturated answer is
+		// not evidence that no migration is missing.
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: Array.from({ length: 300 }, (_, index) => ({
+					filename: `webapp/src/file-${index}.tsx`,
+				})),
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "false");
+		assert.match(core.outputs.get("reason") ?? "", /cannot be verified/);
+	});
+
+	void it("ignores prose under the schema directory", async () => {
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [{ filename: "server/application/src/main/resources/db/README.md" }],
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "true");
+	});
+
+	void it("leaves a live preview alone rather than replacing it with a refusal", async () => {
+		// Head H deploys, a migration then lands on the default branch, and something re-resolves H.
+		// No deployment is needed, so the working preview's comment must survive.
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [migration],
+				deployments: [{ environment: "preview/pr-7", id: 2, sha: pull.head.sha }],
+				statuses: { 2: [{ state: "success" }] },
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "false");
+		// Quiet: the reason is the live deployment, and it posts no comment.
+		assert.equal(core.outputs.get("announce"), "false");
+		assert.match(core.outputs.get("reason") ?? "", /already has a current preview/);
 	});
 
 	void it("deploys a branch that is merely behind on code, which is almost every branch", async () => {
-		// Matching on Java too would refuse a preview after any merge at all.
+		// Matching Java too would refuse a preview after any merge at all.
 		const core = makeCore();
 		await resolve({
 			github: makeGitHub({
