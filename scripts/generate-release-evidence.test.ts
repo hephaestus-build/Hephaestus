@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
@@ -12,6 +12,7 @@ import {
 	planEvidenceImages,
 	planEvidenceSubjects,
 } from "./generate-release-evidence.ts";
+import { asRecord, readJsonFile } from "./lib/json.ts";
 import { planSubjects } from "./scan-main-images.ts";
 import { validateManifest } from "./verify-release-evidence.ts";
 
@@ -141,6 +142,22 @@ await captureSubject(${JSON.stringify(subject)}, ${JSON.stringify(directory)});
 		assert.equal(success.status, 0, success.stderr);
 		assert.equal(await readFile(scanLog, "utf8"), "scan\n");
 		const prefix = path.join(directory, evidenceStem(subject));
+		const readTimings = async () => {
+			const profile = asRecord(await readJsonFile(`${prefix}.timings.json`), "profile");
+			assert.deepEqual(profile.subject, subject);
+			assert.ok(Array.isArray(profile.timings));
+			return profile.timings.map((entry: unknown) => {
+				const timing = asRecord(entry, "timing");
+				assert.equal(typeof timing.durationSeconds, "number");
+				assert.ok(Number.isFinite(timing.durationSeconds));
+				assert.ok(Number(timing.durationSeconds) >= 0);
+				return { tool: timing.tool, success: timing.success };
+			});
+		};
+		assert.deepEqual(await readTimings(), [
+			{ tool: "syft", success: true },
+			{ tool: "trivy", success: true },
+		]);
 		assert.equal(
 			await readFile(`${prefix}.license.json`, "utf8"),
 			await readFile(`${prefix}.trivy.json`, "utf8"),
@@ -150,6 +167,23 @@ await captureSubject(${JSON.stringify(subject)}, ${JSON.stringify(directory)});
 		const failed = invoke("17");
 		assert.notEqual(failed.status, 0);
 		assert.match(failed.stderr, /trivy exited with code 17/);
+		assert.deepEqual(await readTimings(), [
+			{ tool: "syft", success: true },
+			{ tool: "trivy", success: false },
+		]);
+		await writeFile(path.join(directory, "syft"), "#!/bin/sh\nexit 23\n", { mode: 0o755 });
+		const failedInventory = invoke("0");
+		assert.notEqual(failedInventory.status, 0);
+		assert.match(failedInventory.stderr, /syft exited with code 23/);
+		assert.deepEqual(await readTimings(), [{ tool: "syft", success: false }]);
+		assert.equal(await readFile(scanLog, "utf8"), "scan\nscan\n");
+		await writeFile(path.join(directory, "syft"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+		await rm(`${prefix}.timings.json`);
+		await mkdir(`${prefix}.timings.json`);
+		const unavailableProfile = invoke("0");
+		assert.equal(unavailableProfile.status, 0, unavailableProfile.stderr);
+		assert.match(unavailableProfile.stderr, /Could not save advisory timings/);
+		assert.notEqual(invoke("17").status, 0, "Profiling must not mask a scanner failure");
 		await rm(`${prefix}.trivy.json`);
 		await writeFile(path.join(directory, "trivy"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
 		assert.notEqual(invoke("0").status, 0, "A successful scanner without a report must fail");

@@ -493,6 +493,14 @@ the browser E2E suite and the application-server image download that artifact an
 from the same JAR. The unit, architecture and integration suites are the exception: they produce
 nothing that ships, so they compile from source in `Test` and do not wait for packaging.
 
+A default-branch push reuses the packaged reactor when a successful release-candidate merge group
+validated the exact same commit. The source must be this repository's `cicd.yml` run, with successful
+artifact gates, tests, security checks, dual-platform server builds, release preflight and final gate.
+The immutable artifact ID and its SHA-256 digest bind the download to that run. Missing, expired or
+unavailable source evidence falls back to packaging; a corrupt download fails rather than being used.
+Main still runs its own validation and publishes its images, including main-only tags and source maps.
+Release publication still generates fresh vulnerability evidence and signatures.
+
 An image a pull request did not change is not rebuilt either: `Tag unchanged images` verifies the
 digest an earlier run published and re-tags it to this run's head SHA. It is aliased from the
 nearest commit the default branch contains, found by walking up the chain of bases — a layer of a
@@ -518,8 +526,10 @@ reaches no such commit builds every image itself. `detect-changes` resolves that
   every image build in the run.
 - Quality legs run independently; the image matrix in `reusable-docker-build.yml` uses
   `fail-fast: true`.
-- Pull-request runs cancel superseded runs; `release.yml` never cancels. PR and dispatch lanes
-  remain separate because they validate different refs: the PR merge ref and the branch head.
+- Pull-request runs cancel superseded runs; `release.yml` never cancels. The same-repository
+  Version PR shares a concurrency lane with its dispatch, so a racing trigger replaces redundant
+  validation. Either survivor must pass release preflight; the merge queue separately validates
+  the final merge tree. Ordinary PRs, forks, main pushes and merge groups retain separate lanes.
 - A run on `main` that leaves a per-commit record — `codeql.yml`, `semgrep.yml`, `scorecard.yml`,
   `scorecard-ratchet.yml` — is never cancelled, because it is the only run that commit will get and
   its absence is what a later score reads as a gap. Those workflows write
