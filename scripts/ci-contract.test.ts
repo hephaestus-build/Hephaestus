@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, glob, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmod, glob, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
@@ -10,6 +10,7 @@ import { type Document, isMap, isScalar, isSeq, parseDocument, type YAMLMap } fr
 
 import { evaluate as evaluateVulnerabilityPolicy } from "./check-release-vulnerabilities.ts";
 import { versionBranch } from "./dispatch-version-pr-ci.ts";
+import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 import { planRelease, releaseOutputs } from "./plan-release.ts";
@@ -249,7 +250,7 @@ async function runStep(
 	await writeFile(outputFile, "");
 	const run = spawnSync("bash", ["--noprofile", "--norc", "-e", "-c", shell], {
 		encoding: "utf8",
-		env: { ...process.env, ...environment, GITHUB_OUTPUT: outputFile },
+		env: environmentForGitFixture({ ...environment, GITHUB_OUTPUT: outputFile }),
 	});
 	assert.equal(run.error, undefined);
 	const outputs = (await readFile(outputFile, "utf8"))
@@ -1327,7 +1328,7 @@ void describe("CI contract", () => {
 		assert.match(preflight, /max-age-hours: "24"/);
 		assert.match(
 			preflight,
-			/if: \$\{\{ \(github\.event_name == 'workflow_dispatch' && inputs\.release-preflight\) \|\| needs\.detect-changes\.outputs\.version-branch == 'true' \}\}/,
+			/if: \$\{\{ \(github\.event_name == 'workflow_dispatch' && inputs\.release-preflight\) \|\| needs\.detect-changes\.outputs\.release-candidate == 'true' \}\}/,
 		);
 		assert.match(cicd, /^ {6}release-preflight:$/m);
 		assert.match(job(cicd, "all-ci-passed"), /needs: \[[^\]]*Release-preflight\]/);
@@ -1370,23 +1371,73 @@ void describe("CI contract", () => {
 		);
 	});
 
+	void test("merge groups require release evidence when their aggregate tree changes the version", async (context) => {
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const candidateStep = namedStep(
+			workflow,
+			["jobs", "detect-changes"],
+			"Detect the release candidate",
+		);
+		assert.equal(
+			candidateStep.getIn(["env", "MERGE_BASE_SHA"]),
+			`\${{ github.event.merge_group.base_sha }}`,
+		);
+		const directory = await mkdtemp(path.join(tmpdir(), "release-candidate-"));
+		context.after(() => rm(directory, { recursive: true, force: true }));
+		const env = environmentForGitFixture();
+		const git = (...args: string[]) => {
+			const result = spawnSync("git", args, { cwd: directory, env, encoding: "utf8" });
+			assert.equal(result.status, 0, result.stderr);
+			return result.stdout.trim();
+		};
+		await mkdir(path.join(directory, ".changeset"));
+		await writeFile(path.join(directory, ".changeset/config.json"), '{"baseBranch":"main"}');
+		await writeFile(path.join(directory, "package.json"), '{"version":"0.1.0"}');
+		git("init", "-q");
+		git("add", ".");
+		git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "base");
+		const base = git("rev-parse", "HEAD");
+		const output = path.join(directory, "output");
+		const detect = async (sha: string) => {
+			await writeFile(output, "");
+			const result = spawnSync(
+				"bash",
+				["--noprofile", "--norc", "-e", "-c", String(candidateStep.get("run"))],
+				{
+					cwd: directory,
+					encoding: "utf8",
+					env: {
+						...env,
+						HEAD_BRANCH: "gh-readonly-queue/main/pr-1-example",
+						MERGE_BASE_SHA: sha,
+						GITHUB_OUTPUT: output,
+					},
+				},
+			);
+			return { status: result.status, output: await readFile(output, "utf8") };
+		};
+		assert.deepEqual(await detect(base), { status: 0, output: "release-candidate=false\n" });
+		await writeFile(path.join(directory, "package.json"), '{"version":"0.2.0"}');
+		assert.deepEqual(await detect(base), { status: 0, output: "release-candidate=true\n" });
+		assert.notEqual((await detect("0".repeat(40))).status, 0);
+		await writeFile(path.join(directory, "package.json"), "{}");
+		assert.notEqual((await detect(base)).status, 0);
+	});
+
 	void test("fails the CI gate on the Version PR when its release evidence preflight did not", async () => {
-		// #1745's guarantee is that a green Version PR gate means the release will clear its evidence
-		// gate. Two runs reported that gate for #1757's head — the dispatch, where the preflight
-		// succeeded, and a pull_request run, where it skipped — and the ruleset is satisfied by
-		// either, so the guarantee held only for as long as the dispatch was the sole reporter. Every
-		// run on that branch now runs the preflight, and the gate treats a preflight that is anything
-		// other than successful as the missing answer it is.
+		// Every run that can satisfy the gate must require the candidate's own release evidence.
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const detection = ["jobs", "detect-changes"];
 
 		// One home for the branch name: the workflow reads it out of the same `.changeset/config.json`
 		// `versionBranch()` reads, so this runs the workflow's own shell and requires the two to agree
 		// rather than restating either. A base-branch rename moves both or fails here.
-		const detect = runScript(workflow, detection, "Detect the Version PR branch");
+		const detect = runScript(workflow, detection, "Detect the release candidate");
 		const branch = versionBranch(JSON.parse(await readFile(".changeset/config.json", "utf8")));
 		const detected = async (head: string): Promise<string | undefined> =>
-			(await runStep(detect, { HEAD_BRANCH: head })).outputs["version-branch"];
+			(await runStep(detect, { HEAD_BRANCH: head, MERGE_BASE_SHA: "" })).outputs[
+				"release-candidate"
+			];
 		assert.equal(await detected(branch), "true");
 		for (const other of ["main", `${branch}-old`, "changeset-release/release-1.0", "renovate/vite"])
 			assert.equal(await detected(other), "false", `${other} is not the Version PR's branch`);
@@ -1395,11 +1446,11 @@ void describe("CI contract", () => {
 		// every event, and a duplicate-run skip must not take the image builds it needs away.
 		assert.match(
 			String(workflow.getIn(["jobs", "Release-preflight", "if"])),
-			/needs\.detect-changes\.outputs\.version-branch == 'true'/,
+			/needs\.detect-changes\.outputs\.release-candidate == 'true'/,
 		);
 		assert.match(
 			String(workflow.getIn([...detection, "outputs", "should_skip"])),
-			/steps\.version_branch\.outputs\.version-branch != 'true'/,
+			/steps\.release_candidate\.outputs\.release-candidate != 'true'/,
 		);
 
 		// The verdict itself, run rather than read. Its needs are the jobs it judges, so a new one is
@@ -1419,7 +1470,11 @@ void describe("CI contract", () => {
 		// something an expected verdict should have to spell out.
 		const verdict = async (results: Record<string, string>, onVersionBranch: boolean) => {
 			const run = await runStep(
-				render(evaluate, { ...green, ...results }, { "version-branch": String(onVersionBranch) }),
+				render(
+					evaluate,
+					{ ...green, ...results },
+					{ "release-candidate": String(onVersionBranch) },
+				),
 			);
 			return { failed: run.failed, outputs: run.outputs };
 		};
@@ -1447,7 +1502,7 @@ void describe("CI contract", () => {
 		// `linux/amd64` alone and could not, which is what blocked v0.75.1.
 		const architectures = String(workflow.getIn([...detection, "outputs", "single-arch"]));
 		const shape =
-			/^\$\{\{ \(github\.event_name == '(\w+)' \|\| github\.event_name == '(\w+)'\) && steps\.version_branch\.outputs\.version-branch != 'true' }}$/.exec(
+			/^\$\{\{ \(github\.event_name == '(\w+)' \|\| github\.event_name == '(\w+)'\) && steps\.release_candidate\.outputs\.release-candidate != 'true' }}$/.exec(
 				architectures,
 			);
 		assert.ok(shape, `this test cannot evaluate \`${architectures}\``);
@@ -1480,7 +1535,7 @@ void describe("CI contract", () => {
 		const complete = String(workflow.getIn([...detection, "outputs", "all-images"]));
 		assert.match(
 			complete,
-			/^\$\{\{ steps\.alias_base\.outputs\.commit == '' \|\| steps\.version_branch\.outputs\.version-branch == 'true' }}$/,
+			/^\$\{\{ steps\.alias_base\.outputs\.commit == '' \|\| steps\.release_candidate\.outputs\.release-candidate == 'true' }}$/,
 		);
 		// A run builds every image when it resolved no commit to alias from, so which events can
 		// resolve one is read from the resolver's own condition rather than restated here.

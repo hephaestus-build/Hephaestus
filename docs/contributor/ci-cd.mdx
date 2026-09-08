@@ -121,6 +121,14 @@ a stacked layer is approved while it still targets the layer below, because reta
 lower layer merges must not depend on receiving a subsequent event. The `edited` trigger also
 re-evaluates explicit base changes.
 
+A merge group uses a synthetic ref, not the Version PR branch name. If its aggregate tree changes
+`package.json`'s version relative to the group's base, it is a release candidate: it builds both
+platforms of every release image and must pass release evidence preflight on that exact tree.
+Missing base/version data fails detection rather than silently skipping release validation.
+
+Cancelled or approval-blocked runs do not suppress the Version PR’s CI dispatch; actual validation
+failures require an explicit rerun.
+
 The Version PR is maintained after CI/CD succeeds for the current tip of `main`; failed or
 overtaken main runs do not update it. It carries checks like any other pull request. Its updates are
 pushed with `GITHUB_TOKEN`, which starts no workflow run, so `version-pr.yml` dispatches CI/CD on the Version
