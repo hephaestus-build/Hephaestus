@@ -12,6 +12,10 @@ assert.ok(Array.isArray(config.extends));
 assert.ok(config.extends.every((entry) => typeof entry === "string"));
 const extensions = config.extends;
 
+void test("dependency updates normalize optional peer snapshots with the pinned pnpm", () => {
+	assert.deepEqual(config.postUpdateOptions, ["pnpmDedupe"]);
+});
+
 /**
  * Datasources whose versions are release tags, which upstreams prefix with `v` while the pins here
  * are bare. Unless a manager strips the prefix, the version Renovate resolves for a pin is the tag
