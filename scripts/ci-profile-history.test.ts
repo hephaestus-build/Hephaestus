@@ -56,7 +56,7 @@ void test("history skips this rerun, foreign sources and incomplete profiles acr
 	);
 });
 
-void test("a budget-failed run's completed profile remains usable", () => {
+void test("a completed profile remains usable when another diagnostic job failed", () => {
 	assert.equal(selectHistory([[{ ...run(9), conclusion: "failure" }]], { 9: [history] }), "9");
 });
 

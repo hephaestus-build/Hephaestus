@@ -109,14 +109,14 @@ jobs:
           server/application/target/surefire-reports ci-metrics/server-integration-profile.json
           ci-metrics/server-integration.log ci-metrics/server-integration-resource.txt
 
-      - name: Enforce performance budgets
+      - name: Report performance budgets
         if: success() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         run: |
           # Do not compare a rerun against its own previous attempt.
           rm -f "ci-profile-history/${{ github.run_id }}.json"
           node scripts/check-ci-performance.ts ci-metrics/server-integration-profile.json ci-profile-history
 
-      # Keep budget failures in history so sustained regressions remain detectable.
+      # Retain valid out-of-budget samples so sustained regressions remain detectable.
       - name: Record completed profile
         id: record
         if: ${{ !cancelled() && steps.profile.outcome == 'success' && steps.recording.outcome == 'success' && steps.summary.outcome == 'success' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
@@ -210,7 +210,7 @@ jobs:
 
   pr-latency:
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-    name: Pull-request latency budget
+    name: Pull-request latency report
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

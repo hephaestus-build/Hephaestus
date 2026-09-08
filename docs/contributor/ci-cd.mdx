@@ -369,7 +369,7 @@ why the label is the authority, and which alternatives were priced and declined,
 | `semgrep.yml` | Pull request, push to main, merge group | Tests and scans the repository's own TLS rule pack |
 | `rescan-main-images.yml` | Weekly, manual | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings |
 | `rescan-release-images.yml` | Weekly, manual | Rescans the latest published release's images and reports drift on the vulnerability response issue |
-| `ci-profile.yml` | Weekly, manual | Enforces PR latency budgets and profiles server integration tests and Spring contexts |
+| `ci-profile.yml` | Weekly, manual | Reports advisory performance budgets and profiles server test tiers |
 | `ci-server-clean-reference.yml` | Weekly, manual | Records cold server phases and compares generated JARs |
 | `scorecard-ratchet.yml` | Push to main, branch-protection change, weekly, manual | Fails when a Scorecard check drops below the committed baseline; a push fails only for the checks its own commit decides |
 | `deploy-preview.yml` | `preview` label added, or a push, reopen or ready-for-review on a labelled PR | Waits for this commit's attested CI images, deploys them, and registers the native GitHub deployment |
@@ -533,8 +533,18 @@ creation to completion of **CI Status Gate**. On the default branch, `CI profile
 first-attempt PR runs with full server and browser verification from the latest 100 completed PR
 runs created in the last 28 days. Lightweight changes and Version-PR runs cannot satisfy this
 cohort. Failed and cancelled counts describe the bounded listing, not a repository-wide failure
-rate. Fewer than ten qualifying runs fails as insufficient evidence; budget failures also retain
-the JSON report.
+rate. Budget misses produce warnings and a job summary, not workflow failures. Fewer than ten
+qualifying runs produces an insufficient-data notice, not a pass or a regression. All observations
+retain the JSON report. Historical latency includes runner waiting and earlier commits, so it is
+not a correctness verdict on the profiled commit.
+
+Performance observations are advisory in this diagnostic workflow; test failures, unreadable
+recordings, invalid metrics, and reporting/API errors still fail it. Do not use `continue-on-error`
+to hide those failures. Investigate sustained warnings using the retained run timelines and profiles.
+A blocking performance gate would need a comparable workload and runner environment, an established
+noise model, and an attributable regression—not a historical fleet-wide target miss. This separation
+follows [SRE guidance on actionable, low-noise monitoring](https://sre.google/sre-book/monitoring-distributed-systems/)
+and uses native [GitHub warnings and job summaries](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands).
 
 Reproduce the observer with an authenticated GitHub CLI:
 
@@ -570,14 +580,14 @@ Deep profiling stays in the manual/weekly workflow, not on the PR critical path.
 runners at once. Each tier retains its JFR recording, Maven phase report, resource usage and JUnit
 results for 14 days. Verification profiles are diagnostic artifacts, not integration-history samples.
 
-The integration profile additionally records Spring context-cache metrics. It signals
+The integration profile additionally records Spring context-cache metrics. It warns about
 a sustained regression after three consecutive profiles exceed variance limits against five earlier
 default-branch profiles or absolute Spring-context limits. Only successful test runs with a readable
-JFR recording and valid summaries enter history, including runs whose performance budget fails.
+JFR recording and valid summaries enter history, including out-of-budget samples.
 History is restored from this repository's default-branch JFR history artifacts, retained for
 90 days; a rerun replaces its own sample. Uninstrumented runs are not baseline candidates. Without seven earlier
 profiles, the sustained-regression check has no verdict. Branch dispatches produce diagnostic
-artifacts without changing or enforcing the baseline.
+artifacts without changing or comparing against the baseline.
 
 The workflow's `Run integration suite with JFR` step owns the invocation. Additional test-JVM flags
 use `-Dhephaestus.test.jvmArgs=...`; Surefire and Failsafe compose these with JaCoCo's late-bound
