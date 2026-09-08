@@ -123,8 +123,9 @@ select it are in [CI/CD § Path filters](./ci-cd.mdx#path-filters).
 No release exists until every image in `security/release-images.json` passes the evidence gate, and
 it stays a draft until the later gates pass. For each image the gate resolves the index and its
 `linux/amd64` and `linux/arm64` manifests to digests, reads each platform manifest from the registry,
-and generates a Syft inventory plus SPDX and CycloneDX SBOMs, a Trivy vulnerability scan and a Trivy
-license report. `scripts/verify-release-evidence.ts` checks that every document is bound to that
+and generates a Syft inventory plus SPDX and CycloneDX SBOMs. One native Trivy `vuln,license` scan
+supplies both the vulnerability and license report paths, avoiding duplicate image analysis while
+keeping both evidence consumers bound to the same subject. `scripts/verify-release-evidence.ts` checks that every document is bound to that
 platform's repository, digest and architecture and that every package survives both format
 conversions; then the SPDX predicate is attached as a Cosign attestation and the image signature and
 build provenance are verified. SBOMs, reports, the policy, checksums and `manifest.json` are release
