@@ -27,11 +27,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Owns the access-token cookie lifecycle: logout, refresh, and the low-level
- * set/clear of the {@code __Host-} cookie. Keeps the cookie/JWT mechanics in one place so
- * {@code AuthLifecycleController} stays thin (≤5 deps).
- */
+/** Owns session rotation, revocation, and access-token cookies. */
 @ConditionalOnServerRole
 @Service
 @WorkspaceAgnostic("Session lifecycle is account-scoped, not workspace-scoped")
@@ -84,9 +80,12 @@ public class AuthSessionService {
      */
     private static final Duration IMPERSONATION_EXIT_SKEW = Duration.ofSeconds(60);
 
-    /** Rotate: revoke the presenting token, mint a fresh one (preserving impersonation), set cookie. */
+    /**
+     * Rotates the session, returning false when the presenting session must end. A lost rotation race
+     * leaves the response untouched because another request may already have renewed the session.
+     */
     @Transactional
-    public void refresh(
+    public boolean refresh(
             Long accountId,
             UUID jti,
             TokenConstraints context,
@@ -95,37 +94,25 @@ public class AuthSessionService {
         Long impersonatorId = context.impersonatorId();
         Instant impersonationExpiresAt = context.impersonationExpiresAt();
         Instant sessionExpiresAt = context.sessionExpiresAt();
-        // Time the full rotation critical section (revoke + status-gate + re-mint), including the
-        // early-return races — those are the cheap paths and keep the timer's count == refresh calls.
         Timer.Sample sample = metrics.startRefreshTimer();
         try {
-            // Atomically revoke the presenting token. The conditional UPDATE (revokedAt IS NULL) affects
-            // 0 rows when a concurrent refresh/logout already rotated this jti — in that race we must NOT
-            // mint a fresh token (it would resurrect a session the other request meant to end). No-op and
-            // clear the cookie so the client re-authenticates.
+            // Only the request that revokes this token may replace it. A losing response must not
+            // write a cookie, which could overwrite the winning request's new session.
             int revoked = issuedJwtRepository.revoke(jti, clock.instant(), IssuedJwt.RevokedReason.ROTATE);
             if (revoked == 0) {
                 metrics.recordRefreshResult(AuthMetrics.RefreshResult.NOOP);
-                clearCookie(response);
-                return;
+                return true;
             }
-            // Account-status gate (ADR 0017). A SUSPENDED / DELETING / DELETED account must not be able to
-            // rotate its session into a fresh JWT — that would keep a suspended/deleting principal alive
-            // indefinitely. The presenting token is already revoked above; we simply do NOT re-mint, clear
-            // the cookie, and end the session. (forAccountId would also reject as defense-in-depth.)
             Account account = accountRepository.findById(accountId).orElse(null);
             if (account == null || account.getStatus() != Account.Status.ACTIVE) {
                 metrics.recordRefreshResult(AuthMetrics.RefreshResult.SUSPENDED);
                 clearCookie(response);
-                return;
+                return false;
             }
-            // The absolute session ceiling is the one deadline a rolling refresh must not be able to
-            // step over, so it is enforced here rather than only re-stamped onto the new token. A token
-            // that carries no ceiling at all predates the ceiling and is ended rather than renewed.
             if (sessionExpiresAt == null || !clock.instant().isBefore(sessionExpiresAt)) {
                 metrics.recordRefreshResult(AuthMetrics.RefreshResult.NOOP);
                 clearCookie(response);
-                return;
+                return false;
             }
             // An impersonation is only ever as legitimate as the operator behind it. Suspending or
             // demoting an operator revokes their own sessions, but the impersonation token's subject is
@@ -133,12 +120,10 @@ public class AuthSessionService {
             if (impersonatorId != null && !isActiveInstanceAdmin(impersonatorId)) {
                 metrics.recordRefreshResult(AuthMetrics.RefreshResult.SUSPENDED);
                 clearCookie(response);
-                return;
+                return false;
             }
             HephaestusJwtIssuer.Token token;
             if (impersonatorId == null) {
-                // Ordinary (non-impersonation) rotation — carry the absolute session ceiling forward so
-                // the rotated token is re-capped at it (OWASP absolute timeout; impersonation uses imp_exp).
                 token = jwtIssuer.issue(
                         principalFactory.forAccountId(accountId),
                         TokenConstraints.session(sessionExpiresAt, context.authTime()),
@@ -148,10 +133,7 @@ public class AuthSessionService {
                         .account(accountId)
                         .record();
             } else if (impersonationExpired(impersonationExpiresAt) || isAppAdmin(account)) {
-                // Impersonation time-box reached: auto-exit to the operator (mint an operator token
-                // with NO act claim) rather than renewing the impersonation forever via silent refresh.
-                // A target promoted to APP_ADMIN mid-session exits the same way: begin refuses
-                // admin-to-admin impersonation, and a rotation must not be a way around that refusal.
+                // Starting impersonation forbids admin targets; promotion must also end an existing one.
                 String exitReason = isAppAdmin(account) ? "TARGET_PROMOTED" : "EXPIRED";
                 token = jwtIssuer.issue(
                         principalFactory.forAccountId(impersonatorId),
@@ -165,8 +147,6 @@ public class AuthSessionService {
                         .record();
                 metrics.recordImpersonationAutoExit(exitReason.toLowerCase(Locale.ROOT));
             } else {
-                // Impersonation rotation: re-cap the new token at the same imp_exp ceiling, and carry the
-                // operator's session ceiling so impersonating cannot outlive the session that began it.
                 token = jwtIssuer.issue(
                         principalFactory.forAccountId(accountId),
                         new TokenConstraints(
@@ -180,10 +160,8 @@ public class AuthSessionService {
             }
             setCookie(response, token);
             metrics.recordRefreshResult(AuthMetrics.RefreshResult.SUCCESS);
+            return true;
         } catch (RuntimeException e) {
-            // The presenting token is already revoked at this point; a re-mint / cookie failure ends the
-            // session. Record it so sum(result) == refresh count and an error spike is alertable (the
-            // transaction still rolls back and the exception propagates to the controller advice).
             metrics.recordRefreshResult(AuthMetrics.RefreshResult.ERROR);
             throw e;
         } finally {
@@ -203,11 +181,6 @@ public class AuthSessionService {
         response.addCookie(cookie);
     }
 
-    /**
-     * Whether an impersonation session has reached — or is within {@link #IMPERSONATION_EXIT_SKEW} of —
-     * its absolute time-box. A missing ceiling is treated as expired (fail-safe: a legacy impersonation
-     * token without {@code imp_exp} auto-exits on its next refresh rather than living forever).
-     */
     private boolean impersonationExpired(@Nullable Instant impersonationExpiresAt) {
         return impersonationExpiresAt == null
                 || !clock.instant().plus(IMPERSONATION_EXIT_SKEW).isBefore(impersonationExpiresAt);
@@ -227,11 +200,7 @@ public class AuthSessionService {
         return issuedJwtRepository.findActiveByAccountId(accountId, clock.instant());
     }
 
-    /**
-     * Revoke a single session, only if it belongs to {@code accountId}. Atomic ownership-scoped UPDATE
-     * (no findById-then-revoke TOCTOU): a row not owned by {@code accountId}, missing, or already
-     * revoked simply affects 0 rows. The {@code accountId} predicate is the access control.
-     */
+    /** Revokes only sessions owned by {@code accountId}; ownership is checked in the update. */
     @Transactional
     public void revokeSession(Long accountId, UUID jti) {
         issuedJwtRepository.revokeOwned(jti, accountId, clock.instant(), RevokedReason.SELF_REVOKE);
@@ -240,8 +209,6 @@ public class AuthSessionService {
     /** Sign out everywhere except the presenting session. */
     @Transactional
     public void revokeAllExcept(Long accountId, UUID currentJti) {
-        // The negative-cache decoder re-checks every ACTIVE token against the DB, so the bulk revoke
-        // takes effect on all pods within DB visibility lag — no per-jti cache eviction needed.
         issuedJwtRepository.revokeAllForAccountExcept(
                 accountId, currentJti, clock.instant(), RevokedReason.SIGN_OUT_EVERYWHERE);
     }

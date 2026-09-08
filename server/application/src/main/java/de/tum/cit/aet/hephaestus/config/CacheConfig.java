@@ -33,16 +33,7 @@ public class CacheConfig {
     /** TTL for mentor context caches. Short enough to be invisible per-turn, long enough to be warm across consecutive turns. */
     private static final Duration MENTOR_CONTEXT_TTL = Duration.ofMinutes(5);
 
-    /**
-     * TTL for the JWT revocation NEGATIVE cache. Only REVOKED verdicts are cached (see
-     * {@code RevocationAwareJwtDecoder}), so this is not a staleness window — a cached REVOKED entry
-     * can never be wrong (revocation is monotonic). It only bounds how long a revocation is remembered
-     * locally to shed token-replay load; sized to the DEFAULT access-token lifetime
-     * ({@code AuthProperties.accessTtl} default "15m"). This is a static load-shedding hint, not a
-     * tracked invariant: if an operator raises accessTtl above 15m, a revoked token presented after
-     * this window simply forces a fresh DB re-read (still correct — the negative cache is only ever
-     * more permissive in forgetting, never in admitting).
-     */
+    /** Bounds revoked-token replay load; expiry triggers a fresh database check, not acceptance. */
     private static final Duration AUTH_JWT_REVOKED_TTL = Duration.ofMinutes(15);
 
     /** Max entries for the long-lived caches. */

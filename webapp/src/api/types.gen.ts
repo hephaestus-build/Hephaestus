@@ -7432,12 +7432,21 @@ export type RefreshData = {
   url: '/auth/refresh';
 };
 
+export type RefreshErrors = {
+  /**
+   * Session has ended
+   */
+  401: unknown;
+};
+
 export type RefreshResponses = {
   /**
-   * OK
+   * Session renewal completed
    */
-  200: unknown;
+  204: void;
 };
+
+export type RefreshResponse = RefreshResponses[keyof RefreshResponses];
 
 export type ListGlobalContributorsData = {
   body?: never;

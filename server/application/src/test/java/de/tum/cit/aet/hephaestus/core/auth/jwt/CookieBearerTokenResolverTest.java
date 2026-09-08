@@ -25,6 +25,17 @@ class CookieBearerTokenResolverTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldIgnoreCredentialsOnlyOnPublicDiscoveryGet() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/identity-providers");
+        request.setCookies(new Cookie(COOKIE_NAME, COOKIE_TOKEN));
+        request.addHeader("Authorization", "Bearer " + HEADER_TOKEN);
+        assertThat(resolver.resolve(request)).isNull();
+
+        request.setMethod("POST");
+        assertThat(resolver.resolve(request)).isEqualTo(COOKIE_TOKEN);
+    }
+
+    @Test
     void resolve_cookieAndHeader_returnsCookieToken() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setCookies(new Cookie(COOKIE_NAME, COOKIE_TOKEN));

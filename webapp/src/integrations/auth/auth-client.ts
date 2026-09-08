@@ -1,39 +1,9 @@
+import { logout } from "@/api/sdk.gen";
 import type { CurrentUserView } from "@/api/types.gen";
 import environment from "@/environment";
 import { safeReturnTo } from "@/integrations/auth/guard";
+import { withSessionLock } from "./session-lock";
 
-/**
- * Cookie-session auth client (ADR 0017).
- *
- * The browser holds a `__Host-HEPHAESTUS_AT` HttpOnly cookie minted by the server
- * after the OAuth login dance — the SPA never sees a token. Identity is read from
- * `GET /user`; login/link are top-level redirects to the server's `/auth/login`
- * kickoff; logout is a CSRF-protected POST.
- */
-
-/**
- * Shape returned by the server's `GET /user`. The generated `CurrentUserView` types
- * every field as optional; here we require the handful the client always relies on and
- * keep the rest optional so callers don't need to null-check the universe.
- */
-export type CurrentUser = Required<
-	Pick<CurrentUserView, "id" | "displayName" | "appRole" | "status">
-> &
-	Pick<
-		CurrentUserView,
-		| "primaryEmail"
-		| "impersonating"
-		| "impersonatorId"
-		| "username"
-		| "avatarUrl"
-		| "profileUrl"
-		| "identityProvider"
-		| "gitProviderId"
-		| "hasGitLabIdentity"
-		| "roles"
-	>;
-
-/** Profile shape consumed by `useAuth().userProfile`. */
 export interface UserProfile {
 	id: string;
 	username: string;
@@ -45,34 +15,21 @@ export interface UserProfile {
 	githubId?: string;
 	gitlabId?: string;
 	identityProvider?: string;
-	/** SCM instances this account has an active identity on (for instance-scoped gating). */
 	linkedProviders: Array<{ type: string; serverUrl?: string }>;
 }
 
 const serverUrl = () => environment.serverUrl.replace(/\/$/, "");
 
-/** Read a cookie value by name (used for the CSRF double-submit token). */
 function readCookie(name: string): string | undefined {
 	const value = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))?.[1];
 	return value === undefined ? undefined : decodeURIComponent(value);
 }
 
-/** The CSRF header/cookie pair Spring Security's CookieCsrfTokenRepository expects. */
 export function csrfHeaders(): Record<string, string> {
-	// The double-submit cookie carries the __Host- prefix (host-only + Secure) so a sibling subdomain
-	// cannot toss a forged token onto this host; the echoed header name stays X-XSRF-TOKEN. The cookie
-	// name is configurable (environment.xsrfCookieName) because local http E2E drops the __Host- prefix.
 	const token = readCookie(environment.xsrfCookieName);
 	return token ? { "X-XSRF-TOKEN": token } : {};
 }
 
-/**
- * Mutate a state-changing request so it carries the CSRF double-submit header — and, when an operator
- * has explicitly enabled impersonation write-mode, the `X-Impersonation-Allow-Writes` header. Safe
- * methods (GET/HEAD/OPTIONS) get neither. This is the single CSRF guard applied to EVERY generated
- * mutation; `writesEnabled` is injected (not read from the store) so the guard is a pure, unit-testable
- * seam — see `main.tsx` for the wiring.
- */
 export function applyStateChangingHeaders(request: Request, writesEnabled: boolean): Request {
 	const method = request.method.toUpperCase();
 	if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
@@ -87,14 +44,6 @@ export function applyStateChangingHeaders(request: Request, writesEnabled: boole
 }
 
 export const authClient = {
-	/**
-	 * Begin the OAuth login flow against the given provider (default: github).
-	 *
-	 * `returnTo` is the validated destination to land on after the dance completes; it is
-	 * sanitised with the shared `safeReturnTo` open-redirect guard before being handed
-	 * to the server (which echoes it back into the SPA callback). Callers must pass the
-	 * intended destination — defaulting to the current page would send users back to /login.
-	 */
 	login(idpHint?: string, returnTo?: string): void {
 		const provider = idpHint && idpHint.length > 0 ? idpHint : "github";
 		const url = new URL(`${serverUrl()}/auth/login`);
@@ -103,11 +52,6 @@ export const authClient = {
 		window.location.assign(url.toString());
 	},
 
-	/**
-	 * Begin a link flow — attaches a new identity to the currently authenticated account.
-	 *
-	 * `returnTo` is sanitised with the shared `safeReturnTo` guard, same as `login`.
-	 */
 	linkAccount(providerAlias: string, returnTo?: string): void {
 		const url = new URL(`${serverUrl()}/auth/login`);
 		url.searchParams.set("provider", providerAlias);
@@ -116,15 +60,8 @@ export const authClient = {
 		window.location.assign(url.toString());
 	},
 
-	/**
-	 * Passwordless dev/test sign-in (server endpoint gated by {@code hephaestus.auth.dev-login-enabled},
-	 * fail-closed in prod). Mints the same cookie session as the OAuth flow for a local account, then
-	 * lands on the sanitised `returnTo`. Only reachable when the discovery list advertises the `dev`
-	 * provider, so this is a no-op surface in production. Like `logout`, it ends in a full page load
-	 * rather than a render, which is why it is a direct request instead of a generated mutation.
-	 */
 	async devLogin(username: string, admin: boolean, returnTo?: string): Promise<void> {
-		// oxlint-disable-next-line no-restricted-globals -- `/auth/dev-login` is absent from `openapi.yaml`, so no generated operation exists, and the call ends in a full page load that discards the cache anyway.
+		// oxlint-disable-next-line no-restricted-globals -- The development-only endpoint has no generated SDK operation.
 		const response = await fetch(`${serverUrl()}/auth/dev-login`, {
 			method: "POST",
 			credentials: "include",
@@ -137,33 +74,17 @@ export const authClient = {
 		window.location.assign(safeReturnTo(returnTo));
 	},
 
-	/**
-	 * Revoke the session server-side, then return home.
-	 *
-	 * The `finally` is the contract: a failed revocation must still land the browser on `/`, because
-	 * leaving someone on an authenticated screen after they asked to sign out is the worse outcome.
-	 */
 	async logout(): Promise<void> {
-		try {
-			// oxlint-disable-next-line no-restricted-globals -- Sign-out tears the SPA down in the `finally` below, leaving no cache to update and no component to render an error; `/auth/*` is exempt from the 401 handler for the same reason.
-			await fetch(`${serverUrl()}/auth/logout`, {
-				method: "POST",
-				credentials: "include",
-				headers: { ...csrfHeaders() },
-			});
-		} finally {
-			window.location.assign("/");
-		}
+		await withSessionLock(async () => {
+			const { response, error } = await logout();
+			if (!response?.ok && response?.status !== 401) {
+				throw new Error("Could not sign out.", { cause: response ?? error });
+			}
+		});
+		window.location.assign("/");
 	},
 };
 
-/**
- * Build the `UserProfile` from the server's `CurrentUserView`.
- *
- * Accepts the raw generated view (every field optional) rather than the narrowed
- * `CurrentUser`, so the TanStack-Query-backed `useAuth()` can feed the query result
- * straight in without an unsafe cast. All reads are null-safe with `??` fallbacks.
- */
 export function toUserProfile(user: CurrentUserView): UserProfile {
 	const name = user.displayName ?? user.username ?? "";
 	const [firstName = "", ...rest] = name.split(" ");
