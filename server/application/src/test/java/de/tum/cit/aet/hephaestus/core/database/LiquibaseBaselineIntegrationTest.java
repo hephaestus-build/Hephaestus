@@ -33,11 +33,14 @@ import org.junit.jupiter.params.provider.ValueSource;
 @Tag("integration")
 class LiquibaseBaselineIntegrationTest {
 
+    // Baseline parity is anchored to the release, not the evolving master changelog.
+    private static final String BASELINE = "db/changelog/0000000000000_baseline_v0_77_4.xml";
+
     @ParameterizedTest
     @ValueSource(strings = {"dev", "prod"})
     void shouldInitializeRequiredDataAndPartitionMaintenanceWhenDatabaseIsEmpty(String context) throws Exception {
         TestDatabase database = emptyDatabase();
-        update(database, "db/master.xml", context);
+        update(database, BASELINE, context);
 
         assertThat(query(database, "SELECT count(*)::text FROM account UNION ALL SELECT count(*)::text FROM workspace"))
                 .containsExactly("0", "0");
@@ -77,7 +80,7 @@ class LiquibaseBaselineIntegrationTest {
         List<String> history =
                 query(database, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted");
         assertThat(history).hasSize(context.equals("prod") ? 4 : 3);
-        update(database, "db/master.xml", context);
+        update(database, BASELINE, context);
         assertThat(query(database, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted"))
                 .isEqualTo(history);
     }
@@ -87,7 +90,7 @@ class LiquibaseBaselineIntegrationTest {
         TestDatabase database = emptyDatabase();
         execute(database, "CREATE TABLE workspace (id bigint PRIMARY KEY)");
 
-        assertThatThrownBy(() -> update(database, "db/master.xml", "prod"))
+        assertThatThrownBy(() -> update(database, BASELINE, "prod"))
                 .isInstanceOf(LiquibaseException.class)
                 .hasStackTraceContaining(
                         "Existing databases must complete the baseline synchronization runbook before deployment.");
@@ -103,19 +106,19 @@ class LiquibaseBaselineIntegrationTest {
     @Test
     void shouldRecoverStaleLockAndAllowSubsequentUpdate() throws Exception {
         TestDatabase database = emptyDatabase();
-        update(database, "db/master.xml", "prod");
+        update(database, BASELINE, "prod");
         execute(database, """
                 UPDATE databasechangeloglock
                 SET locked = true, lockgranted = now(), lockedby = 'simulated-stale-host' WHERE id = 1
                 """);
 
-        try (Liquibase liquibase = liquibase(database, "db/master.xml")) {
+        try (Liquibase liquibase = liquibase(database, BASELINE)) {
             liquibase.forceReleaseLocks();
         }
 
         assertThat(query(database, "SELECT locked::text FROM databasechangeloglock WHERE id = 1"))
                 .containsExactly("false");
-        update(database, "db/master.xml", "prod");
+        update(database, BASELINE, "prod");
     }
 
     @Tag("slow")
@@ -125,7 +128,7 @@ class LiquibaseBaselineIntegrationTest {
         TestDatabase archived = emptyDatabase();
         TestDatabase baseline = emptyDatabase();
         update(archived, "db/archive-master.xml", context);
-        update(baseline, "db/master.xml", context);
+        update(baseline, BASELINE, context);
 
         DiffResult diff = Objects.requireNonNull(new CommandScope(DiffCommandStep.COMMAND_NAME)
                 .addArgumentValue(
@@ -194,10 +197,10 @@ class LiquibaseBaselineIntegrationTest {
                 """);
         List<String> oldHistory =
                 query(archived, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted");
-        try (Liquibase liquibase = liquibase(archived, "db/master.xml")) {
+        try (Liquibase liquibase = liquibase(archived, BASELINE)) {
             liquibase.changeLogSync("baseline_v0_77_4", new Contexts(context), new LabelExpression());
         }
-        update(archived, "db/master.xml", context);
+        update(archived, BASELINE, context);
         List<String> syncedHistory =
                 query(archived, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted");
         assertThat(syncedHistory).startsWith(oldHistory.toArray(String[]::new));
@@ -206,7 +209,7 @@ class LiquibaseBaselineIntegrationTest {
                         archived,
                         "SELECT silent_mode_engaged::text || ':' || silent_mode_reason FROM instance_settings"))
                 .containsExactly("false:preserve operator choice");
-        update(archived, "db/master.xml", context);
+        update(archived, BASELINE, context);
         assertThat(query(archived, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted"))
                 .isEqualTo(syncedHistory);
     }

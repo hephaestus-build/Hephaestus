@@ -29,7 +29,6 @@ interface ProfileProps {
 	before?: string;
 	onTimeframeChange?: (afterDate: string, beforeDate?: string) => void;
 	schedule?: LeaderboardSchedule;
-	achievementsEnabled?: boolean;
 	progressionEnabled?: boolean;
 	leaguesEnabled?: boolean;
 	practiceGroupStandings?: ReactNode;
@@ -54,7 +53,6 @@ export function ProfilePage({
 	before,
 	onTimeframeChange,
 	schedule,
-	achievementsEnabled = true,
 	progressionEnabled = true,
 	leaguesEnabled = true,
 	practiceGroupStandings,
@@ -76,8 +74,6 @@ export function ProfilePage({
 				leaguePoints={profileData?.userInfo.leaguePoints}
 				userXpRecord={profileData?.xpRecord}
 				isLoading={isLoading}
-				workspaceSlug={workspaceSlug}
-				achievementsEnabled={achievementsEnabled}
 				progressionEnabled={progressionEnabled}
 				leaguesEnabled={leaguesEnabled}
 			/>

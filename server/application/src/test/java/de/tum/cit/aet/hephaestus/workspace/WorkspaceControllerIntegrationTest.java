@@ -952,11 +952,57 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(dto).isNotNull();
         assertThat(dto.practicesEnabled()).isFalse();
-        assertThat(dto.achievementsEnabled()).isFalse();
         assertThat(dto.leaderboardEnabled()).isFalse();
         assertThat(dto.progressionEnabled()).isFalse();
         assertThat(dto.practiceReviewAutoTriggerEnabled()).isTrue();
         assertThat(dto.practiceReviewManualTriggerEnabled()).isTrue();
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldOmitRetiredAchievementsWhenReadingWorkspace() {
+        User owner = persistUser("retired-features-owner");
+        Workspace workspace =
+                createWorkspace("retired-features", "Retired features", "retired-features", AccountType.ORG, owner);
+        ensureAdminMembership(workspace);
+
+        webTestClient
+                .get()
+                .uri("/workspaces/{workspaceSlug}", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.achievementsEnabled")
+                .doesNotExist()
+                .jsonPath("$.leaderboardEnabled")
+                .isEqualTo(false);
+
+        for (String suffix : List.of("", "/definitions")) {
+            webTestClient
+                    .get()
+                    .uri(
+                            "/workspaces/{workspaceSlug}/users/{login}/achievements" + suffix,
+                            workspace.getWorkspaceSlug(),
+                            owner.getLogin())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isNotFound();
+        }
+        for (String suffix : List.of("/recalculate", "/reload")) {
+            webTestClient
+                    .post()
+                    .uri(
+                            "/workspaces/{workspaceSlug}/users/{login}/achievements" + suffix,
+                            workspace.getWorkspaceSlug(),
+                            owner.getLogin())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isNotFound();
+        }
     }
 
     @Test
@@ -972,7 +1018,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .uri("/workspaces/{workspaceSlug}/features", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(true, null, true, true, true, true, null, null))
+                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(true, null, true, true, true, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -982,7 +1028,6 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(patchResponse).isNotNull();
         assertThat(patchResponse.practicesEnabled()).isTrue();
-        assertThat(patchResponse.achievementsEnabled()).isTrue();
         assertThat(patchResponse.leaderboardEnabled()).isTrue();
         assertThat(patchResponse.progressionEnabled()).isTrue();
 
@@ -1000,7 +1045,6 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(getResponse).isNotNull();
         assertThat(getResponse.practicesEnabled()).isTrue();
-        assertThat(getResponse.achievementsEnabled()).isTrue();
         assertThat(getResponse.leaderboardEnabled()).isTrue();
         assertThat(getResponse.progressionEnabled()).isTrue();
     }
@@ -1018,7 +1062,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .uri("/workspaces/{workspaceSlug}/features", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(null, null, null, true, null, null, null, null))
+                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(null, null, true, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -1029,7 +1073,6 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
         assertThat(afterFirst).isNotNull();
         assertThat(afterFirst.leaderboardEnabled()).isTrue();
         assertThat(afterFirst.practicesEnabled()).isFalse();
-        assertThat(afterFirst.achievementsEnabled()).isFalse();
         assertThat(afterFirst.progressionEnabled()).isFalse();
 
         // Now enable practices — leaderboard should remain true
@@ -1038,7 +1081,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .uri("/workspaces/{workspaceSlug}/features", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(true, null, null, null, null, null, null, null))
+                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(true, null, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -1049,7 +1092,6 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
         assertThat(afterSecond).isNotNull();
         assertThat(afterSecond.practicesEnabled()).isTrue();
         assertThat(afterSecond.leaderboardEnabled()).isTrue();
-        assertThat(afterSecond.achievementsEnabled()).isFalse();
         assertThat(afterSecond.progressionEnabled()).isFalse();
     }
 
@@ -1066,18 +1108,18 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .uri("/workspaces/{workspaceSlug}/features", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(true, null, true, true, true, true, null, null))
+                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(true, null, true, true, true, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk();
 
-        // Explicitly disable achievements — others should remain true
+        // Explicitly disable progression — others should remain true
         WorkspaceDTO afterDisable = webTestClient
                 .patch()
                 .uri("/workspaces/{workspaceSlug}/features", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(null, null, false, null, null, null, null, null))
+                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(null, null, null, false, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -1087,9 +1129,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(afterDisable).isNotNull();
         assertThat(afterDisable.practicesEnabled()).isTrue();
-        assertThat(afterDisable.achievementsEnabled()).isFalse();
         assertThat(afterDisable.leaderboardEnabled()).isTrue();
-        assertThat(afterDisable.progressionEnabled()).isTrue();
+        assertThat(afterDisable.progressionEnabled()).isFalse();
     }
 
     @Test
@@ -1106,7 +1147,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .uri("/workspaces/{workspaceSlug}/features", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(null, null, null, null, null, null, false, null))
+                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(null, null, null, null, null, false, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -1124,7 +1165,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .uri("/workspaces/{workspaceSlug}/features", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(null, null, null, null, null, null, true, false))
+                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(null, null, null, null, null, true, false))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -1168,7 +1209,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .uri("/workspaces/{workspaceSlug}/features", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(true, null, true, true, true, true, null, null))
+                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(true, null, true, true, true, null, null))
                 .exchange()
                 .expectStatus()
                 .isForbidden();
@@ -1187,7 +1228,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .uri("/workspaces/{workspaceSlug}/features", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(true, null, false, true, false, false, null, null))
+                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(true, null, true, false, false, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk();
@@ -1211,7 +1252,6 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .orElseThrow();
 
         assertThat(item.practicesEnabled()).isTrue();
-        assertThat(item.achievementsEnabled()).isFalse();
         assertThat(item.leaderboardEnabled()).isTrue();
         assertThat(item.progressionEnabled()).isFalse();
     }

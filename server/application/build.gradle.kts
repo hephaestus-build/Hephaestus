@@ -58,7 +58,6 @@ dependencies {
     testImplementation(libs.testcontainers.postgresql)
     testImplementation(libs.testcontainers)
     testImplementation(libs.assertj.core)
-    implementation(libs.jackson.dataformat.yaml)
     testImplementation(libs.archunit.junit5)
     implementation(libs.therapi.runtime.javadoc)
     implementation(libs.jnats)

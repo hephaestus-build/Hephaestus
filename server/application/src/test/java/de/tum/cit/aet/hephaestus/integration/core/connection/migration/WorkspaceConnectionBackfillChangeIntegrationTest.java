@@ -263,14 +263,14 @@ class WorkspaceConnectionBackfillChangeIntegrationTest extends BaseIntegrationTe
                 var stmt = conn.prepareStatement(
                         "INSERT INTO workspace (" + "  slug, display_name, status, created_at, updated_at, "
                                 + "  account_type, is_publicly_viewable, "
-                                + "  practices_enabled, mentor_enabled, achievements_enabled, leaderboard_enabled, "
+                                + "  practices_enabled, mentor_enabled, leaderboard_enabled, "
                                 + "  progression_enabled, leagues_enabled, "
                                 + "  practice_review_auto_trigger_enabled, practice_review_manual_trigger_enabled, "
                                 + "  git_provider_mode, account_login, installation_id, personal_access_token, "
                                 + "  gitlab_group_id, server_url"
                                 + ") VALUES (?, ?, ?, NOW(), NOW(), "
                                 + "  'ORG', false, "
-                                + "  false, false, false, false, false, false, true, true, "
+                                + "  false, false, false, false, false, true, true, "
                                 + "  ?, ?, ?, ?, ?, ?) RETURNING id")) {
             String slug = "ws-" + System.nanoTime();
             stmt.setString(1, slug);

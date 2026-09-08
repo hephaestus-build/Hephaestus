@@ -20,15 +20,8 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * Evicts mentor context caches after committed domain events. Surgical point-key eviction
- * (per {@code workspaceId + ":" + userId} or per {@code workspaceId}) so a single CRUD does
- * not amplify into a thundering herd across active users.
- *
- * <p>Every listener is {@link Async} so commit-callback latency does not block the publishing
- * transaction's caller. Matches the {@code ActivityEventListener} / {@code AchievementEventListener}
- * sibling pattern; ALL @Async work runs on the bounded {@code applicationTaskExecutor} configured
- * by {@code SpringAsyncConfig} (core 10 / max 50 / queue 500 / graceful shutdown), so a review-
- * event burst (label-spam, mass-approve) buffers cleanly without unbounded thread growth.
+ * Evicts affected mentor context keys after commit. Async listeners keep cache work off the
+ * publishing transaction's caller.
  */
 @Component
 @RequiredArgsConstructor

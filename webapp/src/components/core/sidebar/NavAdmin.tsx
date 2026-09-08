@@ -7,12 +7,10 @@ import {
 	ClipboardCheck,
 	LayoutGridIcon,
 	ListChecks,
-	Map as MapIcon,
 	PlugZapIcon,
 	ScanEye,
 	ScrollText,
 	Settings2,
-	Trophy,
 	Users,
 	Workflow,
 } from "lucide-react";
@@ -36,7 +34,6 @@ import {
 
 export interface NavAdminProps {
 	workspaceSlug: string;
-	achievementsEnabled: boolean;
 	integrationKinds: ReadonlyArray<IntegrationCatalogEntry["kind"]>;
 	scmProviderType?: "GITHUB" | "GITLAB";
 }
@@ -60,7 +57,6 @@ function useSectionOpen(onSection: boolean) {
 
 export function NavAdmin({
 	workspaceSlug,
-	achievementsEnabled,
 	integrationKinds,
 	scmProviderType = "GITHUB",
 }: NavAdminProps) {
@@ -72,12 +68,6 @@ export function NavAdmin({
 	);
 	const onMembers = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/members", fuzzy: true }));
 	const onTeams = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/teams", fuzzy: true }));
-	const onAchievements = Boolean(
-		matchRoute({ to: "/w/$workspaceSlug/admin/achievements", fuzzy: true }),
-	);
-	const onAchievementDesigner = Boolean(
-		matchRoute({ to: "/w/$workspaceSlug/admin/achievement-designer", fuzzy: true }),
-	);
 	const onReview = Boolean(
 		matchRoute({ to: "/w/$workspaceSlug/admin/practices/review", fuzzy: true }),
 	);
@@ -147,35 +137,6 @@ export function NavAdmin({
 						<span>Teams</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
-				{achievementsEnabled && (
-					<SidebarMenuItem>
-						<SidebarMenuButton
-							tooltip="Achievements"
-							isActive={onAchievements}
-							render={<Link to="/w/$workspaceSlug/admin/achievements" params={{ workspaceSlug }} />}
-						>
-							<Trophy />
-							<span>Achievements</span>
-						</SidebarMenuButton>
-					</SidebarMenuItem>
-				)}
-				{achievementsEnabled && (
-					<SidebarMenuItem>
-						<SidebarMenuButton
-							tooltip="Achievement designer"
-							isActive={onAchievementDesigner}
-							render={
-								<Link
-									to="/w/$workspaceSlug/admin/achievement-designer"
-									params={{ workspaceSlug }}
-								/>
-							}
-						>
-							<MapIcon />
-							<span>Achievement designer</span>
-						</SidebarMenuButton>
-					</SidebarMenuItem>
-				)}
 				<AdminNavSection
 					label="Practices"
 					icon={<ClipboardCheck />}

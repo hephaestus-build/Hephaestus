@@ -98,7 +98,6 @@ testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-jun
 testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql" }
 testcontainers = { module = "org.testcontainers:testcontainers" }
 assertj-core = { module = "org.assertj:assertj-core" }
-jackson-dataformat-yaml = { module = "tools.jackson.dataformat:jackson-dataformat-yaml" }
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 therapi-runtime-javadoc = { module = "com.github.therapi:therapi-runtime-javadoc", version.ref = "therapi" }
 jnats = { module = "io.nats:jnats", version.ref = "jnats" }
