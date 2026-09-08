@@ -156,7 +156,7 @@ findings, scheduled rescans, and exceptions.
 
 ### Nothing may fail for the first time at a release
 
-Pre-merge validation covers the same image subjects and evidence checks as release publication.
+Pre-merge validation covers the same image subjects and shared evidence checks as release publication.
 `scripts/generate-release-evidence.ts` is the one generator and
 `scripts/verify-release-evidence.ts` the one verifier; `release.yml` and the `Release evidence
 preflight` job in `cicd.yml` both run them, and the preflight runs the verifier in its default mode,
