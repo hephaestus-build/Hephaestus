@@ -62,8 +62,9 @@ decision. Release affects every workspace and never flushes suppressed feedback.
    `docker compose --env-file .env --env-file release-lock.env up -d --wait postgres nats-server application-server`.
    Verify migration completion and read back Silent Mode before starting `webhook-server` or enabling
    review execution. Compose health alone does not verify the brake.
-4. **Prove silence.** After readback, enable the intended review/Slack settings and recreate affected
-   containers. Keep restore-clone network isolation; use controlled providers for its drills.
+4. **Prove silence.** After readback, keep Silent Mode engaged. Set `AGENT_ENABLED=true` on the
+   submitting server and claiming worker roles, enable the intended review/Slack settings, and recreate
+   affected containers. Keep restore-clone network isolation; use controlled providers for its drills.
    Run bounded reviews on controlled GitHub/GitLab work and Slack conversations for
    every enabled lane. Inspect observations and `SUPPRESSED` / `INSTANCE_SILENCED` outcomes. Correlate
    provider-side object inventories and egress observations, including retries and edits to existing
