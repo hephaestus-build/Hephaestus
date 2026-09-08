@@ -14,7 +14,6 @@ const meta = {
 	args: {
 		username: "johnDoe",
 		workspaceSlug: "aet",
-		achievementsEnabled: true,
 		leaderboardEnabled: true,
 		practicesEnabled: true,
 	},
@@ -41,7 +40,6 @@ export const DifferentUser: Story = {
 
 export const AllFeaturesDisabled: Story = {
 	args: {
-		achievementsEnabled: false,
 		leaderboardEnabled: false,
 		practicesEnabled: false,
 	},
@@ -49,7 +47,7 @@ export const AllFeaturesDisabled: Story = {
 		// Profile and Teams are not workspace capabilities, so they stay whatever else is off.
 		await expect(await canvas.findByRole("link", { name: "Profile" })).toBeVisible();
 		await expect(canvas.getByRole("link", { name: "Teams" })).toBeVisible();
-		for (const gated of ["Achievements", "Leaderboard", "Review activity"])
+		for (const gated of ["Leaderboard", "Review activity"])
 			await expect(canvas.queryByRole("link", { name: gated })).toBeNull();
 	},
 };

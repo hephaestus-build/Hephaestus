@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
@@ -35,7 +36,7 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
         var request = new CreateWorkspaceLlmConnectionRequestDTO(
                 slug,
                 "My Provider",
-                "https://api.openai.com",
+                LlmCatalogTestFixtures.PUBLIC_BASE_URL,
                 "openai-completions",
                 LlmAuthMode.BEARER,
                 "sk-workspace-secret-9999",
@@ -130,7 +131,7 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                 .bodyValue(new CreateWorkspaceLlmConnectionRequestDTO(
                         "redact-me",
                         "Redact Me",
-                        "https://api.openai.com",
+                        LlmCatalogTestFixtures.PUBLIC_BASE_URL,
                         "openai-completions",
                         LlmAuthMode.BEARER,
                         "sk-super-secret-workspace-value",
@@ -233,7 +234,7 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
         var request = new CreateWorkspaceLlmConnectionRequestDTO(
                 "gated-out",
                 "Gated Out",
-                "https://api.openai.com",
+                LlmCatalogTestFixtures.PUBLIC_BASE_URL,
                 "openai-completions",
                 LlmAuthMode.BEARER,
                 null,

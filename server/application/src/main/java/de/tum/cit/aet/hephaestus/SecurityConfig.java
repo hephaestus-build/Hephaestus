@@ -203,10 +203,7 @@ public class SecurityConfig {
             http.csrf(csrf -> csrf.disable());
             http.authorizeHttpRequests(requests -> {
                 requests.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
-                // OpenAPI / Swagger endpoints are public on the resource-server chain; they must
-                // also be public on the lockdown chain so spec generation works on no-JWT-decoder boots
-                // (the `specs` profile boots without a JwtDecoder and would otherwise 403 on
-                // `mvn verify -Dapp.profiles=specs`).
+                // The specs profile needs these endpoints without a JwtDecoder.
                 requests.requestMatchers("/v3/api-docs/**", "/v3/api-docs.yaml", "/swagger-ui/**", "/swagger-ui.html")
                         .permitAll();
                 if (devTriggerEnabled) {

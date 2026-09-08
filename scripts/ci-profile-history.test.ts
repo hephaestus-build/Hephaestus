@@ -56,7 +56,7 @@ void test("history skips this rerun, foreign sources and incomplete profiles acr
 	);
 });
 
-void test("a budget-failed run's completed profile remains usable", () => {
+void test("a completed profile remains usable when another diagnostic job failed", () => {
 	assert.equal(selectHistory([[{ ...run(9), conclusion: "failure" }]], { 9: [history] }), "9");
 });
 
@@ -72,7 +72,7 @@ void test("uninstrumented history cannot become the JFR baseline", () => {
 });
 
 void test(
-	"the profiling pipeline preserves Maven failures through tee",
+	"the profiling pipeline preserves Gradle failures through tee",
 	{ skip: process.platform !== "linux" },
 	async (context) => {
 		const profile = steps.items.find((item) => isMap(item) && item.get("id") === "profile");
@@ -82,7 +82,7 @@ void test(
 		assert.equal(typeof command, "string");
 		const directory = await mkdtemp(path.join(tmpdir(), "profile-pipeline-"));
 		context.after(() => rm(directory, { recursive: true, force: true }));
-		await writeFile(path.join(directory, "vp"), "#!/bin/sh\necho 'Maven failed' >&2\nexit 17\n", {
+		await writeFile(path.join(directory, "vp"), "#!/bin/sh\necho 'Gradle failed' >&2\nexit 17\n", {
 			mode: 0o755,
 		});
 		const result = spawnSync(
@@ -97,7 +97,25 @@ void test(
 		assert.equal(result.status, 17, result.stderr);
 		assert.match(
 			await readFile(path.join(directory, "ci-metrics/server-integration.log"), "utf8"),
-			/Maven failed/,
+			/Gradle failed/,
 		);
 	},
 );
+
+void test("verification profiling retains coverage and runs separately from integration history", () => {
+	const verification = workflow.getIn(["jobs", "server-verification"]);
+	assert.ok(isMap(verification));
+	assert.equal(verification.get("needs"), "server-integration");
+	const items = verification.get("steps");
+	assert.ok(isSeq(items));
+	const profile = items.items.find((item) => isMap(item) && item.get("id") === "profile");
+	assert.ok(isMap(profile));
+	assert.equal(profile.get("shell"), "bash");
+	assert.match(String(profile.get("run")), /vp run test:server:verification/);
+	assert.doesNotMatch(String(profile.get("run")), /skipCoverage|skipTests/);
+	assert.match(String(profile.get("run")), /-PprofileTests=true/);
+	assert.equal(
+		items.items.some((item) => isMap(item) && item.get("id") === "history"),
+		false,
+	);
+});

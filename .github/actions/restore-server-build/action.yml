@@ -1,14 +1,13 @@
 name: "Restore the built server"
-description: "Downloads the packaged reactor into server/ and installs its generated-clients JAR and parent pom, so single-module Maven goals resolve them from the local repository instead of compiling again."
+description: "Restore the package job's JARs, compiled tests and resources without recompilation."
 inputs:
   artifact:
-    description: "Name of the reactor artifact uploaded by the package job"
+    description: "Name of the server artifact uploaded by the package job"
     required: true
 outputs:
   executable-jar:
     description: "Absolute path of the executable application JAR"
     value: ${{ steps.locate.outputs.executable-jar }}
-
 runs:
   using: "composite"
   steps:
@@ -16,22 +15,17 @@ runs:
       with:
         name: ${{ inputs.artifact }}
         path: server
-
-    - name: Install the generated clients and locate the executable JAR
+    - name: Validate the artifact and locate the executable JAR
       id: locate
       shell: bash
       working-directory: server
       run: |
         set -euo pipefail
-        test -d application/target/classes
-        test -d application/target/test-classes
-        mapfile -t jars < <(find application/target -maxdepth 1 -name 'hephaestus-application-*.jar')
-        mapfile -t clients < <(find generated-clients/target -maxdepth 1 -name 'hephaestus-generated-clients-*.jar')
+        test -d application/build/classes/java/main
+        test -d application/build/classes/java/test
+        test -d application/build/resources/main
+        test -d application/build/resources/test
+        mapfile -t jars < <(find application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar')
+        mapfile -t clients < <(find generated-clients/build/libs -maxdepth 1 -name 'hephaestus-generated-clients-*.jar')
         (( ${#jars[@]} == 1 )) && (( ${#clients[@]} == 1 ))
-        # Single-module goals resolve the sibling from the local repository, not from the reactor;
-        # reading its descriptor needs the parent pom there too.
-        ./mvnw --batch-mode --quiet -Dmaven.build.cache.enabled=false install:install-file \
-          -Dfile=pom.xml -DpomFile=pom.xml -Dpackaging=pom
-        ./mvnw --batch-mode --quiet -Dmaven.build.cache.enabled=false install:install-file \
-          -Dfile="${clients[0]}" -DpomFile=generated-clients/pom.xml
         echo "executable-jar=$PWD/${jars[0]}" >> "$GITHUB_OUTPUT"

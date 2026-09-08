@@ -8,7 +8,6 @@ import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 const featureFlags = {
 	practicesEnabled: true,
 	mentorEnabled: true,
-	achievementsEnabled: true,
 	leaderboardEnabled: true,
 	progressionEnabled: false,
 	leaguesEnabled: false,

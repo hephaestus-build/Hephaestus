@@ -344,7 +344,7 @@ services:
       - "traefik.http.services.https-application-server.loadbalancer.healthcheck.interval=10s"
       - "traefik.http.services.https-application-server.loadbalancer.healthcheck.timeout=3s"
     # The distroless image has no shell for a wget probe; the probe is the static thc binary the
-    # health-checker buildpack adds at /workspace/health-check (server/application/pom.xml).
+    # health-checker buildpack adds at /workspace/health-check (server/application/project.toml).
     healthcheck:
       test: ["CMD", "/workspace/health-check"]
       interval: 15s

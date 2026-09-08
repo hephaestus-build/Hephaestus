@@ -107,7 +107,6 @@ describe("catalog adoption over practice setup", () => {
 						status: "ACTIVE",
 						practicesEnabled: false,
 						mentorEnabled: false,
-						achievementsEnabled: false,
 						leaderboardEnabled: false,
 						progressionEnabled: false,
 						leaguesEnabled: false,

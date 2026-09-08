@@ -80,7 +80,7 @@ Check out the newest version from the
 [releases page](https://github.com/hephaestus-build/Hephaestus/releases):
 
 ```bash
-VERSION=0.77.4   # the release you are installing, without the leading "v"
+VERSION=0.78.0   # the release you are installing, without the leading "v"
 sudo git clone --depth 1 --branch "v$VERSION" \
   https://github.com/hephaestus-build/Hephaestus.git /opt/hephaestus
 sudo chown -R "$USER" /opt/hephaestus
@@ -265,43 +265,38 @@ instance to users. See [Legal Pages](./legal-pages).
 
 ## Upgrades
 
-Any release upgrades directly to any later one — no intermediate steps. Support window and
-what a version number promises: [Compatibility Policy](./compatibility-policy).
+Read the target release's migration instructions before starting its images. Pre-1.0 upgrades may
+require an intermediate release or manual preparation; the [Compatibility Policy](./compatibility-policy)
+defines the guarantee and support window. Existing databases crossing the PostgreSQL 18/Liquibase
+baseline transition must complete the [baseline synchronization runbook](./liquibase-baseline-runbook.md)
+first. The commands below do not perform that preparation.
+
+Complete the [runbook silent deployment checklist](./production-operations-runbook#silent-deployment-checklist)
+through backup and staging validation, then acquire the tested release:
 
 ```bash
-# 1. Back up first — see Backup & Restore.
-VERSION=<new version>
-cd /opt/hephaestus
-sudo git fetch --depth 1 origin tag "v$VERSION" && sudo git checkout "v$VERSION"
-node scripts/prepare-release-lock.ts "v$VERSION"
-cd docker/self-host && docker compose --env-file .env --env-file release-lock.env pull && docker compose --env-file .env --env-file release-lock.env up -d
-```
-
-Compare your `.env` against the new release's `.env.example` for added variables. When a release
-changes the PostgreSQL major version, follow its entry in
-[`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) before starting the new
-stack.
-
-## Rollback
-
-Restore a backup compatible with the target release, then deploy that release's published lock:
-
-```bash
-VERSION=<previous version>
+(
+set -eu
+VERSION='<new-version>'
 cd /opt/hephaestus
 sudo git fetch --depth 1 origin tag "v$VERSION"
 sudo git checkout "v$VERSION"
 node scripts/prepare-release-lock.ts "v$VERSION"
 cd docker/self-host
-docker compose --env-file .env --env-file release-lock.env up -d --remove-orphans --wait
+docker compose --env-file .env --env-file release-lock.env pull
+)
 ```
 
-Never reconstruct an old lock or resolve its image tags.
+Before startup, compare `.env` with the release's `.env.example` and complete any manual steps in
+[`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md), especially PostgreSQL
+major-version changes. Return to **Validate then deploy** in the runbook for guarded startup.
+The [compatibility policy](./compatibility-policy#upgrade-guarantee) defines skip-version support.
 
-:::warning In-place downgrades are not supported
-Never run an older release against a database a newer release has already migrated — restore a
-compatible backup instead. Set up [Backup & Restore](./backup-restore) **before** you have data worth losing.
-:::
+## Rollback
+
+Follow [failed-migration recovery](./production-operations-runbook#if-migration-fails) to restore the
+previous release's database, secrets and signed lock. Reverting images alone is not a rollback:
+never run an older release against a newer schema, reconstruct an old lock, or resolve mutable image tags.
 
 ## Troubleshooting
 

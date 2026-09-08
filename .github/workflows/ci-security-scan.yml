@@ -63,7 +63,7 @@ jobs:
     name: "New dependency risk"
     runs-on: ubuntu-latest
     if: inputs.should_skip != 'true' && github.event_name == 'pull_request'
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -76,6 +76,8 @@ jobs:
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           config-file: ./.github/dependency-review-config.yml
+          retry-on-snapshot-warnings: true
+          retry-on-snapshot-warnings-timeout: 600
 
   security-scan:
     name: "Dependencies, secrets, and policy"
@@ -85,6 +87,9 @@ jobs:
     permissions:
       security-events: write
       contents: read
+    env:
+      # Build and test dependencies execute in CI and can affect shipped artifacts too.
+      TRIVY_INCLUDE_DEV_DEPS: "true"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -177,6 +182,11 @@ jobs:
             exit 1
           fi
 
+      - uses: ./.github/actions/setup-toolchain
+        if: always()
+        with:
+          install: "frozen"
+
       - name: Resolve released-chain baseline
         id: baseline
         continue-on-error: true
@@ -205,36 +215,7 @@ jobs:
         if: steps.baseline.outputs.base != ''
         env:
           BASE: ${{ steps.baseline.outputs.base }}
-          RELEASED_REF: ${{ github.event_name == 'pull_request' && github.base_ref || 'main' }}
-        run: |
-          set -euo pipefail
-          CHANGELOG_DIR="server/application/src/main/resources/db/changelog"
-          MASTER="server/application/src/main/resources/db/master.xml"
-          FAILED=false
-
-          VIOLATIONS=$(git diff --name-only --diff-filter=MDR "$BASE" HEAD -- "$CHANGELOG_DIR")
-          if [ -n "$VIOLATIONS" ]; then
-            FAILED=true
-            echo "::error::Released Liquibase changesets were modified, renamed, or deleted. Ship a new follow-up changelog instead:"
-            echo "$VIOLATIONS"
-          fi
-
-          git show "$BASE:$MASTER" 2>/dev/null | grep '<include ' > /tmp/includes-base || true
-          grep '<include ' "$MASTER" > /tmp/includes-head || true
-          if [ -s /tmp/includes-base ] && ! diff /tmp/includes-base <(head -n "$(wc -l < /tmp/includes-base)" /tmp/includes-head) >/dev/null; then
-            FAILED=true
-            echo "::error::master.xml is append-only: an existing <include> was removed, reordered, or edited. New changelogs go at the end of the list."
-          fi
-
-          if [ "$FAILED" = "true" ]; then
-            {
-              echo "### Changelog immutability"
-              echo "Changesets that reached \`$RELEASED_REF\` may already be applied to production databases — editing or removing them breaks the upgrade path (checksum errors or silently orphaned changesets)."
-              echo "Fix forward with a **new** changelog appended to \`master.xml\`. See \`docs/contributor/database-migration.mdx\`."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-          echo "No released changeset was touched; master.xml stays append-only."
+        run: node scripts/check-changelog-immutability.ts "$BASE"
 
       - name: Assert no legacy agent-image references
         id: legacy-image-policy

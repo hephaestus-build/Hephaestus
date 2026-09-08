@@ -37,167 +37,46 @@ on:
 permissions: {}
 
 jobs:
-  # Steps are gated rather than the job: a skipped leg still reports, so the status gate sees it.
-  quality:
-    name: "${{ matrix.name }}"
-    runs-on: ${{ matrix.os }}
+  server:
+    name: "App Server"
+    if: inputs.should_skip != 'true' && (inputs.application_server_changed == 'true' || inputs.pmd_canary == 'true')
+    uses: ./.github/workflows/ci-quality-leg.yml
     permissions:
       contents: read
       checks: write
-    if: inputs.should_skip != 'true'
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - leg: server
-            name: "App Server"
-            os: ubuntu-latest
-            changes: application_server
-            history: true
-            cache: true
-            flags: ""
-          - leg: tooling
-            name: "Tooling and Docs"
-            os: ubuntu-latest
-            changes: tooling
-            hooks: true
-            cache: true
-            flags: ""
-          - leg: webapp
-            name: "Webapp"
-            os: ubuntu-latest
-            changes: webapp
-            cache: true
-            flags: ""
-          # Uncached: on Windows the runner's automatic input tracking misses a new file
-          # (scripts/check-runner-contract.ts), so a cached verdict there could be stale.
-          - leg: windows
-            name: "Windows"
-            os: windows-latest
-            changes: tooling
-            history: true
-            hooks: true
-            flags: --no-cache
-    env:
-      RUN: ${{ inputs[format('{0}_changed', matrix.changes)] }}
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - if: env.RUN == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # gate:contracts compares the branch with the base, which needs the history. The depths
-          # are QUOTED: unquoted, `cond && 0 || 1` always yields 1, because the number 0 is falsy in
-          # GitHub expressions and the non-empty string '0' is truthy.
-          fetch-depth: ${{ matrix.history && '0' || '1' }}
-          persist-credentials: false
+    with:
+      leg: server
+      pmd_canary: ${{ inputs.pmd_canary }}
 
-      - if: env.RUN == 'true'
-        uses: ./.github/actions/setup-toolchain
-        with:
-          install: "frozen"
+  tooling:
+    name: "Tooling and Docs"
+    if: inputs.should_skip != 'true' && inputs.tooling_changed == 'true'
+    uses: ./.github/workflows/ci-quality-leg.yml
+    permissions:
+      contents: read
+      checks: write
+    with:
+      leg: tooling
 
-      # Content-addressed, so a pull request may save them for its own reruns.
-      - name: Restore Vite task cache
-        if: env.RUN == 'true' && matrix.cache
-        id: task-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: node_modules/.vite/task-cache
-          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ matrix.leg }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            vite-task-${{ runner.os }}-${{ runner.arch }}-${{ matrix.leg }}-
+  webapp:
+    name: "Webapp"
+    if: inputs.should_skip != 'true' && inputs.webapp_changed == 'true'
+    uses: ./.github/workflows/ci-quality-leg.yml
+    permissions:
+      contents: read
+      checks: write
+    with:
+      leg: webapp
 
-      - name: Setup application-server caches
-        if: env.RUN == 'true' && matrix.leg == 'server'
-        uses: ./.github/actions/setup-caches
-        with:
-          cache-type: application-server-reactor
-          os: ${{ runner.os }}
-
-      - name: Quality gates
-        if: env.RUN == 'true'
-        run: vp run ${{ matrix.flags }} ci:${{ matrix.leg }}
-
-      - name: Task report
-        if: env.RUN == 'true' && !cancelled()
-        run: vp run --last-details | node scripts/report-task-run.ts
-
-      - name: PMD canary
-        if: env.RUN == 'true' && matrix.leg == 'server' && inputs.pmd_canary == 'true'
-        run: vp run gate:pmd-canary
-
-      # CI installs with --ignore-scripts, so prepare never runs: both hooks are dispatched here instead.
-      - name: Commit-msg hook
-        if: env.RUN == 'true' && matrix.hooks && !cancelled()
-        run: |
-          node scripts/enable-hooks.ts
-          test "$(git config core.hooksPath)" = ".vite-hooks/_"
-          git config user.name ci
-          git config user.email ci@example.invalid
-          if git commit --allow-empty --quiet -m "bad message"; then
-            echo "::error::commit-msg accepted a message commitlint rejects"
-            exit 1
-          fi
-          git commit --allow-empty --quiet -m "chore(ci): probe the commit-msg hook"
-
-      # The dispatcher prepends node_modules/.bin to PATH, so the launcher is shadowed there; the
-      # gate itself must not run a second time.
-      - name: Pre-push hook
-        if: env.RUN == 'true' && matrix.hooks && !cancelled()
-        run: |
-          node scripts/enable-hooks.ts
-          probe="$(mktemp)"
-          remote="$(mktemp -d)"
-          launcher=node_modules/.bin/vp
-          # Nothing else in CI runs the local launcher: GitHub does not put node_modules/.bin on PATH.
-          "$launcher" --version > /dev/null
-          mv "$launcher" "$launcher.real"
-          trap 'mv "$launcher.real" "$launcher"; rm -f "$probe"; rm -rf "$remote"' EXIT
-          cat > "$launcher" <<'EOF'
-          #!/bin/sh
-          if [ "$#" -ne 2 ] || [ "$1" != run ] || [ "$2" != check ]; then
-            exit 1
-          fi
-          printf 'ran\n' > "$PRE_PUSH_PROBE"
-          EOF
-          chmod +x "$launcher"
-          export PRE_PUSH_PROBE="$probe"
-          git init --bare --quiet "$remote"
-          git push --dry-run --quiet "$remote" HEAD:refs/heads/pre-push-probe
-          test "$(cat "$probe")" = ran
-
-      - name: Upload webapp unit-test results
-        if: env.RUN == 'true' && matrix.leg == 'webapp' && !cancelled()
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
-        with:
-          name: "Test Results - Webapp Unit"
-          path: "webapp/test-results/junit-*.xml"
-          reporter: java-junit
-          fail-on-error: false
-
-      - name: Summarize webapp unit tests
-        if: env.RUN == 'true' && matrix.leg == 'webapp' && !cancelled()
-        continue-on-error: true
-        run: vp run report:test-results "Webapp Unit" webapp/test-results ci-metrics/webapp-unit.json
-
-      - name: Upload webapp test metrics
-        if: env.RUN == 'true' && matrix.leg == 'webapp' && !cancelled()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: test-metrics-webapp-unit
-          path: ci-metrics/webapp-unit.json
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Save Vite task cache
-        if: env.RUN == 'true' && matrix.cache && !cancelled()
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: node_modules/.vite/task-cache
-          key: ${{ steps.task-cache.outputs.cache-primary-key }}
+  windows:
+    name: "Windows"
+    if: inputs.should_skip != 'true' && inputs.tooling_changed == 'true'
+    uses: ./.github/workflows/ci-quality-leg.yml
+    permissions:
+      contents: read
+      checks: write
+    with:
+      leg: windows
 
   # The contributor's first command, without setup-toolchain: vp install must fetch the pinned pnpm,
   # install the workspace and enable the hooks on its own.
@@ -236,6 +115,7 @@ jobs:
       statuses: write
     env:
       PREVIEW_URL: hephaestus-build-storybook-pr-${{ github.event.number }}.surge.sh
+      CHROMATIC_POLICY_SKIP: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || startsWith(github.head_ref || github.ref_name, 'dependabot/') || startsWith(github.head_ref || github.ref_name, 'renovate/') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -265,8 +145,7 @@ jobs:
         id: chromatic
         continue-on-error: true
         if: >-
-          success() &&
-          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          success() && env.CHROMATIC_POLICY_SKIP != 'true'
         uses: chromaui/action@2a0b63f30233c48591844a46d451b9cf68128186 # v18.7.2
         with:
           projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
@@ -274,14 +153,30 @@ jobs:
           storybookBuildDir: storybook-static
           onlyChanged: true
           zip: true
-          skip: "@(dependabot/**|renovate/**)"
-          autoAcceptChanges: ${{ github.ref == 'refs/heads/main' && 'main' || '' }}
+          skip: false
+          autoAcceptChanges: false
           exitZeroOnChanges: false
+          exitOnceUploaded: false
           logLevel: info
           junitReport: true
         env:
           CHROMATIC_BRANCH: ${{ github.head_ref || github.ref_name }}
           CHROMATIC_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Report Chromatic visual coverage
+        id: visual_coverage
+        if: always()
+        continue-on-error: true
+        env:
+          CHROMATIC_OUTCOME: ${{ steps.chromatic.outcome }}
+          CHROMATIC_CODE: ${{ steps.chromatic.outputs.code }}
+          CHROMATIC_CAPTURED: ${{ steps.chromatic.outputs.actualCaptureCount }}
+          CHROMATIC_INHERITED: ${{ steps.chromatic.outputs.inheritedCaptureCount }}
+          CHROMATIC_TESTS: ${{ steps.chromatic.outputs.testCount }}
+          CHROMATIC_ERRORS: ${{ steps.chromatic.outputs.errorCount }}
+          CHROMATIC_CHANGES: ${{ steps.chromatic.outputs.changeCount }}
+          CHROMATIC_INTERACTIONS: ${{ steps.chromatic.outputs.interactionTestFailuresCount }}
+          CHROMATIC_BUILD_URL: ${{ steps.chromatic.outputs.buildUrl }}
+        run: node scripts/report-chromatic.ts
       - name: Deploy public Storybook preview
         id: storybook_preview
         if: >-
@@ -344,9 +239,9 @@ jobs:
         if: always()
         env:
           STORYBOOK_TESTS: ${{ steps.tests.outcome }}
-          CHROMATIC: ${{ steps.chromatic.outcome }}
+          CHROMATIC: ${{ steps.visual_coverage.outcome }}
         run: |
-          if [ "$STORYBOOK_TESTS" != success ] || { [ "$CHROMATIC" != success ] && [ "$CHROMATIC" != skipped ]; }; then
+          if [ "$STORYBOOK_TESTS" != success ] || [ "$CHROMATIC" != success ]; then
             echo "::error::Storybook tests or Chromatic failed; review both independently reported steps."
             exit 1
           fi

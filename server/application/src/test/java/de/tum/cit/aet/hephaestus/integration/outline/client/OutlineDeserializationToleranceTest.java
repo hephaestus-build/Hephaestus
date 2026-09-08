@@ -125,7 +125,7 @@ class OutlineDeserializationToleranceTest {
      * running client uses, where the throw surfaces as a {@code DecodingException} and breaks sync for the host.
      *
      * <p>The fix is contract-level: the enums are generated with {@code enumUnknownDefaultCase=true}
-     * (see {@code server/pom.xml}), so {@code fromValue} returns {@code UNKNOWN_DEFAULT_OPEN_API} instead of
+     * (see {@code server/generated-clients/build.gradle.kts}), so {@code fromValue} returns {@code UNKNOWN_DEFAULT_OPEN_API} instead of
      * throwing — path-independent. This test drives the <em>real</em> {@code outlineWebClient} decoder (not
      * {@code readValue}); reverting the generator knob restores the throwing {@code fromValue}, the decode
      * aborts, and this test fails — exactly the regression it guards.

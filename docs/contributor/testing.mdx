@@ -2,37 +2,12 @@
 id: testing
 sidebar_position: 4
 title: Testing Guide
-description: Choose the right test type and integrate with the Maven-powered pipeline.
+description: Choose the right test type and integrate with the Gradle-powered pipeline.
 ---
 
-Testing keeps regression risk low across services. The application server uses Maven with dedicated base classes for unit and integration tests.
-
-## Quick start
-
-1. Decide whether you need a fast unit test or a Spring-backed integration test.
-2. Run the appropriate command:
-
-   ```bash
-   # Unit tests only (fast)
-   cd server && ./mvnw test
-
-   # Unit and integration tests
-   cd server && ./mvnw verify
-   ```
-
-   Generated clients have their own module, and the reactor restores their compiled artifact from
-   Maven Build Cache when its inputs are unchanged. After one reactor build, repeated application or
-   test edits can use the application-only recipes below without touching generated clients.
-
-3. Extend the correct base class:
-
-   Unit tests extend `BaseUnitTest`; Spring-backed tests extend `BaseIntegrationTest` or a
-   feature-specific subclass.
-
-:::warning Naming matters
-Use `*Test.java` for unit tests and `*IntegrationTest.java` or `*LiquibaseTest.java` for integration
-tests. Maven's Surefire and Failsafe plugins use these patterns.
-:::
+Choose the tier by the behaviour under test; [Gradle recipes](#gradle-recipes) lists the commands.
+JUnit tags select tests independently of filenames. Use descriptive `*Test` and `*IntegrationTest`
+names for readers.
 
 ## Unit tests
 
@@ -43,14 +18,13 @@ tests. Maven's Surefire and Failsafe plugins use these patterns.
 ## Integration tests
 
 - Extend `BaseIntegrationTest` for cross-component behaviour.
-- Relies on a shared PostgreSQL Testcontainers instance (significantly faster than per-test containers).
-- Reads recorded webhook payloads from the fixture folder and deserialises them into the handler's event DTO.
+- Reuse the shared PostgreSQL Testcontainer.
+- For webhook tests, deserialize recorded fixtures into the handler's event DTO.
 
 ## Controller integration tests
 
-Two rules, and everything below follows from them: test a controller at the HTTP boundary, because
-that is where a security misconfiguration shows; and keep fixtures reusable, so a new endpoint needs
-no bespoke bootstrapping.
+Test controllers at the HTTP boundary so access-control configuration is exercised. Reuse the
+domain's integration-test base and fixture factories.
 
 - Extend `AbstractWorkspaceIntegrationTest` (or a service-specific base) so every controller IT automatically cleans the database, provides helper factories such as `persistUser`, and exposes `workspaceService` for setup.
 - Use `WebTestClient`. The full Spring Boot context is already running, so access-control rules (`401` unauthenticated vs `403` non-admin) are verified exactly as the frontend receives them.
@@ -107,49 +81,59 @@ vp run schema:nats
 
 Available examples include `label.created`, `repository.created`, `create`, `push`, and more – consult the folder before recording new payloads.
 
-## Maven recipes
+## Gradle recipes
 
 From `server/`:
 
 ```bash
-./mvnw test                         # Unit tests
-./mvnw test -Parchitecture-tests     # ArchUnit + Modulith verification
-./mvnw verify                       # Unit + integration tests and packaging
-./mvnw -f application/pom.xml test -Dtest=SomeTest         # Single test class
-./mvnw -f application/pom.xml test -Dtest=SomeTest#method  # Single test method
+./gradlew :application:test                             # Unit tests
+./gradlew :application:architectureTest                 # ArchUnit and Modulith
+./gradlew :application:verification                     # Unit, architecture and coverage floors
+./gradlew :application:integrationTest                  # Spring and Testcontainers
+./gradlew :application:test --tests SomeTest            # One unit test class
+./gradlew :application:test --tests 'SomeTest.method'    # One unit test method
+./gradlew :application:bootJar                          # Executable JAR, without running tests
 ```
 
-Run a reactor command first after a fresh checkout or after changing a schema, generator, generated-client
-dependency, or `generated-clients/pom.xml`. The application-only commands then preserve Maven's
-incremental compilation; they fail immediately if the generated-client artifact has not been installed.
+Generation and compilation dependencies are automatic. Test tasks always execute when requested;
+compilation remains incremental and cacheable. `--no-build-cache` prevents output restoration;
+combine it with `clean` when measuring a cold build.
 
-The tag filter is a property, not the `-Dgroups` user property: surefire is configured with
-`<groups>${surefire.includedGroups}</groups>`, which an explicitly-configured plugin parameter wins
-over. `-Dgroups=…` is silently ignored; use `-Dsurefire.includedGroups=…` when you need to change the
-tag set directly, or the profiles above, which set it for you.
+`vp run test:server:selection` asks Gradle/JUnit to discover tests without executing them. It proves
+that non-live tests belong to a required tier and that integration shards are disjoint and complete.
+Required PR verification and `vp run verify` run this proof before the real suites. Discovery writes
+only to `application/build/test-selection/`, leaving execution reports and coverage untouched;
+those discovery reports are not evidence that tests passed.
 
 ## Live external-service tests
 
-Some regressions can only be validated against real systems — the GitHub API, a real LLM endpoint, a Docker daemon. Live tests are tagged `@Tag("live")` and **excluded from every other tier**; they only run under `cd server && ./mvnw test -Plive-tests`. The profile flips Surefire's group filter and adds `failIfNoSpecifiedTests=false` so single-test invocations don't fail when the gating env var is unset.
+Live tests use real provider APIs, LLM endpoints or sandbox containers. They carry `@Tag("live")`
+and are excluded from every other tier. From `server/`, explicitly opt in with:
+
+```bash
+./gradlew :application:liveTest
+```
+
+Use `--tests ClassName` to select a suite; an unmatched filter fails.
 
 ### Meta-annotation cheat sheet
 
 Use one of these composite annotations on the test class (or method) rather than wiring `@Tag("live") + @EnabledIfEnvironmentVariable` by hand. They keep gates uniform and put the env-var contract in one place.
 
-| Annotation | Gate | Use for |
-| --- | --- | --- |
-| `@LiveLlmTest` | `HEPHAESTUS_LIVE_LLM_API_KEY` | Tests that drive a real OpenAI-compatible endpoint. Set `HEPHAESTUS_LIVE_LLM_BASE_URL`, `HEPHAESTUS_LIVE_LLM_API_KEY`, and `HEPHAESTUS_LIVE_LLM_MODEL` explicitly. Read via `LiveLlmCredentials.fromEnv()`. |
-| `@LiveGitHubTest` | `GH_APP_INSTALLATION_ID` | Tests that hit github.com via the installed GitHub App. `BaseGitHubLiveIntegrationTest` runs an extra runtime check on private-key material. |
-| `@LiveGitLabTest` | `HEPHAESTUS_LIVE_GITLAB_TOKEN` | Reserved for GitLab-side replay/live-sync tests. |
-| `@LiveDockerTest` | none — runtime probe in `@BeforeAll` | Tests that need a Docker daemon. Combine with `@LiveLlmTest` when the sandbox payload also needs LLM credentials. |
+| Annotation        | Gate                                 | Use for                                                                                                                                                                                                     |
+| ----------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@LiveLlmTest`    | `HEPHAESTUS_LIVE_LLM_API_KEY`        | Tests that drive a real OpenAI-compatible endpoint. Set `HEPHAESTUS_LIVE_LLM_BASE_URL`, `HEPHAESTUS_LIVE_LLM_API_KEY`, and `HEPHAESTUS_LIVE_LLM_MODEL` explicitly. Read via `LiveLlmCredentials.fromEnv()`. |
+| `@LiveGitHubTest` | `GH_APP_INSTALLATION_ID`             | Tests that hit github.com via the installed GitHub App. `BaseGitHubLiveIntegrationTest` runs an extra runtime check on private-key material.                                                                |
+| `@LiveGitLabTest` | `HEPHAESTUS_LIVE_GITLAB_TOKEN`       | Reserved for GitLab-side replay/live-sync tests.                                                                                                                                                            |
+| `@LiveDockerTest` | none — runtime probe in `@BeforeAll` | Tests that need a Docker daemon. Combine with `@LiveLlmTest` when the sandbox payload also needs LLM credentials.                                                                                           |
 
-Each annotation pins JUnit to `Execution(SAME_THREAD)` so two live tests in the same module never race on rate limits, log interleaving, or shared temp dirs.
+The annotations use `Execution(SAME_THREAD)`; Gradle also runs one test JVM at a time.
 
 ### Authoring a new live test
 
 1. Pick the right meta-annotation. If the env var doesn't exist yet, add a new annotation alongside the existing four — don't reuse one with a misleading name.
 2. Put the test under `server/application/src/test/java/.../live/`. The directory marker keeps live and non-live tests in different code-review buckets.
-3. Read credentials from `LiveLlmCredentials.fromEnv()` (or the GitHub helpers); never inline values. Secrets stay in env vars only.
+3. Read credentials from `LiveLlmCredentials.fromEnv()` or the provider helpers. Never inline secrets or commit local credential files.
 4. Per-test wall-clock timeouts: 90s is reasonable for a single mentor turn; 5 minutes for a full practice run.
 
 ### GitHub live API tests
@@ -160,41 +144,31 @@ We ship a focused suite that exercises the live GitHub App installation and veri
 
 1. **Sandbox installation** – the `Hephaestus IntegrationTests` GitHub App must be installed in a sandbox organisation you control. The tests create and delete repositories, milestones, labels, and teams on each run.
 2. **Credentials** – provide both a GitHub App private key and a Personal Access Token with the following scopes:
-    - `repo` (full)
-    - `admin:org`
-    - `read:packages`
+   - `repo` (full)
+   - `admin:org`
+   - `read:packages`
 3. **Local config file** – copy the template that lives alongside the tests:
 
-    ```bash
-    cd server/application/src/test/resources
-    cp application-live-local.example.yml application-live-local.yml
-    ```
+   ```bash
+   cd server/application/src/test/resources
+   cp application-live-local.example.yml application-live-local.yml
+   ```
 
-    Fill in the placeholders with the sandbox organisation slug, the installation id, and either an inline PEM key (`github.app.privateKey`) or a readable `privateKeyLocation`. Keep this file out of version control – it is already listed in `.gitignore`.
+   Fill in the placeholders with the sandbox organisation slug, the installation id, and either an inline PEM key (`github.app.privateKey`) or a readable `privateKeyLocation`. Keep this file out of version control – it is already listed in `.gitignore`.
 
-    Alternatively, export the matching environment variables:
+   Alternatively, export the matching environment variables:
 
-    ```bash
-    export GH_APP_ID=2250297
-    export GH_APP_INSTALLATION_ID=93512943
-    export GH_APP_PRIVATE_KEY="$(cat /path/to/private-key.pem)"
-    export GH_APP_PAT=ghp_xxx...             # PAT with the scopes above
-    export GH_APP_ORGANIZATION=HephaestusTest
-    ```
+   ```bash
+   export GH_APP_ID=2250297
+   export GH_APP_INSTALLATION_ID=93512943
+   export GH_APP_PRIVATE_KEY="$(cat /path/to/private-key.pem)"
+   export GH_APP_PAT=ghp_xxx...             # PAT with the scopes above
+   export GH_APP_ORGANIZATION=HephaestusTest
+   ```
 
-    Use either the config file *or* environment variables; the test suite checks both and aborts if key material is missing.
-
-### Running the suite
-
-From `server/` run:
-
-```bash
-./mvnw test -Plive-tests
-```
-
-The `live-tests` profile tells Maven to run only tests tagged with `@Tag("live")`. This is the **single guard** for live tests – if you don't pass the profile, the tests simply won't run.
-
-**Live tests never run during normal CI.** They are excluded from the other tiers by tag filtering in the Surefire and Failsafe plugins.
+   `GH_APP_INSTALLATION_ID` must be exported even when the other credentials come from the local
+   file: `@LiveGitHubTest` checks the environment before Spring loads that file. Missing credentials
+   skip the suite; a successful Gradle exit alone does not prove live tests executed.
 
 The run prints the GitHub artefacts it provisions. Clean-up is handled automatically, but if a failure interrupts execution you can safely delete any `hephaestus-it-*` repositories, milestones, or teams that remain in the sandbox.
 
@@ -207,6 +181,6 @@ The run prints the GitHub artefacts it provisions. Clean-up is handled automatic
 
 ### Troubleshooting
 
-- **Skipping because of missing credentials** – check the console output; the base test class verifies that the App id, private key, PAT, and installation id are all present before executing.
+- **Skipping because of missing credentials** – export `GH_APP_INSTALLATION_ID`, then check the console for the base class's App id, private-key and PAT checks.
 - **GitHub API rate-limit failures** – the suite creates several entities per run. Prefer a dedicated sandbox organisation so you do not clash with production automation limits.
 - **Longer runtimes** – each suite bootstraps a Testcontainers PostgreSQL instance and provisions GitHub resources. Expect higher runtimes than the pure Testcontainers integration tests; avoid running them on every PR and instead use them before releases or when touching the GitHub sync layer.

@@ -20,12 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.ReviewTargetQuery;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
@@ -68,10 +63,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
     private ObservationRepository observationRepository;
 
     @Mock
-    private PullRequestRepository pullRequestRepository;
-
-    @Mock
-    private de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository issueRepository;
+    private ReviewTargetQuery reviewTargets;
 
     @Mock
     private ConversationSourceLiveness conversationSourceLiveness;
@@ -81,9 +73,6 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
-
-    @Mock
-    private PullRequestReviewRepository pullRequestReviewRepository;
 
     @Mock
     private ContentAddressedStore cas;
@@ -98,17 +87,13 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
     private Practice testPractice;
     private AgentJob testJob;
-    private PullRequest testPr;
-    private User testAuthor;
 
     @BeforeEach
     void setUp() {
         service = new PracticeDetectionDeliveryService(
                 practiceRevisionRepository,
                 observationRepository,
-                pullRequestRepository,
-                pullRequestReviewRepository,
-                issueRepository,
+                reviewTargets,
                 conversationSourceLiveness,
                 documentProjection,
                 eventPublisher,
@@ -174,21 +159,9 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                         "diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] + insecure();\n"
                                 .getBytes(StandardCharsets.UTF_8)));
 
-        testAuthor = new User();
-        ReflectionTestUtils.setField(testAuthor, "id", 789L);
-        testAuthor.setLogin("developer");
-        testPr = new PullRequest();
-        ReflectionTestUtils.setField(testPr, "id", 456L);
-        testPr.setNumber(42);
-        testPr.setAuthor(testAuthor);
-        Repository repository = new Repository();
-        ReflectionTestUtils.setField(repository, "id", 123L);
-        repository.setNameWithOwner("owner/repo");
-        testPr.setRepository(repository);
-
         lenient()
-                .when(pullRequestRepository.findByIdWithAuthorAndRepository(456L))
-                .thenReturn(Optional.of(testPr));
+                .when(reviewTargets.findPullRequest(456L))
+                .thenReturn(Optional.of(new ReviewTargetQuery.Target(123L, "owner/repo", 42, 789L, false)));
         lenient()
                 .when(observationRepository.insertIfAbsent(
                         any(),
@@ -696,7 +669,6 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                     gap.evidenceRationale());
         }
 
-        /** Re-declare the practice's diff requirement as EXHAUSTIVE, leaving every other need alone. */
         private void exhaustiveOverTheDiff(Practice practice) {
             List<PracticeBinding> bindings = practice.getBindings().stream()
                     .map(binding -> new PracticeBinding(
@@ -711,8 +683,6 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                             binding.subject()))
                     .toList();
             practice.setBindings(bindings);
-            // Re-stub the already-admitted revision rather than admitting the practice a second time: the
-            // stance is read off the revision's bindings, and a second admission is a duplicate slug.
             PracticeRevision revision = practiceRevisionRepository.findById(11L).orElseThrow();
             lenient().when(revision.getBindings()).thenReturn(bindings);
         }
@@ -720,17 +690,14 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("a NOT_APPLICABLE observation with no stated ground is refused")
         void rejectsAnUnjustifiedNotApplicable() {
-            // The server repeats the sandbox's rule because the sandbox normalizer runs inside the thing it
-            // is checking: a crashed runner, an older image or a rescued text payload all reach delivery
-            // without it having run.
+            // Sandbox output is untrusted even when its normalizer enforces the same rule.
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.NOT_APPLICABLE);
             ((ObjectNode) evidenceOf(observation)).remove("inapplicability");
 
             assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("must name what the practice looks for")
-                    // The refusal names the answer it is asking for. Without that it would just teach a model
-                    // to invent a ground, which is the failure this rule exists to prevent.
+                    // Direct the model to uncertainty rather than an invented justification.
                     .hasMessageContaining("INCONCLUSIVE");
             verifyNoInteractions(observationRepository);
         }
@@ -766,8 +733,6 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("a ground is asked of NOT_APPLICABLE alone — INCONCLUSIVE claims nothing about the work")
         void doesNotAskForAGroundOnOtherPresences() {
-            // INCONCLUSIVE is the answer this rule pushes work towards, so demanding a ground from it too
-            // would close the exit and send everything back to the unjustified NOT_APPLICABLE we started at.
             for (Presence presence : Presence.values()) {
                 if (presence == Presence.NOT_APPLICABLE) {
                     continue;
@@ -801,10 +766,6 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             }
         }
 
-        /**
-         * The history is staged for every practice without any binding declaring it, so a practice must be
-         * able to cite it — that's what makes "we raised this before" checkable rather than merely plausible.
-         */
         @Test
         @DisplayName("a citation to the review history is in bounds although no binding declared it")
         void acceptsACitationToTheStagedHistory() {
@@ -816,7 +777,6 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             assertThat(result.inserted()).isEqualTo(1);
         }
 
-        /** And the other half of that bargain: a past observation cannot be invented. */
         @Test
         @DisplayName("a fabricated quote from the review history is refused like any other")
         void rejectsAnInventedPastObservation() {
@@ -882,12 +842,12 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                             eq(456L),
                             eq(789L), // aboutUserId
                             eq("Test observation"),
-                            eq("PRESENT"), // presence (ADR 0022)
-                            eq("GOOD"), // assessment (former-GOOD practice, PRESENT → a strength)
-                            isNull(), // severity — coerced to null for a non-BAD observation (ADR 0022 invariant)
+                            eq("PRESENT"), // presence
+                            eq("GOOD"), // assessment
+                            isNull(), // severity
                             anyString(),
                             isNull(),
-                            fingerprintCaptor.capture(), // findingFingerprint == persisted recurrence_key
+                            fingerprintCaptor.capture(), // recurrence key
                             any(),
                             eq("LIVE") // an event-triggered review is the unbiased population
                             );
@@ -930,46 +890,38 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
         @Test
         void shouldResolveReviewerWhenSubmittedReviewMatchesArtifactAndSubject() {
-            User reviewer = new User();
-            ReflectionTestUtils.setField(reviewer, "id", 789L);
-            PullRequestReview review = new PullRequestReview();
-            ReflectionTestUtils.setField(review, "id", 77L);
-            review.setPullRequest(testPr);
-            review.setAuthor(reviewer);
-            when(pullRequestReviewRepository.findById(77L)).thenReturn(Optional.of(review));
-            ObjectNode metadata =
-                    org.junit.jupiter.api.Assertions.assertInstanceOf(ObjectNode.class, testJob.getMetadata());
-            metadata.put("review_id", 77L);
-            metadata.put("about_user_id", 789L);
-            metadata.put("subject_role", "REVIEWER");
-
-            Object target = ReflectionTestUtils.invokeMethod(service, "resolveTarget", testJob, metadata);
-
-            assertThat(target).hasFieldOrPropertyWithValue("aboutUserId", 789L);
-        }
-
-        @Test
-        void shouldRejectReviewerWhenSubmittedReviewDoesNotMatchSubject() {
-            PullRequestReview review = new PullRequestReview();
-            ReflectionTestUtils.setField(review, "id", 77L);
-            review.setPullRequest(testPr);
-            review.setAuthor(testAuthor);
-            when(pullRequestReviewRepository.findById(77L)).thenReturn(Optional.of(review));
+            when(reviewTargets.reviewMatchesTarget(77L, 456L, 999L)).thenReturn(true);
             ObjectNode metadata =
                     org.junit.jupiter.api.Assertions.assertInstanceOf(ObjectNode.class, testJob.getMetadata());
             metadata.put("review_id", 77L);
             metadata.put("about_user_id", 999L);
             metadata.put("subject_role", "REVIEWER");
 
-            assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "resolveTarget", testJob, metadata))
+            service.deliver(testJob, List.of());
+
+            verify(eventPublisher).publishEvent(eventCaptor.capture());
+            assertThat(eventCaptor.getValue().developerId()).isEqualTo(999L);
+            assertThat(eventCaptor.getValue().artifactId()).isEqualTo(456L);
+        }
+
+        @Test
+        void shouldRejectReviewerWhenSubmittedReviewDoesNotMatchSubject() {
+            ObjectNode metadata =
+                    org.junit.jupiter.api.Assertions.assertInstanceOf(ObjectNode.class, testJob.getMetadata());
+            metadata.put("review_id", 77L);
+            metadata.put("about_user_id", 999L);
+            metadata.put("subject_role", "REVIEWER");
+
+            assertThatThrownBy(() -> service.deliver(testJob, List.of()))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("no longer matches");
+            verifyNoInteractions(observationRepository, eventPublisher);
         }
 
         @Test
         @DisplayName("throws when pull request not found")
         void prNotFound() {
-            when(pullRequestRepository.findByIdWithAuthorAndRepository(456L)).thenReturn(Optional.empty());
+            when(reviewTargets.findPullRequest(456L)).thenReturn(Optional.empty());
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
             assertThatThrownBy(() -> service.deliver(testJob, observations))
@@ -980,7 +932,8 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("throws when pull request has no author")
         void prNoAuthor() {
-            testPr.setAuthor(null);
+            when(reviewTargets.findPullRequest(456L))
+                    .thenReturn(Optional.of(new ReviewTargetQuery.Target(123L, "owner/repo", 42, null, false)));
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
             assertThatThrownBy(() -> service.deliver(testJob, observations))
@@ -1122,7 +1075,6 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
     @Nested
     class SeverityCoherence {
 
-        /** Captures the severity the native insert receives for one delivered observation. */
         private String capturedSeverityFor(ValidatedObservation observation) {
             service.deliver(testJob, List.of(observation));
             ArgumentCaptor<String> severityCaptor = ArgumentCaptor.forClass(String.class);
@@ -1245,7 +1197,6 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
         @Test
         void correctCounts() {
-            // One known slug, one unknown
             Practice otherPractice = new Practice();
             ReflectionTestUtils.setField(otherPractice, "id", 20L);
             otherPractice.setSlug("error-handling");
@@ -1263,7 +1214,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             PracticeDetectionCompletedEvent event = eventCaptor.getValue();
             assertThat(event.observationsInserted()).isEqualTo(2);
             assertThat(event.observationsDiscarded()).isZero();
-            assertThat(event.hasNegative()).isTrue(); // error-handling observation is NEGATIVE
+            assertThat(event.hasNegative()).isTrue();
             assertThat(event.developerId()).isEqualTo(789L);
             assertThat(event.artifactKind()).isEqualTo(ArtifactKinds.PULL_REQUEST);
             assertThat(event.artifactId()).isEqualTo(456L);
@@ -1275,16 +1226,8 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
         @Test
         void routesToIssueTargetAndAuthorWhenArtifactKindIsIssue() {
-            // Job carries artifact_kind=ISSUE + issue_id → resolve the Issue (TYPE-filtered) + its author.
-            var issue = new de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue();
-            ReflectionTestUtils.setField(issue, "id", 999L);
-            issue.setAuthor(testAuthor);
-            issue.setNumber(12);
-            Repository repository = new Repository();
-            ReflectionTestUtils.setField(repository, "id", 123L);
-            repository.setNameWithOwner("owner/repo");
-            issue.setRepository(repository);
-            when(issueRepository.findByIdWithAuthorAndRepository(999L)).thenReturn(Optional.of(issue));
+            when(reviewTargets.findIssue(999L))
+                    .thenReturn(Optional.of(new ReviewTargetQuery.Target(123L, "owner/repo", 12, 789L, false)));
 
             ObjectNode meta = new ObjectMapper().createObjectNode();
             meta.put("artifact_kind", ArtifactKinds.ISSUE.value());
@@ -1310,8 +1253,8 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                             eq(999L),
                             eq(789L), // aboutUserId
                             anyString(), // title
-                            eq("ABSENT"), // presence (ADR 0022)
-                            eq("BAD"), // assessment (former-GOOD practice ABSENT → gap)
+                            eq("ABSENT"), // presence
+                            eq("BAD"), // assessment
                             anyString(),
                             any(),
                             any(),
@@ -1323,10 +1266,6 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             assertThat(eventCaptor.getValue().artifactId()).isEqualTo(999L);
         }
 
-        /**
-         * A kind with no branch is named as such rather than falling through to the pull-request one,
-         * which would report a missing {@code pull_request_id} and send the reader after the wrong bug.
-         */
         @Test
         void refusesAKindWithNoDeliveryRoute() {
             ObjectNode meta = new ObjectMapper().createObjectNode();

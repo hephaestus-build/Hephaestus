@@ -499,7 +499,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "Comment", // Through PR -> repository.organization.workspaceId
                                         "Commit", // Through repository.organization.workspaceId
                                         "Project", // Through organization.workspaceId
-                                        "ActivitySavedEvent", // Carries user context for achievement evaluation
                                         "PracticeDetectionCompletedEvent", // carries workspaceId directly (mentor cache
                                         // eviction)
                                         "PracticeDetectionDeliveredEvent", // carries workspaceId directly
@@ -569,8 +568,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
         static final Set<String> ASYNC_LISTENERS_WITH_PAYLOAD_CONTEXT = Set.of(
                 // ActivityEventListener handles CommentCreated, ReviewSubmitted events which carry full entity graphs
                 "ActivityEventListener",
-                // AchievementEventListener handles ActivitySavedEvent which carries workspaceId context
-                "AchievementEventListener",
                 // AgentJobEventListener handles ScmDomainEvent.PullRequest{Created,Ready,Synchronized,
                 // Merged,Closed}/ReviewSubmitted whose EventContext carries the originating repository →
                 // workspaceId is resolved per-event

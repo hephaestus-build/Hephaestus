@@ -50,11 +50,11 @@ published.
 | Quality → Tooling and Docs | toolchain and agent-runtime pins, the runner and lint contracts, `gate:agents`, load-test format and syntax, agent specs, instruction mirrors, docs format and `docs:lint`, Mermaid parse | `vp run gate:agents`, `gate:docs`, `test:agents` |
 | Quality → Webapp | `vp check`, presentational components, story prose, story sort, docs colour tokens, unit tests, Vite build with a `routeTree.gen.ts` diff | `vp run check:webapp`, `test:webapp`, `build:webapp` |
 | Quality → Webapp: Stories | Storybook interaction tests, `export:assets` diff, Storybook build, Chromatic | `vp run test:webapp:stories` |
-| Quality → Windows | Every gate that needs neither Maven, Docker nor the agent sandbox, on `windows-latest`, uncached | `vp run --no-cache ci:windows` |
+| Quality → Windows | Every gate that needs neither Gradle, Docker nor the agent sandbox, on `windows-latest`, uncached | `vp run --no-cache ci:windows` |
 | Quality → Clean install | `vp install --frozen-lockfile` on a runner with Node and the launcher and nothing else, then `gate:toolchain` and the hooks path | `vp install` |
-| Build → App Server: Package | `./mvnw -pl application -am package -DskipTests`; uploads the classes and JARs once | — |
+| Build → App Server: Package | `./gradlew :application:bootJar :application:testClasses`; uploads the classes and JARs once | — |
 | Build → App Server: Generated artifacts | `generate:api` diff against the packaged JAR; `db:check-drift`, which replays `master.xml` and diffs the JPA model; ERD diff | `vp run generate:api`, `db:check-drift`, `db:generate-erd-docs` |
-| Build → App Server: Database | Surefire `database` group against PostgreSQL; the major-upgrade drill | `vp run test:postgres-upgrade` |
+| Build → App Server: Database | Gradle `databaseTest` task against PostgreSQL; the PostgreSQL 18 backup-restore drill | `vp run test:postgres-restore` |
 | Build → Webapp: E2E | Playwright against the packaged JAR | `vp run --filter webapp test:e2e` |
 | Build → App Server image | `pack build` from the packaged JAR, signed, attested and policy-scanned | — |
 | Test → App Server: Unit and architecture, App Server: Integration | compiled from source | `vp run test:server:verification`, `test:server:integration` |
@@ -65,9 +65,10 @@ published.
 | Docker → Webapp, Agent: Pi, Postgres (pg_partman), Tag unchanged images | Dockerfile images; aliases for unchanged ones | — |
 | Supported-host boot smoke | `docker/self-host/setup.sh`, then PostgreSQL, NATS and the application server from this run's own images, waiting for the application to report healthy | — |
 | Actionlint, Zizmor | workflow lint with ShellCheck warnings; Zizmor at medium confidence | — |
-| PR → Verify commit identity | every commit's primary author resolves to a GitHub account, and that account is the pull request's author; a `Bot` author is matched against its `[bot]` account; no commit message or the pull request body names a model, agent, harness or tool | — |
+| PR → Validate PR | Conventional Commit title; every commit’s primary author resolves to the pull request author’s GitHub account (including bot accounts); the PR body follows attribution policy | — |
 
-The four quality legs are one matrix job, one entry per leg of the task graph. Each runs
+The four quality legs call `ci-quality-leg.yml` independently. Job-level conditions omit unchanged
+legs before a runner is allocated; selected legs do not cancel each other on failure. Each runs
 `vp run ci:<leg>`, then pipes `vp run --last-details` through `scripts/report-task-run.ts`: every
 task that did not pass becomes an error annotation naming the command that reproduces it, and the
 report, cache hits and miss reasons included, lands in the job summary. A leg runs when the change
@@ -120,8 +121,17 @@ a stacked layer is approved while it still targets the layer below, because reta
 lower layer merges must not depend on receiving a subsequent event. The `edited` trigger also
 re-evaluates explicit base changes.
 
-The Version PR carries checks like any other pull request. Its updates are pushed with
-`GITHUB_TOKEN`, which starts no workflow run, so `version-pr.yml` dispatches CI/CD on the Version
+A merge group uses a synthetic ref, not the Version PR branch name. If its aggregate tree changes
+`package.json`'s version relative to the group's base, it is a release candidate: it builds both
+platforms of every release image and must pass release evidence preflight on that exact tree.
+Missing base/version data fails detection rather than silently skipping release validation.
+
+Cancelled or approval-blocked runs do not suppress the Version PR’s CI dispatch; actual validation
+failures require an explicit rerun.
+
+The Version PR is maintained after CI/CD succeeds for the current tip of `main`; failed or
+overtaken main runs do not update it. It carries checks like any other pull request. Its updates are
+pushed with `GITHUB_TOKEN`, which starts no workflow run, so `version-pr.yml` dispatches CI/CD on the Version
 PR's branch instead — `workflow_dispatch` being one of the two events that token may start. The
 dispatched run reports `CI Status Gate` onto the branch head, which is the pull request's head
 commit, so the commit whose merge cuts a release is validated before it lands. `Verify changesets`
@@ -146,20 +156,27 @@ changesets rather than adding one. [Release management](./release-management.mdx
 
 One check owns the dependency verdict: the dependency vulnerability gate in `ci-security-scan.yml`,
 a second Trivy pass in `table` format over the same checkout. It runs on pull requests and on `main`
-pushes and evaluates every dependency the lockfiles resolve, so an advisory published against a pin
-no pull request touches fails the next run rather than waiting for someone to open the code-scanning
-dashboard. It applies the severity policy in [vulnerability
+pushes and includes development and test dependencies from the lockfiles. An advisory published
+against a pin no pull request touches fails the next run rather than waiting for someone to open
+the code-scanning dashboard. It applies the severity policy in [vulnerability
 remediation](./vulnerability-remediation.mdx) — fixable high or critical — and its exceptions are the
 one exception path for a dependency finding, recorded in `security/trivy-dependency-ignore.yaml`.
 
-Dependency review sees only the manifests a pull request changes, so it cannot hold that verdict; it
-reports what the pull request introduces and fails nothing. The first Trivy pass is the
-code-scanning feed: SARIF output reports every severity whatever `severity` is set to, so the pass
-that publishes it carries neither `severity` nor `exit-code`, and it keeps Trivy's secret scanner,
+Dependency review compares the base and head dependency graphs, so it cannot hold that verdict; it
+reports what the pull request introduces and fails nothing. Gradle graphs are generated on pull
+requests and main pushes through the official Gradle action, with dependency verification still
+enabled. Generation has read-only permissions; a separate `workflow_run` publisher submits the
+snapshot without checking out or executing the originating code. Dependency review waits for these
+asynchronous snapshots. The publisher must exist on the default branch before GitHub runs it.
+
+The first Trivy pass is the code-scanning feed: SARIF output reports every severity whatever
+`severity` is set to, so the pass that publishes it carries neither `severity` nor `exit-code`,
+and it keeps Trivy's secret scanner,
 which covers the whole tree where TruffleHog covers a pull request's own commits.
 
-Renovate groups routine updates only when they share a review and verification boundary. Production
-dependencies remain separate unless Renovate identifies a package family that must move together.
+Renovate groups routine Gradle updates as server dependencies and webapp development updates
+separately. Webapp production dependencies remain separate unless Renovate identifies a package
+family that must move together.
 Major updates and minor updates to pre-1.0 dependencies remain ungrouped, wait seven days, and require
 Dependency Dashboard approval. Native
 [branch and PR limits](https://docs.renovatebot.com/configuration-options/#branchconcurrentlimit)
@@ -172,6 +189,14 @@ pnpm and Pi SDK pins are grouped, so a version stated in several managed files m
 request; the toolchain checks reject a version that reads differently in any of them. Renovate
 provisions the Node it runs lockfile updates with from `engines`, so `engines.node` restates
 `devEngines.runtime` exactly rather than the supported line.
+
+For Gradle, `constraints.java` restates `.java-version`, enforced by `gate:toolchain`: Renovate's
+parser cannot infer the toolchain through the file read in the Kotlin build. The Gradle and wrapper
+managers own version, lockfile and verification-metadata updates. A self-hosted Renovate administrator
+must permit `gradleWrapper` in `allowedUnsafeExecutions` for artifact updates; a repository config
+cannot grant that permission. Missing or failed artifact updates are not a reason to weaken Gradle
+verification. Follow [Updating Java dependencies](./local-development.mdx#updating-java-dependencies)
+to repair and verify them before merging. Renovate-generated checksums still require independent review.
 
 [Vulnerability remediation](./vulnerability-remediation.mdx) owns the severity policy and the shape,
 ceiling and approval of an exception, for images and dependencies alike.
@@ -352,12 +377,15 @@ why the label is the authority, and which alternatives were priced and declined,
 | `cicd.yml` | PR, merge group, push to main, manual | Validates changes before merge and builds final-SHA images after merge; the release evidence gate runs over the images the run built on the Version PR's branch, and wherever the `release-preflight` dispatch input asks for it |
 | `review-policy.yml` | PR opened, reopened, synchronized, ready for review, edited | Approves a listed maintainer's pull request so the ruleset's required approval is met; does nothing for anyone else |
 | `pull-request.yml` | PR opened, edited, synchronized, reopened, ready for review | Validates the title against the policy `commitlint.config.ts` exports, without installing the workspace, checks that every commit resolves to the pull request's author, and assigns the author when the pull request opens |
-| `ci-quality-gates.yml` | Called by cicd.yml | Formatting, lint, type checks, webapp unit and story tests: everything verifiable from source |
-| `ci-build.yml` | Called by cicd.yml | Packages the server reactor once, then runs the OpenAPI, schema, database and browser E2E gates and the application-server image against that artifact |
+| `ci-quality-gates.yml` | Called by cicd.yml | Selects quality legs, clean-install verification and story tests |
+| `ci-quality-leg.yml` | Called by ci-quality-gates.yml | Shared formatting, lint, type-check and unit-test execution for each selected task-graph leg |
+| `ci-build.yml` | Called by cicd.yml | Packages the server once, then runs the OpenAPI, schema, database and browser E2E gates and the application-server image against that artifact |
 | `ci-tests.yml` | Called by cicd.yml | The server unit, architecture and integration suites, compiled from source |
 | `ci-docker-build.yml` | Called by cicd.yml | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images |
 | `reusable-docker-build.yml` | Called by ci-build.yml and ci-docker-build.yml | Builds, signs, attests, and blocks on the release vulnerability policy for the `linux/amd64` image |
 | `ci-security-scan.yml` | Called by cicd.yml | Dependency review on pull requests; Trivy dependency scan, secret detection and repository policy checks |
+| `dependency-graph.yml` | PR, push to main | Resolves and uploads the verified Gradle dependency graph with read-only permissions |
+| `submit-dependency-graph.yml` | Successful dependency-graph workflow | Submits snapshot data without executing code from the originating run |
 | `verify-changesets.yml` | Called by cicd.yml | Tests changeset and version-sync policy and enforces release-note presence |
 | `ci-compose-validate.yml` | Called by cicd.yml | Validates rendered reference and self-hosted Compose stacks |
 | `openapi-autocommit.yml` | `autocommit-openapi` label | Regenerates the OpenAPI spec and client and commits them to the pull request |
@@ -366,14 +394,14 @@ why the label is the authority, and which alternatives were priced and declined,
 | `semgrep.yml` | Pull request, push to main, merge group | Tests and scans the repository's own TLS rule pack |
 | `rescan-main-images.yml` | Weekly, manual | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings |
 | `rescan-release-images.yml` | Weekly, manual | Rescans the latest published release's images and reports drift on the vulnerability response issue |
-| `ci-profile.yml` | Weekly, manual | Enforces PR latency budgets and profiles server integration tests and Spring contexts |
+| `ci-profile.yml` | Weekly, manual | Reports advisory performance budgets and profiles server test tiers |
 | `ci-server-clean-reference.yml` | Weekly, manual | Records cold server phases and compares generated JARs |
 | `scorecard-ratchet.yml` | Push to main, branch-protection change, weekly, manual | Fails when a Scorecard check drops below the committed baseline; a push fails only for the checks its own commit decides |
 | `deploy-preview.yml` | `preview` label added, or a push, reopen or ready-for-review on a labelled PR | Waits for this commit's attested CI images, deploys them, and registers the native GitHub deployment |
 | `cleanup-preview.yml` | Label removed, PR closed or drafted | Removes and verifies resources, then retains a cleanup tombstone |
 | `reconcile-previews.yml` | Nightly, manual | Re-sends teardown for any preview environment whose pull request is closed, drafted or unlabelled |
 | `cd-docs.yml`, `cd-docs-teardown.yml` | `docs/**` on push and pull requests; PR closed | Publishes the docs site and its pull-request previews |
-| `version-pr.yml` | Push to main | Maintains the accumulating Version PR (changesets) and dispatches CI/CD on its branch, release evidence preflight included |
+| `version-pr.yml` | Successful CI/CD completion for the current main tip | Maintains the accumulating Version PR (changesets) and dispatches CI/CD on its branch, release evidence preflight included |
 | `release.yml` | Successful CI/CD push on `main` | Publishes the release and promotes the moving series and latest image tags |
 | `release-upgrade.yml` | Called by `release.yml`, weekly | Boots the previous stable release with seeded data, then the candidate against the same database |
 | `promote.yml` | Manual dispatch, or automatically for staging | Signs the channel a host follows; hosts pull and apply it themselves |
@@ -399,8 +427,8 @@ credential is still `GITHUB_TOKEN`, so these commits start no further workflow r
 | Action | Contract |
 | --- | --- |
 | `setup-toolchain` | Installs the Node.js version pinned in `package.json`, and nothing else when `install` is `none`, so a job that only runs `node scripts/…` reaches no package registry; `frozen` adds the pinned pnpm — caching its executable by runner platform and pinned version and retrying the download twice on a miss — restores the pnpm store cache, and installs the launcher through the SHA-pinned `setup-vp` with `node-manager: false`, which then runs the lockfile's `vite-plus` |
-| `setup-caches` | Sets up the JDK from `.java-version` and restores the Maven dependency cache with a prefix fallback; `application-server-reactor` also restores the generated-client build cache and is the only type that writes caches, on default-branch push, schedule and dispatch runs |
-| `restore-server-build` | Downloads the packaged reactor and installs its generated-clients JAR and parent pom so single-module Maven goals resolve them; outputs the executable JAR path |
+| `setup-caches` | Sets up the JDK from `.java-version`, validates the wrapper and uses the official Gradle action for dependency and build caches; only default-branch push, schedule and dispatch runs may publish caches |
+| `restore-server-build` | Downloads and validates the packaged JARs, compiled tests and resources; outputs the executable JAR path without recompiling or installing local artifacts |
 | `setup-browsers` | Restores the exact Playwright browser version and installs Chromium system dependencies |
 | `setup-release-security-tools` | Installs Cosign, Trivy, and optionally Syft for release-evidence jobs |
 | `download-trivy-db` | Fetches the vulnerability database with retries and a mirror fallback; optionally refuses one over `max-age-hours` old and records its metadata |
@@ -408,12 +436,21 @@ credential is still `GITHUB_TOKEN`, so these commits start no further workflow r
 
 ### Caches
 
-A run restores caches from its own branch and from `main`, never from a sibling branch; within that
-scope the newest entry under the key prefix wins. Task-cache entries are content-addressed, so a
-pull request saves them for its own reruns; the Maven caches and the pnpm executable cache save only
-from `main`, because every branch shares their key and a write from any other ref would be reused by
-nobody. The JDK the caches depend on is pinned once, in `.java-version`, which every workflow
-provisions from.
+A run restores caches from its own branch and from `main`, never from a sibling branch. Task-cache
+entries are content-addressed, so a pull request saves them for its own reruns. Gradle caches are
+published only by trusted default-branch push, schedule and dispatch runs; the pnpm executable cache
+also saves only from `main`. The JDK is pinned once, in `.java-version`.
+
+Java quality verdicts are not stored in the Vite task cache: Gradle owns their task inputs and outputs.
+The [local verification contract](./local-verification.mdx#java-checks-and-caching) describes the shared
+local/CI command and how to distinguish Vite, Gradle build and Gradle configuration caches.
+
+Gradle's official action explicitly uses its [enhanced cache provider](https://github.com/gradle/actions/blob/v6.3.0/docs/setup-gradle.md#enhanced-caching).
+Its proprietary caching helper is [free for public repositories](https://github.com/gradle/actions/blob/v6.3.0/DISTRIBUTION.md).
+It retains dependency fallback and deduplicated build outputs; the OSS basic provider's immutable,
+exact-match cache cannot refresh build outputs after source-only changes. Configuration-cache
+reuse remains within a job: no encryption key is configured, so the
+action does not persist configuration-cache entries across jobs.
 
 Repository-local actions require checkout first. Jobs without checkout use the external SHA-pinned
 action directly rather than checking out the repository only to reach a wrapper.
@@ -429,10 +466,10 @@ paths, because previews need every image at the head SHA; no other event has a p
 | Selects | Paths |
 | --- | --- |
 | Quality → Webapp | `webapp/**`, `docs/images/readme/**`, `docs/src/css/custom.css`, the root oxlint and oxfmt configs, the four `scripts/check-*` files it runs, root package files |
-| Quality → App Server | `server/**` except `AGENTS.md` and `CLAUDE.md`, `scripts/run-mvnw.ts`, `docker/compose.app.yaml`, `docker/compose.core.yaml`, root package files |
+| Quality → App Server | `server/**` except `AGENTS.md` and `CLAUDE.md`, `scripts/run-gradlew.ts`, `docker/compose.app.yaml`, `docker/compose.core.yaml`, root package files |
 | Quality → Tooling and Docs | `scripts/**`, `docker/agents/**`, `load-tests/**`, `docs/**`, tsconfigs, oxlint and oxfmt configs, `.changeset/**`, `commitlint.config.ts`, instruction files, `renovate.json`, `openapitools.json` |
-| Every quality leg | `vite.config.ts`, `.vite-hooks/**`, `.java-version`, `cicd.yml`, `ci-quality-gates.yml` and the setup actions: the task graph, the hooks and the JDK decide every leg's verdict, so a change to one runs all of them |
-| Build artifact gates | contracts: the App Server paths or `docker/postgres/**`; E2E: webapp source and the server main sources; image: `server/application/src/main/**`, the poms, `server/application/project.toml`, `server/generated-clients/**` |
+| Every quality leg | `vite.config.ts`, `.vite-hooks/**`, `.java-version`, `cicd.yml`, `ci-quality-gates.yml`, `ci-quality-leg.yml` and the setup actions: the task graph, the hooks and the JDK decide every leg's verdict, so a change to one runs all of them |
+| Build artifact gates | contracts: the App Server paths or `docker/postgres/**`; E2E: webapp source and the server main sources; image: `server/application/src/main/**`, the Gradle build scripts, catalog, locks and wrapper, `server/application/project.toml`, `server/generated-clients/**` |
 | Docker images | `webapp-image`: the webapp build inputs and non-test source; `agent-images`: `docker/agents/**`; `postgres-image`: `docker/postgres/**` |
 | Supported-host boot smoke | `docker/**`, `application*.yml`, and the sources Spring binds configuration from — `**/*Properties.java` and `Application.java`. `ci-contract.test.ts` fails if a source carrying `@ConfigurationProperties` or `@ConfigurationPropertiesScan` is not selected |
 | CI config | one filter per leg naming its own workflow files and actions; any `.github/workflows/**` or `.github/actions/**` change runs Actionlint and Zizmor |
@@ -476,11 +513,19 @@ gives the retried job a new attempt number.
 
 ## Build once
 
-`Build` packages the server reactor once. The OpenAPI and schema gates, the database contract tests,
-the browser E2E suite and the application-server image download that artifact and run Maven goals or
-`pack` against it: the JAR the E2E suite ran is the JAR inside the image, and the spec is scraped
-from the same JAR. The unit, architecture and integration suites are the exception: they produce
-nothing that ships, so they compile from source in `Test` and do not wait for packaging.
+`Build` packages the server once and uploads its JARs, compiled tests and resources. OpenAPI and
+browser checks boot that executable JAR; buildpacks consume it without another build. Schema gates
+and database contract tests use the restored classes with `-PpackagedServer=true`, which bypasses
+compilation. Unit, architecture and integration suites compile from source in `Test` without
+waiting for packaging; their outputs do not ship.
+
+A default-branch push reuses the packaged server when a successful release-candidate merge group
+validated the exact same commit. The source must be this repository's `cicd.yml` run, with successful
+artifact gates, tests, security checks, dual-platform server builds, release preflight and final gate.
+The immutable artifact ID and its SHA-256 digest bind the download to that run. Missing, expired or
+unavailable source evidence falls back to packaging; a corrupt download fails rather than being used.
+Main still runs its own validation and publishes its images, including main-only tags and source maps.
+Release publication still generates fresh vulnerability evidence and signatures.
 
 An image a pull request did not change is not rebuilt either: `Tag unchanged images` verifies the
 digest an earlier run published and re-tags it to this run's head SHA. It is aliased from the
@@ -496,19 +541,22 @@ reaches no such commit builds every image itself. `detect-changes` resolves that
 - `App Server: Integration` has two shards: `providers-and-startup` selects the `integration`
   package and `StartupBudgetIntegrationTest`; `application` excludes both. Both retain the
   `integration` tag filter and run in separate JVMs and Testcontainers databases. The startup test
-  owns a database separate from other Spring contexts. Surefire's `-Dtest` replaces its include
-  patterns, so the second selector is exclusion-only; `scripts/ci-contract.test.ts` checks that
-  the selectors partition the tier. Both shards report with `fail-fast: false`, and
-  `CI Status Gate` requires their aggregate result. Locally the tier runs whole.
+  owns a database separate from other Spring contexts. Gradle's native test filters partition
+  the tier; `vp run test:server:selection` checks coverage through JUnit dry-run reports before
+  unit/architecture verification. Discovery reports stay separate from execution results.
+  Both shards use `fail-fast: false`; `CI Status Gate` requires their aggregate result. Locally
+  the tier runs whole.
 - Pull requests and merge groups build `linux/amd64`; pushes to `main`, and every run on the Version
   PR's branch, build both architectures. A pull request and a merge group each also build only the
   images their own diff touched and alias the rest, while the Version PR's branch builds all of
   them. `detect-changes` decides both once, as `single-arch` and `all-images`, and hands them to
   every image build in the run.
-- The `Quality` matrix uses `fail-fast: false`; the image matrix in `reusable-docker-build.yml` uses
+- Quality legs run independently; the image matrix in `reusable-docker-build.yml` uses
   `fail-fast: true`.
-- Pull-request runs cancel superseded runs; `release.yml` never cancels. PR and dispatch lanes
-  remain separate because they validate different refs: the PR merge ref and the branch head.
+- Pull-request runs cancel superseded runs; `release.yml` never cancels. The same-repository
+  Version PR shares a concurrency lane with its dispatch, so a racing trigger replaces redundant
+  validation. Either survivor must pass release preflight; the merge queue separately validates
+  the final merge tree. Ordinary PRs, forks, main pushes and merge groups retain separate lanes.
 - A run on `main` that leaves a per-commit record — `codeql.yml`, `semgrep.yml`, `scorecard.yml`,
   `scorecard-ratchet.yml` — is never cancelled, because it is the only run that commit will get and
   its absence is what a later score reads as a gap. Those workflows write
@@ -530,8 +578,18 @@ creation to completion of **CI Status Gate**. On the default branch, `CI profile
 first-attempt PR runs with full server and browser verification from the latest 100 completed PR
 runs created in the last 28 days. Lightweight changes and Version-PR runs cannot satisfy this
 cohort. Failed and cancelled counts describe the bounded listing, not a repository-wide failure
-rate. Fewer than ten qualifying runs fails as insufficient evidence; budget failures also retain
-the JSON report.
+rate. Budget misses produce warnings and a job summary, not workflow failures. Fewer than ten
+qualifying runs produces an insufficient-data notice, not a pass or a regression. All observations
+retain the JSON report. Historical latency includes runner waiting and earlier commits, so it is
+not a correctness verdict on the profiled commit.
+
+Performance observations are advisory in this diagnostic workflow; test failures, unreadable
+recordings, invalid metrics, and reporting/API errors still fail it. Do not use `continue-on-error`
+to hide those failures. Investigate sustained warnings using the retained run timelines and profiles.
+A blocking performance gate would need a comparable workload and runner environment, an established
+noise model, and an attributable regression—not a historical fleet-wide target miss. This separation
+follows [SRE guidance on actionable, low-noise monitoring](https://sre.google/sre-book/monitoring-distributed-systems/)
+and uses native [GitHub warnings and job summaries](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands).
 
 Reproduce the observer with an authenticated GitHub CLI:
 
@@ -559,31 +617,36 @@ or mixed attempts. Keep raw API evidence under `tmp/`, not in committed performa
 
 ### Server profiles
 
-Normal PR test jobs retain Surefire reports for 14 days, separately for each suite, shard and
+Normal PR test jobs retain JUnit XML reports for 14 days, separately for each suite, shard and
 attempt. Use those reports and GitHub's step timings before rerunning tests with instrumentation.
-Deep profiling stays in the manual/weekly workflow, not on the PR critical path.
+Deep profiling stays in the manual/weekly workflow, not on the PR critical path. Select
+`integration`, `verification` (unit and architecture, including coverage), or `all` when dispatching
+`CI profile`. Weekly runs profile both tiers sequentially so diagnostics do not occupy two heavy
+runners at once. Each tier retains its JFR recording, Gradle task profile, resource usage and JUnit
+results for 14 days. Verification profiles are diagnostic artifacts, not integration-history samples.
 
-`CI profile` records JFR, Maven phase timings, resource usage, JUnit results and Spring context-cache
-metrics. It signals
+The integration profile additionally records Spring context-cache metrics. It warns about
 a sustained regression after three consecutive profiles exceed variance limits against five earlier
 default-branch profiles or absolute Spring-context limits. Only successful test runs with a readable
-JFR recording and valid summaries enter history, including runs whose performance budget fails.
+JFR recording and valid summaries enter history, including out-of-budget samples.
 History is restored from this repository's default-branch JFR history artifacts, retained for
 90 days; a rerun replaces its own sample. Uninstrumented runs are not baseline candidates. Without seven earlier
 profiles, the sustained-regression check has no verdict. Branch dispatches produce diagnostic
-artifacts without changing or enforcing the baseline.
+artifacts without changing or comparing against the baseline.
 
 The workflow's `Run integration suite with JFR` step owns the invocation. Additional test-JVM flags
-use `-Dhephaestus.test.jvmArgs=...`; Surefire and Failsafe compose these with JaCoCo's late-bound
-arguments and the configured memory limits. Missing recordings, Maven reports, resource metrics
-or Spring-context measurements fail the profile rather than becoming zero-valued baselines.
-For local shard profiling, use the same `HEPHAESTUS_INTEGRATION_TESTS` selector as the CI matrix
+use `-PtestJvmArgs=...`; Gradle composes them with the configured memory limits and JaCoCo agent.
+`-PprofileTests=true` writes a separate JFR recording for each test task, so unit and architecture
+recordings never overwrite each other. Missing recordings, Gradle reports or resource metrics
+fail the profile rather than becoming zero-valued baselines. Integration profiles also require
+Spring-context measurements; unit/architecture profiles do not require a Spring application to boot.
+For local shard profiling, use the same `HEPHAESTUS_INTEGRATION_SHARD` selector as the CI matrix
 and the Java version pinned in `.java-version`. Compare the same suite, runtime and cache state;
 the weekly whole-tier baseline is not comparable to one shard.
 
 `SpringTestContextArchitectureTest` enforces the reviewed Spring context keys. The weekly
-**Server Phase Reference** workflow records cache-disabled Maven generation, compilation,
-test-compilation and execution profiles and compares two clean generated-client JARs.
+**Server Phase Reference** workflow profiles generation, compilation and test execution with the
+build cache disabled, and compares two clean generated-client JARs.
 
 ## Running CI locally
 
@@ -638,3 +701,63 @@ Extend the pipeline at the ownership boundary that changed; do not copy an exist
 5. Pass the change-detection output from `cicd.yml` to every reusable workflow that needs it.
 
 `scripts/ci-contract.test.ts` owns the workflow invariants; extend it when the service introduces one.
+
+## Chromatic visual coverage
+
+The Stories job reports visual coverage separately from interaction tests and the
+**Preview / Storybook** publication link. Publication is not visual approval: the final job
+verdict also requires a passing coverage report.
+
+| Verdict | Meaning and action |
+| --- | --- |
+| `tested-build` | The returned build has captured snapshots and passed without errors. It may be a reused approved build, not new captures in this CI run. |
+| `inherited` | The returned build reused baseline snapshots without new captures. Valid TurboSnap coverage, but not a newly tested recovery baseline. |
+| `quota-skipped` | An account limit blocked coverage. The job fails; an account owner must resolve the limit. |
+| `failed` | Visual differences or component/interaction errors need review. Fix errors; accept only intentional, inspected differences. |
+| `unavailable` | Chromatic failed or returned insufficient coverage evidence. The job fails; inspect the build, action logs and account limits before retrying. |
+| `policy-skipped` | Fork PRs and `dependabot/` or `renovate/` branches do not run credentialed visual tests. Interaction tests still run; this is not visual approval. |
+
+`scripts/report-chromatic.ts` interprets the action's public outputs and
+[CLI exit codes](https://www.chromatic.com/docs/cli/#exit-codes). Counts describe the returned
+build, which Chromatic can reuse; they do not establish when snapshots were captured. Accepted
+builds can retain nonzero change counts. Missing outputs fail closed, and account limits are not
+always distinguishable from other failures. Review this contract when updating the action.
+
+For visual verification of a fork contribution, a maintainer can review it and run a trusted
+same-repository branch. Do not expose project secrets to forks or use `pull_request_target`
+to bypass the policy.
+
+### Recovering quota and the baseline
+
+1. An account owner checks the project's current quota/billing and the linked build's results.
+   Resolve any account limit before retrying.
+2. Coordinate one full run on the current `main` commit after confirming snapshot capacity.
+   From the repository root:
+
+   ```bash
+   vp run --filter webapp build-storybook
+   cd webapp
+   vp exec chromatic --storybook-build-dir=storybook-static --only-changed=false --force-rebuild
+   ```
+
+   Supply `CHROMATIC_PROJECT_TOKEN` through the environment, never a committed file or command
+   argument. `--force-rebuild` prevents same-commit build reuse; `--only-changed=false` requests
+   full snapshots instead of TurboSnap inheritance.
+3. Verify in Chromatic that the build captured snapshots and completed testing. Inspect every
+   difference and component/interaction error. CI never auto-accepts, including on `main`:
+   manually accept only intentional, inspected differences, then rerun the check. Never accept
+   a publish-only, limited, errored or untested build as the recovery baseline.
+4. Reproduce component failures with the affected stories. Fix defects with story or regression
+   coverage, or link a scoped defect with reproduction details. For earlier errors that no longer
+   reproduce, record the verification evidence rather than assuming a successful upload fixed them.
+5. Record the `main` commit, build URL, captured/inherited counts, quota check and error dispositions
+   in the issue tracking the recovery. Then rerun affected PRs.
+
+### Snapshot consumption and global changes
+
+[TurboSnap](https://www.chromatic.com/docs/turbosnap/) reuses unchanged baseline snapshots.
+`webapp/chromatic.config.json` owns external-file invalidation: global styles, public files, assets
+and build configuration intentionally trigger full snapshots. Budget for those runs; do not narrow
+`externals` or broaden `untraced` to reduce quota use or latency. Follow
+[Chromatic's external-file guidance](https://www.chromatic.com/docs/turbosnap/setup/#configure-external-files)
+when changing these boundaries, and preserve dependency stats from the single Storybook build.

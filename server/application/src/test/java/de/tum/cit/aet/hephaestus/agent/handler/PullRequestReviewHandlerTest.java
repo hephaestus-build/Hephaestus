@@ -376,7 +376,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
 
             assertThat(files).containsKey("task.json");
             JsonNode envelope = objectMapper.readTree(files.get("task.json"));
-            assertThat(envelope.get("schemaVersion").asInt()).isEqualTo(1);
+            assertThat(envelope.get("schemaVersion").asInt()).isEqualTo(2);
             assertThat(envelope.get("workspaceId").asLong()).isEqualTo(WORKSPACE_ID);
             JsonNode task = envelope.get("task");
             assertThat(task.get("kind").asString()).isEqualTo("practice_review");

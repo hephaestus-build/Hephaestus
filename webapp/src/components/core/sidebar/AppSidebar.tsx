@@ -134,7 +134,6 @@ export function AppSidebar({
 				<NavDashboards
 					username={username}
 					workspaceSlug={activeWorkspace.workspaceSlug}
-					achievementsEnabled={activeWorkspace.achievementsEnabled}
 					leaderboardEnabled={activeWorkspace.leaderboardEnabled}
 					practicesEnabled={activeWorkspace.practicesEnabled}
 				/>
@@ -144,7 +143,6 @@ export function AppSidebar({
 				{isAdmin && (
 					<NavAdmin
 						workspaceSlug={activeWorkspace.workspaceSlug}
-						achievementsEnabled={activeWorkspace.achievementsEnabled}
 						integrationKinds={integrationKinds}
 						scmProviderType={activeWorkspace.providerType === "GITLAB" ? "GITLAB" : "GITHUB"}
 					/>

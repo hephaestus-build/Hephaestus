@@ -6,16 +6,23 @@ on:
     paths:
       - ".github/workflows/security-mutation.yml"
       - ".github/actions/setup-toolchain/**"
+      - ".github/actions/setup-caches/**"
+      - ".java-version"
+      - "scripts/run-gradlew.ts"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "scripts/run-security-mutations.ts"
       - "scripts/run-security-mutations.test.ts"
-      - "server/application/pom.xml"
+      - "server/application/build.gradle.kts"
+      - "server/application/gradle.lockfile"
       - "server/generated-clients/**"
-      - "server/.mvn/**"
-      - "server/mvnw"
-      - "server/pom.xml"
+      - "server/gradle/**"
+      - "server/gradlew*"
+      - "server/build.gradle.kts"
+      - "server/settings.gradle.kts"
+      - "server/settings-gradle.lockfile"
+      - "server/gradle.properties"
       - "server/application/src/**/java/de/tum/cit/aet/hephaestus/core/auth/oauth/**"
       - "server/application/src/**/java/de/tum/cit/aet/hephaestus/core/security/**"
       - "server/application/src/**/java/de/tum/cit/aet/hephaestus/integration/core/connection/**"
@@ -39,12 +46,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
-        with:
-          distribution: temurin
-          java-version-file: .java-version
-          cache: maven
-          cache-dependency-path: "server/**/pom.xml"
+      - uses: ./.github/actions/setup-caches
 
       - uses: ./.github/actions/setup-toolchain
         with:
@@ -58,6 +60,6 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: security-mutation-report-${{ github.run_id }}-${{ github.run_attempt }}
-          path: server/application/target/pit-reports
+          path: server/application/build/reports/pitest
           if-no-files-found: error
           retention-days: 30

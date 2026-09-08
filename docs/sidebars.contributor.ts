@@ -34,7 +34,6 @@ const sidebars: SidebarsConfig = {
 				"migration-unified-integration",
 				"database-schema",
 				"database-migration",
-				"achievements",
 			],
 		},
 		{

@@ -11,6 +11,9 @@ jobs:
     name: "Verify changesets"
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      # Compare with the tested merge's base, not potentially stale PR event metadata.
+      BASE_SHA: HEAD^1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -31,16 +34,12 @@ jobs:
       - name: Detect a verified revert
         id: revert
         if: ${{ !github.event.pull_request.draft && github.event.pull_request.user.type != 'Bot' }}
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: node scripts/verify-revert.ts "$BASE_SHA" HEAD
 
       - name: Check release-note presence
         if: >-
           ${{ !github.event.pull_request.draft && github.event.pull_request.user.type != 'Bot'
             && steps.revert.outputs.verified-revert != 'true' }}
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
 

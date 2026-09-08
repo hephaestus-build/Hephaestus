@@ -191,7 +191,6 @@ first word says what kind of task it is, and only these prefixes are allowed:
 | `gate` | Produce one verdict that CI can annotate; every gate belongs to `quality` unless explicitly CI-only in the task contract test |
 | `generate` | Regenerate a committed artifact from its authoritative source |
 | `lint` | Run a linter; a final `fix` segment applies safe fixes and `report` writes a report |
-| `prepare` | Produce an uncommitted prerequisite needed by another task |
 | `quality` | Internal graph containing every local quality gate; use `check` at the command line |
 | `release` | Prepare or publish a release version |
 | `report` | Turn existing results into a human- or machine-readable report |
@@ -292,10 +291,10 @@ change that ships, never a measurement or a verdict alone.
 | `webapp/src/api/**` | `vp run generate:api:client` |
 | `docs/contributor/erd/schema.mmd` | `vp run db:generate-erd-docs` |
 | `webapp/src/routeTree.gen.ts` | TanStack Router Vite plugin |
-| `server/generated-clients/target/generated-sources/**` | GraphQL and Outline codegen, owned by the generated-clients Maven module |
+| `server/generated-clients/build/generated/sources/**` | GraphQL and Outline codegen, owned by the generated-clients Gradle module |
 
 Never hand-edit these. `generate:api:client` empties `webapp/src/api/` first;
-Maven-generated sources live under `target/` and are never committed. Commit `server/openapi.yaml`
+Gradle-generated sources live under `build/` and are never committed. Commit `server/openapi.yaml`
 and `webapp/src/api/**` with the API change that produced them.
 
 ## Database changes
@@ -304,7 +303,9 @@ Procedure: `docs/contributor/database-migration.mdx`. Entity conventions the dri
 `server/AGENTS.md` § Schema changes. `vp run db:draft-changelog` writes the drift into this
 branch's single changelog and wires it into `master.xml`; a branch never hand-writes one or adds a
 second. A file under `db/changelog/` that reached `main` is never edited, renamed or deleted, and
-`master.xml` is append-only.
+`master.xml` is append-only. The verified v0.77.4 archival transition is documented in the migration
+procedure; it is not permission for future history rewrites. Existing developer databases must follow
+the baseline runbook or be discarded with `vp run dev:reset` before `vp run dev`.
 
 ## Command caveats
 
@@ -312,10 +313,10 @@ Each of these reports success and leaves a stale or wrong result.
 
 - **`generate:api:specs` honours `HEPHAESTUS_APPLICATION_JAR`.** With it set, the
   spec is scraped from that JAR, not from your checkout. Unset it after a CI-style run. Without it
-  the script packages the reactor with tests skipped and boots the JAR under the `specs` profile on
-  a free port.
-- **`surefire:test` as a bare goal runs whatever `target/test-classes` holds.** After editing a
-  test, run a lifecycle phase (`test-compile`) first, or use the `vp run test:server:*` tasks,
-  which do.
-- **One Maven process per checkout**, and `server/.env` leaks into test JVMs — `server/AGENTS.md`
+  the script packages the server without running tests and boots the JAR under the `specs` profile
+  with isolated HTTP ports.
+- **`-PpackagedServer=true` consumes restored compiled classes.** It is reserved for CI artifact
+  consumers. Local Gradle test tasks compile their inputs automatically; never use packaged mode
+  after changing source.
+- **One Gradle invocation per checkout**, and `server/.env` can affect test JVMs — `server/AGENTS.md`
   § Build traps.

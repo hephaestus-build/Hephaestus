@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** The one file that decides whether a run composes at all, and which surfaces it may reach. */
 class FeedbackCompositionInputsTest extends BaseUnitTest {
 
     private final JsonMapper objectMapper = JsonMapper.builder().build();
@@ -33,11 +32,6 @@ class FeedbackCompositionInputsTest extends BaseUnitTest {
         }
     }
 
-    /**
-     * A sweep has no diff and no line to point at, so the public lane is closed — but it is closed by
-     * being named and disabled, not by being left out. The per-surface rules are only legible in
-     * contrast, and a lane that is simply missing reads as a lane the system does not have.
-     */
     @Test
     void aLaneThisOccasionCannotReachIsNamedAndDisabledRatherThanOmitted() {
         JsonNode channels = stage(ObservationOrigin.LIVE, EnumSet.of(FeedbackChannel.IN_APP, FeedbackChannel.IN_CHAT))
@@ -52,10 +46,6 @@ class FeedbackCompositionInputsTest extends BaseUnitTest {
                 .isTrue();
     }
 
-    /**
-     * Absence is the off switch, so a run that should not compose leaves no file at all rather than one
-     * saying so — the runner never opens a second session, and the decision costs nothing.
-     */
     @Test
     void aBackfillSweepStagesNothingAtAll() {
         Map<String, byte[]> files = new LinkedHashMap<>();

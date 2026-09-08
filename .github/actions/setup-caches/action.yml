@@ -1,88 +1,24 @@
-name: "Setup CI caches"
-description: "Set up the JDK and restore the Maven dependency cache; reactor jobs also restore the generated-client build cache."
+name: "Set up the Java build"
+description: "Provision the pinned JDK and Gradle's native dependency and build caches."
 inputs:
-  cache-type:
-    description: "application-server-reactor for jobs that run the Maven reactor; application-server-tests for jobs that run goals against the packaged reactor"
-    required: true
-  os:
-    description: "Operating system for cache key"
+  dependency-graph:
+    description: "Whether to capture and upload a dependency snapshot from the caller's Gradle invocation."
     required: false
-    default: "ubuntu-latest"
-
+    default: disabled
 runs:
   using: "composite"
   steps:
-    - name: Validate cache type
-      shell: bash
-      env:
-        CACHE_TYPE: ${{ inputs.cache-type }}
-      run: |
-        case "$CACHE_TYPE" in
-          application-server-reactor|application-server-tests) ;;
-          *) echo "::error::Unknown cache type '$CACHE_TYPE'."; exit 1 ;;
-        esac
-
-    - name: Compute cache identities
-      id: identity
-      shell: bash
-      env:
-        DEPENDENCY_HASH: ${{ hashFiles('server/**/pom.xml', 'server/.mvn/extensions.xml', 'server/.mvn/wrapper/maven-wrapper.properties') }}
-        GENERATED_CLIENTS_HASH: ${{ hashFiles('server/pom.xml', 'server/generated-clients/pom.xml', 'server/.mvn/**', 'server/generated-clients/src/**') }}
-        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-      run: |
-        if [[ -z "$DEPENDENCY_HASH" || -z "$GENERATED_CLIENTS_HASH" ]]; then
-          echo "::error::Cannot compute the cache identities from the checked-out repository."
-          exit 1
-        fi
-        echo "dependencies=$DEPENDENCY_HASH" >> "$GITHUB_OUTPUT"
-        echo "generated-clients=$GENERATED_CLIENTS_HASH" >> "$GITHUB_OUTPUT"
-        # Publish default-branch caches for reuse across PRs, rather than PR-scoped entries.
-        if [[ "$GITHUB_REF" == "refs/heads/$DEFAULT_BRANCH" && "$GITHUB_EVENT_NAME" =~ ^(push|schedule|workflow_dispatch)$ ]]; then
-          echo "save=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "save=false" >> "$GITHUB_OUTPUT"
-        fi
-
-    - name: Set up JDK 21
-      id: java
+    - name: Set up JDK
       uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
       with:
-        distribution: "temurin"
+        distribution: temurin
         java-version-file: .java-version
         cache-jdk: false
-
-    # A prefix fallback keeps a pom change from downloading the whole dependency tree again;
-    # setup-java's own Maven cache restores only an exact pom hash.
-    - name: Restore Maven dependencies
-      if: steps.identity.outputs.save != 'true' || inputs.cache-type != 'application-server-reactor'
-      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
       with:
-        path: ~/.m2/repository
-        key: ${{ inputs.os }}-${{ steps.java.outputs.distribution }}-${{ steps.java.outputs.version }}-maven-${{ steps.identity.outputs.dependencies }}
-        restore-keys: |
-          ${{ inputs.os }}-${{ steps.java.outputs.distribution }}-${{ steps.java.outputs.version }}-maven-
-
-    # Reactor jobs resolve the complete tree, so only they save; a consumer job would also cache
-    # the reactor artifacts it installed.
-    - name: Cache Maven dependencies
-      if: steps.identity.outputs.save == 'true' && inputs.cache-type == 'application-server-reactor'
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ~/.m2/repository
-        key: ${{ inputs.os }}-${{ steps.java.outputs.distribution }}-${{ steps.java.outputs.version }}-maven-${{ steps.identity.outputs.dependencies }}
-        restore-keys: |
-          ${{ inputs.os }}-${{ steps.java.outputs.distribution }}-${{ steps.java.outputs.version }}-maven-
-
-    - name: Restore generated clients
-      if: steps.identity.outputs.save != 'true' && inputs.cache-type == 'application-server-reactor'
-      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ~/.m2/build-cache
-        key: ${{ inputs.os }}-${{ steps.java.outputs.distribution }}-${{ steps.java.outputs.version }}-generated-clients-${{ steps.identity.outputs.generated-clients }}
-
-    - name: Cache generated clients
-      if: steps.identity.outputs.save == 'true' && inputs.cache-type == 'application-server-reactor'
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ~/.m2/build-cache
-        key: ${{ inputs.os }}-${{ steps.java.outputs.distribution }}-${{ steps.java.outputs.version }}-generated-clients-${{ steps.identity.outputs.generated-clients }}
+        cache-provider: enhanced
+        # Untrusted pull requests and merge groups never publish shared build outputs.
+        cache-read-only: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) || !contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) }}
+        validate-wrappers: true
+        dependency-graph: ${{ inputs.dependency-graph }}

@@ -45,15 +45,21 @@ so when it does. Always read them and test in staging first. This caveat ends wi
 
 ## Upgrade guarantee
 
-**Any 1.x can be upgraded to any later 1.y**, and today **any 0.x to any later 0.y**, in a single step: take
-the release's Compose files and images, and on startup Liquibase applies every not-yet-applied changeset
-from the intervening releases in changelog order. You do not need to step through intermediate releases.
+**From 1.0 onward, any 1.x can be upgraded to any later 1.y without intermediate releases.** Use the
+target release's Compose files and images; startup applies the pending migrations for its supported
+database baseline.
 
-This rests on the migration chain being append-only. CI enforces that mechanically — a released changelog
-can never be edited, renamed, or deleted, and `master.xml` only grows — and replays the whole chain against
-an empty database on every change. What CI does *not* prove is that a migration is safe against real
-existing data (an empty-database replay can't), so data-affecting migrations stay a review responsibility.
-Take a database backup before upgrading. Downgrades are not supported.
+**Before 1.0, do not assume an arbitrary older release can upgrade directly.** Read the target release's
+migration instructions first: they may require an intermediate release or manual preparation. Existing
+databases crossing the PostgreSQL 18/Liquibase baseline transition must reach the v0.77.4 schema
+cut-point and complete the [baseline synchronization runbook](./liquibase-baseline-runbook.md) before
+the new application starts. The target release refuses an unsynchronized existing schema; it does not replay archived migrations.
+Fresh databases initialize automatically.
+
+Released migrations remain immutable. CI checks fresh initialization and selected upgrade fixtures;
+it does not prove that every migration is safe for every existing production dataset. Data-affecting
+migrations still require review and a rehearsal against a restored backup. Take a database backup
+before upgrading. Downgrades are not supported.
 
 ## Deprecation policy
 

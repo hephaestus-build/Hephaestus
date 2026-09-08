@@ -22,58 +22,40 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+      - uses: ./.github/actions/setup-caches
+
+      - uses: ./.github/actions/setup-toolchain
         with:
-          distribution: temurin
-          java-version-file: .java-version
-          cache: maven
-          cache-dependency-path: "server/**/pom.xml"
+          install: "frozen"
 
       - name: Profile generated clients
         working-directory: server
         run: |
-          mkdir -p ../ci-metrics/generated
-          ./mvnw clean install -pl generated-clients -am -DskipTests \
-            -Dmaven.build.cache.enabled=false -Dprofile=generated-clients -DprofileFormat=JSON \
-            -Dmaven-profiler-report-directory=../ci-metrics/generated --batch-mode
-          cp generated-clients/target/hephaestus-generated-clients-*.jar ../ci-metrics/generated-clients-first.jar
+          mkdir -p ../ci-metrics
+          ./gradlew :generated-clients:clean :generated-clients:jar --no-build-cache --profile
+          cp generated-clients/build/libs/hephaestus-generated-clients-*.jar ../ci-metrics/generated-clients-first.jar
 
       - name: Verify generated artifact reproducibility
         working-directory: server
         run: |
-          mkdir -p ../ci-metrics/reproducibility
-          ./mvnw clean package -pl generated-clients -am -DskipTests \
-            -Dmaven.build.cache.enabled=false -Dprofile=reproducibility -DprofileFormat=JSON \
-            -Dmaven-profiler-report-directory=../ci-metrics/reproducibility --batch-mode
-          cmp ../ci-metrics/generated-clients-first.jar generated-clients/target/hephaestus-generated-clients-*.jar
-          sha256sum ../ci-metrics/generated-clients-first.jar \
-            generated-clients/target/hephaestus-generated-clients-*.jar \
-            > ../ci-metrics/generated-clients-sha256.txt
+          ./gradlew :generated-clients:clean :generated-clients:jar --no-build-cache --profile
+          cmp ../ci-metrics/generated-clients-first.jar generated-clients/build/libs/hephaestus-generated-clients-*.jar
+          sha256sum ../ci-metrics/generated-clients-first.jar generated-clients/build/libs/hephaestus-generated-clients-*.jar > ../ci-metrics/generated-clients-sha256.txt
 
       - name: Profile application and test compilation
         working-directory: server
-        run: |
-          mkdir -p ../ci-metrics/compilation
-          ./mvnw -f application/pom.xml test-compile -DskipTests \
-            -Dmaven.build.cache.enabled=false -Dprofile=compilation -DprofileFormat=JSON \
-            -Dmaven-profiler-report-directory=../ci-metrics/compilation --batch-mode
+        run: ./gradlew :application:testClasses --no-build-cache --profile
+
+      - name: Verify test tier and shard discovery
+        run: vp run test:server:selection
 
       - name: Profile unit and architecture execution
         working-directory: server
-        run: |
-          mkdir -p ../ci-metrics/unit-architecture
-          ./mvnw -f application/pom.xml test -Parchitecture-tests \
-            -Dsurefire.includedGroups=unit,architecture -DskipCoverage=false \
-            -Dmaven.build.cache.enabled=false -Dprofile=unit-architecture -DprofileFormat=JSON \
-            -Dmaven-profiler-report-directory=../ci-metrics/unit-architecture --batch-mode
+        run: ./gradlew :application:verification --no-build-cache --profile
 
       - name: Profile integration execution
         working-directory: server
-        run: |
-          mkdir -p ../ci-metrics/integration
-          ./mvnw -f application/pom.xml test -Dsurefire.includedGroups=integration -Dparallel=none \
-            -Dmaven.build.cache.enabled=false -Dprofile=integration -DprofileFormat=JSON \
-            -Dmaven-profiler-report-directory=../ci-metrics/integration --batch-mode
+        run: ./gradlew :application:integrationTest --no-build-cache --profile
 
       - name: Upload phase profiles
         if: always()
@@ -82,6 +64,7 @@ jobs:
           name: server-phase-reference-${{ github.run_id }}
           path: |
             ci-metrics
-            server/application/target/surefire-reports
+            server/application/build/test-results
+            server/build/reports/profile
           if-no-files-found: error
           retention-days: 30

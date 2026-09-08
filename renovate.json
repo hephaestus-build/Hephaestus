@@ -12,8 +12,8 @@
 	"semanticCommitScope": "deps",
 	"enabledManagers": [
 		"npm",
-		"maven",
-		"maven-wrapper",
+		"gradle",
+		"gradle-wrapper",
 		"dockerfile",
 		"docker-compose",
 		"github-actions",
@@ -26,11 +26,15 @@
 		"schedule": ["before 7am on monday"]
 	},
 	"rangeStrategy": "replace",
+	"constraints": { "java": "21" },
+	"postUpdateOptions": ["pnpmDedupe"],
 	"packageRules": [
 		{
-			"matchManagers": ["maven"],
-			"matchPackageNames": ["de.tum.cit.aet:hephaestus-server-parent"],
-			"enabled": false
+			"description": "Gradle updates include reviewed dependency locks and verification metadata, not just version pins",
+			"matchManagers": ["gradle", "gradle-wrapper"],
+			"prBodyNotes": [
+				"Follow [Updating Java dependencies](https://docs.hephaestus.build/contributor/local-development#updating-java-dependencies): review lockfile changes and independently verify new checksums. Exercise changed generators and build tools, then verify with a fresh Gradle user home and no metadata-writing flags. Missing or failed Renovate artifact updates must be repaired before merging."
+			]
 		},
 		{
 			"matchManagers": ["github-actions"],
@@ -51,10 +55,9 @@
 			"groupName": "webapp development dependencies"
 		},
 		{
-			"matchManagers": ["maven"],
-			"matchDepTypes": ["build", "test"],
+			"matchManagers": ["gradle"],
 			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
-			"groupName": "server build dependencies"
+			"groupName": "server dependencies"
 		},
 		{
 			"matchUpdateTypes": ["major"],
@@ -70,6 +73,27 @@
 			"addLabels": ["breaking"],
 			"groupName": null,
 			"dependencyDashboardApproval": true
+		},
+		{
+			"description": "Compatibility override for older transitive consumers: retain patched releases within the supported major, rather than forcing a breaking API",
+			"matchManagers": ["npm"],
+			"matchDepTypes": ["pnpm-workspace.overrides"],
+			"matchDepNames": ["js-yaml@>=4.0.0"],
+			"allowedVersions": "4.x"
+		},
+		{
+			"description": "Compatibility override for older transitive consumers: retain patched releases within the supported major, rather than forcing a breaking API",
+			"matchManagers": ["npm"],
+			"matchDepTypes": ["pnpm-workspace.overrides"],
+			"matchDepNames": ["markdown-it@<14.3.1"],
+			"allowedVersions": "14.x"
+		},
+		{
+			"description": "Compatibility override for older transitive consumers: retain patched releases within the supported major, rather than forcing a breaking API",
+			"matchManagers": ["npm"],
+			"matchDepTypes": ["pnpm-workspace.overrides"],
+			"matchDepNames": ["uuid@<11.1.1"],
+			"allowedVersions": "11.x"
 		},
 		{
 			"matchManagers": ["npm"],

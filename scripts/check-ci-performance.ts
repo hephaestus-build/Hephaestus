@@ -168,12 +168,18 @@ async function main(): Promise<void> {
 		),
 	);
 	const failures = regressions(current, history);
-	const rendered = historyMarkdown([...history, current]);
+	const status =
+		history.length < 7 ? "insufficient-data" : failures.length > 0 ? "regression" : "within-budget";
+	const rendered = `${historyMarkdown([...history, current])}\nStatus: **${status}** (advisory).\n\n${failures.map((failure) => `- ${failure}\n`).join("")}\nCompare retained JFR and Gradle profiles before attributing a change to code; shared-runner variation and suite growth can affect these measurements.\n`;
 	process.stdout.write(rendered);
 	if (process.env.GITHUB_STEP_SUMMARY !== undefined)
 		await appendFile(process.env.GITHUB_STEP_SUMMARY, rendered);
-	if (failures.length > 0)
-		throw new Error(`CI performance regression:\n- ${failures.join("\n- ")}`);
+	for (const failure of failures)
+		process.stdout.write(`::warning title=Integration profile regression::${failure}\n`);
+	if (status === "insufficient-data")
+		process.stdout.write(
+			"::notice title=Integration profile baseline incomplete::Eight valid profiles are needed for a sustained-regression verdict.\n",
+		);
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href)

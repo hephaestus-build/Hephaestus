@@ -6,7 +6,6 @@ import { AdminSettingsPage, type AdminSettingsPageProps } from "./AdminSettingsP
 
 const features: FeatureValues = {
 	mentorEnabled: false,
-	achievementsEnabled: false,
 	leaderboardEnabled: false,
 	progressionEnabled: false,
 	leaguesEnabled: false,
@@ -26,6 +25,12 @@ function setup(overrides: Partial<AdminSettingsPageProps> = {}) {
 }
 
 describe("AdminSettingsPage — non-integration content", () => {
+	it("offers supported features without an achievements switch", () => {
+		setup();
+		screen.getByRole("switch", { name: "Leaderboard" });
+		expect(screen.queryByRole("switch", { name: "Achievements" })).toBeNull();
+	});
+
 	it("hides the league reset card when leagues are disabled", () => {
 		setup({ features: { ...features, leaguesEnabled: false } });
 		expect(screen.queryByText(/reset and recalculate leagues/i)).toBeNull();

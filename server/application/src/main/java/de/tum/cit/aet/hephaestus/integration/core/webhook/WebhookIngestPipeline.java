@@ -115,7 +115,7 @@ public class WebhookIngestPipeline {
         }
 
         return switch (result) {
-            case VerificationResult.Verified v -> publish(kind, body, headers);
+            case VerificationResult.Verified ignored -> publish(kind, body, headers);
             case VerificationResult.RespondImmediately r -> respondImmediately(r);
             case VerificationResult.StaleTimestamp s -> {
                 log.debug("Webhook rejected for kind={}: stale timestamp drift={}s", kind, s.driftSeconds());
@@ -125,7 +125,7 @@ public class WebhookIngestPipeline {
                 log.warn("Webhook rejected for kind={}: {}", kind, i.reason());
                 yield ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "invalid"));
             }
-            case VerificationResult.MissingSignature ms ->
+            case VerificationResult.MissingSignature ignored ->
                 ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "missing-signature"));
         };
     }

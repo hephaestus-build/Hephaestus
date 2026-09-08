@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1788884380638-3" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="user_achievement"/>
+        </preConditions>
+        <dropTable tableName="user_achievement"/>
+        <rollback>
+            <stop>Achievement data cannot be recovered by rollback; restore a pre-upgrade database backup.</stop>
+        </rollback>
+    </changeSet>
+    <changeSet id="1788884380638-4" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="workspace" columnName="achievements_enabled"/>
+        </preConditions>
+        <dropColumn columnName="achievements_enabled" tableName="workspace"/>
+        <rollback>
+            <stop>Achievement data cannot be recovered by rollback; restore a pre-upgrade database backup.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
