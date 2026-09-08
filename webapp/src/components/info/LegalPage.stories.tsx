@@ -121,3 +121,18 @@ export const DisclaimerPrivacy: Story = {
 		resolver: makeResolver("disclaimer"),
 	},
 };
+
+export const PlainTextCode: Story = {
+	args: {
+		page: "privacy",
+		title: LEGAL_PAGE_TITLES.privacy,
+		resolver: async () => ({
+			markdown: "The export includes this identifier.\n\n```text\naccount_id: 42\n```",
+			source: "profile",
+			profile: "example",
+		}),
+	},
+	play: async ({ canvas }) => {
+		await canvas.findByText("The export includes this identifier.");
+	},
+};

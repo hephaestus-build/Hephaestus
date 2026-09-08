@@ -50,17 +50,18 @@ export async function expectSettledVisible(element: HTMLElement): Promise<void> 
 			"Still inside the overlay's starting-style frame, where everything in it is transparent.",
 		).toBeNull();
 	});
-	await Promise.all(
-		enteringAnimationsOf(element).map((animation) =>
-			// `finished` *rejects* with an AbortError when the animation is cancelled rather than run
-			// to its end, which is ordinary here: a popup that re-positions while opening replaces its
-			// own enter animation. A cancelled animation no longer applies, which is all this needs to
-			// know, so the rejection is an outcome rather than a failure. The `waitFor` below is what
-			// covers the replacement it was swapped for.
-			animation.finished.catch(() => undefined),
-		),
-	);
-	await waitFor(() => expect(element).toBeVisible());
+	await waitFor(() => {
+		// Re-read the live animations rather than wait on a stale snapshot: an idle animation
+		// has no finish to await, and a replacement must settle before its box is measured.
+		const entering = enteringAnimationsOf(element).filter(
+			(animation) => animation.playState !== "finished" && animation.playState !== "idle",
+		);
+		void expect(
+			entering.map((animation) => ({ state: animation.playState, time: animation.currentTime })),
+			"The overlay still has an unfinished enter animation.",
+		).toEqual([]);
+		void expect(element).toBeVisible();
+	});
 }
 
 /**

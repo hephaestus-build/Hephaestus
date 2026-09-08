@@ -1,4 +1,5 @@
 ---
+"hephaestus": patch
 ---
 
-Updates development dependencies and removes an obsolete runtime-specific patch; no intentional user-facing behavior change.
+Keeps unhighlighted code in practice feedback and legal pages readable in light and dark themes while preserving line wrapping. Updates interface icons and motion dependencies without changing operator configuration.
