@@ -9463,7 +9463,7 @@ components:
           format: int64
           description: "The artifact's internal id, as the trace and review listings\
             \ report it"
-          minimum: 0
+          exclusiveMinimum: 0
         artifactKind:
           type: string
           description: "The artifact kind's wire id, e.g. scm.pull_request. A raw\
@@ -10972,7 +10972,7 @@ components:
           target:
             type: integer
             format: int32
-            minimum: 0
+            exclusiveMinimum: 0
       description: Linear progress with current and target counts
       required:
       - current

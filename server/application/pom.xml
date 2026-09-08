@@ -51,7 +51,7 @@
         <spring-modulith.version>2.1.1</spring-modulith.version>
         <liquibase.version>5.0.4</liquibase.version>
         <liquibase-hibernate7.version>5.0.4</liquibase-hibernate7.version>
-        <springdoc.version>3.1.0</springdoc.version>
+        <springdoc.version>3.1.1</springdoc.version>
         <sentry.version>8.55.0</sentry.version>
         <logstash-logback-encoder.version>9.0</logstash-logback-encoder.version>
         <slack-bolt.version>1.51.0</slack-bolt.version>
