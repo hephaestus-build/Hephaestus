@@ -119,7 +119,7 @@ if (import.meta.main) {
 		);
 		await appendFile(
 			requiredEnv(process.env, "GITHUB_STEP_SUMMARY"),
-			`Reusing the packaged reactor validated by [merge-queue CI](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${result.runId}) for this exact commit. All current-run validation and image publication remain enabled.\n`,
+			`Reusing the packaged server validated by [merge-queue CI](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${result.runId}) for this exact commit. All current-run validation and image publication remain enabled.\n`,
 		);
 	}
 }

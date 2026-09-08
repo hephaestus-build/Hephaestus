@@ -22,7 +22,7 @@ on:
         required: true
         type: string
       server_changed:
-        description: "Whether anything that runs the packaged reactor changed"
+        description: "Whether anything that runs the packaged server changed"
         required: false
         type: string
         default: "true"
@@ -56,9 +56,8 @@ permissions: {}
 env:
   SERVER_BUILD_ARTIFACT: server-build-${{ github.run_id }}
 
-# Every job after server-package runs Maven goals or pack against the restored classes and JAR. A
-# lifecycle phase (compile, package, verify) in a consumer would compile a second time and break
-# the guarantee that the tested JAR is the shipped one; scripts/ci-contract.test.ts rejects it.
+# Consumers must not recompile: API checks, browser tests and buildpacks share the package job's JAR.
+# docs/contributor/ci-cd.mdx § Build once owns the artifact contract.
 jobs:
   server-package:
     name: "App Server: Package"
@@ -84,7 +83,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: node scripts/resolve-server-build.ts
-      - name: Download the validated reactor
+      - name: Download the validated server build
         if: steps.reuse.outputs.artifact-id != ''
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -96,32 +95,30 @@ jobs:
           digest-mismatch: error
       - uses: ./.github/actions/setup-caches
         if: steps.reuse.outputs.artifact-id == ''
-        with:
-          cache-type: application-server-reactor
-          os: ${{ runner.os }}
-      - name: Package the reactor
+      - name: Package the server
         if: steps.reuse.outputs.artifact-id == ''
         working-directory: server
-        run: ./mvnw -pl application -am package -DskipTests --batch-mode
-      - name: Validate the packaged reactor
+        run: ./gradlew :application:bootJar :application:testClasses
+      - name: Validate the packaged server
         working-directory: server
         run: |
           set -euo pipefail
-          test -d application/target/classes
-          test -d application/target/test-classes
-          mapfile -t jars < <(find application/target -maxdepth 1 -name 'hephaestus-application-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
-          mapfile -t clients < <(find generated-clients/target -maxdepth 1 -name 'hephaestus-generated-clients-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
+          test -d application/build/classes/java/main
+          test -d application/build/classes/java/test
+          mapfile -t jars < <(find application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
+          mapfile -t clients < <(find generated-clients/build/libs -maxdepth 1 -name 'hephaestus-generated-clients-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
           (( ${#jars[@]} == 1 )) && (( ${#clients[@]} == 1 ))
           unzip -p "${jars[0]}" META-INF/MANIFEST.MF | grep -q '^Main-Class: org.springframework.boot.loader'
-      - name: Upload the packaged reactor
+      - name: Upload the packaged server
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ env.SERVER_BUILD_ARTIFACT }}
           path: |
-            server/application/target/classes
-            server/application/target/test-classes
-            server/application/target/hephaestus-application-*.jar
-            server/generated-clients/target/hephaestus-generated-clients-*.jar
+            server/application/build/classes/java/main
+            server/application/build/classes/java/test
+            server/application/build/resources
+            server/application/build/libs/hephaestus-application-*.jar
+            server/generated-clients/build/libs/hephaestus-generated-clients-*.jar
             !server/**/*-sources.jar
             !server/**/*-javadoc.jar
           if-no-files-found: error
@@ -146,9 +143,6 @@ jobs:
         with:
           install: "frozen"
       - uses: ./.github/actions/setup-caches
-        with:
-          cache-type: application-server-tests
-          os: ${{ runner.os }}
       - uses: ./.github/actions/restore-server-build
         id: server
         with:
@@ -241,9 +235,6 @@ jobs:
         with:
           install: "frozen"
       - uses: ./.github/actions/setup-caches
-        with:
-          cache-type: application-server-tests
-          os: ${{ runner.os }}
       - uses: ./.github/actions/restore-server-build
         with:
           artifact: ${{ env.SERVER_BUILD_ARTIFACT }}
@@ -263,8 +254,7 @@ jobs:
           export SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5432/hephaestus"
           export SPRING_DATASOURCE_USERNAME="root"
           export SPRING_DATASOURCE_PASSWORD="root"
-          (cd server && ./mvnw -f application/pom.xml --batch-mode -Dmaven.build.cache.enabled=false \
-            -Dsurefire.includedGroups=database surefire:test)
+          (cd server && ./gradlew :application:databaseTest -PpackagedServer=true)
 
       - name: Run the PostgreSQL backup-restore drill
         run: node scripts/postgres-backup-restore-test.ts --target-image hephaestus-postgres:ci
@@ -273,7 +263,7 @@ jobs:
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
           name: "Test Results - App Server Database"
-          path: "server/application/target/surefire-reports/TEST-*.xml"
+          path: "server/application/build/test-results/databaseTest/TEST-*.xml"
           reporter: java-junit
           fail-on-error: false
 
@@ -298,7 +288,7 @@ jobs:
           java-version-file: .java-version
           cache-jdk: false
       - uses: ./.github/actions/setup-browsers
-      - name: Download the packaged reactor
+      - name: Download the packaged server
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ env.SERVER_BUILD_ARTIFACT }}
@@ -328,7 +318,7 @@ jobs:
             docker compose -f server/compose.yaml down -v
           }
           trap cleanup EXIT
-          mapfile -t SERVER_JARS < <(find server/application/target -maxdepth 1 -name 'hephaestus-application-*.jar')
+          mapfile -t SERVER_JARS < <(find server/application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar')
           (( ${#SERVER_JARS[@]} == 1 ))
           SERVER_JAR=${SERVER_JARS[0]}
           SERVER_PORT=8080 MANAGEMENT_PORT=8080 POSTGRES_PORT=5432 \

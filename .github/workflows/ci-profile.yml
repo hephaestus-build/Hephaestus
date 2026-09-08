@@ -36,9 +36,6 @@ jobs:
           install: "frozen"
 
       - uses: ./.github/actions/setup-caches
-        with:
-          cache-type: application-server-reactor
-          os: ${{ runner.os }}
 
       - name: Find performance history
         if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
@@ -83,30 +80,28 @@ jobs:
         id: profile
         shell: bash
         run: |
-          mkdir -p ci-metrics/maven
+          mkdir -p ci-metrics
           /usr/bin/time -v -o ci-metrics/server-integration-resource.txt \
             vp run test:server:integration \
-            '-Dhephaestus.test.jvmArgs=-XX:StartFlightRecording=filename=target/integration-profile.jfr,settings=profile,dumponexit=true -Xlog:jfr+startup=off' \
-            -Dlogging.level.org.springframework.test.context.cache=DEBUG \
-            -Dprofile=server-integration -DprofileFormat=JSON \
-            -Dmaven-profiler-report-directory=../ci-metrics/maven \
+            -PprofileTests=true \
+            --profile \
             2>&1 | tee ci-metrics/server-integration.log
 
       - name: Validate profile artifacts
         id: recording
         if: ${{ !cancelled() && steps.profile.outcome == 'success' }}
         run: |
-          jq -e '.projects | length > 0' ci-metrics/maven/*.json > /dev/null
-          jfr summary server/application/target/integration-profile.jfr > ci-metrics/jfr-summary.txt
+          test -n "$(find server/build/reports/profile -name '*.html' -print -quit)"
+          jfr summary server/application/build/integrationTest-profile.jfr > ci-metrics/jfr-summary.txt
           jfr print --events hephaestus.test.DatabaseCleanup \
-            server/application/target/integration-profile.jfr > ci-metrics/database-cleanup.jfr.txt
+            server/application/build/integrationTest-profile.jfr > ci-metrics/database-cleanup.jfr.txt
 
       - name: Summarize integration results
         id: summary
         if: always()
         run: >-
           vp run report:test-results "Server Integration Profile"
-          server/application/target/surefire-reports ci-metrics/server-integration-profile.json
+          server/application/build/test-results/integrationTest ci-metrics/server-integration-profile.json
           ci-metrics/server-integration.log ci-metrics/server-integration-resource.txt
 
       - name: Report performance budgets
@@ -140,14 +135,14 @@ jobs:
         with:
           name: server-integration-profile-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            server/application/target/integration-profile.jfr
-            server/application/target/surefire-reports
+            server/application/build/integrationTest-profile.jfr
+            server/application/build/test-results/integrationTest
             ci-metrics/server-integration-profile.json
             ci-metrics/server-integration.log
             ci-metrics/server-integration-resource.txt
             ci-metrics/database-cleanup.jfr.txt
             ci-metrics/jfr-summary.txt
-            ci-metrics/maven
+            server/build/reports/profile
           if-no-files-found: warn
           retention-days: 14
 
@@ -167,33 +162,30 @@ jobs:
         with:
           install: "frozen"
       - uses: ./.github/actions/setup-caches
-        with:
-          cache-type: application-server-reactor
-          os: ${{ runner.os }}
 
       - name: Run unit and architecture verification with JFR
         id: profile
         shell: bash
         run: |
-          mkdir -p ci-metrics/maven
+          mkdir -p ci-metrics
           /usr/bin/time -v -o ci-metrics/server-verification-resource.txt \
             vp run test:server:verification \
-            '-Dhephaestus.test.jvmArgs=-XX:StartFlightRecording=filename=target/verification-profile.jfr,settings=profile,dumponexit=true -Xlog:jfr+startup=off' \
-            -Dprofile=server-verification -DprofileFormat=JSON \
-            -Dmaven-profiler-report-directory=../ci-metrics/maven \
+            -PprofileTests=true \
+            --profile \
             2>&1 | tee ci-metrics/server-verification.log
 
       - name: Validate profile artifacts
         if: ${{ !cancelled() && steps.profile.outcome == 'success' }}
         run: |
-          jq -e '.projects | length > 0' ci-metrics/maven/*.json > /dev/null
-          jfr summary server/application/target/verification-profile.jfr > ci-metrics/jfr-summary.txt
+          test -n "$(find server/build/reports/profile -name '*.html' -print -quit)"
+          jfr summary server/application/build/test-profile.jfr > ci-metrics/jfr-summary.txt
+          jfr summary server/application/build/architectureTest-profile.jfr >> ci-metrics/jfr-summary.txt
 
       - name: Summarize verification results
         if: ${{ !cancelled() }}
         run: >-
           vp run report:test-results "Server Unit and Architecture Profile"
-          server/application/target/surefire-reports ci-metrics/server-verification-profile.json
+          server/application/build/test-results ci-metrics/server-verification-profile.json
           ci-metrics/server-verification.log ci-metrics/server-verification-resource.txt verification
 
       - name: Upload profile
@@ -202,8 +194,9 @@ jobs:
         with:
           name: server-verification-profile-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            server/application/target/verification-profile.jfr
-            server/application/target/surefire-reports
+            server/application/build/test-profile.jfr
+            server/application/build/architectureTest-profile.jfr
+            server/application/build/test-results
             ci-metrics
           if-no-files-found: error
           retention-days: 14

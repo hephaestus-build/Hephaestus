@@ -119,19 +119,6 @@ interface ClaimException {
 	readonly reason: string;
 }
 
-const NON_NPM_NAMES = [
-	{
-		document: "docs/contributor/sync-lifecycle.md",
-		value: "graphql-codegen-maven-plugin",
-		reason: "a Maven plugin artifact, not an npm dependency",
-	},
-	{
-		document: "docs/contributor/sync-lifecycle.md",
-		value: "openapi-generator-maven-plugin",
-		reason: "a Maven plugin artifact, not an npm dependency",
-	},
-] satisfies readonly ClaimException[];
-
 const INTENTIONALLY_MISSING_PATHS = [
 	{
 		document: "docs/contributor/agent/workspace-abi.mdx",
@@ -300,7 +287,7 @@ function staleContributorClaims(repo: Repo): readonly string[] {
 			if (candidate.includes("…") || candidate.includes("...") || /[*<>{}$\s]/.test(candidate))
 				continue;
 			if (looksLikePackage(candidate, packages)) {
-				if (!packages.has(candidate) && !excepts(NON_NPM_NAMES, file.path, candidate)) {
+				if (!packages.has(candidate)) {
 					failures.push(
 						`${file.path} names npm package \`${candidate}\`, but no package.json declares it.\n` +
 							"  Declare the dependency in the workspace that uses it, or remove the stale package name.",

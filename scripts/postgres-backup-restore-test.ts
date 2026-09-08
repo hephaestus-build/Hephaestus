@@ -99,11 +99,10 @@ try {
 		throw new Error("source is not PostgreSQL 18");
 
 	run("node", [
-		"scripts/run-mvnw.ts",
-		"-f",
-		"application/pom.xml",
-		"liquibase:update",
-		`-Dpostgres.port=${sourcePort}`,
+		"scripts/run-gradlew.ts",
+		":application:liquibaseUpdate",
+		...(process.env.CI === "true" ? ["-PpackagedServer=true"] : []),
+		`-PpostgresPort=${sourcePort}`,
 		"--quiet",
 	]);
 	if (sql(source, "SELECT extversion FROM pg_extension WHERE extname='pg_partman'") !== "5.5.0") {

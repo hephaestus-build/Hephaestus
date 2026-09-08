@@ -14,26 +14,18 @@ function actionStep(name: string): string {
 }
 
 await describe("CI cache policy", async () => {
-	await test("cache actions use precomputed identities", () => {
-		const cacheKeys = cacheAction.split("\n").filter((line) => line.trimStart().startsWith("key:"));
-
-		assert.notEqual(cacheKeys.length, 0);
-		for (const key of cacheKeys) {
-			assert.ok(!key.includes("hashFiles("));
-			assert.ok(key.includes("steps.identity.outputs."));
-		}
-	});
-
-	await test("Maven caches are written only by reactor jobs on the default branch", async () => {
-		assert.ok(actionStep("Set up JDK 21").includes("cache-jdk: false"));
-		// A pom change must fall back to the newest default-branch cache, not a full download.
-		const restore = actionStep("Restore Maven dependencies");
-		assert.match(restore, /actions\/cache\/restore@/);
-		assert.match(restore, /restore-keys:[\s\S]*?-maven-\s*$/m);
-		assert.ok(restore.includes("steps.identity.outputs.save != 'true'"));
-		const save = actionStep("Cache Maven dependencies");
-		assert.ok(save.includes("steps.identity.outputs.save == 'true'"));
-		assert.ok(save.includes("inputs.cache-type == 'application-server-reactor'"));
+	await test("only trusted default-branch runs publish Gradle caches", async () => {
+		const setup = actionStep("Set up Gradle");
+		assert.match(setup, /gradle\/actions\/setup-gradle@[a-f0-9]{40}/);
+		assert.match(setup, /cache-read-only:.*github.ref != format/);
+		assert.match(setup, /github.event.repository.default_branch/);
+		assert.match(
+			setup,
+			/!contains\(fromJSON\('\["push","schedule","workflow_dispatch"\]'\), github.event_name\)/,
+		);
+		assert.match(setup, /validate-wrappers: true/);
+		assert.match(setup, /cache-provider: enhanced/);
+		assert.doesNotMatch(cacheAction, /~\/\.m2|target\//);
 		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
 		const e2e = build.slice(
 			build.indexOf("\n  webapp-e2e:"),

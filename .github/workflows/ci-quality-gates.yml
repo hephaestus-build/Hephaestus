@@ -39,7 +39,7 @@ permissions: {}
 jobs:
   server:
     name: "App Server"
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true'
+    if: inputs.should_skip != 'true' && (inputs.application_server_changed == 'true' || inputs.pmd_canary == 'true')
     uses: ./.github/workflows/ci-quality-leg.yml
     permissions:
       contents: read

@@ -108,46 +108,6 @@ function escapeRegExp(value: string): string {
 }
 
 /**
- * Whether a Surefire `-Dtest` value selects one test class, named by its path under the test root
- * without the extension.
- *
- * The value replaces the `includes` and `excludes` parameters outright, and a pattern prefixed with
- * `!` is an exclusion — so a value carrying only exclusions leaves no inclusion pattern, and every
- * class Surefire scans is a candidate until an exclusion removes it. That is what lets one shard
- * select a package and the other select its complement without either restating the four default
- * include patterns.
- * https://maven.apache.org/surefire/maven-surefire-plugin/test-mojo.html#test
- */
-function surefireSelects(selector: string, testClass: string): boolean {
-	const patterns = selector.split(",").map((pattern) => pattern.trim());
-	const matches = (pattern: string) => surefirePattern(pattern.replace(/^!/, "")).test(testClass);
-	const included = patterns.filter((pattern) => !pattern.startsWith("!"));
-	const excluded = patterns.filter((pattern) => pattern.startsWith("!"));
-	return (included.length === 0 || included.some(matches)) && !excluded.some(matches);
-}
-
-/** Surefire's glob dialect: `**` crosses directories, `*` and `?` stay inside one segment. */
-function surefirePattern(pattern: string): RegExp {
-	const unqualified = pattern.replace(/\.(?:java|class)$/, "");
-	const qualified = unqualified.includes("/") ? unqualified : `**/${unqualified}`;
-	const body = qualified.replaceAll(/\*\*\/|\*\*|\*|\?|[^*?]+/g, (token) => {
-		switch (token) {
-			case "**/":
-				return "(?:[^/]+/)*";
-			case "**":
-				return ".*";
-			case "*":
-				return "[^/]*";
-			case "?":
-				return "[^/]";
-			default:
-				return escapeRegExp(token);
-		}
-	});
-	return new RegExp(`^${body}$`);
-}
-
-/**
  * Every repository script a given entry point loads, transitively — its static relative imports,
  * plus any sibling script it names as a string, which is how the scanners reach the policy
  * evaluator (they spawn it rather than importing it, so that its exit status is the verdict).
@@ -441,112 +401,61 @@ void describe("CI contract", () => {
 		);
 	});
 
-	void test("passes only cache types accepted by setup-caches", async () => {
+	void test("server CI uses native Gradle caching and verifies JUnit selection", async () => {
 		const action = await readFile(".github/actions/setup-caches/action.yml", "utf8");
-		assert.match(action, /steps:\s+- name: Validate cache type/);
-		const validation = action.match(/case "\$CACHE_TYPE" in\s+([^\n]+)\) ;;/);
-		assert.ok(validation, "setup-caches must explicitly validate cache-type");
-		assert.match(action, /\*\) [^\n]*exit 1 ;;\s+esac/);
-		const acceptedValues = validation[1];
-		assert.ok(acceptedValues);
-		const accepted = new Set(acceptedValues.split("|"));
-		const rejected: string[] = [];
-		const used = new Set<string>();
-
-		for (const [file, source] of await workflowSources()) {
-			for (const match of source.matchAll(/^\s+cache-type:\s+(.+)$/gm)) {
-				const rawValue = match[1];
-				assert.ok(rawValue);
-				const value = rawValue.trim();
-				if (!value.startsWith("${{")) {
-					if (!accepted.has(value)) rejected.push(`${file}: ${value}`);
-					used.add(value);
-					continue;
-				}
-				const key = value.match(/matrix\.([\w-]+)/)?.[1];
-				assert.ok(key, `${file}: cache-type expression must resolve from a matrix key`);
-				const values = [...source.matchAll(new RegExp(`^\\s+- ${key}: (.+)$`, "gm"))].map(
-					(item) => {
-						const matrixValue = item[1];
-						assert.ok(matrixValue);
-						return matrixValue.trim();
-					},
-				);
-				assert.notEqual(values.length, 0, `${file}: matrix.${key} has no static values`);
-				for (const matrixValue of values) {
-					if (!accepted.has(matrixValue)) rejected.push(`${file}: ${matrixValue}`);
-					used.add(matrixValue);
-				}
-			}
-		}
-		assert.deepEqual(rejected, [], "Workflows may only request recognised cache types");
-		assert.deepEqual(used, accepted, "Every accepted cache type is requested by a workflow");
-	});
-
-	void test("every class the integration tier can run belongs to exactly one shard", async () => {
+		assert.match(action, /gradle\/actions\/setup-gradle@/);
+		assert.doesNotMatch(action, /cache-type|\.m2/);
 		const workflow = parseDocument(await readFile(".github/workflows/ci-tests.yml", "utf8"));
 		const matrix = workflow.getIn(["jobs", "server-integration", "strategy", "matrix"]);
-		assert.ok(isMap(matrix), "server-integration runs no matrix");
-		const selectors = matrixValues(matrix, "tests");
-		assert.equal(selectors.length, 2, "The tier is sharded in two");
-		const startup = "de/tum/cit/aet/hephaestus/StartupBudgetIntegrationTest";
-		assert.ok(surefireSelects(selectors[0] ?? "", startup));
-		assert.ok(!surefireSelects(selectors[1] ?? "", startup));
-		const startupSource = await readFile(
-			`server/application/src/test/java/${startup}.java`,
-			"utf8",
+		assert.ok(isMap(matrix));
+		assert.deepEqual(matrixValues(matrix, "shard"), ["providers-and-startup", "application"]);
+		assert.equal(
+			runScript(workflow, ["jobs", "server-verification"], "Verify test tier and shard discovery"),
+			"vp run test:server:selection",
 		);
-		assert.match(startupSource, /@Tag\("integration"\)/);
-		assert.doesNotMatch(startupSource, /@Tag\("architecture"\)/);
+	});
 
-		for (const selector of selectors)
-			assert.doesNotMatch(
-				selector,
-				/[%#]/,
-				`${selector}: a regex or method selector is outside what surefireSelects models`,
-			);
+	void test("Gradle lock changes rebuild and verify the shipped server", async () => {
+		const build = await readFile("server/build.gradle.kts", "utf8");
+		assert.match(build, /lockAllConfigurations\(\)/);
+		assert.match(build, /lockMode\.set\(LockMode\.STRICT\)/);
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const filter = step(workflow, ["jobs", "detect-changes"], "dorny/paths-filter");
+		const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
+		for (const gate of ["application-server-image", "e2e", "pmd-canary"]) {
+			const paths = asArray(filters[gate], gate);
+			for (const input of ["server/application/gradle.lockfile", "server/settings-gradle.lockfile"])
+				assert.ok(paths.includes(input), `${gate} must include ${input}`);
+		}
+		assert.ok(asArray(filters.e2e, "browser test paths").includes(".java-version"));
+	});
 
-		// The tier the shards must cover is what Surefire runs when nothing narrows it: the four
-		// default include patterns, filtered by the integration tag. A probe for each pattern, in and
-		// out of the sharded package, keeps the tier's current naming from deciding the verdict — a
-		// class dropped by both shards is invisible in CI and runs locally, so the shape has to be
-		// safe for the name nobody has written yet.
-		const testRoot = "server/application/src/test/java/";
-		const sources = await posixGlob(`${testRoot}**/*.java`);
-		assert.ok(sources.length > 0, `No test sources under ${testRoot}`);
-		const probes = ["TestFoo", "FooTest", "FooTests", "FooTestCase"].flatMap((name) => [
-			`de/tum/cit/aet/hephaestus/integration/github/${name}`,
-			`de/tum/cit/aet/hephaestus/practice/${name}`,
-		]);
-		const defaultIncludes = [
-			"**/Test*.java",
-			"**/*Test.java",
-			"**/*Tests.java",
-			"**/*TestCase.java",
-		];
-		const tier = [
-			...sources.map((file) => file.slice(testRoot.length).replace(/\.java$/, "")),
-			...probes,
-		].filter((candidate) =>
-			defaultIncludes.some((pattern) => surefirePattern(pattern).test(candidate)),
+	void test("security mutation checks follow their Gradle launcher and toolchain inputs", async () => {
+		const workflow = parseDocument(
+			await readFile(".github/workflows/security-mutation.yml", "utf8"),
 		);
-		assert.ok(tier.length > probes.length, "The tier is more than its probes");
+		const node = workflow.getIn(["on", "pull_request", "paths"]);
+		assert.ok(isSeq(node));
+		const paths = asArray(node.toJSON(), "mutation paths");
+		for (const input of [
+			".github/actions/setup-caches/**",
+			".java-version",
+			"scripts/run-gradlew.ts",
+		])
+			assert.ok(paths.includes(input), `security mutation checks must include ${input}`);
+	});
 
-		const shards = selectors.map(
-			(selector) => new Set(tier.filter((candidate) => surefireSelects(selector, candidate))),
-		);
-		for (const [index, shard] of shards.entries())
-			assert.notEqual(shard.size, 0, `${selectors[index]} selects no class at all`);
-		assert.deepEqual(
-			tier.filter((candidate) => !shards.some((shard) => shard.has(candidate))),
-			[],
-			"Classes the pull request would never run",
-		);
-		assert.deepEqual(
-			tier.filter((candidate) => shards.every((shard) => shard.has(candidate))),
-			[],
-			"Classes both shards would run",
-		);
+	void test("changes to the PMD canary exercise it even without server source changes", async () => {
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const filter = step(workflow, ["jobs", "detect-changes"], "dorny/paths-filter");
+		const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
+		const paths = asArray(filters["pmd-canary"], "PMD canary paths");
+		for (const input of [
+			"scripts/check-pmd-canary.ts",
+			"scripts/check-pmd-canary.test.ts",
+			"vite.config.ts",
+		])
+			assert.ok(paths.includes(input), `PMD canary must include ${input}`);
 	});
 
 	void test("runs the integration tier once, under the status gate, off an untemplated command", async () => {
@@ -559,23 +468,23 @@ void describe("CI contract", () => {
 		const environment = run.get("env");
 		assert.ok(isMap(environment));
 		assert.match(
-			String(environment.get("HEPHAESTUS_INTEGRATION_TESTS")),
-			/matrix\.tests/,
+			String(environment.get("HEPHAESTUS_INTEGRATION_SHARD")),
+			/matrix\.shard/,
 			"The shard's selector reaches the task as an environment value",
 		);
 		assert.doesNotMatch(
 			runScript(workflow, jobPath, "Run integration tests"),
 			/\$\{\{/,
-			"The selector reaches Maven through the environment, never through a run: script",
+			"The selector reaches Gradle through the environment, never through a run: script",
 		);
 		assert.equal((source.match(/run: vp run test:server:integration/g) ?? []).length, 1);
 		assert.match(integration, /Test Results - App Server Integration \(\$\{\{ matrix.shard \}\}\)/);
 		const tasks = await readFile("vite.config.ts", "utf8");
-		assert.match(tasks, /HEPHAESTUS_INTEGRATION_TESTS/);
 		assert.match(
-			tasks,
-			/"test:server:integration": run\([\s\S]*?-Dsurefire.includedGroups=integration\$\{integrationShard\}/,
+			await readFile("server/application/build.gradle.kts", "utf8"),
+			/HEPHAESTUS_INTEGRATION_SHARD/,
 		);
+		assert.match(tasks, /"test:server:integration": run\([\s\S]*?:application:integrationTest/);
 		const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
 		assert.match(job(orchestrator, "Test"), /uses: \.\/\.github\/workflows\/ci-tests.yml/);
 		assert.match(job(orchestrator, "all-ci-passed"), /needs\.Test\.result/);
@@ -584,10 +493,10 @@ void describe("CI contract", () => {
 	void test("packages the server once and runs every artifact gate against it", async () => {
 		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
 		const packageJob = job(build, "server-package");
-		const packaging = packageJob.match(/^\s+run: (\.\/mvnw .*)$/m)?.[1];
+		const packaging = packageJob.match(/^\s+run: (\.\/gradlew .*)$/m)?.[1];
 		assert.ok(packaging);
-		assert.match(packaging, /\bpackage\b/);
-		assert.match(packaging, /-DskipTests\b/);
+		assert.match(packaging, /:application:bootJar/);
+		assert.match(packaging, /:application:testClasses/);
 		assert.equal((packageJob.match(/actions\/upload-artifact@/g) ?? []).length, 1);
 		assert.match(packageJob, /overwrite: true/);
 		for (const name of ["server-api", "server-database"]) {
@@ -597,10 +506,10 @@ void describe("CI contract", () => {
 			// Goals against the restored classes; a lifecycle phase would compile again.
 			assert.doesNotMatch(
 				consumer,
-				/mvnw[^\n]* (?:compile|test-compile|package|verify|install)(?:\s|$)/,
+				/gradlew[^\n]* :(?:application|generated-clients):(?:compileJava|compileTestJava|bootJar|classes|testClasses)(?:\s|$)/,
 			);
 		}
-		assert.match(job(build, "server-database"), /surefire:test/);
+		assert.match(job(build, "server-database"), /:application:databaseTest -PpackagedServer=true/);
 		assert.match(job(build, "server-api"), /HEPHAESTUS_APPLICATION_JAR/);
 		const e2e = job(build, "webapp-e2e");
 		assert.match(e2e, /needs: server-package/);
@@ -628,11 +537,7 @@ void describe("CI contract", () => {
 		// One invocation exports to the registry; the fork path builds the same image locally.
 		assert.equal(packBuilds.filter((call) => call.includes("--publish")).length, 1);
 		for (const [file, source] of await workflowSources()) {
-			assert.doesNotMatch(
-				source,
-				/spring-boot:build-image/,
-				`${file} must build the image from the JAR`,
-			);
+			assert.doesNotMatch(source, /bootBuildImage/, `${file} must build the image from the JAR`);
 		}
 	});
 
@@ -1661,6 +1566,56 @@ void describe("CI contract", () => {
 		}
 	});
 
+	void test("generates verified Gradle snapshots without giving pull request code write access", async () => {
+		const source = await readFile(".github/workflows/dependency-graph.yml", "utf8");
+		const workflow = parseDocument(source);
+		assert.equal(workflow.get("name"), "Gradle dependency graph");
+		assert.equal(workflow.getIn(["jobs", "generate", "permissions", "contents"]), "read");
+		assert.doesNotMatch(
+			source,
+			/: write|verification=off|write-verification-metadata|dependency-submission@/,
+		);
+		const setup = stepInputs(namedStep(workflow, ["jobs", "generate"], "Set up the Java build"));
+		assert.equal(setup.get("dependency-graph"), "generate-and-upload");
+		const resolve = namedStep(workflow, ["jobs", "generate"], "Resolve the dependency graph");
+		assert.equal(resolve.get("working-directory"), "server");
+		assert.equal(resolve.get("run"), "./gradlew dependencies --no-configuration-cache");
+		assert.equal(
+			workflow.getIn(["jobs", "generate", "env", "GITHUB_DEPENDENCY_GRAPH_JOB_CORRELATOR"]),
+			"server",
+		);
+		assert.equal(
+			namedStep(workflow, ["jobs", "generate"], "Require the snapshot").get("run"),
+			"test -s dependency-graph-reports/server.json",
+		);
+		const action = parseDocument(await readFile(".github/actions/setup-caches/action.yml", "utf8"));
+		assert.equal(action.getIn(["inputs", "dependency-graph", "default"]), "disabled");
+	});
+
+	void test("submits dependency snapshot data without executing the originating checkout", async () => {
+		const source = await readFile(".github/workflows/submit-dependency-graph.yml", "utf8");
+		const workflow = parseDocument(source);
+		assert.equal(workflow.getIn(["on", "workflow_run", "workflows", 0]), "Gradle dependency graph");
+		assert.equal(workflow.getIn(["on", "workflow_run", "types", 0]), "completed");
+		assert.equal(
+			workflow.getIn(["jobs", "submit", "if"]),
+			"github.event.workflow_run.conclusion == 'success'",
+		);
+		assert.equal(workflow.getIn(["jobs", "submit", "permissions", "contents"]), "write");
+		assert.equal(workflow.getIn(["jobs", "submit", "permissions", "actions"]), "read");
+		const submission = step(workflow, ["jobs", "submit"], "gradle/actions/dependency-submission");
+		assert.equal(submission.get("dependency-graph"), "download-and-submit");
+		assert.equal(submission.get("cache-disabled"), true);
+		assert.doesNotMatch(
+			source,
+			/uses: actions\/checkout|uses: \.\/|run:.*(?:gradlew|node|bash|curl)/,
+		);
+		assert.equal(
+			namedStep(workflow, ["jobs", "submit"], "Require the submitted snapshot").get("run"),
+			"test -s dependency-graph-reports/server.json",
+		);
+	});
+
 	void test("blocks dependency regressions across the release trust boundary", async () => {
 		const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
 		const securityConfig = pathFilter(orchestrator, "security-config");
@@ -1679,6 +1634,8 @@ void describe("CI contract", () => {
 		);
 		const review = step(workflow, reviewPath, "actions/dependency-review-action");
 		assert.equal(review.get("config-file"), "./.github/dependency-review-config.yml");
+		assert.equal(review.get("retry-on-snapshot-warnings"), true);
+		assert.equal(review.get("retry-on-snapshot-warnings-timeout"), 600);
 
 		const config = parseDocument(await readFile(".github/dependency-review-config.yml", "utf8"));
 		assert.equal(config.get("warn-only"), true);
@@ -1694,6 +1651,7 @@ void describe("CI contract", () => {
 		);
 
 		const scanPath = ["jobs", "security-scan"];
+		assert.equal(workflow.getIn([...scanPath, "env", "TRIVY_INCLUDE_DEV_DEPS"]), "true");
 		const secretScan = stepInputs(namedStep(workflow, scanPath, "Secret detection"));
 		assert.equal(
 			secretScan.get("base"),
@@ -2013,28 +1971,22 @@ void test("the task graph keeps its cache posture", async () => {
 			assert.ok(isGroup || task.cache === false, `${name} must be a group or uncached`);
 		}
 	}
-	// One Maven process per checkout: the two Maven gates run one after another, the install PMD
-	// needs is an uncached dependency because no cache replays it, and both name the JDK they read.
+	// One native build owns Java quality, inputs and cached outputs; no outer verdict can hide it.
 	const serverCommands = commandsOf(tasks["gate:server"]);
-	assert.ok(
-		serverCommands.indexOf("vp run gate:server-format") <
-			serverCommands.indexOf("vp run gate:server-lint"),
+	assert.equal(serverCommands.length, 1);
+	assert.match(
+		serverCommands[0] ?? "",
+		/run-gradlew\.ts.*:spotlessCheck.*:application:spotlessCheck.*:application:pmdMain/,
 	);
-	const serverLint = asRecord(tasks["gate:server-lint"], "gate:server-lint");
-	assert.ok(
-		Array.isArray(serverLint.dependsOn) &&
-			serverLint.dependsOn.includes("prepare:server:generated"),
-	);
-	assert.equal(
-		asRecord(tasks["prepare:server:generated"], "prepare:server:generated").cache,
-		false,
-	);
-	for (const entry of ["gate:server-format", "gate:server-lint", "gate:docs-lint"])
-		assert.ok(Array.isArray(asRecord(tasks[entry], entry).input), `${entry} names its inputs`);
-	for (const entry of ["gate:server-format", "gate:server-lint"]) {
-		const env = asRecord(tasks[entry], entry).env;
-		assert.ok(Array.isArray(env) && env.includes("JAVA_HOME"), `${entry} names JAVA_HOME`);
+	assert.equal(tasks["prepare:server:generated"], undefined, "Gradle owns generation dependencies");
+	for (const entry of ["gate:server", "format:java:check", "lint:java"]) {
+		assert.equal(
+			asRecord(tasks[entry], entry).cache,
+			false,
+			`${entry} delegates caching to Gradle`,
+		);
 	}
+	assert.ok(Array.isArray(asRecord(tasks["gate:docs-lint"], "gate:docs-lint").input));
 
 	for (const [file, source] of await workflowSources()) {
 		assert.doesNotMatch(
@@ -2216,7 +2168,9 @@ void test("unchanged quality legs are skipped before runner allocation", async (
 	]) {
 		assert.equal(
 			workflow.getIn(["jobs", leg, "if"]),
-			`inputs.should_skip != 'true' && inputs.${scope}_changed == 'true'`,
+			leg === "server"
+				? "inputs.should_skip != 'true' && (inputs.application_server_changed == 'true' || inputs.pmd_canary == 'true')"
+				: `inputs.should_skip != 'true' && inputs.${scope}_changed == 'true'`,
 		);
 		assert.equal(workflow.getIn(["jobs", leg, "uses"]), "./.github/workflows/ci-quality-leg.yml");
 		assert.equal(workflow.getIn(["jobs", leg, "with", "leg"]), leg);

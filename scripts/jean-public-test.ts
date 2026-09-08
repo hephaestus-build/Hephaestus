@@ -208,8 +208,8 @@ async function isBackendProcess(pid: number): Promise<boolean> {
 		]);
 		return (
 			cwd === join(root, "server") &&
-			command.includes("mvnw") &&
-			command.includes("spring-boot:run")
+			command.includes("GradleWrapperMain") &&
+			command.includes(":application:bootRun")
 		);
 	} catch {
 		return false;
@@ -241,22 +241,13 @@ async function startBackend(): Promise<void> {
 		HEPHAESTUS_SYNC_RUN_ON_STARTUP: fileEnv.HEPHAESTUS_SYNC_RUN_ON_STARTUP ?? "false",
 		HEPHAESTUS_SYNC_BACKFILL_ENABLED: fileEnv.HEPHAESTUS_SYNC_BACKFILL_ENABLED ?? "false",
 	};
-	await run(
-		"./mvnw",
-		["-pl", "generated-clients", "-am", "install", "-DskipTests", "--batch-mode"],
-		{ cwd: join(root, "server"), env },
-	);
 	const log = await open(logFile, "a");
-	const child = spawn(
-		"./mvnw",
-		["-f", "application/pom.xml", "spring-boot:run", "-Dspring-boot.run.profiles=local"],
-		{
-			cwd: join(root, "server"),
-			env: { ...process.env, ...env },
-			stdio: ["ignore", log.fd, log.fd],
-			detached: true,
-		},
-	);
+	const child = spawn("./gradlew", [":application:bootRun", "-Pprofiles=local", "--no-daemon"], {
+		cwd: join(root, "server"),
+		env: { ...process.env, ...env },
+		stdio: ["ignore", log.fd, log.fd],
+		detached: true,
+	});
 	child.unref();
 	await writeFile(pidFile, `${child.pid}\n`, { mode: 0o600 });
 	for (let attempt = 0; attempt < 90; attempt++) {

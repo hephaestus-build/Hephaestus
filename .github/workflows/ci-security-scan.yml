@@ -63,7 +63,7 @@ jobs:
     name: "New dependency risk"
     runs-on: ubuntu-latest
     if: inputs.should_skip != 'true' && github.event_name == 'pull_request'
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -76,6 +76,8 @@ jobs:
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           config-file: ./.github/dependency-review-config.yml
+          retry-on-snapshot-warnings: true
+          retry-on-snapshot-warnings-timeout: 600
 
   security-scan:
     name: "Dependencies, secrets, and policy"
@@ -85,6 +87,9 @@ jobs:
     permissions:
       security-events: write
       contents: read
+    env:
+      # Build and test dependencies execute in CI and can affect shipped artifacts too.
+      TRIVY_INCLUDE_DEV_DEPS: "true"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

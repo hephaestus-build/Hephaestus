@@ -75,7 +75,7 @@ class PracticeRunnerLiveLlmTest {
 
     @BeforeAll
     static void installPiSdk() throws Exception {
-        // Same marker + lock dance the mentor test uses so two JVMs (or repeated `mvn test` runs)
+        // Same marker + lock dance the mentor test uses so two JVMs (or repeated test runs)
         // share one install. We deliberately reuse the mentor test's directory and marker file.
         Files.createDirectories(SDK_DIR);
         Path marker = SDK_DIR.resolve(".installed-" + PI_SDK_VERSION);
