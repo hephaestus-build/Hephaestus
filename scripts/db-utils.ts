@@ -346,7 +346,7 @@ async function main(): Promise<void> {
 	}
 	console.log(`✅ Wrote ${relative(root, written)} and refreshed the ERD.`);
 	console.log(
-		"Review it: keep the real deltas, add preconditions and rollbacks, then run vp run db:generate-erd-docs if you pruned anything.",
+		"Review for data loss and upgrade safety: docs/contributor/database-migration.mdx. Refresh the ERD if you edit the changelog.",
 	);
 }
 

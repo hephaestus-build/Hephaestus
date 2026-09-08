@@ -28,7 +28,7 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
         var request = new CreateLlmConnectionRequestDTO(
                 slug,
                 "Test Connection",
-                "https://api.openai.com",
+                LlmCatalogTestFixtures.PUBLIC_BASE_URL,
                 "openai-completions",
                 LlmAuthMode.BEARER,
                 "sk-test-secret-1234",
@@ -123,7 +123,7 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .bodyValue(new CreateLlmConnectionRequestDTO(
                         "redaction-test",
                         "Redaction Test",
-                        "https://api.openai.com",
+                        LlmCatalogTestFixtures.PUBLIC_BASE_URL,
                         "openai-completions",
                         LlmAuthMode.BEARER,
                         "sk-super-secret-value",

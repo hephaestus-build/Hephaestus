@@ -131,7 +131,10 @@ export function parsePerformance(
 	};
 }
 
-export function validateProfile(summary: TestSummary): void {
+export function validateProfile(
+	summary: TestSummary,
+	kind: "integration" | "verification" = "integration",
+): void {
 	const counts = [summary.files, summary.tests, summary.failures, summary.errors, summary.skipped];
 	if (counts.some((value) => !Number.isSafeInteger(value) || value < 0))
 		throw new Error("Invalid profile test counts");
@@ -149,7 +152,10 @@ export function validateProfile(summary: TestSummary): void {
 		throw new Error("Profile metrics must be finite and nonnegative");
 	if (performance.wallTimeSeconds === 0 || performance.maxRssKilobytes === 0)
 		throw new Error("Profile wall time and resident memory must be positive");
-	if (performance.contextStarts === 0 || performance.contextCacheMisses === 0)
+	if (
+		kind === "integration" &&
+		(performance.contextStarts === 0 || performance.contextCacheMisses === 0)
+	)
 		throw new Error("Profile contains no Spring context measurements");
 	if (![performance.contextStarts, performance.contextCacheMisses].every(Number.isSafeInteger))
 		throw new Error("Invalid profile context counts");
@@ -190,7 +196,9 @@ async function xmlFiles(path: string): Promise<string[]> {
 }
 
 async function main(): Promise<void> {
-	const [name, input, output, logPath, resourcePath] = process.argv.slice(2);
+	const [name, input, output, logPath, resourcePath, kind = "integration"] = process.argv.slice(2);
+	if (kind !== "integration" && kind !== "verification")
+		throw new Error(`Unknown profile kind: ${kind}`);
 	if (name === undefined || input === undefined || output === undefined) {
 		throw new Error("Usage: summarize-test-results <name> <report-directory> <output-json>");
 	}
@@ -212,7 +220,7 @@ async function main(): Promise<void> {
 		await appendFile(process.env.GITHUB_STEP_SUMMARY, rendered);
 	}
 	process.stdout.write(rendered);
-	if (summary.performance !== undefined) validateProfile(summary);
+	if (summary.performance !== undefined) validateProfile(summary, kind);
 	if (files.length === 0) {
 		process.stderr.write(`No JUnit XML reports found below ${input}\n`);
 	}

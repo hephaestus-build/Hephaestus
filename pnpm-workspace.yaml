@@ -38,24 +38,18 @@ catalog:
   "@vitest/runner": 4.1.11
 
 overrides:
-  # unplugin 3.1+ declares an optional peer on the retired runtime's types package, whose name
-  # would re-enter the lockfile and fail gate:toolchain's repository-wide token ban.
-  "@tanstack/router-plugin>unplugin": 3.0.0
-  mermaid: 11.16.1
+  mermaid: 11.17.2
   vitest: "catalog:"
   "@vitest/browser": "catalog:"
   "@vitest/runner": "catalog:"
-  "browserslist@<=4.28.6": 4.28.8
+  "browserslist@<=4.28.6": 4.28.9
   dompurify: 3.4.14
   "js-yaml@>=4.0.0": 4.3.2
   lodash: 4.18.1
   lodash-es: 4.18.1
-  "markdown-it@<=14.1.1": 14.2.0
+  "markdown-it@<14.3.1": 14.3.1
   "qs@>=2.2.5 <6.16.0": 6.16.0
-  serialize-javascript: 7.0.5
+  serialize-javascript: 7.1.1
   "shell-quote@<=1.8.4": 1.10.0
   "uuid@<11.1.1": 11.1.1
 
-patchedDependencies:
-  "zod@4.4.3": patches/zod@4.4.3.patch
-  "storybook@10.4.0": patches/storybook@10.4.0.patch

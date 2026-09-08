@@ -304,7 +304,9 @@ Procedure: `docs/contributor/database-migration.mdx`. Entity conventions the dri
 `server/AGENTS.md` § Schema changes. `vp run db:draft-changelog` writes the drift into this
 branch's single changelog and wires it into `master.xml`; a branch never hand-writes one or adds a
 second. A file under `db/changelog/` that reached `main` is never edited, renamed or deleted, and
-`master.xml` is append-only.
+`master.xml` is append-only. The verified v0.77.4 archival transition is documented in the migration
+procedure; it is not permission for future history rewrites. Existing developer databases must follow
+the baseline runbook or be discarded with `vp run dev:reset` before `vp run dev`.
 
 ## Command caveats
 

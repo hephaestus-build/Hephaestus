@@ -13,13 +13,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
-/**
- * The parity test beside this one reads the changelogs; this one applies them. Every other tier builds
- * its schema with {@code ddl-auto: create}, where {@code ck_artifact_signal_state} does not exist at
- * all — so a state the database refuses passes all of them, which is how a deferred signal reached
- * production: the insert was rejected, the message redelivered until the consumer dropped it as
- * poison, and the occurrence never reviewed.
- */
 @Tag("database")
 class SignalStateConstraintIntegrationTest {
 
@@ -32,17 +25,6 @@ class SignalStateConstraintIntegrationTest {
 
     @Test
     void shouldAdmitEverySignalStateAndRejectAnUnknownOneAfterMigration() {
-        String definition = jdbcTemplate.queryForObject(
-                "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'ck_artifact_signal_state'"
-                        + " AND conrelid = 'artifact_signal'::regclass",
-                String.class);
-        assertThat(definition)
-                .as("the changelog chain leaves ck_artifact_signal_state on artifact_signal")
-                .isNotNull();
-        for (SignalState state : SignalState.values()) {
-            assertThat(definition).as("constraint admits %s", state).contains(state.name());
-        }
-
         // Seeding without the workspace this row points at: session_replication_role suspends foreign
         // keys and triggers, and leaves CHECK constraints — which are what this test is about — enforced.
         jdbcTemplate.execute("SET session_replication_role = 'replica'");

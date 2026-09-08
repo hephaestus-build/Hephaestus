@@ -6,7 +6,12 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { isFullVerification, latencyBudget, selectLatencyRuns } from "./report-ci-latency.ts";
+import {
+	isFullVerification,
+	latencyBudget,
+	renderLatencyBudget,
+	selectLatencyRuns,
+} from "./report-ci-latency.ts";
 
 void test("sampling excludes stale/future, retried, failed and release validation", () => {
 	const now = Date.parse("2026-01-30T00:00:00Z");
@@ -49,10 +54,12 @@ void test("lightweight PRs cannot make full verification's latency budget pass",
 		"Test / App Server: Integration (providers)",
 		"Test / App Server: Integration (application)",
 	];
-	const jobs = names.map((name) => ({ name }));
-	assert.equal(isFullVerification(jobs), true);
-	for (const name of names)
-		assert.equal(isFullVerification(jobs.filter((job) => job.name !== name)), false, name);
+	for (const webappName of ["Quality / Webapp", "Quality / Webapp / Gates"]) {
+		const jobs = names.map((name) => ({ name: name === "Quality / Webapp" ? webappName : name }));
+		assert.equal(isFullVerification(jobs), true);
+		for (const { name } of jobs)
+			assert.equal(isFullVerification(jobs.filter((job) => job.name !== name)), false, name);
+	}
 	assert.equal(isFullVerification([{ name: "Quality / Tooling and Docs" }]), false);
 });
 
@@ -69,7 +76,7 @@ void test("the target constrains both the median and tail, and insufficient data
 });
 
 void test(
-	"the CLI saves insufficient-sample evidence before failing",
+	"the CLI reports insufficient evidence without failing but rejects malformed API data",
 	{ skip: process.platform === "win32" },
 	async (context) => {
 		const directory = await mkdtemp(path.join(tmpdir(), "ci-latency-"));
@@ -94,9 +101,38 @@ void test(
 				encoding: "utf8",
 			},
 		);
-		assert.equal(result.status, 1, result.stderr);
+		assert.equal(result.status, 0, result.stderr);
+		assert.match(result.stdout, /::notice title=PR latency baseline incomplete/);
 		const evidence = await readFile(path.join(directory, "tmp/ci-metrics/ci-latency.json"), "utf8");
 		assert.match(evidence, /"status": "insufficient-data"/);
 		assert.match(evidence, /"runs": \[\]/);
+		await writeFile(path.join(directory, "gh"), "#!/bin/sh\necho '{}'\n", { mode: 0o755 });
+		const invalid = spawnSync(
+			process.execPath,
+			[fileURLToPath(new URL("./report-ci-latency.ts", import.meta.url))],
+			{
+				cwd: directory,
+				env: {
+					...process.env,
+					GITHUB_REPOSITORY: "owner/repo",
+					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+				},
+				encoding: "utf8",
+			},
+		);
+		assert.notEqual(invalid.status, 0);
+		assert.match(invalid.stderr, /workflow_runs/);
 	},
 );
+
+void test("latency summaries preserve exceeded targets and distinguish absent evidence", () => {
+	assert.match(
+		renderLatencyBudget(latencyBudget(Array.from({ length: 10 }, () => 900))),
+		/\*\*exceeded\*\*/,
+	);
+	assert.match(renderLatencyBudget(latencyBudget([])), /Not available/);
+	assert.match(
+		renderLatencyBudget(latencyBudget(Array.from({ length: 10 }, () => 300))),
+		/\*\*within-budget\*\*/,
+	);
+});

@@ -77,6 +77,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -679,9 +682,11 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertOutcomeRecorded(MentorChatMetrics.Outcome.SUCCESS);
     }
 
-    @Test
-    void runTurn_clientDisconnectOnSyncSend_recordsClientDisconnect() throws Exception {
-        emitter.disconnectAfterCalls = 1; // call #2 (DataMentorStatus) throws
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1})
+    @Timeout(5)
+    void runTurn_clientDisconnectOnSyncSend_interruptsWithoutWaitingForARunner(int successfulSends) throws Exception {
+        emitter.disconnectAfterCalls = successfulSends;
 
         runTurnSync();
 
@@ -690,8 +695,59 @@ class MentorChatServiceTest extends BaseUnitTest {
         } catch (InteractiveSandboxException e) {
             throw new AssertionError(e);
         }
+        verify(persistence).interrupt(any(), any(), any());
+        verify(persistence, never())
+                .finalise(any(), any(), any(UIMessageChunk.Finish.class), any(MentorChannel.DeliveryOutcome.class));
         assertThat(turnLock.activeKeys()).isZero();
         assertOutcomeRecorded(MentorChatMetrics.Outcome.CLIENT_DISCONNECT);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    @Timeout(5)
+    void runTurn_clientDisconnectDuringStartup_releasesSubscriptionWithoutDraining(boolean afterSubscribe)
+            throws Exception {
+        if (afterSubscribe) {
+            sandbox.onSubscribe = emitter::disconnect;
+        } else {
+            when(interactiveSandboxService.attach(any())).thenAnswer(invocation -> {
+                emitter.disconnect();
+                return sandbox;
+            });
+        }
+
+        runTurnSync();
+
+        assertThat(sandbox.listeners).isEmpty();
+        assertThat(sandbox.closed).isFalse();
+        assertThat(sandbox.methodsSent()).doesNotContain("hello", "open_thread", "prompt");
+        verify(persistence).interrupt(any(), any(), any());
+        verify(persistence, never())
+                .finalise(any(), any(), any(UIMessageChunk.Finish.class), any(MentorChannel.DeliveryOutcome.class));
+        assertThat(turnLock.activeKeys()).isZero();
+        assertOutcomeRecorded(MentorChatMetrics.Outcome.CLIENT_DISCONNECT);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void runTurn_failedHello_releasesSubscriptionAndEvictsOnlyPoisonedSandbox(boolean poisoned) {
+        sandbox.onSend = frame -> {
+            if ("hello".equals(frame.path("method").asString())) {
+                long id = frame.path("id").asLong();
+                sandbox.push(
+                        poisoned
+                                ? jsonRpcError(id, MentorRunnerException.CODE_PI_ERROR, "runner failed")
+                                : jsonRpcResult(id, mapper.createObjectNode().put("protocolVersion", -1)));
+            }
+        };
+
+        runTurnSync();
+
+        assertThat(sandbox.listeners).isEmpty();
+        assertThat(sandbox.closed.get()).isEqualTo(poisoned);
+        verify(persistence).interrupt(any(), any(), any());
+        assertThat(turnLock.activeKeys()).isZero();
+        assertOutcomeRecorded(poisoned ? MentorChatMetrics.Outcome.POISONED : MentorChatMetrics.Outcome.ERROR);
     }
 
     // 3. Runner poisoned (-32002): sandbox evicted, lock released, row interrupted
@@ -1074,6 +1130,17 @@ class MentorChatServiceTest extends BaseUnitTest {
         volatile int disconnectAfterCalls = -1;
 
         private int sendCount = 0;
+        private Runnable completionCallback = () -> {};
+
+        @Override
+        public void onCompletion(Runnable callback) {
+            completionCallback = callback;
+        }
+
+        void disconnect() {
+            clientGone = true;
+            completionCallback.run();
+        }
 
         RecordingEmitter() {
             super(60_000L);
@@ -1132,6 +1199,8 @@ class MentorChatServiceTest extends BaseUnitTest {
         /** Called on every send — installed by the test driver to script responses. */
         volatile Consumer<JsonNode> onSend = f -> {};
 
+        Runnable onSubscribe = () -> {};
+
         @Override
         public SandboxIdentity identity() {
             return new SandboxIdentity(sessionId, Long.toString(USER_ID), Long.toString(WORKSPACE_ID));
@@ -1147,6 +1216,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         @Override
         public Disposable subscribe(Consumer<JsonNode> listener) {
             listeners.add(listener);
+            onSubscribe.run();
             return () -> listeners.remove(listener);
         }
 

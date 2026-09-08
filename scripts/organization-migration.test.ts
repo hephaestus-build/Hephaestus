@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { glob } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { isSeq, parseAllDocuments, parseDocument } from "yaml";
+
+import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 
 const repoRoot = new URL("../", import.meta.url);
 const source = (file: string) => readFileSync(new URL(file, repoRoot), "utf8");
@@ -23,7 +26,6 @@ const SKIPPED_EXTENSIONS = new Set([
 	".pdf",
 	".zip",
 ]);
-const GENERATED_DIRS = ["node_modules", "build", ".docusaurus", "storybook-static", "coverage"];
 
 // Sample repository names in stories and test fixtures are not the shipped rename (#1599).
 const SAMPLE_DATA = /(\.stories\.tsx|\.test\.tsx?|story-mock-data\.ts)$/;
@@ -68,19 +70,33 @@ await test("preview publishing and teardown target the same hostname", () => {
 	}
 });
 
-await test("no shipped surface drifts back to ls1intum/Hephaestus", async () => {
+await test("no shipped surface drifts back to ls1intum/Hephaestus", () => {
 	const offenders: string[] = [];
-	for (const dir of ["webapp/src", "docs", "docker", ".github"]) {
-		const files = await Array.fromAsync(
-			glob(`${dir}/**/*`, {
-				cwd: repoRoot,
-				exclude: (entry) =>
-					GENERATED_DIRS.some((generated) => entry.split("/").includes(generated)),
-			}),
-		);
+	// Shipped surface is what git tracks. Walking the filesystem instead read whatever a contributor
+	// happened to have built — `docs/_build/`, a Python `venv/` — as if it shipped, so the gate
+	// failed locally on files CI never sees and no list of generated directory names stayed complete.
+	const tracked = spawnSync(
+		"git",
+		["ls-files", "-z", "--", "webapp/src", "docs", "docker", ".github"],
+		{
+			cwd: fileURLToPath(repoRoot),
+			encoding: "utf8",
+			maxBuffer: 64 * 1024 * 1024,
+			// The pre-push hook exports GIT_DIR and friends, which outrank `cwd`.
+			env: environmentWithoutGitRepository(),
+		},
+	);
+	assert.equal(tracked.status, 0, `git ls-files failed: ${tracked.stderr}`);
+	{
+		const files = tracked.stdout.split("\0").filter(Boolean);
 		for (const file of files.toSorted()) {
 			const relative = file.split(path.sep).join("/");
-			if (SAMPLE_DATA.test(relative) || HISTORICAL_ALLOWLIST.has(relative)) continue;
+			if (
+				relative.startsWith("docs/db/archive/") ||
+				SAMPLE_DATA.test(relative) ||
+				HISTORICAL_ALLOWLIST.has(relative)
+			)
+				continue;
 			if (SKIPPED_EXTENSIONS.has(path.extname(relative))) continue;
 			let content: string;
 			try {
