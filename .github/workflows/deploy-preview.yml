@@ -69,29 +69,9 @@ jobs:
 
             <sub>Remove the `preview` label to opt out.</sub>
 
-      - name: Wait for CI to publish this commit's signed images
-        if: steps.context.outputs.eligible == 'true'
-        env:
-          GHCR_TOKEN: ${{ github.token }}
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ steps.context.outputs.head_sha }}
-        run: node scripts/coolify-preview.ts images
-
-      - name: Recheck opt-in and head before queueing
-        id: recheck
-        if: steps.context.outputs.eligible == 'true'
-        env:
-          PR_NUMBER: ${{ steps.context.outputs.pr_number }}
-          HEAD_SHA: ${{ steps.context.outputs.head_sha }}
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          script: |
-            const controller = await import(`${process.env.GITHUB_WORKSPACE}/scripts/preview-controller.ts`);
-            await controller.recheck({ github, context, core });
-
-      - name: Reserve the native GitHub deployment
+      - name: Open the native GitHub deployment
         id: github_deployment
-        if: steps.recheck.outputs.proceed == 'true'
+        if: steps.context.outputs.eligible == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           PR_NUMBER: ${{ steps.context.outputs.pr_number }}
@@ -113,9 +93,59 @@ jobs:
           message: |
             ## 🚧 App Preview
 
-            Deploying `${{ steps.context.outputs.head_sha }}`…
+            Deploying `${{ steps.context.outputs.head_sha }}` — follow it under **Environments → `${{ steps.context.outputs.environment }}`** on this pull request.
 
-            <sub>Runs the images CI published for this commit. Updates on every commit. Remove the `preview` label to tear it down.</sub>
+            <sub>Waits for the images CI publishes for this commit, then deploys. Updates on every commit, draft or not. Remove the `preview` label to tear it down.</sub>
+
+      - name: Say it is waiting on images
+        if: steps.github_deployment.outputs.deployment_id != ''
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          DEPLOYMENT_ID: ${{ steps.github_deployment.outputs.deployment_id }}
+          ENVIRONMENT: ${{ steps.context.outputs.environment }}
+          PREVIEW_URL: ${{ steps.context.outputs.preview_url }}
+          SOURCE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          STATE: queued
+          DESCRIPTION: Waiting for CI to publish signed images for this commit.
+        with:
+          script: |
+            const controller = await import(`${process.env.GITHUB_WORKSPACE}/scripts/preview-controller.ts`);
+            await controller.progress({ github, context, core });
+
+      - name: Wait for CI to publish this commit's signed images
+        if: steps.context.outputs.eligible == 'true'
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.context.outputs.head_sha }}
+        run: node scripts/coolify-preview.ts images
+
+      - name: Recheck opt-in and head before queueing
+        id: recheck
+        if: steps.context.outputs.eligible == 'true'
+        env:
+          PR_NUMBER: ${{ steps.context.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.context.outputs.head_sha }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const controller = await import(`${process.env.GITHUB_WORKSPACE}/scripts/preview-controller.ts`);
+            await controller.recheck({ github, context, core });
+
+      - name: Say it is building
+        if: steps.recheck.outputs.proceed == 'true' && steps.github_deployment.outputs.deployment_id != ''
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          DEPLOYMENT_ID: ${{ steps.github_deployment.outputs.deployment_id }}
+          ENVIRONMENT: ${{ steps.context.outputs.environment }}
+          PREVIEW_URL: ${{ steps.context.outputs.preview_url }}
+          SOURCE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          STATE: in_progress
+          DESCRIPTION: Images are ready; Coolify is building the preview.
+        with:
+          script: |
+            const controller = await import(`${process.env.GITHUB_WORKSPACE}/scripts/preview-controller.ts`);
+            await controller.progress({ github, context, core });
 
       - name: Queue the exact commit through Coolify's signed PR webhook
         id: queue
@@ -153,8 +183,14 @@ jobs:
           ENVIRONMENT: ${{ steps.context.outputs.environment }}
           PREVIEW_URL: ${{ steps.context.outputs.preview_url }}
           SOURCE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          FINAL_STATE: ${{ steps.wait.outputs.state || 'error' }}
-          DESCRIPTION: ${{ steps.wait.outputs.description || 'Preview workflow stopped unexpectedly.' }}
+          FINAL_STATE: >-
+            ${{ steps.wait.outputs.state
+               || (steps.recheck.outputs.proceed == 'false' && 'inactive')
+               || 'error' }}
+          DESCRIPTION: >-
+            ${{ steps.wait.outputs.description
+               || (steps.recheck.outputs.proceed == 'false' && 'Superseded or opted out; cleanup owns this environment.')
+               || 'Preview workflow stopped unexpectedly.' }}
           LOG_URL: ${{ steps.wait.outputs.log_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
         with:
           script: |

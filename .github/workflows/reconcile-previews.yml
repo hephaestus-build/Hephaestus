@@ -45,6 +45,9 @@ jobs:
     needs: inventory
     if: needs.inventory.result == 'success' && needs.inventory.outputs.previews != '[]'
     permissions:
+      # `administration: write` is what deleting an environment needs. It lives here, in a scheduled
+      # job, and never in the `pull_request_target` workflows, so no pull request can reach it.
+      administration: write
       contents: read
       deployments: write
       pull-requests: read
@@ -105,3 +108,16 @@ jobs:
           script: |
             const controller = await import(`${process.env.GITHUB_WORKSPACE}/scripts/preview-controller.ts`);
             await controller.retire({ github, context, core });
+
+      # Retiring the deployment leaves the environment behind, and it then sits in the repository's
+      # settings forever. Only once the pull request is closed: while it is open, the record is
+      # worth keeping and re-labelling should be cheap.
+      - name: Delete the environment of a closed pull request
+        if: steps.pull.outputs.closed == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ENVIRONMENT: preview/pr-${{ matrix.pr }}
+        with:
+          script: |
+            const controller = await import(`${process.env.GITHUB_WORKSPACE}/scripts/preview-controller.ts`);
+            await controller.demolish({ github, context, core });
