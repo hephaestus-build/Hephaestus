@@ -133,9 +133,34 @@ public class WorkspaceStatementInspector implements StatementInspector {
      */
     private static final Pattern FULL_KEY_DML_PATTERN = Pattern.compile(
             "^\\s*(?:DELETE\\s+FROM|UPDATE)\\s+\"?([A-Za-z_][A-Za-z0-9_]*)\"?"
-                    + "(?:\\s+SET\\s+.+?)?"
-                    + "\\s+WHERE\\s+(.+?)\\s*$",
+                    // Captured, not skipped: what a SET assigns reaches as far as what a WHERE
+                    // selects, and it is checked below.
+                    + "(?:\\s+SET\\s+(.+?))?"
+                    // Greedy to the end, trimmed in Java. A reluctant tail against a trailing
+                    // `\\s*$` retries at every end position, which a long whitespace run makes
+                    // quadratic.
+                    + "\\s+WHERE\\s+(.+)$",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+    /**
+     * What disqualifies a statement from this allowance before its key is even considered.
+     *
+     * <p>A comment marker means the text read here as a WHERE clause may not be one the database
+     * will apply: {@code UPDATE t SET c=?} followed by a newline and {@code -- WHERE k=?} parses
+     * here as a keyed update and arrives at PostgreSQL as an unrestricted one. A second table
+     * reference means the statement reads rows this rule never examined — a subquery in a SET
+     * assignment copies another workspace's data into the row the key names. A separator means
+     * there is more than one statement to account for.
+     */
+    private static final Pattern SMUGGLED_CLAUSE_PATTERN =
+            Pattern.compile("--|/\\*|;|\\bSELECT\\b|\\bFROM\\b|\\bJOIN\\b", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * The fast path declines to parse a statement longer than the ORM has reason to emit, bounding
+     * what the reluctant SET match can cost. Declining is the safe answer — the standard
+     * {@code workspace_id} check still runs.
+     */
+    private static final int FAST_PATH_SQL_LIMIT = 8192;
 
     /** One conjunct of that WHERE clause, and the only shape allowed in it: {@code column = ?}. */
     private static final Pattern KEY_PREDICATE_PATTERN =
@@ -241,16 +266,22 @@ public class WorkspaceStatementInspector implements StatementInspector {
      * {@code workspace_id} check, so this can only ever narrow what is reported, never widen it.
      */
     private boolean coversCompletePrimaryKey(String sql) {
+        if (sql.length() > FAST_PATH_SQL_LIMIT) return false;
         Matcher dml = FULL_KEY_DML_PATTERN.matcher(sql);
         if (!dml.matches()) return false;
         // An OR anywhere would reach rows the key does not name.
         if (OR_TOKEN_PATTERN.matcher(sql).find()) return false;
 
+        String setClause = dml.group(2);
+        String whereClause = dml.group(3).strip();
+        if (setClause != null && SMUGGLED_CLAUSE_PATTERN.matcher(setClause).find()) return false;
+        if (SMUGGLED_CLAUSE_PATTERN.matcher(whereClause).find()) return false;
+
         Set<String> keyColumns = scopedTables.primaryKeyColumns(unqualify(dml.group(1)));
         if (keyColumns.isEmpty()) return false;
 
         Set<String> predicateColumns = new HashSet<>();
-        for (String conjunct : AND_SPLIT_PATTERN.split(dml.group(2))) {
+        for (String conjunct : AND_SPLIT_PATTERN.split(whereClause)) {
             Matcher predicate = KEY_PREDICATE_PATTERN.matcher(conjunct);
             if (!predicate.matches()) return false;
             String column = predicate.group(1).toLowerCase(Locale.ROOT);
