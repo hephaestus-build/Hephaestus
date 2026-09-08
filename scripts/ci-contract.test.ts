@@ -830,6 +830,14 @@ void describe("CI contract", () => {
 				/inputs\.publish/,
 				`${name} writes to the registry and must be gated on publish`,
 			);
+		assert.match(
+			String(namedStep(reusable, build, "Set up Docker Buildx").getIn(["with", "driver"])),
+			/^\$\{\{ inputs\.use-buildpacks && 'docker' \|\| 'docker-container' }}$/,
+		);
+		assert.equal(
+			namedStep(reusable, ["jobs", "merge"], "Set up Docker Buildx").getIn(["with", "driver"]),
+			"docker",
+		);
 		const buildx = namedStep(reusable, build, "Build and push (Dockerfile)");
 		const inputs = buildx.get("with");
 		assert.ok(isMap(inputs));

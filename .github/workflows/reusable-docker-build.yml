@@ -110,6 +110,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        with:
+          driver: ${{ inputs.use-buildpacks && 'docker' || 'docker-container' }}
 
       - name: Log in to Container Registry
         if: inputs.publish
@@ -172,9 +174,9 @@ jobs:
           platforms: ${{ matrix.platform }}
           build-args: ${{ inputs.build-args }}
           secrets: |
-            sentry_auth_token=${{ github.event_name == 'push' && matrix.platform == 'linux/amd64' && secrets.SENTRY_AUTH_TOKEN || '' }}
-            sentry_org=${{ github.event_name == 'push' && matrix.platform == 'linux/amd64' && secrets.SENTRY_ORG || '' }}
-            sentry_project=${{ github.event_name == 'push' && matrix.platform == 'linux/amd64' && secrets.SENTRY_PROJECT || '' }}
+            ${{ github.event_name == 'push' && matrix.platform == 'linux/amd64' && secrets.SENTRY_AUTH_TOKEN != '' && format('sentry_auth_token={0}', secrets.SENTRY_AUTH_TOKEN) || '' }}
+            ${{ github.event_name == 'push' && matrix.platform == 'linux/amd64' && secrets.SENTRY_ORG != '' && format('sentry_org={0}', secrets.SENTRY_ORG) || '' }}
+            ${{ github.event_name == 'push' && matrix.platform == 'linux/amd64' && secrets.SENTRY_PROJECT != '' && format('sentry_project={0}', secrets.SENTRY_PROJECT) || '' }}
           labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ inputs.single-arch && steps.meta.outputs.tags || '' }}
           push: ${{ inputs.publish }}
@@ -364,6 +366,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        with:
+          driver: docker
 
       - name: Prepare tag configuration
         id: tags
@@ -410,11 +414,6 @@ jobs:
         env:
           INPUTS_REGISTRY: ${{ inputs.registry }}
           INPUTS_IMAGE_NAME: ${{ inputs.image-name }}
-
-      - name: Inspect image
-        run: docker buildx imagetools inspect "$IMAGE_REF"
-        env:
-          IMAGE_REF: ${{ inputs.registry }}/${{ inputs.image-name }}:${{ steps.meta.outputs.version }}
 
       - name: Capture manifest digest
         id: digest
