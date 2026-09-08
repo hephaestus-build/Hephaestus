@@ -1,22 +1,21 @@
 import io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension
 
-// The GraphQL codegen plugin is at its latest release and still resolves a vulnerable
-// `graphql-java` (20.2, fixed in 20.9) and `handlebars` (4.3.1, fixed in 4.5.2) onto the script
-// classpath. Neither reaches a shipped image — they run only while generating clients — but they
-// are
-// the repository's only open Dependabot alerts, and the plugin has no newer version to move to.
-// Each stays inside the line the plugin compiled against, so this raises the patch level without
-// changing the API it uses. `handlebars-jackson2` publishes no 4.5.x and is not the advisory's
-// subject; it rides on the forced `handlebars`.
+// Two build plugins put vulnerable libraries on the script classpath, and both are at their latest
+// release: the GraphQL codegen plugin brings `graphql-java` 20.2 (fixed in 20.9), and the OpenAPI
+// Generator brings `handlebars` 4.3.1 (fixed in 4.5.2). Neither reaches a shipped image — they run
+// only while generating clients — but they are the repository's only open Dependabot alerts. Each
+// is
+// forced inside the line its plugin compiled against, so the API those plugins call does not move.
 buildscript {
     configurations.classpath {
         resolutionStrategy {
             force("com.graphql-java:graphql-java:20.9")
             force("com.github.jknack:handlebars:4.5.2")
         }
-        // 4.5.2 offers a Nashorn-backed helper and the ASM tree it needs. The generator renders
-        // repo-local templates and never evaluates JavaScript, so the patch is taken without the
-        // engine: ten artifacts would otherwise join the build classpath to fix one advisory.
+        // 4.5.2 offers a Nashorn-backed helper and the ASM tree it needs. The generation configured
+        // here renders Mustache and FreeMarker templates, registers no JavaScript helper and
+        // precompiles nothing, so the patch is taken without the engine: ten artifacts would
+        // otherwise join the build classpath to fix one advisory.
         exclude(group = "org.openjdk.nashorn")
         exclude(group = "org.ow2.asm")
     }

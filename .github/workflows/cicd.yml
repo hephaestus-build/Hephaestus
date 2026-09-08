@@ -360,6 +360,24 @@ jobs:
 
   # `Actionlint` is a required context, and a required context that skips still satisfies the
   # ruleset — docs/contributor/ci-cd.mdx § Merge policy says why.
+  # Scorecard's Binary-Artifacts check exempts the committed `gradle-wrapper.jar` only when it finds
+  # `gradle/actions/wrapper-validation@` in a workflow file AND a successful run of that same file at
+  # the latest commit. A reusable workflow produces no run under its own name, so this has to live in
+  # a workflow that is triggered directly — and unconditionally, so every commit on the default
+  # branch has one. `setup-caches` still validates the wrapper wherever Gradle actually runs; this is
+  # the same guarantee, stated where a reader and a scanner can both see it.
+  gradle-wrapper:
+    name: "Gradle wrapper"
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
   workflow-lint:
     name: "Actionlint"
     timeout-minutes: 10
@@ -679,7 +697,7 @@ jobs:
     permissions:
       actions: read
       statuses: write
-    needs: [detect-changes, workflow-lint, zizmor, Quality, Build, Security, Test, Changesets, Compose, Docker, Supported-host-smoke, Release-preflight]
+    needs: [detect-changes, gradle-wrapper, workflow-lint, zizmor, Quality, Build, Security, Test, Changesets, Compose, Docker, Supported-host-smoke, Release-preflight]
     if: always()
     steps:
       - name: Generate workflow timeline
