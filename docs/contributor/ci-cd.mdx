@@ -463,6 +463,9 @@ published only by trusted default-branch push, schedule and dispatch runs; the p
 also saves only from `main`. The JDK is pinned once, in `.java-version`.
 
 Java quality verdicts are not stored in the Vite task cache: Gradle owns their task inputs and outputs.
+GraphQL generation opts into Gradle's build cache using the plugin's declared inputs and outputs.
+Its optional timestamped `@Generated` class marker is disabled so unchanged schemas produce identical
+sources and compilation can also be restored. Test tasks always execute; their results are not cached.
 The [local verification contract](./local-verification.mdx#java-checks-and-caching) describes the shared
 local/CI command and how to distinguish Vite, Gradle build and Gradle configuration caches.
 

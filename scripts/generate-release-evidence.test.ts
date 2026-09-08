@@ -7,6 +7,7 @@ import { describe, test } from "node:test";
 
 import {
 	buildManifest,
+	captureSubjects,
 	evidenceStem,
 	PLATFORMS,
 	planEvidenceImages,
@@ -105,11 +106,12 @@ void test(
 		await writeFile(
 			path.join(directory, "trivy"),
 			`#!/bin/sh
-[ "$1" = image ] && [ "$2" = --skip-db-update ] && [ "$3" = --scanners ] && [ "$4" = vuln,license ] || exit 90
-[ "$5" = --format ] && [ "$6" = json ] && [ "$7" = --output ] || exit 91
+[ "$1" = image ] && [ "$2" = --skip-db-update ] && [ "$3" = --skip-java-db-update ] && [ "$4" = --cache-backend ] && [ "$5" = memory ] || exit 90
+shift 5
+[ "$1" = --scanners ] && [ "$2" = vuln,license ] && [ "$3" = --format ] && [ "$4" = json ] && [ "$5" = --output ] || exit 91
 printf 'scan\\n' >> "$SCAN_LOG"
 [ "$SCAN_EXIT" = 0 ] || exit "$SCAN_EXIT"
-printf '%s' '{"Results":[{"Vulnerabilities":[{"VulnerabilityID":"CVE-example"}],"Licenses":[{"Name":"MIT"}]}]}' > "$8"
+printf '%s' '{"Results":[{"Vulnerabilities":[{"VulnerabilityID":"CVE-example"}],"Licenses":[{"Name":"MIT"}]}]}' > "$6"
 `,
 			{ mode: 0o755 },
 		);
@@ -189,3 +191,46 @@ await captureSubject(${JSON.stringify(subject)}, ${JSON.stringify(directory)});
 		assert.notEqual(invoke("0").status, 0, "A successful scanner without a report must fail");
 	},
 );
+
+void test("captures every subject with at most two in flight", async () => {
+	const subjects = planEvidenceSubjects(await evidenceImages(), platformDigest);
+	const completed: string[] = [];
+	let active = 0;
+	let peak = 0;
+	await captureSubjects(subjects, async (subject) => {
+		active += 1;
+		peak = Math.max(peak, active);
+		await Promise.resolve();
+		completed.push(evidenceStem(subject));
+		active -= 1;
+	});
+	assert.equal(peak, 2);
+	assert.deepEqual(completed.toSorted(), subjects.map(evidenceStem).toSorted());
+});
+
+void test("waits for in-flight capture after failure and never starts another batch", async () => {
+	const subjects = planEvidenceSubjects(await evidenceImages(), platformDigest);
+	const inFlight = Promise.withResolvers<undefined>();
+	const started = Promise.withResolvers<undefined>();
+	const failure = new Error("scanner failed");
+	let captures = 0;
+	let settled = false;
+	const capture = captureSubjects(subjects, async () => {
+		captures += 1;
+		if (captures === 1) throw failure;
+		started.resolve(undefined);
+		await inFlight.promise;
+	});
+	const rejected = assert.rejects(capture, (error: unknown) => {
+		assert.ok(error instanceof AggregateError);
+		assert.deepEqual(error.errors, [failure]);
+		settled = true;
+		return true;
+	});
+	await started.promise;
+	await Promise.resolve();
+	assert.equal(settled, false);
+	inFlight.resolve(undefined);
+	await rejected;
+	assert.equal(captures, 2);
+});

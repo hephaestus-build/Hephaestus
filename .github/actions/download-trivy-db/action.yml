@@ -1,8 +1,12 @@
 name: Download the Trivy database
 description: >-
   Fetches the Trivy vulnerability database once, with the retries and registry fallback a gate
-  needs, and optionally asserts its freshness and records its metadata.
+  needs, optionally asserts its freshness and records its metadata, and can prepare the Java index.
 inputs:
+  java-db:
+    description: Prepare the Java index before concurrent Java image scans.
+    required: false
+    default: "false"
   max-age-hours:
     description: >-
       Fail when the downloaded database is older than this many whole hours. Empty skips the
@@ -20,6 +24,7 @@ runs:
     - name: Download the Trivy database
       shell: bash
       env:
+        JAVA_DB: ${{ inputs.java-db }}
         MAX_AGE_HOURS: ${{ inputs.max-age-hours }}
         METADATA_PATH: ${{ inputs.metadata-path }}
         # GHCR answers TOOMANYREQUESTS often enough that Harbor, Rancher and New Relic all
@@ -29,6 +34,10 @@ runs:
         TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2,public.ecr.aws/aquasecurity/trivy-db:2
       run: |
         set -euo pipefail
+        case "$JAVA_DB" in
+          true|false) ;;
+          *) echo "::error::java-db must be true or false"; exit 1 ;;
+        esac
         if [ -n "$MAX_AGE_HOURS" ] && ! [[ "$MAX_AGE_HOURS" =~ ^[0-9]+$ ]]; then
           echo "::error::max-age-hours must be a whole number of hours"
           exit 1
@@ -41,6 +50,16 @@ runs:
           fi
           sleep $((attempt * 5))
         done
+        if [ "$JAVA_DB" = true ]; then
+          for attempt in 1 2 3; do
+            trivy image --timeout 5m --download-java-db-only && break
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Trivy Java database download failed after $attempt attempts"
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+        fi
         db_metadata="${TRIVY_CACHE_DIR:-$HOME/.cache/trivy}/db/metadata.json"
         if [ -n "$MAX_AGE_HOURS" ]; then
           jq -e --argjson max "$((MAX_AGE_HOURS * 3600))" \

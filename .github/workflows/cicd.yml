@@ -459,6 +459,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+      artifact-metadata: write
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
@@ -540,6 +541,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+      artifact-metadata: write
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
@@ -632,6 +634,7 @@ jobs:
       - uses: ./.github/actions/download-trivy-db
         with:
           max-age-hours: "24"
+          java-db: "true"
 
       - uses: ./.github/actions/ghcr-login
         with:

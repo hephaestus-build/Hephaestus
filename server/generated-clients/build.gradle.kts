@@ -15,6 +15,8 @@ dependencies {
 }
 
 tasks.withType<GraphQLCodegenGradleTask>().configureEach {
+    // The plugin declares its inputs and outputs but does not opt into the build cache.
+    outputs.cacheIf { true }
     generateClient = true
     generateApis = false
     generateDataFetchingEnvironmentArgumentInApis = false
@@ -25,8 +27,8 @@ tasks.withType<GraphQLCodegenGradleTask>().configureEach {
     generateModelsForRootTypes = false
     generateAllMethodInProjection = true
     generatedLanguage = GeneratedLanguage.JAVA
-    addGeneratedAnnotation = true
-    generatedAnnotation = "jakarta.annotation.Generated"
+    // Its SOURCE-retained class marker embeds the wall clock and defeats compilation caching.
+    addGeneratedAnnotation = false
     modelValidationAnnotation = "@jakarta.annotation.Generated(\"graphql-codegen\")"
     modelNameSuffix = ""
     requestSuffix = "Request"
