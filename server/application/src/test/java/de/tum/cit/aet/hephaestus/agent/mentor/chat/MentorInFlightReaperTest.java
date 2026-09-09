@@ -23,6 +23,7 @@ import java.util.UUID;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.dao.OptimisticLockingFailureException;
 
 class MentorInFlightReaperTest extends BaseUnitTest {
@@ -116,8 +117,30 @@ class MentorInFlightReaperTest extends BaseUnitTest {
                 .isGreaterThan(longestPossibleTurn);
     }
 
+    @Test
+    void shouldDeriveTheDefaultWindowWhenNoPropertyIsConfigured() {
+        new ApplicationContextRunner()
+                .withBean(ChatMessageRepository.class, () -> chatMessageRepository)
+                .withBean(MentorInFlightAccounting.class, () -> mock(MentorInFlightAccounting.class))
+                .withBean(io.micrometer.core.instrument.MeterRegistry.class, () -> meterRegistry)
+                .withBean(MentorInFlightReaper.class)
+                .run(context -> assertThat(
+                                context.getBean(MentorInFlightReaper.class).window())
+                        .isEqualTo(Duration.ofSeconds(AgentBindingLimits.MAX_TIMEOUT_SECONDS)
+                                .plusMinutes(10)));
+    }
+
+    @Test
+    void shouldPreserveALongerConfiguredWindow() {
+        Duration configured = Duration.ofDays(1);
+        MentorInFlightReaper reaper = new MentorInFlightReaper(
+                chatMessageRepository, mock(MentorInFlightAccounting.class), meterRegistry, configured);
+
+        assertThat(reaper.window()).isEqualTo(configured);
+    }
+
     private MentorInFlightReaper reaperWith(MentorInFlightAccounting accounting) {
-        return new MentorInFlightReaper(chatMessageRepository, accounting, meterRegistry, Duration.ofMinutes(70));
+        return new MentorInFlightReaper(chatMessageRepository, accounting, meterRegistry, null);
     }
 
     private static ChatMessage messageWithId() {

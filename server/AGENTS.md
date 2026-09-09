@@ -166,5 +166,5 @@ envelope to JetStream, all gated on `RuntimeRole.WEBHOOK_PROPERTY`. Configuratio
 
 Paketo Cloud Native Buildpacks with Application CDS; no `Dockerfile`. From `server/`:
 `./gradlew :application:bootJar`, then
-`pack build hephaestus/application-server --path application/build/libs/hephaestus-application-*.jar --descriptor application/project.toml --run-image <the run image pinned in .github/workflows/ci-build.yml>`.
+`pack build hephaestus/application-server --path application/build/libs/hephaestus-application-*.jar --descriptor application/project.toml --run-image <the run image pinned in .github/workflows/cicd.yml>`.
 Pinning and rationale: `docs/admin/buildpacks-cds-decision.md`.

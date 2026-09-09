@@ -35,7 +35,7 @@ Much longer CI builds, loss of JIT peak throughput on Hibernate workloads, no JF
 ## Builder pinning
 
 `server/application/project.toml` pins `builder-noble-java-tiny` and the `health-checker` buildpack
-by sha256 digest; `.github/workflows/ci-build.yml` pins `ubuntu-noble-run-tiny` the same way, because
+by sha256 digest; `.github/workflows/cicd.yml` pins `ubuntu-noble-run-tiny` the same way, because
 the project descriptor has no run-image key. Renovate tracks each image's `latest` tag and opens the
 digest bump.
 
@@ -52,7 +52,7 @@ type is added, so no JVM is spawned per probe.
 
 ## Rollback
 
-Re-add a `Dockerfile` for `server/application` and switch the `application-server-image` job in `.github/workflows/ci-build.yml` from `use-buildpacks: true` to `docker-file`. The Dockerfile path builds from the checkout, not from the packaged JAR, so the build-once guarantee lapses until that path also downloads `application-artifact`. Coolify re-deploys the prior image SHA. Detection: Sentry release-tagged error spike, or Prometheus alert on `application_ready_time_seconds > 15` for three consecutive deploys.
+Re-add a `Dockerfile` for `server/application` and switch the `application-server-image` job in `.github/workflows/cicd.yml` from `use-buildpacks: true` to `docker-file`. The Dockerfile path builds from the checkout, not from the packaged JAR, so the build-once guarantee lapses until that path also downloads `application-artifact`. Coolify re-deploys the prior image SHA. Detection: Sentry release-tagged error spike, or Prometheus alert on `application_ready_time_seconds > 15` for three consecutive deploys.
 
 ## Operational checklist
 
