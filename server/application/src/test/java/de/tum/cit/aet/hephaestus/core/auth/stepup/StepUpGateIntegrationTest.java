@@ -89,7 +89,8 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .bodyValue(Map.of("appRole", "APP_ADMIN"))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         assertThat(authEventRepository.findByAccountSince(adminId, Instant.now().minus(Duration.ofMinutes(5))))
                 .singleElement()
@@ -133,7 +134,8 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .bodyValue(Map.of("appRole", "APP_ADMIN"))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         assertThat(accountRepository.findById(victimId))
                 .get()
@@ -152,7 +154,8 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .headers(h -> h.setBearerAuth(tokenFor(admin, staleSignIn())))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
     }
 
     private Instant staleSignIn() {

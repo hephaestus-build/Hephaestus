@@ -177,7 +177,8 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -257,7 +258,10 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(runnerStarted.await(5, TimeUnit.SECONDS)).isTrue();
 
         // Different-type request while the reconciliation holds the one-active slot: genuine conflict, not absorb.
-        triggerRequest(adminToken, SyncJobType.BACKFILL).expectStatus().isEqualTo(HttpStatus.CONFLICT);
+        triggerRequest(adminToken, SyncJobType.BACKFILL)
+                .expectStatus()
+                .isEqualTo(HttpStatus.CONFLICT)
+                .expectBody(Void.class);
 
         release.countDown();
         firstCaller.join(5000);
@@ -276,7 +280,8 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .bodyValue("{}")
                 .exchange()
                 .expectStatus()
-                .isBadRequest();
+                .isBadRequest()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -286,7 +291,10 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         connection.setState(IntegrationState.SUSPENDED);
         connectionRepository.save(connection);
 
-        triggerRequest(TestAuthUtils.getCurrentUserToken()).expectStatus().isEqualTo(HttpStatus.CONFLICT);
+        triggerRequest(TestAuthUtils.getCurrentUserToken())
+                .expectStatus()
+                .isEqualTo(HttpStatus.CONFLICT)
+                .expectBody(Void.class);
     }
 
     @Test
@@ -336,7 +344,8 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .bodyValue("{\"cancelRequested\":true}")
                 .exchange()
                 .expectStatus()
-                .isEqualTo(HttpStatus.ACCEPTED);
+                .isEqualTo(HttpStatus.ACCEPTED)
+                .expectBody(Void.class);
 
         firstCaller.join(5000);
 
@@ -369,7 +378,8 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .bodyValue("{\"cancelRequested\":false}")
                 .exchange()
                 .expectStatus()
-                .isBadRequest();
+                .isBadRequest()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -404,15 +414,19 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         User member = persistUser("mentor");
         ensureWorkspaceMembership(workspace, member, WorkspaceRole.MEMBER);
 
-        statusRequest().expectStatus().isForbidden();
+        statusRequest().expectStatus().isForbidden().expectBody(Void.class);
         webTestClient
                 .get()
                 .uri("/workspaces/{slug}/connections/catalog", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
-        triggerRequest(TestAuthUtils.getCurrentUserToken()).expectStatus().isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
+        triggerRequest(TestAuthUtils.getCurrentUserToken())
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -432,7 +446,8 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(h -> h.setBearerAuth(adminToken))
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -440,7 +455,8 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(h -> h.setBearerAuth(adminToken))
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -448,7 +464,8 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(h -> h.setBearerAuth(adminToken))
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
 
         webTestClient
                 .post()
@@ -457,7 +474,8 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .bodyValue(new TriggerSyncJobRequestDTO(SyncJobType.RECONCILIATION))
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
 
         webTestClient
                 .patch()
@@ -471,7 +489,8 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .bodyValue("{\"cancelRequested\":true}")
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
 
         // The reach must not have mutated the other tenant's job on the way to the 404.
         assertThat(syncJobRepository.findById(otherJob.getId()).orElseThrow().isCancelRequested())
@@ -499,7 +518,8 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .bodyValue("{\"cancelRequested\":true}")
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
 
         assertThat(syncJobRepository.findById(otherJob.getId()).orElseThrow().isCancelRequested())
                 .isFalse();

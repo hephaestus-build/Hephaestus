@@ -108,7 +108,8 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .uri(TRACE, workspace.getWorkspaceSlug(), ArtifactKinds.PULL_REQUEST.value(), ARTIFACT_ID)
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -146,7 +147,8 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
 
             get(TRACE, workspace.getWorkspaceSlug(), ArtifactKinds.PULL_REQUEST.value(), ARTIFACT_ID)
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -154,7 +156,8 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
         void refusesAnUnknownArtifactKind() {
             get(TRACE, workspace.getWorkspaceSlug(), "NotAKind", ARTIFACT_ID)
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
     }
 
@@ -237,7 +240,8 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
 
             get(TRACE, workspace.getWorkspaceSlug(), ArtifactKinds.PULL_REQUEST.value(), ARTIFACT_ID)
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
     }
 

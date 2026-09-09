@@ -81,6 +81,12 @@ Name tests `should[ExpectedBehavior]When[Condition]`. Controller-level integrati
 `WebTestClient` + `TestAuthUtils` — the identity comes from the mock JWT **token string**, not from an
 annotation.
 
+**Consume every HTTP response.** A `WebTestClient` status or header assertion does not consume its
+body. If the body is irrelevant to the assertion, finish with `.expectBody(Void.class)` so a large
+response cannot hold a pooled connection indefinitely. Body assertions already consume it; streaming
+tests own their subscription and cancellation explicitly. Use `.returnResult(Void.class)` when only
+response headers or cookies are needed; a non-void `returnResult` leaves the body subscription to you.
+
 **Rows written by earlier tests are already there.** Assert on the row you created, never on a count
 or on "the only" result, and never write cleanup that another test depends on having run.
 

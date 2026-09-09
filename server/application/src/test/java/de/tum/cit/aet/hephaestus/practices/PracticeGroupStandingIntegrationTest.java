@@ -903,7 +903,8 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .uri(STANDINGS_URI, workspace.getWorkspaceSlug())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
     }
 }

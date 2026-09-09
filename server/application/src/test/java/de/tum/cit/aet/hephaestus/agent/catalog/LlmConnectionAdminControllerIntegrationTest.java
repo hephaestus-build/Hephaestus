@@ -102,7 +102,8 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -110,7 +111,8 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -153,7 +155,8 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isEqualTo(409);
+                .isEqualTo(409)
+                .expectBody(Void.class);
     }
 
     @Test
@@ -164,6 +167,7 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 }

@@ -38,7 +38,8 @@ class LoginProviderAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -54,7 +55,8 @@ class LoginProviderAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .bodyValue(Map.of("enabled", false))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         webTestClient
                 .delete()
@@ -62,7 +64,8 @@ class LoginProviderAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -128,10 +131,12 @@ class LoginProviderAdminControllerIntegrationTest extends AbstractWorkspaceInteg
     void aRefusedUpdateLeavesNoSuccessOnTheTrail() {
         createGitLabProvider("gitlab-taken", "https://gitlab.taken.test")
                 .expectStatus()
-                .isCreated();
+                .isCreated()
+                .expectBody(Void.class);
         createGitLabProvider("gitlab-mover", "https://gitlab.mover.test")
                 .expectStatus()
-                .isCreated();
+                .isCreated()
+                .expectBody(Void.class);
 
         webTestClient
                 .patch()
@@ -141,7 +146,8 @@ class LoginProviderAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .bodyValue(Map.of("baseUrl", "https://gitlab.taken.test"))
                 .exchange()
                 .expectStatus()
-                .is4xxClientError();
+                .is4xxClientError()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
