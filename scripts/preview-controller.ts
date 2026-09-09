@@ -250,9 +250,9 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 
 	// A preview restores the default branch's database into an application built from this branch, so
 	// a branch missing one of the default branch's migrations runs against a database built from a
-	// changelog other than its own. Saying so here costs one comparison; discovering it costs a
-	// deployment and a container that exits its healthcheck with nothing on the pull request to
-	// explain it.
+	// changelog other than its own. Checking that here costs one comparison and can name the reason
+	// on the pull request. Leaving it to the deployment costs the deployment, and the failure it
+	// reports says only that the preview did not come up.
 	//
 	// It sits after the checks above on purpose: a head that already has a live preview needs no
 	// deployment, and refusing here would replace a working preview's comment with a refusal.

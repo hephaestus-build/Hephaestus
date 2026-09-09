@@ -747,11 +747,11 @@ void describe("preview schema drift", () => {
 		// names the step each one stops at: neither branch reaches a started application.
 		assert.match(reason, /Liquibase re-runs migrations/);
 		assert.match(reason, /startup then fails on a column/);
-		// It still reports what has gone wrong, never what this branch is guaranteed to hit: a
-		// migration that only adds a table this branch never queries breaks nothing. The two
-		// phrasings that overclaimed — Hibernate validation, which `prod` disables, and a schema
-		// mismatch a differing blob does not prove — may not come back.
-		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot/);
+		// It reports what has gone wrong, never what this branch is guaranteed to hit: a migration
+		// that only adds a table this branch never queries breaks nothing. Two causes it may not
+		// claim are Hibernate validation, which `prod` disables, and a schema mismatch that a
+		// differing blob does not prove.
+		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot|Hibernate/);
 		assert.equal(core.outputs.get("announce"), "true");
 	});
 
@@ -801,8 +801,10 @@ void describe("preview schema drift", () => {
 
 		assert.equal(core.outputs.get("eligible"), "false");
 		const reason = core.outputs.get("reason") ?? "";
-		// A saturated comparison establishes nothing about this branch, so the reason names the check
-		// that could not run, what branches behind on schema have run into, and how to clear it.
+		// At the comparison's limit, whether this branch carries every one of the default branch's
+		// migrations cannot be established — a saturated response does not even prove truncation. So
+		// the reason names the check that could not run, what branches behind on schema have run
+		// into, and how to clear it.
 		assert.match(reason, /behind main/);
 		// Truncation is the one case where the check genuinely could not run, so the reason says so,
 		// and says which check: whether the branch still carries the default branch's migrations.
