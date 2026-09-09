@@ -10,6 +10,10 @@ on:
       SENTRY_PROJECT:
         required: false
     inputs:
+      scan-images:
+        description: "Scan published images here unless the caller requires complete release evidence instead."
+        type: boolean
+        default: true
       image-name:
         type: string
         required: true
@@ -460,15 +464,13 @@ jobs:
             > /dev/null
           gh attestation verify "oci://$IMAGE_REF" --owner "${{ github.repository_owner }}"
 
-  # linux/amd64 only: the base images ship the same packages on every architecture, and the
-  # release scans every published platform where the evidence bundle must be complete.
   scan:
     name: Scan linux/amd64 Image
     needs: [build, merge]
     # `merge` is skipped for single-architecture builds, which would skip this job too
     # without a status-check function to suppress the implicit success() over every need.
     if: >-
-      ${{ inputs.publish && !cancelled() && needs.build.result == 'success' &&
+      ${{ inputs.scan-images && inputs.publish && !cancelled() && needs.build.result == 'success' &&
       needs.merge.result != 'failure' && needs.merge.result != 'cancelled' }}
     timeout-minutes: 20
     runs-on: ubuntu-24.04

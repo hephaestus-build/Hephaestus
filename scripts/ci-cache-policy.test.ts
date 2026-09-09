@@ -41,6 +41,8 @@ await describe("CI cache policy", async () => {
 			/key: \${{ runner\.os }}-playwright-\${{ steps\.playwright\.outputs\.version }}/,
 		);
 		assert.doesNotMatch(browserAction, /restore-keys:/);
-		assert.match(browserAction, /playwright install chromium --with-deps/);
+		assert.match(browserAction, /playwright install chromium/);
+		assert.match(browserAction, /node scripts\/install-browser-deps\.ts/);
+		assert.doesNotMatch(browserAction, /--with-deps/);
 	});
 });

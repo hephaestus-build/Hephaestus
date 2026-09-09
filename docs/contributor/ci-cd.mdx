@@ -455,6 +455,11 @@ credential is still `GITHUB_TOKEN`, so these commits start no further workflow r
 | `download-trivy-db` | Fetches the vulnerability database with retries and a mirror fallback; optionally refuses one over `max-age-hours` old and records its metadata |
 | `ghcr-login` | Authenticates Docker to GHCR |
 
+Browser jobs install Playwright's system dependencies using the runner's Ubuntu package sources,
+with APT configuration scoped to that installation process. Unrelated vendor repositories do not
+participate; repository signatures and package hashes remain enforced. The pinned Playwright CLI
+then installs Chromium as the runner user so the browser cache retains its normal ownership.
+
 ### Caches
 
 A run restores caches from its own branch and from `main`, never from a sibling branch. Task-cache
@@ -522,6 +527,10 @@ A pull request from a fork gets a read-only `GITHUB_TOKEN`, so `cicd.yml` passes
 to both image workflows. That build compiles the image and stops: no login, no push, no signature,
 no attestation, no policy scan and no alias moves. Forks therefore get no preview and no boot smoke;
 the release path exercises their code once it is on `main`.
+
+When release preflight is required, it owns image vulnerability scanning for both architectures;
+the image-build workflows omit their duplicate amd64 scans. Other published builds retain those
+scans. The final gate rejects a required preflight that is skipped, cancelled or unsuccessful.
 
 ## Image identity
 
