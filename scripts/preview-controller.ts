@@ -261,13 +261,17 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		basehead: `${pull.head.sha}...${defaultBranch}`,
 	});
 	const behindFiles = behind.data.files ?? [];
-	// The comparison reports at most COMPARE_FILE_LIMIT files and flags no truncation, so a
-	// saturated response cannot be read as "no migration is missing".
+	// The comparison reports at most COMPARE_FILE_LIMIT files and flags no truncation, so a saturated
+	// response cannot be read as "no migration is missing". Every branch that has hit this so far was
+	// genuinely incompatible — each still mapped entities to tables the default branch had dropped —
+	// so the message names the likely consequence rather than the tool's own uncertainty, which is
+	// what the author can act on.
 	if (behindFiles.length >= COMPARE_FILE_LIMIT) {
 		return skip(
-			`PR #${number} is behind ${defaultBranch} by ${behindFiles.length}+ files, too many for ` +
-				`GitHub to report in one comparison, so schema compatibility cannot be verified. Update ` +
-				`the branch to preview it.`,
+			`PR #${number} is ${behindFiles.length}+ files behind ${defaultBranch}. A preview restores ` +
+				`${defaultBranch}'s database, and a branch this far back is unlikely to still match its ` +
+				`schema — the application would fail validation and the preview would never come up. ` +
+				`Merge ${defaultBranch} in; the next push previews automatically.`,
 		);
 	}
 	for (const file of behindFiles) {
@@ -278,8 +282,9 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		if (await branchHasBlob(github, owner, repo, pull.head.sha, file)) continue;
 		return skip(
 			`PR #${number} is missing ${defaultBranch}'s \`${file.filename}\`. A preview restores ` +
-				`${defaultBranch}'s schema, so this branch's entities may not match it. Update the ` +
-				`branch to preview it.`,
+				`${defaultBranch}'s database, so this branch's entities no longer match its schema and ` +
+				`the application would fail validation on boot. Merge ${defaultBranch} in; the next ` +
+				`push previews automatically.`,
 		);
 	}
 
