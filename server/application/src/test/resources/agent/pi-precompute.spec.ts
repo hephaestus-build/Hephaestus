@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	mkdtempSync,
+	mkdirSync,
+	realpathSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mock, test } from "node:test";
@@ -29,7 +37,10 @@ if (scenarioRoot) {
 	await import("../../../main/resources/agent/pi-precompute.ts");
 } else {
 	void test("precompute stages only regular scripts and executes the image runner with task-declared locations", () => {
-		const root = mkdtempSync(join(tmpdir(), "task-precompute-#"));
+		// The child runs under Node's permission model, which resolves a path before matching it
+		// against --allow-fs-read. On macOS the temporary directory is reached through a symlink, so an
+		// unresolved root grants the child nothing and every script fails to read its own inputs.
+		const root = realpathSync(mkdtempSync(join(tmpdir(), "task-precompute-#")));
 		try {
 			const context = "areas/changed work";
 			const scripts = "catalog/scripts";
