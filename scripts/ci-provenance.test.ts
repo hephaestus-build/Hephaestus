@@ -8,8 +8,7 @@ import { asArray, asRecord } from "./lib/json.ts";
 
 void test("image provenance can persist storage records through every reusable-workflow caller", async () => {
 	const callers = {
-		"cicd.yml": ["Build", "Docker"],
-		"ci-build.yml": ["application-server-image"],
+		"cicd.yml": ["application-server-image", "Docker"],
 		"ci-docker-build.yml": ["webapp-build", "agent-pi-build", "postgres-build"],
 		"reusable-docker-build.yml": ["build", "merge"],
 	};

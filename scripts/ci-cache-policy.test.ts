@@ -27,10 +27,7 @@ await describe("CI cache policy", async () => {
 		assert.match(setup, /cache-provider: enhanced/);
 		assert.doesNotMatch(cacheAction, /~\/\.m2|target\//);
 		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
-		const e2e = build.slice(
-			build.indexOf("\n  webapp-e2e:"),
-			build.indexOf("\n  application-server-image:"),
-		);
+		const e2e = build.slice(build.indexOf("\n  webapp-e2e:"));
 		assert.match(e2e, /uses: actions\/setup-java@/);
 		assert.doesNotMatch(e2e, /setup-caches/);
 	});

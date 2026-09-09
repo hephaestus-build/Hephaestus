@@ -9,12 +9,12 @@ import { resolveServerBuild } from "./resolve-server-build.ts";
 const repository = "hephaestus-build/Hephaestus";
 const commit = "a".repeat(40);
 const requiredJobs = [
-	"Build / App Server: Package",
+	"App Server: Package",
 	"Build / App Server: Generated artifacts",
 	"Build / App Server: Database",
 	"Build / Webapp: E2E",
-	"Build / App Server image / Build linux/amd64 Docker Image",
-	"Build / App Server image / Build linux/arm64 Docker Image",
+	"App Server image / Build linux/amd64 Docker Image",
+	"App Server image / Build linux/arm64 Docker Image",
 	"Test / App Server: Unit and architecture",
 	"Test / App Server: Integration (application)",
 	"Test / App Server: Integration (providers-and-startup)",
@@ -129,7 +129,7 @@ await test("absence falls back and malformed metadata or an unavailable API cann
 });
 
 await test("main reuses immutable verified artifacts without bypassing validation or the packaging fallback", async () => {
-	const workflow = parseDocument(await readFile(".github/workflows/ci-build.yml", "utf8"));
+	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 	const steps = workflow.getIn(["jobs", "server-package", "steps"]);
 	assert.ok(isSeq(steps));
 	const step = (name: string) => {

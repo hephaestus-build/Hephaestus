@@ -199,7 +199,7 @@ void test("every custom manager reads every file it claims to read", async () =>
 		],
 		["Track the Zizmor CLI version", [".github/workflows/cicd.yml"]],
 		["Track the pack CLI version", [".github/workflows/reusable-docker-build.yml"]],
-		["Track the buildpacks run image", [".github/workflows/ci-build.yml"]],
+		["Track the buildpacks run image", [".github/workflows/cicd.yml"]],
 		[
 			"Track the builder and buildpack images in the project descriptor",
 			["server/application/project.toml"],
@@ -262,8 +262,12 @@ void test("every custom manager reads every file it claims to read", async () =>
 				manager.matchStrings.some((pattern) => new RegExp(pattern, "m").test(content)),
 				`${description} no longer extracts a dependency from ${file}`,
 			);
-			for (const [, datasource = ""] of content.matchAll(/# renovate: datasource=(\S+)/g))
-				datasources.add(datasource);
+			// Only dependencies this manager extracts matter; a file may have several managers.
+			for (const pattern of manager.matchStrings)
+				for (const match of content.matchAll(new RegExp(pattern, "gm"))) {
+					const datasource = match.groups?.datasource;
+					if (datasource) datasources.add(datasource);
+				}
 		}
 		if ([...datasources].some((datasource) => RELEASE_TAG_DATASOURCES.has(datasource)))
 			assert.ok(

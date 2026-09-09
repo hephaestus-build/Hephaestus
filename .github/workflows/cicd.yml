@@ -456,10 +456,9 @@ jobs:
       tooling_changed: ${{ (needs.detect-changes.outputs.tooling == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       pmd_canary: ${{ (needs.detect-changes.outputs.pmd-canary == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
 
-  # Same-repository pull requests run Build regardless of paths: previews need the application
-  # image at the head SHA on every push.
-  Build:
-    uses: ./.github/workflows/ci-build.yml
+  # Package once; artifact checks and the image independently consume the same JAR.
+  server-package:
+    name: "App Server: Package"
     needs: [detect-changes]
     if: |
       needs.detect-changes.outputs.should_skip != 'true' && (
@@ -467,26 +466,114 @@ jobs:
         needs.detect-changes.outputs.previews == 'true' ||
         needs.detect-changes.outputs.any-code == 'true' ||
         needs.detect-changes.outputs.build-config == 'true'
+      ) && (
+        needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'
       )
+    env:
+      SERVER_BUILD_ARTIFACT: server-build-${{ github.run_id }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
-      actions: read
       contents: read
-      checks: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        with:
+          install: "none"
+      - name: Find the exact-commit merge-queue build
+        id: reuse
+        if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: node scripts/resolve-server-build.ts
+      - name: Download the validated server build
+        if: steps.reuse.outputs.artifact-id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ steps.reuse.outputs.artifact-id }}
+          run-id: ${{ steps.reuse.outputs.run-id }}
+          github-token: ${{ github.token }}
+          path: server
+          merge-multiple: true
+          digest-mismatch: error
+      - uses: ./.github/actions/setup-caches
+        if: steps.reuse.outputs.artifact-id == ''
+        with:
+          cache-write: "true"
+      - name: Package the server
+        if: steps.reuse.outputs.artifact-id == ''
+        working-directory: server
+        run: ./gradlew :application:bootJar :application:testClasses
+      - name: Validate the packaged server
+        working-directory: server
+        run: |
+          set -euo pipefail
+          test -d application/build/classes/java/main
+          test -d application/build/classes/java/test
+          mapfile -t jars < <(find application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
+          mapfile -t clients < <(find generated-clients/build/libs -maxdepth 1 -name 'hephaestus-generated-clients-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
+          (( ${#jars[@]} == 1 )) && (( ${#clients[@]} == 1 ))
+          unzip -p "${jars[0]}" META-INF/MANIFEST.MF | grep -q '^Main-Class: org.springframework.boot.loader'
+      - name: Upload the packaged server
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.SERVER_BUILD_ARTIFACT }}
+          path: |
+            server/application/build/classes/java/main
+            server/application/build/classes/java/test
+            server/application/build/resources
+            server/application/build/libs/hephaestus-application-*.jar
+            server/generated-clients/build/libs/hephaestus-generated-clients-*.jar
+            !server/**/*-sources.jar
+            !server/**/*-javadoc.jar
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          # A re-run of failed jobs keeps this artifact; a re-run of all jobs replaces it.
+          overwrite: true
+
+  application-server-image:
+    name: "App Server image"
+    needs: [detect-changes, server-package]
+    if: needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'
+    uses: ./.github/workflows/reusable-docker-build.yml
+    permissions:
+      contents: read
       packages: write
       id-token: write
       attestations: write
       artifact-metadata: write
     with:
-      should_skip: ${{ needs.detect-changes.outputs.should_skip }}
+      image-name: "hephaestus-build/application-server"
+      use-buildpacks: true
+      application-artifact: server-build-${{ github.run_id }}
+      project-descriptor: "server/application/project.toml"
+      # renovate: datasource=docker depName=paketobuildpacks/ubuntu-noble-run-tiny
+      run-image: "paketobuildpacks/ubuntu-noble-run-tiny@sha256:c32333227b6dfbc2a4a93b03ee6d3475cfe152468c7d396bf22f06099bb0ecc9"
+      registry: "ghcr.io"
       publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
-      single_arch: ${{ needs.detect-changes.outputs.single-arch }}
+      single-arch: ${{ needs.detect-changes.outputs.single-arch == 'true' }}
       scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
+
+  Build:
+    uses: ./.github/workflows/ci-build.yml
+    needs: [detect-changes, server-package]
+    permissions:
+      contents: read
+      checks: write
+      packages: write
+    with:
+      should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       postgres_base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
-      server_changed: ${{ (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       contracts_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       e2e_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
-      server_image_changed: ${{ (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
 
   Security:
     uses: ./.github/workflows/ci-security-scan.yml
@@ -574,7 +661,7 @@ jobs:
     name: "Supported-host boot smoke"
     # `Docker` publishes no output this job reads, but it is what puts `postgres:<head sha>` in the
     # registry — by building it, or by aliasing the base image when the diff left it alone.
-    needs: [detect-changes, Build, Docker]
+    needs: [detect-changes, application-server-image, Docker]
     # A fork pull request builds its images without publishing them, so there is nothing to pull
     # and no boot to check; the release path exercises a fork's install path once it is on `main`.
     if: >-
@@ -604,7 +691,7 @@ jobs:
       - name: Boot the operator installation path
         working-directory: docker/self-host
         env:
-          APPLICATION_DIGEST: ${{ needs.Build.outputs.application-server-digest }}
+          APPLICATION_DIGEST: ${{ needs.application-server-image.outputs.manifest-digest }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
@@ -629,7 +716,7 @@ jobs:
   # release-management.mdx owns the evidence contract.
   Release-preflight:
     name: "Release evidence preflight"
-    needs: [detect-changes, Build, Docker]
+    needs: [detect-changes, application-server-image, Docker]
     if: needs.detect-changes.outputs.release-preflight == 'true'
     timeout-minutes: 45
     runs-on: ubuntu-latest
@@ -697,7 +784,7 @@ jobs:
     permissions:
       actions: read
       statuses: write
-    needs: [detect-changes, gradle-wrapper, workflow-lint, zizmor, Quality, Build, Security, Test, Changesets, Compose, Docker, Supported-host-smoke, Release-preflight]
+    needs: [detect-changes, gradle-wrapper, workflow-lint, zizmor, Quality, server-package, application-server-image, Build, Security, Test, Changesets, Compose, Docker, Supported-host-smoke, Release-preflight]
     if: always()
     steps:
       - name: Generate workflow timeline
@@ -751,6 +838,8 @@ jobs:
           echo "workflow-lint: ${{ needs.workflow-lint.result }}"
           echo "zizmor:        ${{ needs.zizmor.result }}"
           echo "Quality:        ${{ needs.Quality.result }}"
+          echo "Package:        ${{ needs.server-package.result }}"
+          echo "Server image:   ${{ needs.application-server-image.result }}"
           echo "Build:          ${{ needs.Build.result }}"
           echo "Security:       ${{ needs.Security.result }}"
           echo "Test:           ${{ needs.Test.result }}"
