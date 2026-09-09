@@ -21,7 +21,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 public class DatabaseTestUtils {
 
-    private static final Set<String> IGNORED_TABLES = Set.of("databasechangelog", "databasechangeloglock");
+    // ShedLock caches known lock rows; truncating them can strand acquisition until the context restarts.
+    private static final Set<String> IGNORED_TABLES = Set.of("databasechangelog", "databasechangeloglock", "shedlock");
     private static final Set<String> RETRYABLE_SQL_STATES = Set.of("40P01", "40001", "55P03");
     private static final int MAX_ATTEMPTS = 5;
     private static final long RETRY_DELAY_MS = 100;
