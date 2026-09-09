@@ -56,6 +56,7 @@ export interface GitHubApi {
 }
 
 interface ActionsContext {
+	readonly serverUrl: string;
 	readonly repo: { readonly owner: string; readonly repo: string };
 	readonly payload: {
 		readonly repository: { readonly default_branch: string };
@@ -322,6 +323,13 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 	core.setOutput("base_ref", defaultBranch);
 	core.setOutput("head_sha", pull.head.sha);
 	core.setOutput("preview_url", previewUrl.href);
+	// The environment's own page on GitHub, in the form the API reports as its `html_url` — the
+	// obvious `/deployments/<name>` guess is a 404, and the query parameter is `environments_filter`.
+	core.setOutput(
+		"environment_page",
+		`${context.serverUrl}/${owner}/${repo}/deployments/activity_log` +
+			`?environments_filter=${encodeURIComponent(environment)}`,
+	);
 };
 
 /**
@@ -357,6 +365,13 @@ const create = async ({ github, context, core }: ControllerInput): Promise<void>
 	const { owner, repo } = context.repo;
 	const headSha = requiredEnv(process.env, "HEAD_SHA");
 	const environment = requiredEnv(process.env, "ENVIRONMENT");
+	const number = requiredPositiveInteger(process.env, "PR_NUMBER");
+	const title = process.env.PR_TITLE ?? "";
+	const previewUrl = requiredEnv(process.env, "PREVIEW_URL");
+	// The deployments page lists every environment together, where `preview/pr-2042` alone says
+	// nothing about what is in it. The title is what tells one preview from another at a glance;
+	// GitHub renders this as plain text, so the link lives in the payload rather than here.
+	const described = title ? `PR #${number} · ${title}` : `PR #${number}`;
 	const response = await github.rest.repos.createDeployment({
 		owner,
 		repo,
@@ -365,7 +380,16 @@ const create = async ({ github, context, core }: ControllerInput): Promise<void>
 		auto_merge: false,
 		required_contexts: [],
 		environment,
-		description: `Coolify preview for PR #${requiredEnv(process.env, "PR_NUMBER")}`,
+		description: described.length > 140 ? `${described.slice(0, 139)}…` : described,
+		// Rides on every deployment_status event, so anything watching them — a dashboard, a bot,
+		// a future notifier — can reach the pull request and the preview without another API call.
+		payload: {
+			pull_request: number,
+			pull_request_url: process.env.PR_URL ?? "",
+			title,
+			preview_url: previewUrl,
+			head_sha: headSha,
+		},
 		transient_environment: true,
 		production_environment: false,
 	});
@@ -379,9 +403,9 @@ const create = async ({ github, context, core }: ControllerInput): Promise<void>
 		repo,
 		deployment_id: deploymentId,
 		state: "queued",
-		description: "Admission reserved; Coolify queue follows.",
+		description: `Reserved for PR #${number}; Coolify queue follows.`,
 		environment,
-		environment_url: requiredEnv(process.env, "PREVIEW_URL"),
+		environment_url: previewUrl,
 		log_url: requiredEnv(process.env, "SOURCE_RUN_URL"),
 	});
 };

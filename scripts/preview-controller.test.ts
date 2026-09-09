@@ -46,6 +46,7 @@ const makeCore = () => {
 };
 
 const makeContext = () => ({
+	serverUrl: "https://github.com",
 	repo: { owner: "owner", repo: "repo" },
 	payload: { repository: { default_branch: "main" }, pull_request: { number: 7 } },
 });
