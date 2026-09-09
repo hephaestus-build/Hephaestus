@@ -32,6 +32,7 @@ import {
 } from "./pi-observation-normalize.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { loadProviderConfig, registerHephaestusProvider } from "./pi-provider.ts";
+import { ReviewTrace } from "./pi-review-trace.ts";
 import {
 	buildReviewTree,
 	mapConcurrent,
@@ -168,6 +169,8 @@ const TASK_PATH = `${CWD}/task.json`;
 const taskEnvelope = readTaskEnvelope();
 const INPUT_PATHS = resolveTaskPaths(CWD, taskEnvelope.paths);
 const OUTPUT = `${CWD}/out`;
+const reviewTrace = process.env.PI_REVIEW_CAPTURE === "true" ? new ReviewTrace(OUTPUT) : undefined;
+process.on("exit", (code) => reviewTrace?.finish(code));
 const RESULT_PATH = outputPath(OUTPUT, "result.json");
 const REVIEW_STATE_PATH = outputPath(OUTPUT, "review-state.json");
 const WATCHDOG_PATH = outputPath(OUTPUT, "watchdog-killed.json");
@@ -1671,6 +1674,7 @@ async function main() {
 			agentDir: AGENT_DIR ?? getAgentDir(),
 			settingsManager,
 			...SANDBOX_RESOURCE_LOADER_OPTIONS,
+			extensionFactories: reviewTrace ? [reviewTrace.extension] : [],
 			agentsFilesOverride: () => ({
 				agentsFiles: [{ path: orchestratorPath, content: orchestrator }],
 			}),
@@ -1721,8 +1725,11 @@ async function main() {
 		trackedSession: AgentSession,
 		label: string,
 		pace: RecordingPace | null = null,
-	) =>
-		trackedSession.subscribe((event: AgentSessionEvent) => {
+	) => {
+		const sessionId = trackedSession.sessionManager.getSessionId();
+		reviewTrace?.session(sessionId, label, trackedSession.sessionManager.getSessionFile());
+		return trackedSession.subscribe((event: AgentSessionEvent) => {
+			reviewTrace?.event(sessionId, event);
 			if (event.type === "tool_execution_start") {
 				console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
 			}
@@ -1786,6 +1793,7 @@ async function main() {
 			}
 			events.push({ type: `${label}:${event.type}`, timestamp: Date.now() });
 		});
+	};
 
 	/**
 	 * @param notReached the practices this review never settled, named for the composer so nothing it
@@ -1806,7 +1814,9 @@ async function main() {
 				agentDir: AGENT_DIR,
 				tools: ["read", "grep", "report_feedback", "report_summary"],
 				customTools: [grepTool, feedbackTool, buildSummaryTool()],
-				sessionManager: SessionManager.inMemory(),
+				sessionManager: reviewTrace
+					? SessionManager.create(CWD, reviewTrace.sessionDir)
+					: SessionManager.inMemory(),
 				settingsManager,
 				resourceLoader: await loadResources(),
 				modelRuntime,
@@ -1883,7 +1893,7 @@ async function main() {
 		process.env.PI_REVIEW_CONCURRENCY,
 		tree.practiceCount,
 	);
-	const sessionDir = `${CWD}/.sessions`;
+	const sessionDir = reviewTrace?.sessionDir ?? `${CWD}/.sessions`;
 	console.error(
 		`[pi-runner] Review tree: ${tree.practiceCount} practices, ${tree.groups.length} evidence group(s), concurrency=${concurrency}`,
 	);
@@ -2127,7 +2137,9 @@ async function main() {
 						customTools: [grepTool, retryTool],
 						sessionManager: priorSessionFile
 							? SessionManager.open(priorSessionFile, sessionDir)
-							: SessionManager.inMemory(),
+							: reviewTrace
+								? SessionManager.create(CWD, reviewTrace.sessionDir)
+								: SessionManager.inMemory(),
 						settingsManager,
 						resourceLoader: await loadResources(),
 						modelRuntime,

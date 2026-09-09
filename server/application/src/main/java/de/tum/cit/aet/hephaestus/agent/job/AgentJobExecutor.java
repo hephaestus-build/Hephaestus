@@ -145,6 +145,7 @@ public class AgentJobExecutor {
             .delay(Duration.ofMillis(200))
             .build();
 
+    private final ExecutionArchiveService executionArchive;
     private final AgentProperties agentProperties;
     private final AgentJobRepository jobRepository;
     private final WorkspaceAgentBindingRepository bindingRepository;
@@ -186,6 +187,7 @@ public class AgentJobExecutor {
 
     @Autowired
     public AgentJobExecutor(
+            ExecutionArchiveService executionArchive,
             AgentProperties agentProperties,
             AgentJobRepository jobRepository,
             WorkspaceAgentBindingRepository bindingRepository,
@@ -204,6 +206,7 @@ public class AgentJobExecutor {
             @Nullable LlmAdmissionService llmAdmissionService,
             Optional<WorkerCapacityState> capacityState,
             Optional<WorkerProperties> workerProperties) {
+        this.executionArchive = executionArchive;
         this.agentProperties = agentProperties;
         this.jobRepository = jobRepository;
         this.bindingRepository = bindingRepository;
@@ -607,6 +610,23 @@ public class AgentJobExecutor {
             PreparedSandbox preparedSandbox = prepareSandboxSpec(jobId, job, claim.snapshot);
             stagedInputs = preparedSandbox.stagedInputs();
             SandboxSpec sandboxSpec = preparedSandbox.spec();
+            if (executionArchive.isEnabled()) {
+                Map<String, String> environment = new HashMap<>(sandboxSpec.environment());
+                environment.put("PI_REVIEW_CAPTURE", "true");
+                sandboxSpec = new SandboxSpec(
+                        sandboxSpec.jobId(),
+                        sandboxSpec.image(),
+                        sandboxSpec.command(),
+                        environment,
+                        sandboxSpec.networkPolicy(),
+                        sandboxSpec.resourceLimits(),
+                        sandboxSpec.securityProfile(),
+                        sandboxSpec.inputFiles(),
+                        sandboxSpec.inputFilesOnDisk(),
+                        sandboxSpec.outputPath(),
+                        sandboxSpec.volumeMounts());
+            }
+            executionArchive.captureInputs(job, sandboxSpec);
             // Past this boundary provider usage may exist even if execute() throws, so it is persisted
             // for recovery on another process. A lost fence means the job was cancelled or requeued
             // while preparation ran, so its sandbox must not start.
@@ -617,6 +637,7 @@ public class AgentJobExecutor {
             }
             sandboxExecutionStarted = true;
             SandboxResult result = sandboxManager.execute(sandboxSpec);
+            executionArchive.captureOutputs(job, result);
             AgentResult agentResult = practiceAgent.parseResult(result);
 
             // Two exits say the run could not reach something it needed, rather than anything about the

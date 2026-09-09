@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
@@ -418,13 +419,15 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("a batch in which no quote verifies is still a failed delivery")
-        void refusesTheDeliveryWhenNoObservationSurvivesAdmission() {
+        @DisplayName("a batch in which no quote verifies is refused rather than retried as an unavailable server")
+        void shouldRefuseObservationsWhenNoQuotedEvidenceVerifies() {
             ValidatedObservation misquoted = validObservation("pr-description-quality", Presence.PRESENT);
             ((ObjectNode) evidenceOf(misquoted).withArray("citations").get(0)).put("quote", "fabricated quote");
 
             assertThatThrownBy(() -> service.deliver(testJob, List.of(misquoted)))
-                    .isInstanceOf(JobDeliveryException.class)
+                    .isInstanceOfSatisfying(
+                            ObservationsRefusedException.class,
+                            refusal -> assertThat(refusal.reasonCode()).isEqualTo("no_valid_observations"))
                     .hasMessageContaining("No observation survived the evidence check");
             verifyNoInteractions(observationRepository);
         }

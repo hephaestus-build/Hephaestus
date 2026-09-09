@@ -221,10 +221,10 @@ public class SandboxReconciler {
             for (DockerOperations.NetworkInfo network : networks) {
                 // The suffix is a job id, or a mentor session id for an interactive sandbox.
                 String name = network.name();
-                if (!name.startsWith(SandboxNetworkManager.NETWORK_PREFIX)) {
+                if (!name.startsWith(networkManager.networkPrefix())) {
                     continue;
                 }
-                String jobIdStr = name.substring(SandboxNetworkManager.NETWORK_PREFIX.length());
+                String jobIdStr = name.substring(networkManager.networkPrefix().length());
                 try {
                     UUID jobId = UUID.fromString(jobIdStr);
                     if (!activeJobIds.contains(jobId) && !inUse.contains(jobId)) {

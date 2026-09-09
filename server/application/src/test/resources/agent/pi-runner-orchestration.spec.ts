@@ -48,7 +48,7 @@ if (scenario) {
 		),
 	);
 	let observerCount = 0;
-	const manager = { getSessionFile: () => undefined };
+	const manager = { getSessionFile: () => undefined, getSessionId: () => "test-session" };
 	mock.module("@earendil-works/pi-coding-agent", {
 		namedExports: {
 			defineTool: (tool: unknown) => tool,

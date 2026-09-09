@@ -13,7 +13,7 @@ a separate workspace contract.
 The workspace is partitioned by **lifecycle, expressed as location** (ADR 0020): read-only
 vs writable is decided by *where* a file lives, not by convention. Three top-level regions —
 `inputs/` (read-only), `work/` (agent + precompute scratch; never collected), and `out/`
-(the only directory collected back into SQL).
+(the only directory collected back to the server).
 
 ```text
 /workspace/
@@ -99,6 +99,30 @@ covered by this ABI.
 - **`.pi*`** / `inputs/practices/` / `work/precompute*` / `work/analysis/` / `out/`
   — internal control surfaces. AI-readable as configured by the orchestrator, but
   *not* part of the public agent ABI; subject to change without a `schemaVersion` bump.
+
+## Private execution capture
+
+With `PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED=true`, the practice runner persists native Pi
+session trees in `out/trace/sessions/` instead of `.sessions/`, including composition and retry
+sessions. Pi's `before_provider_request` extension hook records the final provider-specific request
+body in `out/trace/requests/`, addressed by SHA-256; it does not rewrite that body. Native session
+JSONL retains messages, tool calls, tool results and branch/compaction structure. The separate
+`events-*.jsonl` journal records observed event times and session associations rather than inferring
+timings from the transcript.
+
+`capture.json` reports capture limits, dropped records and unfinished sessions. A nonzero exit,
+missing native session or truncated journal cannot claim complete capture. This is not a packet
+capture or a claim that all provider-internal processing is visible. Scratch files under `work/`
+are not independently archived; their contents are visible only when present in captured tool
+results or requests. Abrupt cancellation may prevent output collection entirely.
+
+The server retains staged input bytes and collected output bytes in the existing Context Fabric
+content-addressed store, with immutable manifests per job attempt. Archive state distinguishes
+`INPUTS_CAPTURED` from `OUTPUTS_CAPTURED`; neither means the review succeeded or the native capture
+is complete. An empty attempt list means no retained capture, never an empty complete transcript.
+Workspace-admin archive endpoints check job membership before allowing access to an individual
+blob, and responses disable caching. See [operator guidance](../../admin/observability.mdx#private-execution-archives)
+for privacy and retention.
 
 ## Task envelope
 

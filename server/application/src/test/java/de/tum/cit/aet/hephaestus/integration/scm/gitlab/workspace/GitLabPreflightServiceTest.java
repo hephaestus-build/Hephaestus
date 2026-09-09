@@ -7,8 +7,10 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabGroupDTO;
@@ -22,7 +24,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClient.RequestHeadersSpec;
 import org.springframework.web.reactive.function.client.WebClient.RequestHeadersUriSpec;
@@ -46,9 +48,9 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
                 Duration.ofSeconds(60),
                 Duration.ofMillis(200),
                 Duration.ofMinutes(5));
-        preflightService = new GitLabPreflightService(properties);
-        // Replace the internally-created WebClient with our mock
-        ReflectionTestUtils.setField(preflightService, "webClient", mockWebClient);
+        var endpoints = spy(new ScmServerEndpointPolicy(new MockEnvironment()));
+        lenient().doReturn(mockWebClient).when(endpoints).clientFor(anyString());
+        preflightService = new GitLabPreflightService(properties, endpoints);
     }
 
     @SuppressWarnings("unchecked")

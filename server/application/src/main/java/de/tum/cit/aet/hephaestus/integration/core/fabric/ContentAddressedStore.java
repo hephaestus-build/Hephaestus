@@ -263,7 +263,7 @@ public class ContentAddressedStore {
         }
     }
 
-    private static String sha256(byte[] content) {
+    public static String sha256(byte[] content) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
         } catch (NoSuchAlgorithmException e) {

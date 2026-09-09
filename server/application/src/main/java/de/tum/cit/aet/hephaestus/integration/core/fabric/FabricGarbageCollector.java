@@ -105,6 +105,9 @@ public class FabricGarbageCollector {
             manifests.filter(FabricGarbageCollector::isManifest).forEach(manifest -> {
                 try {
                     JsonNode root = objectMapper.readTree(Files.readAllBytes(manifest));
+                    for (JsonNode file : root.path("files")) {
+                        addSha(shas, file.path("sha256"));
+                    }
                     for (JsonNode entry : root.path("entries")) {
                         addSha(shas, entry.path("sha256"));
                     }
@@ -128,7 +131,10 @@ public class FabricGarbageCollector {
     private record ReferenceScan(Set<String> shas, boolean complete) {}
 
     private static boolean isManifest(Path path) {
-        return path.getFileName().toString().equals("artifact-source-manifest.json");
+        String name = path.getFileName().toString();
+        return name.equals("artifact-source-manifest.json")
+                || name.equals("execution-inputs.json")
+                || name.equals("execution-outputs.json");
     }
 
     private static void addSha(Set<String> shas, JsonNode value) {

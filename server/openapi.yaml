@@ -2465,6 +2465,72 @@ paths:
       summary: Retry delivery for a completed agent job
       tags:
       - Agent Jobs
+  /workspaces/{workspaceSlug}/agents/jobs/{jobId}/execution-archive:
+    get:
+      operationId: getExecutionArchive
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: jobId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecutionArchive"
+          description: OK
+      summary: List retained private execution artifacts
+      tags:
+      - Agent Jobs
+  /workspaces/{workspaceSlug}/agents/jobs/{jobId}/execution-archive/{attempt}/files/{sha256}:
+    get:
+      operationId: getExecutionArtifact
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: jobId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: attempt
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: path
+        name: sha256
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: byte
+          description: OK
+      summary: Read a retained private execution artifact
+      tags:
+      - Agent Jobs
   /workspaces/{workspaceSlug}/agents/{purpose}:
     delete:
       operationId: deleteAgent
@@ -8056,6 +8122,30 @@ components:
       required:
       - role
       - userId
+    Attempt:
+      type: object
+      properties:
+        attempt:
+          type: integer
+          format: int32
+        captureState:
+          type: string
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/File"
+        image:
+          type: string
+        preparedAt:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+      required:
+      - captureState
+      - files
+      - image
+      - preparedAt
     AuthEventView:
       type: object
       description: "One audit row, flattened for the admin viewer."
@@ -9966,6 +10056,27 @@ components:
       - quoteRedacted
       - sourceKind
       - startLine
+    ExecutionArchive:
+      type: object
+      description: "Content-addressed, private execution evidence; absence is never\
+        \ reported as complete capture."
+      properties:
+        attempts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attempt"
+        jobId:
+          type: string
+          format: uuid
+        jobStatus:
+          type: string
+        schemaVersion:
+          type: integer
+          format: int32
+      required:
+      - attempts
+      - jobId
+      - jobStatus
     ExportCreated:
       type: object
       description: Acknowledgement returned when a data export is requested.
@@ -10161,6 +10272,22 @@ components:
       required:
       - count
       - workKind
+    File:
+      type: object
+      properties:
+        bytes:
+          type: integer
+          format: int64
+        mediaType:
+          type: string
+        path:
+          type: string
+        sha256:
+          type: string
+      required:
+      - mediaType
+      - path
+      - sha256
     FirstLoginConsent:
       type: object
       properties:

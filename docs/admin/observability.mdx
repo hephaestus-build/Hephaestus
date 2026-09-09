@@ -75,3 +75,27 @@ That returns the request's own log lines, the lifecycle events of any job it enq
 `agent.job.*` events above), and the proxy calls made on its behalf. A job triggered by the scheduler
 rather than a request mints its own trace ID, so its lifecycle is still joinable even though no HTTP
 response ever carried it.
+
+## Private execution archives
+
+Execution archives are **off by default**. On a dedicated evaluation instance, set
+`PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED=true` to retain the staged review inputs, collected
+outputs, final provider request bodies and native Pi session transcripts for subsequent attempts.
+This does not retroactively capture earlier reviews and does not enable OpenTelemetry export.
+
+Treat these archives as sensitive source material: they can contain private repository content,
+prompts, conversations and tool results. Transport headers and environment variables are not
+archived, but source material itself can contain secrets. Restrict workspace administrator access,
+protect the Context Fabric storage volume and apply its existing retention policy. Do not publish
+raw archives as benchmark results or put their contents in telemetry attributes.
+
+Workspace administrators can retrieve the manifest at
+`GET /workspaces/{workspaceSlug}/agents/jobs/{jobId}/execution-archive` and manifest-listed content at
+`GET /workspaces/{workspaceSlug}/agents/jobs/{jobId}/execution-archive/{attempt}/files/{sha256}`.
+Verify both byte length and SHA-256 on download. Captures share Context Fabric retention; they are
+not permanent backups. Missing attempts or expired files must be reported as unavailable.
+
+An output archive means files were collected, not that every event was recorded. Inspect the native
+`capture.json` and the authoritative job state as well. Cancellation or abrupt termination can
+leave only the input archive. Disabling the setting stops new capture, but does not erase retained
+archives; retention continues to govern existing files.

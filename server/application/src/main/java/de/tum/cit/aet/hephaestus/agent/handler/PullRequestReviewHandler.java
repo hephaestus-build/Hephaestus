@@ -268,6 +268,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
 
     @Override
     public void deliver(AgentJob job) {
+        if (ObservationAdmissionService.observationsWereRefused(job)) return;
         if (feedbackService.recoverAutomaticPackageIfPresent(job)) return;
         ObservationAdmissionService.requireMatchingCompositionDigest(job);
         deliverAdmitted(job);

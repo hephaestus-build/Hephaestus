@@ -52,6 +52,48 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Test
     @WithAdminUser
+    void shouldScopeExecutionArchivesAndAvoidCachingPrivateCapture() {
+        Workspace workspace = setupWorkspace();
+        AgentJob job = createJob(workspace, AgentJobStatus.COMPLETED);
+        webTestClient
+                .get()
+                .uri("/workspaces/{slug}/agents/jobs/{id}/execution-archive", workspace.getWorkspaceSlug(), job.getId())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .valueMatches("Cache-Control", ".*no-store.*")
+                .expectBody()
+                .jsonPath("$.jobId")
+                .isEqualTo(job.getId().toString())
+                .jsonPath("$.attempts.length()")
+                .isEqualTo(0);
+        User owner = persistUser("capture-other-owner");
+        Workspace other = createWorkspace("capture-other", "Other", "capture-other-org", AccountType.ORG, owner);
+        ensureAdminMembership(other);
+        webTestClient
+                .get()
+                .uri("/workspaces/{slug}/agents/jobs/{id}/execution-archive", other.getWorkspaceSlug(), job.getId())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNotFound();
+        webTestClient
+                .get()
+                .uri(
+                        "/workspaces/{slug}/agents/jobs/{id}/execution-archive/0/files/{sha}",
+                        other.getWorkspaceSlug(),
+                        job.getId(),
+                        "a".repeat(64))
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNotFound();
+    }
+
+    @Test
+    @WithAdminUser
     void listJobsReturnsEmptyPageWhenNoJobs() {
         Workspace workspace = setupWorkspace();
 
