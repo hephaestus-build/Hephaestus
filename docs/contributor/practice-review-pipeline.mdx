@@ -197,7 +197,10 @@ carries one entry per staged file and a TOASTed `jsonb` has no partial read.
 An observation is one practice's answer about one piece of work, written once and immutable. It carries a
 `Presence` — `PRESENT`, `ABSENT`, `NOT_APPLICABLE` or `INCONCLUSIVE` — and, only when the presence carries
 valence, an assessment. Admission removes assessment from an `INCONCLUSIVE` observation, so a measurement that
-hedges cannot attach an unearned strength to the series.
+hedges cannot attach an unearned strength to the series. For a practice targeting harmful behaviour,
+`PRESENT/GOOD` is inconsistent and admission records an `incoherent_assessment` refusal. It does not rewrite
+the observation as `NOT_APPLICABLE`: an inconsistent assessment establishes nothing about applicability.
+The callback answers a refusal with HTTP 422, not a retryable server failure.
 
 The glossary defines what each presence claims and what `NOT_APPLICABLE` has to carry to be allowed to claim
 it — see [Outcome states](./practice-review-glossary.mdx#outcome-states). Two facts belong to this stage

@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
@@ -520,6 +521,27 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             lenient().when(observation.getOccurrenceKey()).thenReturn("occ-" + practice.getSlug());
             lenient().when(observation.getRecurrenceKey()).thenReturn("rk-" + practice.getSlug());
             return observation;
+        }
+
+        @Test
+        void shouldRefuseInconsistentPinnedAssessmentBeforePersistingObservations() {
+            String rawOutput = """
+                    {"observations": [{
+                      "practiceSlug": "avoids-insecure-defaults-and-over-broad-permissions",
+                      "summary": "The harmful behaviour is good",
+                      "presence": "PRESENT",
+                      "assessment": "GOOD",
+                      "evidenceRationale": "Original evidence rationale",
+                      "evidence": {}
+                    }]}
+                    """;
+            AgentJob job = jobWithOutput(rawOutput);
+
+            assertThatThrownBy(() -> admit(job, rawOutput))
+                    .isInstanceOfSatisfying(
+                            ObservationsRefusedException.class,
+                            e -> assertThat(e.reasonCode()).isEqualTo("incoherent_assessment"));
+            verifyNoInteractions(deliveryService, feedbackService, observationRepository);
         }
 
         @Test
