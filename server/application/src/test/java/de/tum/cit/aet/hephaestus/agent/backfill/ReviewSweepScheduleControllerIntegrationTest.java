@@ -61,7 +61,8 @@ class ReviewSweepScheduleControllerIntegrationTest extends AbstractWorkspaceInte
                 .bodyValue(body("scm.pull_request", "DAILY", 2))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     /** Membership is not authority to commit the workspace's budget every night. */
@@ -78,7 +79,8 @@ class ReviewSweepScheduleControllerIntegrationTest extends AbstractWorkspaceInte
                 .bodyValue(body("scm.pull_request", "DAILY", 2))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -107,26 +109,32 @@ class ReviewSweepScheduleControllerIntegrationTest extends AbstractWorkspaceInte
      */
     @Test
     void refusesAWindowLongerThanTheCadenceAllows() {
-        post(body("scm.pull_request", "DAILY", 5)).expectStatus().isBadRequest();
+        post(body("scm.pull_request", "DAILY", 5)).expectStatus().isBadRequest().expectBody(Void.class);
 
         assertThat(scheduleRepository.findAll()).isEmpty();
     }
 
     @Test
     void refusesAKindNoCampaignCanEnumerate() {
-        post(body("chat.conversation_thread", "DAILY", 1)).expectStatus().isBadRequest();
+        post(body("chat.conversation_thread", "DAILY", 1))
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
     }
 
     @Test
     void refusesASecondScheduleForTheSameKindOfWork() {
-        post(body("scm.pull_request", "DAILY", 2)).expectStatus().isCreated();
+        post(body("scm.pull_request", "DAILY", 2)).expectStatus().isCreated().expectBody(Void.class);
 
-        post(body("scm.pull_request", "WEEKLY", 7)).expectStatus().isEqualTo(409);
+        post(body("scm.pull_request", "WEEKLY", 7))
+                .expectStatus()
+                .isEqualTo(409)
+                .expectBody(Void.class);
     }
 
     @Test
     void anAdminChangesTheTermsAndSwitchesTheSweepOff() {
-        post(body("scm.pull_request", "DAILY", 2)).expectStatus().isCreated();
+        post(body("scm.pull_request", "DAILY", 2)).expectStatus().isCreated().expectBody(Void.class);
         UUID scheduleId = scheduleRepository.findAll().getFirst().getId();
 
         webTestClient
@@ -147,7 +155,7 @@ class ReviewSweepScheduleControllerIntegrationTest extends AbstractWorkspaceInte
 
     @Test
     void anAdminStopsSweeping() {
-        post(body("scm.pull_request", "DAILY", 2)).expectStatus().isCreated();
+        post(body("scm.pull_request", "DAILY", 2)).expectStatus().isCreated().expectBody(Void.class);
         UUID scheduleId = scheduleRepository.findAll().getFirst().getId();
 
         webTestClient
@@ -156,7 +164,8 @@ class ReviewSweepScheduleControllerIntegrationTest extends AbstractWorkspaceInte
                 .headers(asAdminAccount())
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         assertThat(scheduleRepository.findAll()).isEmpty();
     }
@@ -169,7 +178,8 @@ class ReviewSweepScheduleControllerIntegrationTest extends AbstractWorkspaceInte
                 .headers(asAdminAccount())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     private WebTestClient.ResponseSpec post(Map<String, Object> body) {

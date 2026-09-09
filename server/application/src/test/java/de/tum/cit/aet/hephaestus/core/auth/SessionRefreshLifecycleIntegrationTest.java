@@ -70,15 +70,15 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
         String csrf = fetchCsrfToken();
 
         for (int cycle = 1; cycle <= 5; cycle++) {
-            getUser(current).expectStatus().isOk();
+            getUser(current).expectStatus().isOk().expectBody(Void.class);
 
             String rotated = refreshAndReadNewCookie(current, csrf);
 
             assertThat(rotated)
                     .as("cycle %d: refresh must mint a NEW token", cycle)
                     .isNotEqualTo(current);
-            getUser(rotated).expectStatus().isOk();
-            getUser(current).expectStatus().isUnauthorized();
+            getUser(rotated).expectStatus().isOk().expectBody(Void.class);
+            getUser(current).expectStatus().isUnauthorized().expectBody(Void.class);
 
             current = rotated;
         }

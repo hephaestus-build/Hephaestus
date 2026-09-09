@@ -60,6 +60,7 @@ class SecurityHeadersIntegrationTest extends RealAuthIntegrationTest {
                                 not(containsString("http:"))))
                 // A future accidental re-introduction of reportOnly() must fail this test.
                 .expectHeader()
-                .doesNotExist("Content-Security-Policy-Report-Only");
+                .doesNotExist("Content-Security-Policy-Report-Only")
+                .expectBody(Void.class);
     }
 }

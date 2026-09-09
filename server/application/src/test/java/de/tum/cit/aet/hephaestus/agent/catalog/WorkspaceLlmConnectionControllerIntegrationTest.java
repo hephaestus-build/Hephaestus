@@ -107,7 +107,8 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -115,7 +116,8 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -164,7 +166,8 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -184,7 +187,8 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -211,7 +215,8 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -219,7 +224,8 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -248,6 +254,7 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                 .bodyValue(request)
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 }

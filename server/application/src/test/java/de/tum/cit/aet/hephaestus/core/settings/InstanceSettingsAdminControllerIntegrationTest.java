@@ -57,7 +57,8 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         webTestClient
                 .patch()
@@ -67,12 +68,19 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
                 .bodyValue(Map.of("engaged", true))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
     void anonymousIsRejected() {
-        webTestClient.get().uri("/admin/settings").exchange().expectStatus().isUnauthorized();
+        webTestClient
+                .get()
+                .uri("/admin/settings")
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -113,7 +121,8 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
                 .bodyValue(Map.of("engaged", false))
                 .exchange()
                 .expectStatus()
-                .isEqualTo(412);
+                .isEqualTo(412)
+                .expectBody(Void.class);
 
         assertThat(getSettings().silentModeEngaged()).isTrue();
         assertThat(getSettings().etag()).isEqualTo(engaged.etag());
@@ -130,7 +139,8 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
                 .bodyValue(Map.of("engaged", false))
                 .exchange()
                 .expectStatus()
-                .isEqualTo(428);
+                .isEqualTo(428)
+                .expectBody(Void.class);
     }
 
     @Test
@@ -189,7 +199,8 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
                 .bodyValue(Map.of("reason", "no engaged flag"))
                 .exchange()
                 .expectStatus()
-                .isBadRequest();
+                .isBadRequest()
+                .expectBody(Void.class);
     }
 
     private InstanceSettingsDTO getSettings() {

@@ -77,7 +77,8 @@ class MentorChatControllerAuthIntegrationTest extends AbstractWorkspaceIntegrati
                 .bodyValue(validBody())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -96,7 +97,8 @@ class MentorChatControllerAuthIntegrationTest extends AbstractWorkspaceIntegrati
                 .bodyValue(validBody())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -123,7 +125,8 @@ class MentorChatControllerAuthIntegrationTest extends AbstractWorkspaceIntegrati
                 .expectHeader()
                 .valueEquals("x-vercel-ai-ui-message-stream", "v1")
                 .expectHeader()
-                .valueEquals("Cache-Control", "no-cache");
+                .valueEquals("Cache-Control", "no-cache")
+                .expectBody(Void.class);
 
         assertThat(mentorChatStarter.awaitInvocation()).isTrue();
     }
@@ -147,6 +150,7 @@ class MentorChatControllerAuthIntegrationTest extends AbstractWorkspaceIntegrati
                 .bodyValue(validBody())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 }

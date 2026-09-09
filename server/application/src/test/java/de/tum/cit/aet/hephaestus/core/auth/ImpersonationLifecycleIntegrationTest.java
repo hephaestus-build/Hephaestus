@@ -156,7 +156,8 @@ class ImpersonationLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .headers(h -> h.setBearerAuth(uncappedImpersonation))
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
 
         assertThat(impersonationEndsFor(target)).isEmpty();
     }

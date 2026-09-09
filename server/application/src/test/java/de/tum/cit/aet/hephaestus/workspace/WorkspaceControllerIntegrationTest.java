@@ -113,7 +113,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .bodyValue(request)
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         assertThat(workspaceRepository.count()).isZero();
     }
@@ -141,7 +142,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .bodyValue(request)
                 .exchange()
                 .expectStatus()
-                .isCreated();
+                .isCreated()
+                .expectBody(Void.class);
 
         assertThat(workspaceRepository.count()).isEqualTo(1);
     }
@@ -308,7 +310,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
 
         webTestClient
                 .delete()
@@ -319,7 +322,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         assertThat(repositoryToMonitorRepository.findById(repository.getId())).isEmpty();
 
@@ -358,7 +362,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         var membership = workspaceMembershipRepository
                 .findByWorkspace_IdAndUser_Id(workspace.getId(), user.getId())
@@ -408,7 +413,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .bodyValue(new UpdateWorkspaceNotificationsRequestDTO(true, "core-team", "C12345678"))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         Workspace updated = workspaceRepository.findById(workspace.getId()).orElseThrow();
         assertThat(updated.getLeaderboardNotificationEnabled()).isTrue();
@@ -900,7 +906,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         Workspace purged = workspaceRepository.findById(workspace.getId()).orElseThrow();
         assertThat(purged.getStatus()).isEqualTo(Workspace.WorkspaceStatus.PURGED);
@@ -989,7 +996,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
         for (String suffix : List.of("/recalculate", "/reload")) {
             webTestClient
@@ -1001,7 +1009,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
     }
 
@@ -1111,7 +1120,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(true, null, true, true, true, null, null))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         // Explicitly disable progression — others should remain true
         WorkspaceDTO afterDisable = webTestClient
@@ -1212,7 +1222,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(true, null, true, true, true, null, null))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -1231,7 +1242,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(true, null, true, false, false, null, null))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         // Verify list endpoint includes feature flags
         List<WorkspaceListItemDTO> workspaces = webTestClient

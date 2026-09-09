@@ -145,7 +145,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .bodyValue(Map.of("mentorEnabled", true))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         ConfigAuditEvent row = configAuditEventRepository.findAll().stream()
                 .filter(e -> e.getEntityType() == ConfigAuditEntityType.WORKSPACE_FEATURES)
@@ -199,7 +200,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         "return { hints: ['updated'] };"))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         webTestClient
                 .delete()
@@ -207,7 +209,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         List<ConfigAuditEvent> rows = configAuditEventRepository.findAll().stream()
                 .filter(row -> java.util.Objects.equals(row.getWorkspaceId(), workspace.getId()))
@@ -363,7 +366,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -375,7 +379,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     /**
@@ -490,7 +495,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isBadRequest();
+                .isBadRequest()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -543,7 +549,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .exchange()
                 .expectStatus()
                 .isOk()
-                .returnResult(String.class)
+                .returnResult(Void.class)
                 .getResponseHeaders()
                 .getETag();
         String etag = Objects.requireNonNull(version, "the settings endpoint always answers with an ETag");
@@ -559,7 +565,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .bodyValue(body)
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
     }
 
     /** Authenticates as one specific account id — the JWT subject the native-auth filters read. */
@@ -623,6 +630,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         true))
                 .exchange()
                 .expectStatus()
-                .isCreated();
+                .isCreated()
+                .expectBody(Void.class);
     }
 }
