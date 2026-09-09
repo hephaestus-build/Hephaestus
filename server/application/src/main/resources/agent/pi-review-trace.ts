@@ -17,7 +17,8 @@ export class ReviewTrace {
 	private readonly activeSessions = new Set<string>();
 	private readonly maxBytes: number;
 
-	constructor(outputDirectory: string, maxBytes = 20 * 1024 * 1024) {
+	// Leave room for native session files and review results under the host output archive ceiling.
+	constructor(outputDirectory: string, maxBytes = 32 * 1024 * 1024) {
 		if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0)
 			throw new Error("Capture limit must be a positive integer");
 		this.maxBytes = maxBytes;

@@ -96,7 +96,8 @@ Verify both byte length and SHA-256 on download. Captures share Context Fabric r
 not permanent backups. Missing attempts or expired files must be reported as unavailable.
 
 An output archive means files were collected, not that every event was recorded. Inspect the native
-`capture.json` and the authoritative job state as well. Cancellation or abrupt termination can
+`capture.json` and the authoritative job state as well. The capture status reports its byte budget
+and dropped-record count; reaching the budget leaves the capture explicitly incomplete. Cancellation or abrupt termination can
 leave only the input archive. Disabling the setting stops new capture, but does not erase retained
 archives; retention continues to govern existing files.
 
