@@ -248,11 +248,11 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		}
 	}
 
-	// A preview restores the default branch's schema into an application built from this branch, and
-	// the application boots with `ddl-auto: validate`. A branch missing one of the default branch's
-	// migrations may therefore map entities the restored database no longer has. Saying so here
-	// costs one comparison; discovering it costs a deployment, ten minutes, and a container that
-	// exits its healthcheck with nothing on the pull request to explain it.
+	// A preview restores the default branch's database into an application built from this branch, so
+	// a branch missing one of the default branch's migrations runs against a database its own
+	// changelog never produced. Saying so here costs one comparison; discovering it costs a
+	// deployment, ten minutes, and a container that exits its healthcheck with nothing on the pull
+	// request to explain it.
 	//
 	// It sits after the checks above on purpose: a head that already has a live preview needs no
 	// deployment, and refusing here would replace a working preview's comment with a refusal.
@@ -265,20 +265,24 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 	// The comparison reports at most COMPARE_FILE_LIMIT files and flags no truncation, so a saturated
 	// response cannot be read as "no migration is missing".
 	//
-	// What these messages may claim is bounded by what is actually known. Previews of branches behind
-	// on schema have failed — the container never became healthy — but the mechanism is not
-	// established: `prod` sets `ddl-auto: none`, so Hibernate does not validate, and the earlier
-	// claim that it did was wrong. Liquibase runs the branch's own changelog over the restored dump,
-	// and the preview's PostgreSQL image is built from the branch's commit while the dump comes from
-	// the default branch's server, so a version skew is possible too. Until one is demonstrated the
-	// reason states the observation and the remedy, not a cause.
+	// What these messages may claim is bounded by what is actually known. Two mechanisms are, each
+	// reproduced by booting a released branch image against a database restored from the default
+	// branch: a branch from before a changelog was rewritten does not find its changeset ids
+	// recorded, so Liquibase re-runs them and PostgreSQL refuses the relation that already exists;
+	// and a branch missing a migration that dropped a column its entities still map boots without
+	// complaint — `prod` sets `ddl-auto: none`, so nothing validates, correcting an earlier claim
+	// that Hibernate did — then fails on the first query that reads it.
+	//
+	// Neither makes every missing migration fatal: one that only adds a table this branch never
+	// queries is harmless. So the reason names the mechanisms as what has gone wrong, never as what
+	// this branch is guaranteed to hit.
 	if (behindFiles.length >= COMPARE_FILE_LIMIT) {
 		return skip(
 			`PR #${number} is ${behindFiles.length}+ files behind ${defaultBranch} — too many for GitHub ` +
-				`to compare in full, so whether this branch still matches ${defaultBranch}'s schema ` +
-				`cannot be checked. A preview restores ${defaultBranch}'s database, and previews of ` +
-				`branches behind on schema have failed to start. Merge ${defaultBranch} in; the next ` +
-				`push previews automatically.`,
+				`to compare in full, so whether this branch still carries ${defaultBranch}'s migrations ` +
+				`cannot be checked. A preview restores ${defaultBranch}'s database, and branches behind ` +
+				`on schema have failed to start against it. Merge ${defaultBranch} in; the next push ` +
+				`previews automatically.`,
 		);
 	}
 	for (const file of behindFiles) {
@@ -293,9 +297,10 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		if (await branchHasBlob(github, owner, repo, pull.head.sha, file)) continue;
 		return skip(
 			`PR #${number} does not have ${defaultBranch}'s \`${file.filename}\`. A preview restores ` +
-				`${defaultBranch}'s database, so whether this branch matches that schema cannot be ` +
-				`checked, and previews in that state have failed to start. Merge ${defaultBranch} in; ` +
-				`the next push previews automatically.`,
+				`${defaultBranch}'s database, and branches in that state have failed to start against ` +
+				`it — Liquibase re-running changesets the restored database already recorded under ` +
+				`other ids, or a query reading a column a later migration dropped. Merge ` +
+				`${defaultBranch} in; the next push previews automatically.`,
 		);
 	}
 

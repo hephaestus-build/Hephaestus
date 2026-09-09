@@ -741,13 +741,16 @@ void describe("preview schema drift", () => {
 		const reason = core.outputs.get("reason") ?? "";
 		// The three things the author needs: which file, what goes wrong, and what to do about it.
 		assert.match(reason, /0001_drop\.xml/);
-		assert.match(reason, /cannot be checked/);
 		assert.match(reason, /have failed to start/);
 		assert.match(reason, /Merge main in/);
-		// The refusal reports an observation. Claiming a cause is what it got wrong twice: first
-		// Hibernate validation, which `prod` disables, then a schema mismatch a differing blob does
-		// not prove. Neither phrasing may come back.
-		assert.doesNotMatch(reason, /would fail|never produced|no longer match/);
+		// Both mechanisms were reproduced against a restored database, so the reason names them.
+		assert.match(reason, /Liquibase/);
+		assert.match(reason, /a later migration dropped/);
+		// It still reports what has gone wrong, never what this branch is guaranteed to hit: a
+		// migration that only adds a table this branch never queries breaks nothing. The two
+		// phrasings that overclaimed — Hibernate validation, which `prod` disables, and a schema
+		// mismatch a differing blob does not prove — may not come back.
+		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot/);
 		assert.equal(core.outputs.get("announce"), "true");
 	});
 
@@ -800,10 +803,11 @@ void describe("preview schema drift", () => {
 		// Every branch that has reached this was genuinely incompatible, so the reason says what will
 		// happen and how to fix it rather than reporting the comparison's own limit.
 		assert.match(reason, /behind main/);
+		// Truncation is the one case where the check genuinely could not run, so the reason says so.
 		assert.match(reason, /cannot be checked/);
 		assert.match(reason, /have failed to start/);
 		assert.match(reason, /Merge main in/);
-		assert.doesNotMatch(reason, /would fail|never produced|no longer match/);
+		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot/);
 	});
 
 	void it("ignores prose under the schema directory", async () => {
