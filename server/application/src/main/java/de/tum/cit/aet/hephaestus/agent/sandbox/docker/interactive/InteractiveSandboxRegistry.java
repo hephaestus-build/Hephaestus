@@ -24,13 +24,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Scheduled;
 
 /**
  * In-memory registry of live sessions keyed by {@code (userId, workspaceId)}. Owns capacity caps,
- * idle reaper, watchdog tick, and post-restart orphan sweep.
+ * idle reaper and post-restart orphan sweep.
  */
 @WorkspaceAgnostic("Interactive sandbox registry keys by user+workspace, not by workspace-iteration semantics")
 public class InteractiveSandboxRegistry {
@@ -145,11 +142,9 @@ public class InteractiveSandboxRegistry {
         });
     }
 
-    @Scheduled(fixedDelayString = "${hephaestus.mentor.reap-interval-seconds:30}", timeUnit = TimeUnit.SECONDS)
     public void reap() {
         if (shuttingDown) {
-            // During @PreDestroy the scheduler can still fire; closeExecutor may already be down
-            // and we'd run runClose inline on the scheduler thread, stalling the watchdog.
+            // During @PreDestroy a maintenance sweep may already be in progress.
             return;
         }
         Duration ttl = Duration.ofSeconds(properties.idleTtlSeconds());
@@ -162,15 +157,13 @@ public class InteractiveSandboxRegistry {
                         "Reaping idle sandbox: sessionId={}, idleFor={}s",
                         sandbox.identity().sessionId(),
                         sandbox.idleFor().toSeconds());
-                // Fire and forget: the reaper shares Spring's single-thread scheduler with the
-                // watchdog, so blocking here would stall it.
+                // Fire and forget so one closing session does not delay the remaining idle sessions.
                 sandbox.terminate(EvictionReason.IDLE);
             }
         }
     }
 
     /** After a restart the in-memory registry is gone; any {@code KIND=interactive} container is orphan. */
-    @EventListener(ApplicationReadyEvent.class)
     public void onStartup() {
         try {
             List<DockerOperations.ContainerInfo> managed = containerManager.listManagedContainers();
