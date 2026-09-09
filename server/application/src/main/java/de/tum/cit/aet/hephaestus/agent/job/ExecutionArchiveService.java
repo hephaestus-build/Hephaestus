@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -17,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.json.JsonMapper;
@@ -71,7 +73,7 @@ public class ExecutionArchiveService {
                 "INPUTS_CAPTURED",
                 Instant.now(),
                 spec.image(),
-                job.getTraceId(),
+                MDC.get(StructuredLogKeys.TRACE_ID),
                 List.copyOf(files));
         Path existing = directory.resolve(INPUT_MANIFEST);
         if (Files.exists(existing)) {
@@ -113,6 +115,49 @@ public class ExecutionArchiveService {
                         List.copyOf(files)));
     }
 
+    /** Called only with the workspace and attempt resolved by authenticated proxy routing. */
+    public void captureProxyRequest(
+            long workspaceId,
+            java.util.UUID jobId,
+            int attempt,
+            byte[] body,
+            String piRequestSha256,
+            io.micrometer.tracing.TraceContext traceContext) {
+        if (!enabled) return;
+        Path directory = layout.jobDir(jobId.toString())
+                .resolve("execution")
+                .resolve(Long.toString(workspaceId))
+                .resolve(Integer.toString(attempt));
+        // Capture can be enabled while an older execution is already running. Do not misrepresent
+        // a proxy-only fragment as an archived attempt with complete staged inputs.
+        if (!Files.exists(directory.resolve(INPUT_MANIFEST))) return;
+        AttemptDTO input = read(directory.resolve(INPUT_MANIFEST));
+        String requestId = java.util.UUID.randomUUID().toString();
+        var files = List.of(
+                file("proxy/" + requestId + "/request.json", body),
+                file(
+                        "proxy/" + requestId + "/context.json",
+                        mapper.writeValueAsBytes(Map.of(
+                                "piRequestSha256",
+                                piRequestSha256,
+                                "traceId",
+                                traceContext.traceId(),
+                                "spanId",
+                                traceContext.spanId(),
+                                "capturedAt",
+                                Instant.now().toString()))));
+        write(
+                directory,
+                "execution-proxy-" + requestId + ".json",
+                new AttemptDTO(
+                        attempt,
+                        "PROXY_REQUEST_CAPTURED",
+                        input.preparedAt(),
+                        input.image(),
+                        traceContext.traceId(),
+                        files));
+    }
+
     /** The caller must first load the job through its workspace-scoped repository query. */
     public ExecutionArchiveDTO describe(AgentJob job) {
         Path root = archiveDirectory(job);
@@ -123,8 +168,23 @@ public class ExecutionArchiveService {
                         directories.filter(Files::isDirectory).sorted().toList()) {
                     Path output = directory.resolve(OUTPUT_MANIFEST);
                     Path input = directory.resolve(INPUT_MANIFEST);
-                    if (Files.exists(output)) attempts.add(read(output));
-                    else if (Files.exists(input)) attempts.add(read(input));
+                    if (!Files.exists(input)) continue;
+                    AttemptDTO base = read(Files.exists(output) ? output : input);
+                    List<FileDTO> files = new ArrayList<>(base.files());
+                    try (var proxyManifests = Files.list(directory)) {
+                        proxyManifests
+                                .filter(path -> path.getFileName().toString().startsWith("execution-proxy-")
+                                        && path.getFileName().toString().endsWith(".json"))
+                                .forEach(path -> files.addAll(read(path).files()));
+                    }
+                    files.sort(Comparator.comparing(FileDTO::path));
+                    attempts.add(new AttemptDTO(
+                            base.attempt(),
+                            base.captureState(),
+                            base.preparedAt(),
+                            base.image(),
+                            base.traceId(),
+                            List.copyOf(files)));
                 }
             } catch (IOException e) {
                 throw new UncheckedIOException("Could not read execution capture", e);

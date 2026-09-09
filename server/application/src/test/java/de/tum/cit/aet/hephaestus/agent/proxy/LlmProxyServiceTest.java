@@ -39,7 +39,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.reactive.function.client.WebClient;
 import tools.jackson.databind.ObjectMapper;
 
-class LlmProxyControllerTest extends BaseUnitTest {
+class LlmProxyServiceTest extends BaseUnitTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -58,11 +58,13 @@ class LlmProxyControllerTest extends BaseUnitTest {
     @Mock
     private MentorTurnUsageAccumulator mentorTurnUsageAccumulator;
 
-    private LlmProxyController controller;
+    private LlmProxyService controller;
 
     @BeforeEach
     void setUp() {
-        controller = new LlmProxyController(
+        controller = new LlmProxyService(
+                io.micrometer.tracing.Tracer.NOOP,
+                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.agent.job.ExecutionArchiveService.class),
                 WebClient.create(),
                 resolver,
                 egressPolicy,
@@ -375,7 +377,7 @@ class LlmProxyControllerTest extends BaseUnitTest {
     class Streaming {
 
         private MockWebServer upstream;
-        private LlmProxyController streamingController;
+        private LlmProxyService streamingController;
         private SimpleMeterRegistry streamingMeterRegistry;
 
         @BeforeEach
@@ -383,7 +385,9 @@ class LlmProxyControllerTest extends BaseUnitTest {
             upstream = new MockWebServer();
             upstream.start();
             streamingMeterRegistry = new SimpleMeterRegistry();
-            streamingController = new LlmProxyController(
+            streamingController = new LlmProxyService(
+                    io.micrometer.tracing.Tracer.NOOP,
+                    org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.agent.job.ExecutionArchiveService.class),
                     WebClient.builder().build(),
                     resolver,
                     egressPolicy,
@@ -580,9 +584,9 @@ class LlmProxyControllerTest extends BaseUnitTest {
 
     @Test
     void shouldBuildCanonicalProtocolUrls() {
-        assertThat(LlmProxyController.buildUpstreamUri("https://api.example.com/v1/", "openai-completions"))
+        assertThat(LlmProxyService.buildUpstreamUri("https://api.example.com/v1/", "openai-completions"))
                 .isEqualTo(java.net.URI.create("https://api.example.com/v1/chat/completions"));
-        assertThat(LlmProxyController.buildUpstreamUri("https://api.example.com/v1", "openai-responses"))
+        assertThat(LlmProxyService.buildUpstreamUri("https://api.example.com/v1", "openai-responses"))
                 .isEqualTo(java.net.URI.create("https://api.example.com/v1/responses"));
     }
 

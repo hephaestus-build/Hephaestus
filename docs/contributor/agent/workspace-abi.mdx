@@ -117,11 +117,12 @@ are not independently archived; their contents are visible only when present in 
 results or requests. Abrupt cancellation may prevent output collection entirely.
 
 The server retains staged input bytes and collected output bytes in the existing Context Fabric
-content-addressed store, with immutable manifests per job attempt. Archive state distinguishes
+content-addressed store, with immutable manifests per job attempt. The image field is the declared image reference, not a
+resolved registry digest or a promise of deterministic replay. Archive state distinguishes
 `INPUTS_CAPTURED` from `OUTPUTS_CAPTURED`; neither means the review succeeded or the native capture
 is complete. An empty attempt list means no retained capture, never an empty complete transcript.
 Workspace-admin archive endpoints check job membership before allowing access to an individual
-blob, and responses disable caching. See [operator guidance](../../admin/observability.mdx#private-execution-archives)
+blob, and responses disable caching. See [operator guidance](/admin/observability#private-execution-archives)
 for privacy and retention.
 
 ## Task envelope

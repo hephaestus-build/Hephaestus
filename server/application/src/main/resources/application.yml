@@ -125,9 +125,25 @@ server:
 # Actuator on the management port; health probes for Kubernetes liveness/readiness.
 management:
     tracing:
-        # Propagate trace context without sampling spans.
+        # Opt in separately from private execution archives; raw prompts never enter span attributes.
         sampling:
-            probability: 0.0
+            probability: ${TRACING_SAMPLING_PROBABILITY:0.0}
+        export:
+            otlp:
+                enabled: ${TRACING_OTLP_ENABLED:false}
+    opentelemetry:
+        tracing:
+            export:
+                otlp:
+                    endpoint: ${TRACING_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+    otlp:
+        metrics:
+            export:
+                enabled: false
+    logging:
+        export:
+            otlp:
+                enabled: false
     server:
         port: ${MANAGEMENT_PORT:8080}
     endpoints:

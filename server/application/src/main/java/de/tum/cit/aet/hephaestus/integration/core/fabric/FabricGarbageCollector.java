@@ -134,7 +134,8 @@ public class FabricGarbageCollector {
         String name = path.getFileName().toString();
         return name.equals("artifact-source-manifest.json")
                 || name.equals("execution-inputs.json")
-                || name.equals("execution-outputs.json");
+                || name.equals("execution-outputs.json")
+                || (name.startsWith("execution-proxy-") && name.endsWith(".json"));
     }
 
     private static void addSha(Set<String> shas, JsonNode value) {

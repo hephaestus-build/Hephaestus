@@ -99,6 +99,7 @@ if (scenario) {
 						sessionManager: manager,
 						subscribe: () => () => {},
 						clearQueue() {},
+						abort: () => Promise.resolve(record(`abort:${lane}`)),
 						dispose: () => record(`dispose:${lane}`),
 						async prompt() {
 							record(`prompt:${lane}`);

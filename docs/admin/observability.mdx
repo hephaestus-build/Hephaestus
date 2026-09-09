@@ -99,3 +99,40 @@ An output archive means files were collected, not that every event was recorded.
 `capture.json` and the authoritative job state as well. Cancellation or abrupt termination can
 leave only the input archive. Disabling the setting stops new capture, but does not erase retained
 archives; retention continues to govern existing files.
+
+## Exporting OpenTelemetry traces
+
+Hephaestus uses Spring Boot's OpenTelemetry starter and the OTLP HTTP exporter. Export is disabled
+by default, independently of private execution capture. Configure these settings on the runtime
+roles whose spans you want to collect:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `TRACING_OTLP_ENABLED` | `false` | Enable the OTLP trace exporter. |
+| `TRACING_OTLP_ENDPOINT` | `http://localhost:4318/v1/traces` | Full OTLP HTTP receiver URL, reachable from the application container. |
+| `TRACING_SAMPLING_PROBABILITY` | `0.0` | Fraction of new traces sampled; use `1.0` for a dedicated evaluation instance. |
+
+The supported Compose stack forwards these settings to server, worker and webhook containers.
+For authenticated collectors, configure Spring Boot's
+`management.opentelemetry.tracing.export.otlp.headers` through protected deployment configuration.
+Do not put collector credentials in a URL. OTLP log and metric export stay disabled: enabling traces does not
+start exporting application logs, private transcripts or a second metrics stream. Prometheus metrics
+remain available through the existing endpoint.
+
+Each practice-review attempt starts a real `practice_review.execute` span. Its trace ID is retained
+in the execution archive; it can differ from the job's submission correlation ID. The submission
+ID is a separate span attribute, not an invented parent span. Sandbox proxy requests propagate the
+execution trace's sampling decision. A `gen_ai.chat` span covers each authenticated model request,
+including streaming, and records the model, HTTP outcome and observed streaming token usage when
+available. Framework HTTP spans describe the transport. Prompts, tool results, headers and tokens
+used for authentication are not span attributes.
+
+For private capture, the actual outbound proxy request body is retained separately from the Pi
+request: the proxy may replace a model identifier or add usage-reporting options. The private
+request context links its Pi-request hash to the exported trace and span IDs. Both bodies are
+content-addressed; neither body is copied into telemetry.
+
+A trace ID is not proof of export. Verify that your collector received the execution root and model
+request spans, then compare request hashes with the native event journal. Sampling, exporter errors,
+collector retention and abrupt process termination can all leave partial coverage. Do not equate
+successful feedback delivery or a nonempty trace file with complete execution evidence.

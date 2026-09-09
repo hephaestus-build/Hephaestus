@@ -33,6 +33,11 @@ x-scm-access-env: &scm-access-env
   GH_AUTH_TOKEN: ${GH_AUTH_TOKEN}
   GIT_CHECKOUT_ENABLED: ${GIT_CHECKOUT_ENABLED:-false}
 
+x-observability-env: &observability-env
+  TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-0.0}
+  TRACING_OTLP_ENABLED: ${TRACING_OTLP_ENABLED:-false}
+  TRACING_OTLP_ENDPOINT: ${TRACING_OTLP_ENDPOINT:-http://localhost:4318/v1/traces}
+
 services:
   webapp:
     image: "${HEPHAESTUS_IMAGE_WEBAPP:?verified release lock required}"
@@ -283,7 +288,7 @@ services:
       # a loopback provider URL may be SAVED, the worker's proxy decides whether it may be DIALLED.
       # Leave false in production.
       HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK: ${HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK:-false}
-      <<: [*practice-review-env, *scm-access-env]
+      <<: [*practice-review-env, *scm-access-env, *observability-env]
       GITLAB_WORKSPACE_CREATION: ${GITLAB_WORKSPACE_CREATION:-false}
       # LLM providers are registered at runtime (Instance admin → AI models), not via env vars —
       # the proxy reads each connection's base URL/auth from the catalog per request.
@@ -374,7 +379,7 @@ services:
       JAVA_TOOL_OPTIONS: "-XX:MaxDirectMemorySize=${APP_MAX_DIRECT_MEMORY:-128M}"
       APP_VERSION: ${IMAGE_TAG}
       SPRING_PROFILES_ACTIVE: prod,worker
-      <<: [*practice-review-env, *scm-access-env]
+      <<: [*practice-review-env, *scm-access-env, *observability-env]
       HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES:-}
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: ${HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST:-true}
       # Valueless, as on application-server above; this is the pod that actually opens sandboxes.

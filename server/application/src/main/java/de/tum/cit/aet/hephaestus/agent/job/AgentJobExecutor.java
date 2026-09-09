@@ -589,8 +589,13 @@ public class AgentJobExecutor {
     /** Runs on the sandbox executor, not the poll thread. */
     private void runClaimedJob(UUID jobId, ClaimResult claim) {
         AgentJob job = claim.job;
-        MDC.put(StructuredLogKeys.TRACE_ID, job.getTraceId());
-        MDC.put(StructuredLogKeys.SPAN_ID, randomSpanId());
+        var executionSpan = jobTelemetry.startExecution(job);
+        var executionScope = jobTelemetry.executionScope(executionSpan);
+        MDC.put(StructuredLogKeys.TRACE_ID, executionSpan.context().traceId());
+        MDC.put(StructuredLogKeys.SPAN_ID, executionSpan.context().spanId());
+        MDC.put(
+                StructuredLogKeys.TRACE_FLAGS,
+                Boolean.TRUE.equals(executionSpan.context().sampled()) ? "01" : "00");
         MDC.put(MDC_JOB_ID, jobId.toString());
         MDC.put(StructuredLogKeys.WORKSPACE_ID, job.getWorkspace().getId().toString());
         MDC.put(MDC_JOB_TYPE, job.getJobType().name());
@@ -712,6 +717,10 @@ public class AgentJobExecutor {
             MDC.remove(MDC_JOB_TYPE);
             MDC.remove(StructuredLogKeys.TRACE_ID);
             MDC.remove(StructuredLogKeys.SPAN_ID);
+            MDC.remove(StructuredLogKeys.TRACE_FLAGS);
+            executionSpan.tag("hephaestus.job.outcome", metricOutcome);
+            executionScope.close();
+            executionSpan.end();
         }
     }
 

@@ -15,7 +15,7 @@ class AgentJobTelemetryTest {
     @Test
     void shouldExposeOnlyBoundedLifecycleLabelsWhenRecordingTerminalJob() {
         var registry = new SimpleMeterRegistry();
-        var telemetry = new AgentJobTelemetry(registry);
+        var telemetry = new AgentJobTelemetry(registry, io.micrometer.tracing.Tracer.NOOP);
         var job = new AgentJob();
         job.prePersist();
         job.setWorkspace(workspace(42L));
@@ -33,5 +33,44 @@ class AgentJobTelemetryTest {
         assertThat(timer.totalTime(java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(3);
         assertThat(registry.getMeters())
                 .allSatisfy(meter -> assertThat(meter.getId().getTag("job.id")).isNull());
+    }
+
+    @Test
+    void shouldExportARealExecutionSpanWithoutInventingASubmissionParent() {
+        var exporter = org.mockito.Mockito.mock(io.opentelemetry.sdk.trace.export.SpanExporter.class);
+        org.mockito.Mockito.when(exporter.export(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(io.opentelemetry.sdk.common.CompletableResultCode.ofSuccess());
+        org.mockito.Mockito.when(exporter.shutdown())
+                .thenReturn(io.opentelemetry.sdk.common.CompletableResultCode.ofSuccess());
+        try (var provider = io.opentelemetry.sdk.trace.SdkTracerProvider.builder()
+                .setSampler(io.opentelemetry.sdk.trace.samplers.Sampler.alwaysOn())
+                .addSpanProcessor(io.opentelemetry.sdk.trace.export.SimpleSpanProcessor.create(exporter))
+                .build()) {
+            var tracer = new io.micrometer.tracing.otel.bridge.OtelTracer(
+                    provider.get("test"), new io.micrometer.tracing.otel.bridge.OtelCurrentTraceContext(), event -> {});
+            var telemetry = new AgentJobTelemetry(new SimpleMeterRegistry(), tracer);
+            var job = new AgentJob();
+            job.prePersist();
+            job.setWorkspace(workspace(42L));
+            job.setTraceId("a".repeat(32));
+            var span = telemetry.startExecution(job);
+            try (var scope = telemetry.executionScope(span)) {
+                assertThat(tracer.currentSpan()).isNotNull();
+                assertThat(span.context().traceId()).matches("[a-f0-9]{32}").isNotEqualTo(job.getTraceId());
+                assertThat(span.context().sampled()).isTrue();
+            } finally {
+                span.end();
+            }
+            org.mockito.Mockito.verify(exporter).export(org.mockito.ArgumentMatchers.argThat(spans -> {
+                var data = spans.iterator().next();
+                return data.getName().equals("practice_review.execute")
+                        && data.getParentSpanId().equals("0".repeat(16))
+                        && data.getEndEpochNanos() >= data.getStartEpochNanos()
+                        && job.getId()
+                                .toString()
+                                .equals(data.getAttributes()
+                                        .get(io.opentelemetry.api.common.AttributeKey.stringKey("hephaestus.job.id")));
+            }));
+        }
     }
 }

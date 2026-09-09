@@ -139,6 +139,30 @@ class ExecutionArchiveServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRetainActualProxyRequestsAndLinkThemToNativeRequests() {
+        AgentJob job = job(1);
+        service.captureInputs(job, spec(job, Map.of("task.json", new byte[] {1})));
+        byte[] request = "{\"model\":\"actual-upstream-model\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var traceContext = org.mockito.Mockito.mock(io.micrometer.tracing.TraceContext.class);
+        org.mockito.Mockito.when(traceContext.traceId()).thenReturn("a".repeat(32));
+        org.mockito.Mockito.when(traceContext.spanId()).thenReturn("c".repeat(16));
+        service.captureProxyRequest(job.getWorkspace().getId(), job.getId(), 0, request, "b".repeat(64), traceContext);
+        service.captureOutputs(job, new SandboxResult(0, Map.of(), "", false, Duration.ZERO));
+        var captured = service.describe(job).attempts().getFirst();
+        var file = captured.files().stream()
+                .filter(item -> item.path().endsWith("/request.json"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(service.content(job, 0, file.sha256())).isEqualTo(request);
+        var context = captured.files().stream()
+                .filter(item -> item.path().endsWith("/context.json"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(new String(service.content(job, 0, context.sha256()), java.nio.charset.StandardCharsets.UTF_8))
+                .contains("b".repeat(64), "a".repeat(32), "c".repeat(16));
+    }
+
+    @Test
     void shouldNotCaptureAnythingUnlessExplicitlyEnabled() {
         service = new ExecutionArchiveService(layout, cas, mapper, false);
         AgentJob job = job(1);
