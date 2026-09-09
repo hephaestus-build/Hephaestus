@@ -366,7 +366,7 @@ redeploy preserves an already-seeded database — and configure its AI access ag
 | Comment says | What to do |
 | --- | --- |
 | does not carry the `preview` label | Add the label |
-| is a draft | Mark it ready for review |
+| is behind `main` on schema, or too far behind to compare | Merge `main` in; the next push previews automatically |
 | comes from a fork | Push the branch to this repository |
 | was opened by a … , not a repository collaborator | Nothing; previews need push access |
 | changes trusted deployment policy | Land that change first — a preview never runs a pull request's own edits to `.github/workflows/**`, `.github/actions/**` or `docker/preview/**` |
@@ -419,8 +419,8 @@ why the label is the authority, and which alternatives were priced and declined,
 | `ci-server-clean-reference.yml` | Weekly, manual | Records cold server phases and compares generated JARs |
 | `scorecard-ratchet.yml` | Push to main, branch-protection change, weekly, manual | Fails when a Scorecard check drops below the committed baseline; a push fails only for the checks its own commit decides |
 | `deploy-preview.yml` | `preview` label added, or a push, reopen or ready-for-review on a labelled PR | Waits for this commit's attested CI images, deploys them, and registers the native GitHub deployment |
-| `cleanup-preview.yml` | Label removed, PR closed or drafted | Removes and verifies resources, then retains a cleanup tombstone |
-| `reconcile-previews.yml` | Nightly, manual | Re-sends teardown for any preview environment whose pull request is closed, drafted or unlabelled |
+| `cleanup-preview.yml` | Label removed, or PR closed | Removes and verifies resources, then retains a cleanup tombstone |
+| `reconcile-previews.yml` | Nightly, manual | Re-sends teardown for any preview environment whose pull request is closed or unlabelled |
 | `cd-docs.yml`, `cd-docs-teardown.yml` | `docs/**` on push and pull requests; PR closed | Publishes the docs site and its pull-request previews |
 | `version-pr.yml` | Successful CI/CD completion for the current main tip | Maintains the accumulating Version PR (changesets) and dispatches CI/CD on its branch, release evidence preflight included |
 | `release.yml` | Successful CI/CD push on `main` | Publishes the release and promotes the moving series and latest image tags |
