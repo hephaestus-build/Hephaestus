@@ -415,6 +415,27 @@ void describe("CI contract", () => {
 		);
 	});
 
+	void test("the server package job is the only Gradle cache producer", async () => {
+		const action = parseDocument(await readFile(".github/actions/setup-caches/action.yml", "utf8"));
+		assert.equal(action.getIn(["inputs", "cache-write", "default"]), "false");
+		const sources = await workflowSources();
+		const writers = [...sources].filter(([, source]) => source.includes('cache-write: "true"'));
+		assert.deepEqual(
+			writers.map(([file]) => file),
+			[".github/workflows/ci-build.yml"],
+		);
+		const build = parseDocument(await readFile(".github/workflows/ci-build.yml", "utf8"));
+		const steps = build.getIn(["jobs", "server-package", "steps"]);
+		assert.ok(isSeq(steps));
+		const cache = steps.items.find(
+			(item) => isMap(item) && item.get("uses") === "./.github/actions/setup-caches",
+		);
+		assert.ok(isMap(cache));
+		assert.equal(cache.getIn(["with", "cache-write"]), "true");
+		const source = await readFile(".github/actions/setup-caches/action.yml", "utf8");
+		assert.match(source, /inputs.cache-write != 'true' \|\| github.ref != format/);
+	});
+
 	void test("path exclusions cannot select unrelated files for server tests or webapp images", async () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const steps = workflow.getIn(["jobs", "detect-changes", "steps"]);

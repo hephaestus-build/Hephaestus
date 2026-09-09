@@ -95,6 +95,8 @@ jobs:
           digest-mismatch: error
       - uses: ./.github/actions/setup-caches
         if: steps.reuse.outputs.artifact-id == ''
+        with:
+          cache-write: "true"
       - name: Package the server
         if: steps.reuse.outputs.artifact-id == ''
         working-directory: server
