@@ -46,6 +46,10 @@ if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
 	});
 }
 
+// jsdom exposes scrollTo but throws when the router restores scroll after navigation.
+// Layout and scrolling are covered in browser tests, not this DOM-only environment.
+window.scrollTo = () => {};
+
 // jsdom has no scrollIntoView either; Base UI calls it to keep the highlighted option in view.
 if (typeof Element.prototype.scrollIntoView !== "function") {
 	Element.prototype.scrollIntoView = () => {};
