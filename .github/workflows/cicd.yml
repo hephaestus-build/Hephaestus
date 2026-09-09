@@ -159,6 +159,7 @@ jobs:
               - 'scripts/check-presentational-components.ts'
               - 'scripts/check-story-prose.ts'
               - 'scripts/check-story-sort.ts'
+              - 'scripts/install-browser-deps.ts'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
@@ -237,6 +238,7 @@ jobs:
               - 'server/gradle/**'
               - 'server/gradlew*'
             e2e:
+              - 'scripts/install-browser-deps.ts'
               - '.java-version'
               - 'webapp/e2e/**'
               - 'webapp/src/**'

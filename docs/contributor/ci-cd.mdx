@@ -455,6 +455,11 @@ credential is still `GITHUB_TOKEN`, so these commits start no further workflow r
 | `download-trivy-db` | Fetches the vulnerability database with retries and a mirror fallback; optionally refuses one over `max-age-hours` old and records its metadata |
 | `ghcr-login` | Authenticates Docker to GHCR |
 
+Browser jobs install Playwright's system dependencies using the runner's Ubuntu package sources,
+with APT configuration scoped to that installation process. Unrelated vendor repositories do not
+participate; repository signatures and package hashes remain enforced. The pinned Playwright CLI
+then installs Chromium as the runner user so the browser cache retains its normal ownership.
+
 ### Caches
 
 A run restores caches from its own branch and from `main`, never from a sibling branch. Task-cache
