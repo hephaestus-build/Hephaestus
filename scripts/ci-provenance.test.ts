@@ -42,3 +42,10 @@ void test("image provenance can persist storage records through every reusable-w
 		}
 	}
 });
+
+void test("artifact checks have no registry publishing permissions", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const permissions = workflow.getIn(["jobs", "Build", "permissions"]);
+	assert.ok(isMap(permissions));
+	assert.deepEqual(permissions.toJSON(), { contents: "read", checks: "write" });
+});

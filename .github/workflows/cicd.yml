@@ -567,7 +567,6 @@ jobs:
     permissions:
       contents: read
       checks: write
-      packages: write
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       postgres_base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
