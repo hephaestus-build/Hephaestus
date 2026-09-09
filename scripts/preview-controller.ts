@@ -286,12 +286,16 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		// The comparison says what the default branch changed since the branches diverged; it says
 		// nothing about this branch's tree. A cherry-picked or independently applied migration is
 		// present here under a different commit, so the blob decides, not the ancestry.
+		//
+		// A differing blob is still only unverifiable, never proof: two changelogs can reach the same
+		// schema by different text. The reason says so rather than asserting a mismatch it cannot
+		// demonstrate — the same overreach that claimed Hibernate validation, one sentence along.
 		if (await branchHasBlob(github, owner, repo, pull.head.sha, file)) continue;
 		return skip(
 			`PR #${number} does not have ${defaultBranch}'s \`${file.filename}\`. A preview restores ` +
-				`${defaultBranch}'s database, so this branch would run against a schema its own ` +
-				`migrations never produced, and previews in that state have failed to start. Merge ` +
-				`${defaultBranch} in; the next push previews automatically.`,
+				`${defaultBranch}'s database, so whether this branch matches that schema cannot be ` +
+				`checked, and previews in that state have failed to start. Merge ${defaultBranch} in; ` +
+				`the next push previews automatically.`,
 		);
 	}
 
