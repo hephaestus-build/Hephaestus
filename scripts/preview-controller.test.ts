@@ -46,6 +46,7 @@ const makeCore = () => {
 };
 
 const makeContext = () => ({
+	serverUrl: "https://github.com",
 	repo: { owner: "owner", repo: "repo" },
 	payload: { repository: { default_branch: "main" }, pull_request: { number: 7 } },
 });
@@ -740,8 +741,13 @@ void describe("preview schema drift", () => {
 		const reason = core.outputs.get("reason") ?? "";
 		// The three things the author needs: which file, what goes wrong, and what to do about it.
 		assert.match(reason, /0001_drop\.xml/);
-		assert.match(reason, /fail validation/);
+		assert.match(reason, /cannot be checked/);
+		assert.match(reason, /have failed to start/);
 		assert.match(reason, /Merge main in/);
+		// The refusal reports an observation. Claiming a cause is what it got wrong twice: first
+		// Hibernate validation, which `prod` disables, then a schema mismatch a differing blob does
+		// not prove. Neither phrasing may come back.
+		assert.doesNotMatch(reason, /would fail|never produced|no longer match/);
 		assert.equal(core.outputs.get("announce"), "true");
 	});
 
@@ -794,9 +800,10 @@ void describe("preview schema drift", () => {
 		// Every branch that has reached this was genuinely incompatible, so the reason says what will
 		// happen and how to fix it rather than reporting the comparison's own limit.
 		assert.match(reason, /behind main/);
-		assert.match(reason, /fail validation/);
+		assert.match(reason, /cannot be checked/);
+		assert.match(reason, /have failed to start/);
 		assert.match(reason, /Merge main in/);
-		assert.doesNotMatch(reason, /cannot be verified/);
+		assert.doesNotMatch(reason, /would fail|never produced|no longer match/);
 	});
 
 	void it("ignores prose under the schema directory", async () => {

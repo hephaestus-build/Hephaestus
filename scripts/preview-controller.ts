@@ -56,6 +56,7 @@ export interface GitHubApi {
 }
 
 interface ActionsContext {
+	readonly serverUrl: string;
 	readonly repo: { readonly owner: string; readonly repo: string };
 	readonly payload: {
 		readonly repository: { readonly default_branch: string };
@@ -262,16 +263,22 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 	});
 	const behindFiles = behind.data.files ?? [];
 	// The comparison reports at most COMPARE_FILE_LIMIT files and flags no truncation, so a saturated
-	// response cannot be read as "no migration is missing". Every branch that has hit this so far was
-	// genuinely incompatible — each still mapped entities to tables the default branch had dropped —
-	// so the message names the likely consequence rather than the tool's own uncertainty, which is
-	// what the author can act on.
+	// response cannot be read as "no migration is missing".
+	//
+	// What these messages may claim is bounded by what is actually known. Previews of branches behind
+	// on schema have failed — the container never became healthy — but the mechanism is not
+	// established: `prod` sets `ddl-auto: none`, so Hibernate does not validate, and the earlier
+	// claim that it did was wrong. Liquibase runs the branch's own changelog over the restored dump,
+	// and the preview's PostgreSQL image is built from the branch's commit while the dump comes from
+	// the default branch's server, so a version skew is possible too. Until one is demonstrated the
+	// reason states the observation and the remedy, not a cause.
 	if (behindFiles.length >= COMPARE_FILE_LIMIT) {
 		return skip(
-			`PR #${number} is ${behindFiles.length}+ files behind ${defaultBranch}. A preview restores ` +
-				`${defaultBranch}'s database, and a branch this far back is unlikely to still match its ` +
-				`schema — the application would fail validation and the preview would never come up. ` +
-				`Merge ${defaultBranch} in; the next push previews automatically.`,
+			`PR #${number} is ${behindFiles.length}+ files behind ${defaultBranch} — too many for GitHub ` +
+				`to compare in full, so whether this branch still matches ${defaultBranch}'s schema ` +
+				`cannot be checked. A preview restores ${defaultBranch}'s database, and previews of ` +
+				`branches behind on schema have failed to start. Merge ${defaultBranch} in; the next ` +
+				`push previews automatically.`,
 		);
 	}
 	for (const file of behindFiles) {
@@ -279,12 +286,16 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		// The comparison says what the default branch changed since the branches diverged; it says
 		// nothing about this branch's tree. A cherry-picked or independently applied migration is
 		// present here under a different commit, so the blob decides, not the ancestry.
+		//
+		// A differing blob is still only unverifiable, never proof: two changelogs can reach the same
+		// schema by different text. The reason says so rather than asserting a mismatch it cannot
+		// demonstrate — the same overreach that claimed Hibernate validation, one sentence along.
 		if (await branchHasBlob(github, owner, repo, pull.head.sha, file)) continue;
 		return skip(
-			`PR #${number} is missing ${defaultBranch}'s \`${file.filename}\`. A preview restores ` +
-				`${defaultBranch}'s database, so this branch's entities no longer match its schema and ` +
-				`the application would fail validation on boot. Merge ${defaultBranch} in; the next ` +
-				`push previews automatically.`,
+			`PR #${number} does not have ${defaultBranch}'s \`${file.filename}\`. A preview restores ` +
+				`${defaultBranch}'s database, so whether this branch matches that schema cannot be ` +
+				`checked, and previews in that state have failed to start. Merge ${defaultBranch} in; ` +
+				`the next push previews automatically.`,
 		);
 	}
 
@@ -316,6 +327,13 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 	core.setOutput("base_ref", defaultBranch);
 	core.setOutput("head_sha", pull.head.sha);
 	core.setOutput("preview_url", previewUrl.href);
+	// The environment's own page on GitHub, in the form the API reports as its `html_url` — the
+	// obvious `/deployments/<name>` guess is a 404, and the query parameter is `environments_filter`.
+	core.setOutput(
+		"environment_page",
+		`${context.serverUrl}/${owner}/${repo}/deployments/activity_log` +
+			`?environments_filter=${encodeURIComponent(environment)}`,
+	);
 };
 
 /**
@@ -351,6 +369,13 @@ const create = async ({ github, context, core }: ControllerInput): Promise<void>
 	const { owner, repo } = context.repo;
 	const headSha = requiredEnv(process.env, "HEAD_SHA");
 	const environment = requiredEnv(process.env, "ENVIRONMENT");
+	const number = requiredPositiveInteger(process.env, "PR_NUMBER");
+	const title = process.env.PR_TITLE ?? "";
+	const previewUrl = requiredEnv(process.env, "PREVIEW_URL");
+	// The deployments page lists every environment together, where `preview/pr-2042` alone says
+	// nothing about what is in it. The title is what tells one preview from another at a glance;
+	// GitHub renders this as plain text, so the link lives in the payload rather than here.
+	const described = title ? `PR #${number} · ${title}` : `PR #${number}`;
 	const response = await github.rest.repos.createDeployment({
 		owner,
 		repo,
@@ -359,7 +384,16 @@ const create = async ({ github, context, core }: ControllerInput): Promise<void>
 		auto_merge: false,
 		required_contexts: [],
 		environment,
-		description: `Coolify preview for PR #${requiredEnv(process.env, "PR_NUMBER")}`,
+		description: described.length > 140 ? `${described.slice(0, 139)}…` : described,
+		// Rides on every deployment_status event, so anything watching them — a dashboard, a bot,
+		// a future notifier — can reach the pull request and the preview without another API call.
+		payload: {
+			pull_request: number,
+			pull_request_url: process.env.PR_URL ?? "",
+			title,
+			preview_url: previewUrl,
+			head_sha: headSha,
+		},
 		transient_environment: true,
 		production_environment: false,
 	});
@@ -373,9 +407,9 @@ const create = async ({ github, context, core }: ControllerInput): Promise<void>
 		repo,
 		deployment_id: deploymentId,
 		state: "queued",
-		description: "Admission reserved; Coolify queue follows.",
+		description: `Reserved for PR #${number}; Coolify queue follows.`,
 		environment,
-		environment_url: requiredEnv(process.env, "PREVIEW_URL"),
+		environment_url: previewUrl,
 		log_url: requiredEnv(process.env, "SOURCE_RUN_URL"),
 	});
 };
