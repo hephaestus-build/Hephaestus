@@ -415,6 +415,17 @@ void describe("CI contract", () => {
 		);
 	});
 
+	void test("path exclusions cannot select unrelated files for server tests or webapp images", async () => {
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		for (const id of ["filter", "webapp_image_source"]) {
+			const steps = workflow.getIn(["jobs", "detect-changes", "steps"]);
+			assert.ok(isSeq(steps));
+			const filter = steps.items.find((item) => isMap(item) && item.get("id") === id);
+			assert.ok(isMap(filter));
+			assert.equal(filter.getIn(["with", "predicate-quantifier"]), "some-with-excludes");
+		}
+	});
+
 	void test("Gradle lock changes rebuild and verify the shipped server", async () => {
 		const build = await readFile("server/build.gradle.kts", "utf8");
 		assert.match(build, /lockAllConfigurations\(\)/);
