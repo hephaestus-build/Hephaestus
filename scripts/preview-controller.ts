@@ -262,8 +262,9 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		basehead: `${pull.head.sha}...${defaultBranch}`,
 	});
 	const behindFiles = behind.data.files ?? [];
-	// The comparison reports at most COMPARE_FILE_LIMIT files and flags no truncation, so a saturated
-	// response cannot be read as "no migration is missing".
+	// The comparison reports at most COMPARE_FILE_LIMIT files and flags no truncation. A response at
+	// that count may be complete or cut off, and nothing distinguishes them, so it cannot be read as
+	// "no migration is missing".
 	//
 	// What these messages may claim is bounded by what is actually known. Two mechanisms are, each
 	// reproduced by booting a released branch image against a database restored from the default
@@ -281,11 +282,11 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 	// is guaranteed to hit.
 	if (behindFiles.length >= COMPARE_FILE_LIMIT) {
 		return skip(
-			`PR #${number} is ${behindFiles.length}+ files behind ${defaultBranch} — too many for GitHub ` +
-				`to compare in full, so whether this branch still carries ${defaultBranch}'s migrations ` +
-				`cannot be checked. A preview restores ${defaultBranch}'s database, and branches behind ` +
-				`on schema have failed to start against it. Merge ${defaultBranch} in; the next push ` +
-				`previews automatically.`,
+			`PR #${number} is ${behindFiles.length} files behind ${defaultBranch}, the most one GitHub ` +
+				`comparison reports, so whether this branch still carries ${defaultBranch}'s ` +
+				`migrations cannot be checked. A preview restores ${defaultBranch}'s database, and ` +
+				`branches behind on schema have failed to start against it. Merge ${defaultBranch} ` +
+				`in; the next push previews automatically.`,
 		);
 	}
 	for (const file of behindFiles) {

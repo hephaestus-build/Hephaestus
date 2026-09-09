@@ -806,8 +806,6 @@ void describe("preview schema drift", () => {
 		// the reason names the check that could not run, what branches behind on schema have run
 		// into, and how to clear it.
 		assert.match(reason, /behind main/);
-		// Truncation is the one case where the check genuinely could not run, so the reason says so,
-		// and says which check: whether the branch still carries the default branch's migrations.
 		assert.match(reason, /carries main's migrations/);
 		assert.match(reason, /cannot be checked/);
 		assert.match(reason, /have failed to start against it/);
