@@ -95,6 +95,9 @@ public class OpenAPIConfiguration {
      * Domain objects to include even without DTO suffix
      */
     private static final List<String> ALLOWED_DOMAIN_OBJECTS = List.of(
+            // Immutable onboarding values are persisted snapshots and deliberately shared with the API.
+            "WorkspaceAccessPolicySettings",
+            "WorkspaceAccessDetails",
             "PageableObject",
             "SortObject",
             "ProblemDetail",

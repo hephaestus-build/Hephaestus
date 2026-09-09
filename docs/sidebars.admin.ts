@@ -5,6 +5,7 @@ const sidebars: SidebarsConfig = {
 		{ type: "doc", id: "overview", label: "Overview" },
 		{ type: "doc", id: "install", label: "Install (Self-Hosted)" },
 		{ type: "doc", id: "github-integration", label: "GitHub Integration" },
+		{ type: "doc", id: "workspace-onboarding", label: "Workspace Access Requests" },
 		{ type: "doc", id: "ai-providers", label: "Connect an AI Provider" },
 		{
 			type: "category",

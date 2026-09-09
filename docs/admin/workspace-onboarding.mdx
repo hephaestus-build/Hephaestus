@@ -1,0 +1,78 @@
+---
+title: Workspace access requests
+description: Configure workspace applications, review decisions, email and retention.
+---
+
+Workspace owners configure onboarding under **Administration → Access → Request policy**.
+Administrators review requests and email-delivery status under **Access requests**.
+
+## Before enabling requests
+
+- Synchronize the workspace's GitHub organization or GitLab group and its teams.
+- Enable a sign-in provider for the same provider instance. Applicants see only this primary provider;
+  institutional sign-in is an additional account connection, not another public sign-in option.
+- Choose a responsible-maintainer team. Its eligible members must have linked identities and active
+  workspace accounts; applicants cannot name themselves as their maintainer.
+- Configure email as described below, and use a monitored administrator mailbox.
+
+Select the teams applicants may request, additional required accounts, maximum duration and reminder
+interval. For Slack and Outline, enter the required Slack workspace ID or Outline team ID. Use the introduction and notices for the
+code of conduct and workspace policies. Optional research consent remains a separate account choice;
+requiring a workspace notice must not be used to turn research participation into a condition of access.
+
+Saving changes versions the policy. An older pending application must be resubmitted with the new
+acknowledgements before approval. Owners can pause and resume applications without revoking existing
+access. Pausing also prevents new approvals until requests are resumed.
+
+GitLab's authenticated-user response must include a valid `confirmed_at` for the primary email.
+Temporary OAuth placeholder addresses are not accepted. Existing GitLab accounts can reconnect their
+identity to record a newly confirmed address; an email string alone is not verification. This follows
+[GitLab's authenticated-user contract](https://docs.gitlab.com/api/users/#retrieve-the-current-user).
+
+## Reviewing requests
+
+Select a request to inspect the applicant's comments and requested access. Approve the final maintainer,
+teams and deadline, ask for changes, or decline with an explanation. An administrator cannot review
+their own application. Concurrent or repeated decisions are rejected rather than silently overwriting
+another reviewer.
+
+An approval and its notification are recorded together. Hephaestus access expires at the approved
+instant, independently of the scheduler or email transport. Pending renewals never extend the deadline.
+External organization and team changes are separate operations: local approval or expiry does not claim
+that a provider invitation or removal has completed.
+
+## Email transport
+
+Configure Spring Mail with `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT` and the authentication and TLS
+properties appropriate to your SMTP service. Set `HEPHAESTUS_EMAIL_FROM` to one plain sender address.
+Use authenticated TLS in production. Connection, read and write timeouts default to five seconds;
+adjust Spring Mail's SMTP properties if your relay needs different bounds.
+
+Email is sent only from the server runtime role. Silent Mode also blocks SMTP. Missing configuration,
+missing verified contact details, failures and suppression remain visible in **Email delivery**; none
+are labelled as sent. Correct the cause before retrying an undelivered notification. Submitted comments
+are not included in email. SMTP delivery is at-least-once: a process failure after SMTP accepts a message
+but before the database commits can produce a duplicate, so operators must not promise exactly-once
+email delivery.
+
+## Access-page addresses
+
+The canonical address is `https://your-instance/w/workspace-slug/request-access`. A workspace alias such
+as `https://workspace-slug.your-instance/request-access` redirects to that canonical origin before
+sign-in. Aliases require DNS, TLS certificates and reverse-proxy routing to the same webapp; the SPA
+cannot provision them. Use the canonical origin for OAuth callback registration and session cookies.
+Only a single valid workspace label under the configured client hostname is accepted as an alias.
+
+## Retention and erasure
+
+An optional retention period is recorded in each submitted policy snapshot. For approved requests the
+period begins at the access deadline; for other completed requests it begins when they are declined,
+withdrawn or replaced. Leaving the setting blank keeps submissions until account or workspace erasure.
+The whole applicant history in a workspace is retained while any request still needs it, access remains
+active, or an external access provider still needs the evidence to finish revocation.
+
+Cleanup removes applications and their notification records, not global accounts, mirrored work,
+research consent or audit records. Those follow the separate controls in the
+[personal-data map](./dsms/personal-data-map.md). Account export includes only the applicant's own
+submitted information and acknowledged notices, never the administrator mailbox or another person's
+application.

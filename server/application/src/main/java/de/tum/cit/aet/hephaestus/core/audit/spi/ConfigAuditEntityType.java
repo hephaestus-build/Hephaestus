@@ -24,6 +24,8 @@ public enum ConfigAuditEntityType {
      * that would bury the admin-initiated rows.
      */
     WORKSPACE_ROLE,
+    WORKSPACE_ACCESS_POLICY,
+    WORKSPACE_ACCESS_REQUEST,
     WORKSPACE_FEATURES,
     WORKSPACE_STATUS,
     /** The workspace's stored SCM access token (rotation only — the value is never recorded). */

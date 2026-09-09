@@ -1,11 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlClientFactory;
-import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
-import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.CircuitBreakerOpenException;
-import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
-import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService.InstallationToken;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRateLimit;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -23,8 +19,7 @@ import org.springframework.stereotype.Component;
 public class GitHubGraphQlClientProvider {
 
     private final HttpGraphQlClient baseClient;
-    private final InstallationTokenProvider tokenProvider;
-    private final GitHubAppTokenService appTokens;
+    private final GitHubTokenService tokens;
     private final CircuitBreaker circuitBreaker;
     private final RateLimitTracker rateLimitTracker;
     private final GitHubRestRateLimitSeeder rateLimitSeeder;
@@ -32,15 +27,13 @@ public class GitHubGraphQlClientProvider {
 
     public GitHubGraphQlClientProvider(
             HttpGraphQlClient gitHubGraphQlClient,
-            InstallationTokenProvider tokenProvider,
-            GitHubAppTokenService appTokens,
+            GitHubTokenService tokens,
             @Qualifier("githubGraphQlCircuitBreaker") CircuitBreaker circuitBreaker,
             RateLimitTracker rateLimitTracker,
             GitHubRestRateLimitSeeder rateLimitSeeder,
             SilentModeGraphQlClientFactory clientFactory) {
         this.baseClient = gitHubGraphQlClient;
-        this.tokenProvider = tokenProvider;
-        this.appTokens = appTokens;
+        this.tokens = tokens;
         this.circuitBreaker = circuitBreaker;
         this.rateLimitTracker = rateLimitTracker;
         this.rateLimitSeeder = rateLimitSeeder;
@@ -103,7 +96,7 @@ public class GitHubGraphQlClientProvider {
      *                                  config
      */
     public HttpGraphQlClient forScope(Long scopeId) {
-        String token = getToken(scopeId);
+        String token = tokens.getAccessToken(scopeId);
         // Learn this scope's real GraphQL ceiling from REST GET /rate_limit while it has nothing observed.
         // Fire-and-forget and self-throttled, so it costs the sync neither latency nor quota (GitHub
         // documents that endpoint as not counting against the limit) — see GitHubRestRateLimitSeeder.
@@ -164,29 +157,5 @@ public class GitHubGraphQlClientProvider {
     /** @return the reset instant, or null if unknown */
     public java.time.@Nullable Instant getRateLimitResetAt(Long scopeId) {
         return rateLimitTracker.getResetAt(scopeId);
-    }
-
-    private String getToken(Long scopeId) {
-        // Fail fast for suspended/inactive scopes - don't waste API calls
-        if (!tokenProvider.isScopeActive(scopeId)) {
-            throw new IllegalStateException(
-                    "Scope " + scopeId + " is not active (suspended or purged). Refusing to mint token.");
-        }
-
-        AuthMode authMode = tokenProvider.getAuthMode(scopeId);
-
-        if (authMode == AuthMode.INSTALLATION_APP) {
-            Long installationId = tokenProvider
-                    .getInstallationId(scopeId)
-                    .orElseThrow(() -> new IllegalStateException("Scope " + scopeId + " has no installation id."));
-            InstallationToken token = appTokens.getInstallationTokenDetails(installationId);
-            return token.token();
-        }
-
-        return tokenProvider
-                .getPersonalAccessToken(scopeId)
-                .filter(t -> !t.isBlank())
-                .orElseThrow(() -> new IllegalStateException(
-                        "Scope " + scopeId + " is configured for PAT access but no token is stored."));
     }
 }

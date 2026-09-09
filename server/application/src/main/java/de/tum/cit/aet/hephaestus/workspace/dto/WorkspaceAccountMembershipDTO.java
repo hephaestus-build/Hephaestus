@@ -14,4 +14,5 @@ public record WorkspaceAccountMembershipDTO(
         WorkspaceAccountMembership.@Nullable Source source,
         @NotNull boolean suspended,
         @Nullable Instant createdAt,
+        @Nullable Instant expiresAt,
         @Nullable String scmUserLogin) {}

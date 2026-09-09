@@ -1,6 +1,7 @@
 import { access, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import process from "node:process";
+import { parseArgs } from "node:util";
 
 import { positivePort, readEnvFile } from "./lib/env.ts";
 import { output, run, succeeds } from "./lib/process.ts";
@@ -144,24 +145,30 @@ export function appendInclude(masterXml: string, fileName: string): string {
 	return masterXml.replace(closingTag, `${include}${closingTag}`);
 }
 
-/** The changelog this branch added and main does not have, if there is exactly one. */
-async function branchChangelog(): Promise<string | undefined> {
+/** The one unpublished changelog this layer added relative to its parent. */
+export async function branchChangelog(
+	baseRef?: string,
+	repositoryRoot = root,
+): Promise<string | undefined> {
 	const directory = relative(root, changelogDirectory);
+	const trunk = (await succeeds("git", ["rev-parse", "--verify", "origin/main"], {
+		cwd: repositoryRoot,
+	}))
+		? "origin/main"
+		: "main";
 	const base = (
-		await output("git", ["merge-base", "HEAD", "origin/main"], { cwd: root }).catch(() =>
-			output("git", ["merge-base", "HEAD", "main"], { cwd: root }),
-		)
+		await output("git", ["merge-base", "--", "HEAD", baseRef ?? trunk], { cwd: repositoryRoot })
 	).trim();
 	const added = await output(
 		"git",
-		["diff", "--name-only", "--diff-filter=A", base, "HEAD", "--", directory],
-		{ cwd: root },
+		["diff", "--name-only", "--diff-filter=A", base, "--", directory],
+		{ cwd: repositoryRoot },
 	);
 	const untracked = await output(
 		"git",
 		["ls-files", "--others", "--exclude-standard", "--", directory],
 		{
-			cwd: root,
+			cwd: repositoryRoot,
 		},
 	);
 	const files = `${added}\n${untracked}`
@@ -171,12 +178,16 @@ async function branchChangelog(): Promise<string | undefined> {
 	const unique = [...new Set(files)];
 	if (unique.length > 1)
 		throw new Error(`This branch adds several changelogs: ${unique.join(", ")}`);
-	return unique[0] === undefined ? undefined : join(root, unique[0]);
+	const selected = unique[0];
+	if (selected === undefined) return undefined;
+	if (await succeeds("git", ["cat-file", "-e", `${trunk}:${selected}`], { cwd: repositoryRoot })) {
+		throw new Error(`The changelog ${selected} is published on main and cannot be edited`);
+	}
+	return join(repositoryRoot, selected);
 }
 
 /** Writes the drift into this branch's changelog and wires it; returns the file it wrote. */
-async function promote(draftXml: string): Promise<string> {
-	const existing = await branchChangelog().catch(() => undefined);
+async function promote(draftXml: string, existing?: string): Promise<string> {
 	if (existing) {
 		await writeFile(
 			existing,
@@ -278,16 +289,35 @@ const commands = {
 } as const;
 
 function usage(): string {
-	return `Usage: node scripts/db-utils.ts <command>\n${Object.entries(commands)
+	return `Usage: node scripts/db-utils.ts <command> [--base <parent-branch>]\n${Object.entries(
+		commands,
+	)
 		.map(([name, help]) => `  ${name.padEnd(16)} ${help}`)
 		.join("\n")}`;
 }
 
+export function parseDatabaseArguments(args: string[]) {
+	const parsed = parseArgs({
+		args,
+		allowPositionals: true,
+		options: { base: { type: "string" }, help: { type: "boolean", short: "h" } },
+	});
+	if (parsed.positionals.length > 1) throw new Error("Expected one database command");
+	const command = parsed.positionals[0];
+	if (
+		parsed.values.base !== undefined &&
+		(command !== "draft-changelog" || !parsed.values.base.trim())
+	) {
+		throw new Error("--base requires a parent branch and is supported only for draft-changelog");
+	}
+	return { command, base: parsed.values.base, help: parsed.values.help };
+}
+
 async function main(): Promise<void> {
-	const command = process.argv[2];
-	if (command === undefined || ["help", "-h", "--help"].includes(command)) {
+	const { command, base, help } = parseDatabaseArguments(process.argv.slice(2));
+	if (command === undefined || help || command === "help") {
 		console.log(usage());
-		process.exitCode = command === undefined ? 1 : 0;
+		process.exitCode = command === undefined && !help ? 1 : 0;
 		return;
 	}
 	if (!(command in commands)) {
@@ -295,6 +325,8 @@ async function main(): Promise<void> {
 		process.exitCode = 1;
 		return;
 	}
+	// Reject ambiguous or published ownership before touching the disposable database.
+	const existing = command === "draft-changelog" ? await branchChangelog(base) : undefined;
 	const value = await config();
 	await checkEnvironment(value);
 	if (command === "generate-erd") {
@@ -325,7 +357,7 @@ async function main(): Promise<void> {
 	await withDatabase(value, async (signal) => {
 		const drift = await diffSchema(value, signal);
 		if (!drift) return;
-		written = await promote(drift);
+		written = await promote(drift, existing);
 		await migrate(value, false, signal);
 		await generateErd(value);
 	});

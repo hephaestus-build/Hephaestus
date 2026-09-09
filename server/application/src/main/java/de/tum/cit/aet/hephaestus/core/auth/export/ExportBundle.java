@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.export;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAccessRequestQuery;
 import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -22,7 +23,8 @@ public record ExportBundle(
         List<WorkspaceMembership> workspaceMemberships,
         List<String> featureFlags,
         @Nullable Preferences preferences,
-        List<AuthEvent> authEvents) {
+        List<AuthEvent> authEvents,
+        List<AccountAccessRequestQuery.Submission> workspaceAccessSubmissions) {
     /** Current export schema version. Bump on any breaking shape change. */
     public static final String SCHEMA_VERSION = "1.0";
 

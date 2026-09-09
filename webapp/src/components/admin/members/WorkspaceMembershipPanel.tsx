@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type { AssignRoleRequest, WorkspaceAccountMembership } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { useNow } from "@/components/common/use-now";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -57,6 +58,7 @@ const sourceLabels = {
 	MANUAL: "Granted manually",
 	MIGRATED: "Retained during upgrade",
 	SCM: "Synced from source control",
+	REQUEST: "Access request",
 	DIRECTORY: "Directory managed",
 };
 
@@ -71,6 +73,7 @@ export function WorkspaceMembershipPanel({
 	onAssign,
 	onSuspend,
 }: WorkspaceMembershipPanelProps) {
+	const now = useNow();
 	const [editing, setEditing] = useState<WorkspaceAccountMembership | null>(null);
 	const [open, setOpen] = useState(false);
 	return (
@@ -115,7 +118,14 @@ export function WorkspaceMembershipPanel({
 			) : (
 				<ul className="divide-y rounded-lg border">
 					{members.map((member) => {
-						const canManage = isOwner || (member.role !== "OWNER" && member.source !== "DIRECTORY");
+						const expired = member.expiresAt !== undefined && member.expiresAt.getTime() <= now;
+						const canManage =
+							isOwner ||
+							(member.role !== "OWNER" &&
+								member.source !== "DIRECTORY" &&
+								member.source !== "REQUEST");
+						const canSuspend =
+							canManage || (member.source === "REQUEST" && member.role !== "OWNER");
 						return (
 							<li
 								key={member.accountId}
@@ -127,12 +137,19 @@ export function WorkspaceMembershipPanel({
 										Account {member.accountId} ·{" "}
 										{member.source ? sourceLabels[member.source] : "Instance administrator"}
 									</p>
+									{member.expiresAt && (
+										<p className="text-xs text-muted-foreground">
+											Access deadline {member.expiresAt.toLocaleString()}
+										</p>
+									)}
 								</div>
 								<div className="flex flex-wrap items-center gap-2">
 									<Badge variant={member.suspended ? "outline" : "secondary"}>
 										{member.suspended
 											? "Suspended"
-											: roleItems.find((item) => item.value === member.role)?.label}
+											: expired
+												? "Expired"
+												: roleItems.find((item) => item.value === member.role)?.label}
 									</Badge>
 									{canManage && (
 										<Button
@@ -148,7 +165,7 @@ export function WorkspaceMembershipPanel({
 											{member.suspended ? "Restore access" : "Edit role"}
 										</Button>
 									)}
-									{canManage && !member.suspended && (
+									{canSuspend && !member.suspended && (
 										<AlertDialog>
 											<AlertDialogTrigger
 												render={
@@ -292,6 +309,12 @@ function MembershipForm({
 				<p className="text-sm text-muted-foreground">
 					Saving makes this a manual exception. Directory synchronization will no longer remove this
 					membership.
+				</p>
+			)}
+			{member?.source === "REQUEST" && (
+				<p className="text-sm text-muted-foreground">
+					Saving makes this permanent manual Hephaestus access: its expiry is removed and
+					request-based renewals no longer apply. External permissions are managed separately.
 				</p>
 			)}
 			{saveError && (

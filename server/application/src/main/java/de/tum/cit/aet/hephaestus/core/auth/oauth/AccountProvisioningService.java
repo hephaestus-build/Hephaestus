@@ -122,13 +122,14 @@ public class AccountProvisioningService {
                 throw new AccountLinkConflictException(
                         registrationId, subject, link.getAccount().getId());
             }
+            Account returningAccount = completeVerifiedContact(link.getAccount(), registrationId, principal);
             identityLinkRepository.touchLastLogin(link.getId(), clock.instant());
             log.info(
                     "auth.success: returning login provider={} accountId={}",
                     registrationId,
                     link.getAccount().getId());
             return new ProvisionResult(
-                    promoteIfBootstrapAdmin(link.getAccount(), registrationId, subject, bootstrapLogin), false);
+                    promoteIfBootstrapAdmin(returningAccount, registrationId, subject, bootstrapLogin), false);
         }
 
         if (mode == AuthIntentCookie.Intent.Mode.LINK) {
@@ -139,9 +140,10 @@ public class AccountProvisioningService {
                 throw new IllegalStateException("auth.link: link mode requires an authenticated account binding");
             }
             Account account = accountRepository
-                    .findById(intent.linkingAccountId())
+                    .findByIdForUpdate(intent.linkingAccountId())
                     .orElseThrow(() -> new IllegalStateException(
                             "auth.link: linkingAccountId=" + intent.linkingAccountId() + " not found"));
+            account = completeVerifiedContact(account, registrationId, principal);
             IdentityLink linked = newIdentityLink(account, providerId, subject, teamId, principal);
             linked.setLinkedVia(IdentityLink.LinkedVia.MANUAL_LINK);
             identityLinkRepository.save(linked);
@@ -299,5 +301,19 @@ public class AccountProvisioningService {
             }
         }
         return null;
+    }
+    /** An explicit linked identity may supply a missing verified contact, never replace an existing one or merge accounts. */
+    private Account completeVerifiedContact(Account account, String registrationId, OAuth2User principal) {
+        if (account.getPrimaryEmailVerifiedAt() != null || account.getStatus() != Account.Status.ACTIVE) return account;
+        var contact = verifiedEmailResolver.resolve(registrationId, principal);
+        if (!contact.verified()) return account;
+        var locked = accountRepository
+                .findByIdForUpdate(Objects.requireNonNull(account.getId()))
+                .orElseThrow();
+        if (locked.getPrimaryEmailVerifiedAt() == null && locked.getStatus() == Account.Status.ACTIVE) {
+            locked.setPrimaryEmail(contact.email());
+            locked.setPrimaryEmailVerifiedAt(clock.instant());
+        }
+        return locked;
     }
 }

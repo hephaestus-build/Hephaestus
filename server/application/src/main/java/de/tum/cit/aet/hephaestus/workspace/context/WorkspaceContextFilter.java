@@ -156,8 +156,15 @@ public class WorkspaceContextFilter implements Filter {
                 return;
             }
 
+            boolean accessEntry = "GET".equals(method) && "/access-entry".equals(remainingPath);
+            boolean ownAccessRequest = SecurityUtils.getCurrentAccountId().isPresent()
+                    && (("/access-requests/me".equals(remainingPath) && ("GET".equals(method) || "POST".equals(method)))
+                            || ("/access-requests/me/form".equals(remainingPath) && "GET".equals(method))
+                            || ("/access-requests/me/admission".equals(remainingPath) && "POST".equals(method))
+                            || (remainingPath.matches("/access-requests/me/[0-9]+") && "DELETE".equals(method)));
             var currentUsers = currentAccountUsers.resolve();
-            MembershipResolution membership = fetchUserRoles(workspace, currentUsers);
+            MembershipResolution membership =
+                    fetchUserRoles(workspace, currentUsers, !accessEntry && !ownAccessRequest);
             Set<WorkspaceRole> roles = membership.roles();
 
             // Instance admins may enter without membership, but elevation never grants ownership.
@@ -175,7 +182,7 @@ public class WorkspaceContextFilter implements Filter {
 
             boolean isPublicRead = Boolean.TRUE.equals(workspace.getIsPubliclyViewable()) && isReadRequest;
 
-            if (roles.isEmpty() && !isPublicRead) {
+            if (roles.isEmpty() && !isPublicRead && !accessEntry && !ownAccessRequest) {
                 if (SecurityUtils.getCurrentAccountId().isEmpty()) {
                     sendWorkspaceUnauthorizedError(httpResponse, slug);
                 } else {
@@ -231,7 +238,7 @@ public class WorkspaceContextFilter implements Filter {
                 .findFirst();
     }
 
-    private MembershipResolution fetchUserRoles(Workspace workspace, Collection<User> users) {
+    private MembershipResolution fetchUserRoles(Workspace workspace, Collection<User> users, boolean allowAutoSeed) {
         try {
             Set<Long> userIds = users.stream()
                     .filter(u -> u != null && u.getId() != null)
@@ -241,7 +248,7 @@ public class WorkspaceContextFilter implements Filter {
             if (accountId == null) return MembershipResolution.EMPTY;
             var accountMembership = accountMemberships
                     .findByWorkspace_IdAndAccountId(workspace.getId(), accountId)
-                    .filter(membership -> !membership.isSuspended());
+                    .filter(membership -> membership.isActive());
             Set<WorkspaceRole> roles = accountMembership
                     .map(membership -> Set.of(membership.getRole()))
                     .orElseGet(Set::of);
@@ -257,6 +264,8 @@ public class WorkspaceContextFilter implements Filter {
                 return new MembershipResolution(roles, memberUserIds);
             }
 
+            // Asking for access must never grant it as a side effect of loading a public entry or form.
+            if (!allowAutoSeed) return new MembershipResolution(roles, memberUserIds);
             try {
                 Optional<WorkspaceMembership> seeded = membershipAutoSeeder.seedFirstUserWhenEmpty(workspace, users);
                 if (seeded.isPresent()) {
@@ -267,7 +276,7 @@ public class WorkspaceContextFilter implements Filter {
                             created.getRole());
                     return accountMemberships
                             .findByWorkspace_IdAndAccountId(workspace.getId(), accountId)
-                            .filter(membership -> !membership.isSuspended())
+                            .filter(membership -> membership.isActive())
                             .map(membership -> new MembershipResolution(
                                     Set.of(membership.getRole()),
                                     Set.of(created.getId().getUserId())))
@@ -328,7 +337,7 @@ public class WorkspaceContextFilter implements Filter {
         boolean isPublic = Boolean.TRUE.equals(workspace.getIsPubliclyViewable());
         boolean hasMembership = SecurityUtils.getCurrentAccountId()
                 .flatMap(accountId -> accountMemberships.findByWorkspace_IdAndAccountId(workspace.getId(), accountId))
-                .filter(membership -> !membership.isSuspended())
+                .filter(membership -> membership.isActive())
                 .isPresent();
 
         if (!isPublic && !hasMembership) {

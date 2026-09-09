@@ -24,6 +24,8 @@ area*, `PracticeArea`, `areaSlug`, and `/practice-areas` are retired names, not 
 
 | Term                                | Meaning                                                                                                                                                    | Avoid for this concept                                               |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| **Access request** | A developer's application for time-limited workspace access, reviewed by a workspace administrator | practice review, feedback request |
+| **Renewal** | A new access request for a later deadline; it changes access only after approval | automatic extension |
 | **Practice**                        | A defined way of working used to review work                                                                                                               | rule, detector                                                       |
 | **Practice group**                   | A named collection of related practices                                                                                                                               | category, goal, learning objective                                   |
 | **Unassigned**                      | Practices that are not in a practice group                                                                                                                  | ungrouped, unbound                                                   |

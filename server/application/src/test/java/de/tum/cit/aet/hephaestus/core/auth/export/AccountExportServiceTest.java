@@ -80,7 +80,8 @@ class AccountExportServiceTest extends BaseUnitTest {
                 membershipQuery,
                 preferencesQuery,
                 gitProviderRegistry,
-                clock);
+                clock,
+                accountId -> List.of());
 
         ExportBundle bundle = assembler.assemble(ACCOUNT_ID);
 

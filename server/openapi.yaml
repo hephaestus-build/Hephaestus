@@ -374,6 +374,8 @@ paths:
             - AGENT_CONFIG
             - AI_CONFIG_BINDING
             - WORKSPACE_ROLE
+            - WORKSPACE_ACCESS_POLICY
+            - WORKSPACE_ACCESS_REQUEST
             - WORKSPACE_FEATURES
             - WORKSPACE_STATUS
             - WORKSPACE_TOKEN
@@ -2317,6 +2319,346 @@ paths:
       summary: Fetch a workspace by slug
       tags:
       - workspace
+  /workspaces/{workspaceSlug}/access-entry:
+    get:
+      operationId: getWorkspaceAccessEntry
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAccessEntry"
+          description: OK
+      summary: Discover this workspace's primary sign-in option
+      tags:
+      - workspace-access
+  /workspaces/{workspaceSlug}/access-notifications/{notificationId}/retries:
+    post:
+      operationId: retryWorkspaceAccessNotification
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: notificationId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAccessNotification"
+          description: OK
+      summary: Retry an undelivered access notification
+      tags:
+      - workspace-access
+  /workspaces/{workspaceSlug}/access-policy:
+    get:
+      operationId: getWorkspaceAccessPolicy
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAccessPolicy"
+          description: OK
+      summary: Inspect access-request configuration
+      tags:
+      - workspace-access
+    put:
+      operationId: configureWorkspaceAccessPolicy
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfigureWorkspaceAccessPolicy"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAccessPolicy"
+          description: OK
+      summary: "Configure, pause or resume workspace access requests"
+      tags:
+      - workspace-access
+  /workspaces/{workspaceSlug}/access-requests:
+    get:
+      operationId: getWorkspaceAccessRequests
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: query
+        name: status
+        required: false
+        schema:
+          type: string
+          default: SUBMITTED
+          enum:
+          - SUBMITTED
+          - CHANGES_REQUESTED
+          - APPROVED
+          - REJECTED
+          - CANCELLED
+          - SUPERSEDED
+      - in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkspaceAccessRequest"
+          description: OK
+      summary: Review workspace access requests
+      tags:
+      - workspace-access
+  /workspaces/{workspaceSlug}/access-requests/me:
+    get:
+      operationId: getMyWorkspaceAccessRequests
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkspaceAccessRequest"
+          description: OK
+      summary: "Read your own access requests, including after expiry"
+      tags:
+      - workspace-access
+    post:
+      operationId: submitWorkspaceAccessRequest
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitWorkspaceAccessRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAccessRequest"
+          description: OK
+      summary: Submit an acknowledged access request or renewal
+      tags:
+      - workspace-access
+  /workspaces/{workspaceSlug}/access-requests/me/admission:
+    post:
+      operationId: checkWorkspaceOrganizationMembership
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAccessAdmission"
+          description: OK
+      summary: Admit an existing organization member using fresh provider-native proof
+      tags:
+      - workspace-access
+  /workspaces/{workspaceSlug}/access-requests/me/form:
+    get:
+      operationId: getWorkspaceAccessForm
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAccessForm"
+          description: OK
+      summary: Read the current access form after proving the primary identity
+      tags:
+      - workspace-access
+  /workspaces/{workspaceSlug}/access-requests/me/{requestId}:
+    delete:
+      operationId: withdrawWorkspaceAccessRequest
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAccessRequest"
+          description: OK
+      summary: Withdraw your undecided request without changing existing access
+      tags:
+      - workspace-access
+  /workspaces/{workspaceSlug}/access-requests/options:
+    get:
+      operationId: getWorkspaceAccessReviewOptions
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAccessReviewOptions"
+          description: OK
+      summary: List currently eligible maintainers and teams for access review
+      tags:
+      - workspace-access
+  /workspaces/{workspaceSlug}/access-requests/{requestId}:
+    patch:
+      operationId: reviewWorkspaceAccessRequest
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewWorkspaceAccessRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAccessRequest"
+          description: OK
+      summary: "Approve, request changes or reject someone else's request"
+      tags:
+      - workspace-access
+  /workspaces/{workspaceSlug}/access-requests/{requestId}/notifications:
+    get:
+      operationId: getWorkspaceAccessNotifications
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkspaceAccessNotification"
+          description: OK
+      summary: Inspect access email delivery without exposing addresses
+      tags:
+      - workspace-access
   /workspaces/{workspaceSlug}/agents:
     get:
       operationId: listAgents
@@ -2578,6 +2920,8 @@ paths:
             - AGENT_CONFIG
             - AI_CONFIG_BINDING
             - WORKSPACE_ROLE
+            - WORKSPACE_ACCESS_POLICY
+            - WORKSPACE_ACCESS_REQUEST
             - WORKSPACE_FEATURES
             - WORKSPACE_STATUS
             - WORKSPACE_TOKEN
@@ -8560,6 +8904,8 @@ components:
           - AGENT_CONFIG
           - AI_CONFIG_BINDING
           - WORKSPACE_ROLE
+          - WORKSPACE_ACCESS_POLICY
+          - WORKSPACE_ACCESS_REQUEST
           - WORKSPACE_FEATURES
           - WORKSPACE_STATUS
           - WORKSPACE_TOKEN
@@ -8633,6 +8979,18 @@ components:
       - roles
       - status
       - subject
+    ConfigureWorkspaceAccessPolicy:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        settings:
+          $ref: "#/components/schemas/WorkspaceAccessPolicySettings"
+        version:
+          type: integer
+          format: int64
+      required:
+      - settings
     ConnectionAuditEntry:
       type: object
       description: |-
@@ -10712,6 +11070,19 @@ components:
       required:
       - leaguePointsChange
       - login
+    LinkRequirement:
+      type: object
+      properties:
+        registrationId:
+          type: string
+          maxLength: 64
+          minLength: 0
+        teamId:
+          type: string
+          maxLength: 128
+          minLength: 0
+      required:
+      - registrationId
     LinkedProvider:
       type: object
       description: "A provider instance the current user is linked to: its type +\
@@ -11656,6 +12027,25 @@ components:
           minimum: 0
       required:
       - position
+    PolicyNotice:
+      type: object
+      properties:
+        key:
+          type: string
+          minLength: 1
+          pattern: "[a-z][a-z0-9-]{0,63}"
+        markdown:
+          type: string
+          maxLength: 20000
+          minLength: 0
+        title:
+          type: string
+          maxLength: 200
+          minLength: 0
+      required:
+      - key
+      - markdown
+      - title
     Practice:
       type: object
       description: Practice definition for evaluating developer contributions
@@ -14397,6 +14787,26 @@ components:
       - id
       - lookbackDays
       - nextRunAt
+    ReviewWorkspaceAccessRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 4000
+          minLength: 0
+        decision:
+          type: string
+          enum:
+          - APPROVE
+          - REQUEST_CHANGES
+          - REJECT
+        details:
+          $ref: "#/components/schemas/WorkspaceAccessDetails"
+        version:
+          type: integer
+          format: int64
+      required:
+      - decision
     ReviewedPractice:
       type: object
       description: Developer-facing view of a practice — criteria absent by construction
@@ -14675,6 +15085,29 @@ components:
             type: string
       required:
       - answers
+    SubmitWorkspaceAccessRequest:
+      type: object
+      properties:
+        acknowledgedNoticeKeys:
+          type: array
+          items:
+            type: string
+          maxItems: 8
+          minItems: 0
+        comments:
+          type: string
+          maxLength: 4000
+          minLength: 0
+        details:
+          $ref: "#/components/schemas/WorkspaceAccessDetails"
+        introductionAcknowledged:
+          type: boolean
+        policyVersion:
+          type: integer
+          format: int64
+      required:
+      - acknowledgedNoticeKeys
+      - details
     Survey:
       type: object
       properties:
@@ -16056,6 +16489,346 @@ components:
       - status
       - updatedAt
       - workspaceSlug
+    WorkspaceAccessAdmission:
+      type: object
+      properties:
+        state:
+          type: string
+          enum:
+          - ACTIVE
+          - REQUEST
+          - CHECK_UNAVAILABLE
+          - RENEWAL
+          - MANAGED
+      required:
+      - state
+    WorkspaceAccessDetails:
+      type: object
+      description: Every approval has an absolute end; a pending renewal never moves
+        it.
+      properties:
+        expiresAt:
+          type: string
+          format: date-time
+        maintainerAccountId:
+          type: integer
+          format: int64
+          exclusiveMinimum: 0
+        teamIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+            exclusiveMinimum: 0
+          maxItems: 100
+          minItems: 0
+      required:
+      - expiresAt
+      - maintainerAccountId
+      - teamIds
+    WorkspaceAccessEntry:
+      type: object
+      properties:
+        acceptingRequests:
+          type: boolean
+        primaryProvider:
+          $ref: "#/components/schemas/WorkspaceAccessProvider"
+        workspaceName:
+          type: string
+      required:
+      - workspaceName
+    WorkspaceAccessForm:
+      type: object
+      properties:
+        accessActive:
+          type: boolean
+        acknowledgementLabel:
+          type: string
+        introductionMarkdown:
+          type: string
+        maintainers:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceAccessMaintainerOption"
+        maximumDurationDays:
+          type: integer
+          format: int32
+        notices:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolicyNotice"
+        policyVersion:
+          type: integer
+          format: int64
+        requestableTeams:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceAccessTeamOption"
+        requiredLinks:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceAccessLinkOption"
+        verifiedContactAvailable:
+          type: boolean
+      required:
+      - acknowledgementLabel
+      - introductionMarkdown
+      - maintainers
+      - notices
+      - requestableTeams
+      - requiredLinks
+    WorkspaceAccessLinkOption:
+      type: object
+      properties:
+        displayName:
+          type: string
+        linked:
+          type: boolean
+        providerType:
+          type: string
+        registrationId:
+          type: string
+        serverUrl:
+          type: string
+        teamId:
+          type: string
+      required:
+      - displayName
+      - providerType
+      - registrationId
+      - serverUrl
+    WorkspaceAccessMaintainerOption:
+      type: object
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        displayName:
+          type: string
+      required:
+      - accountId
+      - displayName
+    WorkspaceAccessNotification:
+      type: object
+      properties:
+        attempts:
+          type: integer
+          format: int32
+        id:
+          type: integer
+          format: int64
+        kind:
+          type: string
+          enum:
+          - SUBMITTED
+          - DECIDED
+          - REMINDER
+          - EXPIRED
+        nextAttemptAt:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          enum:
+          - SILENT_MODE
+          - MAIL_NOT_CONFIGURED
+          - NO_VERIFIED_CONTACT
+          - INVALID_CONTACT
+          - DELIVERY_FAILED
+          - REQUEST_REPLACED
+        sentAt:
+          type: string
+          format: date-time
+        state:
+          type: string
+          enum:
+          - PENDING
+          - SENT
+          - FAILED
+          - CANCELLED
+      required:
+      - id
+      - kind
+      - nextAttemptAt
+      - state
+    WorkspaceAccessPolicy:
+      type: object
+      properties:
+        emailConfigured:
+          type: boolean
+        enabled:
+          type: boolean
+        settings:
+          $ref: "#/components/schemas/WorkspaceAccessPolicySettings"
+        version:
+          type: integer
+          format: int64
+    WorkspaceAccessPolicySettings:
+      type: object
+      description: Workspace policy acknowledgements are not the account's optional
+        research consent.
+      properties:
+        acknowledgementLabel:
+          type: string
+          maxLength: 300
+          minLength: 0
+        adminMailbox:
+          type: string
+          format: email
+          maxLength: 320
+          minLength: 0
+        introductionMarkdown:
+          type: string
+          maxLength: 20000
+          minLength: 0
+        maintainerTeamId:
+          type: integer
+          format: int64
+          exclusiveMinimum: 0
+        maximumDurationDays:
+          type: integer
+          format: int32
+          maximum: 3650
+          minimum: 1
+        notices:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolicyNotice"
+          maxItems: 8
+          minItems: 0
+        personalDataRetentionDays:
+          type: integer
+          format: int32
+          maximum: 3650
+          minimum: 1
+        primaryRegistrationId:
+          type: string
+          maxLength: 64
+          minLength: 0
+        reminderDays:
+          type: integer
+          format: int32
+          maximum: 365
+          minimum: 1
+        requestableTeamIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+            exclusiveMinimum: 0
+          maxItems: 100
+          minItems: 0
+        requiredLinks:
+          type: array
+          items:
+            $ref: "#/components/schemas/LinkRequirement"
+          maxItems: 8
+          minItems: 0
+      required:
+      - acknowledgementLabel
+      - adminMailbox
+      - introductionMarkdown
+      - maintainerTeamId
+      - notices
+      - primaryRegistrationId
+      - requestableTeamIds
+      - requiredLinks
+    WorkspaceAccessProvider:
+      type: object
+      properties:
+        displayName:
+          type: string
+        providerType:
+          type: string
+        registrationId:
+          type: string
+        serverUrl:
+          type: string
+      required:
+      - displayName
+      - providerType
+      - registrationId
+      - serverUrl
+    WorkspaceAccessRequest:
+      type: object
+      properties:
+        accessActive:
+          type: boolean
+        accountId:
+          type: integer
+          format: int64
+        approvedDetails:
+          $ref: "#/components/schemas/WorkspaceAccessDetails"
+        comments:
+          type: string
+        decidedAt:
+          type: string
+          format: date-time
+        decisionComment:
+          type: string
+        displayName:
+          type: string
+        effectiveExpiresAt:
+          type: string
+          format: date-time
+        id:
+          type: integer
+          format: int64
+        policyVersion:
+          type: integer
+          format: int64
+        requestedDetails:
+          $ref: "#/components/schemas/WorkspaceAccessDetails"
+        status:
+          type: string
+          enum:
+          - SUBMITTED
+          - CHANGES_REQUESTED
+          - APPROVED
+          - REJECTED
+          - CANCELLED
+          - SUPERSEDED
+        submittedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+      required:
+      - accountId
+      - displayName
+      - id
+      - requestedDetails
+      - status
+      - submittedAt
+    WorkspaceAccessReviewOptions:
+      type: object
+      properties:
+        maintainers:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceAccessMaintainerOption"
+        maximumDurationDays:
+          type: integer
+          format: int32
+        requestableTeams:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceAccessTeamOption"
+      required:
+      - maintainers
+      - requestableTeams
+    WorkspaceAccessTeamOption:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+      required:
+      - id
+      - name
     WorkspaceAccountMembership:
       type: object
       description: "Account access, independent of whether this developer has an SCM\
@@ -16069,6 +16842,9 @@ components:
           format: date-time
         displayName:
           type: string
+        expiresAt:
+          type: string
+          format: date-time
         role:
           type: string
           enum:
@@ -16083,6 +16859,7 @@ components:
           - MANUAL
           - SCM
           - DIRECTORY
+          - REQUEST
           - MIGRATED
         suspended:
           type: boolean

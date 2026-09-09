@@ -6,6 +6,7 @@ import java.time.Instant;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.jspecify.annotations.Nullable;
 
 /** Human access belongs to an account; SCM membership rows retain provider activity and league state. */
 @Entity
@@ -50,10 +51,28 @@ public class WorkspaceAccountMembership {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
+    /** Absolute authorization boundary, independent of background expiry or provider delivery. */
+    @Nullable
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
+    @Nullable
+    @Column(name = "access_request_id")
+    private Long accessRequestId;
+
+    public boolean isActive() {
+        return isActiveAt(Instant.now());
+    }
+
+    public boolean isActiveAt(Instant now) {
+        return !suspended && (expiresAt == null || expiresAt.isAfter(now));
+    }
+
     public enum Source {
         MANUAL,
         SCM,
         DIRECTORY,
+        REQUEST,
         MIGRATED
     }
 }

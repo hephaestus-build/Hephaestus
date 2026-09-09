@@ -50,7 +50,12 @@ class GitHubGraphQlClientProviderTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         provider = new GitHubGraphQlClientProvider(
-                baseClient, tokenProvider, appTokens, circuitBreaker, rateLimitTracker, rateLimitSeeder, clientFactory);
+                baseClient,
+                new GitHubTokenService(tokenProvider, appTokens),
+                circuitBreaker,
+                rateLimitTracker,
+                rateLimitSeeder,
+                clientFactory);
     }
 
     @Test

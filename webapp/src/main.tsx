@@ -6,6 +6,7 @@ import ReactDOM from "react-dom/client";
 import { client } from "@/api/client.gen";
 import environment from "@/environment";
 import { RouteError } from "@/integrations/sentry/RouteError";
+import { workspaceAccessAlias } from "@/lib/workspace-access-alias";
 
 import "./styles.css";
 
@@ -99,7 +100,13 @@ function Root() {
 }
 
 const rootElement = document.getElementById("app");
-if (rootElement && !rootElement.innerHTML) {
+const accessAlias =
+	window.location.pathname === "/request-access"
+		? workspaceAccessAlias(window.location.hostname, environment.clientUrl)
+		: undefined;
+if (accessAlias) {
+	window.location.replace(accessAlias);
+} else if (rootElement && !rootElement.innerHTML) {
 	const root = ReactDOM.createRoot(rootElement, {
 		onUncaughtError: Sentry.reactErrorHandler((error, errorInfo) => {
 			// oxlint-disable-next-line no-console -- The custom handler replaces React's console report.

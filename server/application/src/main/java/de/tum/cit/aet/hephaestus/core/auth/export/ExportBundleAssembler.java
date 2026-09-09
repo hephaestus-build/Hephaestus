@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAccessRequestQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
@@ -35,6 +36,7 @@ public class ExportBundleAssembler {
     private final AccountPreferencesQuery preferencesQuery;
     private final GitProviderRegistry gitProviderRegistry;
     private final Clock clock;
+    private final AccountAccessRequestQuery accessRequests;
 
     public ExportBundleAssembler(
             AccountService accountService,
@@ -43,7 +45,8 @@ public class ExportBundleAssembler {
             AccountWorkspaceMembershipQuery workspaceMembershipQuery,
             AccountPreferencesQuery preferencesQuery,
             GitProviderRegistry gitProviderRegistry,
-            Clock clock) {
+            Clock clock,
+            AccountAccessRequestQuery accessRequests) {
         this.accountService = accountService;
         this.accountFeatureRepository = accountFeatureRepository;
         this.authEventRepository = authEventRepository;
@@ -51,6 +54,7 @@ public class ExportBundleAssembler {
         this.preferencesQuery = preferencesQuery;
         this.gitProviderRegistry = gitProviderRegistry;
         this.clock = clock;
+        this.accessRequests = accessRequests;
     }
 
     @Transactional(readOnly = true)
@@ -101,7 +105,8 @@ public class ExportBundleAssembler {
                 memberships,
                 featureFlags,
                 preferences,
-                authEvents);
+                authEvents,
+                accessRequests.submissionsForAccount(accountId));
     }
 
     private ExportBundle.Identity toIdentity(IdentityLink il) {
