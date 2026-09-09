@@ -5,8 +5,8 @@
 		{
 			"name": "Binary-Artifacts",
 			"score": 10,
-			"scoredOver": "configuration",
-			"reason": "Executables committed to the tree as it stands."
+			"scoredOver": "history",
+			"reason": "Executables committed to the tree, and for the committed Gradle wrapper the successful validation run that vouches for it. That run is what makes this a window: on a push the wrapper job is still executing, so the commit cannot yet answer for itself."
 		},
 		{
 			"name": "CI-Tests",

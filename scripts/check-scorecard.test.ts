@@ -24,7 +24,7 @@ const assessment = () => ({
  * the scoring each check is charged under, so that reclassifying one is a deliberate edit as well.
  */
 const enforced: Record<string, { score: number; scoredOver: string }> = {
-	"Binary-Artifacts": { score: 10, scoredOver: "configuration" },
+	"Binary-Artifacts": { score: 10, scoredOver: "history" },
 	"CI-Tests": { score: 10, scoredOver: "history" },
 	"Code-Review": { score: 10, scoredOver: "history" },
 	"Dangerous-Workflow": { score: 10, scoredOver: "configuration" },
