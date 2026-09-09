@@ -1,6 +1,10 @@
 name: "Set up the Java build"
 description: "Provision the pinned JDK and Gradle's native dependency and build caches."
 inputs:
+  cache-write:
+    description: "Allow a trusted default-branch producer to publish Gradle caches."
+    required: false
+    default: "false"
   dependency-graph:
     description: "Whether to capture and upload a dependency snapshot from the caller's Gradle invocation."
     required: false
@@ -19,6 +23,6 @@ runs:
       with:
         cache-provider: enhanced
         # Untrusted pull requests and merge groups never publish shared build outputs.
-        cache-read-only: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) || !contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) }}
+        cache-read-only: ${{ inputs.cache-write != 'true' || github.ref != format('refs/heads/{0}', github.event.repository.default_branch) || !contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) }}
         validate-wrappers: true
         dependency-graph: ${{ inputs.dependency-graph }}

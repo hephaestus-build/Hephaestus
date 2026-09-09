@@ -448,7 +448,7 @@ credential is still `GITHUB_TOKEN`, so these commits start no further workflow r
 | Action | Contract |
 | --- | --- |
 | `setup-toolchain` | Installs the Node.js version pinned in `package.json`, and nothing else when `install` is `none`, so a job that only runs `node scripts/…` reaches no package registry; `frozen` adds the pinned pnpm — caching its executable by runner platform and pinned version and retrying the download twice on a miss — restores the pnpm store cache, and installs the launcher through the SHA-pinned `setup-vp` with `node-manager: false`, which then runs the lockfile's `vite-plus` |
-| `setup-caches` | Sets up the JDK from `.java-version`, validates the wrapper and uses the official Gradle action for dependency and build caches; only default-branch push, schedule and dispatch runs may publish caches |
+| `setup-caches` | Sets up the JDK from `.java-version`, validates the wrapper and uses the official Gradle action for dependency and build caches; the trusted package job publishes caches; consumers are read-only |
 | `restore-server-build` | Downloads and validates the packaged JARs, compiled tests and resources; outputs the executable JAR path without recompiling or installing local artifacts |
 | `setup-browsers` | Restores the exact Playwright browser version and installs Chromium system dependencies |
 | `setup-release-security-tools` | Installs Cosign, Trivy, and optionally Syft for release-evidence jobs |
@@ -459,8 +459,10 @@ credential is still `GITHUB_TOKEN`, so these commits start no further workflow r
 
 A run restores caches from its own branch and from `main`, never from a sibling branch. Task-cache
 entries are content-addressed, so a pull request saves them for its own reruns. Gradle caches are
-published only by trusted default-branch push, schedule and dispatch runs; the pnpm executable cache
-also saves only from `main`. The JDK is pinned once, in `.java-version`.
+published only by the server package job on trusted default-branch push, schedule and dispatch runs.
+Other jobs are read-only consumers: the Gradle action prefers an older same-job cache over a newer
+producer cache, so consumers must not publish snapshots that become stale between their main-branch runs.
+The pnpm executable cache also saves only from `main`. The JDK is pinned once, in `.java-version`.
 
 Java quality verdicts are not stored in the Vite task cache: Gradle owns their task inputs and outputs.
 GraphQL generation opts into Gradle's build cache using the plugin's declared inputs and outputs.
