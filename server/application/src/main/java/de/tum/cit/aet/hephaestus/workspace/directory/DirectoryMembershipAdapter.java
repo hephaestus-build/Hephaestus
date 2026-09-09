@@ -114,6 +114,8 @@ public class DirectoryMembershipAdapter implements IdentityUnlinkParticipant {
         var before = AccountMembershipSnapshot.of(membership);
         membership.setSource(Source.DIRECTORY);
         membership.setDirectorySubject(subject);
+        membership.setExpiresAt(null);
+        membership.setAccessRequestId(null);
         membership.setRole(WorkspaceRole.MEMBER);
         audit.record(ConfigAuditEntry.updated(
                 ConfigAuditEntityType.WORKSPACE_ROLE,
