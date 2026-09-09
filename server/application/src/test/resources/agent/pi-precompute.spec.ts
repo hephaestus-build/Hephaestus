@@ -37,9 +37,11 @@ if (scenarioRoot) {
 	await import("../../../main/resources/agent/pi-precompute.ts");
 } else {
 	void test("precompute stages only regular scripts and executes the image runner with task-declared locations", () => {
-		// The child runs under Node's permission model, which resolves a path before matching it
-		// against --allow-fs-read. On macOS the temporary directory is reached through a symlink, so an
-		// unresolved root grants the child nothing and every script fails to read its own inputs.
+		// The staged scripts are loaded as modules, and Node's permission model admits a module load
+		// only when the granted path and the loaded path are the same resolved path — unlike an ordinary
+		// read, which an unresolved grant satisfies. macOS reaches the temporary directory through a
+		// symlink, so an unresolved root fails every script's import while the rest of the scenario
+		// looks like it ran.
 		const root = realpathSync(mkdtempSync(join(tmpdir(), "task-precompute-#")));
 		try {
 			const context = "areas/changed work";
