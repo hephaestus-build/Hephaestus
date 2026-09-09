@@ -88,6 +88,15 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"NATS://broker:4222", "TLS://broker:4222"})
+    void shouldAcceptANatsSchemeInAnyCaseBecauseTheClientLowercasesIt(String server) {
+        Map<String, Object> properties = validProperties();
+        properties.put("hephaestus.sync.nats.server", server);
+
+        assertStatus(evaluateReadiness(properties, true), "nats.server", ConfigurationStatus.SATISFIED);
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"", "nats", "//broker:4222", "broker:4222"})
     void shouldReportANatsServerWithoutANatsSchemeInsteadOfFailingToEvaluate(String server) {
         Map<String, Object> properties = validProperties();
