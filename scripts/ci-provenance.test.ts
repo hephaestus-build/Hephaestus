@@ -8,8 +8,7 @@ import { asArray, asRecord } from "./lib/json.ts";
 
 void test("image provenance can persist storage records through every reusable-workflow caller", async () => {
 	const callers = {
-		"cicd.yml": ["Build", "Docker"],
-		"ci-build.yml": ["application-server-image"],
+		"cicd.yml": ["application-server-image", "Docker"],
 		"ci-docker-build.yml": ["webapp-build", "agent-pi-build", "postgres-build"],
 		"reusable-docker-build.yml": ["build", "merge"],
 	};
@@ -42,4 +41,11 @@ void test("image provenance can persist storage records through every reusable-w
 			assert.match(String(inputs["subject-digest"]), /outputs\.(manifest-digest|digest)/);
 		}
 	}
+});
+
+void test("artifact checks have no registry publishing permissions", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const permissions = workflow.getIn(["jobs", "Build", "permissions"]);
+	assert.ok(isMap(permissions));
+	assert.deepEqual(permissions.toJSON(), { contents: "read", checks: "write" });
 });
