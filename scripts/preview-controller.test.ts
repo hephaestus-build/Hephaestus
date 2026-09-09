@@ -740,7 +740,7 @@ void describe("preview schema drift", () => {
 		const reason = core.outputs.get("reason") ?? "";
 		// The three things the author needs: which file, what goes wrong, and what to do about it.
 		assert.match(reason, /0001_drop\.xml/);
-		assert.match(reason, /fail validation/);
+		assert.match(reason, /have failed to start/);
 		assert.match(reason, /Merge main in/);
 		assert.equal(core.outputs.get("announce"), "true");
 	});
@@ -794,7 +794,8 @@ void describe("preview schema drift", () => {
 		// Every branch that has reached this was genuinely incompatible, so the reason says what will
 		// happen and how to fix it rather than reporting the comparison's own limit.
 		assert.match(reason, /behind main/);
-		assert.match(reason, /fail validation/);
+		assert.match(reason, /cannot be checked/);
+		assert.match(reason, /have failed to start/);
 		assert.match(reason, /Merge main in/);
 		assert.doesNotMatch(reason, /cannot be verified/);
 	});
