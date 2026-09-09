@@ -366,7 +366,7 @@ redeploy preserves an already-seeded database — and configure its AI access ag
 | Comment says | What to do |
 | --- | --- |
 | does not carry the `preview` label | Add the label |
-| is a draft | Mark it ready for review |
+| is behind `main` on schema, or too far behind to compare | Merge `main` in; the next push previews automatically |
 | comes from a fork | Push the branch to this repository |
 | was opened by a … , not a repository collaborator | Nothing; previews need push access |
 | changes trusted deployment policy | Land that change first — a preview never runs a pull request's own edits to `.github/workflows/**`, `.github/actions/**` or `docker/preview/**` |
@@ -400,10 +400,10 @@ why the label is the authority, and which alternatives were priced and declined,
 | `pull-request.yml` | PR opened, edited, synchronized, reopened, ready for review | Validates the title against the policy `commitlint.config.ts` exports, without installing the workspace, checks that every commit resolves to the pull request's author, and assigns the author when the pull request opens |
 | `ci-quality-gates.yml` | Called by cicd.yml | Selects quality legs, clean-install verification and story tests |
 | `ci-quality-leg.yml` | Called by ci-quality-gates.yml | Shared formatting, lint, type-check and unit-test execution for each selected task-graph leg |
-| `ci-build.yml` | Called by cicd.yml | Packages the server once, then runs the OpenAPI, schema, database and browser E2E gates and the application-server image against that artifact |
+| `ci-build.yml` | Called by cicd.yml | Runs the OpenAPI, schema, database and browser E2E gates against the server artifact packaged by cicd.yml |
 | `ci-tests.yml` | Called by cicd.yml | The server unit, architecture and integration suites, compiled from source |
 | `ci-docker-build.yml` | Called by cicd.yml | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images |
-| `reusable-docker-build.yml` | Called by ci-build.yml and ci-docker-build.yml | Builds, signs, attests, and blocks on the release vulnerability policy for the `linux/amd64` image |
+| `reusable-docker-build.yml` | Called by cicd.yml and ci-docker-build.yml | Builds, signs, attests, and blocks on the release vulnerability policy for the `linux/amd64` image |
 | `ci-security-scan.yml` | Called by cicd.yml | Dependency review on pull requests; Trivy dependency scan, secret detection and repository policy checks |
 | `dependency-graph.yml` | PR, push to main | Resolves and uploads the verified Gradle dependency graph with read-only permissions |
 | `submit-dependency-graph.yml` | Successful dependency-graph workflow | Submits snapshot data without executing code from the originating run |
@@ -419,8 +419,8 @@ why the label is the authority, and which alternatives were priced and declined,
 | `ci-server-clean-reference.yml` | Weekly, manual | Records cold server phases and compares generated JARs |
 | `scorecard-ratchet.yml` | Push to main, branch-protection change, weekly, manual | Fails when a Scorecard check drops below the committed baseline; a push fails only for the checks its own commit decides |
 | `deploy-preview.yml` | `preview` label added, or a push, reopen or ready-for-review on a labelled PR | Waits for this commit's attested CI images, deploys them, and registers the native GitHub deployment |
-| `cleanup-preview.yml` | Label removed, PR closed or drafted | Removes and verifies resources, then retains a cleanup tombstone |
-| `reconcile-previews.yml` | Nightly, manual | Re-sends teardown for any preview environment whose pull request is closed, drafted or unlabelled |
+| `cleanup-preview.yml` | Label removed, or PR closed | Removes and verifies resources, then retains a cleanup tombstone |
+| `reconcile-previews.yml` | Nightly, manual | Re-sends teardown for any preview environment whose pull request is closed or unlabelled |
 | `cd-docs.yml`, `cd-docs-teardown.yml` | `docs/**` on push and pull requests; PR closed | Publishes the docs site and its pull-request previews |
 | `version-pr.yml` | Successful CI/CD completion for the current main tip | Maintains the accumulating Version PR (changesets) and dispatches CI/CD on its branch, release evidence preflight included |
 | `release.yml` | Successful CI/CD push on `main` | Publishes the release and promotes the moving series and latest image tags |
@@ -448,19 +448,26 @@ credential is still `GITHUB_TOKEN`, so these commits start no further workflow r
 | Action | Contract |
 | --- | --- |
 | `setup-toolchain` | Installs the Node.js version pinned in `package.json`, and nothing else when `install` is `none`, so a job that only runs `node scripts/…` reaches no package registry; `frozen` adds the pinned pnpm — caching its executable by runner platform and pinned version and retrying the download twice on a miss — restores the pnpm store cache, and installs the launcher through the SHA-pinned `setup-vp` with `node-manager: false`, which then runs the lockfile's `vite-plus` |
-| `setup-caches` | Sets up the JDK from `.java-version`, validates the wrapper and uses the official Gradle action for dependency and build caches; only default-branch push, schedule and dispatch runs may publish caches |
+| `setup-caches` | Sets up the JDK from `.java-version`, validates the wrapper and uses the official Gradle action for dependency and build caches; the trusted package job publishes caches; consumers are read-only |
 | `restore-server-build` | Downloads and validates the packaged JARs, compiled tests and resources; outputs the executable JAR path without recompiling or installing local artifacts |
 | `setup-browsers` | Restores the exact Playwright browser version and installs Chromium system dependencies |
 | `setup-release-security-tools` | Installs Cosign, Trivy, and optionally Syft for release-evidence jobs |
 | `download-trivy-db` | Fetches the vulnerability database with retries and a mirror fallback; optionally refuses one over `max-age-hours` old and records its metadata |
 | `ghcr-login` | Authenticates Docker to GHCR |
 
+Browser jobs install Playwright's system dependencies using the runner's Ubuntu package sources,
+with APT configuration scoped to that installation process. Unrelated vendor repositories do not
+participate; repository signatures and package hashes remain enforced. The pinned Playwright CLI
+then installs Chromium as the runner user so the browser cache retains its normal ownership.
+
 ### Caches
 
 A run restores caches from its own branch and from `main`, never from a sibling branch. Task-cache
 entries are content-addressed, so a pull request saves them for its own reruns. Gradle caches are
-published only by trusted default-branch push, schedule and dispatch runs; the pnpm executable cache
-also saves only from `main`. The JDK is pinned once, in `.java-version`.
+published only by the server package job on trusted default-branch push, schedule and dispatch runs.
+Other jobs are read-only consumers: the Gradle action prefers an older same-job cache over a newer
+producer cache, so consumers must not publish snapshots that become stale between their main-branch runs.
+The pnpm executable cache also saves only from `main`. The JDK is pinned once, in `.java-version`.
 
 Java quality verdicts are not stored in the Vite task cache: Gradle owns their task inputs and outputs.
 GraphQL generation opts into Gradle's build cache using the plugin's declared inputs and outputs.
@@ -521,6 +528,10 @@ to both image workflows. That build compiles the image and stops: no login, no p
 no attestation, no policy scan and no alias moves. Forks therefore get no preview and no boot smoke;
 the release path exercises their code once it is on `main`.
 
+When release preflight is required, it owns image vulnerability scanning for both architectures;
+the image-build workflows omit their duplicate amd64 scans. Other published builds retain those
+scans. The final gate rejects a required preflight that is skipped, cancelled or unsuccessful.
+
 ## Image identity
 
 Every consumer resolves an image through the commit the run built it from, and
@@ -537,11 +548,15 @@ gives the retried job a new attempt number.
 
 ## Build once
 
-`Build` packages the server once and uploads its JARs, compiled tests and resources. OpenAPI and
+`App Server: Package` in `cicd.yml` packages the server once and uploads its JARs, compiled tests and resources. OpenAPI and
 browser checks boot that executable JAR; buildpacks consume it without another build. Schema gates
 and database contract tests use the restored classes with `-PpackagedServer=true`, which bypasses
 compilation. Unit, architecture and integration suites compile from source in `Test` without
 waiting for packaging; their outputs do not ship.
+
+The application image and `Build` artifact gates depend on packaging independently. Host smoke
+and release preflight wait for the image producers, not the API, database or browser checks. The
+final CI gate still requires all of them; an early image verdict cannot approve a failed artifact gate.
 
 A default-branch push reuses the packaged server when a successful release-candidate merge group
 validated the exact same commit. The source must be this repository's `cicd.yml` run, with successful

@@ -121,8 +121,8 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
         User mentor = persistUser("mentor");
         ensureWorkspaceMembership(workspace, mentor, WorkspaceRole.MEMBER);
 
-        listRequest().expectStatus().isForbidden();
-        registerRequest(COLLECTION_ID).expectStatus().isForbidden();
+        listRequest().expectStatus().isForbidden().expectBody(Void.class);
+        registerRequest(COLLECTION_ID).expectStatus().isForbidden().expectBody(Void.class);
     }
 
     @Test
@@ -132,15 +132,16 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
         ensureAdminMembership(workspace);
         connectionRepository.deleteById(connectionId);
 
-        listRequest().expectStatus().isNotFound();
-        registerRequest(COLLECTION_ID).expectStatus().isNotFound();
+        listRequest().expectStatus().isNotFound().expectBody(Void.class);
+        registerRequest(COLLECTION_ID).expectStatus().isNotFound().expectBody(Void.class);
         webTestClient
                 .get()
                 .uri("/workspaces/{slug}/outline/collections/{id}", workspace.getWorkspaceSlug(), COLLECTION_ID)
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
         // The unified sync-observability endpoints 404 the same way once the connection row is gone.
         webTestClient
                 .get()
@@ -148,7 +149,8 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
         webTestClient
                 .post()
                 .uri("/workspaces/{slug}/connections/{id}/sync/jobs", workspace.getWorkspaceSlug(), connectionId)
@@ -157,7 +159,8 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
                 .bodyValue(new TriggerSyncJobRequestDTO(SyncJobType.RECONCILIATION))
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -192,7 +195,7 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
         assertThat(listed.get(0).collectionId()).isEqualTo(COLLECTION_ID);
 
         // Idempotent repeat: same natural key answers 200, not a duplicate row.
-        registerRequest(COLLECTION_ID).expectStatus().isOk();
+        registerRequest(COLLECTION_ID).expectStatus().isOk().expectBody(Void.class);
         assertThat(collectionRepository.findByWorkspaceIdOrderByCreatedAtAsc(workspace.getId()))
                 .hasSize(1);
     }
@@ -226,7 +229,8 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -284,7 +288,10 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
         // meant to sync, rather than racing the not-yet-committed transaction.
         assertThat(stored.getSyncStatus()).isEqualTo(SyncStatus.COMPLETE);
 
-        patchState("no-such-collection", MirrorState.PAUSED).expectStatus().isNotFound();
+        patchState("no-such-collection", MirrorState.PAUSED)
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -302,7 +309,8 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         assertThat(collectionRepository.findByWorkspaceIdAndConnectionIdAndCollectionId(
                         workspace.getId(), connectionId, COLLECTION_ID))
@@ -428,7 +436,8 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
                 .bodyValue(new TriggerSyncJobRequestDTO(SyncJobType.RECONCILIATION))
                 .exchange()
                 .expectStatus()
-                .isAccepted();
+                .isAccepted()
+                .expectBody(Void.class);
     }
 
     private WebTestClient.ResponseSpec syncStatusRequest() {

@@ -415,6 +415,72 @@ void describe("CI contract", () => {
 		);
 	});
 
+	void test("the server package job is the only Gradle cache producer", async () => {
+		const action = parseDocument(await readFile(".github/actions/setup-caches/action.yml", "utf8"));
+		assert.equal(action.getIn(["inputs", "cache-write", "default"]), "false");
+		const sources = await workflowSources();
+		const writers = [...sources].filter(([, source]) => source.includes('cache-write: "true"'));
+		assert.deepEqual(
+			writers.map(([file]) => file),
+			[".github/workflows/cicd.yml"],
+		);
+		const build = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const steps = build.getIn(["jobs", "server-package", "steps"]);
+		assert.ok(isSeq(steps));
+		const cache = steps.items.find(
+			(item) => isMap(item) && item.get("uses") === "./.github/actions/setup-caches",
+		);
+		assert.ok(isMap(cache));
+		assert.equal(cache.getIn(["with", "cache-write"]), "true");
+		const source = await readFile(".github/actions/setup-caches/action.yml", "utf8");
+		assert.match(source, /inputs.cache-write != 'true' \|\| github.ref != format/);
+	});
+
+	void test("image scans are delegated only to required release preflight", async () => {
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		assert.equal(
+			workflow.getIn(["jobs", "detect-changes", "outputs", "release-preflight"]),
+			`\${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || steps.release_candidate.outputs.release-candidate == 'true' }}`,
+		);
+		for (const name of ["application-server-image", "Docker"])
+			assert.equal(
+				workflow.getIn(["jobs", name, "with", "scan-images"]),
+				`\${{ needs.detect-changes.outputs.release-preflight != 'true' }}`,
+			);
+		for (const file of ["ci-docker-build.yml", "reusable-docker-build.yml"]) {
+			const reusable = parseDocument(await readFile(`.github/workflows/${file}`, "utf8"));
+			assert.equal(
+				reusable.getIn(["on", "workflow_call", "inputs", "scan-images", "default"]),
+				true,
+			);
+			const jobs = reusable.get("jobs");
+			assert.ok(isMap(jobs));
+			for (const { value } of jobs.items)
+				if (isMap(value) && value.get("uses") === "./.github/workflows/reusable-docker-build.yml")
+					assert.equal(value.getIn(["with", "scan-images"]), `\${{ inputs.scan-images }}`);
+		}
+		const docker = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
+		assert.match(
+			String(docker.getIn(["jobs", "scan", "if"])),
+			/inputs.scan-images && inputs.publish/,
+		);
+	});
+
+	void test("path exclusions cannot select unrelated files for server tests or webapp images", async () => {
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const steps = workflow.getIn(["jobs", "detect-changes", "steps"]);
+		assert.ok(isSeq(steps));
+		const filters = steps.items.filter(
+			(item) => isMap(item) && String(item.get("uses")).startsWith("dorny/paths-filter@"),
+		);
+		assert.equal(filters.length, 1);
+		const filter = filters[0];
+		assert.ok(isMap(filter));
+		assert.equal(filter.getIn(["with", "predicate-quantifier"]), "some-with-excludes");
+	});
+
 	void test("Gradle lock changes rebuild and verify the shipped server", async () => {
 		const build = await readFile("server/build.gradle.kts", "utf8");
 		assert.match(build, /lockAllConfigurations\(\)/);
@@ -492,7 +558,8 @@ void describe("CI contract", () => {
 
 	void test("packages the server once and runs every artifact gate against it", async () => {
 		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
-		const packageJob = job(build, "server-package");
+		const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
+		const packageJob = job(orchestrator, "server-package");
 		const packaging = packageJob.match(/^\s+run: (\.\/gradlew .*)$/m)?.[1];
 		assert.ok(packaging);
 		assert.match(packaging, /:application:bootJar/);
@@ -501,7 +568,7 @@ void describe("CI contract", () => {
 		assert.match(packageJob, /overwrite: true/);
 		for (const name of ["server-api", "server-database"]) {
 			const consumer = job(build, name);
-			assert.match(consumer, /needs: server-package/);
+			assert.doesNotMatch(consumer, /needs:/);
 			assert.match(consumer, /uses: \.\/\.github\/actions\/restore-server-build/);
 			// Goals against the restored classes; a lifecycle phase would compile again.
 			assert.doesNotMatch(
@@ -512,10 +579,10 @@ void describe("CI contract", () => {
 		assert.match(job(build, "server-database"), /:application:databaseTest -PpackagedServer=true/);
 		assert.match(job(build, "server-api"), /HEPHAESTUS_APPLICATION_JAR/);
 		const e2e = job(build, "webapp-e2e");
-		assert.match(e2e, /needs: server-package/);
+		assert.doesNotMatch(e2e, /needs:/);
 		assert.equal((e2e.match(/actions\/download-artifact@/g) ?? []).length, 1);
-		const image = job(build, "application-server-image");
-		assert.match(image, /needs: server-package/);
+		const image = job(orchestrator, "application-server-image");
+		assert.match(image, /needs: \[detect-changes, server-package\]/);
 		assert.match(image, /use-buildpacks: true/);
 
 		// The long suites compile from source and never wait for the package job.
@@ -523,8 +590,7 @@ void describe("CI contract", () => {
 		assert.doesNotMatch(tests, /^ {4}needs:|download-artifact|restore-server-build/m);
 		assert.match(job(tests, "server-verification"), /vp run test:server:verification/);
 		assert.match(job(tests, "server-integration"), /vp run test:server:integration/);
-		const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
-		assert.match(job(orchestrator, "Build"), /needs: \[detect-changes\]/);
+		assert.match(job(orchestrator, "Build"), /needs: \[detect-changes, server-package\]/);
 
 		const reusable = await readFile(".github/workflows/reusable-docker-build.yml", "utf8");
 		const packBuilds = [...reusable.replace(/\\\n\s*/g, " ").matchAll(/^\s+pack build .*$/gm)].map(
@@ -539,6 +605,39 @@ void describe("CI contract", () => {
 		for (const [file, source] of await workflowSources()) {
 			assert.doesNotMatch(source, /bootBuildImage/, `${file} must build the image from the JAR`);
 		}
+	});
+
+	void test("image consumers do not wait for unrelated artifact checks, but the final verdict does", async () => {
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		for (const name of ["Build", "application-server-image"]) {
+			const dependencies = workflow.getIn(["jobs", name, "needs"]);
+			assert.ok(isSeq(dependencies));
+			assert.deepEqual(dependencies.toJSON(), ["detect-changes", "server-package"]);
+		}
+		for (const name of ["Supported-host-smoke", "Release-preflight"]) {
+			const dependencies = workflow.getIn(["jobs", name, "needs"]);
+			assert.ok(isSeq(dependencies));
+			assert.deepEqual(dependencies.toJSON(), [
+				"detect-changes",
+				"application-server-image",
+				"Docker",
+			]);
+		}
+		const gate = workflow.getIn(["jobs", "all-ci-passed", "needs"]);
+		assert.ok(isSeq(gate));
+		for (const name of [
+			"server-package",
+			"application-server-image",
+			"Build",
+			"Test",
+			"Docker",
+			"Supported-host-smoke",
+			"Release-preflight",
+		])
+			assert.ok(
+				gate.items.some((item) => isScalar(item) && item.value === name),
+				`The final verdict must require ${name}`,
+			);
 	});
 
 	void test("builds Storybook once and gives its TurboSnap stats to Chromatic", async () => {
@@ -666,7 +765,7 @@ void describe("CI contract", () => {
 			"workflow-lint",
 			"zizmor",
 			"Quality",
-			"Build",
+			"server-package",
 			"Security",
 			"Test",
 			"Docker",
@@ -698,7 +797,6 @@ void describe("CI contract", () => {
 		}
 
 		const docker = await readFile(".github/workflows/ci-docker-build.yml", "utf8");
-		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
 		// The architecture set is one decision, taken in cicd.yml and handed to every image build, so
 		// a run cannot evidence one image on both platforms and its sibling on one. The test below
 		// owns what that decision is; this owns that nothing decides it locally.
@@ -706,16 +804,19 @@ void describe("CI contract", () => {
 			job(docker, "webapp-build"),
 			job(docker, "agent-pi-build"),
 			job(docker, "postgres-build"),
-			job(build, "application-server-image"),
 		]) {
 			assert.match(image, /single-arch: \${{ inputs\.single_arch == 'true' }}/);
 			assert.doesNotMatch(image, /^\s+tags:/m);
 		}
-		for (const called of [docker, build])
+		for (const called of [docker])
 			// Required, and with no default: a caller that forgets it fails to start, rather than
 			// silently publishing one architecture where a release needs two.
 			assert.match(called, /^ {6}single_arch:\n(?: {8}.*\n)*? {8}required: true$/m);
-		for (const consumer of [job(source, "Build"), job(source, "Docker")])
+		assert.match(
+			job(source, "application-server-image"),
+			/single-arch: \${{ needs\.detect-changes\.outputs\.single-arch == 'true' }}/,
+		);
+		for (const consumer of [job(source, "Docker")])
 			assert.match(consumer, /single_arch: \${{ needs\.detect-changes\.outputs\.single-arch }}/);
 		const inherited = job(docker, "tag-unchanged-images");
 		assert.match(inherited, /HEAD_SHA/);
@@ -798,7 +899,7 @@ void describe("CI contract", () => {
 			String(orchestrator.getIn(["jobs", "detect-changes", "outputs", "publishable"])),
 			/^\$\{\{ github\.event_name != 'pull_request' \|\| github\.event\.pull_request\.head\.repo\.full_name == github\.repository }}$/,
 		);
-		for (const caller of ["Build", "Docker"])
+		for (const caller of ["application-server-image", "Docker"])
 			assert.match(
 				String(orchestrator.getIn(["jobs", caller, "with", "publish"])),
 				/^\$\{\{ needs\.detect-changes\.outputs\.publishable == 'true' }}$/,
@@ -922,12 +1023,6 @@ void describe("CI contract", () => {
 	});
 
 	void test("a pull request boots the supported installation from the images its own run built", async () => {
-		const build = parseDocument(await readFile(".github/workflows/ci-build.yml", "utf8"));
-		assert.match(
-			String(build.getIn(["on", "workflow_call", "outputs", "application-server-digest", "value"])),
-			/^\$\{\{ jobs\.application-server-image\.outputs\.manifest-digest }}$/,
-		);
-
 		const source = await readFile(".github/workflows/cicd.yml", "utf8");
 		const orchestrator = parseDocument(source);
 		const condition = String(orchestrator.getIn(["jobs", "Supported-host-smoke", "if"]));
@@ -942,7 +1037,7 @@ void describe("CI contract", () => {
 		const smoke = job(source, "Supported-host-smoke");
 		assert.match(
 			smoke,
-			/APPLICATION_DIGEST: \${{ needs\.Build\.outputs\.application-server-digest }}/,
+			/APPLICATION_DIGEST: \${{ needs\.application-server-image\.outputs\.manifest-digest }}/,
 		);
 		// The reduced topology an operator's first boot has to get through: no edge, no webapp. The
 		// service list runs onto a continuation line, so the command is rejoined before it is read.
@@ -960,8 +1055,8 @@ void describe("CI contract", () => {
 			/scripts\/prepare-host-smoke-env\.ts/,
 		);
 		// The paths that trigger the smoke also have to rebuild the images it boots.
-		for (const flag of ["server_image_changed", "application_server_changed"])
-			assert.match(source, new RegExp(`${flag}:.*supported-host-smoke`));
+		assert.match(job(source, "application-server-image"), /if:.*supported-host-smoke/);
+		assert.match(source, /application_server_changed:.*supported-host-smoke/);
 		assert.match(job(source, "all-ci-passed"), /needs: \[[^\]]*Supported-host-smoke[^\]]*\]/);
 	});
 
@@ -1239,10 +1334,7 @@ void describe("CI contract", () => {
 		// documents are re-derived and compared exactly as the release re-derives them.
 		assert.match(preflight, /node scripts\/verify-release-evidence\.ts evidence\n/);
 		assert.match(preflight, /max-age-hours: "24"/);
-		assert.match(
-			preflight,
-			/if: \$\{\{ \(github\.event_name == 'workflow_dispatch' && inputs\.release-preflight\) \|\| needs\.detect-changes\.outputs\.release-candidate == 'true' \}\}/,
-		);
+		assert.match(preflight, /if: needs\.detect-changes\.outputs\.release-preflight == 'true'/);
 		assert.match(cicd, /^ {6}release-preflight:$/m);
 		assert.match(job(cicd, "all-ci-passed"), /needs: \[[^\]]*Release-preflight\]/);
 
@@ -1359,7 +1451,7 @@ void describe("CI contract", () => {
 		// every event, and a duplicate-run skip must not take the image builds it needs away.
 		assert.match(
 			String(workflow.getIn(["jobs", "Release-preflight", "if"])),
-			/needs\.detect-changes\.outputs\.release-candidate == 'true'/,
+			/needs\.detect-changes\.outputs\.release-preflight == 'true'/,
 		);
 		assert.match(
 			String(workflow.getIn([...detection, "outputs", "should_skip"])),
@@ -1485,10 +1577,13 @@ void describe("CI contract", () => {
 		assert.ok(buildsEveryImage("pull_request", false, true));
 
 		// One home for that decision too: an input that selects an image reads it, and no input
-		// re-tests the event on its own. `server_changed` is in the list because the buildpacks image
-		// is built from the JAR `App Server: Package` uploads.
+		// re-tests the event on its own. The package and server image selectors read it directly.
+		for (const name of ["server-package", "application-server-image"]) {
+			const condition = String(workflow.getIn(["jobs", name, "if"]));
+			assert.match(condition, /needs\.detect-changes\.outputs\.all-images == 'true'/);
+			assert.doesNotMatch(condition, /github\.event_name/);
+		}
 		const imageInputs = {
-			Build: ["server_changed", "server_image_changed"],
 			Docker: [
 				"webapp_changed",
 				"application_server_changed",

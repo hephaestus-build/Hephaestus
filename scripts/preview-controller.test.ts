@@ -46,6 +46,7 @@ const makeCore = () => {
 };
 
 const makeContext = () => ({
+	serverUrl: "https://github.com",
 	repo: { owner: "owner", repo: "repo" },
 	payload: { repository: { default_branch: "main" }, pull_request: { number: 7 } },
 });
@@ -363,10 +364,14 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 		ENVIRONMENT: "preview/pr-7",
 		PR_NUMBER: "7",
 		PREVIEW_URL: "https://pr7.example",
+		PR_TITLE: "feat(webapp): a readable title",
+		PR_URL: "https://github.example/pull/7",
 		SOURCE_RUN_URL: "https://github.example/runs/50",
 	});
 	let deploymentRef = "";
 	let initialState = "";
+	let description = "";
+	let payload: unknown;
 	const baseGitHub = makeGitHub();
 	const github: GitHubApi = {
 		...baseGitHub,
@@ -380,6 +385,8 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 				},
 				createDeployment: (params: Record<string, unknown>) => {
 					deploymentRef = String(params.ref);
+					description = String(params.description);
+					payload = params.payload;
 					assert.equal(params.task, "deploy:preview");
 					assert.equal(params.transient_environment, true);
 					return Promise.resolve({
@@ -396,6 +403,34 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 	assert.equal(deploymentRef, "head-sha");
 	assert.equal(initialState, "queued");
 	assert.equal(core.outputs.get("deployment_id"), "2");
+	// GitHub renders the environment name on the pull request and the description where every
+	// environment is listed together, so the description is what tells one preview from another.
+	assert.equal(description, "PR #7 · feat(webapp): a readable title");
+	assert.ok(typeof payload === "object" && payload !== null);
+	assert.equal(Reflect.get(payload, "pull_request_url"), "https://github.example/pull/7");
+	assert.equal(Reflect.get(payload, "title"), "feat(webapp): a readable title");
+});
+
+void it("refuses to open a deployment that would carry no title or pull request link", async () => {
+	// A deployment that describes itself as a bare number, or carries an empty link in the payload
+	// that rides on every status event, is worse than one that never opened: it reports success and
+	// identifies nothing.
+	for (const missing of ["PR_TITLE", "PR_URL"]) {
+		Object.assign(process.env, {
+			HEAD_SHA: "head-sha",
+			ENVIRONMENT: "preview/pr-7",
+			PR_NUMBER: "7",
+			PREVIEW_URL: "https://pr7.example",
+			PR_TITLE: "feat(webapp): a readable title",
+			PR_URL: "https://github.example/pull/7",
+			SOURCE_RUN_URL: "https://github.example/runs/50",
+		});
+		delete process.env[missing];
+		await assert.rejects(
+			() => create({ github: makeGitHub(), context: makeContext(), core: makeCore() }),
+			new RegExp(missing),
+		);
+	}
 });
 
 void it("stands down without failing when the head moved during preflight", async () => {
@@ -740,8 +775,17 @@ void describe("preview schema drift", () => {
 		const reason = core.outputs.get("reason") ?? "";
 		// The three things the author needs: which file, what goes wrong, and what to do about it.
 		assert.match(reason, /0001_drop\.xml/);
-		assert.match(reason, /fail validation/);
+		assert.match(reason, /have failed to start against it/);
 		assert.match(reason, /Merge main in/);
+		// Both mechanisms were reproduced against a restored database, so the reason names them, and
+		// names the step each one stops at: neither branch reaches a started application.
+		assert.match(reason, /Liquibase re-runs migrations/);
+		assert.match(reason, /startup then fails on a column/);
+		// It reports what has gone wrong, never what this branch is guaranteed to hit: a migration
+		// that only adds a table this branch never queries breaks nothing. Two causes it may not
+		// claim are Hibernate validation, which `prod` disables, and a schema mismatch that a
+		// differing blob does not prove.
+		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot|Hibernate/);
 		assert.equal(core.outputs.get("announce"), "true");
 	});
 
@@ -791,12 +835,16 @@ void describe("preview schema drift", () => {
 
 		assert.equal(core.outputs.get("eligible"), "false");
 		const reason = core.outputs.get("reason") ?? "";
-		// Every branch that has reached this was genuinely incompatible, so the reason says what will
-		// happen and how to fix it rather than reporting the comparison's own limit.
+		// At the comparison's limit, whether this branch carries every one of the default branch's
+		// migrations cannot be established — a saturated response does not even prove truncation. So
+		// the reason names the check that could not run, what branches behind on schema have run
+		// into, and how to clear it.
 		assert.match(reason, /behind main/);
-		assert.match(reason, /fail validation/);
+		assert.match(reason, /carries main's migrations/);
+		assert.match(reason, /cannot be checked/);
+		assert.match(reason, /have failed to start against it/);
 		assert.match(reason, /Merge main in/);
-		assert.doesNotMatch(reason, /cannot be verified/);
+		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot/);
 	});
 
 	void it("ignores prose under the schema directory", async () => {

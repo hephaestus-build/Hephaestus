@@ -55,7 +55,8 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
                 .headers(h -> h.setBearerAuth(tokenFor(user)))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -337,7 +338,8 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
                 .headers(h -> h.setBearerAuth(tokenFor(user)))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     private void seedFailure(long id, AuthEvent.EventType type, Instant occurredAt, String failureReason) {

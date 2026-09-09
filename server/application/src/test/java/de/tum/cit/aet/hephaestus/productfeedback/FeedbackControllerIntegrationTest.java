@@ -24,7 +24,8 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -36,7 +37,8 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -46,7 +48,8 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .uri("/admin/product-feedback")
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
         String csrf = TestAuthUtils.fetchCsrfToken(webTestClient);
         webTestClient
                 .post()
@@ -54,6 +57,7 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCsrf(csrf))
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 }

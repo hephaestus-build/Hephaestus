@@ -56,6 +56,7 @@ export interface GitHubApi {
 }
 
 interface ActionsContext {
+	readonly serverUrl: string;
 	readonly repo: { readonly owner: string; readonly repo: string };
 	readonly payload: {
 		readonly repository: { readonly default_branch: string };
@@ -247,11 +248,11 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		}
 	}
 
-	// A preview restores the default branch's schema into an application built from this branch, and
-	// the application boots with `ddl-auto: validate`. A branch missing one of the default branch's
-	// migrations may therefore map entities the restored database no longer has. Saying so here
-	// costs one comparison; discovering it costs a deployment, ten minutes, and a container that
-	// exits its healthcheck with nothing on the pull request to explain it.
+	// A preview restores the default branch's database into an application built from this branch, so
+	// a branch missing one of the default branch's migrations runs against a database built from a
+	// changelog other than its own. Checking that here costs one comparison and can name the reason
+	// on the pull request. Leaving it to the deployment costs the deployment, and the failure it
+	// reports says only that the preview did not come up.
 	//
 	// It sits after the checks above on purpose: a head that already has a live preview needs no
 	// deployment, and refusing here would replace a working preview's comment with a refusal.
@@ -261,17 +262,31 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		basehead: `${pull.head.sha}...${defaultBranch}`,
 	});
 	const behindFiles = behind.data.files ?? [];
-	// The comparison reports at most COMPARE_FILE_LIMIT files and flags no truncation, so a saturated
-	// response cannot be read as "no migration is missing". Every branch that has hit this so far was
-	// genuinely incompatible — each still mapped entities to tables the default branch had dropped —
-	// so the message names the likely consequence rather than the tool's own uncertainty, which is
-	// what the author can act on.
+	// The comparison reports at most COMPARE_FILE_LIMIT files and flags no truncation. A response at
+	// that count may be complete or cut off, and nothing distinguishes them, so it cannot be read as
+	// "no migration is missing".
+	//
+	// What these messages may claim is bounded by what is actually known. Two mechanisms are, each
+	// reproduced by booting a released branch image against a database restored from the default
+	// branch. A branch from before a changelog was rewritten does not find its changeset ids
+	// recorded, so Liquibase re-runs those migrations and PostgreSQL refuses the relation that
+	// already exists. A branch missing a migration that dropped a column its entities still map
+	// passes Liquibase untouched and gets as far as a started web server, then fails a startup query
+	// for that column — `prod` sets `ddl-auto: none`, so nothing validates the mapping ahead of it.
+	// Both end in a container that never finished starting, at different steps, and the reason keeps
+	// the steps apart.
+	//
+	// Neither makes every missing migration fatal: one that only adds a table this branch never
+	// queries is harmless, and two changelogs can reach one schema by different text. So the reason
+	// names the mechanisms as what branches in this state have run into, never as what this branch
+	// is guaranteed to hit.
 	if (behindFiles.length >= COMPARE_FILE_LIMIT) {
 		return skip(
-			`PR #${number} is ${behindFiles.length}+ files behind ${defaultBranch}. A preview restores ` +
-				`${defaultBranch}'s database, and a branch this far back is unlikely to still match its ` +
-				`schema — the application would fail validation and the preview would never come up. ` +
-				`Merge ${defaultBranch} in; the next push previews automatically.`,
+			`PR #${number} is ${behindFiles.length} files behind ${defaultBranch}, the most one GitHub ` +
+				`comparison reports, so whether this branch still carries ${defaultBranch}'s ` +
+				`migrations cannot be checked. A preview restores ${defaultBranch}'s database, and ` +
+				`branches behind on schema have failed to start against it. Merge ${defaultBranch} ` +
+				`in; the next push previews automatically.`,
 		);
 	}
 	for (const file of behindFiles) {
@@ -279,12 +294,18 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		// The comparison says what the default branch changed since the branches diverged; it says
 		// nothing about this branch's tree. A cherry-picked or independently applied migration is
 		// present here under a different commit, so the blob decides, not the ancestry.
+		//
+		// A differing blob is still only unverifiable, never proof: two changelogs can reach the same
+		// schema by different text. So the reason reports what branches in this state have run into
+		// and stops short of asserting a mismatch this comparison cannot demonstrate.
 		if (await branchHasBlob(github, owner, repo, pull.head.sha, file)) continue;
 		return skip(
-			`PR #${number} is missing ${defaultBranch}'s \`${file.filename}\`. A preview restores ` +
-				`${defaultBranch}'s database, so this branch's entities no longer match its schema and ` +
-				`the application would fail validation on boot. Merge ${defaultBranch} in; the next ` +
-				`push previews automatically.`,
+			`PR #${number} does not have ${defaultBranch}'s \`${file.filename}\`. A preview restores ` +
+				`${defaultBranch}'s database, and branches in that state have failed to start against ` +
+				`it: Liquibase re-runs migrations that database has no record of and stops on a ` +
+				`relation that already exists, or Liquibase passes and startup then fails on a column ` +
+				`one of those migrations dropped. Merge ${defaultBranch} in; the next push previews ` +
+				`automatically.`,
 		);
 	}
 
@@ -316,6 +337,13 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 	core.setOutput("base_ref", defaultBranch);
 	core.setOutput("head_sha", pull.head.sha);
 	core.setOutput("preview_url", previewUrl.href);
+	// The environment's own page on GitHub, in the form the API reports as its `html_url` — the
+	// obvious `/deployments/<name>` guess is a 404, and the query parameter is `environments_filter`.
+	core.setOutput(
+		"environment_page",
+		`${context.serverUrl}/${owner}/${repo}/deployments/activity_log` +
+			`?environments_filter=${encodeURIComponent(environment)}`,
+	);
 };
 
 /**
@@ -351,6 +379,16 @@ const create = async ({ github, context, core }: ControllerInput): Promise<void>
 	const { owner, repo } = context.repo;
 	const headSha = requiredEnv(process.env, "HEAD_SHA");
 	const environment = requiredEnv(process.env, "ENVIRONMENT");
+	const number = requiredPositiveInteger(process.env, "PR_NUMBER");
+	// Required, not defaulted. Every pull request has both, so a caller without them is a caller
+	// with a bug, and a deployment that opens anyway identifies nothing while looking correct.
+	const title = requiredEnv(process.env, "PR_TITLE");
+	const pullRequestUrl = requiredEnv(process.env, "PR_URL");
+	const previewUrl = requiredEnv(process.env, "PREVIEW_URL");
+	// The deployments page lists every environment together, where `preview/pr-2042` alone says
+	// nothing about what is in it. The title is what tells one preview from another at a glance;
+	// GitHub renders this as plain text, so the link lives in the payload rather than here.
+	const described = `PR #${number} · ${title}`;
 	const response = await github.rest.repos.createDeployment({
 		owner,
 		repo,
@@ -359,7 +397,16 @@ const create = async ({ github, context, core }: ControllerInput): Promise<void>
 		auto_merge: false,
 		required_contexts: [],
 		environment,
-		description: `Coolify preview for PR #${requiredEnv(process.env, "PR_NUMBER")}`,
+		description: described.length > 140 ? `${described.slice(0, 139)}…` : described,
+		// Rides on every deployment_status event, so anything watching them — a dashboard, a bot,
+		// a future notifier — can reach the pull request and the preview without another API call.
+		payload: {
+			pull_request: number,
+			pull_request_url: pullRequestUrl,
+			title,
+			preview_url: previewUrl,
+			head_sha: headSha,
+		},
 		transient_environment: true,
 		production_environment: false,
 	});
@@ -373,9 +420,9 @@ const create = async ({ github, context, core }: ControllerInput): Promise<void>
 		repo,
 		deployment_id: deploymentId,
 		state: "queued",
-		description: "Admission reserved; Coolify queue follows.",
+		description: `Reserved for PR #${number}; Coolify queue follows.`,
 		environment,
-		environment_url: requiredEnv(process.env, "PREVIEW_URL"),
+		environment_url: previewUrl,
 		log_url: requiredEnv(process.env, "SOURCE_RUN_URL"),
 	});
 };

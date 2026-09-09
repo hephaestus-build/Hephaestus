@@ -151,8 +151,8 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .jsonPath("$.title")
                 .isEqualTo("Practice adoption preview changed");
 
-        adopt("W/" + previewEtag()).expectStatus().isEqualTo(412);
-        adopt("malformed").expectStatus().isEqualTo(412);
+        adopt("W/" + previewEtag()).expectStatus().isEqualTo(412).expectBody(Void.class);
+        adopt("malformed").expectStatus().isEqualTo(412).expectBody(Void.class);
     }
 
     @Test
@@ -160,7 +160,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
     void shouldAdoptWhenIfMatchUsesStandardWildcard() {
         ensureAdminMembership(workspace);
 
-        adopt("*").expectStatus().isCreated();
+        adopt("*").expectStatus().isCreated().expectBody(Void.class);
     }
 
     @Test
@@ -224,7 +224,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
     void shouldReturnConflictWhenPracticeIsAlreadyAdopted() {
         ensureAdminMembership(workspace);
         String etag = previewEtag();
-        adopt(etag).expectStatus().isCreated();
+        adopt(etag).expectStatus().isCreated().expectBody(Void.class);
         var practice = practiceRepository
                 .findByWorkspaceIdAndSlug(workspace.getId(), PRACTICE)
                 .orElseThrow();
@@ -251,7 +251,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
     @WithAdminUser
     void shouldAllowAdoptionAgainAfterWorkspacePracticeIsDeleted() {
         ensureAdminMembership(workspace);
-        adopt(previewEtag()).expectStatus().isCreated();
+        adopt(previewEtag()).expectStatus().isCreated().expectBody(Void.class);
 
         webTestClient
                 .delete()
@@ -259,7 +259,8 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -272,7 +273,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .jsonPath("$[?(@.slug == '" + PRACTICE + "')].availability")
                 .isEqualTo("AVAILABLE");
 
-        adopt(previewEtag()).expectStatus().isCreated();
+        adopt(previewEtag()).expectStatus().isCreated().expectBody(Void.class);
 
         assertThat(practiceRepository.findAllForCatalog(workspace.getId())).hasSize(1);
         assertThat(groupRepository.findByWorkspaceIdAndSlug(workspace.getId(), GROUP))
@@ -327,7 +328,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
     void shouldAllowWholeGroupAdoptionAgainAfterGroupAndPracticesAreDeleted() {
         ensureAdminMembership(workspace);
         CatalogGroupAdoptionPreviewDTO firstPreview = previewGroup();
-        adoptGroup(firstPreview.etag()).expectStatus().isOk();
+        adoptGroup(firstPreview.etag()).expectStatus().isOk().expectBody(Void.class);
 
         webTestClient
                 .delete()
@@ -338,7 +339,8 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         assertThat(groupRepository.findByWorkspaceIdAndSlug(workspace.getId(), GROUP))
                 .isEmpty();
@@ -347,7 +349,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
         assertThat(secondPreview.practices())
                 .allMatch(practice -> practice.availability() == CatalogAdoptionAvailability.AVAILABLE);
 
-        adoptGroup(secondPreview.etag()).expectStatus().isOk();
+        adoptGroup(secondPreview.etag()).expectStatus().isOk().expectBody(Void.class);
 
         assertThat(groupRepository.findByWorkspaceIdAndSlug(workspace.getId(), GROUP))
                 .isPresent();
@@ -360,7 +362,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
     void shouldRestoreUnassignedCatalogPracticesWhenDeletedGroupIsAdoptedAgain() {
         ensureAdminMembership(workspace);
         CatalogGroupAdoptionPreviewDTO firstPreview = previewGroup();
-        adoptGroup(firstPreview.etag()).expectStatus().isOk();
+        adoptGroup(firstPreview.etag()).expectStatus().isOk().expectBody(Void.class);
 
         webTestClient
                 .delete()
@@ -368,7 +370,8 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         CatalogGroupAdoptionPreviewDTO restorePreview = previewGroup();
         assertThat(restorePreview.actions())
@@ -441,7 +444,8 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -449,7 +453,8 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         webTestClient
                 .post()
@@ -460,7 +465,8 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 })
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     private String previewEtag() {
@@ -471,7 +477,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .exchange()
                 .expectStatus()
                 .isOk()
-                .returnResult(CatalogPracticePreviewDTO.class)
+                .returnResult(Void.class)
                 .getResponseHeaders()
                 .getETag());
     }

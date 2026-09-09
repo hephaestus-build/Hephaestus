@@ -78,6 +78,10 @@ jobs:
           HEAD_SHA: ${{ steps.context.outputs.head_sha }}
           ENVIRONMENT: ${{ steps.context.outputs.environment }}
           PREVIEW_URL: ${{ steps.context.outputs.preview_url }}
+          # `create` puts both in the deployment: the title in the description that tells one
+          # environment from another, the URL in the payload that rides on every status event.
+          PR_TITLE: ${{ steps.context.outputs.pr_title }}
+          PR_URL: ${{ steps.context.outputs.pr_url }}
           SOURCE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
@@ -93,9 +97,9 @@ jobs:
           message: |
             ## 🚧 App Preview
 
-            Deploying `${{ steps.context.outputs.head_sha }}` — follow it under **Environments → `${{ steps.context.outputs.environment }}`** on this pull request.
+            Deploying [`${{ steps.context.outputs.head_sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ steps.context.outputs.head_sha }}) to [`${{ steps.context.outputs.environment }}`](${{ steps.context.outputs.environment_page }}) — [watch the run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
 
-            <sub>Waits for the images CI publishes for this commit, then deploys. Updates on every commit, draft or not. Remove the `preview` label to tear it down.</sub>
+            <sub>Waits for the images CI publishes for this commit, then deploys. Updates on every push, draft or not. Remove the `preview` label to tear it down.</sub>
 
       - name: Say it is waiting on images
         if: steps.github_deployment.outputs.deployment_id != ''
@@ -206,9 +210,15 @@ jobs:
           message: |
             ## 🚀 App Preview
 
-            🔗 **[Open preview](${{ steps.context.outputs.preview_url }})**
+            ### 🔗 [${{ steps.context.outputs.preview_url }}](${{ steps.context.outputs.preview_url }})
 
-            <sub>Preview for commit ${{ steps.context.outputs.head_sha }}. Updates on every commit. Remove the `preview` label to tear it down.</sub>
+            | | |
+            |---|---|
+            | Commit | [`${{ steps.context.outputs.head_sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ steps.context.outputs.head_sha }}) |
+            | Environment | [`${{ steps.context.outputs.environment }}`](${{ steps.context.outputs.environment_page }}) |
+            | Deployed by | [this run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+
+            <sub>Every push redeploys this preview. Remove the `preview` label to tear it down.</sub>
 
       # An opted-in pull request must not learn about a red preview only from the Actions tab.
       - name: Report a failed preview

@@ -350,7 +350,8 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 .bodyValue(gitlabRequest)
                 .exchange()
                 .expectStatus()
-                .isCreated();
+                .isCreated()
+                .expectBody(Void.class);
 
         List<WorkspaceListItemDTO> workspaces = webTestClient
                 .get()

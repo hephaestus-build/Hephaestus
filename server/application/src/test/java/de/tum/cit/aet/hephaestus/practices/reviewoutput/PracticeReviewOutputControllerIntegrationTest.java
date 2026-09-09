@@ -294,19 +294,26 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                     .uri(OBSERVATIONS, workspace.getWorkspaceSlug())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
 
         @Test
         @WithUser
         void workspaceMemberCannotReadReviewOutput() {
-            get(OBSERVATIONS, workspace.getWorkspaceSlug()).expectStatus().isForbidden();
+            get(OBSERVATIONS, workspace.getWorkspaceSlug())
+                    .expectStatus()
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         @Test
         @WithMentorUser
         void workspaceAdminWithoutInstanceAuthorityIsAdmitted() {
-            get(OBSERVATIONS, workspace.getWorkspaceSlug()).expectStatus().isOk();
+            get(OBSERVATIONS, workspace.getWorkspaceSlug())
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
         }
     }
 
@@ -351,7 +358,8 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
 
             get(OBSERVATIONS + "/{id}", workspace.getWorkspaceSlug(), theirs)
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -820,7 +828,8 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
 
             get(FEEDBACK + "/{id}", workspace.getWorkspaceSlug(), theirs.getId())
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -963,7 +972,8 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
 
             get(FEEDBACK + "?artifactId=99", workspace.getWorkspaceSlug())
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
 
         @Test

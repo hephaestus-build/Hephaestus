@@ -2,30 +2,12 @@ name: Build
 
 on:
   workflow_call:
-    outputs:
-      application-server-digest:
-        description: "Digest of the application image built from this run's packaged JAR"
-        value: ${{ jobs.application-server-image.outputs.manifest-digest }}
     inputs:
       should_skip:
         description: "Whether to skip the workflow"
         required: false
         type: string
         default: "false"
-      # publish and single_arch have no default; reusable-docker-build.yml says why.
-      publish:
-        description: "Whether image jobs may write to the registry"
-        required: true
-        type: boolean
-      single_arch:
-        description: "Whether to build linux/amd64 alone instead of the supported multi-architecture set"
-        required: true
-        type: string
-      server_changed:
-        description: "Whether anything that runs the packaged server changed"
-        required: false
-        type: string
-        default: "true"
       contracts_changed:
         description: "Whether the API or database contracts or their PostgreSQL image changed"
         required: false
@@ -45,11 +27,6 @@ on:
         description: "Commit whose published PostgreSQL image the database legs reuse"
         required: true
         type: string
-      server_image_changed:
-        description: "Whether the application-server image inputs changed"
-        required: false
-        type: string
-        default: "true"
 
 permissions: {}
 
@@ -59,77 +36,8 @@ env:
 # Consumers must not recompile: API checks, browser tests and buildpacks share the package job's JAR.
 # docs/contributor/ci-cd.mdx § Build once owns the artifact contract.
 jobs:
-  server-package:
-    name: "App Server: Package"
-    if: inputs.should_skip != 'true' && inputs.server_changed == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-toolchain
-        if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        with:
-          install: "none"
-      - name: Find the exact-commit merge-queue build
-        id: reuse
-        if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: node scripts/resolve-server-build.ts
-      - name: Download the validated server build
-        if: steps.reuse.outputs.artifact-id != ''
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          artifact-ids: ${{ steps.reuse.outputs.artifact-id }}
-          run-id: ${{ steps.reuse.outputs.run-id }}
-          github-token: ${{ github.token }}
-          path: server
-          merge-multiple: true
-          digest-mismatch: error
-      - uses: ./.github/actions/setup-caches
-        if: steps.reuse.outputs.artifact-id == ''
-      - name: Package the server
-        if: steps.reuse.outputs.artifact-id == ''
-        working-directory: server
-        run: ./gradlew :application:bootJar :application:testClasses
-      - name: Validate the packaged server
-        working-directory: server
-        run: |
-          set -euo pipefail
-          test -d application/build/classes/java/main
-          test -d application/build/classes/java/test
-          mapfile -t jars < <(find application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
-          mapfile -t clients < <(find generated-clients/build/libs -maxdepth 1 -name 'hephaestus-generated-clients-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
-          (( ${#jars[@]} == 1 )) && (( ${#clients[@]} == 1 ))
-          unzip -p "${jars[0]}" META-INF/MANIFEST.MF | grep -q '^Main-Class: org.springframework.boot.loader'
-      - name: Upload the packaged server
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ${{ env.SERVER_BUILD_ARTIFACT }}
-          path: |
-            server/application/build/classes/java/main
-            server/application/build/classes/java/test
-            server/application/build/resources
-            server/application/build/libs/hephaestus-application-*.jar
-            server/generated-clients/build/libs/hephaestus-generated-clients-*.jar
-            !server/**/*-sources.jar
-            !server/**/*-javadoc.jar
-          if-no-files-found: error
-          retention-days: 1
-          compression-level: 0
-          # A re-run of failed jobs keeps this artifact; a re-run of all jobs replaces it.
-          overwrite: true
-
   server-api:
     name: "App Server: Generated artifacts"
-    needs: server-package
     if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -220,7 +128,6 @@ jobs:
 
   server-database:
     name: "App Server: Database"
-    needs: server-package
     if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -269,7 +176,6 @@ jobs:
 
   webapp-e2e:
     name: "Webapp: E2E"
-    needs: server-package
     if: inputs.should_skip != 'true' && inputs.e2e_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -341,25 +247,3 @@ jobs:
             e2e-server.log
           if-no-files-found: warn
           retention-days: 7
-
-  application-server-image:
-    name: "App Server image"
-    needs: server-package
-    if: inputs.should_skip != 'true' && inputs.server_image_changed == 'true'
-    uses: ./.github/workflows/reusable-docker-build.yml
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-    with:
-      image-name: "hephaestus-build/application-server"
-      use-buildpacks: true
-      application-artifact: server-build-${{ github.run_id }}
-      project-descriptor: "server/application/project.toml"
-      # renovate: datasource=docker depName=paketobuildpacks/ubuntu-noble-run-tiny
-      run-image: "paketobuildpacks/ubuntu-noble-run-tiny@sha256:c32333227b6dfbc2a4a93b03ee6d3475cfe152468c7d396bf22f06099bb0ecc9"
-      registry: "ghcr.io"
-      publish: ${{ inputs.publish }}
-      single-arch: ${{ inputs.single_arch == 'true' }}

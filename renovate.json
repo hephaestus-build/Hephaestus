@@ -179,7 +179,7 @@
 		{
 			"description": "Track the buildpacks run image",
 			"customType": "regex",
-			"managerFilePatterns": ["/^\\.github/workflows/ci-build\\.yml$/"],
+			"managerFilePatterns": ["/^\\.github/workflows/cicd\\.yml$/"],
 			"matchStrings": [
 				"# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+run-image: \"[^@\"]+@(?<currentDigest>sha256:[a-f0-9]{64})\""
 			],

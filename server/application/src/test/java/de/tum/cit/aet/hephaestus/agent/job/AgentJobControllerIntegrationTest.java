@@ -154,7 +154,8 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -174,7 +175,8 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -255,7 +257,8 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isEqualTo(409);
+                .isEqualTo(409)
+                .expectBody(Void.class);
     }
 
     @Test
@@ -269,7 +272,8 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -289,7 +293,8 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -328,6 +333,7 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .uri("/workspaces/{slug}/agents/jobs", workspace.getWorkspaceSlug())
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 }
