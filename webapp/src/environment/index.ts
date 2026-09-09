@@ -53,12 +53,33 @@ const DEPLOYMENT_NAMES: Record<string, string> = {
 };
 const deploymentEnvironment = env("SENTRY_ENVIRONMENT") || "local";
 
+/**
+ * Which pull request this preview is of. Every preview shares the name "Preview", so without this
+ * the header pill cannot say which one you are looking at.
+ *
+ * Coolify routes a preview at `pr<id>.<domain>` and passes no pull request variable of its own, so
+ * the hostname is where the number is — and the client URL is the one place that hostname is
+ * already present in the runtime config. Read only on a preview, so no other deployment can be
+ * given a pull request by a host that happens to be named this way.
+ */
+const previewPullRequest = ((): number | undefined => {
+	if (deploymentEnvironment !== "preview") return undefined;
+	try {
+		const [label] = new URL(env("APPLICATION_CLIENT_URL")).hostname.split(".");
+		const match = /^pr-?(\d+)$/.exec(label ?? "");
+		return match ? Number.parseInt(match[1] ?? "", 10) : undefined;
+	} catch {
+		return undefined;
+	}
+})();
+
 const environment = {
 	version: env("APPLICATION_VERSION").replace(/^v/, "") || "DEV",
 	deployment: {
 		environment: deploymentEnvironment,
 		name: DEPLOYMENT_NAMES[deploymentEnvironment] ?? "Local",
 		isProduction: deploymentEnvironment === "production",
+		pullRequest: previewPullRequest,
 	},
 	clientUrl: env("APPLICATION_CLIENT_URL"),
 	serverUrl: env("APPLICATION_SERVER_URL"),

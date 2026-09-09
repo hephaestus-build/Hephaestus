@@ -272,6 +272,7 @@ function HeaderContainer() {
 			sidebarTrigger={isAuthenticated && <SidebarTrigger className="-ml-1" />}
 			version={environment.version}
 			environmentName={environment.deployment.name}
+			pullRequest={environment.deployment.pullRequest}
 			isProduction={environment.deployment.isProduction}
 			isAuthenticated={isAuthenticated}
 			isLoading={isLoading}
