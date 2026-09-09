@@ -169,9 +169,10 @@ class LlmProxyService {
 
         span.tag("gen_ai.request.model", credential.upstreamModelId());
         HttpHeaders upstreamHeaders = buildUpstreamHeaders(incomingHeaders, credential);
+        ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, responsesProtocol);
         UpstreamResult upstream;
         try {
-            upstream = callUpstream(upstreamUri, upstreamHeaders, prepared.body(), routing, span, body);
+            upstream = callUpstream(upstreamUri, upstreamHeaders, prepared.body(), routing, span, body, response, tap);
             if (rejectedOurUsageRequest(upstream, prepared)) {
                 // Asking for usage is OUR addition, so refusing it must cost the caller nothing.
                 log.info(
@@ -180,7 +181,14 @@ class LlmProxyService {
                         routing.principalDescription());
                 accounting.recordStreamUsageUnsupported(routing.apiProtocol());
                 upstream = callUpstream(
-                        upstreamUri, upstreamHeaders, prepared.withoutUsageRequestOrBody(), routing, span, body);
+                        upstreamUri,
+                        upstreamHeaders,
+                        prepared.withoutUsageRequestOrBody(),
+                        routing,
+                        span,
+                        body,
+                        response,
+                        tap);
             }
         } catch (WebClientRequestException e) {
             log.warn(
@@ -203,11 +211,8 @@ class LlmProxyService {
             return ResponseEntity.status(502).body("Upstream provider unavailable");
         }
         boolean served = upstream.status() >= 200 && upstream.status() < 300;
-        if (upstream.sseBody() != null) {
-            ProxyStreamUsageTap tap = served ? new ProxyStreamUsageTap(objectMapper, responsesProtocol) : null;
-            ProxyStreamingUtils.streamSseToResponse(
-                    upstream.sseBody(), upstream.headers(), response, upstream.status(), tap);
-            if (tap != null) {
+        if (upstream.streamed()) {
+            if (served) {
                 if (tap.hasMalformedUsage()) {
                     accounting.recordMalformedUsage(attempt);
                 } else {
@@ -240,7 +245,9 @@ class LlmProxyService {
             byte[] outgoingBody,
             ProxyRouting routing,
             Span span,
-            byte[] incomingBody) {
+            byte[] incomingBody,
+            HttpServletResponse response,
+            ProxyStreamUsageTap tap) {
         var attempt = routing.attempt();
         Long workspaceId = routing.workspaceId();
         if (attempt != null && workspaceId != null && attempt.sourceType() == LlmUsageSourceType.AGENT_JOB) {
@@ -261,8 +268,8 @@ class LlmProxyService {
                     headers.addAll(upstreamHeaders);
                 })
                 .bodyValue(outgoingBody)
-                .exchangeToMono(ProxyStreamingUtils::consumeResponse)
-                .block(BLOCK_TIMEOUT);
+                .exchangeToMono(upstream -> ProxyStreamingUtils.consumeResponse(upstream, response, tap))
+                .block(BLOCK_TIMEOUT.plus(ProxyStreamingUtils.DEFAULT_SSE_TIMEOUT));
     }
 
     /** Narrow on purpose: a blanket retry on 4xx would double every bad request the runner makes. */

@@ -76,40 +76,29 @@ public final class ProxyStreamingUtils {
     }
 
     /**
-     * Consume an upstream {@link ClientResponse}, inspecting Content-Type to decide
-     * whether to buffer (non-SSE) or return a streaming Flux (SSE).
-     *
-     * <p>Designed as the callback for {@code WebClient.exchangeToMono()}. For non-SSE
-     * responses, the body is consumed inside this callback per the WebClient contract.
-     * For SSE, the Flux is returned for streaming to the client.
-     *
-     * @param clientResp the upstream response
-     * @return an {@link UpstreamResult} containing either a buffered body or an SSE Flux
+     * Consume the body within {@code exchangeToMono}'s response lifetime. SSE writes stay off
+     * the Netty event loop; cancellation reaches the one upstream subscription, with no replay cache.
      */
-    public static Mono<UpstreamResult> consumeResponse(ClientResponse clientResp) {
-        HttpHeaders rh = filterHopByHopHeaders(clientResp.headers().asHttpHeaders());
+    public static Mono<UpstreamResult> consumeResponse(
+            ClientResponse clientResp, HttpServletResponse response, @Nullable Consumer<byte[]> tap) {
+        HttpHeaders headers = filterHopByHopHeaders(clientResp.headers().asHttpHeaders());
         int status = clientResp.statusCode().value();
-        MediaType ct = clientResp.headers().contentType().orElse(null);
-        boolean isSse = ct != null && ct.isCompatibleWith(MediaType.TEXT_EVENT_STREAM);
-
-        if (isSse) {
-            // SSE: eagerly subscribe to the body Flux via replay().autoConnect(0).
-            // Without this, Mono.just() completes immediately and WebClient's exchangeToMono
-            // auto-releases the unconsumed response body, causing empty SSE streams.
-            Flux<DataBuffer> replayed =
-                    clientResp.bodyToFlux(DataBuffer.class).replay().autoConnect(0);
-            return Mono.just(new UpstreamResult(status, rh, null, replayed));
-        } else {
-            // Non-SSE: consume body inside callback as required by WebClient contract.
-            return clientResp
-                    .bodyToMono(byte[].class)
-                    .defaultIfEmpty(new byte[0])
-                    .map(bytes -> new UpstreamResult(status, rh, bytes, null));
+        MediaType contentType = clientResp.headers().contentType().orElse(null);
+        if (contentType != null && contentType.isCompatibleWith(MediaType.TEXT_EVENT_STREAM)) {
+            return Mono.fromCallable(() -> {
+                        streamSseToResponse(clientResp.bodyToFlux(DataBuffer.class), headers, response, status, tap);
+                        return new UpstreamResult(status, headers, null, true);
+                    })
+                    .subscribeOn(Schedulers.boundedElastic());
         }
+        return clientResp
+                .bodyToMono(byte[].class)
+                .defaultIfEmpty(new byte[0])
+                .map(bytes -> new UpstreamResult(status, headers, bytes, false));
     }
 
     /** Total wall-clock time for an SSE stream. Must accommodate LLM thinking + output generation. */
-    private static final Duration DEFAULT_SSE_TIMEOUT = Duration.ofMinutes(10);
+    public static final Duration DEFAULT_SSE_TIMEOUT = Duration.ofMinutes(10);
 
     /**
      * Stream SSE data directly to the {@link HttpServletResponse} output stream.
@@ -169,10 +158,10 @@ public final class ProxyStreamingUtils {
             OutputStream outputStream = response.getOutputStream();
 
             dataFlux
-                    // Release any prefetched DataBuffers on cancellation/error to prevent native memory leaks
-                    .doOnDiscard(DataBuffer.class, DataBufferUtils::release)
-                    // Move blocking servlet I/O off the Netty event loop thread
+                    // Move blocking servlet I/O off the Netty event loop thread.
                     .publishOn(Schedulers.boundedElastic())
+                    // Discard hooks apply upstream: include publishOn's prefetched queue on cancellation.
+                    .doOnDiscard(DataBuffer.class, DataBufferUtils::release)
                     .doOnNext(buffer -> {
                         try {
                             byte[] bytes = new byte[buffer.readableByteCount()];
@@ -216,20 +205,6 @@ public final class ProxyStreamingUtils {
         }
     }
 
-    /**
-     * Holds the upstream response data after consuming it inside the reactive pipeline.
-     *
-     * <p>Per the Spring WebClient contract, non-SSE response bodies must be consumed inside
-     * {@code exchangeToMono}. For SSE, the body is returned as a {@link Flux} for streaming.
-     *
-     * @param status  HTTP status code from upstream
-     * @param headers filtered response headers
-     * @param body    buffered response body (null for SSE)
-     * @param sseBody streaming body flux (null for non-SSE)
-     */
-    public record UpstreamResult(
-            int status,
-            HttpHeaders headers,
-            byte @Nullable [] body,
-            @Nullable Flux<DataBuffer> sseBody) {}
+    /** A fully consumed upstream response: SSE is already written; other bodies remain buffered. */
+    public record UpstreamResult(int status, HttpHeaders headers, byte @Nullable [] body, boolean streamed) {}
 }

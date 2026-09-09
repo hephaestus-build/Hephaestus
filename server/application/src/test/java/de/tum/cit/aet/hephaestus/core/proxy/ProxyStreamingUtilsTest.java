@@ -1,19 +1,29 @@
 package de.tum.cit.aet.hephaestus.core.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.netty.buffer.PooledByteBufAllocator;
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
+import org.springframework.core.io.buffer.NettyDataBuffer;
+import org.springframework.core.io.buffer.NettyDataBufferFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -145,11 +155,12 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             ClientResponse clientResponse =
                     mockClientResponse(200, upstreamHeaders, MediaType.APPLICATION_JSON, expectedBody);
 
-            StepVerifier.create(ProxyStreamingUtils.consumeResponse(clientResponse))
+            StepVerifier.create(
+                            ProxyStreamingUtils.consumeResponse(clientResponse, new MockHttpServletResponse(), null))
                     .assertNext(result -> {
                         assertThat(result.status()).isEqualTo(200);
                         assertThat(result.body()).isEqualTo(expectedBody);
-                        assertThat(result.sseBody()).isNull();
+                        assertThat(result.streamed()).isFalse();
                     })
                     .verifyComplete();
         }
@@ -165,11 +176,12 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
 
             ClientResponse clientResponse = mockClientResponseWithSseFlux(200, upstreamHeaders, sseFlux);
 
-            StepVerifier.create(ProxyStreamingUtils.consumeResponse(clientResponse))
+            StepVerifier.create(
+                            ProxyStreamingUtils.consumeResponse(clientResponse, new MockHttpServletResponse(), null))
                     .assertNext(result -> {
                         assertThat(result.status()).isEqualTo(200);
                         assertThat(result.body()).isNull();
-                        assertThat(result.sseBody()).isNotNull();
+                        assertThat(result.streamed()).isTrue();
                     })
                     .verifyComplete();
         }
@@ -181,11 +193,12 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
 
             ClientResponse clientResponse = mockClientResponseEmpty(204, upstreamHeaders);
 
-            StepVerifier.create(ProxyStreamingUtils.consumeResponse(clientResponse))
+            StepVerifier.create(
+                            ProxyStreamingUtils.consumeResponse(clientResponse, new MockHttpServletResponse(), null))
                     .assertNext(result -> {
                         assertThat(result.status()).isEqualTo(204);
                         assertThat(result.body()).isEmpty();
-                        assertThat(result.sseBody()).isNull();
+                        assertThat(result.streamed()).isFalse();
                     })
                     .verifyComplete();
         }
@@ -201,7 +214,8 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             ClientResponse clientResponse =
                     mockClientResponse(200, upstreamHeaders, MediaType.APPLICATION_JSON, "{}".getBytes());
 
-            StepVerifier.create(ProxyStreamingUtils.consumeResponse(clientResponse))
+            StepVerifier.create(
+                            ProxyStreamingUtils.consumeResponse(clientResponse, new MockHttpServletResponse(), null))
                     .assertNext(result -> {
                         assertThat(result.headers().get(HttpHeaders.CONNECTION)).isNull();
                         assertThat(result.headers().get(HttpHeaders.TRANSFER_ENCODING))
@@ -220,7 +234,8 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             ClientResponse clientResponse =
                     mockClientResponse(429, upstreamHeaders, MediaType.APPLICATION_JSON, errorBody);
 
-            StepVerifier.create(ProxyStreamingUtils.consumeResponse(clientResponse))
+            StepVerifier.create(
+                            ProxyStreamingUtils.consumeResponse(clientResponse, new MockHttpServletResponse(), null))
                     .assertNext(result -> {
                         assertThat(result.status()).isEqualTo(429);
                         assertThat(result.body()).isEqualTo(errorBody);
@@ -240,9 +255,10 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
 
             ClientResponse clientResponse = mockClientResponseWithSseFlux(200, upstreamHeaders, sseFlux);
 
-            StepVerifier.create(ProxyStreamingUtils.consumeResponse(clientResponse))
+            StepVerifier.create(
+                            ProxyStreamingUtils.consumeResponse(clientResponse, new MockHttpServletResponse(), null))
                     .assertNext(result -> {
-                        assertThat(result.sseBody()).isNotNull();
+                        assertThat(result.streamed()).isTrue();
                         assertThat(result.body()).isNull();
                     })
                     .verifyComplete();
@@ -254,12 +270,48 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
 
             ClientResponse clientResponse = mockClientResponse(200, upstreamHeaders, null, "plain text".getBytes());
 
-            StepVerifier.create(ProxyStreamingUtils.consumeResponse(clientResponse))
+            StepVerifier.create(
+                            ProxyStreamingUtils.consumeResponse(clientResponse, new MockHttpServletResponse(), null))
                     .assertNext(result -> {
-                        assertThat(result.sseBody()).isNull();
+                        assertThat(result.streamed()).isFalse();
                         assertThat(result.body()).isEqualTo("plain text".getBytes());
                     })
                     .verifyComplete();
+        }
+
+        @Test
+        void shouldCancelUpstreamAndReleasePooledBuffersWhenClientDisconnects() throws Exception {
+            var allocated = new ConcurrentLinkedQueue<NettyDataBuffer>();
+            var cancelled = new AtomicBoolean();
+            var factory = new NettyDataBufferFactory(PooledByteBufAllocator.DEFAULT);
+            Flux<DataBuffer> body = Flux.range(0, 1024)
+                    .<DataBuffer>map(index -> {
+                        var buffer = factory.allocateBuffer(32);
+                        buffer.write("data: event\n\n".getBytes(StandardCharsets.UTF_8));
+                        allocated.add(buffer);
+                        return buffer;
+                    })
+                    .concatWith(Flux.never())
+                    .doOnCancel(() -> cancelled.set(true));
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.TEXT_EVENT_STREAM);
+            ClientResponse upstream = mockClientResponseWithSseFlux(200, headers, body);
+            var response = mock(HttpServletResponse.class);
+            var output = mock(ServletOutputStream.class);
+            when(response.getOutputStream()).thenReturn(output);
+            doThrow(new IOException("Client disconnected")).when(output).write(any(byte[].class));
+
+            StepVerifier.create(ProxyStreamingUtils.consumeResponse(upstream, response, null))
+                    .assertNext(result -> assertThat(result.streamed()).isTrue())
+                    .verifyComplete();
+
+            await().untilAsserted(() -> {
+                assertThat(cancelled).isTrue();
+                assertThat(allocated).isNotEmpty();
+                assertThat(allocated)
+                        .allSatisfy(buffer ->
+                                assertThat(buffer.getNativeBuffer().refCnt()).isZero());
+            });
         }
 
         private ClientResponse mockClientResponse(
