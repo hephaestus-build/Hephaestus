@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -52,8 +53,10 @@ class SandboxIdleMaintenanceTest extends BaseUnitTest {
                             .isEqualTo(InteractiveSandboxRegistry.RegistrationOutcome.REGISTERED);
                     assertThat(registry.tryRegister(active))
                             .isEqualTo(InteractiveSandboxRegistry.RegistrationOutcome.REGISTERED);
-                    await().atMost(Duration.ofSeconds(3))
-                            .untilAsserted(() -> verify(idle).terminate(EvictionReason.IDLE));
+                    await().atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
+                        verify(idle, atLeastOnce()).terminate(EvictionReason.IDLE);
+                        verify(active, atLeastOnce()).idleFor();
+                    });
                     verify(active, never()).terminate(EvictionReason.IDLE);
                 });
         meters.close();
