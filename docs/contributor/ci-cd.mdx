@@ -523,6 +523,10 @@ to both image workflows. That build compiles the image and stops: no login, no p
 no attestation, no policy scan and no alias moves. Forks therefore get no preview and no boot smoke;
 the release path exercises their code once it is on `main`.
 
+When release preflight is required, it owns image vulnerability scanning for both architectures;
+the image-build workflows omit their duplicate amd64 scans. Other published builds retain those
+scans. The final gate rejects a required preflight that is skipped, cancelled or unsuccessful.
+
 ## Image identity
 
 Every consumer resolves an image through the commit the run built it from, and

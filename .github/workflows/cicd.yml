@@ -56,6 +56,7 @@ jobs:
       version-bump: ${{ steps.version_bump.outputs.changed }}
       version: ${{ steps.version.outputs.version }}
       release-candidate: ${{ steps.release_candidate.outputs.release-candidate }}
+      release-preflight: ${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || steps.release_candidate.outputs.release-candidate == 'true' }}
       any-code: ${{ steps.filter.outputs.webapp == 'true' || steps.filter.outputs.application-server == 'true' || steps.filter.outputs.tooling == 'true' || steps.filter.outputs.agent-images == 'true' || steps.filter.outputs.postgres-image == 'true' }}
       # The vulnerability policy's match key includes the platform, so an arm64-only finding has to
       # be found before the release rather than by it, and only a manifest that exists can carry it.
@@ -477,6 +478,7 @@ jobs:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
       single_arch: ${{ needs.detect-changes.outputs.single-arch }}
+      scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
       postgres_base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
       server_changed: ${{ (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       contracts_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
@@ -559,6 +561,7 @@ jobs:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
       single_arch: ${{ needs.detect-changes.outputs.single-arch }}
+      scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
       webapp_changed: ${{ (needs.detect-changes.outputs.webapp-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       application_server_changed: ${{ (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       agent_images_changed: ${{ (needs.detect-changes.outputs.agent-images == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
@@ -625,7 +628,7 @@ jobs:
   Release-preflight:
     name: "Release evidence preflight"
     needs: [detect-changes, Build, Docker]
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || needs.detect-changes.outputs.release-candidate == 'true' }}
+    if: needs.detect-changes.outputs.release-preflight == 'true'
     timeout-minutes: 45
     runs-on: ubuntu-latest
     permissions:

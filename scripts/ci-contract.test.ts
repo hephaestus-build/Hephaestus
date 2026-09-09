@@ -436,6 +436,38 @@ void describe("CI contract", () => {
 		assert.match(source, /inputs.cache-write != 'true' \|\| github.ref != format/);
 	});
 
+	void test("image scans are delegated only to required release preflight", async () => {
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		assert.equal(
+			workflow.getIn(["jobs", "detect-changes", "outputs", "release-preflight"]),
+			`\${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || steps.release_candidate.outputs.release-candidate == 'true' }}`,
+		);
+		for (const name of ["Build", "Docker"])
+			assert.equal(
+				workflow.getIn(["jobs", name, "with", "scan-images"]),
+				`\${{ needs.detect-changes.outputs.release-preflight != 'true' }}`,
+			);
+		for (const file of ["ci-build.yml", "ci-docker-build.yml", "reusable-docker-build.yml"]) {
+			const reusable = parseDocument(await readFile(`.github/workflows/${file}`, "utf8"));
+			assert.equal(
+				reusable.getIn(["on", "workflow_call", "inputs", "scan-images", "default"]),
+				true,
+			);
+			const jobs = reusable.get("jobs");
+			assert.ok(isMap(jobs));
+			for (const { value } of jobs.items)
+				if (isMap(value) && value.get("uses") === "./.github/workflows/reusable-docker-build.yml")
+					assert.equal(value.getIn(["with", "scan-images"]), `\${{ inputs.scan-images }}`);
+		}
+		const docker = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
+		assert.match(
+			String(docker.getIn(["jobs", "scan", "if"])),
+			/inputs.scan-images && inputs.publish/,
+		);
+	});
+
 	void test("path exclusions cannot select unrelated files for server tests or webapp images", async () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const steps = workflow.getIn(["jobs", "detect-changes", "steps"]);
@@ -1273,10 +1305,7 @@ void describe("CI contract", () => {
 		// documents are re-derived and compared exactly as the release re-derives them.
 		assert.match(preflight, /node scripts\/verify-release-evidence\.ts evidence\n/);
 		assert.match(preflight, /max-age-hours: "24"/);
-		assert.match(
-			preflight,
-			/if: \$\{\{ \(github\.event_name == 'workflow_dispatch' && inputs\.release-preflight\) \|\| needs\.detect-changes\.outputs\.release-candidate == 'true' \}\}/,
-		);
+		assert.match(preflight, /if: needs\.detect-changes\.outputs\.release-preflight == 'true'/);
 		assert.match(cicd, /^ {6}release-preflight:$/m);
 		assert.match(job(cicd, "all-ci-passed"), /needs: \[[^\]]*Release-preflight\]/);
 
@@ -1393,7 +1422,7 @@ void describe("CI contract", () => {
 		// every event, and a duplicate-run skip must not take the image builds it needs away.
 		assert.match(
 			String(workflow.getIn(["jobs", "Release-preflight", "if"])),
-			/needs\.detect-changes\.outputs\.release-candidate == 'true'/,
+			/needs\.detect-changes\.outputs\.release-preflight == 'true'/,
 		);
 		assert.match(
 			String(workflow.getIn([...detection, "outputs", "should_skip"])),

@@ -7,6 +7,10 @@ on:
         description: "Digest of the application image built from this run's packaged JAR"
         value: ${{ jobs.application-server-image.outputs.manifest-digest }}
     inputs:
+      scan-images:
+        description: "Scan published images here unless the caller requires complete release evidence instead."
+        type: boolean
+        default: true
       should_skip:
         description: "Whether to skip the workflow"
         required: false
@@ -365,3 +369,4 @@ jobs:
       registry: "ghcr.io"
       publish: ${{ inputs.publish }}
       single-arch: ${{ inputs.single_arch == 'true' }}
+      scan-images: ${{ inputs.scan-images }}

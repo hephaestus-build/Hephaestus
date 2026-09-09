@@ -10,6 +10,10 @@ on:
       SENTRY_PROJECT:
         required: false
     inputs:
+      scan-images:
+        description: "Scan published images here unless the caller requires complete release evidence instead."
+        type: boolean
+        default: true
       should_skip:
         description: "Whether to skip the workflow"
         required: false
@@ -78,6 +82,7 @@ jobs:
         COOLIFY_BRANCH=${{ github.head_ref || github.ref_name }}
       publish: ${{ inputs.publish }}
       single-arch: ${{ inputs.single_arch == 'true' }}
+      scan-images: ${{ inputs.scan-images }}
       labels: |
         org.opencontainers.image.title=Hephaestus Webapp
         org.opencontainers.image.description=Web client for Hephaestus
@@ -105,6 +110,7 @@ jobs:
         SOURCE_COMMIT=${{ github.sha }}
       publish: ${{ inputs.publish }}
       single-arch: ${{ inputs.single_arch == 'true' }}
+      scan-images: ${{ inputs.scan-images }}
       labels: |
         org.opencontainers.image.title=Hephaestus Agent - Pi
         org.opencontainers.image.description=Sandboxed Pi coding agent for AI-powered code review
@@ -132,6 +138,7 @@ jobs:
         SOURCE_COMMIT=${{ github.sha }}
       publish: ${{ inputs.publish }}
       single-arch: ${{ inputs.single_arch == 'true' }}
+      scan-images: ${{ inputs.scan-images }}
       labels: |
         org.opencontainers.image.title=Hephaestus Postgres
         org.opencontainers.image.description=PostgreSQL + pg_partman for all environments (dev/preview/prod)
