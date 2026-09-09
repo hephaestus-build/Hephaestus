@@ -78,6 +78,10 @@ jobs:
           HEAD_SHA: ${{ steps.context.outputs.head_sha }}
           ENVIRONMENT: ${{ steps.context.outputs.environment }}
           PREVIEW_URL: ${{ steps.context.outputs.preview_url }}
+          # `create` puts both in the deployment: the title in the description that tells one
+          # environment from another, the URL in the payload that rides on every status event.
+          PR_TITLE: ${{ steps.context.outputs.pr_title }}
+          PR_URL: ${{ steps.context.outputs.pr_url }}
           SOURCE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |

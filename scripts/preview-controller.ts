@@ -380,12 +380,15 @@ const create = async ({ github, context, core }: ControllerInput): Promise<void>
 	const headSha = requiredEnv(process.env, "HEAD_SHA");
 	const environment = requiredEnv(process.env, "ENVIRONMENT");
 	const number = requiredPositiveInteger(process.env, "PR_NUMBER");
-	const title = process.env.PR_TITLE ?? "";
+	// Required, not defaulted. Every pull request has both, so a caller without them is a caller
+	// with a bug, and a deployment that opens anyway identifies nothing while looking correct.
+	const title = requiredEnv(process.env, "PR_TITLE");
+	const pullRequestUrl = requiredEnv(process.env, "PR_URL");
 	const previewUrl = requiredEnv(process.env, "PREVIEW_URL");
 	// The deployments page lists every environment together, where `preview/pr-2042` alone says
 	// nothing about what is in it. The title is what tells one preview from another at a glance;
 	// GitHub renders this as plain text, so the link lives in the payload rather than here.
-	const described = title ? `PR #${number} · ${title}` : `PR #${number}`;
+	const described = `PR #${number} · ${title}`;
 	const response = await github.rest.repos.createDeployment({
 		owner,
 		repo,
@@ -399,7 +402,7 @@ const create = async ({ github, context, core }: ControllerInput): Promise<void>
 		// a future notifier — can reach the pull request and the preview without another API call.
 		payload: {
 			pull_request: number,
-			pull_request_url: process.env.PR_URL ?? "",
+			pull_request_url: pullRequestUrl,
 			title,
 			preview_url: previewUrl,
 			head_sha: headSha,
