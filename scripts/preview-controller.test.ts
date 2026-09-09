@@ -364,10 +364,14 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 		ENVIRONMENT: "preview/pr-7",
 		PR_NUMBER: "7",
 		PREVIEW_URL: "https://pr7.example",
+		PR_TITLE: "feat(webapp): a readable title",
+		PR_URL: "https://github.example/pull/7",
 		SOURCE_RUN_URL: "https://github.example/runs/50",
 	});
 	let deploymentRef = "";
 	let initialState = "";
+	let description = "";
+	let payload: unknown;
 	const baseGitHub = makeGitHub();
 	const github: GitHubApi = {
 		...baseGitHub,
@@ -381,6 +385,8 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 				},
 				createDeployment: (params: Record<string, unknown>) => {
 					deploymentRef = String(params.ref);
+					description = String(params.description);
+					payload = params.payload;
 					assert.equal(params.task, "deploy:preview");
 					assert.equal(params.transient_environment, true);
 					return Promise.resolve({
@@ -397,6 +403,34 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 	assert.equal(deploymentRef, "head-sha");
 	assert.equal(initialState, "queued");
 	assert.equal(core.outputs.get("deployment_id"), "2");
+	// GitHub renders the environment name on the pull request and the description where every
+	// environment is listed together, so the description is what tells one preview from another.
+	assert.equal(description, "PR #7 · feat(webapp): a readable title");
+	assert.ok(typeof payload === "object" && payload !== null);
+	assert.equal(Reflect.get(payload, "pull_request_url"), "https://github.example/pull/7");
+	assert.equal(Reflect.get(payload, "title"), "feat(webapp): a readable title");
+});
+
+void it("refuses to open a deployment that would carry no title or pull request link", async () => {
+	// A deployment that describes itself as a bare number, or carries an empty link in the payload
+	// that rides on every status event, is worse than one that never opened: it reports success and
+	// identifies nothing.
+	for (const missing of ["PR_TITLE", "PR_URL"]) {
+		Object.assign(process.env, {
+			HEAD_SHA: "head-sha",
+			ENVIRONMENT: "preview/pr-7",
+			PR_NUMBER: "7",
+			PREVIEW_URL: "https://pr7.example",
+			PR_TITLE: "feat(webapp): a readable title",
+			PR_URL: "https://github.example/pull/7",
+			SOURCE_RUN_URL: "https://github.example/runs/50",
+		});
+		delete process.env[missing];
+		await assert.rejects(
+			() => create({ github: makeGitHub(), context: makeContext(), core: makeCore() }),
+			new RegExp(missing),
+		);
+	}
 });
 
 void it("stands down without failing when the head moved during preflight", async () => {
