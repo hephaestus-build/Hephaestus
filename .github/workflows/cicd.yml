@@ -36,7 +36,7 @@ jobs:
       contents: read
     outputs:
       webapp: ${{ steps.filter.outputs.webapp }}
-      webapp-image: ${{ steps.filter.outputs.webapp-image == 'true' || steps.webapp_image_source.outputs.webapp-image-source == 'true' }}
+      webapp-image: ${{ steps.filter.outputs.webapp-image }}
       application-server: ${{ steps.filter.outputs.application-server }}
       tooling: ${{ steps.filter.outputs.tooling }}
       application-server-image: ${{ steps.filter.outputs.application-server-image == 'true' || steps.filter.outputs.docker-config == 'true' || steps.filter.outputs.build-config == 'true' }}
@@ -162,6 +162,10 @@ jobs:
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
             webapp-image:
+              - 'webapp/src/**'
+              - '!webapp/src/**/*.test.*'
+              - '!webapp/src/**/*.stories.*'
+              - '!webapp/src/test/**'
               - '.oxfmtrc.json'
               - 'patches/**'
               - 'webapp/public/**'
@@ -348,17 +352,6 @@ jobs:
               - 'scripts/run-gradlew.ts'
               - '.github/workflows/ci-quality-gates.yml'
               - '.github/workflows/ci-quality-leg.yml'
-
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
-        id: webapp_image_source
-        with:
-          predicate-quantifier: some-with-excludes
-          filters: |
-            webapp-image-source:
-              - 'webapp/src/**'
-              - '!webapp/src/**/*.test.*'
-              - '!webapp/src/**/*.stories.*'
-              - '!webapp/src/test/**'
 
   # `Actionlint` is a required context, and a required context that skips still satisfies the
   # ruleset — docs/contributor/ci-cd.mdx § Merge policy says why.
