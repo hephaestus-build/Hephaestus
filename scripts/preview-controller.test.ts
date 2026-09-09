@@ -741,13 +741,17 @@ void describe("preview schema drift", () => {
 		const reason = core.outputs.get("reason") ?? "";
 		// The three things the author needs: which file, what goes wrong, and what to do about it.
 		assert.match(reason, /0001_drop\.xml/);
-		assert.match(reason, /cannot be checked/);
-		assert.match(reason, /have failed to start/);
+		assert.match(reason, /have failed to start against it/);
 		assert.match(reason, /Merge main in/);
-		// The refusal reports an observation. Claiming a cause is what it got wrong twice: first
-		// Hibernate validation, which `prod` disables, then a schema mismatch a differing blob does
-		// not prove. Neither phrasing may come back.
-		assert.doesNotMatch(reason, /would fail|never produced|no longer match/);
+		// Both mechanisms were reproduced against a restored database, so the reason names them, and
+		// names the step each one stops at: neither branch reaches a started application.
+		assert.match(reason, /Liquibase re-runs migrations/);
+		assert.match(reason, /startup then fails on a column/);
+		// It reports what has gone wrong, never what this branch is guaranteed to hit: a migration
+		// that only adds a table this branch never queries breaks nothing. Two causes it may not
+		// claim are Hibernate validation, which `prod` disables, and a schema mismatch that a
+		// differing blob does not prove.
+		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot|Hibernate/);
 		assert.equal(core.outputs.get("announce"), "true");
 	});
 
@@ -797,13 +801,16 @@ void describe("preview schema drift", () => {
 
 		assert.equal(core.outputs.get("eligible"), "false");
 		const reason = core.outputs.get("reason") ?? "";
-		// Every branch that has reached this was genuinely incompatible, so the reason says what will
-		// happen and how to fix it rather than reporting the comparison's own limit.
+		// At the comparison's limit, whether this branch carries every one of the default branch's
+		// migrations cannot be established — a saturated response does not even prove truncation. So
+		// the reason names the check that could not run, what branches behind on schema have run
+		// into, and how to clear it.
 		assert.match(reason, /behind main/);
+		assert.match(reason, /carries main's migrations/);
 		assert.match(reason, /cannot be checked/);
-		assert.match(reason, /have failed to start/);
+		assert.match(reason, /have failed to start against it/);
 		assert.match(reason, /Merge main in/);
-		assert.doesNotMatch(reason, /would fail|never produced|no longer match/);
+		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot/);
 	});
 
 	void it("ignores prose under the schema directory", async () => {
