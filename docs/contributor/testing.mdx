@@ -99,6 +99,10 @@ Generation and compilation dependencies are automatic. Test tasks always execute
 compilation remains incremental and cacheable. `--no-build-cache` prevents output restoration;
 combine it with `clean` when measuring a cold build.
 
+The shared integration PostgreSQL container keeps its ephemeral data directory on tmpfs. Database
+cleanup still truncates every application table transactionally; SQL constraints and isolation checks
+remain enabled. This container does not prove storage durability across container restarts.
+
 `vp run test:server:selection` asks Gradle/JUnit to discover tests without executing them. It proves
 that non-live tests belong to a required tier and that integration shards are disjoint and complete.
 Required PR verification and `vp run verify` run this proof before the real suites. Discovery writes

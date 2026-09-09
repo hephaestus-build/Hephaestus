@@ -5,6 +5,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Map;
 import java.util.regex.Pattern;
 import liquibase.Contexts;
 import liquibase.Liquibase;
@@ -125,7 +126,8 @@ public final class PostgreSQLTestContainer {
                         .asCompatibleSubstituteFor("postgres"))
                 .withDatabaseName(DEFAULT_TEST_DB)
                 .withUsername(DEFAULT_TEST_USER)
-                .withPassword(DEFAULT_TEST_PASSWORD);
+                .withPassword(DEFAULT_TEST_PASSWORD)
+                .withTmpFs(Map.of("/var/lib/postgresql", "rw"));
 
         newContainer.start();
         ensureExtensions(

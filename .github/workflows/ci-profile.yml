@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        description: "Server tier to profile"
+        description: "Server profile or application-integration runner comparison"
         type: choice
         default: all
-        options: [all, integration, verification]
+        options: [all, integration, verification, runner-comparison]
 
 concurrency:
   group: ci-profile-${{ github.ref }}
@@ -20,7 +20,7 @@ permissions: {}
 jobs:
   server-integration:
     name: "Server integration profile"
-    if: github.event_name != 'workflow_dispatch' || inputs.suite != 'verification'
+    if: github.event_name != 'workflow_dispatch' || (inputs.suite != 'verification' && inputs.suite != 'runner-comparison')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -149,7 +149,7 @@ jobs:
   server-verification:
     name: "Server unit and architecture profile"
     needs: server-integration
-    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.suite != 'integration') }}
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || (inputs.suite != 'integration' && inputs.suite != 'runner-comparison')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -228,3 +228,60 @@ jobs:
           path: tmp/ci-metrics/ci-latency.json
           if-no-files-found: error
           retention-days: 30
+
+  runner-comparison:
+    name: "Application integration (${{ matrix.runner }}, sample ${{ matrix.sample }})"
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'runner-comparison'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            sample: 1
+          - runner: ubuntu-24.04-arm
+            sample: 1
+          - runner: ubuntu-24.04-arm
+            sample: 2
+          - runner: ubuntu-24.04
+            sample: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+      - uses: ./.github/actions/setup-caches
+      - name: Record runner hardware
+        run: |
+          mkdir -p ci-metrics
+          lscpu > ci-metrics/cpu.txt
+          free -m > ci-metrics/memory.txt
+      - name: Prepare compiled tests
+        working-directory: server
+        run: ./gradlew :application:testClasses --profile
+      - name: Run application integration tests
+        env:
+          HEPHAESTUS_INTEGRATION_SHARD: application
+        run: vp run test:server:integration --profile
+      - name: Summarize test results
+        if: ${{ !cancelled() }}
+        run: >-
+          vp run report:test-results "Application integration runner comparison"
+          server/application/build/test-results/integrationTest ci-metrics/test-results.json
+      - name: Retain comparison evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: runner-comparison-${{ matrix.runner }}-${{ matrix.sample }}-${{ github.run_attempt }}
+          path: |
+            ci-metrics
+            server/application/build/test-results/integrationTest
+            server/build/reports/profile
+          if-no-files-found: error
+          retention-days: 14
