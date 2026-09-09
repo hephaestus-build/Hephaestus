@@ -135,6 +135,23 @@ class OrganizationalOidcLoginIntegrationTest extends RealAuthIntegrationTest {
     }
 
     @Test
+    void shouldKeepInstitutionalAndLinkOnlyCatalogBehindAuthentication() {
+        client.get()
+                .uri("/identity-providers")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$[?(@.providerType == 'OIDC')]")
+                .isEmpty()
+                .jsonPath("$[?(@.providerType == 'SLACK')]")
+                .isEmpty()
+                .jsonPath("$[?(@.providerType == 'OUTLINE')]")
+                .isEmpty();
+        client.get().uri("/user/identity-providers").exchange().expectStatus().isUnauthorized();
+    }
+
+    @Test
     void shouldSignInAnOrganizationalAccountThroughTheCompleteCallback() throws Exception {
         var flow = begin("organization", null);
         var result = finish(flow, "member-1", ISSUER, flow.nonce(), null);

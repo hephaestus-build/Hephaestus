@@ -30,13 +30,13 @@ class IdentityProviderDiscoveryControllerTest extends BaseUnitTest {
         provider.setDisplayName("Organization account");
         when(providers.listEnabled()).thenReturn(List.of(provider));
 
-        assertThat(controller.list().getBody())
+        assertThat(controller.accountProviders())
                 .containsExactly(new IdentityProviderDiscoveryController.IdentityProviderViewDTO(
                         "organization", "Organization account", type.name(), provider.getBaseUrl()));
     }
 
     @Test
-    void shouldKeepExactIssuerWhenListingOrganizationalSignIn() {
+    void shouldKeepInstitutionalIdentityAvailableForLinkingWithoutAdvertisingGlobalSignIn() {
         LoginProvider provider = new LoginProvider();
         provider.setRegistrationId("organization");
         provider.setType(LoginProvider.ProviderType.OIDC);
@@ -44,9 +44,25 @@ class IdentityProviderDiscoveryControllerTest extends BaseUnitTest {
         provider.setDisplayName("Organization account");
         when(providers.listEnabled()).thenReturn(List.of(provider));
 
-        assertThat(controller.list().getBody())
+        assertThat(controller.list().getBody()).isEmpty();
+        assertThat(controller.accountProviders())
                 .containsExactly(new IdentityProviderDiscoveryController.IdentityProviderViewDTO(
                         "organization", "Organization account", "OIDC", "https://identity.example.com/realms/team/"));
+    }
+
+    @ParameterizedTest
+    @EnumSource(LoginProvider.ProviderType.class)
+    void shouldAdvertiseOnlyScmProvidersOnPublicEntry(LoginProvider.ProviderType type) {
+        LoginProvider provider = new LoginProvider();
+        provider.setRegistrationId("provider");
+        provider.setType(type);
+        provider.setBaseUrl("https://identity.example.com");
+        provider.setDisplayName("Configured identity");
+        when(providers.listEnabled()).thenReturn(List.of(provider));
+
+        assertThat(controller.list().getBody())
+                .hasSize(
+                        type == LoginProvider.ProviderType.GITHUB || type == LoginProvider.ProviderType.GITLAB ? 1 : 0);
     }
 
     @Test

@@ -2,15 +2,14 @@ import type { IdentityProviderView } from "@/api/types.gen";
 
 /** Synthetic provider type the server emits for the optional passwordless dev sign-in. */
 export const DEV_PROVIDER_TYPE = "DEV";
-const LINK_ONLY_PROVIDER_TYPES = new Set(["SLACK", "OUTLINE"]);
+const SIGN_IN_PROVIDER_TYPES = new Set(["GITHUB", "GITLAB", "OIDC"]);
 
 /**
- * Whether an advertised provider is a way *in*. `/identity-providers` also lists providers that can
- * only be attached to a session that already exists (Slack, Outline) and the dev sign-in, which
- * needs a username field rather than an OAuth redirect — an OAuth-style button for any of them
- * leads to a path that cannot authenticate anybody.
+ * OAuth sign-in capability, including institutional reauthentication from the authenticated catalog.
+ * Slack and Outline only link to an existing account; dev sign-in uses its own username form.
+ * Unknown provider types fail closed rather than becoming a sign-in button automatically.
  */
 export function isSignInProvider(provider: IdentityProviderView): boolean {
 	const type = provider.providerType?.toUpperCase();
-	return type !== DEV_PROVIDER_TYPE && !LINK_ONLY_PROVIDER_TYPES.has(type ?? "");
+	return SIGN_IN_PROVIDER_TYPES.has(type ?? "");
 }

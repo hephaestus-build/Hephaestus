@@ -2092,6 +2092,21 @@ paths:
       summary: Unlink one of the current user's linked identity providers
       tags:
       - Account
+  /user/identity-providers:
+    get:
+      operationId: listAccountIdentityProviders
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IdentityProviderView"
+          description: OK
+      summary: List configured providers for account linking and reauthentication
+      tags:
+      - Auth discovery
   /user/sessions:
     delete:
       operationId: revokeOtherSessions

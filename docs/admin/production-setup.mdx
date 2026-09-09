@@ -240,6 +240,11 @@ This env-seeds **one** default GitLab login provider (registration id `gitlab`).
 
 ### Organizational OpenID Connect sign-in
 
+Institutional providers are not advertised on the public sign-in picker. Developers connect them from
+their authenticated account settings. Explicit institutional sign-in remains supported; it does not
+grant workspace membership. Account confirmation offers only the exact provider instances already
+linked to that account; two GitLab deployments or two institutional realms are not interchangeable.
+
 Organizational sign-in is optional and uses standard OpenID Connect, including providers such as
 Keycloak. It does not grant workspace membership, read directory groups, or change GitHub access.
 The existing GitHub and GitLab sign-in methods remain available.

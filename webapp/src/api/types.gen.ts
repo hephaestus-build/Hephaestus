@@ -7668,6 +7668,22 @@ export type UnlinkIdentityResponses = {
 
 export type UnlinkIdentityResponse = UnlinkIdentityResponses[keyof UnlinkIdentityResponses];
 
+export type ListAccountIdentityProvidersData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/user/identity-providers';
+};
+
+export type ListAccountIdentityProvidersResponses = {
+  /**
+   * OK
+   */
+  200: Array<IdentityProviderView>;
+};
+
+export type ListAccountIdentityProvidersResponse = ListAccountIdentityProvidersResponses[keyof ListAccountIdentityProvidersResponses];
+
 export type RevokeOtherSessionsData = {
   body?: never;
   path?: never;

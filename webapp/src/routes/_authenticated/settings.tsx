@@ -10,7 +10,7 @@ import {
 	getSlackUserPreferencesQueryKey,
 	getUserSettingsOptions,
 	getUserSettingsQueryKey,
-	listIdentityProvidersOptions,
+	listAccountIdentityProvidersOptions,
 	listLinkedIdentitiesOptions,
 	listLinkedIdentitiesQueryKey,
 	unlinkIdentityMutation,
@@ -62,7 +62,7 @@ function RouteComponent() {
 	});
 
 	const identityProvidersQuery = useQuery({
-		...listIdentityProvidersOptions({}),
+		...listAccountIdentityProvidersOptions({}),
 	});
 
 	const updateSettingsMutation = useMutation<

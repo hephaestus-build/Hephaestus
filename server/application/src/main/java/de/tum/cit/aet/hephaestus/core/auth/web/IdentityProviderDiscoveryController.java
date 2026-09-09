@@ -18,8 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
  * page renders one button per entry; each button targets
  * {@code /auth/login?provider={registrationId}}.
  *
- * <p>Lists every enabled instance-scoped {@code login_provider} (GitHub, GitLab.com, self-hosted
- * GitLab, and link-only Slack) — one shared registration per provider, reused across all workspaces.
+ * <p>Public entry offers SCM providers only. Institutional and secondary providers belong to the
+ * authenticated account-linking catalog or an explicitly configured workspace entry.
  */
 @ConditionalOnServerRole
 @RestController
@@ -52,11 +52,8 @@ public class IdentityProviderDiscoveryController {
         // not take the public picker (or the account-linking page) down with it.
         List<IdentityProviderViewDTO> views = new ArrayList<>();
         for (LoginProvider provider : loginProviderService.listEnabled()) {
-            views.add(new IdentityProviderViewDTO(
-                    provider.getRegistrationId(),
-                    provider.getDisplayName(),
-                    provider.getType().name(),
-                    provider.getBaseUrl()));
+            if (provider.getType() == LoginProvider.ProviderType.GITHUB
+                    || provider.getType() == LoginProvider.ProviderType.GITLAB) views.add(view(provider));
         }
         // Optional passwordless dev sign-in. Advertised ONLY when enabled (never in prod), so the SPA
         // login page renders a "Dev sign-in" affordance (username field → POST /auth/dev-login) instead
@@ -65,5 +62,24 @@ public class IdentityProviderDiscoveryController {
             views.add(new IdentityProviderViewDTO(DEV_REGISTRATION_ID, "Dev sign-in", DEV_PROVIDER_TYPE, ""));
         }
         return ResponseEntity.ok(views);
+    }
+
+    @GetMapping("/user/identity-providers")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(
+            summary = "List configured providers for account linking and reauthentication",
+            operationId = "listAccountIdentityProviders")
+    public List<IdentityProviderViewDTO> accountProviders() {
+        return loginProviderService.listEnabled().stream()
+                .map(IdentityProviderDiscoveryController::view)
+                .toList();
+    }
+
+    private static IdentityProviderViewDTO view(LoginProvider provider) {
+        return new IdentityProviderViewDTO(
+                provider.getRegistrationId(),
+                provider.getDisplayName(),
+                provider.getType().name(),
+                provider.getBaseUrl());
     }
 }
