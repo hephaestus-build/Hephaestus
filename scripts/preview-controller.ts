@@ -268,11 +268,12 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 	// What these messages may claim is bounded by what is actually known. Two mechanisms are, each
 	// reproduced by booting a released branch image against a database restored from the default
 	// branch. A branch from before a changelog was rewritten does not find its changeset ids
-	// recorded, so Liquibase re-runs them, PostgreSQL refuses the relation that already exists, and
-	// the boot stops there. A branch missing a migration that dropped a column its entities still
-	// map boots without complaint — `prod` sets `ddl-auto: none`, so nothing validates the mapping —
-	// and fails on the first query that reads it. They fail at different points, and the reason
-	// keeps them apart.
+	// recorded, so Liquibase re-runs those migrations and PostgreSQL refuses the relation that
+	// already exists. A branch missing a migration that dropped a column its entities still map
+	// passes Liquibase untouched and gets as far as a started web server, then fails a startup query
+	// for that column — `prod` sets `ddl-auto: none`, so nothing validates the mapping ahead of it.
+	// Both end in a container that never finished starting, at different steps, and the reason keeps
+	// the steps apart.
 	//
 	// Neither makes every missing migration fatal: one that only adds a table this branch never
 	// queries is harmless, and two changelogs can reach one schema by different text. So the reason
@@ -283,8 +284,8 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 			`PR #${number} is ${behindFiles.length}+ files behind ${defaultBranch} — too many for GitHub ` +
 				`to compare in full, so whether this branch still carries ${defaultBranch}'s migrations ` +
 				`cannot be checked. A preview restores ${defaultBranch}'s database, and branches behind ` +
-				`on schema have failed against it. Merge ${defaultBranch} in; the next push previews ` +
-				`automatically.`,
+				`on schema have failed to start against it. Merge ${defaultBranch} in; the next push ` +
+				`previews automatically.`,
 		);
 	}
 	for (const file of behindFiles) {
@@ -299,10 +300,10 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		if (await branchHasBlob(github, owner, repo, pull.head.sha, file)) continue;
 		return skip(
 			`PR #${number} does not have ${defaultBranch}'s \`${file.filename}\`. A preview restores ` +
-				`${defaultBranch}'s database, and branches in that state have failed against it: ` +
-				`Liquibase stops the boot on changesets that database already recorded under other ` +
-				`ids, or the application starts and then fails the first query that reads a column a ` +
-				`later migration dropped. Merge ${defaultBranch} in; the next push previews ` +
+				`${defaultBranch}'s database, and branches in that state have failed to start against ` +
+				`it: Liquibase re-runs migrations that database has no record of and stops on a ` +
+				`relation that already exists, or Liquibase passes and startup then fails on a column ` +
+				`one of those migrations dropped. Merge ${defaultBranch} in; the next push previews ` +
 				`automatically.`,
 		);
 	}

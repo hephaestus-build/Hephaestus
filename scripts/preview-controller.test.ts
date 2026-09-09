@@ -741,12 +741,12 @@ void describe("preview schema drift", () => {
 		const reason = core.outputs.get("reason") ?? "";
 		// The three things the author needs: which file, what goes wrong, and what to do about it.
 		assert.match(reason, /0001_drop\.xml/);
-		assert.match(reason, /have failed against it/);
+		assert.match(reason, /have failed to start against it/);
 		assert.match(reason, /Merge main in/);
-		// Both mechanisms were reproduced against a restored database, so the reason names them —
-		// and keeps them apart, because only one of the two stops the boot.
-		assert.match(reason, /Liquibase stops the boot/);
-		assert.match(reason, /starts and then fails the first query/);
+		// Both mechanisms were reproduced against a restored database, so the reason names them, and
+		// names the step each one stops at: neither branch reaches a started application.
+		assert.match(reason, /Liquibase re-runs migrations/);
+		assert.match(reason, /startup then fails on a column/);
 		// It still reports what has gone wrong, never what this branch is guaranteed to hit: a
 		// migration that only adds a table this branch never queries breaks nothing. The two
 		// phrasings that overclaimed — Hibernate validation, which `prod` disables, and a schema
@@ -801,14 +801,14 @@ void describe("preview schema drift", () => {
 
 		assert.equal(core.outputs.get("eligible"), "false");
 		const reason = core.outputs.get("reason") ?? "";
-		// Every branch that has reached this was genuinely incompatible, so the reason says what will
-		// happen and how to fix it rather than reporting the comparison's own limit.
+		// A saturated comparison establishes nothing about this branch, so the reason names the check
+		// that could not run, what branches behind on schema have run into, and how to clear it.
 		assert.match(reason, /behind main/);
 		// Truncation is the one case where the check genuinely could not run, so the reason says so,
 		// and says which check: whether the branch still carries the default branch's migrations.
 		assert.match(reason, /carries main's migrations/);
 		assert.match(reason, /cannot be checked/);
-		assert.match(reason, /have failed against it/);
+		assert.match(reason, /have failed to start against it/);
 		assert.match(reason, /Merge main in/);
 		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot/);
 	});
