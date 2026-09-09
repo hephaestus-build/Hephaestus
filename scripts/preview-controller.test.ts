@@ -737,8 +737,11 @@ void describe("preview schema drift", () => {
 		});
 
 		assert.equal(core.outputs.get("eligible"), "false");
-		assert.match(core.outputs.get("reason") ?? "", /0001_drop\.xml/);
-		assert.match(core.outputs.get("reason") ?? "", /Update the branch/);
+		const reason = core.outputs.get("reason") ?? "";
+		// The three things the author needs: which file, what goes wrong, and what to do about it.
+		assert.match(reason, /0001_drop\.xml/);
+		assert.match(reason, /fail validation/);
+		assert.match(reason, /Merge main in/);
 		assert.equal(core.outputs.get("announce"), "true");
 	});
 
@@ -772,7 +775,7 @@ void describe("preview schema drift", () => {
 		assert.equal(core.outputs.get("eligible"), "false");
 	});
 
-	void it("cannot verify a comparison GitHub truncated, and says so rather than admitting it", async () => {
+	void it("refuses a branch too far behind to compare, naming the consequence not the tool", async () => {
 		// The response caps at COMPARE_FILE_LIMIT and flags no truncation, so a saturated answer is
 		// not evidence that no migration is missing.
 		const core = makeCore();
@@ -787,7 +790,13 @@ void describe("preview schema drift", () => {
 		});
 
 		assert.equal(core.outputs.get("eligible"), "false");
-		assert.match(core.outputs.get("reason") ?? "", /cannot be verified/);
+		const reason = core.outputs.get("reason") ?? "";
+		// Every branch that has reached this was genuinely incompatible, so the reason says what will
+		// happen and how to fix it rather than reporting the comparison's own limit.
+		assert.match(reason, /behind main/);
+		assert.match(reason, /fail validation/);
+		assert.match(reason, /Merge main in/);
+		assert.doesNotMatch(reason, /cannot be verified/);
 	});
 
 	void it("ignores prose under the schema directory", async () => {
