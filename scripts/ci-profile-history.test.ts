@@ -141,3 +141,27 @@ void test("both profile tiers use a fresh Gradle process", () => {
 		assert.match(String(profile.get("run")), /--no-daemon/);
 	}
 });
+
+void test("runner comparisons are manual, sequential and separate from profile history", () => {
+	const benchmark = workflow.getIn(["jobs", "runner-comparison"]);
+	assert.ok(isMap(benchmark));
+	assert.match(
+		String(benchmark.get("if")),
+		/github\.event_name == 'workflow_dispatch' && inputs\.suite == 'runner-comparison'/,
+	);
+	assert.equal(benchmark.getIn(["strategy", "max-parallel"]), 1);
+	assert.equal(benchmark.getIn(["strategy", "fail-fast"]), false);
+	const matrix = benchmark.getIn(["strategy", "matrix", "include"]);
+	assert.ok(isSeq(matrix));
+	assert.deepEqual(matrix.toJSON(), [
+		{ runner: "ubuntu-24.04", sample: 1 },
+		{ runner: "ubuntu-24.04-arm", sample: 1 },
+		{ runner: "ubuntu-24.04-arm", sample: 2 },
+		{ runner: "ubuntu-24.04", sample: 2 },
+	]);
+	for (const job of ["server-integration", "server-verification"])
+		assert.match(
+			String(workflow.getIn(["jobs", job, "if"])),
+			/inputs\.suite != 'runner-comparison'/,
+		);
+});

@@ -656,6 +656,13 @@ measurements. GNU time's CPU/RSS accounting does not reliably include Gradle's d
 values are not reported as suite metrics or compared against budgets. Inspect the retained JFR recordings
 for JVM CPU, allocation and GC diagnostics instead.
 
+The manual `runner-comparison` selection runs the application integration shard twice each on standard
+Ubuntu 24.04 x64 and ARM64 runners, one job at a time. Preparation is a separate step so cold dependency
+and compilation caches are not mistaken for test execution speed. Each sample retains runner hardware,
+JUnit results and Gradle task profiles. Compare actual job ordering, test counts and execution time as
+well as end-to-end latency; matrix declaration order is not a scheduling guarantee. These samples do
+not enter full-suite JFR history and do not change the runners used for required CI.
+
 The integration profile additionally records Spring context-cache metrics. It warns about
 a sustained regression after three consecutive profiles exceed variance limits against five earlier
 default-branch profiles or absolute Spring-context limits. Only successful test runs with a readable
