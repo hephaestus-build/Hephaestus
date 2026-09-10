@@ -437,6 +437,36 @@ void describe("CI contract", () => {
 		assert.match(source, /inputs.cache-write != 'true' \|\| github.ref != format/);
 	});
 
+	void test("OpenAPI generation uses the read-only Gradle setup but runtime-only E2E does not", async () => {
+		const api = parseDocument(await readFile(".github/workflows/openapi-autocommit.yml", "utf8"));
+		const setup = namedStep(api, ["jobs", "generate"], "Set up Java build");
+		assert.equal(setup.get("uses"), "./.github/actions/setup-caches");
+		assert.notEqual(setup.getIn(["with", "cache-write"]), "true");
+		assert.equal(api.getIn(["jobs", "generate", "permissions", "contents"]), "read");
+		assert.doesNotMatch(job(String(api), "generate"), /actions\/setup-java@/);
+		assert.doesNotMatch(job(String(api), "commit"), /setup-caches|gradlew|vp run/);
+		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
+		assert.match(job(build, "webapp-e2e"), /actions\/setup-java@/);
+		assert.doesNotMatch(job(build, "webapp-e2e"), /setup-caches|gradlew/);
+	});
+
+	void test("GHCR-only rescans share login while the image builder keeps its registry input", async () => {
+		const rescan = parseDocument(
+			await readFile(".github/workflows/rescan-main-images.yml", "utf8"),
+		);
+		const login = namedStep(rescan, ["jobs", "rescan"], "Log in to Container Registry");
+		assert.equal(login.get("uses"), "./.github/actions/ghcr-login");
+		assert.equal(login.getIn(["with", "username"]), `\${{ github.actor }}`);
+		assert.equal(login.getIn(["with", "password"]), `\${{ secrets.GITHUB_TOKEN }}`);
+		const reusable = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
+		for (const name of ["build", "merge", "scan"]) {
+			const registry = step(reusable, ["jobs", name], "docker/login-action");
+			assert.equal(registry.get("registry"), `\${{ inputs.registry }}`);
+		}
+	});
+
 	void test("image scans are delegated only to required release preflight", async () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		assert.equal(
@@ -1177,11 +1207,10 @@ void describe("CI contract", () => {
 		);
 		const declared = reusable.getIn(["env", "STANDARD_IMAGE_TAGS"]);
 		assert.equal(typeof declared, "string");
-		// `${{ github.event_name <op> '<event>' && <expression> || '' }}`: every tag the build
-		// publishes is guarded on the event that started the run, so a consumer can derive from its
-		// own event which tags exist. A tag published under every event names the attempt rather than
-		// the artefact, and a re-run of a failed job would resolve nothing.
-		const guard = /^\$\{\{ github\.event_name (==|!=) '(\w+)' && (.+?) \|\| '' }}$/;
+		// Native metadata-action entries keep the event guard alongside the value. A tag names
+		// the artifact, not a run attempt that a re-run could never resolve.
+		const guard =
+			/^type=raw,value=\$\{\{ (.+?) }},enable=\$\{\{ github\.event_name (==|!=) '(\w+)' }}$/;
 		const lines = String(declared)
 			.split("\n")
 			.filter((line) => line.length > 0);
@@ -1189,8 +1218,30 @@ void describe("CI contract", () => {
 			lines.flatMap((line) => {
 				const parsed = guard.exec(line);
 				assert.ok(parsed, `image tag "${line}" is published under every event`);
-				return (parsed[1] === "==") === (parsed[2] === event) ? [String(parsed[3])] : [];
+				return (parsed[2] === "==") === (parsed[3] === event) ? [String(parsed[1])] : [];
 			});
+
+		assert.deepEqual(publishedOn("push"), [
+			"github.ref_name",
+			"format('ci-{0}', github.run_number)",
+			"github.sha",
+		]);
+		assert.deepEqual(publishedOn("pull_request"), [
+			"github.event.pull_request.head.sha",
+			"format('pr-{0}', github.event.number)",
+		]);
+		for (const event of ["merge_group", "workflow_dispatch"])
+			assert.deepEqual(publishedOn(event), ["github.sha"]);
+		for (const name of ["build", "merge"]) {
+			const metadata = step(reusable, ["jobs", name], "docker/metadata-action");
+			assert.equal(
+				metadata.get("tags"),
+				name === "build"
+					? `\${{ inputs.single-arch && env.STANDARD_IMAGE_TAGS || '' }}`
+					: `\${{ env.STANDARD_IMAGE_TAGS }}`,
+			);
+		}
+		assert.doesNotMatch(String(reusable), /steps\.tags\.outputs|Prepare tag configuration/);
 
 		const source = await readFile(".github/workflows/cicd.yml", "utf8");
 		const triggers = /^on:\n([\s\S]*?)^\S/m.exec(source)?.[1] ?? "";
