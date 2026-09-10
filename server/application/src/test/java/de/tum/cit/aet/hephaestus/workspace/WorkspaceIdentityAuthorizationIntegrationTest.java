@@ -35,15 +35,12 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
     private WorkspaceRepository workspaces;
 
     @Test
-    void shouldKeepTheVerifiedOwnerWhenLoginsCollideAndDenyAccessWhenItsLinkIsDisabled() {
+    void shouldKeepAccountOwnershipButRemoveScmAttributionWhenItsLinkIsDisabled() {
         var namesake = persistUser("shared-login");
         var provider = ensureGitLabProvider();
         var providerId = provider.getId();
         assertNotNull(providerId);
         var owner = userRepository.saveAndFlush(TestUserFactory.createUser(987L, "shared-login", provider));
-        var workspace = createWorkspace("identity-http", "Identity", "identity", AccountType.ORG, owner);
-        workspace.setIsPubliclyViewable(false);
-        workspaces.saveAndFlush(workspace);
         var account = accounts.saveAndFlush(new Account("Verified owner"));
         var accountId = account.getId();
         assertNotNull(accountId);
@@ -54,6 +51,10 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
         link.setUsernameAtSignup("shared-login");
         link.setExternalActorId(namesake.getId());
         link = identities.saveAndFlush(link);
+        var workspace = createWorkspace("identity-http", "Identity", "identity", AccountType.ORG, owner);
+        workspace.setIsPubliclyViewable(false);
+        workspaces.saveAndFlush(workspace);
+
         String token = "mock-jwt-user-sub-" + accountId;
         String path = "/workspaces/identity-http/members/me";
 
@@ -64,8 +65,8 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.userId")
-                .isEqualTo(owner.getId());
+                .jsonPath("$.accountId")
+                .isEqualTo(accountId);
 
         owner.setLogin("renamed-login");
         userRepository.saveAndFlush(owner);
@@ -77,9 +78,9 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.userId")
-                .isEqualTo(owner.getId())
-                .jsonPath("$.userLogin")
+                .jsonPath("$.accountId")
+                .isEqualTo(accountId)
+                .jsonPath("$.scmUserLogin")
                 .isEqualTo("renamed-login");
 
         link.setDisabledAt(Instant.now());
@@ -89,17 +90,23 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
                 .headers(headers -> headers.setBearerAuth(token))
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isOk()
+                .expectBody()
+                .jsonPath("$.accountId")
+                .isEqualTo(accountId)
+                .jsonPath("$.scmUserLogin")
+                .doesNotExist();
         assertThat(identities.findActiveByAccountId(accountId)).isEmpty();
         assertThat(accounts.findById(accountId)).isPresent();
     }
 
     @Test
-    void shouldReportUnionedRoleWithoutChangingTheFirstLinkedActor() {
-        var olderActor = persistUser("older-http-actor");
-        var firstActor = persistUser("first-http-actor");
-        var workspace = createWorkspace("identity-http-roles", "Roles", "roles", AccountType.ORG, olderActor);
-        ensureWorkspaceMembership(workspace, firstActor, WorkspaceMembership.WorkspaceRole.MEMBER);
+    void shouldNotPromoteAnAccountFromALinkedContributorsProviderRole() {
+        var provider = ensureGitLabProvider();
+        var olderActor = userRepository.saveAndFlush(TestUserFactory.createUser(543L, "older-http-actor", provider));
+        var firstActor = userRepository.saveAndFlush(TestUserFactory.createUser(544L, "first-http-actor", provider));
+        var workspace = createWorkspace(
+                "identity-http-roles", "Roles", "roles", AccountType.ORG, persistUser("workspace-owner"));
         var account = accounts.saveAndFlush(new Account("Multi-identity member"));
         var accountId = account.getId();
         assertNotNull(accountId);
@@ -110,6 +117,8 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
             link.setSubject(actor.getNativeId().toString());
             identities.saveAndFlush(link);
         }
+        ensureWorkspaceMembership(workspace, firstActor, WorkspaceMembership.WorkspaceRole.MEMBER);
+        ensureWorkspaceMembership(workspace, olderActor, WorkspaceMembership.WorkspaceRole.OWNER);
         client.get()
                 .uri("/workspaces/identity-http-roles/members/me")
                 .headers(headers -> headers.setBearerAuth("mock-jwt-user-sub-" + accountId))
@@ -117,10 +126,10 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.userId")
-                .isEqualTo(firstActor.getId())
+                .jsonPath("$.scmUserLogin")
+                .isEqualTo(firstActor.getLogin())
                 .jsonPath("$.role")
-                .isEqualTo("OWNER");
+                .isEqualTo("MEMBER");
     }
 
     @ParameterizedTest

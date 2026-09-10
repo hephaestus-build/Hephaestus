@@ -312,12 +312,15 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
         workspaceRepository.save(stored);
     }
 
+    @Autowired
+    private de.tum.cit.aet.hephaestus.workspace.WorkspaceAccountMembershipRepository accountMemberships;
+
     private void promoteColleagueToAdmin() {
-        workspaceMembershipRepository
-                .findByWorkspace_IdAndUser_Id(workspace.getId(), colleague.getId())
+        accountMemberships
+                .findByWorkspace_IdAndAccountId(workspace.getId(), accountId(colleague))
                 .ifPresent(membership -> {
                     membership.setRole(WorkspaceRole.ADMIN);
-                    workspaceMembershipRepository.save(membership);
+                    accountMemberships.save(membership);
                 });
     }
 

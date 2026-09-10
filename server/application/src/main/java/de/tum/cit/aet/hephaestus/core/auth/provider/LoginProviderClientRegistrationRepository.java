@@ -3,11 +3,11 @@ package de.tum.cit.aet.hephaestus.core.auth.provider;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.core.auth.spi.IdentityProviderCatalog;
+import de.tum.cit.aet.hephaestus.core.security.OidcIssuerPolicy;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
@@ -29,6 +29,8 @@ public class LoginProviderClientRegistrationRepository
 
     private final LoginProviderRepository loginProviderRepository;
     private final OutlineOriginPolicy outlineOriginPolicy;
+    private final OidcIssuerPolicy oidcIssuerPolicy;
+    private final OidcProviderDiscovery oidcProviderDiscovery;
 
     /**
      * {@code redirect_uri} template. {@code {baseUrl}} expands per request to the public origin (scheme
@@ -45,9 +47,13 @@ public class LoginProviderClientRegistrationRepository
     public LoginProviderClientRegistrationRepository(
             LoginProviderRepository loginProviderRepository,
             String apiBasePath,
-            OutlineOriginPolicy outlineOriginPolicy) {
+            OutlineOriginPolicy outlineOriginPolicy,
+            OidcIssuerPolicy oidcIssuerPolicy,
+            OidcProviderDiscovery oidcProviderDiscovery) {
         this.loginProviderRepository = loginProviderRepository;
         this.outlineOriginPolicy = outlineOriginPolicy;
+        this.oidcIssuerPolicy = oidcIssuerPolicy;
+        this.oidcProviderDiscovery = oidcProviderDiscovery;
         this.callbackTemplate = "{baseUrl}" + apiBasePath + "/login/oauth2/code/{registrationId}";
     }
 
@@ -89,25 +95,30 @@ public class LoginProviderClientRegistrationRepository
 
     @Override
     public boolean hasEnabledPrimarySignInProvider() {
-        return loginProviderRepository.existsByEnabledTrueAndTypeIn(
-                Set.of(LoginProvider.ProviderType.GITHUB, LoginProvider.ProviderType.GITLAB));
+        return loginProviderRepository.findByEnabledTrueOrderByDisplayNameAsc().stream()
+                .filter(this::isApproved)
+                .anyMatch(provider -> !provider.getType().isLinkOnly());
     }
 
     private boolean isApproved(LoginProvider provider) {
         return (provider.getType() != LoginProvider.ProviderType.OUTLINE
-                || outlineOriginPolicy.allows(provider.getBaseUrl()));
+                        || outlineOriginPolicy.allows(provider.getBaseUrl()))
+                && (provider.getType() != LoginProvider.ProviderType.OIDC
+                        || oidcIssuerPolicy.allows(provider.getBaseUrl()));
     }
 
     private ClientRegistration toRegistration(LoginProvider provider) {
         String base = provider.getBaseUrl().replaceAll("/+$", "");
-        ClientRegistration.Builder builder = ClientRegistration.withRegistrationId(provider.getRegistrationId())
-                .clientId(provider.getClientId())
+        ClientRegistration.Builder builder = provider.getType() == LoginProvider.ProviderType.OIDC
+                ? oidcProviderDiscovery.discover(provider.getBaseUrl()).registrationId(provider.getRegistrationId())
+                : ClientRegistration.withRegistrationId(provider.getRegistrationId())
+                        .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                        .userNameAttributeName("id");
+        builder.clientId(provider.getClientId())
                 .clientSecret(provider.getClientSecret())
-                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
                 .redirectUri(callbackTemplate)
                 .scope(provider.getScopes().trim().split("\\s+"))
-                .userNameAttributeName("id")
                 .clientName(provider.getDisplayName());
 
         if (provider.getType() == LoginProvider.ProviderType.GITHUB) {
@@ -136,7 +147,7 @@ public class LoginProviderClientRegistrationRepository
             builder.authorizationUri(base + "/oauth/authorize")
                     .tokenUri(base + "/oauth/token")
                     .userInfoUri(base + "/api/auth.info");
-        } else {
+        } else if (provider.getType() == LoginProvider.ProviderType.GITLAB) {
             // GitLab (gitlab.com or self-hosted) — all endpoints hang off the instance base URL.
             builder.authorizationUri(base + "/oauth/authorize")
                     .tokenUri(base + "/oauth/token")

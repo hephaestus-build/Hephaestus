@@ -12,7 +12,7 @@ const workspaceWithOwner: AdminWorkspaceView = {
 	status: "ACTIVE",
 	accountLogin: "aet-org",
 	providerType: "GITHUB",
-	ownerLogin: "octocat",
+	ownerDisplayName: "octocat",
 	ownerAccountId: 101,
 	memberCount: 42,
 	createdAt: new Date("2026-01-15T00:00:00Z"),

@@ -163,7 +163,9 @@ describe("instance AI models route", () => {
 			),
 			// The instance also offers GitHub, but this account has only ever signed in with GitLab.
 			http.get("*/user/identities", () =>
-				HttpResponse.json([{ id: 2, providerType: "GITLAB", username: "ada" }]),
+				HttpResponse.json([
+					{ id: 2, providerType: "GITLAB", serverUrl: "https://gitlab.lrz.de", username: "ada" },
+				]),
 			),
 		);
 

@@ -259,7 +259,7 @@ function HeaderContainer() {
 		userName: workspaceUserName,
 	} = useWorkspaceAccess();
 
-	const effectiveUsername = workspaceUserLogin ?? username;
+	const effectiveUsername = chromeWorkspaceSlug ? workspaceUserLogin : username;
 	const effectiveName =
 		workspaceUserName ?? (userProfile && `${userProfile.firstName} ${userProfile.lastName}`);
 	// Feedback about the product reaches instance administrators either way; carrying the chrome's

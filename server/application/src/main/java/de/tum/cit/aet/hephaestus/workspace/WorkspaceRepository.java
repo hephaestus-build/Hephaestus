@@ -32,6 +32,13 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
     @Query("SELECT w FROM Workspace w WHERE w.id = :id")
     Optional<Workspace> findByIdForUpdate(@Param("id") Long id);
 
+    /** Account deletion already owns the account lock, so it must not wait behind a workspace-first mutation. */
+    @WorkspaceAgnostic("Non-waiting lock of the tenant root for account deletion's last-owner check")
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "0"))
+    @Query("SELECT w FROM Workspace w WHERE w.id = :id")
+    Optional<Workspace> findByIdForUpdateNowait(@Param("id") Long id);
+
     /**
      * {@link #findByIdForUpdate} for a caller that only has the slug. One locking query, not a lookup
      * followed by a locking read: the second call returns the persistence context's existing instance

@@ -53,12 +53,21 @@ Outline support linking only, not sign-in.
   against the nOAuth (Descope 2023) account-takeover class. `IdentityLinkRepository` has no
   `findByEmail`.
 - **Login providers are instance-scoped.**
-  A sign-in option — GitHub, GitLab.com, or a self-hosted GitLab — is a row in the instance
-  `login_provider` table (`core.auth.provider`), **one per SCM instance** (`UNIQUE(type, base_url)`),
+  A sign-in option — GitHub, GitLab, or an approved organizational OpenID Connect issuer — is a row
+  in the instance `login_provider` table (`core.auth.provider`), **one per provider instance**
+  (`UNIQUE(type, base_url)`),
   env-seeded on first boot and managed at runtime by an instance admin. The client secret is sealed
   by `EncryptedStringConverter` (AES-256-GCM). This is **authentication** only; a workspace's SCM
   data source is a separate per-workspace `Connection` + group token/PAT. ADR 0017 records why the
   two are separate.
+- **Organizational identity is the exact validated `(issuer, subject)` pair.**
+  OIDC provider keys preserve the issuer's realm path, case and trailing slash; neither a tenant claim,
+  a username nor an email address changes that key. Issuers are operator-approved and immutable once
+  registered. Spring Security validates ID tokens and drives authorization code, PKCE and nonce
+  handling. Discovery, token, userinfo and signing-key requests use DNS-time SSRF checks without
+  redirects. Organizational bootstrap administrators match only the stable subject. Configuration
+  and recovery belong to [the operator guide](admin/production-setup.mdx#organizational-openid-connect-sign-in).
+  Organizational authentication alone grants no workspace membership or provider-side permissions.
 - **Impersonation reissues the token.** There is no server-side session to switch, so an
   instance admin mints a target-scoped JWT carrying the actor claim defined in
   [the auth glossary](./auth-glossary.md#jwt-claim-shape).

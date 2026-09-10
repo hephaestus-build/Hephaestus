@@ -171,15 +171,19 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
     @WithAdminUser
     void installationCreationCollidingWithHistoryFailsFast() {
         User owner = persistUser("install-owner");
-        // Ensure a user exists with the installation account login so owner sync succeeds
-        persistUser("install-alpha");
+        User installationActor = persistUser("install-alpha");
         Workspace workspace = createWorkspace("install-alpha", "Alpha", "alpha", AccountType.ORG, owner);
         ensureOwnerMembership(workspace);
 
         workspaceService.renameSlug(workspace.getId(), "install-alpha-renamed");
 
-        Workspace created =
-                githubLifecycleListener.createOrUpdateFromInstallation(999L, "install-alpha", RepositorySelection.ALL);
+        Workspace created = githubLifecycleListener.createOrUpdateFromInstallation(
+                999L,
+                installationActor.getNativeId(),
+                "install-alpha",
+                de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener.AccountKind.ORGANIZATION,
+                null,
+                RepositorySelection.ALL);
 
         assertThat(created).as("workspace should be created with fallback slug").isNotNull();
         assertThat(created.getWorkspaceSlug()).isNotEqualTo("install-alpha");

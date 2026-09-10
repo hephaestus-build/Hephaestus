@@ -16,6 +16,9 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -79,6 +82,12 @@ public class AccountProvisioningService {
     public ProvisionResult resolveOrProvision(
             String registrationId, String subject, OAuth2User principal, AuthIntentCookie.@Nullable Intent intent) {
         LoginProvider provider = requireLoginProvider(registrationId);
+        if (provider.getType() == LoginProvider.ProviderType.OIDC
+                && (!(principal instanceof OidcUser oidc)
+                        || !provider.getBaseUrl().equals(oidc.getIdToken().getClaimAsString("iss"))
+                        || !subject.equals(oidc.getIdToken().getSubject()))) {
+            throw new OAuth2AuthenticationException(new OAuth2Error("invalid_id_token"));
+        }
         long providerId =
                 gitProviderRegistry.resolveProviderId(provider.getType().name(), provider.getBaseUrl());
         AuthIntentCookie.Intent.Mode mode = (intent != null) ? intent.mode() : AuthIntentCookie.Intent.Mode.LOGIN;
@@ -88,7 +97,9 @@ public class AccountProvisioningService {
         if (provider.getType().isLinkOnly() && mode != AuthIntentCookie.Intent.Mode.LINK) {
             throw new LinkOnlyProviderLoginException(registrationId);
         }
-        String teamId = teamIdOf(principal);
+        // Organizational usernames may be mutable or reassigned; only the validated subject can bootstrap an admin.
+        String bootstrapLogin = provider.getType() == LoginProvider.ProviderType.OIDC ? null : loginOf(principal);
+        String teamId = provider.getType() == LoginProvider.ProviderType.OIDC ? null : teamIdOf(principal);
         // Both link-only providers are multi-tenant: a Slack U… / Outline user UUID is only unique within
         // its team, so a null teamId would alias identities across tenants — fail closed.
         if (provider.getType().isLinkOnly() && (teamId == null || teamId.isBlank())) {
@@ -117,7 +128,7 @@ public class AccountProvisioningService {
                     registrationId,
                     link.getAccount().getId());
             return new ProvisionResult(
-                    promoteIfBootstrapAdmin(link.getAccount(), registrationId, subject, loginOf(principal)), false);
+                    promoteIfBootstrapAdmin(link.getAccount(), registrationId, subject, bootstrapLogin), false);
         }
 
         if (mode == AuthIntentCookie.Intent.Mode.LINK) {
@@ -158,19 +169,18 @@ public class AccountProvisioningService {
                     created.getId(),
                     registrationId,
                     resolvedEmail.verified());
-            String login = loginOf(principal);
-            Account result = promoteIfBootstrapAdmin(created, registrationId, subject, login);
+            Account result = promoteIfBootstrapAdmin(created, registrationId, subject, bootstrapLogin);
             if (result.getAppRole() != Account.AppRole.APP_ADMIN && adminBootstrapPolicy.isConfigured()) {
                 // Cold-start aid: a new account on an allowlist-configured instance that did NOT match.
                 // Logs the exact identity so a mis-listed first admin can self-diagnose in one line
                 // instead of silently landing as a plain USER with no Admin nav.
                 log.info(
                         "auth.bootstrap: new accountId={} did NOT match bootstrap-admins (provider={} subject={} username=@{}). "
-                                + "Add 'provider:@username' or 'provider:subject' to grant APP_ADMIN.",
+                                + "Add 'provider:subject' to grant APP_ADMIN.",
                         result.getId(),
                         registrationId,
                         subject,
-                        login);
+                        bootstrapLogin);
             }
             return new ProvisionResult(result, false); // fresh JIT login, not a link onto an existing account
         } catch (DataIntegrityViolationException e) {
@@ -186,7 +196,7 @@ public class AccountProvisioningService {
                                 winner.getId(),
                                 registrationId);
                         return new ProvisionResult(
-                                promoteIfBootstrapAdmin(winner, registrationId, subject, loginOf(principal)), false);
+                                promoteIfBootstrapAdmin(winner, registrationId, subject, bootstrapLogin), false);
                     })
                     .orElseThrow(() -> new IllegalStateException(
                             "auth.success: JIT create lost the race for provider=" + registrationId
@@ -205,7 +215,8 @@ public class AccountProvisioningService {
     private LoginProvider requireLoginProvider(String registrationId) {
         return loginProviderRepository
                 .findByRegistrationId(registrationId)
-                .orElseThrow(() -> new IllegalArgumentException("unknown login registrationId: " + registrationId));
+                .filter(LoginProvider::isEnabled)
+                .orElseThrow(() -> new OAuth2AuthenticationException(new OAuth2Error("provider_unavailable")));
     }
 
     /**

@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1788882358341-1" author="hephaestus">
+        <createTable tableName="workspace_account_membership">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="workspace_account_membershipPK"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="role" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="suspended" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1788882358341-2" author="hephaestus">
+        <addUniqueConstraint columnNames="workspace_id, account_id" constraintName="uq_workspace_account_membership" tableName="workspace_account_membership"/>
+    </changeSet>
+    <changeSet id="1788882358341-3" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="workspace_account_membership" constraintName="fk_workspace_account_membership_workspace" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
+    <changeSet id="1788882358341-4" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="account_id" baseTableName="workspace_account_membership"
+                constraintName="sfk_workspace_account_membership_account" referencedColumnNames="id" referencedTableName="account"/>
+        <createIndex tableName="workspace_account_membership" indexName="idx_workspace_account_membership_account">
+            <column name="account_id"/>
+        </createIndex>
+        <sql><![CDATA[
+            ALTER TABLE workspace_account_membership
+                ADD CONSTRAINT ck_workspace_account_membership_role CHECK (role IN ('OWNER', 'ADMIN', 'MEMBER')),
+                ADD CONSTRAINT ck_workspace_account_membership_source CHECK (source IN ('MANUAL', 'SCM', 'DIRECTORY', 'MIGRATED'));
+            ALTER TABLE login_provider DROP CONSTRAINT ck_login_provider_type;
+            ALTER TABLE login_provider ADD CONSTRAINT ck_login_provider_type CHECK (type IN ('GITHUB', 'GITLAB', 'SLACK', 'OUTLINE', 'OIDC'));
+        ]]></sql>
+    </changeSet>
+    <changeSet id="1788882358341-5" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="Link at least one existing workspace owner to an active account before upgrading. Match provider ID and immutable subject, never username or email. See the account membership upgrade guide.">
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(DISTINCT original.workspace_id)
+                FROM workspace_membership original
+                WHERE original.role = 'OWNER' AND NOT EXISTS (
+                    SELECT 1 FROM workspace_membership candidate
+                    JOIN "user" actor ON actor.id = candidate.user_id AND actor.type = 'USER'
+                    JOIN identity_provider provider ON provider.id = actor.provider_id AND provider.type IN ('GITHUB', 'GITLAB')
+                    JOIN identity_link link ON link.provider_id = actor.provider_id AND link.subject = actor.native_id::text
+                        AND link.team_id IS NULL AND link.disabled_at IS NULL
+                    JOIN account person ON person.id = link.account_id AND person.status = 'ACTIVE'
+                    WHERE candidate.workspace_id = original.workspace_id AND candidate.role = 'OWNER'
+                )
+            ]]></sqlCheck>
+        </preConditions>
+        <sql><![CDATA[
+            INSERT INTO workspace_account_membership (account_id, workspace_id, role, source, suspended, created_at)
+            SELECT link.account_id, membership.workspace_id,
+                CASE min(CASE membership.role WHEN 'OWNER' THEN 0 WHEN 'ADMIN' THEN 1 ELSE 2 END)
+                    WHEN 0 THEN 'OWNER' WHEN 1 THEN 'ADMIN' ELSE 'MEMBER' END,
+                'MIGRATED', false, min(membership.created_at)
+            FROM workspace_membership membership
+            JOIN "user" actor ON actor.id = membership.user_id AND actor.type = 'USER'
+            JOIN identity_provider provider ON provider.id = actor.provider_id AND provider.type IN ('GITHUB', 'GITLAB')
+            JOIN identity_link link ON link.provider_id = actor.provider_id AND link.subject = actor.native_id::text
+                AND link.team_id IS NULL AND link.disabled_at IS NULL
+            JOIN account person ON person.id = link.account_id AND person.status = 'ACTIVE'
+            GROUP BY link.account_id, membership.workspace_id;
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

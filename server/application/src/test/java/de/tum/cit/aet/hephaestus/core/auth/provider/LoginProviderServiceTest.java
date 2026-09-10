@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventData;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventWriter;
+import de.tum.cit.aet.hephaestus.core.security.OidcIssuerPolicy;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
@@ -53,7 +54,9 @@ class LoginProviderServiceTest extends BaseUnitTest {
                 AuthPropertiesFixture.withLoginProviders(providers),
                 authEventLogger,
                 new ObjectMapper(),
-                new OutlineOriginPolicy(Set.of("https://wiki.example.com", "https://wiki.acme.test")));
+                new OutlineOriginPolicy(Set.of("https://wiki.example.com", "https://wiki.acme.test")),
+                new OidcIssuerPolicy(Set.of(
+                        "https://identity.example.com/realms/team/", "https://identity.example.com/realms/other")));
     }
 
     private LoginProviderService adminService() {
@@ -546,5 +549,65 @@ class LoginProviderServiceTest extends BaseUnitTest {
         provider.setScopes("read_user");
         provider.setEnabled(true);
         return provider;
+    }
+
+    @Test
+    void shouldCreateAnApprovedOrganizationalProviderWithOidcScopesAndExactIssuer() {
+        when(repository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+        LoginProvider provider = adminService().create(oidcDraft(null));
+
+        assertThat(provider.getType()).isEqualTo(LoginProvider.ProviderType.OIDC);
+        assertThat(provider.getBaseUrl()).isEqualTo("https://identity.example.com/realms/team/");
+        assertThat(provider.getScopes()).isEqualTo("openid profile email");
+        assertThat(provider.getType().isLinkOnly()).isFalse();
+    }
+
+    @Test
+    void shouldRejectOrganizationalScopesWithoutOpenid() {
+        assertThatThrownBy(() -> adminService().create(oidcDraft("profile email")))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("requires the 'openid' scope");
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void shouldRejectChangingAnOrganizationalIssuerEvenToAnotherApprovedRealm() {
+        LoginProvider provider = new LoginProvider();
+        provider.setRegistrationId("organization");
+        provider.setType(LoginProvider.ProviderType.OIDC);
+        provider.setBaseUrl("https://identity.example.com/realms/team/");
+        when(repository.findByRegistrationId("organization")).thenReturn(Optional.of(provider));
+
+        assertThatThrownBy(() -> adminService()
+                        .update(
+                                "organization",
+                                new LoginProviderService.Patch(
+                                        null, "https://identity.example.com/realms/other", null, null, null, null)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("issuer is immutable");
+        assertThat(provider.getBaseUrl()).isEqualTo("https://identity.example.com/realms/team/");
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void shouldHideOrganizationalProvidersWhoseExactIssuerIsNotApproved() {
+        LoginProvider provider = new LoginProvider();
+        provider.setRegistrationId("organization");
+        provider.setType(LoginProvider.ProviderType.OIDC);
+        provider.setBaseUrl("https://identity.example.com/realms/team");
+        when(repository.findByEnabledTrueOrderByDisplayNameAsc()).thenReturn(List.of(provider));
+
+        assertThat(adminService().listEnabled()).isEmpty();
+    }
+
+    private static LoginProviderService.Draft oidcDraft(@Nullable String scopes) {
+        return new LoginProviderService.Draft(
+                "organization",
+                LoginProvider.ProviderType.OIDC,
+                "Organization account",
+                "https://identity.example.com/realms/team/",
+                "client",
+                "secret",
+                scopes);
     }
 }

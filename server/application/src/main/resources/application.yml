@@ -196,6 +196,8 @@ hephaestus:
         step-up-max-age: ${HEPHAESTUS_AUTH_STEP_UP_MAX_AGE:5m}
         cookie-name: ${HEPHAESTUS_AUTH_COOKIE_NAME:__Host-HEPHAESTUS_AT}
         state-cookie-key: ${HEPHAESTUS_AUTH_STATE_COOKIE_KEY:}
+        oidc:
+            allowed-issuers: ${HEPHAESTUS_AUTH_OIDC_ALLOWED_ISSUERS:}
         # Instance login providers seeded into the login_provider store on first boot, keyed by a stable
         # registrationId (the OAuth callback segment + identity key). A blank client-id skips that entry
         # (no crash). Seeding is seed-if-absent, so admin edits survive reboots. Multiple providers per

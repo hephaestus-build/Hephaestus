@@ -1453,6 +1453,16 @@ erDiagram
         BIGINT practice_config_version "NOT NULL"
     }
 
+    WorkspaceAccountMembership {
+        BIGINT id PK
+        BIGINT account_id FK,UK "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        VARCHAR(16) role "NOT NULL"
+        VARCHAR(16) source "NOT NULL"
+        BOOLEAN suspended "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+    }
+
     WorkspaceAgentBinding {
         BIGINT id PK
         BIGINT workspace_id FK,UK "NOT NULL"
@@ -1696,6 +1706,8 @@ erDiagram
     Workspace ||--o{ SyncJob : has
     IdentityProvider ||--o{ Team : references
     IdentityProvider ||--o{ User : references
+    Workspace ||--o{ WorkspaceAccountMembership : belongs_to
+    Account ||--o{ WorkspaceAccountMembership : belongs_to
     LlmModel ||--o{ WorkspaceAgentBinding : references
     Workspace ||--o{ WorkspaceAgentBinding : has
     WorkspaceLlmModel ||--o{ WorkspaceAgentBinding : workspace_model_id

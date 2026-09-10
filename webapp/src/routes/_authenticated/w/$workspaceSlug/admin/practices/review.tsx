@@ -10,7 +10,7 @@ import {
 	listAgentsOptions,
 	listBackfillRunsOptions,
 	listBackfillRunsQueryKey,
-	listMembersOptions,
+	listWorkspaceContributorsOptions,
 	listPracticesOptions,
 	listSweepSchedulesOptions,
 	preflightBackfillRunMutation,
@@ -222,7 +222,7 @@ function WhenAndWhereSection({ workspaceSlug }: { workspaceSlug: string }) {
 	const workspaceQuery = useQuery({ ...getWorkspaceOptions({ path: { workspaceSlug } }) });
 	const schedulesQuery = useQuery(listSweepSchedulesOptions({ path: { workspaceSlug } }));
 	const repositoriesQuery = useQuery(getRepositoriesToMonitorOptions({ path: { workspaceSlug } }));
-	const membersQuery = useQuery(listMembersOptions({ path: { workspaceSlug } }));
+	const membersQuery = useQuery(listWorkspaceContributorsOptions({ path: { workspaceSlug } }));
 	const coveragePreview = useMutation(previewCoverageMutation());
 
 	const updatePracticeReviewSettings = usePracticeReviewSettingsMutation(workspaceSlug, {

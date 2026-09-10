@@ -1,7 +1,7 @@
 import { useQueries } from "@tanstack/react-query";
 
 import {
-	listIdentityProvidersOptions,
+	listAccountIdentityProvidersOptions,
 	listLinkedIdentitiesOptions,
 } from "@/api/@tanstack/react-query.gen";
 import { authClient } from "@/integrations/auth/auth-client";
@@ -10,21 +10,21 @@ import { isSignInProvider } from "@/lib/sign-in-providers";
 export function useConfirmAccess(enabled: boolean) {
 	const [instanceProviders, linkedIdentities] = useQueries({
 		queries: [
-			{ ...listIdentityProvidersOptions(), enabled },
+			{ ...listAccountIdentityProvidersOptions(), enabled },
 			{ ...listLinkedIdentitiesOptions(), enabled },
 		],
 	});
 
-	const linkedTypes = new Set(
-		(linkedIdentities.data ?? []).flatMap((identity) =>
-			identity.providerType ? [identity.providerType.toUpperCase()] : [],
-		),
-	);
-
 	return {
 		providers: (instanceProviders.data ?? []).filter(
 			(provider) =>
-				isSignInProvider(provider) && linkedTypes.has(provider.providerType?.toUpperCase() ?? ""),
+				isSignInProvider(provider) &&
+				(linkedIdentities.data ?? []).some(
+					(identity) =>
+						identity.providerType === provider.providerType &&
+						Boolean(identity.serverUrl) &&
+						identity.serverUrl === provider.baseUrl,
+				),
 		),
 		loading: instanceProviders.isPending || linkedIdentities.isPending,
 		error: instanceProviders.isError || linkedIdentities.isError,

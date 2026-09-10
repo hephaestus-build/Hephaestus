@@ -5,9 +5,6 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.dto.AdminWorkspaceViewDTO;
@@ -22,7 +19,7 @@ class WorkspaceAdminServiceTest extends BaseUnitTest {
     private WorkspaceRepository workspaceRepository;
 
     @Mock
-    private WorkspaceMembershipRepository membershipRepository;
+    private WorkspaceAccountMembershipRepository membershipRepository;
 
     @Mock
     private ConnectionService connectionService;
@@ -39,26 +36,21 @@ class WorkspaceAdminServiceTest extends BaseUnitTest {
         workspace.setAccountLogin("acme-org");
         workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
 
-        User owner = new User();
-        owner.setId(34L);
-        owner.setLogin("octocat");
-        var provider = new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com");
-        provider.setId(9L);
-        owner.setProvider(provider);
-        owner.setNativeId(123L);
-
+        var owner = new WorkspaceAccountMembership();
+        owner.setWorkspace(workspace);
+        owner.setAccountId(56L);
+        owner.setRole(WorkspaceRole.OWNER);
         when(workspaceRepository.findAll()).thenReturn(List.of(workspace));
-        when(membershipRepository.findUsersByWorkspaceIdAndRole(12L, WorkspaceRole.OWNER))
-                .thenReturn(List.of(owner));
-        when(accountIdentityQuery.resolveAccountId(9L, "123", null)).thenReturn(Optional.of(56L));
-        when(membershipRepository.countByWorkspace_Id(12L)).thenReturn(3L);
+        when(membershipRepository.findByWorkspace_Id(12L)).thenReturn(List.of(owner));
+        when(accountIdentityQuery.account(56L))
+                .thenReturn(Optional.of(new AccountIdentityQuery.AccountView(56L, "Organization owner", true)));
 
         WorkspaceAdminService service = new WorkspaceAdminService(
                 workspaceRepository, membershipRepository, connectionService, accountIdentityQuery);
 
         AdminWorkspaceViewDTO view = service.listAll().getFirst();
 
-        assertThat(view.ownerLogin()).isEqualTo("octocat");
+        assertThat(view.ownerDisplayName()).isEqualTo("Organization owner");
         assertThat(view.ownerAccountId()).isEqualTo(56L);
     }
 }

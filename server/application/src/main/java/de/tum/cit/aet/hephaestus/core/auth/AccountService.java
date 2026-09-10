@@ -9,6 +9,10 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
+import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDeletionGuard;
+import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.util.List;
@@ -34,18 +38,27 @@ public class AccountService {
     private final IssuedJwtRepository issuedJwtRepository;
     private final AuthEventLogger authEventLogger;
     private final Clock clock;
+    private final List<AccountDeletionGuard> deletionGuards;
+    private final LoginProviderService loginProviderService;
+    private final GitProviderRegistry gitProviderRegistry;
 
     public AccountService(
             AccountRepository accountRepository,
             IdentityLinkRepository identityLinkRepository,
             IssuedJwtRepository issuedJwtRepository,
             AuthEventLogger authEventLogger,
-            Clock clock) {
+            Clock clock,
+            LoginProviderService loginProviderService,
+            GitProviderRegistry gitProviderRegistry,
+            List<AccountDeletionGuard> deletionGuards) {
         this.accountRepository = accountRepository;
         this.identityLinkRepository = identityLinkRepository;
         this.issuedJwtRepository = issuedJwtRepository;
         this.authEventLogger = authEventLogger;
         this.clock = clock;
+        this.loginProviderService = loginProviderService;
+        this.gitProviderRegistry = gitProviderRegistry;
+        this.deletionGuards = deletionGuards;
     }
 
     public Account requireById(Long id) {
@@ -73,12 +86,15 @@ public class AccountService {
      */
     @Transactional
     public void softDelete(Long accountId, @Nullable Long actingAccountId) {
-        Account account = requireById(accountId);
+        Account account = accountRepository
+                .findByIdForUpdate(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "account not found"));
         if (account.getStatus() == Account.Status.DELETING || account.getStatus() == Account.Status.DELETED) {
             // Idempotent: only ACTIVE/SUSPENDED → DELETING starts the Art.17 cooldown. A re-invocation
             // must NOT reset deleted_at (restarting the 48h purge clock) or re-emit ACCOUNT_DELETED.
             return;
         }
+        deletionGuards.forEach(guard -> guard.beforeDeletion(accountId));
         account.setStatus(Account.Status.DELETING);
         account.setDeletedAt(clock.instant());
         accountRepository.save(account);
@@ -115,7 +131,12 @@ public class AccountService {
                 .filter(il -> il.getId().equals(identityLinkId))
                 .findFirst()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "identity link not found"));
-        if (active.size() <= 1) {
+        List<LoginProvider> signInProviders = loginProviderService.listEnabled().stream()
+                .filter(provider -> !provider.getType().isLinkOnly())
+                .toList();
+        if (active.stream()
+                .filter(link -> !link.getId().equals(identityLinkId))
+                .noneMatch(link -> canSignIn(link, signInProviders))) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "You can't unlink your only sign-in method. Link another provider first, or delete your account.");
@@ -133,6 +154,14 @@ public class AccountService {
                 .actingAccount(actingAccountId)
                 .gitProvider(gitProviderId)
                 .record();
+    }
+
+    private boolean canSignIn(IdentityLink link, List<LoginProvider> providers) {
+        String type = gitProviderRegistry.providerTypeName(link.getProviderId());
+        String serverUrl = gitProviderRegistry.providerServerUrl(link.getProviderId());
+        return providers.stream()
+                .anyMatch(provider -> provider.getType().name().equals(type)
+                        && provider.getBaseUrl().equals(serverUrl));
     }
 
     public List<Account> adminList(int page, int size) {

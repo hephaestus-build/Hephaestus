@@ -9,6 +9,14 @@ import org.jspecify.annotations.Nullable;
  * not from display names or upstream claims copied into the session token.
  */
 public interface AccountIdentityQuery {
+    /** Public profile fields for a known account ID; callers enforce membership visibility. */
+    Optional<AccountView> account(Long accountId);
+
+    /** Locks the account for an access mutation; requires an enclosing transaction. */
+    Optional<AccountView> accountForUpdate(Long accountId);
+
+    record AccountView(Long id, String displayName, boolean active) {}
+
     /** Enabled federated identities, oldest link first; empty for a missing or unlinked account. */
     List<IdentityLinkView> activeLinksForAccount(Long accountId);
 

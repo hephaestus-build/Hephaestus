@@ -46,6 +46,8 @@ public class LoginProvider {
     public enum ProviderType {
         GITHUB,
         GITLAB,
+        /** Organizational OpenID Connect; baseUrl is the exact issuer, including its realm path. */
+        OIDC,
         /**
          * "Sign in with Slack" (OIDC). A <em>link-only</em> secondary provider: it is never offered on the
          * public login picker ({@code IdentityProviderCatalog.listRegistrations} filters it out) and is only
@@ -86,7 +88,7 @@ public class LoginProvider {
     @Column(name = "display_name", nullable = false, length = 255)
     private String displayName;
 
-    /** OAuth host root, e.g. {@code https://github.com}, {@code https://gitlab.com}, {@code https://gitlab.lrz.de}. */
+    /** OAuth host root, or the exact issuer URL for an organizational OIDC provider. */
     @Column(name = "base_url", nullable = false, length = 512)
     private String baseUrl;
 
@@ -121,6 +123,7 @@ public class LoginProvider {
      * meaningful — {@code https://gitlab.lrz.de} and {@code https://gitlab.lrz.de/} are the same instance.
      */
     public void setBaseUrl(String baseUrl) {
-        this.baseUrl = baseUrl.trim().replaceAll("/+$", "");
+        this.baseUrl =
+                type == ProviderType.OIDC ? baseUrl.trim() : baseUrl.trim().replaceAll("/+$", "");
     }
 }

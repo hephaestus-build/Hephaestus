@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -21,6 +22,9 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
+import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
+import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Instant;
@@ -48,6 +52,8 @@ class AccountServiceTest extends BaseUnitTest {
     private final AuthEventWriter auditWriter = mock(AuthEventWriter.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
 
+    private final LoginProviderService loginProviderService = mock(LoginProviderService.class);
+    private final GitProviderRegistry gitProviderRegistry = mock(GitProviderRegistry.class);
     private AccountService service;
 
     @BeforeEach
@@ -57,7 +63,16 @@ class AccountServiceTest extends BaseUnitTest {
                 identityLinkRepository,
                 issuedJwtRepository,
                 new AuthEventLogger(auditWriter),
-                clock);
+                clock,
+                loginProviderService,
+                gitProviderRegistry,
+                List.of());
+        LoginProvider github = new LoginProvider();
+        github.setType(LoginProvider.ProviderType.GITHUB);
+        github.setBaseUrl("https://github.com");
+        lenient().when(loginProviderService.listEnabled()).thenReturn(List.of(github));
+        lenient().when(gitProviderRegistry.providerTypeName(anyLong())).thenReturn("GITHUB");
+        lenient().when(gitProviderRegistry.providerServerUrl(anyLong())).thenReturn("https://github.com");
     }
 
     private static IdentityLink link(long id, long gitProviderId) {
@@ -146,7 +161,8 @@ class AccountServiceTest extends BaseUnitTest {
         Account account = new Account();
         account.setId(id);
         account.setAppRole(role);
-        when(accountRepository.findById(id)).thenReturn(Optional.of(account));
+        lenient().when(accountRepository.findById(id)).thenReturn(Optional.of(account));
+        lenient().when(accountRepository.findByIdForUpdate(id)).thenReturn(Optional.of(account));
         return account;
     }
 
@@ -288,5 +304,52 @@ class AccountServiceTest extends BaseUnitTest {
         assertThat(event.getValue().accountId()).isEqualTo(2L);
         assertThat(event.getValue().actingAccountId()).isEqualTo(1L);
         assertThat(event.getValue().details()).contains("ADMIN_REVOKE", "\"count\":3");
+    }
+
+    @Test
+    void shouldRefuseToUnlinkTheOnlySignInWhenAnotherLinkIsSlack() {
+        when(identityLinkRepository.findActiveByAccountIdForUpdate(1L))
+                .thenReturn(List.of(link(10L, 100L), link(11L, 101L)));
+        when(gitProviderRegistry.providerTypeName(101L)).thenReturn("SLACK");
+        when(gitProviderRegistry.providerServerUrl(101L)).thenReturn("https://slack.com");
+
+        assertThatThrownBy(() -> service.unlinkIdentity(1L, 10L, null))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("only sign-in method");
+        verify(identityLinkRepository, never()).deleteByIdAndAccountId(anyLong(), anyLong());
+    }
+
+    @Test
+    void shouldKeepTheCurrentSignInWhenTheLinkedOrganizationalRealmIsNotAvailable() {
+        when(identityLinkRepository.findActiveByAccountIdForUpdate(1L))
+                .thenReturn(List.of(link(10L, 100L), link(11L, 101L)));
+        when(gitProviderRegistry.providerTypeName(101L)).thenReturn("OIDC");
+        when(gitProviderRegistry.providerServerUrl(101L)).thenReturn("https://identity.example.com/realms/old");
+        LoginProvider otherRealm = new LoginProvider();
+        otherRealm.setType(LoginProvider.ProviderType.OIDC);
+        otherRealm.setBaseUrl("https://identity.example.com/realms/new");
+        when(loginProviderService.listEnabled()).thenReturn(List.of(otherRealm));
+
+        assertThatThrownBy(() -> service.unlinkIdentity(1L, 10L, null))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("only sign-in method");
+        verify(identityLinkRepository, never()).deleteByIdAndAccountId(anyLong(), anyLong());
+    }
+
+    @Test
+    void shouldAllowUnlinkingAnScmIdentityWhenTheExactOrganizationalIssuerRemainsAvailable() {
+        when(identityLinkRepository.findActiveByAccountIdForUpdate(1L))
+                .thenReturn(List.of(link(10L, 100L), link(11L, 101L)));
+        when(gitProviderRegistry.providerTypeName(101L)).thenReturn("OIDC");
+        when(gitProviderRegistry.providerServerUrl(101L)).thenReturn("https://identity.example.com/realms/team/");
+        LoginProvider organization = new LoginProvider();
+        organization.setType(LoginProvider.ProviderType.OIDC);
+        organization.setBaseUrl("https://identity.example.com/realms/team/");
+        when(loginProviderService.listEnabled()).thenReturn(List.of(organization));
+        when(identityLinkRepository.deleteByIdAndAccountId(10L, 1L)).thenReturn(1);
+
+        service.unlinkIdentity(1L, 10L, null);
+
+        verify(identityLinkRepository).deleteByIdAndAccountId(10L, 1L);
     }
 }

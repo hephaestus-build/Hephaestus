@@ -1,11 +1,14 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -29,10 +32,15 @@ public class ReviewRequestAuthority {
 
     private static final Set<WorkspaceRole> ADMIN_ROLES = Set.of(WorkspaceRole.OWNER, WorkspaceRole.ADMIN);
 
-    private final WorkspaceMembershipRepository memberships;
+    private final AccountWorkspaceMembershipQuery memberships;
+    private final AccountIdentityQuery identities;
+    private final UserRepository users;
 
-    public ReviewRequestAuthority(WorkspaceMembershipRepository memberships) {
+    public ReviewRequestAuthority(
+            AccountWorkspaceMembershipQuery memberships, AccountIdentityQuery identities, UserRepository users) {
         this.memberships = memberships;
+        this.identities = identities;
+        this.users = users;
     }
 
     /**
@@ -69,9 +77,16 @@ public class ReviewRequestAuthority {
     }
 
     public boolean isWorkspaceAdmin(long workspaceId, Long requesterId) {
-        return memberships
-                .findByWorkspace_IdAndUser_Id(workspaceId, requesterId)
-                .map(membership -> ADMIN_ROLES.contains(membership.getRole()))
-                .orElse(false);
+        return users
+                .findById(requesterId)
+                .flatMap(user -> identities.resolveActiveAccountId(
+                        Objects.requireNonNull(user.getProvider().getId()),
+                        user.getNativeId().toString(),
+                        null))
+                .map(memberships::membershipsForAccount)
+                .orElseGet(List::of)
+                .stream()
+                .anyMatch(membership -> membership.workspaceId().equals(workspaceId)
+                        && ("OWNER".equals(membership.role()) || "ADMIN".equals(membership.role())));
     }
 }

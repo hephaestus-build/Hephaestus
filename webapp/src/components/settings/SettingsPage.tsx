@@ -24,6 +24,7 @@ import {
 } from "./SlackPreferencesSection";
 
 export interface SettingsPageProps {
+	accountId?: string;
 	practiceFeedbackProps: PracticeFeedbackSectionProps;
 	researchProps: ResearchParticipationSectionProps;
 	showResearchSection: boolean;
@@ -33,10 +34,12 @@ export interface SettingsPageProps {
 	onAccountDeleted: () => void | Promise<void>;
 	isLoading?: boolean;
 	settingsError?: boolean;
+	needsScmIdentity?: boolean;
 	onRetrySettings?: () => void;
 }
 
 export function SettingsPage({
+	accountId,
 	practiceFeedbackProps,
 	researchProps,
 	showResearchSection,
@@ -46,6 +49,7 @@ export function SettingsPage({
 	onAccountDeleted,
 	isLoading = false,
 	settingsError = false,
+	needsScmIdentity = false,
 	onRetrySettings,
 }: SettingsPageProps) {
 	const { isLoading: practiceFeedbackLoading = false, ...practiceFeedbackRest } =
@@ -55,7 +59,7 @@ export function SettingsPage({
 	const { isLoading: slackLoading = false, ...slackRest } = slackPreferencesProps;
 
 	const practiceFeedbackPending = isLoading || practiceFeedbackLoading;
-	const researchPending = isLoading || researchLoading;
+	const researchPending = researchLoading;
 
 	return (
 		<PageLayout>
@@ -66,7 +70,28 @@ export function SettingsPage({
 			/>
 
 			<div className="max-w-3xl space-y-8">
-				{settingsError ? (
+				{accountId && (
+					<section className="space-y-1" aria-label="Account identity">
+						<p className="text-sm">
+							Your account ID: <code className="font-mono">{accountId}</code>
+						</p>
+						<p className="text-sm text-muted-foreground">
+							Share this ID with a workspace owner who wants to add you. It stays the same when you
+							connect another sign-in method.
+						</p>
+					</section>
+				)}
+				{needsScmIdentity ? (
+					<section className="space-y-2" aria-labelledby="preferences-identity-heading">
+						<h2 id="preferences-identity-heading" className="text-xl font-semibold">
+							Practice feedback preferences
+						</h2>
+						<p className="text-sm text-muted-foreground">
+							Connect a GitHub or GitLab account below to configure practice feedback about your
+							work.
+						</p>
+					</section>
+				) : settingsError ? (
 					<>
 						<Separator />
 						<section className="space-y-2" aria-labelledby="settings-error-heading">
@@ -74,8 +99,7 @@ export function SettingsPage({
 								Preferences
 							</h2>
 							<p className="text-sm text-destructive" role="alert">
-								We couldn't load your preferences, so your feedback and research settings aren't
-								shown.
+								We couldn't load your practice feedback preferences.
 							</p>
 							{onRetrySettings && (
 								<Button variant="outline" size="sm" onClick={onRetrySettings}>
@@ -91,23 +115,22 @@ export function SettingsPage({
 							{...practiceFeedbackRest}
 							isLoading={practiceFeedbackPending}
 						/>
-
-						{showResearchSection && (
-							<>
-								<Separator />
-								<ResearchParticipationSection {...researchRest} isLoading={researchPending} />
-							</>
-						)}
+					</>
+				)}
+				{showResearchSection && (
+					<>
+						<Separator />
+						<ResearchParticipationSection {...researchRest} isLoading={researchPending} />
 					</>
 				)}
 
 				<Separator />
-				<LinkedAccountsSection {...linkedRest} isLoading={isLoading || linkedLoading} />
+				<LinkedAccountsSection {...linkedRest} isLoading={linkedLoading} />
 
 				{showSlackPreferencesSection && (
 					<>
 						<Separator />
-						<SlackPreferencesSection {...slackRest} isLoading={isLoading || slackLoading} />
+						<SlackPreferencesSection {...slackRest} isLoading={slackLoading} />
 					</>
 				)}
 

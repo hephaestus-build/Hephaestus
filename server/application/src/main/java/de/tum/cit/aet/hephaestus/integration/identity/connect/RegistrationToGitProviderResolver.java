@@ -46,7 +46,7 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public long resolveProviderId(String providerTypeName, String baseUrl) {
         IdentityProviderType type = IdentityProviderType.valueOf(providerTypeName);
-        String origin = originOf(baseUrl);
+        String origin = type == IdentityProviderType.OIDC ? baseUrl : originOf(baseUrl);
         return Objects.requireNonNull(gitProviderRepository
                 .findByTypeAndServerUrl(type, origin)
                 .orElseGet(() -> gitProviderRepository.save(new IdentityProvider(type, origin)))

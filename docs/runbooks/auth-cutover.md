@@ -1,5 +1,10 @@
 # Runbook: Keycloak → Spring-native auth cutover
 
+> This runbook records the original native-authentication cutover, not a current upgrade procedure.
+> Account-based workspace access supersedes its membership bridge and binary-only rollback advice.
+> Use the release migration guide for upgrades and [workspace context](../contributor/workspace-context.mdx#account-identity-resolution)
+> for current authorization behavior. Never restore username-based access as a recovery step.
+
 Operational guide for shipping and operating the auth replacement (ADR 0017). Read
 [`auth-architecture.md`](../auth-architecture.md) first.
 
@@ -80,24 +85,12 @@ column. The `"user"` table is otherwise left in place (still mapped as `User`); 
 activity/membership columns are renamed or dropped, so leaving `account` / `identity_link` rows in
 place on a revert is harmless.
 
-## Existing users at cutover (no backfill required)
+## Existing users at the original cutover
 
-Existing users are **not** pre-migrated into `account` / `identity_link` — those tables start
-empty, and there is no backfill changeset. On a user's first post-cutover login an `Account` +
-`IdentityLink` are JIT-created. This is safe because **workspace authorization never keys on
-`account_id`**: the issued JWT carries `preferred_username` = the git login, and
-`WorkspaceContextFilter` resolves the current `User` by login (case-insensitive) → the existing
-`workspace_membership` rows (still keyed on `user_id`). Memberships, roles, leaderboard points and
-activity history therefore carry over automatically.
-
-- ⚠️ **Risk — username drift.** The bridge is git-login string equality. GitHub / GitLab
-  usernames are mutable; if a user renamed since the last sync, the stale `User.login` won't match
-  their fresh `preferred_username` and they will appear as a non-member (403) until a sync updates
-  the row. **Mitigation: run a fresh user sync immediately before the cutover** so `User.login`
-  reflects current provider usernames. **Verify on staging** with at least one user whose provider
-  username differs from the value currently in the `"user"` table. (The FK-stable fallback keyed on
-  the numeric provider id lives in `AuthenticatedGitProviderUserService` but is not on the
-  `WorkspaceContextFilter` hot path, so the sync is the operational safeguard.)
+The original cutover created accounts and identity links on first sign-in. The later account-membership
+migration requires verified owner links before upgrading and uses immutable provider subjects, not
+usernames. [ADR 0019](../decisions/0019-workspace-membership-keyed-on-account.md) owns that change.
+The release migration guide owns preflight, upgrade and rollback steps.
 
 ### Migration smoke-tested
 

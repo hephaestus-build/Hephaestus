@@ -49,7 +49,17 @@ export const handlers = [
 	),
 
 	// --- identity providers + linked identities -----------------------------
-	http.get("*/identity-providers", () => HttpResponse.json(identityProviders)),
+	http.get("*/user/identity-providers", () => HttpResponse.json(identityProviders)),
+	http.get("*/identity-providers", () =>
+		HttpResponse.json(
+			identityProviders.filter(
+				(provider) =>
+					provider.providerType === "GITHUB" ||
+					provider.providerType === "GITLAB" ||
+					provider.providerType === "DEV",
+			),
+		),
+	),
 	http.get("*/user/identities", () => HttpResponse.json(linkedIdentities)),
 
 	// --- sessions ------------------------------------------------------------

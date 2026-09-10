@@ -52,6 +52,9 @@ class AccountUnlinkIdentityIntegrationTest extends RealAuthIntegrationTest {
     private IdentityProviderRepository gitProviderRepository;
 
     @Autowired
+    private de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository loginProviders;
+
+    @Autowired
     private HephaestusJwtIssuer jwtIssuer;
 
     @Autowired
@@ -221,6 +224,20 @@ class AccountUnlinkIdentityIntegrationTest extends RealAuthIntegrationTest {
         IdentityProvider provider = gitProviderRepository
                 .findByTypeAndServerUrl(type, serverUrl)
                 .orElseGet(() -> gitProviderRepository.save(new IdentityProvider(type, serverUrl)));
+        if (!loginProviders.existsByTypeAndBaseUrl(
+                de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider.ProviderType.valueOf(type.name()),
+                serverUrl)) {
+            var loginProvider = new de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider();
+            loginProvider.setRegistrationId("provider-" + provider.getId());
+            loginProvider.setDisplayName(type.name());
+            loginProvider.setType(
+                    de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider.ProviderType.valueOf(type.name()));
+            loginProvider.setBaseUrl(serverUrl);
+            loginProvider.setClientId("fixture-client");
+            loginProvider.setClientSecret("fixture-secret");
+            loginProvider.setScopes("read:user");
+            loginProviders.save(loginProvider);
+        }
         IdentityLink link = new IdentityLink();
         link.setAccount(account);
         link.setProviderId(persistedId(provider.getId()));

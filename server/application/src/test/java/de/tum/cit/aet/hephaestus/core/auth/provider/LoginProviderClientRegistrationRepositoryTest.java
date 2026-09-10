@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.security.OidcIssuerPolicy;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
@@ -57,8 +58,9 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                                 "https://gitlab.lrz.de",
                                 "openid profile")));
 
-        List<ClientRegistration> registrations =
-                new LoginProviderClientRegistrationRepository(repo, "", OUTLINE_ORIGINS).listRegistrations();
+        List<ClientRegistration> registrations = new LoginProviderClientRegistrationRepository(
+                        repo, "", OUTLINE_ORIGINS, new OidcIssuerPolicy(Set.of()), mock(OidcProviderDiscovery.class))
+                .listRegistrations();
 
         assertThat(registrations).hasSize(2);
         for (ClientRegistration registration : registrations) {
@@ -89,8 +91,8 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                 .thenReturn(Optional.of(provider(
                         "slack", LoginProvider.ProviderType.SLACK, "https://slack.com", "openid profile email")));
 
-        LoginProviderClientRegistrationRepository repository =
-                new LoginProviderClientRegistrationRepository(repo, "", OUTLINE_ORIGINS);
+        LoginProviderClientRegistrationRepository repository = new LoginProviderClientRegistrationRepository(
+                repo, "", OUTLINE_ORIGINS, new OidcIssuerPolicy(Set.of()), mock(OidcProviderDiscovery.class));
 
         List<ClientRegistration> picker = repository.listRegistrations();
         assertThat(picker).extracting(ClientRegistration::getRegistrationId).containsExactly("github", "slack");
@@ -110,11 +112,16 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
     @Test
     void primaryProviderSatisfiesSignInReadiness() {
         LoginProviderRepository repo = mock(LoginProviderRepository.class);
-        when(repo.existsByEnabledTrueAndTypeIn(
-                        Set.of(LoginProvider.ProviderType.GITHUB, LoginProvider.ProviderType.GITLAB)))
-                .thenReturn(true);
+        when(repo.findByEnabledTrueOrderByDisplayNameAsc())
+                .thenReturn(List.of(
+                        provider("github", LoginProvider.ProviderType.GITHUB, "https://github.com", "read:user")));
 
-        assertThat(new LoginProviderClientRegistrationRepository(repo, "", OUTLINE_ORIGINS)
+        assertThat(new LoginProviderClientRegistrationRepository(
+                                repo,
+                                "",
+                                OUTLINE_ORIGINS,
+                                new OidcIssuerPolicy(Set.of()),
+                                mock(OidcProviderDiscovery.class))
                         .hasEnabledPrimarySignInProvider())
                 .isTrue();
     }
@@ -122,12 +129,15 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
     @Test
     void signInReadinessQueriesOnlyPrimaryProviderTypes() {
         LoginProviderRepository repo = mock(LoginProviderRepository.class);
-        assertThat(new LoginProviderClientRegistrationRepository(repo, "", OUTLINE_ORIGINS)
+        assertThat(new LoginProviderClientRegistrationRepository(
+                                repo,
+                                "",
+                                OUTLINE_ORIGINS,
+                                new OidcIssuerPolicy(Set.of()),
+                                mock(OidcProviderDiscovery.class))
                         .hasEnabledPrimarySignInProvider())
                 .isFalse();
-        verify(repo)
-                .existsByEnabledTrueAndTypeIn(
-                        Set.of(LoginProvider.ProviderType.GITHUB, LoginProvider.ProviderType.GITLAB));
+        verify(repo).findByEnabledTrueOrderByDisplayNameAsc();
     }
 
     @Test
@@ -137,7 +147,8 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                 .thenReturn(Optional.of(
                         provider("outline", LoginProvider.ProviderType.OUTLINE, "https://wiki.example.com", "read")));
 
-        ClientRegistration outline = new LoginProviderClientRegistrationRepository(repo, "", OUTLINE_ORIGINS)
+        ClientRegistration outline = new LoginProviderClientRegistrationRepository(
+                        repo, "", OUTLINE_ORIGINS, new OidcIssuerPolicy(Set.of()), mock(OidcProviderDiscovery.class))
                 .findByRegistrationId("outline");
 
         assertNotNull(outline);
@@ -159,7 +170,11 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                         provider("outline", LoginProvider.ProviderType.OUTLINE, "https://wiki.example.com", "read")));
 
         ClientRegistration outline = new LoginProviderClientRegistrationRepository(
-                        repo, "", new OutlineOriginPolicy(Set.of()))
+                        repo,
+                        "",
+                        new OutlineOriginPolicy(Set.of()),
+                        new OidcIssuerPolicy(Set.of()),
+                        mock(OidcProviderDiscovery.class))
                 .findByRegistrationId("outline");
 
         assertThat(outline).isNull();
@@ -172,7 +187,8 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                 .thenReturn(Optional.of(
                         provider("gitlab-lrz", LoginProvider.ProviderType.GITLAB, "https://gitlab.lrz.de", "openid")));
 
-        ClientRegistration reg = new LoginProviderClientRegistrationRepository(repo, "", OUTLINE_ORIGINS)
+        ClientRegistration reg = new LoginProviderClientRegistrationRepository(
+                        repo, "", OUTLINE_ORIGINS, new OidcIssuerPolicy(Set.of()), mock(OidcProviderDiscovery.class))
                 .findByRegistrationId("gitlab-lrz");
 
         assertNotNull(reg);
@@ -189,13 +205,19 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                 .thenReturn(Optional.of(
                         provider("github", LoginProvider.ProviderType.GITHUB, "https://github.com", "read:user")));
 
-        ClientRegistration prefixed = new LoginProviderClientRegistrationRepository(repo, "/api", OUTLINE_ORIGINS)
+        ClientRegistration prefixed = new LoginProviderClientRegistrationRepository(
+                        repo,
+                        "/api",
+                        OUTLINE_ORIGINS,
+                        new OidcIssuerPolicy(Set.of()),
+                        mock(OidcProviderDiscovery.class))
                 .findByRegistrationId("github");
         assertNotNull(prefixed);
         assertThat(prefixed.getRedirectUri()).isEqualTo("{baseUrl}/api/login/oauth2/code/{registrationId}");
 
-        ClientRegistration root =
-                new LoginProviderClientRegistrationRepository(repo, "", OUTLINE_ORIGINS).findByRegistrationId("github");
+        ClientRegistration root = new LoginProviderClientRegistrationRepository(
+                        repo, "", OUTLINE_ORIGINS, new OidcIssuerPolicy(Set.of()), mock(OidcProviderDiscovery.class))
+                .findByRegistrationId("github");
         assertNotNull(root);
         assertThat(root.getRedirectUri()).isEqualTo("{baseUrl}/login/oauth2/code/{registrationId}");
     }

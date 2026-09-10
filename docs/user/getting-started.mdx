@@ -21,7 +21,36 @@ The public TUM deployment is available at [hephaestus.build](https://hephaestus.
 3. Choose one of the available providers and complete its sign-in flow.
 4. Select a workspace from the workspace switcher.
 
-If you do not have a workspace, ask an instance admin to create one or add you. Some deployments also allow eligible users to select **Create workspace** from the workspace switcher.
+If you do not have a workspace, ask an instance admin to create one, or share your account ID from **User settings** with a workspace owner who can add you. Some deployments also allow eligible users to select **Create workspace** from the workspace switcher.
+
+### Connect an organizational account
+
+If your deployment offers organizational sign-in and you already have a Hephaestus account, sign in
+with your existing method first. Open **User settings → Connected Accounts** and choose **Connect**
+for your organization. Complete the organization's sign-in flow to attach that identity to your
+existing account.
+
+Signing in with an identity you have not connected creates a separate account, even if it has the same
+email address. The issuer shown beside a connected account distinguishes different organizations or
+realms. Keep at least one available sign-in method connected; Slack and Outline connections are not
+sign-in methods. An organizational sign-in alone does not give you access to a private workspace.
+
+### Join and manage workspace access
+
+Workspace access belongs to your Hephaestus account. You do not need a GitHub or GitLab connection to
+be a member. Your account ID is shown in **User settings** and stays the same when you connect another
+sign-in method. Connect GitHub or GitLab to see your own source-control profile and configure practice
+feedback preferences.
+
+In **Workspace admin → Members**, owners and administrators can add an existing account by ID,
+change its role, or suspend access. Only owners can grant or remove ownership. Before stepping down
+or deleting your account, promote a successor if you are the final owner.
+
+A suspension immediately removes member access and prevents synchronization from restoring it.
+Public pages and instance-administrator access are unaffected. Use **Restore
+access** to explicitly choose a role and restore the membership. Disconnecting an SCM identity does
+not remove manually granted workspace access. Workspace access and provider-side organization
+permissions are separate: suspending workspace access does not revoke GitHub or GitLab permissions.
 
 ## Find your way around
 

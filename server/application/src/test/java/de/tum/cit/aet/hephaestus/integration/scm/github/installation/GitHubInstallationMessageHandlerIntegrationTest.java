@@ -31,6 +31,21 @@ class GitHubInstallationMessageHandlerIntegrationTest extends BaseIntegrationTes
     @Autowired
     private IdentityProviderRepository gitProviderRepository;
 
+    @Autowired
+    private de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository workspaces;
+
+    @Autowired
+    private de.tum.cit.aet.hephaestus.workspace.WorkspaceAccountMembershipRepository accountMemberships;
+
+    @Autowired
+    private de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository users;
+
+    @Autowired
+    private de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository accounts;
+
+    @Autowired
+    private de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository identities;
+
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
@@ -52,9 +67,38 @@ class GitHubInstallationMessageHandlerIntegrationTest extends BaseIntegrationTes
 
         handler.handleEvent(event);
 
-        // Then - handler processes without error
-        // Full workspace creation is tested in live integration tests
-        assertThat(event.action()).isEqualTo("created");
+        var installation = java.util.Objects.requireNonNull(event.installation());
+        var workspace = workspaces.findByInstallationId(installation.id()).orElseThrow();
+        assertThat(workspace.getAccountLogin()).isEqualTo("HephaestusTest");
+        assertThat(accountMemberships.findByWorkspace_Id(workspace.getId()))
+                .as("a GitHub organization must not be invented as a human owner")
+                .isEmpty();
+        handler.handleEvent(event);
+        assertThat(workspaces
+                        .findByInstallationId(installation.id())
+                        .orElseThrow()
+                        .getId())
+                .isEqualTo(workspace.getId());
+    }
+
+    @Test
+    void shouldNotGrantOwnershipToMatchingLoginFromAnotherProvider() throws Exception {
+        var gitlab = gitProviderRepository.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.example.com"));
+        var unrelated = de.tum.cit.aet.hephaestus.testconfig.TestUserFactory.ensureUser(
+                users, "HephaestusTest", 215361191L, gitlab);
+        de.tum.cit.aet.hephaestus.testconfig.TestUserFactory.ensureAccountForUser(accounts, identities, unrelated);
+        var event = loadPayload("installation.created");
+        handler.handleEvent(event);
+        var workspace = workspaces
+                .findByInstallationId(
+                        java.util.Objects.requireNonNull(event.installation()).id())
+                .orElseThrow();
+        assertThat(accountMemberships.findByWorkspace_Id(workspace.getId())).isEmpty();
+        assertThat(users.findById(unrelated.getId()))
+                .get()
+                .extracting(user -> user.getProvider().getId())
+                .isEqualTo(gitlab.getId());
     }
 
     @Test

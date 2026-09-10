@@ -1,6 +1,6 @@
-import type { WorkspaceMembership } from "@/api/types.gen";
+import type { WorkspaceAccountMembership } from "@/api/types.gen";
 
-export type WorkspaceRole = NonNullable<WorkspaceMembership["role"]>;
+export type WorkspaceRole = NonNullable<WorkspaceAccountMembership["role"]>;
 
 const WORKSPACE_ROLE_RANK: Record<WorkspaceRole, number> = {
 	MEMBER: 0,

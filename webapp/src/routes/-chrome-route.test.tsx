@@ -25,9 +25,9 @@ describe("app chrome on a route with no workspace in the URL", () => {
 			http.get("*/workspaces/:workspaceSlug/members/me", () =>
 				HttpResponse.json({
 					role: "ADMIN",
-					userId: 42,
-					userLogin: "ada",
-					userName: "Ada Lovelace",
+					accountId: 42,
+					scmUserLogin: "ada",
+					displayName: "Ada Lovelace",
 				}),
 			),
 		);

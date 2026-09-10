@@ -12,7 +12,7 @@ const ERROR_COPY: Record<string, { title: string; description: string }> = {
 	oauth_failure: {
 		title: "Sign-in didn't complete",
 		description:
-			"We couldn't finish signing you in with that provider. Please try again from the sign-in page.",
+			"We couldn't finish signing you in with that provider. Try again from the sign-in page, or use another connected sign-in method. If it keeps failing, ask an instance administrator to check the provider settings.",
 	},
 	token_exchange: {
 		title: "Sign-in couldn't be verified",
@@ -38,7 +38,7 @@ const ERROR_COPY: Record<string, { title: string; description: string }> = {
 		// Slack and Outline are both link-only: they can only be attached to an existing session.
 		title: "Sign in before linking that account",
 		description:
-			"Open Hephaestus, sign in with GitHub or GitLab, then connect Slack or Outline from Settings.",
+			"Sign in to your existing Hephaestus account, then connect Slack or Outline from User settings.",
 	},
 	step_up_required: {
 		// The session is valid and the account is right; only its age is the problem, so this must not

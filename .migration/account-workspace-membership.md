@@ -1,0 +1,11 @@
+#### 🔴 Account-based workspace access
+
+Before upgrading, have at least one existing owner of each workspace sign in with their existing GitHub or GitLab identity. Their account must be active and the identity must remain connected. Do not create links by matching email addresses or usernames. If a workspace has only a source-control organization as its recorded owner, use the previous version’s administration tools to assign a real developer as an owner first. An organization itself cannot sign in. The migration stops if a workspace with an owner has no verified active owner account; resolve the missing link through normal sign-in on the previous version before retrying.
+
+Back up the database and stop all runtime roles before upgrading. Upgrade server, worker and webhook together. Verify an owner's private-workspace access and a non-member's denial before reopening access. Do not run the previous version alongside the new version. To roll back, stop all roles and restore the complete pre-upgrade database backup with the previous release; a binary-only rollback would restore the old authorization rules.
+
+The migration retains the strongest existing role per verified account and workspace, marked as retained during upgrade. Unlinked source-control contributors remain in leaderboards and historical work but do not gain account access. Owners can grant an existing account access from Workspace admin → Members; the member's stable account ID is shown in User settings. Suspension is sticky until an explicit role assignment restores access.
+
+Custom clients must update membership operations: `/workspaces/{slug}/members` is an administrator-only account roster; role assignment takes `accountId`, not `userId`; deleting `/members/{accountId}` suspends access. Read source-control rosters at `/workspaces/{slug}/contributors`, and update leaderboard visibility at `/contributors/{userId}/hidden`. The member response no longer represents a source-control user. Instance workspace summaries use `ownerDisplayName`, not `ownerLogin`.
+
+New GitHub App installations can arrive before anyone signs in. If such a workspace has no account owner, an instance administrator must open Workspace admin → Members and explicitly assign its first owner. That initial assignment is audited; once an active owner exists, only an owner can grant further ownership.

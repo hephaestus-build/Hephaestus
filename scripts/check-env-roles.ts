@@ -66,6 +66,11 @@ interface RoleScope {
  */
 const ROLE_SCOPES: readonly RoleScope[] = [
 	{
+		path: "hephaestus.auth.oidc",
+		role: "server",
+		why: "OidcIssuerPolicy and the organizational login clients are gated on hephaestus.runtime.server.enabled",
+	},
+	{
 		path: "hephaestus.sandbox.docker",
 		role: "worker",
 		why: "DockerSandboxConfiguration registers Docker connection, network and runtime settings only when hephaestus.runtime.worker.enabled is active",

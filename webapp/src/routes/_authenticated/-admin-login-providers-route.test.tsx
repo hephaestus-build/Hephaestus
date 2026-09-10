@@ -87,7 +87,7 @@ describe("instance login providers route", () => {
 					{ status: 403 },
 				);
 			}),
-			http.get("*/identity-providers", () => HttpResponse.json({}, { status: 503 })),
+			http.get("*/user/identity-providers", () => HttpResponse.json({}, { status: 503 })),
 		);
 
 		renderLoginProvidersRoute();
@@ -101,9 +101,14 @@ describe("instance login providers route", () => {
 		);
 
 		server.use(
-			http.get("*/identity-providers", () =>
+			http.get("*/user/identity-providers", () =>
 				HttpResponse.json([
-					{ registrationId: "gitlab", providerType: "GITLAB", displayName: "Team GitLab" },
+					{
+						registrationId: "gitlab",
+						providerType: "GITLAB",
+						baseUrl: "https://gitlab.lrz.de",
+						displayName: "Team GitLab",
+					},
 				]),
 			),
 		);

@@ -102,4 +102,27 @@ class RegistrationToGitProviderResolverTest {
             throw new AssertionError("could not set id via reflection", e);
         }
     }
+
+    @Test
+    void shouldResolveDistinctProviderRowsForSeparateOidcRealmsAndExactIssuerSpellings() {
+        when(gitProviderRepository.findByTypeAndServerUrl(
+                        IdentityProviderType.OIDC, "https://identity.example.com/realms/team/"))
+                .thenReturn(Optional.of(
+                        stamped(IdentityProviderType.OIDC, "https://identity.example.com/realms/team/", 10L)));
+        when(gitProviderRepository.findByTypeAndServerUrl(
+                        IdentityProviderType.OIDC, "https://identity.example.com/realms/team"))
+                .thenReturn(Optional.of(
+                        stamped(IdentityProviderType.OIDC, "https://identity.example.com/realms/team", 11L)));
+        when(gitProviderRepository.findByTypeAndServerUrl(
+                        IdentityProviderType.OIDC, "https://identity.example.com/realms/other"))
+                .thenReturn(Optional.of(
+                        stamped(IdentityProviderType.OIDC, "https://identity.example.com/realms/other", 12L)));
+
+        assertThat(resolver.resolveProviderId("OIDC", "https://identity.example.com/realms/team/"))
+                .isEqualTo(10L);
+        assertThat(resolver.resolveProviderId("OIDC", "https://identity.example.com/realms/team"))
+                .isEqualTo(11L);
+        assertThat(resolver.resolveProviderId("OIDC", "https://identity.example.com/realms/other"))
+                .isEqualTo(12L);
+    }
 }

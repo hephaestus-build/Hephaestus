@@ -96,8 +96,8 @@ export type AdminWorkspaceView = {
   id: number;
   memberCount: number;
   ownerAccountId?: number;
-  ownerLogin?: string;
-  providerType?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
+  ownerDisplayName?: string;
+  providerType?: 'GITHUB' | 'GITLAB' | 'OIDC' | 'SLACK' | 'OUTLINE';
   status: string;
   workspaceSlug: string;
 };
@@ -300,13 +300,13 @@ export type ArtifactTrace = {
  */
 export type AssignRoleRequest = {
   /**
+   * Account ID of the member to update
+   */
+  accountId: number;
+  /**
    * New role to assign (OWNER, ADMIN, MEMBER)
    */
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
-  /**
-   * User ID of the member to update
-   */
-  userId: number;
 };
 
 /**
@@ -888,7 +888,7 @@ export type CreateLlmModelRequest = {
 
 export type CreateLoginProviderRequest = {
   /**
-   * Instance base URL (GitLab only; GitHub is always github.com)
+   * Exact issuer URL for OIDC, including its realm path; instance origin for GitLab/Outline. GitHub/Slack use fixed hosts.
    */
   baseUrl?: string;
   clientId: string;
@@ -908,7 +908,7 @@ export type CreateLoginProviderRequest = {
    * Space-separated scopes; defaulted by provider type if omitted
    */
   scopes?: string;
-  type: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
+  type: 'GITHUB' | 'GITLAB' | 'OIDC' | 'SLACK' | 'OUTLINE';
 };
 
 /**
@@ -1650,15 +1650,7 @@ export type GroupAutonomyRollup = {
 };
 
 /**
- * One row per sign-in option. <code>providerType</code> drives the SPA's icon choice; <code>baseUrl</code> is
- *  the OAuth instance origin (scheme + host[:port]) of the authorization endpoint, so the
- *  workspace-creation wizard can match a target instance to its login.
- *
- *  <p><b>baseUrl is the OAuth origin, not the SCM API origin.</b> It is only meaningful for GitLab rows,
- *  where the OAuth origin and the API origin coincide (e.g. <code>https://gitlab.example.com</code>). For a
- *  GitHub row it is <code>https://github.com</code> (the OAuth host), NOT <code>https://api.github.com</code>; the
- *  sole consumer (the workspace wizard) matches GitLab self-hosted origins and never relies on the GitHub
- *  value, so the discrepancy is harmless. Do not treat this as an SCM API base URL.
+ * A configured sign-in/linking option; baseUrl is the exact issuer for OIDC and the provider origin otherwise.
  */
 export type IdentityProviderView = {
   baseUrl?: string;
@@ -1673,6 +1665,7 @@ export type IdentityView = {
   id?: number;
   lastLoginAt?: Date;
   providerType?: string;
+  serverUrl?: string;
   subject?: string;
   username?: string;
 };
@@ -5638,7 +5631,7 @@ export type Workspace = {
   /**
    * High-level git provider type for the workspace's SCM connection (null if none bound)
    */
-  providerType?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
+  providerType?: 'GITHUB' | 'GITLAB' | 'OIDC' | 'SLACK' | 'OUTLINE';
   /**
    * Custom server URL for self-hosted instances (null for cloud defaults)
    */
@@ -5659,6 +5652,53 @@ export type Workspace = {
    * URL-friendly identifier for the workspace
    */
   workspaceSlug: string;
+};
+
+/**
+ * Account access, independent of whether this developer has an SCM profile.
+ */
+export type WorkspaceAccountMembership = {
+  accountId: number;
+  createdAt?: Date;
+  displayName: string;
+  role: 'OWNER' | 'ADMIN' | 'MEMBER';
+  scmUserLogin?: string;
+  source?: 'MANUAL' | 'SCM' | 'DIRECTORY' | 'MIGRATED';
+  suspended: boolean;
+};
+
+/**
+ * An SCM contributor in a workspace
+ */
+export type WorkspaceContributor = {
+  /**
+   * Timestamp when the membership was created
+   */
+  createdAt?: Date;
+  /**
+   * Whether this linked human member can be selected for practice-review coverage
+   */
+  eligibleForPracticeReview?: boolean;
+  /**
+   * Whether the member is hidden from the leaderboard
+   */
+  hidden?: boolean;
+  /**
+   * League points earned by the user in this workspace
+   */
+  leaguePoints?: number;
+  /**
+   * Unique identifier of the user
+   */
+  userId?: number;
+  /**
+   * Login/username of the user
+   */
+  userLogin?: string;
+  /**
+   * Display name of the user
+   */
+  userName?: string;
 };
 
 /**
@@ -5704,7 +5744,7 @@ export type WorkspaceListItem = {
   /**
    * High-level git provider type (GITHUB or GITLAB), or null if no SCM connection bound
    */
-  providerType?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
+  providerType?: 'GITHUB' | 'GITLAB' | 'OIDC' | 'SLACK' | 'OUTLINE';
   /**
    * Current lifecycle status of the workspace (PENDING, ACTIVE, ARCHIVED)
    */
@@ -5925,44 +5965,6 @@ export type WorkspaceLlmUsageReport = {
    * Calls this month (either purse) whose price is not yet known. They are excluded from both totals above, so a non-zero value means the real spend may be higher than shown.
    */
   unpricedEventCount: number;
-};
-
-/**
- * A user's membership in a workspace
- */
-export type WorkspaceMembership = {
-  /**
-   * Timestamp when the membership was created
-   */
-  createdAt?: Date;
-  /**
-   * Whether this linked human member can be selected for practice-review coverage
-   */
-  eligibleForPracticeReview?: boolean;
-  /**
-   * Whether the member is hidden from the leaderboard
-   */
-  hidden?: boolean;
-  /**
-   * League points earned by the user in this workspace
-   */
-  leaguePoints?: number;
-  /**
-   * Role of the user in this workspace (OWNER, ADMIN, MEMBER)
-   */
-  role?: 'OWNER' | 'ADMIN' | 'MEMBER';
-  /**
-   * Unique identifier of the user
-   */
-  userId?: number;
-  /**
-   * Login/username of the user
-   */
-  userLogin?: string;
-  /**
-   * Display name of the user
-   */
-  userName?: string;
 };
 
 /**
@@ -7666,6 +7668,22 @@ export type UnlinkIdentityResponses = {
 
 export type UnlinkIdentityResponse = UnlinkIdentityResponses[keyof UnlinkIdentityResponses];
 
+export type ListAccountIdentityProvidersData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/user/identity-providers';
+};
+
+export type ListAccountIdentityProvidersResponses = {
+  /**
+   * OK
+   */
+  200: Array<IdentityProviderView>;
+};
+
+export type ListAccountIdentityProvidersResponse = ListAccountIdentityProvidersResponses[keyof ListAccountIdentityProvidersResponses];
+
 export type RevokeOtherSessionsData = {
   body?: never;
   path?: never;
@@ -8445,6 +8463,54 @@ export type UpdateConnectionStatusResponses = {
 
 export type UpdateConnectionStatusResponse = UpdateConnectionStatusResponses[keyof UpdateConnectionStatusResponses];
 
+export type ListWorkspaceContributorsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: {
+    page?: number;
+    size?: number;
+  };
+  url: '/workspaces/{workspaceSlug}/contributors';
+};
+
+export type ListWorkspaceContributorsResponses = {
+  /**
+   * OK
+   */
+  200: Array<WorkspaceContributor>;
+};
+
+export type ListWorkspaceContributorsResponse = ListWorkspaceContributorsResponses[keyof ListWorkspaceContributorsResponses];
+
+export type UpdateMemberVisibilityData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+  };
+  query: {
+    hidden: boolean;
+  };
+  url: '/workspaces/{workspaceSlug}/contributors/{userId}/hidden';
+};
+
+export type UpdateMemberVisibilityResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceContributor;
+};
+
+export type UpdateMemberVisibilityResponse = UpdateMemberVisibilityResponses[keyof UpdateMemberVisibilityResponses];
+
 export type UpdateFeaturesData = {
   body: UpdateWorkspaceFeaturesRequest;
   path: {
@@ -8987,16 +9053,7 @@ export type ListMembersData = {
      */
     workspaceSlug: string;
   };
-  query?: {
-    /**
-     * Zero-based page index
-     */
-    page?: number;
-    /**
-     * Results per page, capped at 100
-     */
-    size?: number;
-  };
+  query?: never;
   url: '/workspaces/{workspaceSlug}/members';
 };
 
@@ -9004,7 +9061,7 @@ export type ListMembersResponses = {
   /**
    * OK
    */
-  200: Array<WorkspaceMembership>;
+  200: Array<WorkspaceAccountMembership>;
 };
 
 export type ListMembersResponse = ListMembersResponses[keyof ListMembersResponses];
@@ -9025,7 +9082,7 @@ export type AssignRoleResponses = {
   /**
    * OK
    */
-  200: WorkspaceMembership;
+  200: WorkspaceAccountMembership;
 };
 
 export type AssignRoleResponse = AssignRoleResponses[keyof AssignRoleResponses];
@@ -9046,7 +9103,7 @@ export type GetCurrentUserMembershipResponses = {
   /**
    * OK
    */
-  200: WorkspaceMembership;
+  200: WorkspaceAccountMembership;
 };
 
 export type GetCurrentUserMembershipResponse = GetCurrentUserMembershipResponses[keyof GetCurrentUserMembershipResponses];
@@ -9058,15 +9115,15 @@ export type RemoveMemberData = {
      * Workspace slug
      */
     workspaceSlug: string;
-    userId: number;
+    accountId: number;
   };
   query?: never;
-  url: '/workspaces/{workspaceSlug}/members/{userId}';
+  url: '/workspaces/{workspaceSlug}/members/{accountId}';
 };
 
 export type RemoveMemberResponses = {
   /**
-   * Membership removed
+   * Access suspended; an explicit role assignment restores it
    */
   204: void;
 };
@@ -9080,47 +9137,20 @@ export type GetMemberData = {
      * Workspace slug
      */
     workspaceSlug: string;
-    userId: number;
+    accountId: number;
   };
   query?: never;
-  url: '/workspaces/{workspaceSlug}/members/{userId}';
+  url: '/workspaces/{workspaceSlug}/members/{accountId}';
 };
 
 export type GetMemberResponses = {
   /**
    * OK
    */
-  200: WorkspaceMembership;
+  200: WorkspaceAccountMembership;
 };
 
 export type GetMemberResponse = GetMemberResponses[keyof GetMemberResponses];
-
-export type UpdateMemberVisibilityData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    userId: number;
-  };
-  query: {
-    /**
-     * Whether to exclude the member from leaderboard rankings
-     */
-    hidden: boolean;
-  };
-  url: '/workspaces/{workspaceSlug}/members/{userId}/hidden';
-};
-
-export type UpdateMemberVisibilityResponses = {
-  /**
-   * OK
-   */
-  200: WorkspaceMembership;
-};
-
-export type UpdateMemberVisibilityResponse = UpdateMemberVisibilityResponses[keyof UpdateMemberVisibilityResponses];
 
 export type ListThreadsData = {
   body?: never;

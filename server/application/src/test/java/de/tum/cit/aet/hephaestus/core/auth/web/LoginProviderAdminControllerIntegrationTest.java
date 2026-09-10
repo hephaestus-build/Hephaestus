@@ -20,6 +20,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * ({@code app_admin}) may manage login providers, the create response carries the upstream redirect
  * URI, and the sealed client secret is never returned.
  */
+@org.springframework.test.context.TestPropertySource(
+        properties = "hephaestus.auth.oidc.allowed-issuers=https://identity.example.com/realms/team")
 @Sql(scripts = "/db/auth-event-sequence.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 class LoginProviderAdminControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
@@ -163,6 +165,103 @@ class LoginProviderAdminControllerIntegrationTest extends AbstractWorkspaceInteg
         assertThat(authEventRepository.findAll())
                 .filteredOn(e -> e.getEventType() == AuthEvent.EventType.LOGIN_PROVIDER_UPDATED)
                 .isEmpty();
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldConfigureRotateDisableAndRestoreAnApprovedOrganizationalProvider() {
+        createGitLabProvider("fallback", "https://gitlab.fallback.test")
+                .expectStatus()
+                .isCreated();
+        webTestClient
+                .post()
+                .uri("/admin/login-providers")
+                .headers(TestAuthUtils.withCurrentUser())
+                .bodyValue(Map.of(
+                        "registrationId",
+                        "organization",
+                        "type",
+                        "OIDC",
+                        "displayName",
+                        "Organization",
+                        "baseUrl",
+                        "https://identity.example.com/realms/team",
+                        "clientId",
+                        "organization-client",
+                        "clientSecret",
+                        "original-secret"))
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody()
+                .jsonPath("$.baseUrl")
+                .isEqualTo("https://identity.example.com/realms/team")
+                .jsonPath("$.clientSecret")
+                .doesNotExist();
+        webTestClient
+                .patch()
+                .uri("/admin/login-providers/organization")
+                .headers(TestAuthUtils.withCurrentUser())
+                .bodyValue(Map.of("clientSecret", "rotated-secret", "enabled", false))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.enabled")
+                .isEqualTo(false)
+                .jsonPath("$.clientSecret")
+                .doesNotExist();
+        webTestClient
+                .patch()
+                .uri("/admin/login-providers/organization")
+                .headers(TestAuthUtils.withCurrentUser())
+                .bodyValue(Map.of("enabled", true))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.enabled")
+                .isEqualTo(true);
+        webTestClient
+                .patch()
+                .uri("/admin/login-providers/organization")
+                .headers(TestAuthUtils.withCurrentUser())
+                .bodyValue(Map.of("baseUrl", "https://identity.example.com/realms/replacement"))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(422);
+        webTestClient
+                .delete()
+                .uri("/admin/login-providers/organization")
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNoContent();
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldRejectAnOrganizationalIssuerOutsideTheOperatorAllowlist() {
+        webTestClient
+                .post()
+                .uri("/admin/login-providers")
+                .headers(TestAuthUtils.withCurrentUser())
+                .bodyValue(Map.of(
+                        "registrationId",
+                        "untrusted",
+                        "type",
+                        "OIDC",
+                        "displayName",
+                        "Untrusted",
+                        "baseUrl",
+                        "https://identity.example.com/realms/unapproved",
+                        "clientId",
+                        "client",
+                        "clientSecret",
+                        "secret"))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(422);
     }
 
     private WebTestClient.ResponseSpec createGitLabProvider(String registrationId, String baseUrl) {

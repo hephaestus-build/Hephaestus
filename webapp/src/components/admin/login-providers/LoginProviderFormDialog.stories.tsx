@@ -109,3 +109,43 @@ export const Edit: Story = {
 		await expect(screen.getByLabelText("Registration ID")).toBeDisabled();
 	},
 };
+
+export const CreateOrganization: Story = {
+	play: async () => {
+		await userEvent.click(await screen.findByRole("combobox", { name: "Provider type" }));
+		await userEvent.click(
+			await screen.findByRole("option", { name: "Organization / OpenID Connect" }),
+		);
+		screen.getByLabelText("Issuer URL");
+		screen.getByText(/including its realm path/);
+		await expect(screen.getByLabelText("Scopes")).toHaveAttribute(
+			"placeholder",
+			"openid profile email",
+		);
+	},
+};
+
+export const EditOrganization: Story = {
+	args: {
+		editing: {
+			...editing,
+			registrationId: "organization",
+			type: "OIDC",
+			displayName: "Organization account",
+			baseUrl: "https://identity.example.com/realms/team/",
+			scopes: "openid profile email",
+			redirectUri: "https://hephaestus.example.com/api/login/oauth2/code/organization",
+		},
+	},
+	play: async () => {
+		await expectSettledVisible(await screen.findByText("Edit login provider"));
+		await expect(screen.getByLabelText("Issuer URL")).toHaveValue(
+			"https://identity.example.com/realms/team/",
+		);
+		await expect(screen.getByLabelText("Issuer URL")).toHaveAttribute("readonly");
+	},
+};
+
+export const SavingOrganization: Story = {
+	args: { ...EditOrganization.args, isSubmitting: true },
+};

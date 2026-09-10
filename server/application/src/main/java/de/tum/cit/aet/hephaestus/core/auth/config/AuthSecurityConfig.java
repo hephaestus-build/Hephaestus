@@ -24,6 +24,9 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResponseClient;
+import org.springframework.security.oauth2.client.endpoint.OAuth2AuthorizationCodeGrantRequest;
+import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserRequest;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
@@ -32,6 +35,7 @@ import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
 import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
@@ -70,8 +74,16 @@ public class AuthSecurityConfig {
 
     private final LoginProviderRepository loginProviderRepository;
 
-    public AuthSecurityConfig(LoginProviderRepository loginProviderRepository) {
+    private final OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> loginTokenResponseClient;
+    private final OAuth2UserService<OidcUserRequest, OidcUser> oidcUserService;
+
+    public AuthSecurityConfig(
+            LoginProviderRepository loginProviderRepository,
+            OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> loginTokenResponseClient,
+            OAuth2UserService<OidcUserRequest, OidcUser> oidcUserService) {
         this.loginProviderRepository = loginProviderRepository;
+        this.loginTokenResponseClient = loginTokenResponseClient;
+        this.oidcUserService = oidcUserService;
     }
 
     @Bean
@@ -180,7 +192,9 @@ public class AuthSecurityConfig {
                             .authorizationRequestResolver(pkceResolver(clientRegistrationRepository)));
                     // GitHub: enrich attributes with the primary+verified email from /user/emails so
                     // VerifiedEmailResolver can stamp primaryEmailVerifiedAt. OIDC providers are untouched.
-                    oauth.userInfoEndpoint(userInfo -> userInfo.userService(oauthUserService()));
+                    oauth.tokenEndpoint(endpoint -> endpoint.accessTokenResponseClient(loginTokenResponseClient));
+                    oauth.userInfoEndpoint(
+                            userInfo -> userInfo.userService(oauthUserService()).oidcUserService(oidcUserService));
                     oauth.successHandler(successHandler);
                     oauth.failureHandler(failureHandler);
                 });

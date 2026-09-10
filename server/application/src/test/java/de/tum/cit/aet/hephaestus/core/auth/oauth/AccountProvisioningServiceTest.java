@@ -30,6 +30,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.oidc.OidcIdToken;
+import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 
@@ -77,6 +80,73 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
                 accountJitCreator,
                 adminBootstrapPolicy,
                 Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
+    @Test
+    void shouldRejectUnvalidatedPrincipalWhenProviderIsOidc() {
+        useOidcProvider();
+        assertThatThrownBy(() -> service.resolveOrProvision("organization", "sub-1", principal(), null))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        verify(accountJitCreator, never()).create(any(), any());
+    }
+
+    @Test
+    void shouldRejectDifferentIssuerWhenOidcCallbackCompletes() {
+        useOidcProvider();
+        assertThatThrownBy(() -> service.resolveOrProvision(
+                        "organization", "sub-1", oidcPrincipal("https://identity.example.com/realms/other"), null))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        verify(accountJitCreator, never()).create(any(), any());
+    }
+
+    @Test
+    void shouldRejectDifferentSubjectWhenOidcCallbackCompletes() {
+        useOidcProvider();
+        assertThatThrownBy(() -> service.resolveOrProvision(
+                        "organization", "other", oidcPrincipal("https://identity.example.com/realms/team"), null))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        verify(accountJitCreator, never()).create(any(), any());
+    }
+
+    @Test
+    void shouldIgnoreTenantClaimAndMutableUsernameWhenOidcUserReturns() {
+        useOidcProvider();
+        when(identityLinkRepository.findActiveByProviderSubject(PROVIDER_ID, "sub-1", null))
+                .thenReturn(Optional.of(linkOn(accountWithId(42L))));
+        var result = service.resolveOrProvision(
+                "organization", "sub-1", oidcPrincipal("https://identity.example.com/realms/team"), null);
+        assertThat(result.account().getId()).isEqualTo(42L);
+        verify(adminBootstrapPolicy).shouldPromote("organization", "sub-1", null);
+        verify(accountJitCreator, never()).create(any(), any());
+    }
+
+    @Test
+    void shouldRejectDisabledProviderWhenCallbackCompletes() {
+        var provider = useOidcProvider();
+        provider.setEnabled(false);
+        assertThatThrownBy(() -> service.resolveOrProvision(
+                        "organization", "sub-1", oidcPrincipal("https://identity.example.com/realms/team"), null))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        verify(accountJitCreator, never()).create(any(), any());
+    }
+
+    private LoginProvider useOidcProvider() {
+        var provider = new LoginProvider();
+        provider.setRegistrationId("organization");
+        provider.setType(LoginProvider.ProviderType.OIDC);
+        provider.setBaseUrl("https://identity.example.com/realms/team");
+        when(loginProviderRepository.findByRegistrationId("organization")).thenReturn(Optional.of(provider));
+        return provider;
+    }
+
+    private static DefaultOidcUser oidcPrincipal(String issuer) {
+        return new DefaultOidcUser(
+                List.of(new SimpleGrantedAuthority("ROLE_USER")),
+                new OidcIdToken(
+                        "validated-id-token",
+                        NOW,
+                        NOW.plusSeconds(300),
+                        Map.of("iss", issuer, "sub", "sub-1", "preferred_username", "admin", "tid", "mutable-tenant")));
     }
 
     @Test

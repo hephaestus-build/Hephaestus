@@ -74,19 +74,26 @@ public void updateSettings(WorkspaceContext ctx, @RequestBody SettingsDTO dto) {
 
 ## Account identity resolution
 
-Membership rows are keyed on SCM users, not accounts. The account-keyed schema in
-[ADR 0019](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0019-workspace-membership-keyed-on-account.md) is proposed, not implemented.
-`CurrentAccountUsers` resolves an account's non-disabled identity links to existing SCM actors by
-provider id and immutable provider subject. It does not provision actors or fall back to usernames,
-display names, or cached actor references. No resolvable links means no SCM actors, not a restriction
-on public reads or instance-admin elevation.
+Authorization comes from `workspace_account_membership`, uniquely keyed by workspace and account.
+An account with no SCM identity is a valid member. Its role, source and sticky suspension belong to
+that account membership, not to an upstream organization role. The retained `workspace_membership`
+table contains SCM contributor and leaderboard facts; its legacy role is not an authorization input.
+[ADR 0019](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0019-workspace-membership-keyed-on-account.md)
+owns the split and migration decision.
 
-`AccountWorkspaceMembershipQuery` uses that resolver for cross-module membership reads. The effective
-role is the strongest role across the account's linked workspace members. The representative actor is
-instead the first-linked actor that currently holds membership, using identity-link id order. HTTP
-requests and provider attribution use that same selection. Role changes and newly added links do not
-replace an existing eligible representative; losing or disabling its link or membership can change it.
-A failure in this cross-module query propagates rather than returning an empty membership list.
+`CurrentAccountUsers` resolves non-disabled identity links by provider ID and immutable subject.
+It does not provision actors or fall back to usernames, display names, or cached actor references.
+`AccountWorkspaceMembershipQuery` reads account membership directly and optionally selects the
+first-linked SCM actor with a contributor row in that workspace. Changing roles or linking another
+identity does not replace an existing eligible representative. Unlinking can remove attribution but
+does not remove manually granted workspace access. Query failures propagate rather than pretending
+that the account has no memberships.
+
+Membership mutations lock the workspace and recheck the caller's current account role. Administrators
+can manage non-owner access; only owners can change ownership or adopt directory-managed access as a
+manual exception. Suspension survives sync. Removing the final active owner, including through
+account deletion, requires an explicit ownership transfer. Instance administrators receive effective
+ADMIN access, never synthetic ownership or an invented membership row.
 
 Slack and Outline attribution first resolve the provider subject and provider workspace identity
 (Slack team or Outline team), then require membership in the target Hephaestus workspace. Account
