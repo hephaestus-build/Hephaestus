@@ -521,6 +521,18 @@ Other jobs are read-only consumers: the Gradle action prefers an older same-job 
 producer cache, so consumers must not publish snapshots that become stale between their main-branch runs.
 The pnpm executable cache also saves only from `main`. The JDK is pinned once, in `.java-version`.
 
+The package store and pnpm's lockfile-verification cache are separate. `setup-toolchain` also restores
+`lockfile-verified.jsonl` from the directory reported by `pnpm cache path`; without it, a warm store
+still needs registry metadata for release-age and resolution checks. Only successful default-branch
+push installs publish this record, keyed by platform, pnpm
+version, lockfile, workspace policy and any repository `.npmrc`. pnpm's [native verification cache](https://github.com/pnpm/pnpm/blob/v12.3.4/pnpm/crates/lockfile-verification/src/cache.rs)
+validates the content and policy before reusing a verdict. The frozen install still runs with scripts
+disabled and package integrity checks intact; a miss performs normal verification, not an offline
+fallback. The action verifies the native cache file exists on each runner, including Windows; a
+changed upstream cache contract must be reviewed rather than silently losing reuse. Registry
+metadata itself is not cached by this action. A dependency update is cold under its new key; only
+later runs with the same inputs can reuse the default branch's verdict.
+
 Java quality verdicts are not stored in the Vite task cache: Gradle owns their task inputs and outputs.
 GraphQL generation opts into Gradle's build cache using the plugin's declared inputs and outputs.
 Its optional timestamped `@Generated` class marker is disabled so unchanged schemas produce identical
