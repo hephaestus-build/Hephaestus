@@ -67,6 +67,10 @@ published.
 | Actionlint, Zizmor | workflow lint with ShellCheck warnings; Zizmor at medium confidence | — |
 | PR → Validate PR | Conventional Commit title; every commit’s primary author resolves to the pull request author’s GitHub account (including bot accounts); the PR body follows attribution policy | — |
 
+The browser job retains `webapp-e2e-results`, including `e2e-server.log`, for seven days on
+success as well as failure. Inspect server startup and shutdown output even when browser assertions
+pass; a passing suite does not prove that background work started correctly.
+
 The four quality legs call `ci-quality-leg.yml` independently. Job-level conditions omit unchanged
 legs before a runner is allocated; selected legs do not cancel each other on failure. Each runs
 `vp run ci:<leg>`, then pipes `vp run --last-details` through `scripts/report-task-run.ts`: every
@@ -80,7 +84,7 @@ both it and the tooling leg prove the hook dispatcher on a rejected and an accep
 Pull requests targeting `main` merge through GitHub's merge queue after these GitHub
 Actions contexts pass: `CI Status Gate`, `Actionlint`, and `Zizmor`. Required
 workflows run again for the merge group, which includes the current base and queued changes ahead of
-the pull request. Each required context is bound to the GitHub Actions integration rather than
+the pull request. `CI Status Gate` also waits for CodeQL analysis and publication. Each required context is bound to the GitHub Actions integration rather than
 accepting a same-named external status.
 
 A merge group is a diff, so it selects its jobs from the paths it touches —
@@ -222,6 +226,17 @@ because GitHub caps a fork token's `security-events` access at read.
 PR and merge-group diffs select analysis languages, not individual files: each selected language
 scans its configured source tree. Main and scheduled runs select all languages, as do changes to
 the CodeQL workflow or configuration. The language filters live in `.github/workflows/codeql.yml`.
+
+CI calls that reusable workflow, and `CI Status Gate` waits for its successful completion, including
+SARIF upload. A merge group therefore cannot pass the gate and lose its temporary ref while CodeQL
+is still publishing results. The weekly scan also runs directly from the same workflow.
+
+Java uses manual extraction with the JDK pinned in `.java-version` and a clean, uncached
+`:application:testClasses` compilation. This gives CodeQL the real dependencies, generated clients
+and annotation-processed source instead of no-build dependency and JDK guesses. The single-use Gradle
+process runs inside the extractor; neither cached classes nor a pre-existing daemon can bypass it.
+This compilation produces analysis inputs only: the packaged server remains owned by the build-once
+job. Actions and JavaScript/TypeScript retain no-build analysis.
 
 `.github/workflows/codeql.yml` runs CodeQL under advanced setup: only advanced setup reads a
 committed config file, and `.github/codeql/codeql-config.yml` excludes `security/semgrep/**`,

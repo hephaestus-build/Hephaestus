@@ -18,6 +18,7 @@ import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 
 /** Wires issuance and verification for ES256 cookie-session JWTs (ADR 0017). */
@@ -82,8 +83,9 @@ public class AuthJwtConfig {
         keyService.assertProdKeysSealed();
     }
 
-    // CDS training exits at context refresh, before runners can perform database writes.
+    // Build profiles load the authentication contract but have no database to seed.
     @Bean
+    @Profile("!specs & !cds-training")
     ApplicationRunner seedKeysOnStartup() {
         return args -> {
             try {

@@ -581,6 +581,10 @@ void describe("CI contract", () => {
 		const e2e = job(build, "webapp-e2e");
 		assert.doesNotMatch(e2e, /needs:/);
 		assert.equal((e2e.match(/actions\/download-artifact@/g) ?? []).length, 1);
+		assert.match(e2e, /name: Upload diagnostics\s+if: always\(\)/);
+		assert.match(e2e, /e2e-server\.log/);
+		assert.match(e2e, /http:\/\/localhost:8080\/actuator\/health\/readiness/);
+		assert.doesNotMatch(e2e, /actuator\/health\/liveness/);
 		const image = job(orchestrator, "application-server-image");
 		assert.match(image, /needs: \[detect-changes, server-package\]/);
 		assert.match(image, /use-buildpacks: true/);
@@ -1485,6 +1489,13 @@ void describe("CI contract", () => {
 		};
 		const passes = { failed: false, outputs: { status: "success" } };
 
+		for (const result of ["skipped", "failure", "cancelled"])
+			assert.equal(
+				(await verdict({ CodeQL: result }, false)).failed,
+				true,
+				`CodeQL ${result} must not release the merge queue ref`,
+			);
+
 		// An ordinary pull request legitimately skips the preflight, and blocking one would block
 		// every pull request in the repository.
 		assert.deepEqual(await verdict({ "Release-preflight": "skipped" }, false), passes);
@@ -2349,7 +2360,7 @@ void test("Semgrep scans PRs, main and merge queues without a privileged trigger
 void test("CodeQL runs advanced setup and excludes the Semgrep fixtures it would otherwise flag", async () => {
 	const source = await readFile(".github/workflows/codeql.yml", "utf8");
 	const workflow = parseDocument(source);
-	for (const trigger of ["pull_request", "push", "merge_group", "schedule"])
+	for (const trigger of ["workflow_call", "schedule"])
 		assert.ok(workflow.hasIn(["on", trigger]), `codeql.yml must run on ${trigger}`);
 	assert.equal(workflow.hasIn(["on", "pull_request_target"]), false);
 	const permissions = workflow.getIn(["jobs", "analyze", "permissions"]);
@@ -2363,7 +2374,33 @@ void test("CodeQL runs advanced setup and excludes the Semgrep fixtures it would
 		for (const match of source.matchAll(new RegExp(`uses: ${action}@([\\w.-]+)`, "g")))
 			assert.match(match[1] ?? "", /^[a-f0-9]{40}$/, `${action} must be pinned by commit`);
 	const init = step(workflow, ["jobs", "analyze"], "github/codeql-action/init");
-	assert.equal(init.get("build-mode"), "none");
+	assert.match(
+		String(init.get("build-mode")),
+		/matrix\.language == 'java-kotlin' && 'manual' \|\| 'none'/,
+	);
+	const java = step(workflow, ["jobs", "analyze"], "actions/setup-java");
+	assert.equal(java.get("java-version-file"), ".java-version");
+	const compile = namedStep(workflow, ["jobs", "analyze"], "Compile Java for analysis");
+	assert.equal(compile.get("if"), "matrix.language == 'java-kotlin'");
+	assert.equal(compile.get("working-directory"), "server");
+	assert.equal(
+		compile.get("run"),
+		"./gradlew --no-daemon --no-build-cache --no-configuration-cache clean :application:testClasses",
+	);
+	const ci = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	assert.equal(ci.getIn(["jobs", "CodeQL", "uses"]), "./.github/workflows/codeql.yml");
+	const gate = ci.getIn(["jobs", "all-ci-passed", "needs"]);
+	assert.ok(isSeq(gate));
+	assert.ok(gate.toJSON().includes("CodeQL"));
+	assert.match(
+		String(namedStep(ci, ["jobs", "all-ci-passed"], "Evaluate CI results").get("run")),
+		/needs.CodeQL.result/,
+	);
+	for (const trigger of ["pull_request", "push", "merge_group"])
+		assert.ok(ci.hasIn(["on", trigger]));
+	assert.equal(workflow.hasIn(["on", "pull_request"]), false);
+	assert.equal(workflow.hasIn(["on", "merge_group"]), false);
+	assert.equal(workflow.hasIn(["on", "push"]), false);
 	assert.equal(init.get("config-file"), "./.github/codeql/codeql-config.yml");
 	assert.match(String(init.get("languages")), /^\$\{\{ *matrix\.language *\}\}$/);
 	const analyze = step(workflow, ["jobs", "analyze"], "github/codeql-action/analyze");

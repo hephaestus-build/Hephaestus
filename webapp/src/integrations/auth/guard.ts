@@ -15,8 +15,11 @@ export function currentUserQueryOptions() {
 		...getCurrentUserOptions(),
 		retry: false,
 		staleTime: QUERY_STALE_TIME_MS,
-		queryFn: async ({ signal }) => {
-			const { data, error, response } = await getCurrentUser({ signal });
+		// Route guards await this shared request even when AuthProvider has no mounted observer.
+		// Leave its lifetime independent of observer unmounts; explicit query cancellation still
+		// discards the result when the session ends.
+		queryFn: async () => {
+			const { data, error, response } = await getCurrentUser();
 			if (data !== undefined && response?.ok) return data;
 			// The generated client's error body need not contain the actual HTTP status.
 			throw new Error("Could not verify your session.", { cause: response ?? error });

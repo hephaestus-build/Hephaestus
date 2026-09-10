@@ -67,9 +67,6 @@ const viteConfig = {
 	build: {
 		sourcemap: "hidden" as const,
 	},
-	optimizeDeps: {
-		exclude: ["storybook-static"],
-	},
 	test: {
 		globals: true,
 		environment: "jsdom",
@@ -88,6 +85,8 @@ const viteConfig = {
 	server: {
 		port: Number.parseInt(process.env.WEBAPP_PORT ?? "", 10) || 4200,
 		strictPort: true,
+		// Storybook writes a separate site inside this root; rebuilding it must not reload the app.
+		watch: { ignored: ["**/storybook-static/**"] },
 		fs: {
 			allow: [resolve(import.meta.dirname, "..")],
 		},

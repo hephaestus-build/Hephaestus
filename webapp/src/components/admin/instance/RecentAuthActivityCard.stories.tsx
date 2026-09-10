@@ -60,6 +60,10 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("Failed sign-in");
+		await expect(canvas.getByRole("link", { name: "View audit log" })).toHaveAttribute(
+			"href",
+			"/admin/audit?tab=signins",
+		);
 	},
 };
 
