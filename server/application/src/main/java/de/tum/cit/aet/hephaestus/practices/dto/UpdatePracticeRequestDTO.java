@@ -24,10 +24,9 @@ public record UpdatePracticeRequestDTO(
                 max = 1,
                 message = "A practice is reviewed on one occasion. To read different evidence at a different moment, "
                         + "split this into two practices.")
-        @Valid
         @Schema(description = "Replacement occasion and its evidence; omit to leave it unchanged")
         @Nullable
-        List<PracticeBinding> bindings,
+        List<@Valid PracticeBinding> bindings,
 
         @Size(max = 50000, message = "Criteria must be at most 50000 characters")
         @Pattern(regexp = ".*\\S.*", message = "Criteria must not be blank")
