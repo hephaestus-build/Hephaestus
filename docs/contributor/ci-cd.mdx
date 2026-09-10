@@ -205,6 +205,16 @@ The first Trivy pass is the code-scanning feed: SARIF output reports every sever
 and it keeps Trivy's secret scanner,
 which covers the whole tree where TruffleHog covers a pull request's own commits.
 
+TruffleHog has two independent pins in `ci-security-scan.yml`: the action commit selects its
+wrapper, while the supported `image` and `version` inputs select the scanner container by tag and
+digest. The wrapper otherwise defaults to a mutable scanner tag even when its action is pinned.
+Renovate tracks the wrapper through its GitHub Actions manager and the scanner through a Docker
+custom manager; their versions need not move together. When reviewing a wrapper update, verify its
+[`image` and `version` input contract](https://github.com/trufflesecurity/trufflehog/blob/363923b901c911a9164f50b6c423f47c15372b1c/action.yml):
+the resulting Docker reference must retain the digest, and scanner failure must still fail the step.
+The event's immutable base/head commit range, verified-secret policy, and scan-error failure policy
+apply to either update.
+
 Renovate groups routine Gradle updates as server dependencies and webapp development updates
 separately. Webapp production dependencies remain separate unless Renovate identifies a package
 family that must move together.

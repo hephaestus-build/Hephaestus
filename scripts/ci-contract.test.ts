@@ -1869,6 +1869,8 @@ void describe("CI contract", () => {
 		const scanPath = ["jobs", "security-scan"];
 		assert.equal(workflow.getIn([...scanPath, "env", "TRIVY_INCLUDE_DEV_DEPS"]), "true");
 		const secretScan = stepInputs(namedStep(workflow, scanPath, "Secret detection"));
+		assert.equal(secretScan.get("image"), "ghcr.io/trufflesecurity/trufflehog");
+		assert.match(String(secretScan.get("version")), /^\d+\.\d+\.\d+@sha256:[a-f0-9]{64}$/);
 		assert.equal(
 			secretScan.get("base"),
 			`\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || '' }}`,
@@ -1878,6 +1880,7 @@ void describe("CI contract", () => {
 			`\${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}`,
 		);
 		assert.ok(String(secretScan.get("extra_args")).split(" ").includes("--fail-on-scan-errors"));
+		assert.ok(String(secretScan.get("extra_args")).split(" ").includes("--only-verified"));
 		const report = stepInputs(namedStep(workflow, scanPath, "Trivy dependency scan"));
 		assert.equal(report.get("format"), "sarif");
 		assert.ok(
