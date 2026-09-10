@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent } from "storybook/test";
+import { expect, fn, screen } from "storybook/test";
 
 import { expectNoPageOverflow } from "@/test/reflow";
 
@@ -23,9 +23,8 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-	play: async ({ args }) => {
-		await userEvent.click(await screen.findByRole("button", { name: "Continue with GitHub" }));
-		await expect(args.onSignIn).toHaveBeenCalledWith("github");
+	play: async () => {
+		await expect(await screen.findByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
 		await expect(screen.getByRole("link", { name: /privacy notice/i })).toHaveAttribute(
 			"href",
 			"/privacy",

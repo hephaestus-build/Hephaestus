@@ -36,16 +36,14 @@ import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 /**
- * The version of the wording below, and the version this page submits.
+ * The version of the wording below. This bundle is the archive: what an account accepted is whichever
+ * release published these words, and `ConsentService.WORDING_VERSION` holds the same string.
  *
- * This bundle is the archive: what an account accepted is whichever release published these words,
- * and `ConsentService.CURRENT_NOTICE_VERSION` holds the same string so the server can reject
- * anything else. Submitting the server's value instead would let a tab left open across a deployment
- * record acceptance of wording it never rendered.
- *
- * Change any string in `TERMS` or `RESEARCH` and this moves, in the same commit as the server's.
+ * The page refuses to render the form when the server reports a different one, because the words on
+ * screen would then be a version nobody could truthfully accept. Change any string in `TERMS` or
+ * `RESEARCH` and this moves, in the same commit as the server's.
  */
-export const NOTICE_VERSION = "2026-09-10";
+export const WORDING_VERSION = "2026-09-10";
 
 export interface ConsentChoice {
 	noticeVersion: string;
@@ -132,12 +130,12 @@ const ANSWERS = [
 	{
 		value: "yes",
 		title: "Yes, take part",
-		detail: "My usage and feedback may be used for the research.",
+		detail: "Use my usage and feedback for the research.",
 	},
 	{
 		value: "no",
 		title: "No, don't take part",
-		detail: "None of my data is used for research.",
+		detail: "Keep my usage and feedback out of the research.",
 	},
 ] as const;
 
@@ -194,7 +192,9 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 	const researchOrganization =
 		state.status === "ready" ? state.notice.researchOrganization : undefined;
 	const asksAboutResearch = researchOrganization !== undefined;
-	const stale = state.status === "ready" && state.notice.noticeVersion !== NOTICE_VERSION;
+	// `noticeVersion` also covers the research organisation named below, which the server composes and
+	// this page only echoes; `wordingVersion` is the half this bundle is responsible for rendering.
+	const stale = state.status === "ready" && state.notice.wordingVersion !== WORDING_VERSION;
 	const answered = !asksAboutResearch || answer !== undefined;
 	const ready = state.status === "ready" && !stale && termsAccepted && answered;
 
@@ -234,7 +234,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 		event.preventDefault();
 		if (state.status !== "ready" || !ready || submitting) return;
 		state.onSubmit({
-			noticeVersion: NOTICE_VERSION,
+			noticeVersion: state.notice.noticeVersion,
 			termsAccepted: true,
 			...(asksAboutResearch && { participateInResearch: answer === "yes" }),
 		});

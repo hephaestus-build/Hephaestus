@@ -45,7 +45,7 @@ public class ConsentDecision {
     @Column(name = "mechanism", nullable = false, length = 32)
     private Mechanism mechanism;
 
-    /** Which wording the account was shown — {@link ConsentService#CURRENT_NOTICE_VERSION} owns it. */
+    /** What the account was shown — {@link ConsentService#currentNoticeVersion()} composes it. */
     @Column(name = "notice_version", nullable = false, length = 32)
     private String noticeVersion;
 

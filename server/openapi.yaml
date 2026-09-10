@@ -8892,16 +8892,22 @@ components:
           type: boolean
         noticeVersion:
           type: string
+          description: Identifies the wording and the research organisation shown;
+            echo it back to submit
         participateInResearch:
           type: boolean
         researchOrganization:
           type: string
           description: "Organisation running the optional research programme, or null\
             \ when this instance runs none"
+        wordingVersion:
+          type: string
+          description: Version of the first-login wording the client must be rendering
       required:
       - completed
       - noticeVersion
       - participateInResearch
+      - wordingVersion
     Contributor:
       type: object
       description: Information about a contributor to the Hephaestus project

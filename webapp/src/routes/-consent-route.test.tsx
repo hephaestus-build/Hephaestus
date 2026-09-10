@@ -4,13 +4,15 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
 import type { FirstLoginConsent } from "@/api/types.gen";
-import { NOTICE_VERSION } from "@/components/auth/ConsentPage";
+import { WORDING_VERSION } from "@/components/auth/ConsentPage";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
+const NOTICE_VERSION = `${WORDING_VERSION}+abcd1234`;
 const notice = {
 	completed: false,
 	noticeVersion: NOTICE_VERSION,
+	wordingVersion: WORDING_VERSION,
 	participateInResearch: false,
 	researchOrganization: "AET",
 };
@@ -113,11 +115,11 @@ describe("consent recovery", () => {
 	});
 
 	it("stops offering the form when a rejected save reveals a newer notice version", async () => {
-		let version: string = NOTICE_VERSION;
+		let wording: string = WORDING_VERSION;
 		server.use(
-			http.get("*/user/consent", () => HttpResponse.json({ ...notice, noticeVersion: version })),
+			http.get("*/user/consent", () => HttpResponse.json({ ...notice, wordingVersion: wording })),
 			http.put("*/user/consent", () => {
-				version = "next-notice";
+				wording = "next-wording";
 				return new HttpResponse(null, { status: 409 });
 			}),
 		);

@@ -767,12 +767,19 @@ export type ConnectionSyncStatus = {
 
 export type ConsentStatus = {
   completed: boolean;
+  /**
+   * Identifies the wording and the research organisation shown; echo it back to submit
+   */
   noticeVersion: string;
   participateInResearch: boolean;
   /**
    * Organisation running the optional research programme, or null when this instance runs none
    */
   researchOrganization?: string;
+  /**
+   * Version of the first-login wording the client must be rendering
+   */
+  wordingVersion: string;
 };
 
 /**

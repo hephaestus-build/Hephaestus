@@ -5,6 +5,10 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -19,15 +23,15 @@ import org.springframework.web.server.ResponseStatusException;
 public class ConsentService {
 
     /**
-     * Identifies the wording an account was shown. The wording itself is the first-login screen in the
-     * webapp, published in a signed release and immutable in git, so this version is a pointer into
-     * that history rather than a row anyone could edit afterwards.
-     *
-     * <p>The webapp holds the same constant beside the words themselves and submits its own, so a tab
-     * that predates a deployment cannot record acceptance of wording it never rendered — it gets the
-     * conflict below instead. Bump both in the commit that changes any of those words.
+     * The version of the wording on the first-login screen. That screen is in the webapp, published in
+     * a signed release and immutable in git, so this is a pointer into that history rather than a row
+     * anyone could edit afterwards. The webapp holds the same constant beside the words and refuses to
+     * render the form when the two disagree; bump both in the commit that changes any of them.
      */
-    static final String CURRENT_NOTICE_VERSION = "2026-09-10";
+    static final String WORDING_VERSION = "2026-09-10";
+
+    /** Enough of a digest to distinguish two organisation names, and short enough for the column. */
+    private static final int ORGANISATION_DIGEST_LENGTH = 8;
 
     private final ConsentDecisionRepository decisionRepository;
     private final AccountRepository accountRepository;
@@ -42,17 +46,40 @@ public class ConsentService {
         this.properties = properties;
     }
 
+    /**
+     * What an account was actually shown: the wording, and the organisation the research question
+     * named — because consent to a study is consent to the organisation running it, and renaming that
+     * organisation asks a different question with the same words.
+     *
+     * <p>Recording the composite is what makes every downstream check follow the configuration for
+     * free: turn a study on, off, or over to another organisation and completion lapses, so the
+     * account is asked again instead of inheriting an answer it gave to somebody else.
+     */
+    String currentNoticeVersion() {
+        String organisation = properties.researchProgramme();
+        return organisation == null ? WORDING_VERSION : WORDING_VERSION + "+" + digestOf(organisation);
+    }
+
+    private static String digestOf(String organisation) {
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256").digest(organisation.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash).substring(0, ORGANISATION_DIGEST_LENGTH);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is required by every JRE", e);
+        }
+    }
+
     @Transactional(readOnly = true)
     public ConsentStatusDTO status(Long accountId) {
         return currentStatus(accountId);
     }
 
     private ConsentStatusDTO currentStatus(Long accountId) {
-        ConsentDecision research = latest(accountId, ConsentDecision.Purpose.RESEARCH_PARTICIPATION);
         return new ConsentStatusDTO(
-                CURRENT_NOTICE_VERSION,
+                currentNoticeVersion(),
+                WORDING_VERSION,
                 isCurrentNoticeCompleted(accountId),
-                research != null && research.isGranted() && CURRENT_NOTICE_VERSION.equals(research.getNoticeVersion()),
+                researchAuthorised(accountId),
                 properties.researchProgramme());
     }
 
@@ -63,12 +90,12 @@ public class ConsentService {
 
     private boolean isCurrentNoticeCompleted(Long accountId) {
         return decisionRepository.isCompletedForNotice(
-                accountId, CURRENT_NOTICE_VERSION, properties.researchProgramme() != null);
+                accountId, currentNoticeVersion(), properties.researchProgramme() != null);
     }
 
     @Transactional
     public ConsentStatusDTO completeFirstLogin(Long accountId, FirstLoginConsentDTO request) {
-        if (!CURRENT_NOTICE_VERSION.equals(request.noticeVersion())) {
+        if (!currentNoticeVersion().equals(request.noticeVersion())) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "The transparency notice has changed; review it again");
         }
@@ -99,8 +126,7 @@ public class ConsentService {
         }
         Boolean answer = request.participateInResearch();
         if (answer != null) {
-            appendResearchIfChanged(
-                    account, accountId, answer, ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL, true);
+            appendResearchIfChanged(account, accountId, answer, ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL);
         }
         decisionRepository.flush();
         return currentStatus(accountId);
@@ -109,6 +135,8 @@ public class ConsentService {
     @Transactional
     public ConsentStatusDTO setResearchParticipation(Long accountId, ResearchConsentDTO request) {
         if (properties.researchProgramme() == null) {
+            // Participation is already false for every account while no study is configured, so there
+            // is nothing here to grant and nothing left to withdraw.
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "This instance runs no research programme");
         }
         if (!isCurrentNoticeCompleted(accountId)) {
@@ -116,33 +144,38 @@ public class ConsentService {
                     HttpStatus.PRECONDITION_REQUIRED, "Complete the current transparency notice first");
         }
         Account account = requireAccountForUpdate(accountId);
-        appendResearchIfChanged(
-                account, accountId, request.granted(), ConsentDecision.Mechanism.ACCOUNT_SETTINGS, false);
+        appendResearchIfChanged(account, accountId, request.granted(), ConsentDecision.Mechanism.ACCOUNT_SETTINGS);
         decisionRepository.flush();
         return currentStatus(accountId);
     }
 
+    /**
+     * Whether research processing is authorised right now. A grant given to a study that has since
+     * been switched off, or handed to a different organisation, is history rather than permission:
+     * both change the notice version, and only the current one authorises anything.
+     */
     @Transactional(readOnly = true)
     public boolean participatesInResearch(Long accountId) {
+        return researchAuthorised(accountId);
+    }
+
+    private boolean researchAuthorised(Long accountId) {
+        if (properties.researchProgramme() == null) {
+            return false;
+        }
         ConsentDecision latest = latest(accountId, ConsentDecision.Purpose.RESEARCH_PARTICIPATION);
-        return latest != null && latest.isGranted() && CURRENT_NOTICE_VERSION.equals(latest.getNoticeVersion());
+        return latest != null && latest.isGranted() && isForCurrentNotice(latest);
     }
 
     /**
-     * Appends only when the answer differs from the one currently on record, which makes a repeated
-     * submission a no-op and a changed one a decision. Setup takes {@code onlyIfNotForCurrentNotice}
-     * because an account arriving from an older notice has an answer that predates the wording it is
-     * being asked about: that one is superseded rather than compared.
+     * Appends unless the answer on record already says this, for this notice. A resubmitted form
+     * writes nothing; a changed answer, or one given against a notice that has since moved, is a
+     * decision — including when its boolean happens to match, because the question was not the same.
      */
     private void appendResearchIfChanged(
-            Account account,
-            Long accountId,
-            boolean granted,
-            ConsentDecision.Mechanism mechanism,
-            boolean supersedeOlderNotice) {
+            Account account, Long accountId, boolean granted, ConsentDecision.Mechanism mechanism) {
         ConsentDecision current = latest(accountId, ConsentDecision.Purpose.RESEARCH_PARTICIPATION);
-        boolean stale = supersedeOlderNotice && (current == null || !isForCurrentNotice(current));
-        if (stale || current == null || current.isGranted() != granted) {
+        if (current == null || !isForCurrentNotice(current) || current.isGranted() != granted) {
             append(account, ConsentDecision.Purpose.RESEARCH_PARTICIPATION, granted, mechanism);
         }
     }
@@ -158,8 +191,8 @@ public class ConsentService {
         return decision != null && decision.isGranted() && isForCurrentNotice(decision);
     }
 
-    private static boolean isForCurrentNotice(ConsentDecision decision) {
-        return CURRENT_NOTICE_VERSION.equals(decision.getNoticeVersion());
+    private boolean isForCurrentNotice(ConsentDecision decision) {
+        return currentNoticeVersion().equals(decision.getNoticeVersion());
     }
 
     private @Nullable ConsentDecision latest(Long accountId, ConsentDecision.Purpose purpose) {
@@ -170,11 +203,16 @@ public class ConsentService {
 
     private void append(
             Account account, ConsentDecision.Purpose purpose, boolean granted, ConsentDecision.Mechanism mechanism) {
-        decisionRepository.save(new ConsentDecision(account, purpose, granted, mechanism, CURRENT_NOTICE_VERSION));
+        decisionRepository.save(new ConsentDecision(account, purpose, granted, mechanism, currentNoticeVersion()));
     }
 
     public record ConsentStatusDTO(
-            @NonNull String noticeVersion,
+            @Schema(description = "Identifies the wording and the research organisation shown; echo it back to submit")
+            @NonNull
+            String noticeVersion,
+
+            @Schema(description = "Version of the first-login wording the client must be rendering") @NonNull
+            String wordingVersion,
 
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
             boolean completed,

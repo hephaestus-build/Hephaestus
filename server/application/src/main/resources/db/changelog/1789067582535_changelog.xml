@@ -14,7 +14,7 @@
     <changeSet id="1789067582535-1" author="hephaestus">
         <dropNotNullConstraint tableName="consent_decision" columnName="notice_sha256" columnDataType="varchar(64)"/>
         <rollback>
-            <addNotNullConstraint tableName="consent_decision" columnName="notice_sha256" columnDataType="varchar(64)"/>
+            <stop>Restoring NOT NULL fails once a decision has been recorded without a digest, and the ledger is append-only, so there is nothing to backfill with. Restore a pre-upgrade database backup.</stop>
         </rollback>
     </changeSet>
     <!--
@@ -43,27 +43,13 @@ CREATE OR REPLACE FUNCTION public.enforce_consent_decision_append_only() RETURNS
             END;
             $$;
 ]]></sql>
+        <!--
+            Refused rather than reversed. Liquibase rolls back in reverse order, so restoring the
+            null-unsafe comparison here would commit before the NOT NULL above fails on the rows this
+            release allowed, leaving a database whose erasure path rejects exactly those rows.
+        -->
         <rollback>
-            <sql splitStatements="false"><![CDATA[
-CREATE OR REPLACE FUNCTION public.enforce_consent_decision_append_only() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-            BEGIN
-                IF TG_OP = 'UPDATE'
-                   AND OLD.account_id IS NOT NULL AND NEW.account_id IS NULL
-                   AND OLD.id = NEW.id
-                   AND OLD.purpose = NEW.purpose
-                   AND OLD.granted = NEW.granted
-                   AND OLD.mechanism = NEW.mechanism
-                   AND OLD.notice_version = NEW.notice_version
-                   AND OLD.notice_sha256 = NEW.notice_sha256
-                   AND OLD.occurred_at = NEW.occurred_at THEN
-                    RETURN NEW;
-                END IF;
-                RAISE EXCEPTION 'consent_decision is append-only';
-            END;
-            $$;
-]]></sql>
+            <stop>Rolling this back would restore a guard that refuses to erase the account reference on any decision recorded without a digest. Restore a pre-upgrade database backup.</stop>
         </rollback>
     </changeSet>
 </databaseChangeLog>

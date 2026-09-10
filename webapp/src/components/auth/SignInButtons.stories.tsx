@@ -21,9 +21,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-	play: async ({ args }) => {
-		await userEvent.click(await screen.findByRole("button", { name: "Continue with GitLab" }));
-		await expect(args.onSignIn).toHaveBeenCalledWith("gitlab");
+	// What happens on a press is the route's contract, asserted in `-login-route.test.tsx`.
+	play: async () => {
+		await expect(await screen.findByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
+		await expect(screen.getByRole("button", { name: "Continue with GitLab" })).toBeEnabled();
 	},
 };
 

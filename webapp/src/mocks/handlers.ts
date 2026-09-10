@@ -35,6 +35,7 @@ export const handlers = [
 		HttpResponse.json({
 			completed: true,
 			noticeVersion: "2026-09-10",
+			wordingVersion: "2026-09-10",
 			participateInResearch: false,
 		}),
 	),

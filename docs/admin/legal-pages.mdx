@@ -42,8 +42,15 @@ HEPHAESTUS_RESEARCH_ORGANIZATION="Technical University of Munich (AET)"
 ```
 
 Leave it unset — the default — and no question is asked: first-login setup is the terms alone, the
-account-settings switch is hidden, and `PUT /user/consent/research` answers 404. Decisions already
-recorded stay in the ledger untouched.
+account-settings switch is hidden, and `PUT /user/consent/research` answers 404.
+
+**Changing this value is a new question, and it is treated as one.** The recorded notice version
+covers the wording *and* the organisation the question named, because consent to a study is consent to
+the organisation running it. Turn a study on, off, or over to a different name and every account's
+completion lapses: they are asked again at their next request, and until they answer, nothing they
+granted to the previous name authorises anything — `participatesInResearch` reports false. Earlier
+decisions stay in the ledger as the record of what was asked and answered at the time. A cosmetic
+rename therefore costs every account one more setup screen; make it deliberately.
 
 Hephaestus records the answer; it does not enforce it. No server code reads the decision to exclude a
 refusing or withdrawn account from processing, so an operator running a study must apply the current
@@ -51,7 +58,7 @@ decision in their own exports and analyses. Note also that the Slack app home re
 `user_preferences.participate_in_research` flag, which this screen does not write. The recorded answer
 is evidence of what was asked, not a technical control.
 
-`ConsentService.CURRENT_NOTICE_VERSION` identifies the wording an account accepted; the wording itself
+`ConsentService.WORDING_VERSION` identifies the wording an account accepted; the wording itself
 is the first-login screen, published in a signed release and immutable in git. The webapp holds the
 same constant beside those words and submits its own, so a browser tab that predates a deployment
 cannot record acceptance of wording it never rendered. A fork that changes the words changes both

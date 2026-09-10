@@ -9,12 +9,13 @@ import {
 	ConsentPage,
 	type ConsentPageProps,
 	type ConsentSubmission,
-	NOTICE_VERSION,
+	WORDING_VERSION,
 } from "./ConsentPage";
 
 const notice = {
 	completed: false,
-	noticeVersion: NOTICE_VERSION,
+	noticeVersion: `${WORDING_VERSION}+abcd1234`,
+	wordingVersion: WORDING_VERSION,
 	participateInResearch: false,
 	researchOrganization: "the Technical University of Munich (AET)",
 };
@@ -100,7 +101,7 @@ export const BothAnswered: Story = {
  * server has moved past must not be answered — accepting it would record terms nobody was shown.
  */
 export const NoticeChangedUnderneath: Story = {
-	args: { state: { ...ready, notice: { ...notice, noticeVersion: "2027-01-01" } } },
+	args: { state: { ...ready, notice: { ...notice, wordingVersion: "2027-01-01" } } },
 	play: async () => {
 		await expect(await screen.findByRole("button", { name: "Reload" })).toBeVisible();
 		await expect(screen.queryByRole("checkbox")).toBeNull();

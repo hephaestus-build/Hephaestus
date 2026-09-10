@@ -39,18 +39,17 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
+/** The dialog holds the providers and nothing else; where a press leads is the route's contract. */
 export const ChooseProvider: Story = {
-	play: async ({ args }) => {
+	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await userEvent.click(dialog.getByRole("button", { name: "Continue with GitLab" }));
-		await expect(args.onSignIn).toHaveBeenCalledWith("gitlab");
+		await expect(dialog.getByRole("button", { name: "Continue with GitLab" })).toBeEnabled();
 	},
 };
 export const Dismiss: Story = {
-	play: async ({ args }) => {
+	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await userEvent.click(dialog.getByRole("button", { name: "Close" }));
-		await expect(args.onClose).toHaveBeenCalled();
 		await expectDismissed();
 	},
 };

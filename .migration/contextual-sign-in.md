@@ -14,7 +14,12 @@ decision, and nothing is deleted.
 
 The wording changed and its version moved to `2026-09-10`, so every account accepts it once more. The
 gate runs on requests from existing sessions too, so signed-in users meet it as soon as the deployment
-finishes rather than at their next sign-in.
+finishes rather than at their next sign-in. A browser tab left open on the old setup screen during the
+upgrade shows an error and needs a full refresh, not the page's own retry.
+
+The recorded version covers the organisation the research question named as well as the wording, so
+changing `HEPHAESTUS_RESEARCH_ORGANIZATION` later asks every account again rather than carrying an
+answer over to a different name.
 
 Nothing is dropped from the database this release. `consent_notice` and its archived `2026-08-30`
 wording stay exactly as the baseline seeded them, and `consent_decision.notice_sha256` only loses its

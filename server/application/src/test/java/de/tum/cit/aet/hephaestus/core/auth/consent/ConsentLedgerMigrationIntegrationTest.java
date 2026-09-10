@@ -44,7 +44,7 @@ class ConsentLedgerMigrationIntegrationTest {
     void shouldRecordADecisionWithoutADigest() throws Exception {
         try (Connection connection = connect()) {
             long decisionId =
-                    insertDecision(connection, insertAccount(connection), ConsentService.CURRENT_NOTICE_VERSION, null);
+                    insertDecision(connection, insertAccount(connection), ConsentService.WORDING_VERSION, null);
 
             assertThat(digestOf(connection, decisionId)).isNull();
         }
@@ -54,7 +54,7 @@ class ConsentLedgerMigrationIntegrationTest {
     void shouldKeepTheLedgerAppendOnlyAndStillPermitErasure() throws Exception {
         try (Connection connection = connect()) {
             long accountId = insertAccount(connection);
-            long decisionId = insertDecision(connection, accountId, ConsentService.CURRENT_NOTICE_VERSION, null);
+            long decisionId = insertDecision(connection, accountId, ConsentService.WORDING_VERSION, null);
 
             assertThatThrownBy(() ->
                             execute(connection, "UPDATE consent_decision SET granted = false WHERE id = " + decisionId))
@@ -68,7 +68,7 @@ class ConsentLedgerMigrationIntegrationTest {
             assertThatCode(() -> execute(
                             connection, "UPDATE consent_decision SET account_id = NULL WHERE id = " + decisionId))
                     .doesNotThrowAnyException();
-            assertThat(noticeVersion(connection, decisionId)).isEqualTo(ConsentService.CURRENT_NOTICE_VERSION);
+            assertThat(noticeVersion(connection, decisionId)).isEqualTo(ConsentService.WORDING_VERSION);
         }
     }
 
