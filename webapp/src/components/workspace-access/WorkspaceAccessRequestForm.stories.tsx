@@ -33,6 +33,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("region", { name: "Before you apply" })).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Request access" })).toBeDisabled();
 		await expect(
 			canvas.getByRole("checkbox", { name: "I acknowledge AI policy" }),

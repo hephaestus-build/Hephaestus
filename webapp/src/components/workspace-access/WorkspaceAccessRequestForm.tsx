@@ -70,18 +70,23 @@ export function WorkspaceAccessRequestForm({
 			}}
 		>
 			<h2 className="text-xl font-semibold">Request access</h2>
-			<div className={UNTRUSTED_MARKDOWN_PROSE}>
-				<UntrustedMarkdown>{form.introductionMarkdown}</UntrustedMarkdown>
-			</div>
-			<Field orientation="horizontal">
-				<Checkbox
-					id={`${id}-introduction`}
-					checked={introductionAcknowledged}
-					onCheckedChange={(checked) => setIntroductionAcknowledged(checked)}
-					disabled={pending}
-				/>
-				<FieldLabel htmlFor={`${id}-introduction`}>{form.acknowledgementLabel}</FieldLabel>
-			</Field>
+			<section className="space-y-3" aria-labelledby={`${id}-introduction-title`}>
+				<h3 id={`${id}-introduction-title`} className="font-semibold">
+					Before you apply
+				</h3>
+				<div className={UNTRUSTED_MARKDOWN_PROSE}>
+					<UntrustedMarkdown>{form.introductionMarkdown}</UntrustedMarkdown>
+				</div>
+				<Field orientation="horizontal">
+					<Checkbox
+						id={`${id}-introduction`}
+						checked={introductionAcknowledged}
+						onCheckedChange={(checked) => setIntroductionAcknowledged(checked)}
+						disabled={pending}
+					/>
+					<FieldLabel htmlFor={`${id}-introduction`}>{form.acknowledgementLabel}</FieldLabel>
+				</Field>
+			</section>
 			<FieldGroup>
 				<Field orientation="responsive">
 					<FieldLabel htmlFor={`${id}-maintainer`}>Responsible maintainer</FieldLabel>
