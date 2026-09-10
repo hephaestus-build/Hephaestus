@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.EvidenceQuoteUnverifiedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
@@ -172,7 +173,8 @@ public class PracticeDetectionDeliveryService {
         }
         // Only when there was something to admit: a review that found nothing still publishes its zero.
         if (admittedObservations.isEmpty() && !validObservations.isEmpty()) {
-            throw new JobDeliveryException(
+            throw new ObservationsRefusedException(
+                    "no_valid_observations",
                     "No observation survived the evidence check, so there is nothing to deliver: jobId=" + job.getId()
                             + ", withheld="
                             + withheldObservations);

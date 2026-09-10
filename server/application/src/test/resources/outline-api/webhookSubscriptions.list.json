@@ -9,7 +9,7 @@
     {
       "id": "451e2dc4-010e-44e7-8052-8537a3927ba8",
       "name": "Hephaestus documentation sync",
-      "url": "https://hephaestus-test.felixdietrich.com/webhooks/outline",
+      "url": "https://hephaestus.example.com/webhooks/outline",
       "secret": "REDACTED_TEST_FIXTURE_SECRET_0000000000000000000000000000",
       "events": [
         "documents.create",

@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler.spi;
 
+import java.io.Serial;
+
 /**
  * An observation quoted evidence that does not appear where it said the evidence was.
  *
@@ -10,6 +12,9 @@ package de.tum.cit.aet.hephaestus.agent.handler.spi;
  * means the run itself cannot be trusted, and stays fatal.
  */
 public class EvidenceQuoteUnverifiedException extends JobDeliveryException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     public EvidenceQuoteUnverifiedException(String message) {
         super(message);

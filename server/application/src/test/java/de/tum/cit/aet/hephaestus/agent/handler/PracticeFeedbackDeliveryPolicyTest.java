@@ -141,6 +141,42 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                 .isTrue();
     }
 
+    @ParameterizedTest
+    @CsvSource({"scm.issue,true", "scm.issue,false", "scm.pull_request,true", "scm.pull_request,false"})
+    void shouldEvaluateScmInAppCompositionWithoutExternalSilentModeDenial(String kind, boolean consent) {
+        var job = pullRequestJob();
+        job.setArtifactKind(ArtifactKind.of(kind));
+        var work = openPullRequest();
+        if ("scm.issue".equals(kind)) {
+            var metadata =
+                    tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
+            metadata.put("issue_id", PULL_REQUEST_ID);
+            metadata.put("issue_number", 17);
+            metadata.put("repository_id", REPOSITORY_ID);
+            metadata.put("repository_full_name", "owner/repo");
+            job.setMetadata(metadata);
+            Issue issue = new Issue();
+            issue.setId(work.getId());
+            issue.setNumber(work.getNumber());
+            issue.setAuthor(work.getAuthor());
+            issue.setRepository(work.getRepository());
+            issue.setState(work.getState());
+            when(issueRepository.findByIdWithAuthorAndRepository(PULL_REQUEST_ID))
+                    .thenReturn(Optional.of(issue));
+            when(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(WORKSPACE_ID, "owner/repo"))
+                    .thenReturn(true);
+            when(coverageService.assess(any(), eq("owner/repo"), eq(null), any(), eq(false)))
+                    .thenReturn(coverage(true));
+        } else {
+            stubPullRequestEvaluation(work, coverage(true));
+        }
+        when(silentModeQuery.isSilentModeEngaged()).thenReturn(true);
+        when(accountPreferencesQuery.practiceFeedbackDeliveryEnabled(AUTHOR_ID)).thenReturn(consent);
+        assertThat(policy().allowsComposition(job, DeliveryPolicySurface.IN_APP))
+                .isEqualTo(consent);
+        if (!consent) assertThat(recordedRefusal()).isEqualTo(FeedbackSuppressionReason.RECIPIENT_OPTED_OUT);
+    }
+
     @Test
     void shouldStopConversationWithPauseReasonButKeepInAppReadableWhenSendingIsPaused() {
         AgentJob job = conversationJob();

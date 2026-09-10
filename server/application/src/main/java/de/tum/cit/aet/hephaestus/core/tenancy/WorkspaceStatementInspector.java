@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import io.micrometer.core.instrument.Counter;
+import java.io.Serial;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -39,7 +40,13 @@ import org.slf4j.LoggerFactory;
  * <p>Wired via Spring Boot's {@code HibernatePropertiesCustomizer} in
  * {@link TenancyConfiguration}.
  */
+// Hibernate requires Serializable, but this Spring-managed inspector is recreated with each session factory.
+// Its metric registry, reporter and cache must not be serialized or restored as detached service state.
+@SuppressWarnings("serial")
 public class WorkspaceStatementInspector implements StatementInspector {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceStatementInspector.class);
 

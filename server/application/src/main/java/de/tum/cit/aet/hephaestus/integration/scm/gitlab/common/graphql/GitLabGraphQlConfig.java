@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
 import io.netty.resolver.DefaultAddressResolverGroup;
+import java.io.Serial;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
@@ -259,6 +260,9 @@ public class GitLabGraphQlConfig {
      */
     private static class RetryableStatusException extends RuntimeException {
 
+        @Serial
+        private static final long serialVersionUID = 1L;
+
         private final int statusCode;
 
         RetryableStatusException(int statusCode) {
@@ -276,6 +280,9 @@ public class GitLabGraphQlConfig {
      */
     private static class GitLabGraphQlRetryExhaustedException extends RuntimeException {
 
+        @Serial
+        private static final long serialVersionUID = 1L;
+
         GitLabGraphQlRetryExhaustedException(String message) {
             super(message);
         }
@@ -285,6 +292,9 @@ public class GitLabGraphQlConfig {
      * Thrown when GitLab GraphQL requests fail after exhausting transport-level retries.
      */
     private static class GitLabTransportRetryExhaustedException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         GitLabTransportRetryExhaustedException(String message, Throwable cause) {
             super(message, cause);

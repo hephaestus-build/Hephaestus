@@ -26,6 +26,16 @@ login. The setup script accepts only loopback application and database URLs. The
 still needs to be reachable from Docker through `host.docker.internal`, so enforce the boundary with
 the host firewall or an isolated development network.
 
+## Local SCM simulation
+
+For an isolated simulator, set `hephaestus.e2e.scm-origin` (environment variable
+`HEPHAESTUS_E2E_SCM_ORIGIN`) to its exact `http://127.0.0.1:<port>` origin, without a trailing
+slash. Startup rejects this setting unless `e2e` is active and `prod` is absent. Workspace
+validation and GitLab preflight allow only that origin; other destinations retain the normal
+HTTPS and private-address restrictions. Preflight clients do not follow redirects and cannot
+send requests to a different origin. This does not enable a GitHub simulator or supply missing
+provider APIs, Git transport, or historical replay.
+
 ## Setup
 
 ```bash

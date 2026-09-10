@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler.spi;
 
+import java.io.Serial;
+
 /**
  * A review whose observations the server will not record: the run finished, and what it submitted
  * does not support a claim about anyone's work. This is a decision the review stage took, not a
@@ -10,6 +12,9 @@ package de.tum.cit.aet.hephaestus.agent.handler.spi;
  * message, which names one job.
  */
 public class ObservationsRefusedException extends JobDeliveryException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private final String reasonCode;
     private final String reason;

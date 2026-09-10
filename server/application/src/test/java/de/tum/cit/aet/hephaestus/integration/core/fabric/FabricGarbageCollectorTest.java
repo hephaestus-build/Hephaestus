@@ -33,6 +33,15 @@ class FabricGarbageCollectorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRetainExecutionArtifactsReferencedByEitherAttemptManifest() throws Exception {
+        Path attempt = layout.jobDir("run").resolve("execution/1/0");
+        Files.createDirectories(attempt);
+        Files.writeString(attempt.resolve("execution-inputs.json"), "{\"files\":[{\"sha256\":\"input\"}]}");
+        Files.writeString(attempt.resolve("execution-outputs.json"), "{\"files\":[{\"sha256\":\"output\"}]}");
+        assertThat(gc.referencedShas()).containsExactlyInAnyOrder("input", "output");
+    }
+
+    @Test
     void rejectsNonPositiveRetention() {
         assertThatIllegalArgumentException().isThrownBy(() -> new FabricGarbageCollector(layout, cas, mapper, 0));
     }

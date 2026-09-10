@@ -20,7 +20,7 @@ dependencies {
     implementation(libs.micrometer.registry.prometheus)
     implementation(libs.logstash.logback.encoder)
     implementation(libs.context.propagation)
-    implementation(libs.micrometer.tracing.bridge.otel)
+    implementation(libs.spring.boot.starter.opentelemetry)
     implementation(libs.caffeine)
     implementation(libs.spring.boot.starter.data.jpa)
     implementation(libs.shedlock.spring)
@@ -50,6 +50,7 @@ dependencies {
     testImplementation(libs.spring.boot.starter.test) {
         exclude(group = "org.slf4j", module = "slf4j-simple")
     }
+    testImplementation(libs.micrometer.tracing.bridge.otel)
     testImplementation(libs.spring.boot.starter.data.jpa.test)
     testImplementation(libs.spring.boot.webtestclient)
     testImplementation(libs.spring.security.test)

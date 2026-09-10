@@ -125,9 +125,25 @@ server:
 # Actuator on the management port; health probes for Kubernetes liveness/readiness.
 management:
     tracing:
-        # Propagate trace context without sampling spans.
+        # Opt in separately from private execution archives; raw prompts never enter span attributes.
         sampling:
-            probability: 0.0
+            probability: ${TRACING_SAMPLING_PROBABILITY:0.0}
+        export:
+            otlp:
+                enabled: ${TRACING_OTLP_ENABLED:false}
+    opentelemetry:
+        tracing:
+            export:
+                otlp:
+                    endpoint: ${TRACING_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+    otlp:
+        metrics:
+            export:
+                enabled: false
+    logging:
+        export:
+            otlp:
+                enabled: false
     server:
         port: ${MANAGEMENT_PORT:8080}
     endpoints:
@@ -444,6 +460,9 @@ hephaestus:
     # Controls the detection gate for the practice-aware PR review agent.
     # The gate decides whether to submit an agent job for a PR event.
     practice-review:
+        # Private prompts, source files and native Pi sessions; enable only with appropriate retention/access controls.
+        execution-capture:
+            enabled: ${PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED:false}
         # whether to deliver feedback to already-merged PRs
         deliver-to-merged: ${PRACTICE_REVIEW_DELIVER_TO_MERGED:false}
         # minimum minutes between reviews for the same PR (0 = no cooldown)
@@ -495,6 +514,7 @@ hephaestus:
             # OCI runtime: null=runc (default), "runsc"=gVisor (recommended for production)
             container-runtime: ${SANDBOX_DOCKER_CONTAINER_RUNTIME:}
             cli: ${SANDBOX_DOCKER_CLI:docker}
+            owner: ${SANDBOX_DOCKER_OWNER:default}
         max-concurrent-containers: ${SANDBOX_MAX_CONCURRENT:5}
         container-stop-timeout-seconds: ${SANDBOX_STOP_TIMEOUT:10}
         reconciliation-interval-seconds: ${SANDBOX_RECONCILIATION_INTERVAL:60}
