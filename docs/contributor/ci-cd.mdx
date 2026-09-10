@@ -268,12 +268,17 @@ CI calls that reusable workflow, and `CI Status Gate` waits for its successful c
 SARIF upload. A merge group therefore cannot pass the gate and lose its temporary ref while CodeQL
 is still publishing results. The weekly scan also runs directly from the same workflow.
 
-Java uses manual extraction with the JDK pinned in `.java-version` and a clean, uncached
-`:application:testClasses` compilation. This gives CodeQL the real dependencies, generated clients
-and annotation-processed source instead of no-build dependency and JDK guesses. The single-use Gradle
-process runs inside the extractor; neither cached classes nor a pre-existing daemon can bypass it.
-This compilation produces analysis inputs only: the packaged server remains owned by the build-once
-job. Actions and JavaScript/TypeScript retain no-build analysis.
+Java uses manual extraction with the JDK pinned in `.java-version` and a clean
+`:application:testClasses` compilation with build and configuration caches disabled. The shared
+`setup-caches` action restores Gradle dependencies read-only from the default-branch package
+producer through the Gradle action's OS-wide fallback; analysis never publishes a cache. The
+package job is the only writer, and a missing or expired entry falls back to a cold build.
+This gives CodeQL the real dependencies, generated clients and annotation-processed source instead
+of no-build dependency and JDK guesses. The single-use Gradle process runs inside the extractor;
+neither cached classes nor a pre-existing daemon can bypass project compilation. Gradle's own
+generated version-catalog helpers, outside the project source tree, need not be recompiled or
+extracted on a cache hit. This compilation produces analysis inputs only: the packaged server
+remains owned by the build-once job. Actions and JavaScript/TypeScript retain no-build analysis.
 
 `.github/workflows/codeql.yml` runs CodeQL under advanced setup: only advanced setup reads a
 committed config file, and `.github/codeql/codeql-config.yml` excludes `security/semgrep/**`,
