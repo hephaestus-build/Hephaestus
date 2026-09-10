@@ -76,6 +76,7 @@ export const Default: Story = {
 		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Continue" }));
 		await expect(screen.getByRole("radio", { name: /Yes, take part/ })).not.toBeChecked();
 		await expect(screen.getByRole("radio", { name: /don't take part/ })).not.toBeChecked();
+		await expect(screen.getByText(/Two things first/)).toBeVisible();
 	},
 };
 
@@ -84,6 +85,7 @@ export const TermsAcceptedOnly: Story = {
 		await acceptTerms();
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Continue" }));
 		await expect(screen.getByText("Answer the research question to continue.")).toBeVisible();
+		await expect(screen.getByText(/One question to go/)).toBeVisible();
 	},
 };
 
@@ -94,6 +96,7 @@ export const TakingPart: Story = {
 		await expect(
 			screen.getByText("You can change your research answer later in settings."),
 		).toBeVisible();
+		await expect(screen.getByText("That's everything. Let's get to work.")).toBeVisible();
 		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await expect(onSubmit).toHaveBeenCalledWith({
 			noticeVersion: "2026-08-30",

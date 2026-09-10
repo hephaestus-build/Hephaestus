@@ -1,11 +1,11 @@
-import { ShieldCheckIcon } from "lucide-react";
+import { CheckIcon } from "lucide-react";
 import { useId, useState } from "react";
 
 import type { ConsentStatus } from "@/api/types.gen";
 import { LegalLinks } from "@/components/auth/LegalLinks";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
+import { HephIcon } from "@/components/brand/HephIcon";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { PageHeader } from "@/components/core/PageHeader";
 import { PageLayout } from "@/components/core/PageLayout";
 import { Section } from "@/components/core/Section";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -22,6 +22,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { cn } from "@/lib/utils";
 
 export interface ConsentChoice {
 	noticeVersion: string;
@@ -78,10 +79,25 @@ const ANSWERS = [
 
 type Answer = (typeof ANSWERS)[number]["value"];
 
+/** Hidden: the number is a visual index, and the state it shows is announced by the control it tracks. */
+function StepMarker({ step, done }: { step: number; done: boolean }) {
+	return (
+		<span
+			aria-hidden="true"
+			className={cn(
+				"mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium transition-colors",
+				done ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground",
+			)}
+		>
+			{done ? <CheckIcon className="size-3.5" /> : step}
+		</span>
+	);
+}
+
 /**
- * The page deliberately does not number itself. A member is handed workspace setup after this, and a
- * changed notice brings an existing user back through it, so "step 1 of n" is a claim this screen
- * cannot make about a flow it cannot see.
+ * The numbers count the two decisions on this screen and nothing beyond it. A member is handed
+ * workspace setup afterwards and a changed notice brings an existing account back here, so a counter
+ * that claimed to measure the whole of onboarding would be wrong for most of the people reading it.
  */
 export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 	const submitting = state.status === "ready" && state.submission.status === "saving";
@@ -90,14 +106,32 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 	const id = useId();
 
 	const ready = state.status === "ready" && termsAccepted && answer !== undefined;
-	const outstanding =
+
+	// Heph narrates, and only Heph is a live region. The footer hint says the same thing factually
+	// and reaches the button through `aria-describedby`, so focusing Continue does not replay it.
+	const narration =
+		state.status === "loading"
+			? "Give me a moment — I'm fetching the notice."
+			: state.status === "error"
+				? "I couldn't fetch the notice just now."
+				: termsAccepted && answer !== undefined
+					? "That's everything. Let's get to work."
+					: termsAccepted
+						? "Thanks. One question to go, and either answer is fine by me."
+						: answer !== undefined
+							? "Noted. Just the terms left."
+							: "Two things first: what happens to your data, and whether you'd like to take part in the research.";
+
+	const hint =
 		state.status !== "ready"
 			? undefined
-			: !termsAccepted
-				? "Accept the terms, then answer the research question."
-				: answer === undefined
-					? "Answer the research question to continue."
-					: "You can change your research answer later in settings.";
+			: !termsAccepted && answer === undefined
+				? "Accept the terms and answer the research question."
+				: !termsAccepted
+					? "Accept the terms to continue."
+					: answer === undefined
+						? "Answer the research question to continue."
+						: "You can change your research answer later in settings.";
 
 	function submit() {
 		if (state.status !== "ready" || !ready || submitting) return;
@@ -111,14 +145,27 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 	return (
 		<div className="min-h-svh bg-background">
 			{/* Narrower than `PageLayout`'s default: this surface has no sidebar taking the other half. */}
-			<PageLayout className="max-w-3xl px-6 py-10">
+			<PageLayout className="max-w-2xl px-6 py-10">
 				<HephaestusLogo markClassName="size-7" wordmarkClassName="text-lg" />
 
-				<PageHeader
-					icon={<ShieldCheckIcon />}
-					title="Before you continue"
-					description="Two things: what Hephaestus does with your data, and whether you want to take part in the research."
-				/>
+				{/* Heph's own greeting rather than `PageHeader`: this is the one screen where it speaks,
+				    and the app chrome that header belongs to is not up yet. Illustration scale, not icon
+				    scale, so it reads as the character talking rather than as the mark printed twice. */}
+				<header className="flex items-start gap-4">
+					<HephIcon className="shrink-0" size={64} pad={2} />
+					<div className="min-w-0 space-y-1">
+						<h1 className="break-words text-2xl font-semibold tracking-tight">
+							Let's get you set up
+						</h1>
+						<p className="max-w-2xl text-sm text-muted-foreground">
+							I'm Heph. I read the work your team already does and give you feedback on the
+							practices your project cares about.
+						</p>
+						<p aria-live="polite" className="max-w-2xl text-sm font-medium">
+							{narration}
+						</p>
+					</div>
+				</header>
 
 				<Separator />
 
@@ -140,7 +187,12 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 				) : (
 					<>
 						<Section
-							title="What you're accepting"
+							title={
+								<span className="flex items-start gap-2">
+									<StepMarker step={1} done={termsAccepted} />
+									<span className="min-w-0">What Hephaestus does with your data</span>
+								</span>
+							}
 							description="Your acceptance is recorded together with this exact notice."
 						>
 							<div className="space-y-4 rounded-lg border p-4">
@@ -171,7 +223,12 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 
 						<Section
 							id={`${id}-research`}
-							title="Take part in the research?"
+							title={
+								<span className="flex items-start gap-2">
+									<StepMarker step={2} done={answer !== undefined} />
+									<span className="min-w-0">Take part in the research?</span>
+								</span>
+							}
 							description="Optional, and reversible in settings. Nothing is selected for you, and Hephaestus works exactly the same either way."
 						>
 							<dl className="grid gap-4 sm:grid-cols-3">
@@ -224,9 +281,17 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 				{/* Sign out sits at the far edge from Continue: only one of the two is recoverable. */}
 				<footer className="flex flex-col gap-4 sm:flex-row-reverse sm:items-center sm:justify-between">
 					<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-						{outstanding && <p className="text-sm text-muted-foreground">{outstanding}</p>}
+						{hint && (
+							<p id={`${id}-hint`} className="text-sm text-muted-foreground">
+								{hint}
+							</p>
+						)}
 						{state.status === "ready" && (
-							<Button disabled={!ready || submitting} onClick={submit}>
+							<Button
+								disabled={!ready || submitting}
+								onClick={submit}
+								aria-describedby={`${id}-hint`}
+							>
 								{submitting && <Spinner />}
 								{submitting ? "Saving…" : "Continue"}
 							</Button>

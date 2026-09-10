@@ -54,6 +54,7 @@ export function LoginPage({ title = "Sign in to Hephaestus", error, ...signIn }:
 			</Link>
 
 			<Card className="w-full max-w-sm">
+				{/* No `HephIcon` here: the brand mark a few pixels above already is Heph's face. */}
 				<CardHeader>
 					<h1 className="text-xl font-semibold tracking-tight">{title}</h1>
 				</CardHeader>

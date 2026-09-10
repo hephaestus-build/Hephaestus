@@ -32,7 +32,7 @@ describe("first-login consent route", () => {
 		});
 		const { router } = renderRouteAtWithRouter("/consent?returnTo=%2Fabout");
 
-		await screen.findByRole("heading", { name: "Before you continue" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("heading", { name: "Let's get you set up" }, ROUTE_RENDER_WAIT);
 
 		await userEvent.click(screen.getByRole("checkbox", { name: /terms of use/i }));
 		await userEvent.click(screen.getByRole("radio", { name: /don't take part/ }));
@@ -55,7 +55,7 @@ describe("first-login consent route", () => {
 		});
 		renderRouteAtWithRouter("/consent");
 
-		await screen.findByRole("heading", { name: "Before you continue" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("heading", { name: "Let's get you set up" }, ROUTE_RENDER_WAIT);
 		await userEvent.click(screen.getByRole("checkbox", { name: /terms of use/i }));
 		await userEvent.click(screen.getByRole("radio", { name: /Yes, take part/ }));
 		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
