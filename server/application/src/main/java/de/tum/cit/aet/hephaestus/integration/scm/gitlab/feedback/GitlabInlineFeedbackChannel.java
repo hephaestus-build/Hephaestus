@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClie
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitlabMrResolver.MrCoordinates;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitlabMrResolver.MrInfo;
+import java.io.Serial;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -504,6 +505,9 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
 
     /** Signals the per-finding loop to stop and fail the rest of the batch on a rate-limit hit. */
     private static final class RateLimitHit extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         private RateLimitHit(Throwable cause) {
             super(cause);

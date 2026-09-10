@@ -7,6 +7,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import java.io.Serial;
 import java.io.Serializable;
 import java.time.Instant;
 import lombok.AllArgsConstructor;
@@ -182,6 +183,9 @@ public class AuthEvent {
     @AllArgsConstructor
     @EqualsAndHashCode
     public static class Id implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         @Column(name = "id", nullable = false)
         private Long id;

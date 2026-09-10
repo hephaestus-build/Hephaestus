@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.metrics.GithubMetrics;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.netty.resolver.DefaultAddressResolverGroup;
+import java.io.Serial;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -341,6 +342,9 @@ public class GitHubGraphQlConfig {
 
     private static class RetryableException extends RuntimeException {
 
+        @Serial
+        private static final long serialVersionUID = 1L;
+
         private final int statusCode;
 
         RetryableException(int statusCode) {
@@ -355,6 +359,9 @@ public class GitHubGraphQlConfig {
 
     public static class GitHubGraphQlException extends RuntimeException {
 
+        @Serial
+        private static final long serialVersionUID = 1L;
+
         private final int statusCode;
 
         public GitHubGraphQlException(String message, int statusCode) {
@@ -368,6 +375,9 @@ public class GitHubGraphQlConfig {
     }
 
     public static class TransportException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         public TransportException(String message, Throwable cause) {
             super(message, cause);

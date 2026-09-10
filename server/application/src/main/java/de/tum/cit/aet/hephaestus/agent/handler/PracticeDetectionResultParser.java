@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
+import java.io.Serial;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -273,6 +274,9 @@ public class PracticeDetectionResultParser {
     }
 
     private static class EntryValidationException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         EntryValidationException(String message) {
             super(message);

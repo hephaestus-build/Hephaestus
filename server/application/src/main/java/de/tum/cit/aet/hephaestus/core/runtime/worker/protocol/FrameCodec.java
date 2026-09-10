@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.runtime.worker.protocol;
 
+import java.io.Serial;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -47,6 +48,9 @@ public final class FrameCodec {
     }
 
     public static final class FrameCodecException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         public FrameCodecException(String message) {
             super(message);

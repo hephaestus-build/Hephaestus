@@ -41,6 +41,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.PullRequ
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.GitHubPullRequestReviewProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.GitHubPullRequestReviewSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcomment.GitHubPullRequestReviewCommentSyncService;
+import java.io.Serial;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -1619,6 +1620,9 @@ public class GitHubHistoricalBackfillService {
      * transport-level retries, so the caller should apply repository-level cooldown.
      */
     static class BackfillTransientException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         BackfillTransientException(String message, @Nullable Throwable cause) {
             super(message, cause);

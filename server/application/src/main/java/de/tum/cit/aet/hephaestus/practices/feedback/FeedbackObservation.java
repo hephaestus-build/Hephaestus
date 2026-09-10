@@ -15,6 +15,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.MapsId;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.UUID;
 import lombok.EqualsAndHashCode;
@@ -125,6 +126,9 @@ public class FeedbackObservation {
     @NoArgsConstructor
     @EqualsAndHashCode
     public static class Id implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         @Column(name = "feedback_id", columnDefinition = "UUID")
         private UUID feedbackId;
