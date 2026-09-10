@@ -17,7 +17,7 @@ import liquibase.LabelExpression;
 import liquibase.Liquibase;
 import liquibase.command.CommandScope;
 import liquibase.command.core.DiffCommandStep;
-import liquibase.command.core.helpers.DbUrlConnectionCommandStep;
+import liquibase.command.core.helpers.DbUrlConnectionArgumentsCommandStep;
 import liquibase.command.core.helpers.PreCompareCommandStep;
 import liquibase.command.core.helpers.ReferenceDbUrlConnectionCommandStep;
 import liquibase.database.DatabaseFactory;
@@ -134,9 +134,9 @@ class LiquibaseBaselineIntegrationTest {
                 .addArgumentValue(
                         PreCompareCommandStep.DIFF_TYPES_ARG,
                         "tables,columns,foreignkeys,indexes,primarykeys,sequences,uniqueconstraints,views")
-                .addArgumentValue(DbUrlConnectionCommandStep.URL_ARG, baseline.jdbcUrl())
-                .addArgumentValue(DbUrlConnectionCommandStep.USERNAME_ARG, baseline.username())
-                .addArgumentValue(DbUrlConnectionCommandStep.PASSWORD_ARG, baseline.password())
+                .addArgumentValue(DbUrlConnectionArgumentsCommandStep.URL_ARG, baseline.jdbcUrl())
+                .addArgumentValue(DbUrlConnectionArgumentsCommandStep.USERNAME_ARG, baseline.username())
+                .addArgumentValue(DbUrlConnectionArgumentsCommandStep.PASSWORD_ARG, baseline.password())
                 .addArgumentValue(ReferenceDbUrlConnectionCommandStep.REFERENCE_URL_ARG, archived.jdbcUrl())
                 .addArgumentValue(ReferenceDbUrlConnectionCommandStep.REFERENCE_USERNAME_ARG, archived.username())
                 .addArgumentValue(ReferenceDbUrlConnectionCommandStep.REFERENCE_PASSWORD_ARG, archived.password())

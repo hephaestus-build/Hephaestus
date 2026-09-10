@@ -158,6 +158,8 @@ public class OpenAPIConfiguration {
     /**
      * Process server schemas: include DTOs and remove suffix.
      */
+    // Swagger exposes Map<String, Schema> publicly; stream element types inherit that raw schema type.
+    @SuppressWarnings("rawtypes")
     private void processApplicationServerSchemas(OpenAPI openApi) {
         var components = openApi.getComponents();
         if (components == null || components.getSchemas() == null) {
@@ -165,7 +167,6 @@ public class OpenAPIConfiguration {
             return;
         }
 
-        @SuppressWarnings("rawtypes")
         Map<String, Schema> filteredSchemas = new HashMap<>();
 
         components.getSchemas().entrySet().stream()

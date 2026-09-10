@@ -65,7 +65,7 @@ class DockerSandboxPropertiesTest {
             assertThat(context).hasNotFailed();
             assertThat(context.getBean(DockerSandboxProperties.class))
                     .isEqualTo(new DockerSandboxProperties(
-                            "unix:///var/run/docker.sock", false, null, null, null, "docker"));
+                            "unix:///var/run/docker.sock", false, null, null, null, "docker", "default"));
             assertThat(context.getBean(SandboxGatewayProperties.class).port()).isEqualTo(8081);
             assertThat(context.getBean(SandboxProperties.class).maxConcurrentContainers())
                     .isEqualTo(5);
@@ -92,7 +92,8 @@ class DockerSandboxPropertiesTest {
                                     "/run/docker-certs",
                                     "runsc",
                                     "worker-id",
-                                    "/usr/bin/docker"));
+                                    "/usr/bin/docker",
+                                    "default"));
                     assertThat(context.getBean(SandboxGatewayProperties.class).port())
                             .isEqualTo(9081);
                     assertThat(context.getBean(SandboxProperties.class).maxConcurrentContainers())
@@ -155,12 +156,13 @@ class DockerSandboxPropertiesTest {
                                     "/run/docker-certs",
                                     "runsc",
                                     "worker-id",
-                                    "/usr/bin/docker"));
+                                    "/usr/bin/docker",
+                                    "default"));
                 });
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"host=", "cli="})
+    @ValueSource(strings = {"host=", "cli=", "owner=", "owner=a/b", "owner=UPPER", "owner=-start", "owner=has space"})
     void shouldRejectBlankRequiredDockerSettings(String property) {
         runner.withPropertyValues("hephaestus.sandbox.docker." + property)
                 .run(context ->

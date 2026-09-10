@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.outline.client;
 
+import java.io.Serial;
 import java.time.Duration;
 import org.jspecify.annotations.Nullable;
 
@@ -13,6 +14,9 @@ import org.jspecify.annotations.Nullable;
  * {@code outlineRestApiRetry} decorator honors this hint as its backoff interval.
  */
 public class OutlineRateLimitedException extends OutlineApiException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private final @Nullable Duration retryAfter;
 

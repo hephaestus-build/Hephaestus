@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
+import java.io.Serial;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.Objects;
@@ -73,6 +74,9 @@ public class SlackParticipantConsent {
     @Setter
     @NoArgsConstructor
     public static class Id implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         private @Nullable Long workspaceId;
         private @Nullable String slackUserId;

@@ -91,6 +91,9 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private PracticeRepository practices;
 
+    @Autowired
+    private de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository scmConnections;
+
     private Workspace workspace;
     private IssueUpdateCoalescer coalescer;
     private SignalKey current;
@@ -99,7 +102,11 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void setUp() {
         String slug = "coalescer-" + UUID.randomUUID();
-        workspace = WorkspaceTestFixtures.activeWorkspace(slug);
+        workspace = WorkspaceTestFixtures.persistInstallationWorkspace(
+                workspaces,
+                scmConnections,
+                WorkspaceTestFixtures.installationWorkspace(42L, slug).withSlug(slug),
+                42L);
         workspace.getFeatures().setPracticesEnabled(true);
         workspace = workspaces.save(workspace);
 

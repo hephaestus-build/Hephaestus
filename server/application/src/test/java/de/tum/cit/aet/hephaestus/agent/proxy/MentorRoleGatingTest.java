@@ -13,6 +13,7 @@ class MentorRoleGatingTest extends BaseUnitTest {
     @Test
     void shouldKeepProxyAvailableWheneverWorkerRoleIsEnabled() {
         assertWorkerRoleCondition(LlmProxyController.class);
+        assertWorkerRoleCondition(LlmProxyService.class);
         assertWorkerRoleCondition(LlmProxySecurityConfig.class);
     }
 

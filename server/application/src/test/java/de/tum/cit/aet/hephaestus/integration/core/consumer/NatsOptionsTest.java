@@ -14,8 +14,8 @@ class NatsOptionsTest extends BaseUnitTest {
 
         var options = NatsOptions.builder(properties).build();
 
-        assertThat(options.getUsername()).isEqualTo("user");
-        assertThat(options.getPassword()).isEqualTo("secret");
+        assertThat(options.getUsernameChars()).containsExactly("user".toCharArray());
+        assertThat(options.getPasswordChars()).containsExactly("secret".toCharArray());
     }
 
     @Test
@@ -39,7 +39,7 @@ class NatsOptionsTest extends BaseUnitTest {
 
         var options = NatsOptions.builder(properties).build();
 
-        assertThat(options.getUsername()).isNull();
-        assertThat(options.getPassword()).isNull();
+        assertThat(options.getUsernameChars()).isNull();
+        assertThat(options.getPasswordChars()).isNull();
     }
 }

@@ -103,13 +103,13 @@ public class DatabaseTestUtils {
 
     private synchronized String getTruncateStatement() {
         if (truncateStatement == null) {
+            // Singleton caches outlive database cleanup. Never reuse ids for different rows in one context.
             truncateStatement = fetchApplicationTables().stream()
                     .sorted()
                     .map(this::quoteIdentifier)
                     .collect(Collectors.collectingAndThen(
                             Collectors.joining(", "),
-                            tables ->
-                                    tables.isEmpty() ? "" : "TRUNCATE TABLE " + tables + " RESTART IDENTITY CASCADE"));
+                            tables -> tables.isEmpty() ? "" : "TRUNCATE TABLE " + tables + " CASCADE"));
         }
         return Objects.requireNonNull(truncateStatement);
     }

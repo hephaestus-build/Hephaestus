@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.EvidenceQuoteUnverifiedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
@@ -172,7 +173,8 @@ public class PracticeDetectionDeliveryService {
         }
         // Only when there was something to admit: a review that found nothing still publishes its zero.
         if (admittedObservations.isEmpty() && !validObservations.isEmpty()) {
-            throw new JobDeliveryException(
+            throw new ObservationsRefusedException(
+                    "no_valid_observations",
                     "No observation survived the evidence check, so there is nothing to deliver: jobId=" + job.getId()
                             + ", withheld="
                             + withheldObservations);
@@ -352,20 +354,20 @@ public class PracticeDetectionDeliveryService {
             boolean redactedSecretCitation =
                     "secret-diff-scanner".equals(evidence.path("detector").asString())
                             && quote.isMissingNode()
-                            && quoteSha256.isTextual()
+                            && quoteSha256.isString()
                             && quoteSha256.asString().matches("[0-9a-f]{64}");
             if (!citation.isObject()
-                    || !sourceKind.isTextual()
-                    || !artifactPath.isTextual()
-                    || !path.isTextual()
-                    || ("scm.pull-request.diff".equals(sourceKind.asText())
-                            && (!side.isTextual() || !("OLD".equals(side.asText()) || "NEW".equals(side.asText()))))
-                    || (!"scm.pull-request.diff".equals(sourceKind.asText()) && !side.isMissingNode())
+                    || !sourceKind.isString()
+                    || !artifactPath.isString()
+                    || !path.isString()
+                    || ("scm.pull-request.diff".equals(sourceKind.asString())
+                            && (!side.isString() || !("OLD".equals(side.asString()) || "NEW".equals(side.asString()))))
+                    || (!"scm.pull-request.diff".equals(sourceKind.asString()) && !side.isMissingNode())
                     || !startLine.isIntegralNumber()
                     || startLine.asInt() < 1
                     || (!endLine.isMissingNode()
                             && (!endLine.isIntegralNumber() || endLine.asInt() < startLine.asInt()))
-                    || (!quote.isTextual() && !redactedSecretCitation)) {
+                    || (!quote.isString() && !redactedSecretCitation)) {
                 throw new JobDeliveryException(
                         "Observation has an invalid evidence citation: slug=" + observation.practiceSlug()
                                 + ", jobId="
@@ -373,7 +375,7 @@ public class PracticeDetectionDeliveryService {
             }
             SourceKind kind;
             try {
-                kind = new SourceKind(sourceKind.asText());
+                kind = new SourceKind(sourceKind.asString());
             } catch (IllegalArgumentException e) {
                 throw new JobDeliveryException(
                         "Observation has invalid evidence-source attribution: slug=" + observation.practiceSlug()
@@ -381,7 +383,7 @@ public class PracticeDetectionDeliveryService {
                                 + job.getId(),
                         e);
             }
-            SourceArtifactRef artifact = boundary.artifacts().get(artifactPath.asText());
+            SourceArtifactRef artifact = boundary.artifacts().get(artifactPath.asString());
             if (!boundary.allowedSources().contains(kind)
                     || artifact == null
                     || !artifact.kind().equals(kind)) {
@@ -391,7 +393,7 @@ public class PracticeDetectionDeliveryService {
                         + ", jobId="
                         + job.getId());
             }
-            String exactQuote = quote.asText("");
+            String exactQuote = quote.asString("");
             if (!redactedSecretCitation && exactQuote.isBlank()) {
                 throw new JobDeliveryException(
                         "Observation has an empty evidence quote: slug=" + observation.practiceSlug()
@@ -400,13 +402,13 @@ public class PracticeDetectionDeliveryService {
             }
             byte[] content = cas.get(artifact.sha256())
                     .orElseThrow(() -> new JobDeliveryException(
-                            "Cited evidence artifact is no longer available: path=" + artifactPath.asText()
+                            "Cited evidence artifact is no longer available: path=" + artifactPath.asString()
                                     + ", jobId="
                                     + job.getId()));
             String artifactContent = new String(content, StandardCharsets.UTF_8);
             if (!"scm.pull-request.diff".equals(kind.value()) && !artifactContent.contains(exactQuote)) {
                 throw new EvidenceQuoteUnverifiedException(
-                        "Evidence quote does not occur in the cited artifact: path=" + artifactPath.asText()
+                        "Evidence quote does not occur in the cited artifact: path=" + artifactPath.asString()
                                 + ", jobId="
                                 + job.getId());
             }
@@ -414,19 +416,19 @@ public class PracticeDetectionDeliveryService {
                     && !(redactedSecretCitation
                             ? diffContainsRedactedCitation(
                                     artifactContent,
-                                    path.asText(),
-                                    side.asText(),
+                                    path.asString(),
+                                    side.asString(),
                                     startLine.asInt(),
-                                    quoteSha256.asText())
+                                    quoteSha256.asString())
                             : diffContainsCitation(
                                     artifactContent,
-                                    path.asText(),
-                                    side.asText(),
+                                    path.asString(),
+                                    side.asString(),
                                     startLine.asInt(),
                                     endLine.isMissingNode() ? startLine.asInt() : endLine.asInt(),
                                     exactQuote))) {
                 throw new EvidenceQuoteUnverifiedException(
-                        "Evidence quote does not match the cited diff location: path=" + path.asText()
+                        "Evidence quote does not match the cited diff location: path=" + path.asString()
                                 + ", line="
                                 + startLine.asInt()
                                 + ", jobId="
@@ -479,9 +481,9 @@ public class PracticeDetectionDeliveryService {
                 || consulted == null
                 || !consulted.isArray()
                 || consulted.isEmpty()
-                || !inapplicability.path("subject").isTextual()
+                || !inapplicability.path("subject").isString()
                 || inapplicability.path("subject").asString().isBlank()
-                || !inapplicability.path("ruledOutBy").isTextual()
+                || !inapplicability.path("ruledOutBy").isString()
                 || inapplicability.path("ruledOutBy").asString().isBlank()) {
             throw new JobDeliveryException(
                     "A NOT_APPLICABLE observation must name what the practice looks for and what rules it out "
@@ -491,7 +493,7 @@ public class PracticeDetectionDeliveryService {
                             + job.getId());
         }
         for (JsonNode kind : consulted) {
-            if (!kind.isTextual()) {
+            if (!kind.isString()) {
                 throw new JobDeliveryException(
                         "Stated inapplicability names a non-textual source: slug=" + observation.practiceSlug()
                                 + ", jobId="
@@ -539,9 +541,9 @@ public class PracticeDetectionDeliveryService {
                 || consulted == null
                 || !consulted.isArray()
                 || consulted.isEmpty()
-                || !search.path("lookedFor").isTextual()
+                || !search.path("lookedFor").isString()
                 || search.path("lookedFor").asString().isBlank()
-                || !search.path("boundary").isTextual()
+                || !search.path("boundary").isString()
                 || search.path("boundary").asString().isBlank()) {
             throw new JobDeliveryException(
                     "An ABSENT observation must record where it searched: slug=" + observation.practiceSlug()
@@ -550,7 +552,7 @@ public class PracticeDetectionDeliveryService {
         }
         Set<SourceKind> searched = new HashSet<>();
         for (JsonNode kind : consulted) {
-            if (!kind.isTextual()) {
+            if (!kind.isString()) {
                 throw new JobDeliveryException(
                         "Recorded search names a non-textual source: slug=" + observation.practiceSlug()
                                 + ", jobId="

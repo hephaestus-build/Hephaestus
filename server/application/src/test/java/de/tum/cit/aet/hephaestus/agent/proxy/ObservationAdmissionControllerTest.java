@@ -13,6 +13,8 @@ import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.web.server.ResponseStatusException;
@@ -47,26 +49,26 @@ class ObservationAdmissionControllerTest {
         verify(service).admit(id, validRequest().path("observations"));
     }
 
-    @Test
-    void aRefusedReviewIsAnsweredAsADecisionAndCounted() {
+    @ParameterizedTest
+    @ValueSource(strings = {"did_not_read_the_diff", "incoherent_assessment"})
+    void aRefusedReviewIsAnsweredAsADecisionAndCounted(String reasonCode) {
         UUID id = UUID.randomUUID();
         when(service.admit(eq(id), any()))
-                .thenThrow(new ObservationsRefusedException(
-                        "did_not_read_the_diff", "No observation decided anything or quoted the diff"));
+                .thenThrow(
+                        new ObservationsRefusedException(reasonCode, "The submitted observations cannot be admitted"));
 
         assertThatThrownBy(() -> controller.admit(validRequest(), authentication(LlmUsageSourceType.AGENT_JOB, id)))
                 .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
                     // Not 5xx: a 5xx is what the sandbox repeats, and repeating puts the same question.
-                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
-                    assertThat(e.getReason()).contains("quoted the diff");
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+                    assertThat(e.getReason()).contains("cannot be admitted");
                 });
         assertThat(meterRegistry
-                        .counter("practice.review.refused", "phase", "execution", "reason", "did_not_read_the_diff")
+                        .counter("practice.review.refused", "phase", "execution", "reason", reasonCode)
                         .count())
                 .isEqualTo(1d);
         // The sandbox is gone once it reads this answer, so the reason has to outlive it on the job.
-        verify(service)
-                .recordRefusal(id, "did_not_read_the_diff", "No observation decided anything or quoted the diff");
+        verify(service).recordRefusal(id, reasonCode, "The submitted observations cannot be admitted");
     }
 
     @Test

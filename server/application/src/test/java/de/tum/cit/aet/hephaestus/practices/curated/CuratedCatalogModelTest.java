@@ -47,7 +47,11 @@ class CuratedCatalogModelTest extends BaseUnitTest {
 
     @SafeVarargs
     private static BundledPracticeCatalog catalog(BundledEntry<GroupDefinition>... groups) {
-        return new BundledPracticeCatalog(List.of(groups), List.of());
+        List<BundledEntry<GroupDefinition>> entries = new java.util.ArrayList<>(groups.length);
+        for (BundledEntry<GroupDefinition> group : groups) {
+            entries.add(group);
+        }
+        return new BundledPracticeCatalog(entries, List.of());
     }
 
     private static List<String> slugs(EffectiveCatalog catalog) {

@@ -21,6 +21,8 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.api.TriggerSyncJobRequest
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineApiException;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineClientModels;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineContentClient;
+import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineWebhookClient;
+import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineWebhookTestFixtures;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollection;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollection.MirrorState;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollection.SyncStatus;
@@ -77,17 +79,21 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
     @Autowired
     private OutlineContentClient outlineApiClient;
 
+    @Autowired
+    private OutlineWebhookClient outlineWebhookClient;
+
     private Workspace workspace;
     private long connectionId;
 
     @AfterEach
     void resetOutlineClient() {
-        reset(outlineApiClient);
+        reset(outlineApiClient, outlineWebhookClient);
     }
 
     @BeforeEach
     void setUp() {
-        reset(outlineApiClient);
+        reset(outlineApiClient, outlineWebhookClient);
+        OutlineWebhookTestFixtures.acceptsSubscriptions(outlineWebhookClient);
         User owner = persistUser("outline-admin-owner-" + System.nanoTime());
         workspace = createWorkspace(
                 "outline-admin-" + System.nanoTime(),

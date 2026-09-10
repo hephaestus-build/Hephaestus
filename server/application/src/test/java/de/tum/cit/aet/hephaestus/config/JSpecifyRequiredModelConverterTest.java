@@ -24,6 +24,8 @@ import org.junit.jupiter.api.Test;
 @Tag("unit")
 class JSpecifyRequiredModelConverterTest {
 
+    // Swagger ModelConverters exposes raw Schema values in its public return type.
+    @SuppressWarnings("rawtypes")
     private Map<String, Schema> resolve(Class<?> type) {
         ModelConverters converters = new ModelConverters();
         converters.addConverter(new JSpecifyRequiredModelConverter());

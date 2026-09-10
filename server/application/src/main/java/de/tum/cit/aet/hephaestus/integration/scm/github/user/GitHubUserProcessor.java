@@ -156,6 +156,8 @@ public class GitHubUserProcessor {
      * Spring and we retry with exponential backoff and jitter. The caller's transaction
      * is not affected because we use REQUIRES_NEW propagation.
      */
+    // Spring's SQL error-code translator still emits this legacy subtype for configured deadlock codes.
+    @SuppressWarnings("deprecation")
     private void executeUpsertWithDeadlockRetry(
             Long userId,
             Long providerId,

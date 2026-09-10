@@ -165,6 +165,6 @@ public class ContainerSecurityPolicy {
 
     /** Build container labels for lifecycle management and reconciliation. */
     public Map<String, String> buildLabels(UUID jobId) {
-        return Map.of(SandboxLabels.MANAGED, "true", SandboxLabels.JOB_ID, jobId.toString());
+        return Map.of(SandboxLabels.OWNER, properties.owner(), SandboxLabels.JOB_ID, jobId.toString());
     }
 }

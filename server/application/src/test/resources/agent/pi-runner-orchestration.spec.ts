@@ -48,7 +48,7 @@ if (scenario) {
 		),
 	);
 	let observerCount = 0;
-	const manager = { getSessionFile: () => undefined };
+	const manager = { getSessionFile: () => undefined, getSessionId: () => "test-session" };
 	mock.module("@earendil-works/pi-coding-agent", {
 		namedExports: {
 			defineTool: (tool: unknown) => tool,
@@ -99,6 +99,7 @@ if (scenario) {
 						sessionManager: manager,
 						subscribe: () => () => {},
 						clearQueue() {},
+						abort: () => Promise.resolve(record(`abort:${lane}`)),
 						dispose: () => record(`dispose:${lane}`),
 						async prompt() {
 							record(`prompt:${lane}`);

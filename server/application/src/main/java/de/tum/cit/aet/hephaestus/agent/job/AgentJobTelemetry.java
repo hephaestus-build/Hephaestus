@@ -5,6 +5,8 @@ import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.EnumMap;
@@ -60,7 +62,10 @@ final class AgentJobTelemetry {
     private final Map<Phase, Timer> durations = new EnumMap<>(Phase.class);
     private final Map<Outcome, Counter> terminalCounters = new EnumMap<>(Outcome.class);
 
-    AgentJobTelemetry(MeterRegistry registry) {
+    private final Tracer tracer;
+
+    AgentJobTelemetry(MeterRegistry registry, Tracer tracer) {
+        this.tracer = tracer;
         for (Phase phase : Phase.values()) {
             durations.put(
                     phase,
@@ -79,6 +84,23 @@ final class AgentJobTelemetry {
                             .tag("outcome", outcome.tag)
                             .register(registry));
         }
+    }
+
+    Span startExecution(AgentJob job) {
+        // A persisted job can run long after its submitting request, or on another worker. Start
+        // a real execution trace and retain the submission correlation separately, not a fake parent.
+        return tracer.spanBuilder()
+                .setNoParent()
+                .name("practice_review.execute")
+                .tag("hephaestus.job.id", job.getId().toString())
+                .tag("hephaestus.workspace.id", job.getWorkspace().getId().toString())
+                .tag("hephaestus.job.attempt", job.getRetryCount())
+                .tag("hephaestus.job.submission_trace_id", job.getTraceId())
+                .start();
+    }
+
+    Tracer.SpanInScope executionScope(Span span) {
+        return tracer.withSpan(span);
     }
 
     static void queued(AgentJob job) {

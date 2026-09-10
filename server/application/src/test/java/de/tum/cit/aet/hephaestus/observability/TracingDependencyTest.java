@@ -9,9 +9,9 @@ import org.junit.jupiter.api.Test;
 class TracingDependencyTest {
 
     @Test
-    void shouldNotIncludeSpanExporterOnRuntimeClasspath() {
-        assertThat(isPresent("io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter"))
-                .isFalse();
+    void shouldIncludeTheOfficialOtlpExporterWithoutLegacyExporters() {
+        assertThat(isPresent("io.opentelemetry.exporter.otlp.http.trace.OtlpHttpSpanExporter"))
+                .isTrue();
         assertThat(isPresent("io.opentelemetry.exporter.zipkin.ZipkinSpanExporter"))
                 .isFalse();
         assertThat(isPresent("io.opentelemetry.exporter.jaeger.JaegerGrpcSpanExporter"))

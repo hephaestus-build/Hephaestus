@@ -20,7 +20,10 @@ import org.slf4j.LoggerFactory;
 public class SandboxNetworkManager {
 
     private static final Logger log = LoggerFactory.getLogger(SandboxNetworkManager.class);
-    static final String NETWORK_PREFIX = "agent-net-";
+
+    public String networkPrefix() {
+        return "hephaestus-sandbox-" + properties.owner() + "--";
+    }
 
     private final DockerNetworkOperations networkOps;
     private final DockerSandboxProperties properties;
@@ -51,7 +54,7 @@ public class SandboxNetworkManager {
      * @return the Docker network ID
      */
     public String createJobNetwork(UUID jobId, boolean allowInternet) {
-        String networkName = NETWORK_PREFIX + jobId;
+        String networkName = networkPrefix() + jobId;
         boolean internal = !allowInternet;
         removeLeftoverNetwork(networkName);
         String networkId = networkOps.createNetwork(networkName, internal);
@@ -137,9 +140,12 @@ public class SandboxNetworkManager {
         networkOps.removeNetwork(networkId);
     }
 
-    /** List orphaned job networks (matching the agent-net-* prefix). */
+    /** List candidate networks owned by this installation. */
     public List<DockerOperations.NetworkInfo> listOrphanedNetworks() {
-        return networkOps.listNetworksByName(NETWORK_PREFIX);
+        return networkOps.listNetworksByName(networkPrefix()).stream()
+                .filter(network -> network.name().startsWith(networkPrefix())
+                        && network.name().length() == networkPrefix().length() + 36)
+                .toList();
     }
 
     private String resolveAppServerContainerId() {

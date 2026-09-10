@@ -11,6 +11,7 @@ import io.nats.client.PublishOptions;
 import io.nats.client.api.PublishAck;
 import io.nats.client.impl.Headers;
 import java.io.IOException;
+import java.io.Serial;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -124,6 +125,9 @@ public class JetStreamPublisher {
     }
 
     public static class PublishFailedException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         public PublishFailedException(String message, Throwable cause) {
             super(message, cause);
