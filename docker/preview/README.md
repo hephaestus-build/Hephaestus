@@ -97,9 +97,25 @@ Create one Docker Compose application for `hephaestus-build/Hephaestus` on branc
    GitHub App webhook.
 2. Do not select **Deploy preview** in Coolify. That UI action bypasses attestation checking and the
    admission limit.
-3. Assign the webapp and appserver sibling wildcard domains, shaped `pr<id>.<preview zone>` and
-   `pr<id>.api.<preview zone>`. The web hostname must match the `COOLIFY_PREVIEW_URL_TEMPLATE`
-   repository variable below — that variable is the single place the zone is written down.
+3. Give the webapp the wildcard domain `https://pr<id>.<preview zone>`, and give the appserver
+   **the same host with the `/api` path**, `https://pr<id>.<preview zone>/api`. Coolify routes that
+   path to the application server and, with **Strip Prefix** left enabled (its default), removes the
+   prefix before the container sees it — the shape production serves. Do not give the appserver a
+   hostname of its own: the session and CSRF cookies are `__Host-` prefixed, so they bind to one
+   host, and a page on a sibling hostname cannot read the CSRF cookie it must send back, which
+   refuses sign-out and every other write. The web hostname must match the
+   `COOLIFY_PREVIEW_URL_TEMPLATE` repository variable below — that variable is the single place the
+   zone is written down.
+
+   Two things do not follow the compose file and must be changed with it:
+
+   - **Domains already stored for an existing preview.** Coolify keeps each preview's domains in its
+     own record, so a preview created under the old sibling-hostname layout keeps sending `/api`
+     requests to the webapp until its record is updated or the preview is torn down and re-created
+     through the label.
+   - **Any configured GitHub OAuth app.** Its callback becomes
+     `https://pr<id>.<preview zone>/api/login/oauth2/code/<registrationId>`. Moving the proxy does
+     not update that registration, and sign-in fails until it does.
 4. Set every value in `.env.example`. Compose rejects a blank required value before any container
    starts. Generate new database, state-cookie, encryption, and webhook secrets for this preview;
    the broker and seed-role credentials must match staging. A GitHub OAuth app is optional, but if

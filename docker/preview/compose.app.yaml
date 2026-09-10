@@ -65,7 +65,6 @@ services:
       - staging-shared
     environment:
       SERVICE_NAME_POSTGRES: ${SERVICE_NAME_POSTGRES:-postgres}
-      SERVICE_FQDN_APPSERVER: ${SERVICE_FQDN_APPSERVER:-}
       SERVICE_FQDN_WEBAPP: ${SERVICE_FQDN_WEBAPP:-}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
       PREVIEW_SEED_SOURCE_HOST: ${PREVIEW_SEED_SOURCE_HOST:-app-postgres-1}
@@ -79,8 +78,7 @@ services:
         set -eu
         trap 'rm -f /tmp/seed.dump' EXIT
 
-        APP_FQDN="$${SERVICE_FQDN_APPSERVER:-$${SERVICE_FQDN_WEBAPP:-}}"
-        if ! echo "$$APP_FQDN" | grep -Eq "^pr[0-9]+"; then
+        if ! echo "$${SERVICE_FQDN_WEBAPP:-}" | grep -Eq "^pr[0-9]+"; then
           echo "Skipping seed-loader: non-PR deployment detected"
           exit 0
         fi
@@ -272,7 +270,6 @@ services:
       # 172.(1[6-9]|2[0-9]|3[01]).[0-9]{1,3}.[0-9]{1,3}
       HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES}
       APPLICATION_HOST_URL: https://${SERVICE_FQDN_WEBAPP}
-      HEPHAESTUS_AUTH_API_BASE_PATH: ""
       # Coolify renames each service to `<service>-pr-<id>` and publishes the renamed hosts as
       # SERVICE_NAME_*, so the bare service name resolves to nothing inside a preview. The defaults
       # keep this file runnable on its own.
@@ -369,7 +366,12 @@ services:
       APPLICATION_VERSION: preview
       APPLICATION_CLIENT_URL: https://${SERVICE_FQDN_WEBAPP}
       GIT_BRANCH: ${COOLIFY_BRANCH:-}
-      APPLICATION_SERVER_URL: https://${SERVICE_FQDN_APPSERVER}
+      # One origin, as production has: the API answers under the app's own hostname at /api, and
+      # Coolify strips the prefix before the container sees it. The session and CSRF cookies carry
+      # the `__Host-` prefix, which forbids a Domain attribute and so binds them to exactly one
+      # host — on sibling hostnames the page cannot read the CSRF cookie it has to send back, and
+      # every request that changes something is refused.
+      APPLICATION_SERVER_URL: https://${SERVICE_FQDN_WEBAPP}/api
       TANSTACK_DEVTOOLS_ENABLED: "true"
       SENTRY_ENVIRONMENT: preview
       SENTRY_DSN: ""
