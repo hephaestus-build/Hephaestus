@@ -670,6 +670,11 @@ and database contract tests use the restored classes with `-PpackagedServer=true
 compilation. Unit, architecture and integration suites compile from source in `Test` without
 waiting for packaging; their outputs do not ship.
 
+API and ERD drift checks use `scripts/assert-generated-clean.ts` against their own generated paths.
+It includes added, modified, deleted and staged files without staging anything or refreshing the Git
+index. Unrelated changes cannot contaminate either verdict. The API and schema steps still report
+independently, and a failure in either fails the artifact gate.
+
 The application image and `Build` artifact gates depend on packaging independently. Host smoke
 and release preflight wait for the image producers, not the API, database or browser checks. The
 final CI gate still requires all of them; an early image verdict cannot approve a failed artifact gate.
