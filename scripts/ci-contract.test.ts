@@ -2354,6 +2354,94 @@ void test("proves the toolchain on Windows and from a clean clone", async () => 
 	assert.doesNotMatch(prePushHook, /^\s*vp run check\s*$/m);
 });
 
+void test("pnpm reuses only trusted native verification verdicts and still runs a frozen install", async () => {
+	const action = parseDocument(
+		await readFile(".github/actions/setup-toolchain/action.yml", "utf8"),
+	);
+	const actionPath = ["runs"];
+	const locate = namedStep(action, actionPath, "Locate pnpm verification cache");
+	const restore = namedStep(action, actionPath, "Restore pnpm verification cache");
+	const install = namedStep(action, actionPath, "Install dependencies");
+	const proof = namedStep(action, actionPath, "Verify pnpm verification cache");
+	const save = namedStep(action, actionPath, "Save pnpm verification cache");
+	const steps = action.getIn(["runs", "steps"]);
+	assert.ok(isSeq(steps));
+	assert.ok(steps.items.indexOf(locate) < steps.items.indexOf(restore));
+	assert.ok(steps.items.indexOf(restore) < steps.items.indexOf(install));
+	assert.ok(steps.items.indexOf(install) < steps.items.indexOf(proof));
+	assert.ok(steps.items.indexOf(proof) < steps.items.indexOf(save));
+	for (const declaration of [locate, restore, install, proof])
+		assert.equal(declaration.get("if"), "inputs.install == 'frozen'");
+	assert.equal(install.get("run"), "pnpm install --frozen-lockfile --ignore-scripts");
+	assert.match(String(locate.get("run")), /\$\(pnpm cache path\)/);
+	assert.match(
+		String(locate.get("run")),
+		/require\("node:path"\)\.join\(process\.argv\[1\], "lockfile-verified\.jsonl"\)/,
+	);
+	assert.equal(
+		proof.getIn(["env", "PNPM_VERIFICATION_CACHE"]),
+		`\${{ steps.pnpm-verification-path.outputs.path }}`,
+	);
+	assert.match(String(proof.get("run")), /statSync\(process\.argv\[1\]\)\.isFile\(\)/);
+	assert.match(String(restore.get("uses")), /^actions\/cache\/restore@/);
+	assert.match(String(save.get("uses")), /^actions\/cache\/save@/);
+	const restored = stepInputs(restore);
+	assert.deepEqual(stepInputs(save).toJSON(), restored.toJSON());
+	assert.equal(restored.get("path"), `\${{ steps.pnpm-verification-path.outputs.path }}`);
+	assert.equal(restored.has("restore-keys"), false);
+	assert.equal(
+		restored.get("key"),
+		`pnpm-verification-v1-\${{ runner.os }}-\${{ runner.arch }}-\${{ steps.pnpm.outputs.version }}-\${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}`,
+	);
+	const parsed = new Parser(
+		new Lexer(String(save.get("if"))).lex().tokens,
+		["inputs", "steps", "github"],
+		[],
+	).parse();
+	for (const [event, ref, branch, outcome, hit, mode, expected] of [
+		["push", "refs/heads/main", "main", "success", "false", "frozen", true],
+		["push", "refs/heads/trunk", "trunk", "success", "false", "frozen", true],
+		["push", "refs/heads/topic", "main", "success", "false", "frozen", false],
+		["schedule", "refs/heads/main", "main", "success", "false", "frozen", false],
+		["workflow_dispatch", "refs/heads/main", "main", "success", "false", "frozen", false],
+		["pull_request", "refs/pull/1/merge", "main", "success", "false", "frozen", false],
+		["pull_request_target", "refs/heads/main", "main", "success", "false", "frozen", false],
+		["workflow_run", "refs/heads/main", "main", "success", "false", "frozen", false],
+		[
+			"merge_group",
+			"refs/heads/gh-readonly-queue/main/pr-1",
+			"main",
+			"success",
+			"false",
+			"frozen",
+			false,
+		],
+		["workflow_dispatch", "refs/heads/topic", "main", "success", "false", "frozen", false],
+		["push", "refs/heads/main", "main", "failure", "false", "frozen", false],
+		["push", "refs/heads/main", "main", "skipped", "false", "frozen", false],
+		["push", "refs/heads/main", "main", "success", "true", "frozen", false],
+		["push", "refs/heads/main", "main", "success", "false", "none", false],
+	] as const) {
+		const context: unknown = JSON.parse(
+			JSON.stringify({
+				inputs: { install: mode },
+				steps: {
+					"pnpm-install": { outcome },
+					"pnpm-verification-cache": { outputs: { "cache-hit": hit } },
+				},
+				github: { ref, event_name: event, event: { repository: { default_branch: branch } } },
+			}),
+			data.reviver,
+		);
+		assert.ok(context instanceof data.Dictionary);
+		assert.equal(
+			new Evaluator(parsed, context).evaluate().coerceString(),
+			String(expected),
+			`${event} ${ref} ${outcome} ${hit} ${mode}`,
+		);
+	}
+});
+
 void test(
 	"quality dispatch selects one task and rejects an unknown leg",
 	{ skip: !bashRunsRunnerSteps() },
