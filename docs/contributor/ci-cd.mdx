@@ -608,7 +608,10 @@ reuse remains within a job: no encryption key is configured, so the
 action does not persist configuration-cache entries across jobs.
 
 Repository-local actions require checkout first. Jobs without checkout use the external SHA-pinned
-action directly rather than checking out the repository only to reach a wrapper.
+action directly rather than checking out the repository only to reach a wrapper. The reusable
+image builder also uses the external login action because its registry is a caller input, whereas
+`ghcr-login` intentionally authenticates only to GHCR. Browser E2E boots the packaged JAR without
+Gradle, so it sets up Java directly; OpenAPI autocommit builds the JAR and uses `setup-caches`.
 
 ## Path filters
 

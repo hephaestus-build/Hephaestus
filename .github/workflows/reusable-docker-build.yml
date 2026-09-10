@@ -83,11 +83,11 @@ env:
   # is the commit a push, dispatch or merge group built, and a pull request uses its head commit
   # because `github.sha` there is a merge commit no other run can name.
   STANDARD_IMAGE_TAGS: |
-    ${{ github.event_name == 'push' && github.ref_name || '' }}
-    ${{ github.event_name == 'push' && format('ci-{0}', github.run_number) || '' }}
-    ${{ github.event_name != 'pull_request' && github.sha || '' }}
-    ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
-    ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || '' }}
+    type=raw,value=${{ github.ref_name }},enable=${{ github.event_name == 'push' }}
+    type=raw,value=${{ format('ci-{0}', github.run_number) }},enable=${{ github.event_name == 'push' }}
+    type=raw,value=${{ github.sha }},enable=${{ github.event_name != 'pull_request' }}
+    type=raw,value=${{ github.event.pull_request.head.sha }},enable=${{ github.event_name == 'pull_request' }}
+    type=raw,value=${{ format('pr-{0}', github.event.number) }},enable=${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -125,34 +125,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare tag configuration
-        id: tags
-        if: inputs.single-arch
-        run: |
-          {
-            echo "tags<<EOF"
-            while IFS= read -r line || [[ -n "$line" ]]; do
-              line=$(echo "$line" | xargs)
-              [ -z "$line" ] && continue
-              if [[ "$line" == *"type="* ]]; then
-                echo "$line"
-              else
-                IFS=',' read -ra values <<< "$line"
-                for value in "${values[@]}"; do
-                  value=$(echo "$value" | xargs)
-                  [ -n "$value" ] && echo "type=raw,value=$value"
-                done
-              fi
-            done <<< "$STANDARD_IMAGE_TAGS"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ inputs.registry }}/${{ inputs.image-name }}
-          tags: ${{ inputs.single-arch && steps.tags.outputs.tags || '' }}
+          tags: ${{ inputs.single-arch && env.STANDARD_IMAGE_TAGS || '' }}
           labels: ${{ inputs.labels }}
 
       - name: Prepare platform pair
@@ -387,38 +365,12 @@ jobs:
         with:
           driver: docker
 
-      - name: Prepare tag configuration
-        id: tags
-        run: |
-          {
-            echo "tags<<EOF"
-            if [ -n "${STANDARD_IMAGE_TAGS}" ]; then
-              echo "${STANDARD_IMAGE_TAGS}" | while IFS= read -r line || [[ -n "$line" ]]; do
-                line=$(echo "$line" | xargs)
-                if [ -n "$line" ]; then
-                  if [[ "$line" == *"type="* ]]; then
-                    echo "$line"
-                  else
-                    IFS=',' read -ra TAG_ARRAY <<< "$line"
-                    for tag in "${TAG_ARRAY[@]}"; do
-                      tag=$(echo "$tag" | xargs)
-                      if [ -n "$tag" ]; then
-                        echo "type=raw,value=${tag}"
-                      fi
-                    done
-                  fi
-                fi
-              done
-            fi
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
-
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ inputs.registry }}/${{ inputs.image-name }}
-          tags: ${{ steps.tags.outputs.tags }}
+          tags: ${{ env.STANDARD_IMAGE_TAGS }}
           labels: ${{ inputs.labels }}
 
       - name: Create manifest and push
