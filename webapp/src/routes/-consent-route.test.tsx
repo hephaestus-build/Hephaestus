@@ -4,13 +4,15 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
 import type { FirstLoginConsent } from "@/api/types.gen";
+import { NOTICE_VERSION } from "@/components/auth/ConsentPage";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 const notice = {
 	completed: false,
-	noticeVersion: "2026-09-10",
+	noticeVersion: NOTICE_VERSION,
 	participateInResearch: false,
+	researchOrganization: "AET",
 };
 
 function showNotice(onComplete: (body: FirstLoginConsent) => void) {
@@ -110,8 +112,8 @@ describe("consent recovery", () => {
 		await screen.findByRole("alert");
 	});
 
-	it("requires fresh acceptance when a rejected save reveals a new notice version", async () => {
-		let version = notice.noticeVersion;
+	it("stops offering the form when a rejected save reveals a newer notice version", async () => {
+		let version: string = NOTICE_VERSION;
 		server.use(
 			http.get("*/user/consent", () => HttpResponse.json({ ...notice, noticeVersion: version })),
 			http.put("*/user/consent", () => {
@@ -125,8 +127,33 @@ describe("consent recovery", () => {
 		);
 		await userEvent.click(screen.getByRole("radio", { name: /Yes, take part/ }));
 		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-		await screen.findByRole("checkbox", { name: /terms of use/i });
-		expect(screen.getByRole<HTMLButtonElement>("button", { name: "Continue" }).disabled).toBe(true);
-		expect(screen.queryByRole("alert")).toBeNull();
+
+		// The wording is in this bundle, so once the server has moved on there is nothing here the
+		// account could truthfully accept: only a document load can bring the new words in.
+		await screen.findByRole("button", { name: "Reload" });
+		expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+		expect(screen.queryByRole("checkbox", { name: /terms of use/i })).toBeNull();
+	});
+
+	it("omits the research answer when the instance names no research organisation", async () => {
+		let submitted: FirstLoginConsent | undefined;
+		const solo = { ...notice, researchOrganization: undefined };
+		server.use(
+			http.get("*/user/consent", () => HttpResponse.json(solo)),
+			http.put<never, FirstLoginConsent>("*/user/consent", async ({ request }) => {
+				submitted = await request.json();
+				return HttpResponse.json({ ...solo, completed: true });
+			}),
+		);
+		renderRouteAtWithRouter("/consent");
+		await userEvent.click(
+			await screen.findByRole("checkbox", { name: /terms of use/i }, ROUTE_RENDER_WAIT),
+		);
+		expect(screen.queryByRole("radiogroup")).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+		await waitFor(() =>
+			expect(submitted).toStrictEqual({ noticeVersion: NOTICE_VERSION, termsAccepted: true }),
+		);
 	});
 });

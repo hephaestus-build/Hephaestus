@@ -8894,6 +8894,10 @@ components:
           type: string
         participateInResearch:
           type: boolean
+        researchOrganization:
+          type: string
+          description: "Organisation running the optional research programme, or null\
+            \ when this instance runs none"
       required:
       - completed
       - noticeVersion
@@ -10165,11 +10169,12 @@ components:
           type: string
         participateInResearch:
           type: boolean
+          description: "Required when the instance names a research organisation,\
+            \ omitted otherwise"
         termsAccepted:
           type: boolean
       required:
       - noticeVersion
-      - participateInResearch
       - termsAccepted
     FxRateInfo:
       type: object

@@ -240,8 +240,11 @@ function RouteComponent() {
 				onTogglePracticeFeedback: handlePracticeFeedbackToggle,
 				isLoading: updateSettingsMutation.isPending,
 			}}
-			showResearchSection
+			// No configured organisation means no study on this deployment, and a switch for a study
+			// nobody runs is a promise the instance cannot keep.
+			showResearchSection={accountConsent?.researchOrganization !== undefined}
 			researchProps={{
+				organization: accountConsent?.researchOrganization ?? "",
 				participateInResearch: accountConsent?.participateInResearch ?? false,
 				onToggleResearch: handleResearchToggle,
 				isLoading: consentQuery.isLoading || researchConsentMutation.isPending,

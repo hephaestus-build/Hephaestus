@@ -10,7 +10,7 @@ import {
 	TrendingUpIcon,
 	TriangleAlertIcon,
 } from "lucide-react";
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, type SubmitEvent, useId, useState } from "react";
 
 import type { ConsentStatus } from "@/api/types.gen";
 import { LegalLink, LegalLinks } from "@/components/auth/LegalLinks";
@@ -35,16 +35,30 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
+/**
+ * The version of the wording below, and the version this page submits.
+ *
+ * This bundle is the archive: what an account accepted is whichever release published these words,
+ * and `ConsentService.CURRENT_NOTICE_VERSION` holds the same string so the server can reject
+ * anything else. Submitting the server's value instead would let a tab left open across a deployment
+ * record acceptance of wording it never rendered.
+ *
+ * Change any string in `TERMS` or `RESEARCH` and this moves, in the same commit as the server's.
+ */
+export const NOTICE_VERSION = "2026-09-10";
+
 export interface ConsentChoice {
 	noticeVersion: string;
 	termsAccepted: boolean;
-	participateInResearch: boolean;
+	participateInResearch?: boolean;
 }
 
 export type ConsentSubmission = { status: "idle" } | { status: "saving" } | { status: "error" };
 
 export interface ConsentPageProps {
 	onSignOut: () => void;
+	/** A stale bundle is not something the router can fix; only a document load replaces it. */
+	onReload: () => void;
 	state:
 		| { status: "loading" }
 		| { status: "error"; error: unknown; onRetry: () => void }
@@ -63,12 +77,9 @@ interface Fact {
 }
 
 /**
- * The notice, in full. It says nothing about who operates this instance — that is the privacy notice
- * and the imprint, which every operator configures and this page links to, so the same words are
- * true on every deployment.
- *
- * Editing anything here publishes a new notice: bump `ConsentService.CURRENT_NOTICE_VERSION`, or the
- * ledger will record acceptances of these words against the version of the previous ones.
+ * The notice, in full. It names no operator: who runs this instance is the privacy notice and the
+ * imprint, which every operator configures and this page links to, so the same words are true on
+ * every deployment.
  */
 const TERMS: readonly Fact[] = [
 	{
@@ -174,13 +185,18 @@ function StepMarker({ icon: Icon, done }: { icon: LucideIcon; done: boolean }) {
  * brings an existing account back here, so "step 1 of n" would be a claim about a flow this screen
  * cannot see; the markers say what is answered, which is a claim it can make.
  */
-export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
+export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 	const submitting = state.status === "ready" && state.submission.status === "saving";
 	const [termsAccepted, setTermsAccepted] = useState(false);
 	const [answer, setAnswer] = useState<Answer>();
 	const id = useId();
 
-	const ready = state.status === "ready" && termsAccepted && answer !== undefined;
+	const researchOrganization =
+		state.status === "ready" ? state.notice.researchOrganization : undefined;
+	const asksAboutResearch = researchOrganization !== undefined;
+	const stale = state.status === "ready" && state.notice.noticeVersion !== NOTICE_VERSION;
+	const answered = !asksAboutResearch || answer !== undefined;
+	const ready = state.status === "ready" && !stale && termsAccepted && answered;
 
 	// Heph narrates, and only Heph is a live region. The footer hint says the same thing factually
 	// and reaches the button through `aria-describedby`, so focusing Continue does not replay it.
@@ -189,186 +205,215 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 			? "Give me a moment — I'm fetching your setup."
 			: state.status === "error"
 				? "I couldn't fetch your setup just now."
-				: termsAccepted && answer !== undefined
-					? "That's everything. Let's get to work."
-					: termsAccepted
-						? "Thanks. One question to go, and either answer is fine by me."
-						: answer !== undefined
-							? "Noted. Just the terms left."
-							: "Two things first: the rules, and whether you'd like to take part in the research.";
+				: stale
+					? "Hephaestus was updated while this page was open."
+					: termsAccepted && answered
+						? "That's everything. Let's get to work."
+						: !asksAboutResearch
+							? "One thing first: the rules."
+							: termsAccepted
+								? "Thanks. One question to go, and either answer is fine by me."
+								: answer !== undefined
+									? "Noted. Just the terms left."
+									: "Two things first: the rules, and whether you'd like to take part in the research.";
 
 	const hint =
-		state.status !== "ready"
+		state.status !== "ready" || stale
 			? undefined
-			: !termsAccepted && answer === undefined
+			: !termsAccepted && !answered
 				? "Accept the terms and answer the research question."
 				: !termsAccepted
 					? "Accept the terms to continue."
-					: answer === undefined
+					: !answered
 						? "Answer the research question to continue."
-						: "You can change your answer later in settings.";
+						: asksAboutResearch
+							? "You can change your answer later in settings."
+							: undefined;
 
-	function submit() {
+	function submit(event: SubmitEvent<HTMLFormElement>) {
+		event.preventDefault();
 		if (state.status !== "ready" || !ready || submitting) return;
 		state.onSubmit({
-			noticeVersion: state.notice.noticeVersion,
+			noticeVersion: NOTICE_VERSION,
 			termsAccepted: true,
-			participateInResearch: answer === "yes",
+			...(asksAboutResearch && { participateInResearch: answer === "yes" }),
 		});
 	}
 
 	return (
 		<div className="min-h-svh bg-background">
 			{/* Narrower than `PageLayout`'s default: this surface has no sidebar taking the other half. */}
-			<PageLayout className="max-w-2xl px-6 py-10">
-				<HephaestusLogo markClassName="size-7" wordmarkClassName="text-lg" />
+			<form onSubmit={submit}>
+				<PageLayout className="max-w-2xl px-6 py-10">
+					<HephaestusLogo markClassName="size-7" wordmarkClassName="text-lg" />
 
-				<header className="space-y-4">
-					<h1 className="break-words text-2xl font-semibold tracking-tight">
-						Let's get you set up
-					</h1>
-					<div className="flex items-start gap-3">
-						<HephIcon className="shrink-0" size={64} pad={2} />
-						{/* The tail is opaque so it covers the bubble's own border; a tinted fill would let
+					<header className="space-y-4">
+						<h1 className="break-words text-2xl font-semibold tracking-tight">
+							Let's get you set up
+						</h1>
+						<div className="flex items-start gap-3">
+							<HephIcon className="shrink-0" size={64} pad={2} />
+							{/* The tail is opaque so it covers the bubble's own border; a tinted fill would let
 						    that edge show straight through it. */}
-						<div className="relative min-w-0 flex-1 rounded-xl border border-mentor/30 bg-card p-3 before:absolute before:top-6 before:-left-1.5 before:size-3 before:rotate-45 before:border-b before:border-l before:border-mentor/30 before:bg-card before:content-[''] sm:p-4">
-							<p className="sr-only">Heph says:</p>
-							<p className="text-sm leading-relaxed">
-								I'm Heph, the mentor in Hephaestus. I read the work you already do, give you
-								feedback on the practices your project cares about, and talk it through whenever you
-								ask.
-							</p>
-							<p aria-live="polite" className="mt-2 text-sm font-medium">
-								{narration}
-							</p>
+							<div className="relative min-w-0 flex-1 rounded-xl border border-mentor/30 bg-card p-3 before:absolute before:top-6 before:-left-1.5 before:size-3 before:rotate-45 before:border-b before:border-l before:border-mentor/30 before:bg-card before:content-[''] sm:p-4">
+								<p className="sr-only">Heph says:</p>
+								<p className="text-sm leading-relaxed">
+									I'm Heph, the mentor in Hephaestus. I read the work you already do, give you
+									feedback on the practices your project cares about, and talk it through whenever
+									you ask.
+								</p>
+								<p aria-live="polite" className="mt-2 text-sm font-medium">
+									{narration}
+								</p>
+							</div>
 						</div>
-					</div>
-				</header>
+					</header>
 
-				<Separator />
+					<Separator />
 
-				{state.status === "error" ? (
-					<QueryErrorAlert
-						error={state.error}
-						title="Couldn't load your setup"
-						onRetry={state.onRetry}
-					/>
-				) : state.status === "loading" ? (
-					<div className="space-y-6" aria-busy="true">
-						<span className="sr-only">Loading…</span>
-						<Skeleton className="h-32 w-full" />
-						<div className="grid gap-3 sm:grid-cols-2">
-							<Skeleton className="h-20" />
-							<Skeleton className="h-20" />
+					{state.status === "error" ? (
+						<QueryErrorAlert
+							error={state.error}
+							title="Couldn't load your setup"
+							onRetry={state.onRetry}
+						/>
+					) : state.status === "loading" ? (
+						<div className="space-y-6" aria-busy="true">
+							<span className="sr-only">Loading…</span>
+							<Skeleton className="h-32 w-full" />
+							<div className="grid gap-3 sm:grid-cols-2">
+								<Skeleton className="h-20" />
+								<Skeleton className="h-20" />
+							</div>
 						</div>
-					</div>
-				) : (
-					<>
-						<Section
-							title={
-								<span className="flex items-start gap-3">
-									<StepMarker icon={FileTextIcon} done={termsAccepted} />
-									<span className="min-w-0">Terms and privacy</span>
-								</span>
-							}
-						>
-							<FactList facts={TERMS} />
-							<Field orientation="horizontal">
-								<Checkbox
-									id={`${id}-terms`}
-									checked={termsAccepted}
-									disabled={submitting}
-									onCheckedChange={setTermsAccepted}
-								/>
-								<FieldContent>
-									<FieldLabel htmlFor={`${id}-terms`}>I accept the terms of use</FieldLabel>
-								</FieldContent>
-							</Field>
-						</Section>
-
-						<Separator />
-
-						<Section
-							id={`${id}-research`}
-							title={
-								<span className="flex items-start gap-3">
-									<StepMarker icon={FlaskConicalIcon} done={answer !== undefined} />
-									<span className="min-w-0">Take part in the research?</span>
-								</span>
-							}
-							description="Optional, and Hephaestus works the same either way. The research is run by the organisation the privacy notice names."
-						>
-							<FactList facts={RESEARCH} />
-
-							<RadioGroup
-								value={answer ?? null}
-								onValueChange={(value) => setAnswer(value ?? undefined)}
-								disabled={submitting}
-								aria-labelledby={`${id}-research-title`}
-								aria-describedby={`${id}-research-description`}
-								className="grid gap-3 sm:grid-cols-2"
+					) : stale ? (
+						/* The words below come from this bundle and the version comes with them, so a bundle
+					   the server has moved past must not be answered — it would record an acceptance of
+					   terms nobody was shown. Only a document load replaces the bundle. */
+						<Alert>
+							<AlertTitle>The terms changed while this page was open</AlertTitle>
+							<AlertDescription className="flex flex-col items-start gap-3">
+								Reload to read the current version before you accept it.
+								<Button type="button" variant="outline" onClick={onReload}>
+									Reload
+								</Button>
+							</AlertDescription>
+						</Alert>
+					) : (
+						<>
+							<Section
+								title={
+									<span className="flex items-start gap-3">
+										<StepMarker icon={FileTextIcon} done={termsAccepted} />
+										<span className="min-w-0">Terms and privacy</span>
+									</span>
+								}
 							>
-								{ANSWERS.map(({ value, title, detail }) => (
-									<FieldLabel key={value} htmlFor={`${id}-${value}`}>
-										<Field orientation="horizontal">
-											<FieldContent>
-												<FieldTitle id={`${id}-${value}-title`}>{title}</FieldTitle>
-												<FieldDescription id={`${id}-${value}-detail`}>{detail}</FieldDescription>
-											</FieldContent>
-											<RadioGroupItem
-												id={`${id}-${value}`}
-												value={value}
-												aria-labelledby={`${id}-${value}-title`}
-												aria-describedby={`${id}-${value}-detail`}
-											/>
-										</Field>
-									</FieldLabel>
-								))}
-							</RadioGroup>
-						</Section>
+								<FactList facts={TERMS} />
+								<Field orientation="horizontal">
+									<Checkbox
+										id={`${id}-terms`}
+										checked={termsAccepted}
+										disabled={submitting}
+										onCheckedChange={setTermsAccepted}
+									/>
+									<FieldContent>
+										<FieldLabel htmlFor={`${id}-terms`}>I accept the terms of use</FieldLabel>
+									</FieldContent>
+								</Field>
+							</Section>
 
-						{state.submission.status === "error" && (
-							<Alert variant="destructive">
-								<AlertTitle>Your answers weren't saved</AlertTitle>
-								<AlertDescription>Please try again.</AlertDescription>
-							</Alert>
-						)}
-					</>
-				)}
+							{asksAboutResearch && (
+								<>
+									<Separator />
 
-				<Separator />
+									<Section
+										id={`${id}-research`}
+										title={
+											<span className="flex items-start gap-3">
+												<StepMarker icon={FlaskConicalIcon} done={answer !== undefined} />
+												<span className="min-w-0">Take part in the research?</span>
+											</span>
+										}
+										description={`Optional, and Hephaestus works the same either way. The research is run by ${researchOrganization}.`}
+									>
+										<FactList facts={RESEARCH} />
 
-				{/* Sign out sits at the far edge from Continue: only one of the two is recoverable. */}
-				<footer className="flex flex-col gap-4 sm:flex-row-reverse sm:items-center sm:justify-between">
-					<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-						{hint && (
-							<p id={`${id}-hint`} className="text-sm text-muted-foreground">
-								{hint}
-							</p>
-						)}
-						{state.status === "ready" && (
-							<Button
-								disabled={!ready || submitting}
-								onClick={submit}
-								aria-describedby={`${id}-hint`}
-							>
-								{submitting && <Spinner />}
-								{submitting ? "Saving…" : "Continue"}
-							</Button>
-						)}
-					</div>
-					<Button
-						variant="ghost"
-						disabled={submitting}
-						onClick={onSignOut}
-						className="self-start text-muted-foreground sm:-ml-3"
-					>
-						Sign out
-					</Button>
-				</footer>
+										<RadioGroup
+											value={answer ?? null}
+											onValueChange={(value) => setAnswer(value ?? undefined)}
+											disabled={submitting}
+											aria-labelledby={`${id}-research-title`}
+											aria-describedby={`${id}-research-description`}
+											className="grid gap-3 sm:grid-cols-2"
+										>
+											{ANSWERS.map(({ value, title, detail }) => (
+												<FieldLabel key={value} htmlFor={`${id}-${value}`}>
+													<Field orientation="horizontal">
+														<FieldContent>
+															<FieldTitle id={`${id}-${value}-title`}>{title}</FieldTitle>
+															<FieldDescription id={`${id}-${value}-detail`}>
+																{detail}
+															</FieldDescription>
+														</FieldContent>
+														<RadioGroupItem
+															id={`${id}-${value}`}
+															value={value}
+															aria-labelledby={`${id}-${value}-title`}
+															aria-describedby={`${id}-${value}-detail`}
+														/>
+													</Field>
+												</FieldLabel>
+											))}
+										</RadioGroup>
+									</Section>
+								</>
+							)}
 
-				<LegalLinks />
-			</PageLayout>
+							{state.submission.status === "error" && (
+								<Alert variant="destructive">
+									<AlertTitle>Your answers weren't saved</AlertTitle>
+									<AlertDescription>Please try again.</AlertDescription>
+								</Alert>
+							)}
+						</>
+					)}
+
+					<Separator />
+
+					{/* Sign out sits at the far edge from Continue: only one of the two is recoverable. */}
+					<footer className="flex flex-col gap-4 sm:flex-row-reverse sm:items-center sm:justify-between">
+						<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+							{hint && (
+								<p id={`${id}-hint`} className="text-sm text-muted-foreground">
+									{hint}
+								</p>
+							)}
+							{state.status === "ready" && !stale && (
+								<Button
+									type="submit"
+									disabled={!ready || submitting}
+									aria-describedby={hint ? `${id}-hint` : undefined}
+								>
+									{submitting && <Spinner />}
+									{submitting ? "Saving…" : "Continue"}
+								</Button>
+							)}
+						</div>
+						<Button
+							type="button"
+							variant="ghost"
+							disabled={submitting}
+							onClick={onSignOut}
+							className="self-start text-muted-foreground sm:-ml-3"
+						>
+							Sign out
+						</Button>
+					</footer>
+
+					<LegalLinks />
+				</PageLayout>
+			</form>
 		</div>
 	);
 }

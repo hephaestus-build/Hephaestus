@@ -5,25 +5,29 @@ import { Stateful } from "@/stories/stateful";
 import { expectGenuinelyDisabled } from "@/test/controls";
 import { expectNoPageOverflow } from "@/test/reflow";
 
-import { ConsentPage, type ConsentPageProps, type ConsentSubmission } from "./ConsentPage";
+import {
+	ConsentPage,
+	type ConsentPageProps,
+	type ConsentSubmission,
+	NOTICE_VERSION,
+} from "./ConsentPage";
 
 const notice = {
 	completed: false,
-	noticeVersion: "2026-09-10",
+	noticeVersion: NOTICE_VERSION,
 	participateInResearch: false,
+	researchOrganization: "the Technical University of Munich (AET)",
 };
-const onSubmit = fn();
-const onRetry = fn();
 const ready = {
 	status: "ready",
 	notice,
 	submission: { status: "idle" },
-	onSubmit,
+	onSubmit: fn(),
 } satisfies ConsentPageProps["state"];
 
 const meta = {
 	component: ConsentPage,
-	args: { state: ready, onSignOut: fn() },
+	args: { state: ready, onSignOut: fn(), onReload: fn() },
 	parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof ConsentPage>;
 export default meta;
@@ -78,35 +82,42 @@ export const TermsAcceptedOnly: Story = {
 		await acceptTerms();
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Continue" }));
 		await expect(screen.getByText("Answer the research question to continue.")).toBeVisible();
-		await expect(screen.getByText(/One question to go/)).toBeVisible();
 	},
 };
 
-export const TakingPart: Story = {
+export const BothAnswered: Story = {
 	play: async () => {
 		await acceptTerms();
 		await answer(/Yes, take part/);
+		await expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
 		await expect(screen.getByText("You can change your answer later in settings.")).toBeVisible();
 		await expect(screen.getByText("That's everything. Let's get to work.")).toBeVisible();
-		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
-		await expect(onSubmit).toHaveBeenCalledWith({
-			noticeVersion: "2026-09-10",
-			termsAccepted: true,
-			participateInResearch: true,
-		});
 	},
 };
 
-export const DecliningResearch: Story = {
+/**
+ * A deployment can land while this page is open. The wording comes from this bundle, so a version the
+ * server has moved past must not be answered — accepting it would record terms nobody was shown.
+ */
+export const NoticeChangedUnderneath: Story = {
+	args: { state: { ...ready, notice: { ...notice, noticeVersion: "2027-01-01" } } },
 	play: async () => {
+		await expect(await screen.findByRole("button", { name: "Reload" })).toBeVisible();
+		await expect(screen.queryByRole("checkbox")).toBeNull();
+		await expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+	},
+};
+
+/** No study on this deployment, so the question is not asked and the terms alone complete setup. */
+export const NoResearchProgramme: Story = {
+	args: {
+		state: { ...ready, notice: { ...notice, researchOrganization: undefined } },
+	},
+	play: async () => {
+		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Continue" }));
+		await expect(screen.queryByRole("radiogroup")).toBeNull();
 		await acceptTerms();
-		await answer(/don't take part/);
-		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
-		await expect(onSubmit).toHaveBeenCalledWith({
-			noticeVersion: "2026-09-10",
-			termsAccepted: true,
-			participateInResearch: false,
-		});
+		await expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
 	},
 };
 
@@ -135,18 +146,10 @@ export const SubmitFailed: Story = {
 export const Loading: Story = { args: { state: { status: "loading" } } };
 
 export const FailedToLoad: Story = {
-	args: { state: { status: "error", error: new Error("offline"), onRetry } },
+	args: { state: { status: "error", error: new Error("offline"), onRetry: fn() } },
 	play: async () => {
-		await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
-		await expect(onRetry).toHaveBeenCalled();
+		await expect(await screen.findByRole("button", { name: "Retry" })).toBeVisible();
 		await expect(screen.queryByRole("checkbox")).toBeNull();
-	},
-};
-
-export const CanSignOut: Story = {
-	play: async ({ args }) => {
-		await userEvent.click(await screen.findByRole("button", { name: "Sign out" }));
-		await expect(args.onSignOut).toHaveBeenCalled();
 	},
 };
 

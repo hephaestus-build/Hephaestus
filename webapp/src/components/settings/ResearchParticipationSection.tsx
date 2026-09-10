@@ -3,6 +3,8 @@ import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/
 import { Switch } from "@/components/ui/switch";
 
 export interface ResearchParticipationSectionProps {
+	/** The organisation running the study, named on the first-login screen this answer came from. */
+	organization: string;
 	participateInResearch: boolean;
 	onToggleResearch: (checked: boolean) => void;
 	isLoading?: boolean;
@@ -12,6 +14,7 @@ export interface ResearchParticipationSectionProps {
 }
 
 export function ResearchParticipationSection({
+	organization,
 	participateInResearch,
 	onToggleResearch,
 	isLoading = false,
@@ -43,8 +46,8 @@ export function ResearchParticipationSection({
 							Participate in academic research
 						</FieldLabel>
 						<FieldDescription>
-							When enabled, AET may use your Hephaestus usage and feedback interactions for the
-							academic research described in the{" "}
+							When enabled, {organization} may use your Hephaestus usage and feedback interactions
+							for the academic research described in the{" "}
 							<a
 								href="/privacy"
 								target="_blank"

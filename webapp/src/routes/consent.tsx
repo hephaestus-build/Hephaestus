@@ -38,6 +38,9 @@ function ConsentRoute() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const { logout } = useAuth();
+	// The setup wording ships in the bundle, so a bundle the server has moved past is replaced by a
+	// document load and by nothing the router can do.
+	const reload = () => window.location.reload();
 	const { data, isError, error, refetch } = useQuery(getConsentStatusOptions({}));
 	const mutation = useMutation({
 		...completeFirstLoginConsentMutation(),
@@ -59,9 +62,17 @@ function ConsentRoute() {
 			<ConsentPage
 				state={{ status: "error", error, onRetry: () => void refetch() }}
 				onSignOut={() => void logout()}
+				onReload={reload}
 			/>
 		);
-	if (!data) return <ConsentPage state={{ status: "loading" }} onSignOut={() => void logout()} />;
+	if (!data)
+		return (
+			<ConsentPage
+				state={{ status: "loading" }}
+				onSignOut={() => void logout()}
+				onReload={reload}
+			/>
+		);
 
 	const submission: ConsentSubmission = mutation.isPending
 		? { status: "saving" }
@@ -78,6 +89,7 @@ function ConsentRoute() {
 				onSubmit: (choice) => mutation.mutate({ body: choice }),
 			}}
 			onSignOut={() => void logout()}
+			onReload={reload}
 		/>
 	);
 }

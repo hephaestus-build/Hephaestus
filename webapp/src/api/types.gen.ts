@@ -769,6 +769,10 @@ export type ConsentStatus = {
   completed: boolean;
   noticeVersion: string;
   participateInResearch: boolean;
+  /**
+   * Organisation running the optional research programme, or null when this instance runs none
+   */
+  researchOrganization?: string;
 };
 
 /**
@@ -1504,7 +1508,10 @@ export type FeedbackSourceCount = {
 
 export type FirstLoginConsent = {
   noticeVersion: string;
-  participateInResearch: boolean;
+  /**
+   * Required when the instance names a research organisation, omitted otherwise
+   */
+  participateInResearch?: boolean;
   termsAccepted: boolean;
 };
 

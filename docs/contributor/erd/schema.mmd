@@ -262,8 +262,16 @@ erDiagram
         VARCHAR(40) purpose "NOT NULL"
         BOOLEAN granted "NOT NULL"
         VARCHAR(32) mechanism "NOT NULL"
-        VARCHAR(32) notice_version "NOT NULL"
+        VARCHAR(32) notice_version FK "NOT NULL"
+        VARCHAR(64) notice_sha256 FK
         TIMESTAMPTZ occurred_at "NOT NULL"
+    }
+
+    ConsentNotice {
+        VARCHAR(32) version PK,UK
+        TEXT notice_text "NOT NULL"
+        VARCHAR(64) sha256 UK "NOT NULL"
+        TIMESTAMPTZ published_at "NOT NULL"
     }
 
     CuratedGroupOverride {
@@ -1570,6 +1578,7 @@ erDiagram
     Workspace ||--o{ Connection : has
     Connection ||--o{ ConnectionAudit : has
     Account ||--o{ ConsentDecision : has
+    ConsentNotice ||--o{ ConsentDecision : references
     Feedback ||--o{ DeliveryPolicyEvaluation : references
     AgentJob ||--o{ DeliveryPolicyEvaluation : references
     Workspace ||--o{ DeliveryPolicyEvaluation : has
