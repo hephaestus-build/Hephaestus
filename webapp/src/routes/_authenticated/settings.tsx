@@ -109,7 +109,12 @@ function RouteComponent() {
 		onSuccess: (status) => {
 			queryClient.setQueryData(getConsentStatusQueryKey({}), status);
 		},
-		onError: () => toast.error("Failed to update research participation. Please try again."),
+		onError: () => {
+			// The refusal may be the notice moving on — a renamed research organisation, or setup owed
+			// again. Re-read it so the control reflects what this instance is now asking.
+			void queryClient.invalidateQueries({ queryKey: getConsentStatusQueryKey({}) });
+			toast.error("Failed to update research participation. Please try again.");
+		},
 	});
 
 	// Echo the notice and organisation this page rendered: a settings tab left open across a change of
@@ -250,7 +255,11 @@ function RouteComponent() {
 			}}
 			// No configured organisation means no study on this deployment, and a switch for a study
 			// nobody runs is a promise the instance cannot keep.
-			showResearchSection={accountConsent?.researchOrganization !== undefined}
+			// Setup owns the question until it is answered for the organisation currently named; a switch
+			// before that would stand in for a consent this account has not given.
+			showResearchSection={
+				accountConsent?.researchOrganization !== undefined && accountConsent.completed
+			}
 			researchProps={{
 				organization: accountConsent?.researchOrganization ?? "",
 				participateInResearch: accountConsent?.participateInResearch ?? false,

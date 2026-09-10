@@ -57,8 +57,24 @@ public class ConsentService {
         return isCurrentNoticeCompleted(accountId);
     }
 
+    /**
+     * Setup is done when the terms are accepted for this wording and, where a study is configured, the
+     * research question has an answer — granted or refused — for the organisation currently named.
+     *
+     * <p>The research half reads the same latest decision as {@link #researchAuthorised(Long)} rather
+     * than asking whether such a row exists anywhere: an account that answered A, then B, then found
+     * itself back on A would otherwise be let through on a superseded row while participation, which
+     * reads the latest, said the opposite.
+     */
     private boolean isCurrentNoticeCompleted(Long accountId) {
-        return decisionRepository.isCompletedForNotice(accountId, WORDING_VERSION, properties.researchProgramme());
+        if (!decisionRepository.hasAcceptedNotice(accountId, WORDING_VERSION)) {
+            return false;
+        }
+        if (properties.researchProgramme() == null) {
+            return true;
+        }
+        ConsentDecision latest = latest(accountId, ConsentDecision.Purpose.RESEARCH_PARTICIPATION);
+        return latest != null && isForCurrentQuestion(latest);
     }
 
     @Transactional

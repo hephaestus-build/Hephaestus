@@ -81,7 +81,9 @@ function ConsentRoute() {
 			: { status: "idle" };
 	return (
 		<ConsentPage
-			key={data.noticeVersion}
+			// Remount when the question changes, not just the wording: a draft "yes" chosen for one
+			// research organisation must never be submitted against another one's name.
+			key={`${data.noticeVersion}\u0000${data.researchOrganization ?? ""}`}
 			state={{
 				status: "ready",
 				notice: data,

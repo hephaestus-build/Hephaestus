@@ -159,7 +159,7 @@ class ConsentServiceTest extends BaseUnitTest {
                 .containsExactly(
                         ConsentDecision.Purpose.TERMS_ACCEPTANCE,
                         ConsentDecision.Purpose.PRIVACY_NOTICE_ACKNOWLEDGEMENT);
-        verify(decisionRepository).isCompletedForNotice(42L, VERSION, null);
+        verify(decisionRepository).hasAcceptedNotice(42L, VERSION);
     }
 
     @Test
@@ -252,24 +252,60 @@ class ConsentServiceTest extends BaseUnitTest {
         assertThat(serviceWithoutResearch().status(42L).participateInResearch()).isFalse();
     }
 
+    /**
+     * An answer that named another organisation leaves the question open, so settings sends the
+     * account back through setup rather than letting a switch stand in for a consent it never gave.
+     */
     @Test
-    void shouldRecordAnAnswerFromSettingsWhenTheOneOnRecordNamedAnotherOrganisation() {
-        when(decisionRepository.isCompletedForNotice(eq(42L), eq(VERSION), eq(ORG)))
-                .thenReturn(true);
+    void shouldSendTheAccountBackToSetupWhenTheAnswerOnRecordNamedAnotherOrganisation() {
+        when(decisionRepository.hasAcceptedNotice(eq(42L), eq(VERSION))).thenReturn(true);
         researchOnRecord(researchDecision(true, VERSION, "Another lab"));
 
-        serviceWithResearch().setResearchParticipation(42L, new ConsentService.ResearchConsentDTO(VERSION, true, ORG));
+        assertThatThrownBy(() -> serviceWithResearch()
+                        .setResearchParticipation(42L, new ConsentService.ResearchConsentDTO(VERSION, true, ORG)))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_REQUIRED));
 
-        assertThat(saved(1))
-                .singleElement()
-                .satisfies(decision ->
-                        assertThat(decision.getResearchOrganization()).isEqualTo(ORG));
+        verify(decisionRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRecordAWithdrawalFromSettings() {
+        when(decisionRepository.hasAcceptedNotice(eq(42L), eq(VERSION))).thenReturn(true);
+        researchOnRecord(researchDecision(true, VERSION, ORG));
+
+        serviceWithResearch().setResearchParticipation(42L, new ConsentService.ResearchConsentDTO(VERSION, false, ORG));
+
+        assertThat(saved(1)).singleElement().satisfies(decision -> {
+            assertThat(decision.isGranted()).isFalse();
+            assertThat(decision.getResearchOrganization()).isEqualTo(ORG);
+            assertThat(decision.getMechanism()).isEqualTo(ConsentDecision.Mechanism.ACCOUNT_SETTINGS);
+        });
+    }
+
+    /** A → B → A: the A row is superseded by the B one, so the question is open again. */
+    @Test
+    void shouldNotTreatASupersededAnswerAsCompletionWhenTheOrganisationReturns() {
+        when(decisionRepository.hasAcceptedNotice(eq(42L), eq(VERSION))).thenReturn(true);
+        researchOnRecord(researchDecision(false, VERSION, "Another lab"));
+
+        assertThat(serviceWithResearch().status(42L).completed()).isFalse();
+        assertThat(serviceWithResearch().participatesInResearch(42L)).isFalse();
+    }
+
+    @Test
+    void shouldTreatARefusalAsAnAnswer() {
+        when(decisionRepository.hasAcceptedNotice(eq(42L), eq(VERSION))).thenReturn(true);
+        researchOnRecord(researchDecision(false, VERSION, ORG));
+
+        assertThat(serviceWithResearch().status(42L).completed()).isTrue();
+        assertThat(serviceWithResearch().participatesInResearch(42L)).isFalse();
     }
 
     @Test
     void shouldReportTheConfiguredResearchOrganisation() {
-        when(decisionRepository.isCompletedForNotice(eq(42L), eq(VERSION), eq(ORG)))
-                .thenReturn(true);
+        when(decisionRepository.hasAcceptedNotice(eq(42L), eq(VERSION))).thenReturn(true);
 
         assertThat(serviceWithResearch().status(42L).researchOrganization()).isEqualTo("AET");
         assertThat(serviceWithoutResearch().status(42L).researchOrganization()).isNull();

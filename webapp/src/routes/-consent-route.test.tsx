@@ -137,6 +137,33 @@ describe("consent recovery", () => {
 		expect(screen.queryByRole("checkbox", { name: /terms of use/i })).toBeNull();
 	});
 
+	it("discards the research answer when the question changes to another organisation", async () => {
+		let organization = "AET";
+		server.use(
+			http.get("*/user/consent", () =>
+				HttpResponse.json({ ...notice, researchOrganization: organization }),
+			),
+			http.put("*/user/consent", () => {
+				organization = "Another lab";
+				return new HttpResponse(null, { status: 409 });
+			}),
+		);
+		renderRouteAtWithRouter("/consent");
+		await userEvent.click(
+			await screen.findByRole("checkbox", { name: /terms of use/i }, ROUTE_RENDER_WAIT),
+		);
+		await userEvent.click(screen.getByRole("radio", { name: /Yes, take part/ }));
+		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+		// The question named someone else now, so neither the acceptance nor the answer may stand.
+		await screen.findByText(/Another lab/);
+		// Base UI renders a radio as a button, so its state is the ARIA attribute, not `checked`.
+		expect(screen.getByRole("radio", { name: /Yes, take part/ }).getAttribute("aria-checked")).toBe(
+			"false",
+		);
+		expect(screen.getByRole<HTMLButtonElement>("button", { name: "Continue" }).disabled).toBe(true);
+	});
+
 	it("omits the research answer when the instance names no research organisation", async () => {
 		let submitted: FirstLoginConsent | undefined;
 		const solo = { ...notice, researchOrganization: undefined };
