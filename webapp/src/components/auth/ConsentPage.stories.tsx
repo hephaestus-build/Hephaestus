@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent, waitFor } from "storybook/test";
+import { expect, fn, screen, userEvent } from "storybook/test";
 
 import { Stateful } from "@/stories/stateful";
 import { expectGenuinelyDisabled } from "@/test/controls";
+import { expectNoPageOverflow } from "@/test/reflow";
 
 import { ConsentPage, type ConsentPageProps, type ConsentSubmission } from "./ConsentPage";
 
@@ -26,19 +27,24 @@ const ready = {
 	submission: { status: "idle" },
 	onSubmit,
 } satisfies ConsentPageProps["state"];
+
 const meta = {
 	component: ConsentPage,
 	args: { state: ready, onSignOut: fn() },
-	parameters: { layout: "fullscreen" },
+	parameters: { layout: "fullscreen", chromatic: { viewports: [320, 1440] } },
 } satisfies Meta<typeof ConsentPage>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-async function openResearch() {
+async function acceptTerms() {
 	await userEvent.click(await screen.findByRole("checkbox", { name: /terms of use/i }));
-	await userEvent.click(screen.getByRole("button", { name: "Continue to the research question" }));
 }
 
+async function answer(name: RegExp) {
+	await userEvent.click(screen.getByRole("radio", { name }));
+}
+
+/** The wrapper drives the submission the caller supplied, so the spy still sees the real choice. */
 function AfterSubmission(args: ConsentPageProps) {
 	const { state } = args;
 	if (state.status !== "ready") return <ConsentPage {...args} />;
@@ -63,21 +69,25 @@ function AfterSubmission(args: ConsentPageProps) {
 
 export const Default: Story = {
 	play: async () => {
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "How Hephaestus uses your data" })).toHaveFocus(),
-		);
-		await expectGenuinelyDisabled(
-			screen.getByRole("button", { name: "Continue to the research question" }),
-		);
-		await openResearch();
-		await expect(onSubmit).not.toHaveBeenCalled();
-		await expect(screen.getByRole("heading", { name: "Take part in the research?" })).toHaveFocus();
+		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Continue" }));
+		await expect(screen.getByRole("radio", { name: /Yes, take part/ })).not.toBeChecked();
+		await expect(screen.getByRole("radio", { name: /don't take part/ })).not.toBeChecked();
 	},
 };
-export const ResearchInvitation: Story = {
+
+export const TermsAcceptedOnly: Story = {
 	play: async () => {
-		await openResearch();
-		await userEvent.click(screen.getByRole("button", { name: "Yes, I'll take part" }));
+		await acceptTerms();
+		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Continue" }));
+		await expect(screen.getByText("Answer the research question to continue.")).toBeVisible();
+	},
+};
+
+export const TakingPart: Story = {
+	play: async () => {
+		await acceptTerms();
+		await answer(/Yes, take part/);
+		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await expect(onSubmit).toHaveBeenCalledWith({
 			noticeVersion: "2026-08-30",
 			termsAccepted: true,
@@ -85,10 +95,12 @@ export const ResearchInvitation: Story = {
 		});
 	},
 };
-export const ContinueWithoutResearch: Story = {
+
+export const DecliningResearch: Story = {
 	play: async () => {
-		await openResearch();
-		await userEvent.click(screen.getByRole("button", { name: "Continue without research" }));
+		await acceptTerms();
+		await answer(/don't take part/);
+		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await expect(onSubmit).toHaveBeenCalledWith({
 			noticeVersion: "2026-08-30",
 			termsAccepted: true,
@@ -96,62 +108,56 @@ export const ContinueWithoutResearch: Story = {
 		});
 	},
 };
-export const RevisitNotice: Story = {
-	play: async () => {
-		await openResearch();
-		await userEvent.click(screen.getByRole("button", { name: "Back" }));
-		await expect(screen.getByRole("checkbox", { name: /terms of use/i })).toBeChecked();
-		await expect(onSubmit).not.toHaveBeenCalled();
-	},
-};
+
 export const Submitting: Story = {
-	args: { state: { ...ready, submission: { status: "saving", participateInResearch: true } } },
+	args: { state: { ...ready, submission: { status: "saving" } } },
 	render: (args) => <AfterSubmission {...args} />,
 	play: async () => {
-		await openResearch();
-		await userEvent.click(screen.getByRole("button", { name: "Yes, I'll take part" }));
-		await expect(onSubmit).toHaveBeenCalledWith(
-			expect.objectContaining({ participateInResearch: true }),
-		);
+		await acceptTerms();
+		await answer(/Yes, take part/);
+		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Saving…" }));
-		await expectGenuinelyDisabled(
-			screen.getByRole("button", { name: "Continue without research" }),
-		);
+		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Sign out" }));
 	},
 };
+
 export const SubmitFailed: Story = {
 	args: { state: { ...ready, submission: { status: "error" } } },
 	render: (args) => <AfterSubmission {...args} />,
 	play: async () => {
-		await openResearch();
-		await userEvent.click(screen.getByRole("button", { name: "Continue without research" }));
-		await expect(onSubmit).toHaveBeenCalledWith(
-			expect.objectContaining({ participateInResearch: false }),
-		);
-		await expect(screen.getByRole("alert")).toHaveTextContent(/wasn't saved/i);
+		await acceptTerms();
+		await answer(/don't take part/);
+		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+		await expect(screen.getByRole("alert")).toHaveTextContent(/weren't saved/i);
+		await expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
 	},
 };
+
 export const Loading: Story = { args: { state: { status: "loading" } } };
+
 export const FailedToLoad: Story = {
-	args: { state: { status: "error", onRetry } },
+	args: { state: { status: "error", error: new Error("offline"), onRetry } },
 	play: async () => {
-		await userEvent.click(await screen.findByRole("button", { name: "Try again" }));
+		await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
 		await expect(onRetry).toHaveBeenCalled();
+		await expect(screen.queryByRole("checkbox")).toBeNull();
 	},
 };
+
 export const CanSignOut: Story = {
 	play: async ({ args }) => {
 		await userEvent.click(await screen.findByRole("button", { name: "Sign out" }));
 		await expect(args.onSignOut).toHaveBeenCalled();
 	},
 };
-export const NarrowNotice: Story = {
-	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
-};
-export const NarrowResearchInvitation: Story = {
+
+export const Narrow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async () => {
-		await openResearch();
-		await expect(screen.getByRole("button", { name: "Continue without research" })).toBeEnabled();
+		await acceptTerms();
+		await answer(/Yes, take part/);
+		await expectNoPageOverflow();
 	},
 };
+
+export const Dark: Story = { globals: { theme: "dark" } };

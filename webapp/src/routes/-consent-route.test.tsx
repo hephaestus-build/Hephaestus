@@ -32,15 +32,11 @@ describe("first-login consent route", () => {
 		});
 		const { router } = renderRouteAtWithRouter("/consent?returnTo=%2Fabout");
 
-		await screen.findByRole(
-			"heading",
-			{ name: "How Hephaestus uses your data" },
-			ROUTE_RENDER_WAIT,
-		);
+		await screen.findByRole("heading", { name: "Before you continue" }, ROUTE_RENDER_WAIT);
 
 		await userEvent.click(screen.getByRole("checkbox", { name: /terms of use/i }));
-		fireEvent.click(screen.getByRole("button", { name: "Continue to the research question" }));
-		fireEvent.click(screen.getByRole("button", { name: "Continue without research" }));
+		await userEvent.click(screen.getByRole("radio", { name: /don't take part/ }));
+		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
 		await waitFor(() =>
 			expect(submitted).toStrictEqual({
@@ -59,14 +55,10 @@ describe("first-login consent route", () => {
 		});
 		renderRouteAtWithRouter("/consent");
 
-		await screen.findByRole(
-			"heading",
-			{ name: "How Hephaestus uses your data" },
-			ROUTE_RENDER_WAIT,
-		);
+		await screen.findByRole("heading", { name: "Before you continue" }, ROUTE_RENDER_WAIT);
 		await userEvent.click(screen.getByRole("checkbox", { name: /terms of use/i }));
-		fireEvent.click(screen.getByRole("button", { name: "Continue to the research question" }));
-		fireEvent.click(screen.getByRole("button", { name: "Yes, I'll take part" }));
+		await userEvent.click(screen.getByRole("radio", { name: /Yes, take part/ }));
+		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
 		await waitFor(() =>
 			expect(submitted).toStrictEqual({
@@ -92,7 +84,7 @@ describe("consent recovery", () => {
 		await screen.findByRole("alert", undefined, ROUTE_RENDER_WAIT);
 		expect(protectedReads).toBe(0);
 		server.use(http.get("*/user/consent", () => HttpResponse.json(notice)));
-		await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+		await userEvent.click(screen.getByRole("button", { name: "Retry" }));
 		await screen.findByRole("checkbox", { name: /terms of use/i });
 		expect(screen.queryByRole("alert")).toBeNull();
 	});
@@ -102,11 +94,11 @@ describe("consent recovery", () => {
 		const { router } = renderRouteAtWithRouter("/consent?returnTo=%2Fabout");
 		await screen.findByRole("alert", undefined, ROUTE_RENDER_WAIT);
 		server.use(http.get("*/user/consent", () => HttpResponse.json({ ...notice, completed: true })));
-		await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+		await userEvent.click(screen.getByRole("button", { name: "Retry" }));
 		await waitFor(() => expect(router.state.location.pathname).toBe("/about"));
 	});
 
-	it("keeps the research choice available after a failed save", async () => {
+	it("keeps the answers editable after a failed save", async () => {
 		server.use(
 			http.get("*/user/consent", () => HttpResponse.json(notice)),
 			http.put("*/user/consent", () => new HttpResponse(null, { status: 503 })),
@@ -115,15 +107,12 @@ describe("consent recovery", () => {
 		await userEvent.click(
 			await screen.findByRole("checkbox", { name: /terms of use/i }, ROUTE_RENDER_WAIT),
 		);
-		fireEvent.click(screen.getByRole("button", { name: "Continue to the research question" }));
-		fireEvent.click(screen.getByRole("button", { name: "Continue without research" }));
+		await userEvent.click(screen.getByRole("radio", { name: /don't take part/ }));
+		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await screen.findByRole("alert");
-		expect(
-			screen.getByRole<HTMLButtonElement>("button", { name: "Yes, I'll take part" }).disabled,
-		).toBe(false);
-		expect(
-			screen.getByRole<HTMLButtonElement>("button", { name: "Continue without research" }).disabled,
-		).toBe(false);
+		expect(screen.getByRole<HTMLButtonElement>("button", { name: "Continue" }).disabled).toBe(
+			false,
+		);
 	});
 
 	it("requires fresh acceptance when a rejected save reveals a new notice version", async () => {
@@ -139,13 +128,10 @@ describe("consent recovery", () => {
 		await userEvent.click(
 			await screen.findByRole("checkbox", { name: /terms of use/i }, ROUTE_RENDER_WAIT),
 		);
-		fireEvent.click(screen.getByRole("button", { name: "Continue to the research question" }));
-		fireEvent.click(screen.getByRole("button", { name: "Yes, I'll take part" }));
+		await userEvent.click(screen.getByRole("radio", { name: /Yes, take part/ }));
+		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await screen.findByRole("checkbox", { name: /terms of use/i });
-		expect(
-			screen.getByRole<HTMLButtonElement>("button", { name: "Continue to the research question" })
-				.disabled,
-		).toBe(true);
+		expect(screen.getByRole<HTMLButtonElement>("button", { name: "Continue" }).disabled).toBe(true);
 		expect(screen.queryByRole("alert")).toBeNull();
 	});
 });

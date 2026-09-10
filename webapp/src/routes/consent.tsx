@@ -38,7 +38,7 @@ function ConsentRoute() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const { logout } = useAuth();
-	const { data, isError, refetch } = useQuery(getConsentStatusOptions({}));
+	const { data, isError, error, refetch } = useQuery(getConsentStatusOptions({}));
 	const mutation = useMutation({
 		...completeFirstLoginConsentMutation(),
 		onError: () => {
@@ -57,14 +57,14 @@ function ConsentRoute() {
 	if (isError)
 		return (
 			<ConsentPage
-				state={{ status: "error", onRetry: () => void refetch() }}
+				state={{ status: "error", error, onRetry: () => void refetch() }}
 				onSignOut={() => void logout()}
 			/>
 		);
 	if (!data) return <ConsentPage state={{ status: "loading" }} onSignOut={() => void logout()} />;
 
 	const submission: ConsentSubmission = mutation.isPending
-		? { status: "saving", participateInResearch: mutation.variables.body.participateInResearch }
+		? { status: "saving" }
 		: mutation.isError && mutation.variables.body.noticeVersion === data.noticeVersion
 			? { status: "error" }
 			: { status: "idle" };

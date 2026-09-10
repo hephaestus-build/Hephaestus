@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
 
+import { AuthWash } from "@/components/auth/AuthWash";
 import { SignInButtons, type SignInButtonsProps } from "@/components/auth/SignInButtons";
 import { SignInNotice } from "@/components/auth/SignInNotice";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { HephIcon } from "@/components/brand/HephIcon";
+import { LandingGlow } from "@/components/info/landing/LandingVisuals";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 // Never display raw OAuth error parameters; they can contain provider details.
@@ -18,13 +20,14 @@ const ERROR_COPY: Record<string, { title: string; description: string }> = {
 	},
 };
 
+const GENERIC_ERROR = {
+	title: "Something went wrong",
+	description: "We couldn't sign you in. Please try again.",
+};
+
+/** `hasOwn`, not `??`: a code of `__proto__` or `toString` reaches an inherited value that is truthy. */
 function describeError(code: string): { title: string; description: string } {
-	return (
-		(Object.hasOwn(ERROR_COPY, code) ? ERROR_COPY[code] : undefined) ?? {
-			title: "Something went wrong",
-			description: "We couldn't sign you in. Please try again.",
-		}
-	);
+	return (Object.hasOwn(ERROR_COPY, code) ? ERROR_COPY[code] : undefined) ?? GENERIC_ERROR;
 }
 
 /**
@@ -40,7 +43,8 @@ export function LoginPage({
 	const errorCopy = error ? describeError(error) : undefined;
 
 	return (
-		<div className="grid min-h-svh lg:grid-cols-2">
+		<div className="relative isolate grid min-h-svh overflow-hidden lg:grid-cols-2">
+			<AuthWash />
 			<div className="flex flex-col gap-8 p-6 md:p-10">
 				<Link
 					to="/"
@@ -52,7 +56,7 @@ export function LoginPage({
 
 				<div className="flex flex-1 items-center justify-center">
 					<div className="flex w-full max-w-sm flex-col gap-6">
-						<h1 className="text-2xl font-semibold tracking-tight text-balance">{title}</h1>
+						<h1 className="text-3xl font-semibold tracking-tight text-balance">{title}</h1>
 						<div aria-live="assertive" aria-atomic="true">
 							{errorCopy ? (
 								<Alert variant="destructive">
@@ -77,19 +81,21 @@ export function LoginPage({
  * from someone whose session expired, and only the first of those is sent through onboarding — so a
  * "what happens next" list is a claim that is wrong for most of the people reading it.
  *
- * Dropped below `lg`, where the form needs the width. It is the landing page's own lede, so arriving
- * at sign-in first is told the same thing.
+ * Dropped below `lg`, where the form needs the width.
  */
 function BrandAside() {
 	return (
-		<aside className="hidden flex-col items-start justify-center gap-6 border-l border-border bg-muted/40 p-10 lg:flex">
-			<HephIcon size={88} pad={8} strokeWidth={1.4} />
+		<aside className="relative hidden flex-col items-start justify-center gap-6 border-l border-border p-10 lg:flex">
+			<LandingGlow className="absolute top-1/3 left-4 size-72" />
+			<span className="relative">
+				<HephIcon size={88} pad={8} strokeWidth={1.4} />
+			</span>
 			<p className="max-w-md text-lg leading-relaxed text-pretty">
 				<span className="font-semibold text-foreground">
-					The mentoring feedback a senior would give.
+					Hephaestus reads the work a team already does
 				</span>{" "}
 				<span className="text-muted-foreground">
-					For everyone, not only the people they have time for.
+					and gives every developer practice feedback on it, where the work happens.
 				</span>
 			</p>
 		</aside>
