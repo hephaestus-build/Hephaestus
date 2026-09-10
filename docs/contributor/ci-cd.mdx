@@ -718,8 +718,12 @@ reaches no such commit builds every image itself. `detect-changes` resolves that
 
 Use GitHub's organization-level [Actions metrics](https://docs.github.com/en/actions/concepts/metrics)
 for workflow and job run time, queue time, failure rate, and runner usage. Each `CI Status Gate` job
-also includes the current run's dependency-aware timeline and job summary, and JUnit results appear
-as `Test Results - …` check runs.
+also includes the current run's dependency-aware timeline, every direct prerequisite's result and
+the boolean selection flags from `Detect changes`. Selection is not a claim that a component's files
+changed: an unfiltered run or a preview can select unchanged inputs. The summary counts all skipped
+prerequisites without guessing their cause and links to the [local verification guide](./local-verification.mdx)
+for troubleshooting. It stays checkout-free because the same job writes commit statuses. JUnit
+results appear as `Test Results - …` check runs.
 
 ### Pull-request latency
 
