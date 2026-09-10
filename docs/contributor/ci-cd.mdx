@@ -801,7 +801,7 @@ Extend the pipeline at the ownership boundary that changed; do not copy an exist
 
 The Stories job reports visual coverage separately from interaction tests and the
 **Preview / Storybook** publication link. Publication is not visual approval: the final job
-verdict also requires a passing coverage report.
+verdict also requires a passing coverage report or an explicit policy exemption.
 
 | Verdict | Meaning and action |
 | --- | --- |
@@ -810,7 +810,16 @@ verdict also requires a passing coverage report.
 | `quota-skipped` | An account limit blocked coverage. The job fails; an account owner must resolve the limit. |
 | `failed` | Visual differences or component/interaction errors need review. Fix errors; accept only intentional, inspected differences. |
 | `unavailable` | Chromatic failed or returned insufficient coverage evidence. The job fails; inspect the build, action logs and account limits before retrying. |
+| `budget-paused` | A maintainer-approved, time-bounded pause skips paid visual comparison. Interaction tests and generated-asset checks remain required. CI may pass without visual approval. |
 | `policy-skipped` | Fork PRs and `dependabot/` or `renovate/` branches do not run credentialed visual tests. Interaction tests still run; this is not visual approval. |
+
+The workflow's `CHROMATIC_PAUSED_UNTIL` is the sole budget-pause deadline (midnight UTC).
+Before it expires, CI does not invoke Chromatic, reports `budget-paused` explicitly, and still builds,
+tests, and publishes the first-party PR's independent Storybook preview. The pause does not turn
+actual failures into passes. At the deadline, visual testing and fail-closed evidence enforcement
+resume automatically; removing the deadline resumes them immediately. Restore account capacity
+before expiry and follow baseline recovery below. Do not extend a pause silently or interpret a
+preview link as visual verification.
 
 `scripts/report-chromatic.ts` requires both the action's public outputs and its fresh JUnit report.
 The workflow removes the previous report before invoking Chromatic and uses one explicit report

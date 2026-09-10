@@ -91,7 +91,18 @@ function count(value: string | undefined): number | undefined {
 	return Number.isSafeInteger(parsed) ? parsed : undefined;
 }
 
-export function visualVerdict(env: NodeJS.ProcessEnv, report?: string) {
+export function visualTestingPaused(env: NodeJS.ProcessEnv, now = Date.now()) {
+	const until = env.CHROMATIC_PAUSED_UNTIL;
+	if (!until || !/^\d{4}-\d{2}-\d{2}$/u.test(until)) return false;
+	const deadline = Date.parse(`${until}T00:00:00Z`);
+	return (
+		Number.isFinite(deadline) &&
+		new Date(deadline).toISOString().startsWith(until) &&
+		now < deadline
+	);
+}
+
+export function visualVerdict(env: NodeJS.ProcessEnv, report?: string, now = Date.now()) {
 	const code = count(env.CHROMATIC_CODE);
 	const captured = count(env.CHROMATIC_CAPTURED);
 	const inherited = count(env.CHROMATIC_INHERITED);
@@ -105,6 +116,12 @@ export function visualVerdict(env: NodeJS.ProcessEnv, report?: string) {
 			"policy-skipped",
 			true,
 			"Not tested: fork or dependency-bot policy. This is not visual approval.",
+		);
+	if (env.CHROMATIC_OUTCOME === "skipped" && visualTestingPaused(env, now))
+		return result(
+			"budget-paused",
+			true,
+			`Visual comparison unavailable: maintainer-approved budget pause until ${env.CHROMATIC_PAUSED_UNTIL} 00:00 UTC. Browser interaction tests remain required. This is not visual approval; enforcement resumes automatically at the deadline.`,
 		);
 	if (code === 5 || code === 11 || code === 12)
 		return result(
@@ -176,6 +193,8 @@ export function coverageSummary(env: NodeJS.ProcessEnv, report?: string) {
 if (import.meta.main) {
 	if (process.argv[2] === "--clear") {
 		rmSync(REPORT_PATH, { force: true });
+		if (process.env.GITHUB_OUTPUT)
+			appendFileSync(process.env.GITHUB_OUTPUT, `paused=${visualTestingPaused(process.env)}\n`);
 	} else {
 		let report: string | undefined;
 		try {
@@ -188,7 +207,8 @@ if (import.meta.main) {
 		if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
 		console.log(summary);
 		if (!verdict.pass) console.log(`::error::${verdict.message}`);
-		else if (verdict.state === "policy-skipped") console.log(`::warning::${verdict.message}`);
+		else if (["policy-skipped", "budget-paused"].includes(verdict.state))
+			console.log(`::warning::${verdict.message}`);
 		process.exitCode = verdict.pass ? 0 : 1;
 	}
 }

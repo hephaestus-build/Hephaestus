@@ -2567,7 +2567,19 @@ void test("Stories enforces visual evidence independently of preview publication
 		`\${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || startsWith(github.head_ref || github.ref_name, 'dependabot/') || startsWith(github.head_ref || github.ref_name, 'renovate/') }}`,
 	);
 	const chromatic = namedStep(workflow, jobPath, "Chromatic visual testing");
-	assert.equal(chromatic.get("if"), "success() && env.CHROMATIC_POLICY_SKIP != 'true'");
+	assert.equal(
+		chromatic.get("if"),
+		"success() && env.CHROMATIC_POLICY_SKIP != 'true' && steps.visual_policy.outputs.paused != 'true'",
+	);
+	assert.equal(workflow.getIn([...jobPath, "env", "CHROMATIC_PAUSED_UNTIL"]), "2026-09-30");
+	assert.equal(
+		namedStep(workflow, jobPath, "Clear previous Chromatic evidence").get("id"),
+		"visual_policy",
+	);
+	assert.equal(
+		namedStep(workflow, jobPath, "Deploy public Storybook preview").get("if"),
+		"success() && github.event_name == 'pull_request' && env.CHROMATIC_POLICY_SKIP != 'true'",
+	);
 	assert.equal(chromatic.getIn(["with", "autoAcceptChanges"]), false);
 	assert.equal(chromatic.getIn(["with", "exitZeroOnChanges"]), false);
 	assert.equal(chromatic.getIn(["with", "exitOnceUploaded"]), false);

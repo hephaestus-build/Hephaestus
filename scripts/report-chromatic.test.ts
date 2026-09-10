@@ -5,7 +5,12 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
 
-import { coverageSummary, verifyTerminalReport, visualVerdict } from "./report-chromatic.ts";
+import {
+	coverageSummary,
+	verifyTerminalReport,
+	visualTestingPaused,
+	visualVerdict,
+} from "./report-chromatic.ts";
 
 const buildUrl = "https://www.chromatic.com/build?appId=abc&number=123";
 function terminalReport(status = "PASSED", testStatus = "PASSED", skipped = false) {
@@ -206,6 +211,62 @@ void test("clear step prevents an old successful report approving a skipped uplo
 		});
 		assert.equal(result.status, 1);
 		assert.match(result.stdout, /Missing structured Chromatic report evidence/);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+void test("budget pause expires at midnight UTC and cannot excuse actual failures", () => {
+	const env = { CHROMATIC_PAUSED_UNTIL: "2026-09-30", CHROMATIC_OUTCOME: "skipped" };
+	const before = Date.parse("2026-09-29T23:59:59.999Z");
+	const deadline = Date.parse("2026-09-30T00:00:00Z");
+	assert.equal(visualTestingPaused(env, before), true);
+	const paused = visualVerdict(env, undefined, before);
+	assert.equal(paused.state, "budget-paused");
+	assert.equal(paused.pass, true);
+	assert.match(paused.message, /not visual approval/);
+	for (const now of [deadline, deadline + 1]) {
+		assert.equal(visualTestingPaused(env, now), false);
+		assert.equal(visualVerdict(env, undefined, now).pass, false);
+	}
+	for (const until of [undefined, "", "invalid", "2026-02-30", "2026-09-30T23:59:59Z"]) {
+		const invalid = { ...env, CHROMATIC_PAUSED_UNTIL: until };
+		assert.equal(visualTestingPaused(invalid, before), false);
+		assert.equal(visualVerdict(invalid, undefined, before).pass, false);
+	}
+	for (const outcome of ["failure", "cancelled", "success", ""]) {
+		assert.equal(
+			visualVerdict({ ...env, CHROMATIC_OUTCOME: outcome }, undefined, before).pass,
+			false,
+		);
+	}
+	for (const code of ["1", "2", "5", "11", "12"]) {
+		assert.equal(
+			visualVerdict(
+				{ ...tested, ...env, CHROMATIC_OUTCOME: "success", CHROMATIC_CODE: code },
+				terminalReport(),
+				before,
+			).pass,
+			false,
+		);
+	}
+});
+
+void test("policy preparation clears stale evidence and exports the skip decision", () => {
+	const dir = mkdtempSync(join(tmpdir(), "chromatic-pause-"));
+	try {
+		mkdirSync(join(dir, "webapp"));
+		const report = join(dir, "webapp/chromatic-report.xml");
+		writeFileSync(report, terminalReport());
+		const output = join(dir, "outputs");
+		const run = spawnSync(process.execPath, [resolve("scripts/report-chromatic.ts"), "--clear"], {
+			cwd: dir,
+			env: { GITHUB_OUTPUT: output, CHROMATIC_PAUSED_UNTIL: "2999-01-01" },
+			encoding: "utf8",
+		});
+		assert.equal(run.status, 0, run.stderr);
+		assert.equal(readFileSync(output, "utf8"), "paused=true\n");
+		assert.throws(() => readFileSync(report), { code: "ENOENT" });
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
