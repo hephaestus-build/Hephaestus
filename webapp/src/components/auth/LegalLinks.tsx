@@ -1,8 +1,10 @@
+import { Link, type LinkProps } from "@tanstack/react-router";
+
 import { cn } from "@/lib/utils";
 
 /**
- * The `auth` surface renders no site footer, so sign-in and onboarding carry the imprint and privacy
- * links themselves. Both open in a new tab: leaving mid-flow would drop an unsaved consent choice.
+ * The `auth` surface renders no site footer, so sign-in and onboarding carry these themselves. Both
+ * open in a new tab: leaving mid-flow would drop an unsaved consent answer.
  */
 export function LegalLinks({ className }: { className?: string }) {
 	return (
@@ -13,23 +15,23 @@ export function LegalLinks({ className }: { className?: string }) {
 				className,
 			)}
 		>
-			<LegalLink href="/privacy">Privacy notice</LegalLink>
+			<LegalLink to="/privacy">Privacy notice</LegalLink>
 			<span aria-hidden="true">·</span>
-			<LegalLink href="/imprint">Imprint</LegalLink>
+			<LegalLink to="/imprint">Imprint</LegalLink>
 		</nav>
 	);
 }
 
-export function LegalLink({ href, children }: { href: string; children: string }) {
+export function LegalLink({ to, children }: { to: LinkProps["to"]; children: string }) {
 	return (
-		<a
-			href={href}
+		<Link
+			to={to}
 			target="_blank"
-			rel="noreferrer"
+			rel="noopener noreferrer"
 			className="underline underline-offset-4 hover:text-foreground"
 		>
 			{children}
 			<span className="sr-only"> (opens in a new tab)</span>
-		</a>
+		</Link>
 	);
 }

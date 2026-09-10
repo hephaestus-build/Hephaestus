@@ -1,7 +1,6 @@
 /**
- * The brand wash the landing page uses, so the screens before the app look like it. Decorative and
- * behind everything: the caller is `relative isolate overflow-hidden`, which keeps it out of the
- * content's stacking context and clips it to the surface.
+ * Decorative, and behind everything: the caller must be `relative isolate overflow-hidden`, which
+ * keeps this out of the content's stacking context and clips it to the surface.
  */
 export function AuthWash() {
 	return (

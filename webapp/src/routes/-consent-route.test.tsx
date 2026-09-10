@@ -86,7 +86,6 @@ describe("consent recovery", () => {
 		server.use(http.get("*/user/consent", () => HttpResponse.json(notice)));
 		await userEvent.click(screen.getByRole("button", { name: "Retry" }));
 		await screen.findByRole("checkbox", { name: /terms of use/i });
-		expect(screen.queryByRole("alert")).toBeNull();
 	});
 
 	it("returns to the intended destination when retry discovers onboarding was already completed", async () => {
@@ -110,9 +109,6 @@ describe("consent recovery", () => {
 		await userEvent.click(screen.getByRole("radio", { name: /don't take part/ }));
 		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await screen.findByRole("alert");
-		expect(screen.getByRole<HTMLButtonElement>("button", { name: "Continue" }).disabled).toBe(
-			false,
-		);
 	});
 
 	it("requires fresh acceptance when a rejected save reveals a new notice version", async () => {

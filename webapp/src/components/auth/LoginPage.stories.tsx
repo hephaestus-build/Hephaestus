@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
+import { expectNoPageOverflow } from "@/test/reflow";
+
 import { LoginPage } from "./LoginPage";
 
 const meta = {
@@ -32,6 +34,10 @@ export const Default: Story = {
 			"href",
 			"/imprint",
 		);
+		await expect(screen.getByRole("link", { name: /privacy notice/i })).toHaveAttribute(
+			"target",
+			"_blank",
+		);
 	},
 };
 export const Cancelled: Story = { args: { error: "access_denied" } };
@@ -52,6 +58,7 @@ export const DevelopmentSignIn: Story = {
 /** The aside is dropped below `lg`, so the form has to stand on its own down to 320px. */
 export const Narrow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: expectNoPageOverflow,
 	args: {
 		error: "idp_unavailable",
 		options: {
@@ -66,3 +73,5 @@ export const Narrow: Story = {
 		},
 	},
 };
+
+export const Dark: Story = { globals: { theme: "dark" } };

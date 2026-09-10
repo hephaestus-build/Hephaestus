@@ -24,7 +24,7 @@ export const Route = createFileRoute("/consent")({
 		const user = await resolveCurrentUser(context.queryClient);
 		if (!user)
 			throw redirect({ to: "/login", search: { returnTo: safeReturnTo(search.returnTo) } });
-		// The dialog owns retry and sign-out on failure; a loader error would bypass both.
+		// The page owns retry and sign-out on failure; a loader error would bypass both.
 		const consent = await context.queryClient
 			.query(getConsentStatusOptions({}))
 			.catch(() => undefined);

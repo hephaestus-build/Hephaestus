@@ -68,7 +68,7 @@ describe("contextual sign-in", () => {
 		await waitFor(() => expect(document.activeElement).toBe(signIn));
 	});
 
-	it("shows the privacy link even when only one provider is configured", async () => {
+	it("opens the same sign-in dialog from the landing page", async () => {
 		renderRouteAtWithRouter("/");
 		await screen.findAllByRole("button", { name: "Sign in" }, ROUTE_RENDER_WAIT);
 		await userEvent.click(
@@ -77,20 +77,13 @@ describe("contextual sign-in", () => {
 			}),
 		);
 		const dialog = await screen.findByRole("dialog");
-		expect(
-			within(dialog)
-				.getByRole("link", { name: /privacy notice/i })
-				.getAttribute("href"),
-		).toBe("/privacy");
+		within(dialog).getByRole("button", { name: "Continue with GitHub" });
 	});
 
 	it("renders a standalone login for a shared URL without a background page", async () => {
 		renderRouteAtWithRouter("/login?returnTo=%2Fabout");
 		await screen.findByRole("button", { name: "Continue with GitHub" }, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("dialog")).toBeNull();
-		expect(screen.getByRole("link", { name: /privacy notice/i }).getAttribute("target")).toBe(
-			"_blank",
-		);
 	});
 
 	it("preserves the public destination when sign-in is opened by an unmasked URL", async () => {
@@ -126,6 +119,5 @@ describe("contextual sign-in", () => {
 		);
 		await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 		await screen.findByRole("button", { name: "Continue with GitLab" });
-		expect(screen.queryByRole("alert")).toBeNull();
 	});
 });

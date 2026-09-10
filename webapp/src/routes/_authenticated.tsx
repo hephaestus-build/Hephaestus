@@ -12,7 +12,6 @@ export const Route = createFileRoute("/_authenticated")({
 				search: { returnTo: location.href },
 			});
 		}
-		// Keep the destination URL visible while the consent guard holds back protected loaders.
 		if (await consentIsPending(context.queryClient)) {
 			throw redirect({
 				to: "/consent",

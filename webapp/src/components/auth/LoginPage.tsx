@@ -5,42 +5,43 @@ import { SignInButtons, type SignInButtonsProps } from "@/components/auth/SignIn
 import { SignInNotice } from "@/components/auth/SignInNotice";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { HephIcon } from "@/components/brand/HephIcon";
-import { LandingGlow } from "@/components/info/landing/LandingVisuals";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-// Never display raw OAuth error parameters; they can contain provider details.
-const ERROR_COPY: Record<string, { title: string; description: string }> = {
-	access_denied: {
-		title: "Sign-in was cancelled",
-		description: "No problem — you can try again whenever you're ready.",
-	},
-	idp_unavailable: {
-		title: "That provider isn't responding",
-		description: "We couldn't reach it just now. Give it a moment and try again.",
-	},
-};
+// Never display raw OAuth error parameters; they can contain provider details. A `Map` rather than
+// an object literal, so a code of `__proto__` or `toString` cannot reach an inherited value.
+const ERROR_COPY = new Map([
+	[
+		"access_denied",
+		{
+			title: "Sign-in was cancelled",
+			description: "No problem — you can try again whenever you're ready.",
+		},
+	],
+	[
+		"idp_unavailable",
+		{
+			title: "That provider isn't responding",
+			description: "We couldn't reach it just now. Give it a moment and try again.",
+		},
+	],
+]);
 
 const GENERIC_ERROR = {
 	title: "Something went wrong",
 	description: "We couldn't sign you in. Please try again.",
 };
 
-/** `hasOwn`, not `??`: a code of `__proto__` or `toString` reaches an inherited value that is truthy. */
-function describeError(code: string): { title: string; description: string } {
-	return (Object.hasOwn(ERROR_COPY, code) ? ERROR_COPY[code] : undefined) ?? GENERIC_ERROR;
+export interface LoginPageProps extends SignInButtonsProps {
+	title?: string;
+	error?: string;
 }
 
 /**
  * The standalone sign-in surface, for the visitors the dialog cannot serve: a shared or bookmarked
- * link, a reload, and the return trip from a provider. The dialog borrows its context from the page
- * behind it, so this page supplies its own.
+ * link, a reload, and the return trip from a provider.
  */
-export function LoginPage({
-	title = "Sign in to Hephaestus",
-	error,
-	...signIn
-}: SignInButtonsProps & { title?: string; error?: string }) {
-	const errorCopy = error ? describeError(error) : undefined;
+export function LoginPage({ title = "Sign in to Hephaestus", error, ...signIn }: LoginPageProps) {
+	const errorCopy = error ? (ERROR_COPY.get(error) ?? GENERIC_ERROR) : undefined;
 
 	return (
 		<div className="relative isolate grid min-h-svh overflow-hidden lg:grid-cols-2">
@@ -80,16 +81,11 @@ export function LoginPage({
  * Nothing here may describe what happens after sign-in. This screen cannot tell a first-time visitor
  * from someone whose session expired, and only the first of those is sent through onboarding — so a
  * "what happens next" list is a claim that is wrong for most of the people reading it.
- *
- * Dropped below `lg`, where the form needs the width.
  */
 function BrandAside() {
 	return (
-		<aside className="relative hidden flex-col items-start justify-center gap-6 border-l border-border p-10 lg:flex">
-			<LandingGlow className="absolute top-1/3 left-4 size-72" />
-			<span className="relative">
-				<HephIcon size={88} pad={8} strokeWidth={1.4} />
-			</span>
+		<aside className="hidden flex-col items-start justify-center gap-6 border-l border-border p-10 lg:flex">
+			<HephIcon size={88} pad={8} strokeWidth={1.4} />
 			<p className="max-w-md text-lg leading-relaxed text-pretty">
 				<span className="font-semibold text-foreground">
 					Hephaestus reads the work a team already does

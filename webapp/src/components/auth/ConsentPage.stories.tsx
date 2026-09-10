@@ -31,7 +31,7 @@ const ready = {
 const meta = {
 	component: ConsentPage,
 	args: { state: ready, onSignOut: fn() },
-	parameters: { layout: "fullscreen", chromatic: { viewports: [320, 1440] } },
+	parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof ConsentPage>;
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -44,8 +44,12 @@ async function answer(name: RegExp) {
 	await userEvent.click(screen.getByRole("radio", { name }));
 }
 
-/** The wrapper drives the submission the caller supplied, so the spy still sees the real choice. */
-function AfterSubmission(args: ConsentPageProps) {
+/**
+ * Renders the idle page and moves to `outcome` on submit. A static `saving` state would leave
+ * Continue disabled by the unanswered question rather than by the write, so the disabled assertions
+ * would pass on a component that never disables anything.
+ */
+function AfterSubmit({ outcome, ...args }: ConsentPageProps & { outcome: ConsentSubmission }) {
 	const { state } = args;
 	if (state.status !== "ready") return <ConsentPage {...args} />;
 	return (
@@ -58,7 +62,7 @@ function AfterSubmission(args: ConsentPageProps) {
 						submission,
 						onSubmit: (choice) => {
 							state.onSubmit(choice);
-							setSubmission(state.submission);
+							setSubmission(outcome);
 						},
 					}}
 				/>
@@ -87,6 +91,9 @@ export const TakingPart: Story = {
 	play: async () => {
 		await acceptTerms();
 		await answer(/Yes, take part/);
+		await expect(
+			screen.getByText("You can change your research answer later in settings."),
+		).toBeVisible();
 		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await expect(onSubmit).toHaveBeenCalledWith({
 			noticeVersion: "2026-08-30",
@@ -110,8 +117,7 @@ export const DecliningResearch: Story = {
 };
 
 export const Submitting: Story = {
-	args: { state: { ...ready, submission: { status: "saving" } } },
-	render: (args) => <AfterSubmission {...args} />,
+	render: (args) => <AfterSubmit {...args} outcome={{ status: "saving" }} />,
 	play: async () => {
 		await acceptTerms();
 		await answer(/Yes, take part/);
@@ -122,8 +128,7 @@ export const Submitting: Story = {
 };
 
 export const SubmitFailed: Story = {
-	args: { state: { ...ready, submission: { status: "error" } } },
-	render: (args) => <AfterSubmission {...args} />,
+	render: (args) => <AfterSubmit {...args} outcome={{ status: "error" }} />,
 	play: async () => {
 		await acceptTerms();
 		await answer(/don't take part/);
@@ -160,4 +165,12 @@ export const Narrow: Story = {
 	},
 };
 
-export const Dark: Story = { globals: { theme: "dark" } };
+/** A checked card in dark: the primitive's own `dark:has-data-checked:` rules outrank a plain override. */
+export const Dark: Story = {
+	globals: { theme: "dark" },
+	play: async () => {
+		await acceptTerms();
+		await answer(/Yes, take part/);
+		await expect(screen.getByRole("radio", { name: /Yes, take part/ })).toBeChecked();
+	},
+};

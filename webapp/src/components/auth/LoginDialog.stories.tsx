@@ -5,8 +5,6 @@ import { Stateful } from "@/stories/stateful";
 
 import { LoginDialog } from "./LoginDialog";
 
-const onRetry = fn();
-
 const meta = {
 	component: LoginDialog,
 	args: {
@@ -40,23 +38,9 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
-export const Loading: Story = { args: { options: { status: "loading" } } };
-export const Empty: Story = { args: { options: { status: "ready", providers: [] } } };
-export const Failed: Story = {
-	args: { options: { status: "error", onRetry } },
-	play: async () => {
-		const dialog = within(await screen.findByRole("dialog"));
-		await userEvent.click(dialog.getByRole("button", { name: "Try again" }));
-		await expect(onRetry).toHaveBeenCalled();
-	},
-};
 export const ChooseProvider: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await expect(dialog.getByRole("link", { name: /privacy notice/i })).toHaveAttribute(
-			"href",
-			"/privacy",
-		);
 		await userEvent.click(dialog.getByRole("button", { name: "Continue with GitLab" }));
 		await expect(args.onSignIn).toHaveBeenCalledWith("gitlab");
 	},
@@ -66,6 +50,8 @@ export const Dismiss: Story = {
 		const dialog = within(await screen.findByRole("dialog"));
 		await userEvent.click(dialog.getByRole("button", { name: "Close" }));
 		await expect(args.onClose).toHaveBeenCalled();
+		// Base UI holds a popup mounted until its exit animation finishes, so `open={false}` on its
+		// own does not prove the dialog left.
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 	},
 };

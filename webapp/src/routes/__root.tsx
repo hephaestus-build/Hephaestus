@@ -150,6 +150,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 	validateSearch: (search): { login?: boolean } => ({
 		login: search.login === true || search.login === "true" ? true : undefined,
 	}),
+	// Fallback tab title; the deepest match that sets its own `head` wins.
 	head: () => ({ meta: [{ title: "Hephaestus" }] }),
 	component: RootLayout,
 	notFoundComponent: () => (
