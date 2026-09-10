@@ -1,17 +1,14 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import de.tum.cit.aet.hephaestus.agent.job.ExecutionArchiveDTO.AttemptDTO;
-import de.tum.cit.aet.hephaestus.agent.job.ExecutionArchiveDTO.FileDTO;
+import de.tum.cit.aet.hephaestus.agent.job.ExecutionCaptureManifest.FileDTO;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
-import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
@@ -21,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -70,7 +66,7 @@ public class ExecutionArchiveService {
             throw new IllegalStateException("Duplicate execution input path");
         }
         Path directory = attemptDirectory(job, job.getRetryCount());
-        AttemptDTO attempt = new AttemptDTO(
+        ExecutionCaptureManifest attempt = new ExecutionCaptureManifest(
                 job.getRetryCount(),
                 "INPUTS_CAPTURED",
                 Instant.now(),
@@ -79,7 +75,7 @@ public class ExecutionArchiveService {
                 List.copyOf(files));
         Path existing = directory.resolve(INPUT_MANIFEST);
         if (Files.exists(existing)) {
-            AttemptDTO prior = read(existing);
+            ExecutionCaptureManifest prior = read(existing);
             if (!prior.files().equals(attempt.files()) || !prior.image().equals(attempt.image())) {
                 throw new IllegalStateException("Execution attempt inputs changed; original capture was preserved");
             }
@@ -91,7 +87,7 @@ public class ExecutionArchiveService {
     public void captureOutputs(AgentJob job, SandboxResult result) {
         if (!enabled) return;
         Path directory = attemptDirectory(job, job.getRetryCount());
-        AttemptDTO input = read(directory.resolve(INPUT_MANIFEST));
+        ExecutionCaptureManifest input = read(directory.resolve(INPUT_MANIFEST));
         List<FileDTO> files = new ArrayList<>(input.files());
         result.outputFiles().forEach((path, content) -> files.add(file("outputs/" + safePath(path), content)));
         files.add(file("execution/container.log", result.logs().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
@@ -108,7 +104,7 @@ public class ExecutionArchiveService {
         write(
                 directory,
                 OUTPUT_MANIFEST,
-                new AttemptDTO(
+                new ExecutionCaptureManifest(
                         input.attempt(),
                         "OUTPUTS_CAPTURED",
                         input.preparedAt(),
@@ -133,7 +129,7 @@ public class ExecutionArchiveService {
         // Capture can be enabled while an older execution is already running. Do not misrepresent
         // a proxy-only fragment as an archived attempt with complete staged inputs.
         if (!Files.exists(directory.resolve(INPUT_MANIFEST))) return;
-        AttemptDTO input = read(directory.resolve(INPUT_MANIFEST));
+        ExecutionCaptureManifest input = read(directory.resolve(INPUT_MANIFEST));
         String requestId = java.util.UUID.randomUUID().toString();
         var files = List.of(
                 file("proxy/" + requestId + "/request.json", body),
@@ -151,76 +147,13 @@ public class ExecutionArchiveService {
         write(
                 directory,
                 "execution-proxy-" + requestId + ".json",
-                new AttemptDTO(
+                new ExecutionCaptureManifest(
                         attempt,
                         "PROXY_REQUEST_CAPTURED",
                         input.preparedAt(),
                         input.image(),
                         traceContext.traceId(),
                         files));
-    }
-
-    /** The caller must first load the job through its workspace-scoped repository query. */
-    public ExecutionArchiveDTO describe(AgentJob job) {
-        Path root = archiveDirectory(job);
-        List<AttemptDTO> attempts = new ArrayList<>();
-        if (Files.isDirectory(root)) {
-            try (var directories = Files.list(root)) {
-                for (Path directory :
-                        directories.filter(Files::isDirectory).sorted().toList()) {
-                    Path output = directory.resolve(OUTPUT_MANIFEST);
-                    Path input = directory.resolve(INPUT_MANIFEST);
-                    if (!Files.exists(input)) continue;
-                    AttemptDTO base = read(Files.exists(output) ? output : input);
-                    List<FileDTO> files = new ArrayList<>(base.files());
-                    try (var proxyManifests = Files.list(directory)) {
-                        proxyManifests
-                                .filter(path -> path.getFileName().toString().startsWith("execution-proxy-")
-                                        && path.getFileName().toString().endsWith(".json"))
-                                .forEach(path -> files.addAll(read(path).files()));
-                    }
-                    files.sort(Comparator.comparing(FileDTO::path));
-                    attempts.add(new AttemptDTO(
-                            base.attempt(),
-                            base.captureState(),
-                            base.preparedAt(),
-                            base.image(),
-                            base.traceId(),
-                            List.copyOf(files)));
-                }
-            } catch (IOException e) {
-                throw new UncheckedIOException("Could not read execution capture", e);
-            }
-        }
-        return new ExecutionArchiveDTO(1, job.getId(), job.getStatus().name(), List.copyOf(attempts));
-    }
-
-    /** Membership is checked before CAS access: a digest is not permission to read another job's content. */
-    public FileSystemResource content(AgentJob job, int attempt, String sha256) {
-        if (!sha256.matches("[a-f0-9]{64}")) throw missing();
-        FileDTO file = describe(job).attempts().stream()
-                .filter(item -> item.attempt() == attempt)
-                .flatMap(item -> item.files().stream())
-                .filter(item -> item.sha256().equals(sha256))
-                .findFirst()
-                .orElseThrow(ExecutionArchiveService::missing);
-        Path content = cas.verifiedPath(file.sha256()).orElseThrow(ExecutionArchiveService::missing);
-        try {
-            if (Files.size(content) != file.bytes()) {
-                throw new IllegalStateException("Execution capture content failed integrity verification");
-            }
-            return new FileSystemResource(content);
-        } catch (NoSuchFileException e) {
-            var exception = missing();
-            exception.initCause(e);
-            throw exception;
-        } catch (IOException e) {
-            throw new UncheckedIOException("Execution capture content is unavailable", e);
-        }
-    }
-
-    private static EntityNotFoundException missing() {
-        return new EntityNotFoundException("Execution artifact", "not retained for this job and attempt");
     }
 
     private FileDTO file(String path, byte[] content) {
@@ -238,15 +171,15 @@ public class ExecutionArchiveService {
         return archiveDirectory(job).resolve(Integer.toString(attempt));
     }
 
-    private AttemptDTO read(Path path) {
+    private ExecutionCaptureManifest read(Path path) {
         try {
-            return mapper.readValue(Files.readAllBytes(path), AttemptDTO.class);
+            return mapper.readValue(Files.readAllBytes(path), ExecutionCaptureManifest.class);
         } catch (IOException e) {
             throw new UncheckedIOException("Execution capture manifest is unavailable", e);
         }
     }
 
-    private void write(Path directory, String name, AttemptDTO content) {
+    private void write(Path directory, String name, ExecutionCaptureManifest content) {
         try {
             Files.createDirectories(directory);
             Path temporary = Files.createTempFile(directory, "capture-", ".tmp");

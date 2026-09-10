@@ -4,10 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
@@ -21,6 +17,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import tools.jackson.databind.ObjectMapper;
 
+@org.springframework.test.context.TestPropertySource(
+        properties = "hephaestus.practice-review.execution-capture.enabled=true")
 class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
@@ -28,12 +26,6 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private AgentJobRepository agentJobRepository;
-
-    @Autowired
-    private FabricLayout fabricLayout;
-
-    @Autowired
-    private ContentAddressedStore contentAddressedStore;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -62,92 +54,18 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Test
     @WithAdminUser
-    void shouldStreamTheVerifiedArtifactWithPrivateBinaryResponseHeaders() {
+    void shouldNotExposePrivateExecutionEvidenceOverHttp() {
         Workspace workspace = setupWorkspace();
         AgentJob job = createJob(workspace, AgentJobStatus.COMPLETED);
-        byte[] content = "private execution input".getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        var capture = new ExecutionArchiveService(
-                fabricLayout,
-                contentAddressedStore,
-                tools.jackson.databind.json.JsonMapper.builder().build(),
-                true);
-        capture.captureInputs(
-                job,
-                new SandboxSpec(
-                        job.getId(),
-                        "runner@sha256:fixture",
-                        null,
-                        null,
-                        null,
-                        ResourceLimits.DEFAULT,
-                        null,
-                        Map.of("task.json", content),
-                        "/workspace/out",
-                        Map.of()));
-
-        webTestClient
-                .get()
-                .uri(
-                        "/workspaces/{slug}/agents/jobs/{id}/execution-archive/0/files/{sha}",
-                        workspace.getWorkspaceSlug(),
-                        job.getId(),
-                        ContentAddressedStore.sha256(content))
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectHeader()
-                .contentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM)
-                .expectHeader()
-                .contentLength(content.length)
-                .expectHeader()
-                .valueMatches("Cache-Control", ".*no-store.*")
-                .expectHeader()
-                .valueEquals("X-Content-Type-Options", "nosniff")
-                .expectBody(byte[].class)
-                .isEqualTo(content);
-    }
-
-    @Test
-    @WithAdminUser
-    void shouldScopeExecutionArchivesAndAvoidCachingPrivateCapture() {
-        Workspace workspace = setupWorkspace();
-        AgentJob job = createJob(workspace, AgentJobStatus.COMPLETED);
-        webTestClient
-                .get()
-                .uri("/workspaces/{slug}/agents/jobs/{id}/execution-archive", workspace.getWorkspaceSlug(), job.getId())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectHeader()
-                .valueMatches("Cache-Control", ".*no-store.*")
-                .expectBody()
-                .jsonPath("$.jobId")
-                .isEqualTo(job.getId().toString())
-                .jsonPath("$.attempts.length()")
-                .isEqualTo(0);
-        User owner = persistUser("capture-other-owner");
-        Workspace other = createWorkspace("capture-other", "Other", "capture-other-org", AccountType.ORG, owner);
-        ensureAdminMembership(other);
-        webTestClient
-                .get()
-                .uri("/workspaces/{slug}/agents/jobs/{id}/execution-archive", other.getWorkspaceSlug(), job.getId())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isNotFound();
-        webTestClient
-                .get()
-                .uri(
-                        "/workspaces/{slug}/agents/jobs/{id}/execution-archive/0/files/{sha}",
-                        other.getWorkspaceSlug(),
-                        job.getId(),
-                        "a".repeat(64))
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isNotFound();
+        for (String suffix : java.util.List.of("execution-archive", "execution-archive/0/files/" + "a".repeat(64))) {
+            webTestClient
+                    .get()
+                    .uri("/workspaces/{slug}/agents/jobs/{id}/" + suffix, workspace.getWorkspaceSlug(), job.getId())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isNotFound();
+        }
     }
 
     @Test

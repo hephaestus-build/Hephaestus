@@ -309,15 +309,6 @@ export type AssignRoleRequest = {
   userId: number;
 };
 
-export type Attempt = {
-  attempt?: number;
-  captureState: string;
-  files: Array<File>;
-  image: string;
-  preparedAt: Date;
-  traceId?: string;
-};
-
 /**
  * One audit row, flattened for the admin viewer.
  */
@@ -1395,16 +1386,6 @@ export type EvidenceCitation = {
 };
 
 /**
- * Content-addressed, private execution evidence; absence is never reported as complete capture.
- */
-export type ExecutionArchive = {
-  attempts: Array<Attempt>;
-  jobId: string;
-  jobStatus: string;
-  schemaVersion?: number;
-};
-
-/**
  * Acknowledgement returned when a data export is requested.
  */
 export type ExportCreated = {
@@ -1520,13 +1501,6 @@ export type FeedbackSourceCount = {
    * The kind of work the feedback came from
    */
   workKind: string;
-};
-
-export type File = {
-  bytes?: number;
-  mediaType: string;
-  path: string;
-  sha256: string;
 };
 
 export type FirstLoginConsent = {
@@ -8051,52 +8025,6 @@ export type RetryAgentJobDeliveryResponses = {
 };
 
 export type RetryAgentJobDeliveryResponse = RetryAgentJobDeliveryResponses[keyof RetryAgentJobDeliveryResponses];
-
-export type GetExecutionArchiveData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    jobId: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/agents/jobs/{jobId}/execution-archive';
-};
-
-export type GetExecutionArchiveResponses = {
-  /**
-   * OK
-   */
-  200: ExecutionArchive;
-};
-
-export type GetExecutionArchiveResponse = GetExecutionArchiveResponses[keyof GetExecutionArchiveResponses];
-
-export type GetExecutionArtifactData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    jobId: string;
-    attempt: number;
-    sha256: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/agents/jobs/{jobId}/execution-archive/{attempt}/files/{sha256}';
-};
-
-export type GetExecutionArtifactResponses = {
-  /**
-   * OK
-   */
-  200: Blob | File;
-};
-
-export type GetExecutionArtifactResponse = GetExecutionArtifactResponses[keyof GetExecutionArtifactResponses];
 
 export type DeleteAgentData = {
   body?: never;

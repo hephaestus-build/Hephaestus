@@ -145,20 +145,6 @@ public class ContentAddressedStore {
         }
     }
 
-    /** Verifies a blob with bounded memory before a caller streams it from disk. */
-    public Optional<Path> verifiedPath(String sha) {
-        Path blob = pathFor(sha);
-        try {
-            if (!sha.equals(sha256(blob))) {
-                throw new IllegalStateException("CAS blob digest mismatch: " + sha);
-            }
-            return Optional.of(blob);
-        } catch (UncheckedIOException e) {
-            if (e.getCause() instanceof NoSuchFileException) return Optional.empty();
-            throw e;
-        }
-    }
-
     public boolean exists(String sha) {
         return Files.exists(pathFor(sha));
     }

@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
-import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -69,16 +68,9 @@ class ExecutionArchiveServiceTest extends BaseUnitTest {
         byte[] input = "exact prompt and evidence".getBytes(StandardCharsets.UTF_8);
         service.captureInputs(job, spec(job, Map.of("task.json", input)));
         service.captureInputs(job, spec(job, Map.of("task.json", input)));
-        var initialAttempts = service.describe(job).attempts();
-        assertThat(initialAttempts)
-                .singleElement()
-                .satisfies(attempt -> assertThat(attempt.captureState()).isEqualTo("INPUTS_CAPTURED"));
-        assertThat(service.content(
-                                job,
-                                0,
-                                initialAttempts.getFirst().files().getFirst().sha256())
-                        .getContentAsByteArray())
-                .isEqualTo(input);
+        var inputManifest = manifest(job, 0, "execution-inputs.json");
+        assertThat(inputManifest.captureState()).isEqualTo("INPUTS_CAPTURED");
+        assertThat(cas.get(inputManifest.files().getFirst().sha256())).contains(input);
         byte[] transcript = "{\"type\":\"session\"}\n".getBytes(StandardCharsets.UTF_8);
         service.captureOutputs(
                 job,
@@ -90,32 +82,34 @@ class ExecutionArchiveServiceTest extends BaseUnitTest {
                         Duration.ofSeconds(1)));
         job.setRetryCount(1);
         service.captureInputs(job, spec(job, Map.of("task.json", "new attempt".getBytes(StandardCharsets.UTF_8))));
-        var archive = service.describe(job);
-        assertThat(archive.attempts()).hasSize(2);
-        assertThat(archive.attempts().getFirst().captureState()).isEqualTo("OUTPUTS_CAPTURED");
-        assertThat(mapper.writeValueAsString(archive)).doesNotContain("private-credential-never-export");
-        var session = archive.attempts().getFirst().files().stream()
+        var first = manifest(job, 0, "execution-outputs.json");
+        var second = manifest(job, 1, "execution-inputs.json");
+        assertThat(first.captureState()).isEqualTo("OUTPUTS_CAPTURED");
+        assertThat(second.files()).hasSize(1);
+        assertThat(mapper.writeValueAsString(first)).doesNotContain("private-credential-never-export");
+        var session = first.files().stream()
                 .filter(file -> file.path().endsWith("session.jsonl"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(service.content(job, 0, session.sha256()).getContentAsByteArray())
-                .isEqualTo(transcript);
-        assertThatThrownBy(() -> service.content(job, 1, session.sha256())).isInstanceOf(EntityNotFoundException.class);
+        assertThat(cas.get(session.sha256())).contains(transcript);
+        assertThat(second.files()).noneMatch(file -> file.sha256().equals(session.sha256()));
+        AgentJob otherWorkspace = job(2);
+        otherWorkspace.setId(job.getId());
+        service.captureInputs(otherWorkspace, spec(otherWorkspace, Map.of("task.json", new byte[] {7})));
+        assertThat(manifest(otherWorkspace, 0, "execution-inputs.json").files()).isNotEqualTo(inputManifest.files());
+        assertThat(manifest(job, 0, "execution-inputs.json")).isEqualTo(inputManifest);
     }
 
-    @Test
-    void shouldRejectCrossWorkspaceCrossJobAndUnreferencedDigests() {
-        AgentJob first = job(1);
-        service.captureInputs(first, spec(first, Map.of("task.json", new byte[] {1})));
-        String sha =
-                service.describe(first).attempts().getFirst().files().getFirst().sha256();
-        AgentJob otherWorkspace = job(2);
-        otherWorkspace.setId(first.getId());
-        assertThat(service.describe(otherWorkspace).attempts()).isEmpty();
-        assertThatThrownBy(() -> service.content(otherWorkspace, 0, sha)).isInstanceOf(EntityNotFoundException.class);
-        assertThatThrownBy(() -> service.content(job(1), 0, sha)).isInstanceOf(EntityNotFoundException.class);
-        String unreferenced = cas.put(new byte[] {7});
-        assertThatThrownBy(() -> service.content(first, 0, unreferenced)).isInstanceOf(EntityNotFoundException.class);
+    private Path directory(AgentJob job, int attempt) {
+        return layout.jobDir(job.getId().toString())
+                .resolve("execution")
+                .resolve(job.getWorkspace().getId().toString())
+                .resolve(Integer.toString(attempt));
+    }
+
+    private ExecutionCaptureManifest manifest(AgentJob job, int attempt, String name) throws Exception {
+        return mapper.readValue(
+                Files.readAllBytes(directory(job, attempt).resolve(name)), ExecutionCaptureManifest.class);
     }
 
     @Test
@@ -133,18 +127,6 @@ class ExecutionArchiveServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldFailIntegrityVerificationAfterStoredContentIsCorrupted() throws Exception {
-        AgentJob job = job(1);
-        service.captureInputs(job, spec(job, Map.of("task.json", new byte[] {1})));
-        String sha =
-                service.describe(job).attempts().getFirst().files().getFirst().sha256();
-        Files.write(cas.pathFor(sha), new byte[] {2});
-        assertThatThrownBy(() -> service.content(job, 0, sha))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("digest mismatch");
-    }
-
-    @Test
     void shouldRetainActualProxyRequestsAndLinkThemToNativeRequests() throws Exception {
         AgentJob job = job(1);
         service.captureInputs(job, spec(job, Map.of("task.json", new byte[] {1})));
@@ -154,20 +136,24 @@ class ExecutionArchiveServiceTest extends BaseUnitTest {
         org.mockito.Mockito.when(traceContext.spanId()).thenReturn("c".repeat(16));
         service.captureProxyRequest(job.getWorkspace().getId(), job.getId(), 0, request, "b".repeat(64), traceContext);
         service.captureOutputs(job, new SandboxResult(0, Map.of(), "", false, Duration.ZERO));
-        var captured = service.describe(job).attempts().getFirst();
+        Path proxyManifest;
+        try (var files = Files.list(directory(job, 0))) {
+            proxyManifest = files.filter(path -> path.getFileName().toString().startsWith("execution-proxy-"))
+                    .findFirst()
+                    .orElseThrow();
+        }
+        var captured = mapper.readValue(Files.readAllBytes(proxyManifest), ExecutionCaptureManifest.class);
+        assertThat(captured.files()).hasSize(2);
         var file = captured.files().stream()
                 .filter(item -> item.path().endsWith("/request.json"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(service.content(job, 0, file.sha256()).getContentAsByteArray())
-                .isEqualTo(request);
+        assertThat(cas.get(file.sha256())).contains(request);
         var context = captured.files().stream()
                 .filter(item -> item.path().endsWith("/context.json"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(new String(
-                        service.content(job, 0, context.sha256()).getContentAsByteArray(),
-                        java.nio.charset.StandardCharsets.UTF_8))
+        assertThat(new String(cas.get(context.sha256()).orElseThrow(), StandardCharsets.UTF_8))
                 .contains("b".repeat(64), "a".repeat(32), "c".repeat(16));
     }
 
@@ -177,7 +163,6 @@ class ExecutionArchiveServiceTest extends BaseUnitTest {
         AgentJob job = job(1);
         service.captureInputs(job, spec(job, Map.of("task.json", new byte[] {1})));
         service.captureOutputs(job, new SandboxResult(0, Map.of(), "private", false, Duration.ZERO));
-        assertThat(service.describe(job).attempts()).isEmpty();
         assertThat(layout.jobsRoot()).doesNotExist();
     }
 }
