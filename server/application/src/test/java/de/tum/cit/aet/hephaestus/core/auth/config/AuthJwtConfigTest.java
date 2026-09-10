@@ -12,6 +12,8 @@ import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -30,10 +32,11 @@ class AuthJwtConfigTest extends BaseUnitTest {
             .withBean(CacheManager.class, ConcurrentMapCacheManager::new)
             .withBean(Clock.class, Clock::systemUTC);
 
-    @Test
-    void shouldNotSeedSigningKeysDuringCdsContextRefresh() {
-        contextRunner.withPropertyValues("spring.profiles.active=cds-training").run(context -> {
-            assertThat(context).hasNotFailed().hasSingleBean(ApplicationRunner.class);
+    @ParameterizedTest
+    @ValueSource(strings = {"specs", "cds-training"})
+    void shouldNotSeedSigningKeysInBuildProfiles(String profile) {
+        contextRunner.withPropertyValues("spring.profiles.active=" + profile).run(context -> {
+            assertThat(context).hasNotFailed().doesNotHaveBean(ApplicationRunner.class);
             verify(keyService, never()).ensureActiveKey();
         });
     }

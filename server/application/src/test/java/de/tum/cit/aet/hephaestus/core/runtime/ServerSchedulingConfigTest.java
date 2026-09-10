@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -35,9 +37,10 @@ class ServerSchedulingConfigTest extends BaseUnitTest {
                         .isEmpty());
     }
 
-    @Test
-    void shouldNotScheduleBackgroundWorkWhileGeneratingTheApiContract() {
-        runner.withPropertyValues("spring.profiles.active=specs")
+    @ParameterizedTest
+    @ValueSource(strings = {"specs", "cds-training"})
+    void shouldNotScheduleBackgroundWorkInBuildProfiles(String profile) {
+        runner.withPropertyValues("spring.profiles.active=" + profile)
                 .run(context -> assertThat(context.getBeansOfType(ScheduledTaskHolder.class).values().stream()
                                 .flatMap(holder -> holder.getScheduledTasks().stream()))
                         .isEmpty());

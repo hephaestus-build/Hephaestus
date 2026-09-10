@@ -1,4 +1,4 @@
-import { act, screen, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -119,7 +119,7 @@ describe("practice-group routes", () => {
 			),
 		);
 		const { router } = renderRouteAtWithRouter(path);
-		await vi.waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/user/ada"));
+		await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/user/ada"));
 		expect(practiceReads).toBe(0);
 	});
 	it("waits for features without redirecting, then loads the enabled surface", async () => {
@@ -129,7 +129,7 @@ describe("practice-group routes", () => {
 		});
 		server.use(http.get("*/workspaces", () => response.then((value) => value.clone())));
 		const { router, queryClient } = renderRouteAtWithRouter(path);
-		await vi.waitFor(() =>
+		await waitFor(() =>
 			expect(queryClient.getQueryState(listWorkspacesQueryKey())?.fetchStatus).toBe("fetching"),
 		);
 		expect(router.state.location.pathname).toBe(path);
@@ -166,13 +166,13 @@ describe("practice-group routes", () => {
 		);
 		const scroll = vi.spyOn(window, "scrollTo").mockReturnValue(undefined);
 		await userEvent.click(filter);
-		await vi.waitFor(() =>
+		await waitFor(() =>
 			expect(router.state.location.search).toMatchObject({ practice: "small-changes" }),
 		);
 		await userEvent.click(
 			screen.getByRole("button", { name: "Clear review-run filter for Keep changes focused" }),
 		);
-		await vi.waitFor(() => expect(router.state.location.search).not.toHaveProperty("practice"));
+		await waitFor(() => expect(router.state.location.search).not.toHaveProperty("practice"));
 		expect(scroll).not.toHaveBeenCalled();
 		scroll.mockRestore();
 	});
@@ -249,7 +249,7 @@ it("refreshes every cached filter of the group after responding to feedback", as
 	});
 	queryClient.setQueryData(filtered, { pages: [{ content: [], hasNext: false }], pageParams: [0] });
 	await userEvent.click(helpful);
-	await vi.waitFor(() => expect(helpful.getAttribute("aria-pressed")).toBe("true"));
+	await waitFor(() => expect(helpful.getAttribute("aria-pressed")).toBe("true"));
 	expect(queryClient.getQueryState(filtered)?.isInvalidated).toBe(true);
 });
 
@@ -265,12 +265,12 @@ it("restores the bookmarked custom timeframe on Back without scrolling on select
 	const scroll = vi.spyOn(window, "scrollTo").mockReturnValue(undefined);
 	await userEvent.click(screen.getByRole("combobox", { name: "Timeframe" }));
 	await userEvent.click(await screen.findByRole("option", { name: "Last week" }));
-	await vi.waitFor(() => expect(router.state.location.search.after).not.toBe(after));
+	await waitFor(() => expect(router.state.location.search.after).not.toBe(after));
 	expect(scroll).not.toHaveBeenCalled();
 	scroll.mockRestore();
 	act(() => router.history.back());
-	await vi.waitFor(() => expect(router.state.location.search).toMatchObject({ after, before }));
-	await vi.waitFor(() =>
+	await waitFor(() => expect(router.state.location.search).toMatchObject({ after, before }));
+	await waitFor(() =>
 		expect(screen.getByRole("combobox", { name: "Timeframe" }).textContent).toContain(
 			"Custom range",
 		),
@@ -279,7 +279,7 @@ it("restores the bookmarked custom timeframe on Back without scrolling on select
 		"Jun 2 – 6",
 	);
 	act(() => router.history.forward());
-	await vi.waitFor(() =>
+	await waitFor(() =>
 		expect(screen.getByRole("combobox", { name: "Timeframe" }).textContent).toContain("Last week"),
 	);
 	expect(screen.queryByRole("button", { name: "Choose custom dates" })).toBeNull();
@@ -309,7 +309,7 @@ it.each([
 		screen.getByRole("heading", { name: "Developer ada" });
 		server.use(http.get(endpoint, () => HttpResponse.json(response)));
 		await userEvent.click(screen.getByRole("button", { name: "Retry" }));
-		await vi.waitFor(() => expect(screen.queryByText("Could not load activity")).toBeNull());
+		await waitFor(() => expect(screen.queryByText("Could not load activity")).toBeNull());
 		screen.getByRole("combobox", { name: "Timeframe" });
 		screen.getByRole("heading", { name: "Developer ada" });
 	},
@@ -338,7 +338,7 @@ it("does not present the previous timeframe's activity as the newly selected ran
 	);
 	await userEvent.click(screen.getByRole("combobox", { name: "Timeframe" }));
 	await userEvent.click(await screen.findByRole("option", { name: "Last week" }));
-	await vi.waitFor(() => expect(activityReads).toBe(1));
+	await waitFor(() => expect(activityReads).toBe(1));
 	expect(screen.queryByRole("heading", { name: "No review activity" })).toBeNull();
 	screen.getByRole("heading", { name: "Developer ada" });
 	screen.getByRole("combobox", { name: "Timeframe" });

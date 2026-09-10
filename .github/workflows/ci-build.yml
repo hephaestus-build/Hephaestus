@@ -237,8 +237,9 @@ jobs:
           docker compose -f server/compose.yaml exec -T postgres \
             psql -v ON_ERROR_STOP=1 -U root -d hephaestus < webapp/e2e/seed.sql
           timeout --kill-after=30s 10m vp run --filter webapp test:e2e
+      # A green browser suite can still hide server startup failures. Preserve the raw log too.
       - name: Upload diagnostics
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: webapp-e2e-results
