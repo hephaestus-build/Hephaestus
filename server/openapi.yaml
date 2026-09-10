@@ -2526,7 +2526,7 @@ paths:
             application/octet-stream:
               schema:
                 type: string
-                format: byte
+                format: binary
           description: OK
       summary: Read a retained private execution artifact
       tags:

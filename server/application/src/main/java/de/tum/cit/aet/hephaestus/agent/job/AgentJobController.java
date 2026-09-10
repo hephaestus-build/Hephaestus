@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -87,7 +88,7 @@ public class AgentJobController {
     @GetMapping(value = "/{jobId}/execution-archive/{attempt}/files/{sha256}", produces = "application/octet-stream")
     @Operation(summary = "Read a retained private execution artifact", operationId = "getExecutionArtifact")
     @RequireAtLeastWorkspaceAdmin
-    public ResponseEntity<byte[]> getExecutionArtifact(
+    public ResponseEntity<Resource> getExecutionArtifact(
             WorkspaceContext context,
             @PathVariable UUID jobId,
             @PathVariable int attempt,

@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
@@ -24,6 +28,12 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private AgentJobRepository agentJobRepository;
+
+    @Autowired
+    private FabricLayout fabricLayout;
+
+    @Autowired
+    private ContentAddressedStore contentAddressedStore;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -48,6 +58,54 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         job.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of(
                 "agent_type", "CLAUDE_CODE", "model", "claude-sonnet-4-20250514", "upstreamModelId", "gpt-5.4-mini")));
         return agentJobRepository.save(job);
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldStreamTheVerifiedArtifactWithPrivateBinaryResponseHeaders() {
+        Workspace workspace = setupWorkspace();
+        AgentJob job = createJob(workspace, AgentJobStatus.COMPLETED);
+        byte[] content = "private execution input".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var capture = new ExecutionArchiveService(
+                fabricLayout,
+                contentAddressedStore,
+                tools.jackson.databind.json.JsonMapper.builder().build(),
+                true);
+        capture.captureInputs(
+                job,
+                new SandboxSpec(
+                        job.getId(),
+                        "runner@sha256:fixture",
+                        null,
+                        null,
+                        null,
+                        ResourceLimits.DEFAULT,
+                        null,
+                        Map.of("task.json", content),
+                        "/workspace/out",
+                        Map.of()));
+
+        webTestClient
+                .get()
+                .uri(
+                        "/workspaces/{slug}/agents/jobs/{id}/execution-archive/0/files/{sha}",
+                        workspace.getWorkspaceSlug(),
+                        job.getId(),
+                        ContentAddressedStore.sha256(content))
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .contentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM)
+                .expectHeader()
+                .contentLength(content.length)
+                .expectHeader()
+                .valueMatches("Cache-Control", ".*no-store.*")
+                .expectHeader()
+                .valueEquals("X-Content-Type-Options", "nosniff")
+                .expectBody(byte[].class)
+                .isEqualTo(content);
     }
 
     @Test

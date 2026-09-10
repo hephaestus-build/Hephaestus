@@ -1,5 +1,12 @@
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import {
+	appendFileSync,
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { basename, join } from "node:path";
 
 import type { AgentSessionEvent, ExtensionFactory } from "@earendil-works/pi-coding-agent";
@@ -9,6 +16,7 @@ export class ReviewTrace {
 	readonly sessionDir: string;
 	private readonly directory: string;
 	private bytes = 0;
+	private sessionBytes = 0;
 	private sequence = 0;
 	private dropped = 0;
 	private requests = 0;
@@ -17,14 +25,17 @@ export class ReviewTrace {
 	private readonly activeSessions = new Set<string>();
 	private readonly maxBytes: number;
 
-	// Leave room for native session files and review results under the host output archive ceiling.
+	// Bound journal and native session copies together, leaving room for review results and tar headers.
 	constructor(outputDirectory: string, maxBytes = 32 * 1024 * 1024) {
 		if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0)
 			throw new Error("Capture limit must be a positive integer");
 		this.maxBytes = maxBytes;
 		this.directory = join(outputDirectory, "trace");
-		this.sessionDir = join(this.directory, "sessions");
+		// Pi owns the live files outside the collected output: an oversized native session must
+		// never make the host reject result.json under its 10 MiB member / 50 MiB archive limits.
+		this.sessionDir = join(outputDirectory, "..", ".sessions");
 		mkdirSync(this.sessionDir, { recursive: true, mode: 0o700 });
+		mkdirSync(join(this.directory, "sessions"), { recursive: true, mode: 0o700 });
 		this.status(false);
 	}
 
@@ -131,6 +142,20 @@ export class ReviewTrace {
 	}
 
 	finish(exitCode: number) {
+		// Sessions are settled before process exit. Copy whole native files or omit them; truncating
+		// JSONL would destroy Pi's replay contract and must not masquerade as a complete session.
+		for (const file of new Set(this.sessions.values())) {
+			if (file === undefined) continue;
+			try {
+				const size = statSync(file).size;
+				if (this.reserve(size)) {
+					copyFileSync(file, join(this.directory, "sessions", basename(file)));
+					this.sessionBytes += size;
+				}
+			} catch {
+				this.dropped++;
+			}
+		}
 		this.status(true, exitCode);
 	}
 
@@ -178,13 +203,18 @@ export class ReviewTrace {
 						exitCode === 0 &&
 						this.dropped === 0 &&
 						this.activeSessions.size === 0 &&
-						[...this.sessions.values()].every((file) => file !== undefined && existsSync(file)),
+						[...this.sessions.values()].every(
+							(file) =>
+								file !== undefined && existsSync(join(this.directory, "sessions", basename(file))),
+						),
 					unfinishedSessions: this.activeSessions.size,
-					journalBytes: this.bytes,
+					journalBytes: this.bytes - this.sessionBytes,
+					sessionBytes: this.sessionBytes,
+					captureBytes: this.bytes,
 					droppedRecords: this.dropped,
 					providerRequests: this.requests,
 					sessions: this.sessions.size,
-					limits: { journalBytes: this.maxBytes },
+					limits: { captureBytes: this.maxBytes, fileBytes: 8 * 1024 * 1024 },
 					limitations: [
 						"Native session JSONL is not a transport packet capture; provider-internal processing is not observable.",
 						"Abrupt termination may leave the last session or request unfinished; the host execution state is authoritative.",

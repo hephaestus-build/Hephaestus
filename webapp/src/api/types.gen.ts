@@ -8093,7 +8093,7 @@ export type GetExecutionArtifactResponses = {
   /**
    * OK
    */
-  200: string;
+  200: Blob | File;
 };
 
 export type GetExecutionArtifactResponse = GetExecutionArtifactResponses[keyof GetExecutionArtifactResponses];

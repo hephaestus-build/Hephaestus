@@ -64,16 +64,21 @@ class ExecutionArchiveServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRetainInputsOutputsAndSeparateRetriesWithoutCredentials() {
+    void shouldRetainInputsOutputsAndSeparateRetriesWithoutCredentials() throws Exception {
         AgentJob job = job(1);
         byte[] input = "exact prompt and evidence".getBytes(StandardCharsets.UTF_8);
         service.captureInputs(job, spec(job, Map.of("task.json", input)));
         service.captureInputs(job, spec(job, Map.of("task.json", input)));
-        assertThat(service.describe(job).attempts()).singleElement().satisfies(attempt -> {
-            assertThat(attempt.captureState()).isEqualTo("INPUTS_CAPTURED");
-            assertThat(service.content(job, 0, attempt.files().getFirst().sha256()))
-                    .isEqualTo(input);
-        });
+        var initialAttempts = service.describe(job).attempts();
+        assertThat(initialAttempts)
+                .singleElement()
+                .satisfies(attempt -> assertThat(attempt.captureState()).isEqualTo("INPUTS_CAPTURED"));
+        assertThat(service.content(
+                                job,
+                                0,
+                                initialAttempts.getFirst().files().getFirst().sha256())
+                        .getContentAsByteArray())
+                .isEqualTo(input);
         byte[] transcript = "{\"type\":\"session\"}\n".getBytes(StandardCharsets.UTF_8);
         service.captureOutputs(
                 job,
@@ -93,7 +98,8 @@ class ExecutionArchiveServiceTest extends BaseUnitTest {
                 .filter(file -> file.path().endsWith("session.jsonl"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(service.content(job, 0, session.sha256())).isEqualTo(transcript);
+        assertThat(service.content(job, 0, session.sha256()).getContentAsByteArray())
+                .isEqualTo(transcript);
         assertThatThrownBy(() -> service.content(job, 1, session.sha256())).isInstanceOf(EntityNotFoundException.class);
     }
 
@@ -139,7 +145,7 @@ class ExecutionArchiveServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRetainActualProxyRequestsAndLinkThemToNativeRequests() {
+    void shouldRetainActualProxyRequestsAndLinkThemToNativeRequests() throws Exception {
         AgentJob job = job(1);
         service.captureInputs(job, spec(job, Map.of("task.json", new byte[] {1})));
         byte[] request = "{\"model\":\"actual-upstream-model\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
@@ -153,12 +159,15 @@ class ExecutionArchiveServiceTest extends BaseUnitTest {
                 .filter(item -> item.path().endsWith("/request.json"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(service.content(job, 0, file.sha256())).isEqualTo(request);
+        assertThat(service.content(job, 0, file.sha256()).getContentAsByteArray())
+                .isEqualTo(request);
         var context = captured.files().stream()
                 .filter(item -> item.path().endsWith("/context.json"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(new String(service.content(job, 0, context.sha256()), java.nio.charset.StandardCharsets.UTF_8))
+        assertThat(new String(
+                        service.content(job, 0, context.sha256()).getContentAsByteArray(),
+                        java.nio.charset.StandardCharsets.UTF_8))
                 .contains("b".repeat(64), "a".repeat(32), "c".repeat(16));
     }
 

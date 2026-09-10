@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import test from "node:test";
 
 import {
@@ -163,7 +163,9 @@ for (const abortStream of [false, true]) {
 				);
 				const file = manager.getSessionFile();
 				assert.ok(file);
-				const reopened = SessionManager.open(file, capture.sessionDir);
+				const archivedFile = join(root, "out/trace/sessions", basename(file));
+				assert.equal(readFileSync(archivedFile, "utf8"), readFileSync(file, "utf8"));
+				const reopened = SessionManager.open(archivedFile, capture.sessionDir);
 				assert.equal(
 					JSON.stringify(reopened.buildSessionContext().messages),
 					JSON.stringify(manager.buildSessionContext().messages),
@@ -198,12 +200,12 @@ for (const abortStream of [false, true]) {
 void test("capture reports interruption and capacity loss instead of claiming a complete transcript", () => {
 	const root = mkdtempSync(join(tmpdir(), "pi-trace-limit-"));
 	try {
-		const capture = new ReviewTrace(root, 8);
-		const initial = json(join(root, "trace/capture.json"));
+		const capture = new ReviewTrace(join(root, "out"), 8);
+		const initial = json(join(root, "out/trace/capture.json"));
 		assert.equal(Reflect.get(initial, "complete"), false);
 		capture.session("session", "observer", undefined);
 		capture.finish(137);
-		const final = json(join(root, "trace/capture.json"));
+		const final = json(join(root, "out/trace/capture.json"));
 		assert.equal(Reflect.get(final, "complete"), false);
 		assert.equal(Reflect.get(final, "droppedRecords"), 1);
 		assert.equal(Reflect.get(final, "exitCode"), 137);
@@ -215,10 +217,10 @@ void test("capture reports interruption and capacity loss instead of claiming a 
 void test("a missing native session and a nonzero exit cannot be called complete", () => {
 	const root = mkdtempSync(join(tmpdir(), "pi-trace-missing-"));
 	try {
-		const capture = new ReviewTrace(root);
+		const capture = new ReviewTrace(join(root, "out"));
 		capture.session("missing", "observer", join(root, "never-written.jsonl"));
 		capture.finish(0);
-		assert.equal(Reflect.get(json(join(root, "trace/capture.json")), "complete"), false);
+		assert.equal(Reflect.get(json(join(root, "out/trace/capture.json")), "complete"), false);
 		const failed = new ReviewTrace(join(root, "failed"));
 		failed.finish(1);
 		assert.equal(Reflect.get(json(join(root, "failed/trace/capture.json")), "complete"), false);
@@ -230,13 +232,59 @@ void test("a missing native session and a nonzero exit cannot be called complete
 void test("journal write failure is recorded rather than changing the review", () => {
 	const root = mkdtempSync(join(tmpdir(), "pi-trace-io-"));
 	try {
-		const capture = new ReviewTrace(root);
-		mkdirSync(join(root, "trace/events-00000.jsonl"));
+		const capture = new ReviewTrace(join(root, "out"));
+		mkdirSync(join(root, "out/trace/events-00000.jsonl"));
 		assert.doesNotThrow(() => capture.session("session", "observer", undefined));
 		capture.finish(0);
-		const status = json(join(root, "trace/capture.json"));
+		const status = json(join(root, "out/trace/capture.json"));
 		assert.equal(Reflect.get(status, "complete"), false);
 		assert.equal(Reflect.get(status, "droppedRecords"), 1);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("oversized native sessions cannot invalidate mandatory review outputs", () => {
+	const root = mkdtempSync(join(tmpdir(), "pi-trace-native-limit-"));
+	try {
+		const output = join(root, "out");
+		const capture = new ReviewTrace(output);
+		const file = join(capture.sessionDir, "oversized.jsonl");
+		writeFileSync(file, Buffer.alloc(11 * 1024 * 1024));
+		writeFileSync(join(output, "result.json"), "{}\n");
+		capture.session("large", "observer", file);
+		// Abrupt termination is safe too: live native files are never inside the host output archive.
+		assert.deepEqual(readdirSync(join(output, "trace/sessions")), []);
+		capture.finish(0);
+		assert.deepEqual(readdirSync(join(output, "trace/sessions")), []);
+		assert.equal(readFileSync(join(output, "result.json"), "utf8"), "{}\n");
+		const status = json(join(output, "trace/capture.json"));
+		assert.equal(Reflect.get(status, "complete"), false);
+		assert.equal(Reflect.get(status, "droppedRecords"), 1);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("whole native sessions share the aggregate capture budget with the journal", () => {
+	const root = mkdtempSync(join(tmpdir(), "pi-trace-native-total-"));
+	try {
+		const capture = new ReviewTrace(join(root, "out"), 1024);
+		for (const id of ["first", "second"]) {
+			const file = join(capture.sessionDir, `${id}.jsonl`);
+			writeFileSync(file, "x".repeat(400));
+			capture.session(id, "observer", file);
+		}
+		capture.finish(0);
+		const status = json(join(root, "out/trace/capture.json"));
+		assert.equal(Reflect.get(status, "complete"), false);
+		assert.equal(Reflect.get(status, "droppedRecords"), 1);
+		assert.deepEqual(readdirSync(join(root, "out/trace/sessions")), ["first.jsonl"]);
+		assert.equal(
+			readFileSync(join(root, "out/trace/sessions/first.jsonl"), "utf8"),
+			"x".repeat(400),
+		);
+		assert.ok(Number(Reflect.get(status, "captureBytes")) <= 1024);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

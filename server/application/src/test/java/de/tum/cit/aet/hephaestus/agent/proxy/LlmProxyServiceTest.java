@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -365,6 +367,95 @@ class LlmProxyServiceTest extends BaseUnitTest {
             } else {
                 assertThat(prepared).as(what).isNull();
             }
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "COMPLETED, 200, OK",
+        "STREAM_FAILED, 200, ERROR",
+        "CLIENT_DISCONNECTED, 200, ERROR",
+        "HTTP_ERROR, 502, ERROR"
+    })
+    void shouldExportTheOperationOutcomeWithoutLeakingFailureDetails(
+            String outcome, int status, io.opentelemetry.api.trace.StatusCode expectedStatus) throws Exception {
+        var exporter = mock(io.opentelemetry.sdk.trace.export.SpanExporter.class);
+        when(exporter.export(any())).thenReturn(io.opentelemetry.sdk.common.CompletableResultCode.ofSuccess());
+        when(exporter.shutdown()).thenReturn(io.opentelemetry.sdk.common.CompletableResultCode.ofSuccess());
+        try (var provider = io.opentelemetry.sdk.trace.SdkTracerProvider.builder()
+                .setSampler(io.opentelemetry.sdk.trace.samplers.Sampler.alwaysOn())
+                .addSpanProcessor(io.opentelemetry.sdk.trace.export.SimpleSpanProcessor.create(exporter))
+                .build()) {
+            var tracer = new io.micrometer.tracing.otel.bridge.OtelTracer(
+                    provider.get("test"), new io.micrometer.tracing.otel.bridge.OtelCurrentTraceContext(), event -> {});
+            var buffer = org.springframework.core.io.buffer.DefaultDataBufferFactory.sharedInstance.wrap(
+                    "data: response\n\n".getBytes(StandardCharsets.UTF_8));
+            reactor.core.publisher.Flux<org.springframework.core.io.buffer.DataBuffer> body =
+                    outcome.equals("STREAM_FAILED")
+                            ? reactor.core.publisher.Flux.error(new IOException("private-provider-token"))
+                            : reactor.core.publisher.Flux.just(buffer);
+            var upstreamResponse = org.springframework.web.reactive.function.client.ClientResponse.create(
+                            org.springframework.http.HttpStatusCode.valueOf(status))
+                    .header(HttpHeaders.CONTENT_TYPE, status == 200 ? "text/event-stream" : "application/json")
+                    .body(body)
+                    .build();
+            var client = WebClient.builder()
+                    .exchangeFunction(request -> reactor.core.publisher.Mono.just(upstreamResponse))
+                    .build();
+            var service = new LlmProxyService(
+                    tracer,
+                    mock(de.tum.cit.aet.hephaestus.agent.job.ExecutionArchiveService.class),
+                    client,
+                    resolver,
+                    egressPolicy,
+                    OBJECT_MAPPER,
+                    new ProxyAccounting(
+                            budgetGate,
+                            usageAccumulator,
+                            mentorTurnUsageAccumulator,
+                            new SimpleMeterRegistry(),
+                            OBJECT_MAPPER));
+            var routing = routing("openai-completions");
+            authenticate(routing);
+            when(resolver.resolveProxyCredential(any()))
+                    .thenReturn(credential("openai-completions", LlmAuthMode.BEARER));
+            jakarta.servlet.http.HttpServletResponse response;
+            if (outcome.equals("CLIENT_DISCONNECTED")) {
+                response = mock(jakarta.servlet.http.HttpServletResponse.class);
+                var output = mock(jakarta.servlet.ServletOutputStream.class);
+                when(response.getOutputStream()).thenReturn(output);
+                when(response.getStatus()).thenReturn(200);
+                doThrow(new IOException("private-client-detail")).when(output).write(any(byte[].class));
+            } else {
+                response = new MockHttpServletResponse();
+            }
+            var result = service.proxy(
+                    request("POST", "/internal/llm/chat/completions"),
+                    response,
+                    new HttpHeaders(),
+                    "{\"stream\":true,\"messages\":[]}".getBytes(StandardCharsets.UTF_8));
+            if (status == 200) {
+                assertThat(result).isNull();
+                assertThat(response.getStatus()).isEqualTo(200);
+            } else {
+                assertThat(result).isNotNull();
+                assertThat(result.getStatusCode().value()).isEqualTo(status);
+            }
+            verify(exporter).export(org.mockito.ArgumentMatchers.argThat(spans -> {
+                assertThat(spans).hasSize(1);
+                var span = spans.iterator().next();
+                assertThat(span.getStatus().getStatusCode()).isEqualTo(expectedStatus);
+                var errorType =
+                        span.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("error.type"));
+                if (expectedStatus == io.opentelemetry.api.trace.StatusCode.ERROR) {
+                    assertThat(errorType).isEqualTo(status == 502 ? "502" : outcome);
+                } else {
+                    assertThat(errorType).isNull();
+                }
+                assertThat(span.getEvents().toString())
+                        .doesNotContain("private-provider-token", "private-client-detail");
+                return true;
+            }));
         }
     }
 

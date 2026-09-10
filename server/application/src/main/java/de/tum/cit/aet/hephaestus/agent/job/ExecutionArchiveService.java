@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -194,7 +196,7 @@ public class ExecutionArchiveService {
     }
 
     /** Membership is checked before CAS access: a digest is not permission to read another job's content. */
-    public byte[] content(AgentJob job, int attempt, String sha256) {
+    public FileSystemResource content(AgentJob job, int attempt, String sha256) {
         if (!sha256.matches("[a-f0-9]{64}")) throw missing();
         FileDTO file = describe(job).attempts().stream()
                 .filter(item -> item.attempt() == attempt)
@@ -202,12 +204,19 @@ public class ExecutionArchiveService {
                 .filter(item -> item.sha256().equals(sha256))
                 .findFirst()
                 .orElseThrow(ExecutionArchiveService::missing);
-        byte[] content = cas.get(file.sha256()).orElseThrow(ExecutionArchiveService::missing);
-        if (content.length != file.bytes()
-                || !ContentAddressedStore.sha256(content).equals(file.sha256())) {
-            throw new IllegalStateException("Execution capture content failed integrity verification");
+        Path content = cas.verifiedPath(file.sha256()).orElseThrow(ExecutionArchiveService::missing);
+        try {
+            if (Files.size(content) != file.bytes()) {
+                throw new IllegalStateException("Execution capture content failed integrity verification");
+            }
+            return new FileSystemResource(content);
+        } catch (NoSuchFileException e) {
+            var exception = missing();
+            exception.initCause(e);
+            throw exception;
+        } catch (IOException e) {
+            throw new UncheckedIOException("Execution capture content is unavailable", e);
         }
-        return content;
     }
 
     private static EntityNotFoundException missing() {

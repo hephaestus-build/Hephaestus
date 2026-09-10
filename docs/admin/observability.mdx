@@ -11,21 +11,21 @@ Production logs are JSON records. `job.id` and `workspace.id` are fields, not me
 Lifecycle records contain `event.name`, `job.id`, `workspace.id`, `job.type`, `job.phase`,
 `job.outcome`, and `duration.ms`.
 
-| `event.name` | Emitted when | `job.phase` | `job.outcome` | `duration.ms` |
-| --- | --- | --- | --- | --- |
-| `agent.job.queued` | A new job transaction commits | `queue` | `queued` | `0` |
-| `agent.job.started` | A worker starts a claimed job | `queue` | `started` | Creation to start |
-| `agent.job.delivery` | A delivery attempt finishes | `delivery` | `delivered`, `failed` | Delivery attempt |
-| `agent.job.terminal` | A terminal transition commits | `total` | `completed`, `failed`, `timed_out`, `cancelled` | Creation to terminal emission |
+| `event.name`         | Emitted when                  | `job.phase` | `job.outcome`                                   | `duration.ms`                 |
+| -------------------- | ----------------------------- | ----------- | ----------------------------------------------- | ----------------------------- |
+| `agent.job.queued`   | A new job transaction commits | `queue`     | `queued`                                        | `0`                           |
+| `agent.job.started`  | A worker starts a claimed job | `queue`     | `started`                                       | Creation to start             |
+| `agent.job.delivery` | A delivery attempt finishes   | `delivery`  | `delivered`, `failed`                           | Delivery attempt              |
+| `agent.job.terminal` | A terminal transition commits | `total`     | `completed`, `failed`, `timed_out`, `cancelled` | Creation to terminal emission |
 
 Delivery is optional. Jobs that do not complete successfully may have no delivery event.
 
 ## Agent-job metrics
 
-| Prometheus name | Type | Labels | Meaning |
-| --- | --- | --- | --- |
-| `agent_job_total` | Counter | `outcome` | Committed terminal transitions |
-| `agent_job_duration_seconds` | Histogram | `phase` | Queue, execution-attempt, delivery-attempt, and total durations |
+| Prometheus name              | Type      | Labels    | Meaning                                                         |
+| ---------------------------- | --------- | --------- | --------------------------------------------------------------- |
+| `agent_job_total`            | Counter   | `outcome` | Committed terminal transitions                                  |
+| `agent_job_duration_seconds` | Histogram | `phase`   | Queue, execution-attempt, delivery-attempt, and total durations |
 
 `outcome` is one of `completed`, `failed`, `timed_out`, or `cancelled`. `phase` is one of `queue`,
 `execution`, `delivery`, or `total`. Identifiers, model and provider names, worker IDs, and exception text are not
@@ -37,10 +37,10 @@ existing execution metric.
 Account erasure, export generation, export expiry and LLM usage retention each report one terminal
 outcome per run, published by the server role.
 
-| Prometheus name | Type | Labels | Meaning |
-| --- | --- | --- | --- |
-| `privacy_job_completed_total` | Counter | `job`, `outcome` | Terminal privacy-job executions |
-| `privacy_job_affected_total` | Counter | `job` | Rows or subjects the run removed or produced |
+| Prometheus name               | Type    | Labels           | Meaning                                      |
+| ----------------------------- | ------- | ---------------- | -------------------------------------------- |
+| `privacy_job_completed_total` | Counter | `job`, `outcome` | Terminal privacy-job executions              |
+| `privacy_job_affected_total`  | Counter | `job`            | Rows or subjects the run removed or produced |
 
 `job` is one of `account_erasure`, `export_generation`, `export_retention`, or
 `llm_usage_retention`. `outcome` is `success`, `incomplete` or `failure`. An empty backlog is a
@@ -97,8 +97,11 @@ not permanent backups. Missing attempts or expired files must be reported as una
 
 An output archive means files were collected, not that every event was recorded. Inspect the native
 `capture.json` and the authoritative job state as well. The capture status reports its byte budget
-and dropped-record count; reaching the budget leaves the capture explicitly incomplete. Cancellation or abrupt termination can
-leave only the input archive. Disabling the setting stops new capture, but does not erase retained
+and dropped-record count; reaching the budget leaves the capture explicitly incomplete. Requests,
+the event journal and whole native session copies share a 32 MiB capture budget with an 8 MiB
+per-file ceiling. Native sessions are staged outside the collected output and copied only at exit,
+so an oversized session cannot invalidate the review result. Omitted sessions make capture incomplete;
+abrupt termination can leave the journal without native sessions, or only the input archive. Disabling the setting stops new capture, but does not erase retained
 archives; retention continues to govern existing files.
 
 ## Exporting OpenTelemetry traces
@@ -107,11 +110,11 @@ Hephaestus uses Spring Boot's OpenTelemetry starter and the OTLP HTTP exporter. 
 by default, independently of private execution capture. Configure these settings on the runtime
 roles whose spans you want to collect:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `TRACING_OTLP_ENABLED` | `false` | Enable the OTLP trace exporter. |
-| `TRACING_OTLP_ENDPOINT` | `http://localhost:4318/v1/traces` | Full OTLP HTTP receiver URL, reachable from the application container. |
-| `TRACING_SAMPLING_PROBABILITY` | `0.0` | Fraction of new traces sampled; use `1.0` for a dedicated evaluation instance. |
+| Variable                       | Default                           | Purpose                                                                        |
+| ------------------------------ | --------------------------------- | ------------------------------------------------------------------------------ |
+| `TRACING_OTLP_ENABLED`         | `false`                           | Enable the OTLP trace exporter.                                                |
+| `TRACING_OTLP_ENDPOINT`        | `http://localhost:4318/v1/traces` | Full OTLP HTTP receiver URL, reachable from the application container.         |
+| `TRACING_SAMPLING_PROBABILITY` | `0.0`                             | Fraction of new traces sampled; use `1.0` for a dedicated evaluation instance. |
 
 The supported Compose stack forwards these settings to server, worker and webhook containers.
 For authenticated collectors, configure Spring Boot's
@@ -127,6 +130,11 @@ execution trace's sampling decision. A `gen_ai.chat` span covers each authentica
 including streaming, and records the model, HTTP outcome and observed streaming token usage when
 available. Framework HTTP spans describe the transport. Prompts, tool results, headers and tokens
 used for authentication are not span attributes.
+
+For streaming requests, `hephaestus.stream.outcome` records transport completion separately from
+the HTTP status. A client disconnect or stream failure marks the span as an error with a bounded
+`error.type`, even if HTTP 200 headers were already sent. No replacement response body is sent
+after the stream has been committed.
 
 For private capture, the actual outbound proxy request body is retained separately from the Pi
 request: the proxy may replace a model identifier or add usage-reporting options. The private

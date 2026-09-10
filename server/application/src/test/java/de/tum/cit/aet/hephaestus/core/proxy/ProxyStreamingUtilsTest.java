@@ -31,6 +31,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 import reactor.test.StepVerifier;
 
 class ProxyStreamingUtilsTest extends BaseUnitTest {
@@ -182,6 +183,7 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
                         assertThat(result.status()).isEqualTo(200);
                         assertThat(result.body()).isNull();
                         assertThat(result.streamed()).isTrue();
+                        assertThat(result.streamOutcome()).isEqualTo(ProxyStreamingUtils.StreamOutcome.COMPLETED);
                     })
                     .verifyComplete();
         }
@@ -302,7 +304,11 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             doThrow(new IOException("Client disconnected")).when(output).write(any(byte[].class));
 
             StepVerifier.create(ProxyStreamingUtils.consumeResponse(upstream, response, null))
-                    .assertNext(result -> assertThat(result.streamed()).isTrue())
+                    .assertNext(result -> {
+                        assertThat(result.streamed()).isTrue();
+                        assertThat(result.streamOutcome())
+                                .isEqualTo(ProxyStreamingUtils.StreamOutcome.CLIENT_DISCONNECTED);
+                    })
                     .verifyComplete();
 
             await().untilAsserted(() -> {
@@ -312,6 +318,34 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
                         .allSatisfy(buffer ->
                                 assertThat(buffer.getNativeBuffer().refCnt()).isZero());
             });
+        }
+
+        @Test
+        void shouldReportUpstreamFailureAfterDeliveringAChunkWithoutReplacingCommittedResponse() throws Exception {
+            var factory = new NettyDataBufferFactory(PooledByteBufAllocator.DEFAULT);
+            var buffer = factory.allocateBuffer(32);
+            buffer.write("data: delivered\n\n".getBytes(StandardCharsets.UTF_8));
+            var delivered = Sinks.<Void>empty();
+            Flux<DataBuffer> body = Flux.<DataBuffer>just(buffer)
+                    .concatWith(delivered.asMono().then(Mono.error(new IOException("private provider failure"))));
+            var headers = new HttpHeaders();
+            headers.setContentType(MediaType.TEXT_EVENT_STREAM);
+            var response = new MockHttpServletResponse();
+
+            StepVerifier.create(ProxyStreamingUtils.consumeResponse(
+                            mockClientResponseWithSseFlux(200, headers, body),
+                            response,
+                            bytes -> delivered.tryEmitEmpty()))
+                    .assertNext(result -> {
+                        assertThat(result.status()).isEqualTo(200);
+                        assertThat(result.streamOutcome()).isEqualTo(ProxyStreamingUtils.StreamOutcome.STREAM_FAILED);
+                        assertThat(result.body()).isNull();
+                    })
+                    .verifyComplete();
+
+            assertThat(response.isCommitted()).isTrue();
+            assertThat(response.getContentAsString()).isEqualTo("data: delivered\n\n");
+            assertThat(buffer.getNativeBuffer().refCnt()).isZero();
         }
 
         private ClientResponse mockClientResponse(
@@ -441,27 +475,8 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             MockHttpServletResponse response = new MockHttpServletResponse();
             HttpHeaders headers = new HttpHeaders();
 
-            // Should not throw — caught internally
-            ProxyStreamingUtils.streamSseToResponse(dataFlux, headers, response, 200);
-
-            assertThat(response.getStatus()).isEqualTo(200);
-        }
-
-        @Test
-        void shouldReleaseBuffersOnPartialFluxError() {
-            var buf1 = bufferFactory.allocateBuffer(16);
-            buf1.write("data: ok\n\n".getBytes(StandardCharsets.UTF_8));
-            var buf2 = bufferFactory.allocateBuffer(16);
-            buf2.write("data: ok2\n\n".getBytes(StandardCharsets.UTF_8));
-
-            Flux<DataBuffer> dataFlux = Flux.just((DataBuffer) buf1, (DataBuffer) buf2)
-                    .concatWith(Flux.error(new RuntimeException("mid-stream failure")));
-
-            MockHttpServletResponse response = new MockHttpServletResponse();
-            HttpHeaders headers = new HttpHeaders();
-
-            // Should not throw — errors are caught internally
-            ProxyStreamingUtils.streamSseToResponse(dataFlux, headers, response, 200);
+            assertThat(ProxyStreamingUtils.streamSseToResponse(dataFlux, headers, response, 200))
+                    .isEqualTo(ProxyStreamingUtils.StreamOutcome.STREAM_FAILED);
 
             assertThat(response.getStatus()).isEqualTo(200);
         }

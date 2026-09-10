@@ -86,15 +86,16 @@ public final class ProxyStreamingUtils {
         MediaType contentType = clientResp.headers().contentType().orElse(null);
         if (contentType != null && contentType.isCompatibleWith(MediaType.TEXT_EVENT_STREAM)) {
             return Mono.fromCallable(() -> {
-                        streamSseToResponse(clientResp.bodyToFlux(DataBuffer.class), headers, response, status, tap);
-                        return new UpstreamResult(status, headers, null, true);
+                        var outcome = streamSseToResponse(
+                                clientResp.bodyToFlux(DataBuffer.class), headers, response, status, tap);
+                        return new UpstreamResult(status, headers, null, outcome);
                     })
                     .subscribeOn(Schedulers.boundedElastic());
         }
         return clientResp
                 .bodyToMono(byte[].class)
                 .defaultIfEmpty(new byte[0])
-                .map(bytes -> new UpstreamResult(status, headers, bytes, false));
+                .map(bytes -> new UpstreamResult(status, headers, bytes, null));
     }
 
     /** Total wall-clock time for an SSE stream. Must accommodate LLM thinking + output generation. */
@@ -113,9 +114,9 @@ public final class ProxyStreamingUtils {
      * @param response    the servlet response to write to
      * @param statusCode  HTTP status code from upstream
      */
-    public static void streamSseToResponse(
+    public static StreamOutcome streamSseToResponse(
             Flux<DataBuffer> dataFlux, HttpHeaders respHeaders, HttpServletResponse response, int statusCode) {
-        streamSseToResponse(dataFlux, respHeaders, response, statusCode, null);
+        return streamSseToResponse(dataFlux, respHeaders, response, statusCode, null);
     }
 
     /**
@@ -125,7 +126,7 @@ public final class ProxyStreamingUtils {
      *
      * @param tap receives a copy of each chunk's bytes; {@code null} to stream without observing
      */
-    public static void streamSseToResponse(
+    public static StreamOutcome streamSseToResponse(
             Flux<DataBuffer> dataFlux,
             HttpHeaders respHeaders,
             HttpServletResponse response,
@@ -176,35 +177,39 @@ public final class ProxyStreamingUtils {
                                 }
                             }
                         } catch (IOException e) {
-                            log.debug("Client disconnected during SSE streaming: {}", e.getMessage());
+                            log.debug("Client disconnected during SSE streaming");
                             throw new StreamingException("Client disconnected", e);
                         } finally {
                             DataBufferUtils.release(buffer);
                         }
                     })
-                    .doOnError(e -> {
-                        if (!(e instanceof StreamingException)) {
-                            log.debug("SSE stream error: {}", e.getMessage());
-                        }
-                    })
-                    .doOnComplete(() -> {
-                        try {
-                            outputStream.flush();
-                        } catch (IOException e) {
-                            log.debug("Error flushing final SSE output: {}", e.getMessage());
-                        }
-                    })
-                    .blockLast(DEFAULT_SSE_TIMEOUT); // Safe: servlet thread, not Netty event loop
-        } catch (IOException e) {
-            log.debug("SSE streaming initialization failed: {}", e.getMessage());
-        } catch (StreamingException e) {
-            log.debug("SSE streaming terminated: {}", e.getMessage());
-        } catch (Exception e) {
-            // Catches Netty ReadTimeoutException, PrematureCloseException, scheduler rejection, etc.
-            log.warn("SSE streaming failed unexpectedly: {}", e.getMessage(), e);
+                    .blockLast(DEFAULT_SSE_TIMEOUT);
+            outputStream.flush();
+            return StreamOutcome.COMPLETED;
+        } catch (IOException | StreamingException e) {
+            log.debug("SSE client disconnected");
+            return StreamOutcome.CLIENT_DISCONNECTED;
+        } catch (RuntimeException e) {
+            log.warn("SSE stream failed: type={}", e.getClass().getSimpleName());
+            return StreamOutcome.STREAM_FAILED;
         }
     }
 
     /** A fully consumed upstream response: SSE is already written; other bodies remain buffered. */
-    public record UpstreamResult(int status, HttpHeaders headers, byte @Nullable [] body, boolean streamed) {}
+    public record UpstreamResult(
+            int status,
+            HttpHeaders headers,
+            byte @Nullable [] body,
+            @Nullable StreamOutcome streamOutcome) {
+        public boolean streamed() {
+            return streamOutcome != null;
+        }
+    }
+
+    /** HTTP headers may already be committed when the stream fails; the terminal outcome is independent. */
+    public enum StreamOutcome {
+        COMPLETED,
+        CLIENT_DISCONNECTED,
+        STREAM_FAILED
+    }
 }

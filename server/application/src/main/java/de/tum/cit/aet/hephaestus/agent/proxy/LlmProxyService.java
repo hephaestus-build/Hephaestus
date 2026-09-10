@@ -107,10 +107,10 @@ class LlmProxyService {
                     ? response.getStatus()
                     : result.getStatusCode().value();
             span.tag("http.response.status_code", status);
-            if (status >= 400) span.tag("error.type", Integer.toString(status));
+            if (status >= 400) recordSpanError(span, Integer.toString(status));
             return result;
         } catch (RuntimeException e) {
-            span.tag("error.type", e.getClass().getSimpleName());
+            recordSpanError(span, e.getClass().getSimpleName());
             throw e;
         } finally {
             span.end();
@@ -211,7 +211,13 @@ class LlmProxyService {
             return ResponseEntity.status(502).body("Upstream provider unavailable");
         }
         boolean served = upstream.status() >= 200 && upstream.status() < 300;
-        if (upstream.streamed()) {
+        var outcome = upstream.streamOutcome();
+        if (outcome != null) {
+            span.tag("hephaestus.stream.outcome", outcome.name());
+            if (outcome != ProxyStreamingUtils.StreamOutcome.COMPLETED) {
+                recordSpanError(span, outcome.name());
+                incrementErrors(routing.apiProtocol());
+            }
             if (served) {
                 if (tap.hasMalformedUsage()) {
                     accounting.recordMalformedUsage(attempt);
@@ -417,6 +423,13 @@ class LlmProxyService {
         return fundingSource == FundingSource.WORKSPACE
                 ? "Own-provider budget reached. Paused until an admin raises the cap or the month rolls over."
                 : "Shared-model budget reached. Paused until an admin raises the budget or the month rolls over.";
+    }
+
+    private static void recordSpanError(Span span, String errorType) {
+        // The original exception may contain provider content or credentials. Only a bounded failure
+        // classification is exported; Micrometer's error API also sets the underlying OTLP status.
+        span.error(new IllegalStateException(errorType));
+        span.tag("error.type", errorType);
     }
 
     private void incrementErrors(String apiProtocol) {

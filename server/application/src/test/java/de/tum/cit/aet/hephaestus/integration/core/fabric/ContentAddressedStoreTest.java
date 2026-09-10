@@ -55,6 +55,21 @@ class ContentAddressedStoreTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldProvideOnlyVerifiedRetainedFilesForStreaming() throws Exception {
+        String sha = cas.put("original".getBytes(StandardCharsets.UTF_8));
+        Path file = cas.verifiedPath(sha).orElseThrow();
+        assertThat(java.nio.file.Files.readString(file)).isEqualTo("original");
+
+        java.nio.file.Files.writeString(file, "corrupted");
+        assertThatThrownBy(() -> cas.verifiedPath(sha))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("digest mismatch");
+        java.nio.file.Files.delete(file);
+        assertThat(cas.verifiedPath(sha)).isEmpty();
+        assertThatThrownBy(() -> cas.verifiedPath("../escape")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void putReusesContentAndRefreshesRetentionAge() throws Exception {
         String sha = cas.put("immutable".getBytes(StandardCharsets.UTF_8));
         Path blob = cas.pathFor(sha);
