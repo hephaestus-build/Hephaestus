@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRightIcon, PlugZapIcon } from "lucide-react";
+import { ArrowRightIcon, NetworkIcon, PlugZapIcon } from "lucide-react";
 
 import type { ConnectionSyncStatus, IntegrationCatalogEntry } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -18,10 +18,12 @@ import { SyncNowButton } from "./SyncNowButton";
 
 const DETAIL_ROUTE: Record<
 	IntegrationCatalogEntry["kind"],
+	| "/w/$workspaceSlug/admin/directory"
 	| "/w/$workspaceSlug/admin/integrations/scm"
 	| "/w/$workspaceSlug/admin/integrations/slack"
 	| "/w/$workspaceSlug/admin/integrations/outline"
 > = {
+	KEYCLOAK_DIRECTORY: "/w/$workspaceSlug/admin/directory",
 	GITHUB: "/w/$workspaceSlug/admin/integrations/scm",
 	GITLAB: "/w/$workspaceSlug/admin/integrations/scm",
 	SLACK: "/w/$workspaceSlug/admin/integrations/slack",
@@ -29,6 +31,7 @@ const DETAIL_ROUTE: Record<
 };
 
 const KIND_ICON: Record<IntegrationCatalogEntry["kind"], React.ReactNode> = {
+	KEYCLOAK_DIRECTORY: <NetworkIcon className="size-5" />,
 	GITHUB: <GithubIcon className="size-5" />,
 	GITLAB: <GitlabIcon className="size-5" />,
 	SLACK: <SlackIcon className="size-5" />,

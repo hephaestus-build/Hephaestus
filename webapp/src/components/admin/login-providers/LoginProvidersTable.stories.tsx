@@ -7,6 +7,7 @@ import { LoginProvidersTable } from "./LoginProvidersTable";
 
 const providers: LoginProviderView[] = [
 	{
+		directoryGroupIds: [],
 		registrationId: "github",
 		type: "GITHUB",
 		displayName: "GitHub",
@@ -19,6 +20,7 @@ const providers: LoginProviderView[] = [
 		updatedAt: new Date("2026-05-01T00:00:00Z"),
 	},
 	{
+		directoryGroupIds: [],
 		registrationId: "gitlab-acme",
 		type: "GITLAB",
 		displayName: "ACME GitLab",
@@ -31,6 +33,7 @@ const providers: LoginProviderView[] = [
 		updatedAt: new Date("2026-05-02T00:00:00Z"),
 	},
 	{
+		directoryGroupIds: [],
 		registrationId: "outline-acme",
 		type: "OUTLINE",
 		displayName: "ACME Outline",
@@ -57,6 +60,7 @@ const meta = {
 		onToggleEnabled: fn(),
 		onDelete: fn(),
 		onAdd: fn(),
+		onDirectoryGroups: fn(),
 		onRetry: fn(),
 	},
 } satisfies Meta<typeof LoginProvidersTable>;
@@ -106,7 +110,7 @@ export const ConfirmDelete: Story = {
 		const confirm = within(dialog).getByRole("button", { name: "Delete" });
 		await userEvent.click(confirm);
 		await expect(args.onDelete).toHaveBeenCalledWith(
-			expect.objectContaining({ registrationId: "outline-acme" }),
+			expect.objectContaining({ directoryGroupIds: [], registrationId: "outline-acme" }),
 		);
 	},
 };

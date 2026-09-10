@@ -458,6 +458,9 @@ class ConnectionControllerTest extends BaseUnitTest {
                                 null,
                                 ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
                                 Set.of());
+                    case KEYCLOAK_DIRECTORY ->
+                        new ConnectionConfig.KeycloakDirectoryConfig(
+                                "organization", "https://identity.example.com/realms/team", Set.of());
                     case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, null, null, Set.of());
                     case OUTLINE ->
                         new ConnectionConfig.OutlineConfig("https://app.getoutline.com", null, null, Set.of());

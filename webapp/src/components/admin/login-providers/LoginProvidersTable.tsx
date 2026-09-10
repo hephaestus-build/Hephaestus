@@ -53,6 +53,7 @@ interface LoginProvidersTableProps {
 	onDelete: (provider: LoginProviderView) => void;
 	/** Opens the create dialog — offered from the empty state so it is not a dead end. */
 	onAdd?: () => void;
+	onDirectoryGroups: (provider: LoginProviderView) => void;
 }
 
 const SKELETON_ROWS = ["a", "b", "c"];
@@ -68,6 +69,7 @@ export function LoginProvidersTable({
 	onToggleEnabled,
 	onDelete,
 	onAdd,
+	onDirectoryGroups,
 }: LoginProvidersTableProps) {
 	// ONE delete dialog for the whole table, driven by the row it targets — a dialog per row means N
 	// portals mounted for a single, rare action.
@@ -199,6 +201,16 @@ export function LoginProvidersTable({
 								</TableCell>
 								<TableCell className="text-right">
 									<div className="flex justify-end gap-1">
+										{provider.type === "OIDC" && (
+											<Button
+												variant="outline"
+												size="sm"
+												disabled={busy}
+												onClick={() => onDirectoryGroups(provider)}
+											>
+												Directory groups
+											</Button>
+										)}
 										<Button
 											type="button"
 											variant="ghost"

@@ -13,6 +13,7 @@ const PROVIDER_LABELS: Record<string, string> = {
 	SLACK: "Slack",
 	OUTLINE: "Outline",
 	OIDC: "Organization account",
+	KEYCLOAK_DIRECTORY: "Keycloak directory",
 	DEV: "Dev sign-in",
 };
 

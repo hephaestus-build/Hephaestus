@@ -40,11 +40,12 @@ export function reviewArtifactTypeFromSlug(slug: string): KnownArtifactKind | un
 type ArtifactGlyph = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 
 const PROVIDER_ICONS = {
+	KEYCLOAK_DIRECTORY: undefined,
 	GITHUB: GithubIcon,
 	GITLAB: GitlabIcon,
 	SLACK: SlackIcon,
 	OUTLINE: OutlineIcon,
-} satisfies Record<NonNullable<ReviewArtifactData["provider"]>, ArtifactGlyph>;
+} satisfies Record<NonNullable<ReviewArtifactData["provider"]>, ArtifactGlyph | undefined>;
 
 /**
  * The provider's mark, falling back to the kind's. The label beside it already carries the kind
@@ -52,7 +53,10 @@ const PROVIDER_ICONS = {
  * no way to tell a GitHub request from a GitLab one.
  */
 export function reviewArtifactIcon(artifact: ReviewArtifactDisplay): ArtifactGlyph {
-	return artifact.provider ? PROVIDER_ICONS[artifact.provider] : artifactKindIcon(artifact.type);
+	return (
+		(artifact.provider ? PROVIDER_ICONS[artifact.provider] : undefined) ??
+		artifactKindIcon(artifact.type)
+	);
 }
 
 export function reviewArtifactLabel(artifact: ReviewArtifactDisplay): string {

@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { UserRoundCog } from "lucide-react";
 
 import { PageHeader } from "@/components/core/PageHeader";
@@ -25,6 +27,7 @@ import {
 
 export interface SettingsPageProps {
 	accountId?: string;
+	workspaceAccessSection?: ReactNode;
 	practiceFeedbackProps: PracticeFeedbackSectionProps;
 	researchProps: ResearchParticipationSectionProps;
 	showResearchSection: boolean;
@@ -40,6 +43,7 @@ export interface SettingsPageProps {
 
 export function SettingsPage({
 	accountId,
+	workspaceAccessSection,
 	practiceFeedbackProps,
 	researchProps,
 	showResearchSection,
@@ -81,6 +85,7 @@ export function SettingsPage({
 						</p>
 					</section>
 				)}
+				{workspaceAccessSection}
 				{needsScmIdentity ? (
 					<section className="space-y-2" aria-labelledby="preferences-identity-heading">
 						<h2 id="preferences-identity-heading" className="text-xl font-semibold">

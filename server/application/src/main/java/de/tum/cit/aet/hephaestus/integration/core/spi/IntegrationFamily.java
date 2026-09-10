@@ -5,4 +5,5 @@ public enum IntegrationFamily {
     SCM,
     MESSAGING,
     DOCUMENTATION,
+    DIRECTORY,
 }

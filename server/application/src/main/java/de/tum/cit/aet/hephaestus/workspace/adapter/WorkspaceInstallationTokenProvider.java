@@ -66,7 +66,7 @@ public class WorkspaceInstallationTokenProvider implements InstallationTokenProv
                         ? AuthMode.INSTALLATION_APP
                         : AuthMode.PERSONAL_ACCESS_TOKEN;
             case GITLAB -> AuthMode.PERSONAL_ACCESS_TOKEN;
-            case SLACK, OUTLINE -> {
+            case SLACK, OUTLINE, KEYCLOAK_DIRECTORY -> {
                 log.warn("Non-SCM provider for scope {}: kind={}; defaulting to INSTALLATION_APP", scopeId, kind.get());
                 yield AuthMode.INSTALLATION_APP;
             }

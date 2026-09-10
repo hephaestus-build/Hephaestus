@@ -22,13 +22,11 @@ conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
    `server/application/src/main/resources/db/changelog/<timestamp>_changelog.xml`, with ids
    `<timestamp>-1`, `-2`, … and the author `hephaestus`. A branch gets one such file: the first run
    creates it and appends its `<include>` to `master.xml`; later runs add change sets to it. It then
-   refreshes the ERD. With no drift it writes nothing.
-
-   On a stacked branch, pass its immediate parent so that the parent's migration is not mistaken
-   for this branch's file:
+   refreshes the ERD. With no drift it writes nothing. For a stacked pull request, pass its parent
+   branch so the parent migration stays unchanged:
 
    ```bash
-   vp run db:draft-changelog --base feat/parent-branch
+   vp run db:draft-changelog --base <parent-branch>
    ```
 
    Without `--base`, ownership is measured against `origin/main` (or local `main` when the remote

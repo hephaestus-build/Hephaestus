@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
+import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.OidcIssuerPolicy;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
@@ -77,6 +78,7 @@ public class LoginProviderService {
     private final ObjectMapper objectMapper;
     private final OutlineOriginPolicy outlineOriginPolicy;
     private final OidcIssuerPolicy oidcIssuerPolicy;
+    private final GitProviderRegistry identities;
 
     public LoginProviderService(
             LoginProviderRepository repository,
@@ -85,7 +87,8 @@ public class LoginProviderService {
             AuthEventLogger authEventLogger,
             ObjectMapper objectMapper,
             OutlineOriginPolicy outlineOriginPolicy,
-            OidcIssuerPolicy oidcIssuerPolicy) {
+            OidcIssuerPolicy oidcIssuerPolicy,
+            GitProviderRegistry identities) {
         this.repository = repository;
         this.registrationCache = registrationCache;
         this.authProperties = authProperties;
@@ -93,6 +96,7 @@ public class LoginProviderService {
         this.objectMapper = objectMapper;
         this.outlineOriginPolicy = outlineOriginPolicy;
         this.oidcIssuerPolicy = oidcIssuerPolicy;
+        this.identities = identities;
     }
 
     /** Enabled providers for the login page / discovery, stable order. */
@@ -134,6 +138,22 @@ public class LoginProviderService {
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "no login provider: " + registrationId));
     }
 
+    private LoginProvider loadRequiredForUpdate(String registrationId) {
+        return repository
+                .findByRegistrationIdForUpdate(registrationId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "no login provider: " + registrationId));
+    }
+
+    /** Directory admission serializes with disabling, editing or deleting its instance-approved source. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public java.util.Optional<LoginProvider> findEnabledForUpdate(String registrationId) {
+        return repository
+                .findByRegistrationIdForUpdate(registrationId)
+                .filter(LoginProvider::isEnabled)
+                .filter(this::isApproved);
+    }
+
     /** Create a new login provider (instance admin). The client secret is sealed at rest. */
     @Transactional
     public LoginProvider create(Draft draft) {
@@ -168,7 +188,7 @@ public class LoginProviderService {
     /** Apply a partial update (only non-null fields). registrationId + type are immutable identity. */
     @Transactional
     public LoginProvider update(String registrationId, Patch patch) {
-        LoginProvider provider = loadRequired(registrationId);
+        LoginProvider provider = loadRequiredForUpdate(registrationId);
         // Field NAMES only — this list goes into the audit trail, so it must stay free of values.
         List<String> changed = new ArrayList<>();
         if (patch.displayName() != null && !patch.displayName().isBlank()) {
@@ -213,10 +233,36 @@ public class LoginProviderService {
         return saved;
     }
 
+    /** Directory approval is a distinct operator action; interactive sign-in credentials are never reused. */
+    @Transactional
+    public LoginProvider approveDirectoryGroups(String registrationId, Set<String> groupIds) {
+        if (!SecurityUtils.isSuperAdmin())
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Instance administrator access required");
+        LoginProvider provider = loadRequiredForUpdate(registrationId);
+        if (provider.getType() != LoginProvider.ProviderType.OIDC || !isApproved(provider))
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_ENTITY, "Approve an organizational OIDC issuer first");
+        if (groupIds.size() > 100
+                || groupIds.stream()
+                        .anyMatch(id -> id.isBlank()
+                                || id.length() > 255
+                                || id.contains("/")
+                                || id.contains("\\")
+                                || id.equals(".")
+                                || id.equals("..")))
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_ENTITY, "Provide at most 100 immutable Keycloak group IDs");
+        if (!groupIds.isEmpty()) identities.resolveProviderId("OIDC", provider.getBaseUrl());
+        provider.setDirectoryGroupIds(Set.copyOf(groupIds));
+        LoginProvider saved = persist(provider);
+        audit(AuthEvent.EventType.LOGIN_PROVIDER_UPDATED, saved, List.of("directoryGroupIds"));
+        return saved;
+    }
+
     /** Delete a login provider. Refuses to remove the last enabled one (would lock everyone out). */
     @Transactional
     public void delete(String registrationId) {
-        LoginProvider provider = loadRequired(registrationId);
+        LoginProvider provider = loadRequiredForUpdate(registrationId);
         if (provider.isEnabled()) {
             requireNotLastEnabled(registrationId, "delete");
         }

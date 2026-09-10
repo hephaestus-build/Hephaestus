@@ -85,9 +85,11 @@ class IntegrationStructuralRulesTest extends HephaestusArchitectureTest {
             // integration.slack.connect. It lives here (not in core.auth) so that core.auth never
             // imports integration.* — that import would invert the bounded-context direction and
             // re-introduce the core ↔ scm-data-platform cycle.
-            Set<String> expected = Set.of("core", "scm", "slack", "identity", "outline", "package-info.java");
+            Set<String> expected =
+                    Set.of("core", "scm", "slack", "identity", "outline", "directory", "package-info.java");
             assertThat(actual)
-                    .as("Integration top-level sub-roots: {core, scm, slack, identity, outline} (ADR 0017 OIDC login).")
+                    .as(
+                            "Integration top-level sub-roots: {core, scm, slack, identity, outline, directory} (ADR 0017 OIDC login).")
                     .isEqualTo(expected);
         }
     }

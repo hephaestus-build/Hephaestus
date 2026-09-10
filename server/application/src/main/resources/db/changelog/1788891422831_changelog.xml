@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1788891422831-1" author="hephaestus">
+        <createTable tableName="directory_policy">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="directory_policyPK"/>
+            </column>
+            <column name="active_snapshot" type="JSONB"/>
+            <column name="approved_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="approved_by_account_id" type="BIGINT"/>
+            <column name="approved_group_ids" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="configuration_version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="connection_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="draft_group_ids" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="failure_reason" type="VARCHAR(512)"/>
+            <column name="health" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="identity_provider_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="issuer" type="VARCHAR(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_attempt_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="preview_snapshot" type="JSONB"/>
+            <column name="registration_id" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1788891422831-2" author="hephaestus">
+        <addColumn tableName="login_provider">
+            <column name="directory_group_ids" type="JSONB" defaultValueComputed="'[]'::jsonb">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <dropDefaultValue tableName="login_provider" columnName="directory_group_ids" columnDataType="JSONB"/>
+    </changeSet>
+    <changeSet id="1788891422831-3" author="hephaestus">
+        <addColumn tableName="workspace_account_membership">
+            <column name="directory_subject" type="VARCHAR(512)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1788891422831-4" author="hephaestus">
+        <addUniqueConstraint columnNames="workspace_id" constraintName="uq_directory_policy_workspace" tableName="directory_policy"/>
+    </changeSet>
+    <changeSet id="1788891422831-5" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="directory_policy" constraintName="FKps42x3ryhb5jw1y3ukxktxd4j" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
+    <changeSet id="1788891422831-6" author="hephaestus">
+        <addForeignKeyConstraint baseTableName="directory_policy" baseColumnNames="connection_id,workspace_id" constraintName="sfk_directory_policy_connection_workspace" referencedTableName="connection" referencedColumnNames="id,workspace_id"/>
+        <addForeignKeyConstraint baseTableName="directory_policy" baseColumnNames="identity_provider_id" constraintName="sfk_directory_policy_identity_provider" referencedTableName="identity_provider" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="directory_policy" baseColumnNames="approved_by_account_id" constraintName="sfk_directory_policy_approver" referencedTableName="account" referencedColumnNames="id" onDelete="SET NULL"/>
+        <sql><![CDATA[
+            ALTER TABLE connection DROP CONSTRAINT ck_connection_kind;
+            ALTER TABLE connection ADD CONSTRAINT ck_connection_kind CHECK (kind IN ('GITHUB', 'GITLAB', 'SLACK', 'OUTLINE', 'KEYCLOAK_DIRECTORY'));
+            ALTER TABLE config_audit_event DROP CONSTRAINT ck_config_audit_event_entity_type;
+            ALTER TABLE config_audit_event ADD CONSTRAINT ck_config_audit_event_entity_type CHECK (entity_type IN ('PRACTICE_REVIEW_SETTINGS', 'AGENT_BINDING', 'AGENT_CONFIG', 'AI_CONFIG_BINDING', 'WORKSPACE_ROLE', 'WORKSPACE_FEATURES', 'WORKSPACE_STATUS', 'WORKSPACE_TOKEN', 'WORKSPACE_VISIBILITY', 'PRACTICE_ACTIVE', 'PRACTICE_USAGE', 'PRACTICE_DEFINITION', 'PRACTICE_GROUP', 'PRACTICE_AREA', 'CURATED_PRACTICE', 'CURATED_PRACTICE_GROUP', 'CURATED_PRACTICE_AREA', 'WORKSPACE_INSTANCE_LLM_BUDGET', 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET', 'WORKSPACE_LLM_BUDGET', 'WORKSPACE_BYO_LLM_BUDGET', 'REVIEW_BACKFILL_RUN', 'REVIEW_SWEEP_SCHEDULE', 'WORKSPACE_LLM_CONNECTION', 'WORKSPACE_LLM_MODEL', 'WORKSPACE_ACCESS_POLICY', 'WORKSPACE_ACCESS_REQUEST', 'DIRECTORY_POLICY'));
+            ALTER TABLE directory_policy
+                ADD CONSTRAINT ck_directory_policy_status CHECK (status IN ('DRAFT', 'ACTIVE', 'PAUSED', 'ENDED')),
+                ADD CONSTRAINT ck_directory_policy_health CHECK (health IN ('UNVERIFIED', 'HEALTHY', 'FAILED')),
+                ADD CONSTRAINT ck_directory_policy_version CHECK (configuration_version > 0),
+                ADD CONSTRAINT ck_directory_policy_groups CHECK (jsonb_typeof(draft_group_ids) = 'array' AND jsonb_typeof(approved_group_ids) = 'array');
+            ALTER TABLE workspace_account_membership ADD CONSTRAINT ck_membership_directory_subject CHECK
+                ((source = 'DIRECTORY' AND directory_subject IS NOT NULL) OR (source <> 'DIRECTORY' AND directory_subject IS NULL));
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

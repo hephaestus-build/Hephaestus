@@ -1,4 +1,5 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -11,6 +12,7 @@ vi.setConfig({ testTimeout: 20_000 });
 
 function provider(registrationId: string, displayName: string): LoginProviderView {
 	return {
+		directoryGroupIds: [],
 		registrationId,
 		displayName,
 		type: "oidc",
@@ -124,5 +126,43 @@ describe("instance login providers route", () => {
 		expect(
 			screen.getByRole("switch", { name: "Disable Team GitLab" }).getAttribute("aria-checked"),
 		).toBe("true");
+	});
+	it("approves immutable directory group IDs and can explicitly remove their approval", async () => {
+		const user = userEvent.setup();
+		const organization = { ...provider("organization", "Organization"), type: "OIDC" };
+		let savedGroups: string[] = [];
+		const readProvider = () => ({ ...organization, directoryGroupIds: savedGroups });
+		server.use(
+			http.get("*/admin/login-providers", () => HttpResponse.json([readProvider()])),
+			http.patch("*/admin/login-providers/organization/directory-groups", async ({ request }) => {
+				expect(await request.json()).toStrictEqual({ groupIds: ["engineering"] });
+				savedGroups = ["engineering"];
+				return HttpResponse.json(readProvider());
+			}),
+		);
+		renderLoginProvidersRoute();
+		await user.click(
+			await screen.findByRole("button", { name: "Directory groups" }, ROUTE_RENDER_WAIT),
+		);
+		let dialog = await screen.findByRole("dialog", { name: "Approve directory groups" });
+		await user.type(
+			within(dialog).getByRole("textbox", { name: "Approved group IDs" }),
+			"engineering\nengineering",
+		);
+		await user.click(within(dialog).getByRole("button", { name: "Approve groups" }));
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		server.use(
+			http.patch("*/admin/login-providers/organization/directory-groups", async ({ request }) => {
+				expect(await request.json()).toStrictEqual({ groupIds: [] });
+				savedGroups = [];
+				return HttpResponse.json(readProvider());
+			}),
+		);
+		await user.click(screen.getByRole("button", { name: "Directory groups" }));
+		dialog = await screen.findByRole("dialog", { name: "Approve directory groups" });
+		await user.clear(within(dialog).getByRole("textbox", { name: "Approved group IDs" }));
+		await user.click(within(dialog).getByRole("button", { name: "Remove directory approval" }));
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		expect(savedGroups).toStrictEqual([]);
 	});
 });

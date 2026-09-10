@@ -7,6 +7,7 @@ import { expectSettledVisible } from "@/test/overlay";
 import { LoginProviderFormDialog } from "./LoginProviderFormDialog";
 
 const editing: LoginProviderView = {
+	directoryGroupIds: [],
 	registrationId: "gitlab-acme",
 	type: "GITLAB",
 	displayName: "ACME GitLab",
@@ -20,6 +21,7 @@ const editing: LoginProviderView = {
 };
 
 const editingSlack: LoginProviderView = {
+	directoryGroupIds: [],
 	registrationId: "slack",
 	type: "SLACK",
 	displayName: "Slack",
@@ -33,6 +35,7 @@ const editingSlack: LoginProviderView = {
 };
 
 const editingOutline: LoginProviderView = {
+	directoryGroupIds: [],
 	registrationId: "outline-acme",
 	type: "OUTLINE",
 	displayName: "ACME Outline",
@@ -129,6 +132,7 @@ export const EditOrganization: Story = {
 	args: {
 		editing: {
 			...editing,
+			directoryGroupIds: [],
 			registrationId: "organization",
 			type: "OIDC",
 			displayName: "Organization account",

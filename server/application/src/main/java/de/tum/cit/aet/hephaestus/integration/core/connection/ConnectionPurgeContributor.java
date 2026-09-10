@@ -93,6 +93,7 @@ public class ConnectionPurgeContributor implements WorkspacePurgeContributor {
             case GITLAB -> "GitLab";
             case SLACK -> "Slack";
             case OUTLINE -> "Outline";
+            case KEYCLOAK_DIRECTORY -> "Keycloak directory";
         };
     }
 

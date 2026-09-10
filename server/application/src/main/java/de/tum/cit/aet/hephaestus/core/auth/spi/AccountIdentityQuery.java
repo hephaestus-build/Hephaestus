@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.core.auth.spi;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -14,6 +16,12 @@ public interface AccountIdentityQuery {
 
     /** Locks the account for an access mutation; requires an enclosing transaction. */
     Optional<AccountView> accountForUpdate(Long accountId);
+
+    /** Profiles for a known set of IDs, without one query per inventory row. */
+    Map<Long, AccountView> accounts(Set<Long> accountIds);
+
+    /** Enabled, non-team-scoped identity links; account status remains explicit in each view. */
+    Map<String, AccountView> accountsForSubjects(Long providerId, Set<String> subjects);
 
     record AccountView(Long id, String displayName, boolean active) {}
 

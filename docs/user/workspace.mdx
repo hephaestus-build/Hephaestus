@@ -40,6 +40,30 @@ Members and teams are scoped to one workspace.
 
 If source-managed membership is wrong, correct it in GitHub or GitLab and wait for the next sync.
 
+## Directory-managed access
+
+If your organization uses directory-managed access, open **User settings → Workspace access**.
+Connect your organization's sign-in method under **Connected Accounts** using your existing account.
+A matching name or email does not connect accounts. Eligible workspaces appear only after a complete,
+current directory read. Choose **Join workspace** on an offer; this grants a Member role, never
+ownership. A suspension requires an explicit owner decision and cannot be bypassed by linking again.
+
+Workspace owners configure **Administration → Directory access** using a source and group IDs already
+approved by an instance administrator. Save the dedicated read-only directory credentials, preview the
+saved configuration, inspect the proposed changes, and approve that preview. Workspace administrators
+can inspect the policy and reconcile it, but only owners can change eligibility or approve it.
+
+Directory management removes only the access it manages after a complete read confirms departure.
+Manual access and ownership are preserved. Owners can explicitly **Adopt** an eligible non-owner's
+access into directory management; this changes their role to Member, even if they were an
+administrator, and preserves any suspension.
+
+**Pause new access** stops additions while confirmed departures still remove managed access.
+**Resume new access** requires a fresh read. **End management** removes managed access immediately
+without changing manual access, ownership or suspensions. An outage or stale read blocks new grants
+but is never treated as proof that everyone left. Disconnecting the organizational identity also
+removes its managed access.
+
 ## Practices and AI
 
 Workspace admins choose:

@@ -66,7 +66,9 @@ class AccountServiceTest extends BaseUnitTest {
                 clock,
                 loginProviderService,
                 gitProviderRegistry,
+                List.of(),
                 List.of());
+        lenient().when(accountRepository.findByIdForUpdate(1L)).thenReturn(java.util.Optional.of(new Account()));
         LoginProvider github = new LoginProvider();
         github.setType(LoginProvider.ProviderType.GITHUB);
         github.setBaseUrl("https://github.com");

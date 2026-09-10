@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import {
+	adminApproveDirectoryGroupsMutation,
 	adminCreateLoginProviderMutation,
 	adminDeleteLoginProviderMutation,
 	adminListLoginProvidersOptions,
@@ -16,6 +17,7 @@ import type {
 	LoginProviderView,
 	UpdateLoginProviderRequest,
 } from "@/api/types.gen";
+import { InstanceDirectoryGroupsDialog } from "@/components/admin/login-providers/InstanceDirectoryGroupsDialog";
 import { LoginProviderFormDialog } from "@/components/admin/login-providers/LoginProviderFormDialog";
 import { LoginProvidersTable } from "@/components/admin/login-providers/LoginProvidersTable";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
@@ -39,6 +41,7 @@ function AdminLoginProvidersPage() {
 	const listQuery = useQuery(adminListLoginProvidersOptions());
 	const providers: LoginProviderView[] = listQuery.data ?? [];
 
+	const [directoryProvider, setDirectoryProvider] = useState<LoginProviderView | null>(null);
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [editing, setEditing] = useState<LoginProviderView | null>(null);
 
@@ -57,6 +60,7 @@ function AdminLoginProvidersPage() {
 		const stepUp = stepUpChallengeOf(error);
 		if (stepUp) {
 			setDialogOpen(false);
+			setDirectoryProvider(null);
 			setChallenge(stepUp);
 			return;
 		}
@@ -92,6 +96,15 @@ function AdminLoginProvidersPage() {
 		onError: (error) => reportError(error, "Could not delete the login provider"),
 	});
 
+	const directoryMutation = useMutation({
+		...filedUnder(PROVIDER_WRITE_MUTATION_KEY, adminApproveDirectoryGroupsMutation()),
+		onSuccess: () => {
+			void invalidate();
+			setDirectoryProvider(null);
+			toast.success("Directory group approval updated");
+		},
+		onError: (error) => reportError(error, "Could not update directory approval"),
+	});
 	const mutatingIds = usePendingMutationIds(PROVIDER_WRITE_MUTATION_KEY, (variables) =>
 		pathString(variables, "registrationId"),
 	);
@@ -141,6 +154,7 @@ function AdminLoginProvidersPage() {
 				onToggleEnabled={handleToggleEnabled}
 				onDelete={handleDelete}
 				onAdd={openCreate}
+				onDirectoryGroups={setDirectoryProvider}
 			/>
 
 			<LoginProviderFormDialog
@@ -152,6 +166,18 @@ function AdminLoginProvidersPage() {
 				onUpdate={handleUpdate}
 			/>
 
+			<InstanceDirectoryGroupsDialog
+				provider={directoryProvider}
+				isSaving={directoryMutation.isPending}
+				onClose={() => setDirectoryProvider(null)}
+				onSave={(groupIds) => {
+					if (directoryProvider)
+						directoryMutation.mutate({
+							path: { registrationId: directoryProvider.registrationId },
+							body: { groupIds },
+						});
+				}}
+			/>
 			<ConfirmAccessDialog
 				open={challenge !== undefined}
 				onOpenChange={(open) => {

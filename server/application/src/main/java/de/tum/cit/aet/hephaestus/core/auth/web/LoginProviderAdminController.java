@@ -14,9 +14,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -115,6 +117,19 @@ public class LoginProviderAdminController {
         return ResponseEntity.ok(toView(updated, callbackBase()));
     }
 
+    @PatchMapping("/{registrationId}/directory-groups")
+    @Operation(summary = "Approve Keycloak directory eligibility groups", operationId = "adminApproveDirectoryGroups")
+    @RequiresRecentSignIn
+    @Audited(ledger = AuditLedger.AUTH_EVENT, type = "LOGIN_PROVIDER_UPDATED")
+    public ResponseEntity<LoginProviderViewDTO> approveDirectoryGroups(
+            @PathVariable String registrationId, @Valid @RequestBody DirectoryGroupsRequestDTO body) {
+        return ResponseEntity.ok(
+                toView(loginProviderService.approveDirectoryGroups(registrationId, body.groupIds()), callbackBase()));
+    }
+
+    public record DirectoryGroupsRequestDTO(
+            @NotNull @Size(max = 100) Set<@NotBlank @Size(max = 255) String> groupIds) {}
+
     @DeleteMapping("/{registrationId}")
     @Operation(summary = "Delete a login provider", operationId = "adminDeleteLoginProvider")
     @RequiresRecentSignIn
@@ -135,7 +150,8 @@ public class LoginProviderAdminController {
                 p.isSeededFromEnv(),
                 callbackBase + "/login/oauth2/code/" + p.getRegistrationId(),
                 p.getCreatedAt(),
-                p.getUpdatedAt());
+                p.getUpdatedAt(),
+                p.getDirectoryGroupIds());
     }
 
     /** Admin view of a login provider. The client secret is never included. */
@@ -152,7 +168,8 @@ public class LoginProviderAdminController {
             String redirectUri,
 
             @NonNull Instant createdAt,
-            @NonNull Instant updatedAt) {}
+            @NonNull Instant updatedAt,
+            @NonNull Set<String> directoryGroupIds) {}
 
     public record CreateLoginProviderRequestDTO(
             @NotBlank

@@ -609,7 +609,7 @@ export type ConfigAuditEntryView = {
    */
   elevatedViaInstanceAdmin: boolean;
   entityId?: string;
-  entityType?: 'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_ACCESS_POLICY' | 'WORKSPACE_ACCESS_REQUEST' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL';
+  entityType?: 'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_ACCESS_POLICY' | 'WORKSPACE_ACCESS_REQUEST' | 'DIRECTORY_POLICY' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL';
   id?: number;
   newValue?: string;
   occurredAt?: Date;
@@ -676,10 +676,10 @@ export type ConnectionDetail = {
   createdAt?: Date;
   credentialsUnreadableSince?: Date;
   displayName?: string;
-  family?: 'SCM' | 'MESSAGING' | 'DOCUMENTATION';
+  family?: 'SCM' | 'MESSAGING' | 'DOCUMENTATION' | 'DIRECTORY';
   id?: number;
   instanceKey?: string;
-  kind?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
+  kind?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
   state?: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'UNINSTALLED';
   stateReason?: string;
   updatedAt?: Date;
@@ -696,10 +696,10 @@ export type ConnectionSummary = {
   createdAt?: Date;
   credentialsUnreadableSince?: Date;
   displayName?: string;
-  family?: 'SCM' | 'MESSAGING' | 'DOCUMENTATION';
+  family?: 'SCM' | 'MESSAGING' | 'DOCUMENTATION' | 'DIRECTORY';
   id?: number;
   instanceKey?: string;
-  kind?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
+  kind?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
   state?: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'UNINSTALLED';
   stateReason?: string;
   updatedAt?: Date;
@@ -736,7 +736,7 @@ export type ConnectionSyncStatus = {
   /**
    * Integration kind
    */
-  kind: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
+  kind: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
   /**
    * When the last inbound webhook/event was processed for this connection, if any
    */
@@ -1377,6 +1377,85 @@ export type DeveloperPracticeSummary = {
   totalObservations: number;
 };
 
+export type DirectoryAccessState = {
+  policy?: DirectoryPolicy;
+};
+
+export type DirectoryApproval = {
+  configurationVersion: number;
+};
+
+export type DirectoryConfiguration = {
+  credentials?: DirectoryCredentials;
+  groupIds: Array<string>;
+  registrationId: string;
+};
+
+export type DirectoryCredentials = {
+  clientId: string;
+  clientSecret: string;
+};
+
+export type DirectoryEvidence = {
+  additions: number;
+  awaitingIdentity: number;
+  completedAt: Date;
+  eligiblePeople: number;
+  fresh: boolean;
+  groupNames: {
+    [key: string]: string;
+  };
+  removals: number;
+  startedAt: Date;
+};
+
+export type DirectoryGroupsRequest = {
+  groupIds: Array<string>;
+};
+
+export type DirectoryMember = {
+  accountId: number;
+  adoptable: boolean;
+  change: 'ADD' | 'REMOVE' | 'PROTECTED' | 'UNCHANGED';
+  displayName: string;
+  eligible: boolean;
+  role?: 'OWNER' | 'ADMIN' | 'MEMBER';
+  source?: 'MANUAL' | 'SCM' | 'DIRECTORY' | 'REQUEST' | 'MIGRATED';
+  suspended: boolean;
+};
+
+/**
+ * Administrative view; raw directory subjects, access tokens and client secrets never cross HTTP.
+ */
+export type DirectoryPolicy = {
+  approvedAt?: Date;
+  approvedEvidence?: DirectoryEvidence;
+  approvedGroupIds: Array<string>;
+  blockers: Array<string>;
+  configurationVersion: number;
+  connectionId: number;
+  draftGroupIds: Array<string>;
+  failureReason?: string;
+  health: 'UNVERIFIED' | 'HEALTHY' | 'FAILED';
+  issuer: string;
+  lastAttemptAt?: Date;
+  members: Array<DirectoryMember>;
+  previewEvidence?: DirectoryEvidence;
+  registrationId: string;
+  status: 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'ENDED';
+};
+
+export type DirectorySource = {
+  displayName: string;
+  groupIds: Array<string>;
+  issuer: string;
+  registrationId: string;
+};
+
+export type DirectoryStatus = {
+  status: 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'ENDED';
+};
+
 /**
  * A verified quote and its exact source location
  */
@@ -1763,7 +1842,7 @@ export type InAppFeedback = {
  *  <code>group_id</code>; GitHub needs nothing because the install URL is server-configured).
  */
 export type InitiateConnectionRequest = {
-  kind: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
+  kind: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
   userInput?: {
     [key: string]: string;
   };
@@ -1841,7 +1920,7 @@ export type IntegrationCatalogEntry = {
   /**
    * Integration kind
    */
-  kind: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
+  kind: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
 };
 
 /**
@@ -2199,6 +2278,7 @@ export type LlmUsageByJobType = {
 export type LoginProviderView = {
   baseUrl: string;
   createdAt: Date;
+  directoryGroupIds: Array<string>;
   displayName: string;
   enabled?: boolean;
   /**
@@ -2974,7 +3054,7 @@ export type PracticeGroupReviewedWork = {
   channelName?: string;
   id: number;
   number?: number;
-  provider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
+  provider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
   repositoryName?: string;
   title?: string;
   type: string;
@@ -3838,7 +3918,7 @@ export type ReviewArtifact = {
   /**
    * Source provider, when recorded
    */
-  provider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
+  provider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
   /**
    * Provider-qualified repository path for SCM artifacts
    */
@@ -4342,7 +4422,7 @@ export type ReviewRunTarget = {
    * Provider-visible work-item number
    */
   number?: number;
-  provider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
+  provider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
   repositoryName?: string;
   title: string;
   type: string;
@@ -5742,6 +5822,14 @@ export type WorkspaceAccessNotification = {
   state: 'PENDING' | 'SENT' | 'FAILED' | 'CANCELLED';
 };
 
+export type WorkspaceAccessOffer = {
+  displayName: string;
+  joined: boolean;
+  slug: string;
+  suspended: boolean;
+  workspaceId: number;
+};
+
 export type WorkspaceAccessPolicy = {
   emailConfigured?: boolean;
   enabled?: boolean;
@@ -6256,7 +6344,7 @@ export type AdminListConfigAuditEventsData = {
     workspaceId?: number;
     page?: number;
     size?: number;
-    entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_ACCESS_POLICY' | 'WORKSPACE_ACCESS_REQUEST' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
+    entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_ACCESS_POLICY' | 'WORKSPACE_ACCESS_REQUEST' | 'DIRECTORY_POLICY' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
     entityId?: string;
     changedKey?: string;
     action?: Array<'CREATED' | 'UPDATED' | 'DELETED'>;
@@ -6737,6 +6825,24 @@ export type AdminUpdateLoginProviderResponses = {
 };
 
 export type AdminUpdateLoginProviderResponse = AdminUpdateLoginProviderResponses[keyof AdminUpdateLoginProviderResponses];
+
+export type AdminApproveDirectoryGroupsData = {
+  body: DirectoryGroupsRequest;
+  path: {
+    registrationId: string;
+  };
+  query?: never;
+  url: '/admin/login-providers/{registrationId}/directory-groups';
+};
+
+export type AdminApproveDirectoryGroupsResponses = {
+  /**
+   * OK
+   */
+  200: LoginProviderView;
+};
+
+export type AdminApproveDirectoryGroupsResponse = AdminApproveDirectoryGroupsResponses[keyof AdminApproveDirectoryGroupsResponses];
 
 export type AdminGetCuratedCatalogData = {
   body?: never;
@@ -7926,6 +8032,40 @@ export type GetSlackUserPreferencesResponses = {
 
 export type GetSlackUserPreferencesResponse = GetSlackUserPreferencesResponses[keyof GetSlackUserPreferencesResponses];
 
+export type GetWorkspaceAccessOffersData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/user/workspace-access';
+};
+
+export type GetWorkspaceAccessOffersResponses = {
+  /**
+   * OK
+   */
+  200: Array<WorkspaceAccessOffer>;
+};
+
+export type GetWorkspaceAccessOffersResponse = GetWorkspaceAccessOffersResponses[keyof GetWorkspaceAccessOffersResponses];
+
+export type JoinDirectoryWorkspaceData = {
+  body?: never;
+  path: {
+    workspaceId: number;
+  };
+  query?: never;
+  url: '/user/workspace-access/{workspaceId}';
+};
+
+export type JoinDirectoryWorkspaceResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceAccessOffer;
+};
+
+export type JoinDirectoryWorkspaceResponse = JoinDirectoryWorkspaceResponses[keyof JoinDirectoryWorkspaceResponses];
+
 export type ListWorkspacesData = {
   body?: never;
   path?: never;
@@ -8534,7 +8674,7 @@ export type ListWorkspaceConfigAuditEventsData = {
   query?: {
     page?: number;
     size?: number;
-    entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_ACCESS_POLICY' | 'WORKSPACE_ACCESS_REQUEST' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
+    entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_ACCESS_POLICY' | 'WORKSPACE_ACCESS_REQUEST' | 'DIRECTORY_POLICY' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
     entityId?: string;
     changedKey?: string;
     action?: Array<'CREATED' | 'UPDATED' | 'DELETED'>;
@@ -8938,6 +9078,175 @@ export type UpdateMemberVisibilityResponses = {
 };
 
 export type UpdateMemberVisibilityResponse = UpdateMemberVisibilityResponses[keyof UpdateMemberVisibilityResponses];
+
+export type GetDirectoryPolicyData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/directory-access';
+};
+
+export type GetDirectoryPolicyResponses = {
+  /**
+   * OK
+   */
+  200: DirectoryAccessState;
+};
+
+export type GetDirectoryPolicyResponse = GetDirectoryPolicyResponses[keyof GetDirectoryPolicyResponses];
+
+export type ConfigureDirectoryPolicyData = {
+  body: DirectoryConfiguration;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/directory-access';
+};
+
+export type ConfigureDirectoryPolicyResponses = {
+  /**
+   * OK
+   */
+  200: DirectoryPolicy;
+};
+
+export type ConfigureDirectoryPolicyResponse = ConfigureDirectoryPolicyResponses[keyof ConfigureDirectoryPolicyResponses];
+
+export type ApproveDirectoryPolicyData = {
+  body: DirectoryApproval;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/directory-access/approvals';
+};
+
+export type ApproveDirectoryPolicyResponses = {
+  /**
+   * OK
+   */
+  200: DirectoryPolicy;
+};
+
+export type ApproveDirectoryPolicyResponse = ApproveDirectoryPolicyResponses[keyof ApproveDirectoryPolicyResponses];
+
+export type AdoptDirectoryMemberData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    accountId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/directory-access/members/{accountId}';
+};
+
+export type AdoptDirectoryMemberResponses = {
+  /**
+   * OK
+   */
+  200: DirectoryPolicy;
+};
+
+export type AdoptDirectoryMemberResponse = AdoptDirectoryMemberResponses[keyof AdoptDirectoryMemberResponses];
+
+export type PreviewDirectoryPolicyData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/directory-access/previews';
+};
+
+export type PreviewDirectoryPolicyResponses = {
+  /**
+   * OK
+   */
+  200: SyncJob;
+};
+
+export type PreviewDirectoryPolicyResponse = PreviewDirectoryPolicyResponses[keyof PreviewDirectoryPolicyResponses];
+
+export type ReconcileDirectoryPolicyData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/directory-access/reconciliations';
+};
+
+export type ReconcileDirectoryPolicyResponses = {
+  /**
+   * OK
+   */
+  200: SyncJob;
+};
+
+export type ReconcileDirectoryPolicyResponse = ReconcileDirectoryPolicyResponses[keyof ReconcileDirectoryPolicyResponses];
+
+export type GetDirectorySourcesData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/directory-access/sources';
+};
+
+export type GetDirectorySourcesResponses = {
+  /**
+   * OK
+   */
+  200: Array<DirectorySource>;
+};
+
+export type GetDirectorySourcesResponse = GetDirectorySourcesResponses[keyof GetDirectorySourcesResponses];
+
+export type ChangeDirectoryPolicyStatusData = {
+  body: DirectoryStatus;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/directory-access/status';
+};
+
+export type ChangeDirectoryPolicyStatusResponses = {
+  /**
+   * OK
+   */
+  200: DirectoryPolicy;
+};
+
+export type ChangeDirectoryPolicyStatusResponse = ChangeDirectoryPolicyStatusResponses[keyof ChangeDirectoryPolicyStatusResponses];
 
 export type UpdateFeaturesData = {
   body: UpdateWorkspaceFeaturesRequest;

@@ -158,6 +158,10 @@ public class ConnectionController {
             @RequestBody @Valid @NotNull UpdateConnectionStatusRequestDTO body,
             @Nullable Authentication authentication) {
         Connection connection = admin.findInWorkspaceOrThrow(workspace.id(), id);
+        if (connection.getKind() == IntegrationKind.KEYCLOAK_DIRECTORY) {
+            throw new IllegalArgumentException(
+                    "Manage directory availability and teardown through the workspace directory policy");
+        }
         IntegrationState target = body.state();
         String eventType =
                 switch (target) {

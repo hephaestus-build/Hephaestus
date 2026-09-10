@@ -21,7 +21,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderClientRegistrationRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
-import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.OrganizationalIdentityIntegrationTest;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -38,24 +38,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.mock.http.client.MockClientHttpRequest;
 import org.springframework.mock.http.client.MockClientHttpResponse;
-import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
 /** Real HTTP authorization and callbacks, framework nonce/PKCE validation and signed RSA ID tokens; no external IdP. */
-@TestPropertySource(
-        properties = {
-            "hephaestus.auth.oidc.allowed-issuers=https://identity.example.com/realms/team,https://identity.example.com/realms/other",
-            "hephaestus.auth.api-base-path=",
-            "hephaestus.webapp.url=https://app.example.com"
-        })
-class OrganizationalOidcLoginIntegrationTest extends RealAuthIntegrationTest {
+class OrganizationalOidcLoginIntegrationTest extends OrganizationalIdentityIntegrationTest {
     private static final String ISSUER = "https://identity.example.com/realms/team";
     private static final String OTHER = "https://identity.example.com/realms/other";
 
@@ -79,9 +70,6 @@ class OrganizationalOidcLoginIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private JwtPrincipalFactory principals;
-
-    @MockitoBean(name = "oidcRequestFactory")
-    private ClientHttpRequestFactory requests;
 
     private RSAKey key;
     private String idToken = "";

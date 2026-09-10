@@ -8,6 +8,7 @@ import {
 	LayoutGridIcon,
 	KeyRound,
 	ListChecks,
+	Network,
 	PlugZapIcon,
 	ScanEye,
 	ScrollText,
@@ -68,6 +69,7 @@ export function NavAdmin({
 		matchRoute({ to: "/w/$workspaceSlug/admin/settings", fuzzy: false }),
 	);
 	const onAccess = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/access", fuzzy: true }));
+	const onDirectory = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/directory", fuzzy: true }));
 	const onMembers = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/members", fuzzy: true }));
 	const onTeams = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/teams", fuzzy: true }));
 	const onReview = Boolean(
@@ -137,6 +139,16 @@ export function NavAdmin({
 					>
 						<BookUser />
 						<span>Members</span>
+					</SidebarMenuButton>
+				</SidebarMenuItem>
+				<SidebarMenuItem>
+					<SidebarMenuButton
+						tooltip="Directory access"
+						isActive={onDirectory}
+						render={<Link to="/w/$workspaceSlug/admin/directory" params={{ workspaceSlug }} />}
+					>
+						<Network />
+						<span>Directory access</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
 				<SidebarMenuItem>

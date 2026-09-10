@@ -6,9 +6,12 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +49,40 @@ public class AccountIdentityQueryService implements AccountIdentityQuery {
                         Objects.requireNonNull(account.getId()),
                         account.getDisplayName(),
                         account.getStatus() == Account.Status.ACTIVE));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, AccountView> accounts(Set<Long> accountIds) {
+        Map<Long, AccountView> result = new HashMap<>();
+        List<Long> ids = List.copyOf(accountIds);
+        for (int from = 0; from < ids.size(); from += 1000) {
+            accountRepository
+                    .findAllById(ids.subList(from, Math.min(from + 1000, ids.size())))
+                    .forEach(account -> result.put(Objects.requireNonNull(account.getId()), toAccountView(account)));
+        }
+        return Map.copyOf(result);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, AccountView> accountsForSubjects(Long providerId, Set<String> subjects) {
+        Map<String, AccountView> result = new HashMap<>();
+        List<String> keys = List.copyOf(subjects);
+        // Directory captures can exceed PostgreSQL's bind-parameter limit; bound every IN query.
+        for (int from = 0; from < keys.size(); from += 1000) {
+            identityLinkRepository
+                    .findActiveByProviderSubjects(providerId, keys.subList(from, Math.min(from + 1000, keys.size())))
+                    .forEach(link -> result.put(link.getSubject(), toAccountView(link.getAccount())));
+        }
+        return Map.copyOf(result);
+    }
+
+    private static AccountView toAccountView(Account account) {
+        return new AccountView(
+                Objects.requireNonNull(account.getId()),
+                account.getDisplayName(),
+                account.getStatus() == Account.Status.ACTIVE);
     }
 
     @Override

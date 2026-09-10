@@ -19,7 +19,9 @@ public enum IntegrationKind {
     /** Slack workspace. */
     SLACK(IntegrationFamily.MESSAGING),
     /** Outline knowledge base (getoutline.com cloud or a self-hosted host). */
-    OUTLINE(IntegrationFamily.DOCUMENTATION);
+    OUTLINE(IntegrationFamily.DOCUMENTATION),
+    /** Read-only organizational eligibility; never a practice-review source. */
+    KEYCLOAK_DIRECTORY(IntegrationFamily.DIRECTORY);
 
     private final IntegrationFamily family;
 

@@ -1,7 +1,7 @@
 import { HttpResponse, http } from "msw";
 import { assert, describe, expect, it } from "vitest";
 
-import { adminListAuthEvents, listBackfillRuns } from "@/api/sdk.gen";
+import { adminListAuthEvents, getDirectoryPolicy, listBackfillRuns } from "@/api/sdk.gen";
 import { server } from "@/mocks/server";
 
 /**
@@ -18,6 +18,27 @@ import { server } from "@/mocks/server";
  * outside `src/api/` because `openapi-ts` empties that directory on every run.
  */
 describe("generated SDK response transformers", () => {
+	it("preserves an unconfigured directory state and revives nested directory evidence", async () => {
+		server.use(http.get("*/workspaces/acme/directory-access", () => HttpResponse.json({})));
+		const empty = await getDirectoryPolicy({ path: { workspaceSlug: "acme" } });
+		expect(empty.data?.policy).toBeUndefined();
+		server.use(
+			http.get("*/workspaces/acme/directory-access", () =>
+				HttpResponse.json({
+					policy: {
+						approvedAt: ISO,
+						approvedEvidence: { startedAt: ISO, completedAt: ISO },
+						previewEvidence: { startedAt: ISO, completedAt: ISO },
+					},
+				}),
+			),
+		);
+		const configured = await getDirectoryPolicy({ path: { workspaceSlug: "acme" } });
+		expect(configured.data?.policy?.approvedAt).toBeInstanceOf(Date);
+		expect(configured.data?.policy?.approvedEvidence?.startedAt.toISOString()).toBe(ISO);
+		expect(configured.data?.policy?.previewEvidence?.completedAt.toISOString()).toBe(ISO);
+	});
+
 	it("revives a required date field into a Date", async () => {
 		server.use(
 			http.get("*/admin/audit", () =>
