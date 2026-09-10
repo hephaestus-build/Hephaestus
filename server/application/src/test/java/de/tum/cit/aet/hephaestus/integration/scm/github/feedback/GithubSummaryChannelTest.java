@@ -438,7 +438,7 @@ class GithubSummaryChannelTest extends BaseUnitTest {
                 List.of(comment("IC_1", "also unrelated")),
                 false, // hasPreviousPage=false — the oldest comment was reached, every comment was scanned
                 null);
-        when(spec.execute()).thenReturn(Mono.just(newestPage), Mono.just(oldestPage));
+        when(spec.execute()).thenReturn(Mono.just(newestPage)).thenReturn(Mono.just(oldestPage));
 
         ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
 
@@ -461,7 +461,10 @@ class GithubSummaryChannelTest extends BaseUnitTest {
                 List.of(comment("IC_1", "unrelated")),
                 true, // still older comments left when the budget runs out
                 "start-cursor-3");
-        when(spec.execute()).thenReturn(Mono.just(page1), Mono.just(page2), Mono.just(page3));
+        when(spec.execute())
+                .thenReturn(Mono.just(page1))
+                .thenReturn(Mono.just(page2))
+                .thenReturn(Mono.just(page3));
 
         ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
 
@@ -478,7 +481,7 @@ class GithubSummaryChannelTest extends BaseUnitTest {
                 "repository.pullRequest.comments", List.of(comment("IC_2", "unrelated")), true, "start-cursor-1");
         ClientGraphQlResponse olderPage = mockCommentsPageResponse(
                 "repository.pullRequest.comments", List.of(comment("IC_1", "<!-- marker:job-1 -->body")), false, null);
-        when(spec.execute()).thenReturn(Mono.just(newestPage), Mono.just(olderPage));
+        when(spec.execute()).thenReturn(Mono.just(newestPage)).thenReturn(Mono.just(olderPage));
 
         ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
 

@@ -77,7 +77,8 @@ class DevLoginIntegrationTest extends RealAuthIntegrationTest {
                 .jsonPath("$.appRole")
                 .isEqualTo("APP_ADMIN")
                 .jsonPath("$.roles")
-                .value(hasItem("app_admin"));
+                .value((java.util.List<String> value) ->
+                        org.hamcrest.MatcherAssert.assertThat(value, hasItem("app_admin")));
     }
 
     @Test

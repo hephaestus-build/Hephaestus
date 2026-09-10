@@ -101,8 +101,11 @@ public class WorkspaceAgnosticAspect {
         return null;
     }
 
+    // Closing the scope is the operation; its binding is intentionally unread.
+    @SuppressWarnings("try")
     private static Object proceedWithBypass(ProceedingJoinPoint pjp, WorkspaceAgnostic ann) throws Throwable {
         String reason = ann != null ? ann.value() : "anonymous";
+
         try (TenancyBypass.Scope ignored = TenancyBypass.open(reason)) {
             return pjp.proceed();
         }

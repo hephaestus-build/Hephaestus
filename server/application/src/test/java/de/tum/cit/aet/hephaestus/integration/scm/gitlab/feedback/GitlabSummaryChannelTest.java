@@ -498,7 +498,7 @@ class GitlabSummaryChannelTest extends BaseUnitTest {
         ClientGraphQlResponse page1 =
                 mockMrNotesPage(List.of(note("gid://gitlab/Note/1", "unrelated")), true, "cursor-1");
         ClientGraphQlResponse page2 = mockMrNotesPage(List.of(note("gid://gitlab/Note/2", MARKER)), false, null);
-        when(spec.execute()).thenReturn(Mono.just(page1), Mono.just(page2));
+        when(spec.execute()).thenReturn(Mono.just(page1)).thenReturn(Mono.just(page2));
 
         ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
 

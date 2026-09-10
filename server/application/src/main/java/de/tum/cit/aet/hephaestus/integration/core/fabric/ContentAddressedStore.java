@@ -49,9 +49,12 @@ public class ContentAddressedStore {
      * Stores the contents of {@code source} atomically and returns its SHA-256 digest, streaming the
      * file twice — once to digest, once to copy — so a blob of any size costs one buffer of memory.
      */
+    // Closing the scope is the operation; its binding is intentionally unread.
+    @SuppressWarnings("try")
     public String put(Path source) {
         String sha = sha256(source);
         Path blob = pathFor(sha);
+
         try (BlobLock ignored = lockBlob(sha)) {
             if (Files.exists(blob)) {
                 Files.setLastModifiedTime(blob, FileTime.from(Instant.now()));
@@ -91,6 +94,8 @@ public class ContentAddressedStore {
     /**
      * Stores {@code content} atomically and returns its SHA-256 digest. Reusing a blob refreshes its retention age.
      */
+    // Closing the scope is the operation; its binding is intentionally unread.
+    @SuppressWarnings("try")
     public String put(byte[] content) {
         String sha = sha256(content);
         Path blob = pathFor(sha);
@@ -162,6 +167,8 @@ public class ContentAddressedStore {
         return sweep(liveShas, Instant.MAX);
     }
 
+    // Closing the scope is the operation; its binding is intentionally unread.
+    @SuppressWarnings("try")
     public int sweep(Set<String> liveShas, Instant createdBefore) {
         Path casRoot = layout.casRoot();
         if (!Files.isDirectory(casRoot)) {

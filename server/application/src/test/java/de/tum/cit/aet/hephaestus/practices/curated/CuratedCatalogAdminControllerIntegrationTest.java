@@ -103,9 +103,11 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .expectBody()
                 // Selected by kind rather than by position; the list is ordered by the registered domains.
                 .jsonPath("$.workTypes[?(@.artifactKind == 'chat.conversation_thread')].recommendedNeeds[0].sourceKind")
-                .value(contains("slack.conversation.thread"))
+                .value((java.util.List<String> value) ->
+                        org.hamcrest.MatcherAssert.assertThat(value, contains("slack.conversation.thread")))
                 .jsonPath("$.workTypes[?(@.artifactKind == 'chat.conversation_thread')].allowedSources[0].displayName")
-                .value(contains("Slack thread"));
+                .value((java.util.List<String> value) ->
+                        org.hamcrest.MatcherAssert.assertThat(value, contains("Slack thread")));
     }
 
     @Test

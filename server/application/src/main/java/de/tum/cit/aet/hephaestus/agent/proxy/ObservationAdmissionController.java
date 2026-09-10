@@ -65,7 +65,7 @@ public class ObservationAdmissionController {
             refusals.recordExecutionRefusal(e.reasonCode());
             admission.recordRefusal(jobId, e.reasonCode(), e.reason());
             log.info("Refused this review's observations ({}): jobId={}, {}", e.reasonCode(), jobId, e.reason());
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, e.reason(), e);
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, e.reason(), e);
         }
     }
 }
