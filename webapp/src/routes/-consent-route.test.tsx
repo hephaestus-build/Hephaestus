@@ -8,11 +8,9 @@ import { WORDING_VERSION } from "@/components/auth/ConsentPage";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-const NOTICE_VERSION = `${WORDING_VERSION}+abcd1234`;
 const notice = {
 	completed: false,
-	noticeVersion: NOTICE_VERSION,
-	wordingVersion: WORDING_VERSION,
+	noticeVersion: WORDING_VERSION,
 	participateInResearch: false,
 	researchOrganization: "AET",
 };
@@ -45,6 +43,7 @@ describe("first-login consent route", () => {
 			expect(submitted).toStrictEqual({
 				noticeVersion: notice.noticeVersion,
 				participateInResearch: false,
+				researchOrganization: notice.researchOrganization,
 				termsAccepted: true,
 			}),
 		);
@@ -67,6 +66,7 @@ describe("first-login consent route", () => {
 			expect(submitted).toStrictEqual({
 				noticeVersion: notice.noticeVersion,
 				participateInResearch: true,
+				researchOrganization: notice.researchOrganization,
 				termsAccepted: true,
 			}),
 		);
@@ -117,7 +117,7 @@ describe("consent recovery", () => {
 	it("stops offering the form when a rejected save reveals a newer notice version", async () => {
 		let wording: string = WORDING_VERSION;
 		server.use(
-			http.get("*/user/consent", () => HttpResponse.json({ ...notice, wordingVersion: wording })),
+			http.get("*/user/consent", () => HttpResponse.json({ ...notice, noticeVersion: wording })),
 			http.put("*/user/consent", () => {
 				wording = "next-wording";
 				return new HttpResponse(null, { status: 409 });
@@ -155,7 +155,7 @@ describe("consent recovery", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
 		await waitFor(() =>
-			expect(submitted).toStrictEqual({ noticeVersion: NOTICE_VERSION, termsAccepted: true }),
+			expect(submitted).toStrictEqual({ noticeVersion: WORDING_VERSION, termsAccepted: true }),
 		);
 	});
 });

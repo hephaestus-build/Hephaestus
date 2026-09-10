@@ -112,8 +112,16 @@ function RouteComponent() {
 		onError: () => toast.error("Failed to update research participation. Please try again."),
 	});
 
+	// Echo the notice and organisation this page rendered: a settings tab left open across a change of
+	// research organisation would otherwise record a decision about one the reader never saw.
 	const handleResearchToggle = (checked: boolean) =>
-		researchConsentMutation.mutate({ body: { granted: checked } });
+		researchConsentMutation.mutate({
+			body: {
+				granted: checked,
+				noticeVersion: accountConsent?.noticeVersion ?? "",
+				researchOrganization: accountConsent?.researchOrganization,
+			},
+		});
 
 	// After deletion: end the session. `logout()` performs a full reload to "/",
 	// so no further navigation is needed here.

@@ -5,10 +5,6 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -30,9 +26,6 @@ public class ConsentService {
      */
     static final String WORDING_VERSION = "2026-09-10";
 
-    /** Enough of a digest to distinguish two organisation names, and short enough for the column. */
-    private static final int ORGANISATION_DIGEST_LENGTH = 8;
-
     private final ConsentDecisionRepository decisionRepository;
     private final AccountRepository accountRepository;
     private final ConsentProperties properties;
@@ -46,29 +39,6 @@ public class ConsentService {
         this.properties = properties;
     }
 
-    /**
-     * What an account was actually shown: the wording, and the organisation the research question
-     * named — because consent to a study is consent to the organisation running it, and renaming that
-     * organisation asks a different question with the same words.
-     *
-     * <p>Recording the composite is what makes every downstream check follow the configuration for
-     * free: turn a study on, off, or over to another organisation and completion lapses, so the
-     * account is asked again instead of inheriting an answer it gave to somebody else.
-     */
-    String currentNoticeVersion() {
-        String organisation = properties.researchProgramme();
-        return organisation == null ? WORDING_VERSION : WORDING_VERSION + "+" + digestOf(organisation);
-    }
-
-    private static String digestOf(String organisation) {
-        try {
-            byte[] hash = MessageDigest.getInstance("SHA-256").digest(organisation.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash).substring(0, ORGANISATION_DIGEST_LENGTH);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 is required by every JRE", e);
-        }
-    }
-
     @Transactional(readOnly = true)
     public ConsentStatusDTO status(Long accountId) {
         return currentStatus(accountId);
@@ -76,7 +46,6 @@ public class ConsentService {
 
     private ConsentStatusDTO currentStatus(Long accountId) {
         return new ConsentStatusDTO(
-                currentNoticeVersion(),
                 WORDING_VERSION,
                 isCurrentNoticeCompleted(accountId),
                 researchAuthorised(accountId),
@@ -89,24 +58,20 @@ public class ConsentService {
     }
 
     private boolean isCurrentNoticeCompleted(Long accountId) {
-        return decisionRepository.isCompletedForNotice(
-                accountId, currentNoticeVersion(), properties.researchProgramme() != null);
+        return decisionRepository.isCompletedForNotice(accountId, WORDING_VERSION, properties.researchProgramme());
     }
 
     @Transactional
     public ConsentStatusDTO completeFirstLogin(Long accountId, FirstLoginConsentDTO request) {
-        if (!currentNoticeVersion().equals(request.noticeVersion())) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "The transparency notice has changed; review it again");
-        }
+        requireCurrentNotice(request.noticeVersion(), request.researchOrganization());
         if (!request.termsAccepted()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Terms must be accepted to use Hephaestus");
         }
-        boolean asksAboutResearch = properties.researchProgramme() != null;
-        if (asksAboutResearch && request.participateInResearch() == null) {
+        String organisation = properties.researchProgramme();
+        if (organisation != null && request.participateInResearch() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Answer the research question to continue");
         }
-        if (!asksAboutResearch && request.participateInResearch() != null) {
+        if (organisation == null && request.participateInResearch() != null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This instance runs no research programme");
         }
         Account account = requireAccountForUpdate(accountId);
@@ -125,8 +90,9 @@ public class ConsentService {
                     ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL);
         }
         Boolean answer = request.participateInResearch();
-        if (answer != null) {
-            appendResearchIfChanged(account, accountId, answer, ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL);
+        if (answer != null && organisation != null) {
+            appendResearchIfChanged(
+                    account, accountId, answer, organisation, ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL);
         }
         decisionRepository.flush();
         return currentStatus(accountId);
@@ -134,17 +100,20 @@ public class ConsentService {
 
     @Transactional
     public ConsentStatusDTO setResearchParticipation(Long accountId, ResearchConsentDTO request) {
-        if (properties.researchProgramme() == null) {
+        String organisation = properties.researchProgramme();
+        if (organisation == null) {
             // Participation is already false for every account while no study is configured, so there
             // is nothing here to grant and nothing left to withdraw.
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "This instance runs no research programme");
         }
+        requireCurrentNotice(request.noticeVersion(), request.researchOrganization());
         if (!isCurrentNoticeCompleted(accountId)) {
             throw new ResponseStatusException(
                     HttpStatus.PRECONDITION_REQUIRED, "Complete the current transparency notice first");
         }
         Account account = requireAccountForUpdate(accountId);
-        appendResearchIfChanged(account, accountId, request.granted(), ConsentDecision.Mechanism.ACCOUNT_SETTINGS);
+        appendResearchIfChanged(
+                account, accountId, request.granted(), organisation, ConsentDecision.Mechanism.ACCOUNT_SETTINGS);
         decisionRepository.flush();
         return currentStatus(accountId);
     }
@@ -164,7 +133,7 @@ public class ConsentService {
             return false;
         }
         ConsentDecision latest = latest(accountId, ConsentDecision.Purpose.RESEARCH_PARTICIPATION);
-        return latest != null && latest.isGranted() && isForCurrentNotice(latest);
+        return latest != null && latest.isGranted() && isForCurrentQuestion(latest);
     }
 
     /**
@@ -173,10 +142,29 @@ public class ConsentService {
      * decision — including when its boolean happens to match, because the question was not the same.
      */
     private void appendResearchIfChanged(
-            Account account, Long accountId, boolean granted, ConsentDecision.Mechanism mechanism) {
+            Account account,
+            Long accountId,
+            boolean granted,
+            String organisation,
+            ConsentDecision.Mechanism mechanism) {
         ConsentDecision current = latest(accountId, ConsentDecision.Purpose.RESEARCH_PARTICIPATION);
-        if (current == null || !isForCurrentNotice(current) || current.isGranted() != granted) {
-            append(account, ConsentDecision.Purpose.RESEARCH_PARTICIPATION, granted, mechanism);
+        if (current == null || !isForCurrentQuestion(current) || current.isGranted() != granted) {
+            decisionRepository.save(new ConsentDecision(
+                    account,
+                    ConsentDecision.Purpose.RESEARCH_PARTICIPATION,
+                    granted,
+                    mechanism,
+                    WORDING_VERSION,
+                    organisation));
+        }
+    }
+
+    /** Rejects a submission that answers a question this instance is no longer putting. */
+    private void requireCurrentNotice(String noticeVersion, @Nullable String researchOrganization) {
+        if (!WORDING_VERSION.equals(noticeVersion)
+                || !Objects.equals(properties.researchProgramme(), researchOrganization)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "The transparency notice has changed; review it again");
         }
     }
 
@@ -192,7 +180,13 @@ public class ConsentService {
     }
 
     private boolean isForCurrentNotice(ConsentDecision decision) {
-        return currentNoticeVersion().equals(decision.getNoticeVersion());
+        return WORDING_VERSION.equals(decision.getNoticeVersion());
+    }
+
+    /** The same wording, and the same organisation named — a rename asks a different question. */
+    private boolean isForCurrentQuestion(ConsentDecision decision) {
+        return isForCurrentNotice(decision)
+                && Objects.equals(properties.researchProgramme(), decision.getResearchOrganization());
     }
 
     private @Nullable ConsentDecision latest(Long accountId, ConsentDecision.Purpose purpose) {
@@ -203,16 +197,12 @@ public class ConsentService {
 
     private void append(
             Account account, ConsentDecision.Purpose purpose, boolean granted, ConsentDecision.Mechanism mechanism) {
-        decisionRepository.save(new ConsentDecision(account, purpose, granted, mechanism, currentNoticeVersion()));
+        decisionRepository.save(new ConsentDecision(account, purpose, granted, mechanism, WORDING_VERSION, null));
     }
 
     public record ConsentStatusDTO(
-            @Schema(description = "Identifies the wording and the research organisation shown; echo it back to submit")
-            @NonNull
-            String noticeVersion,
-
             @Schema(description = "Version of the first-login wording the client must be rendering") @NonNull
-            String wordingVersion,
+            String noticeVersion,
 
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
             boolean completed,
@@ -234,13 +224,26 @@ public class ConsentService {
 
             @Schema(description = "Required when the instance names a research organisation, omitted otherwise")
             @Nullable
-            Boolean participateInResearch) {
+            Boolean participateInResearch,
+
+            @Schema(description = "The organisation the research question named on screen; omitted when it asked none")
+            @Nullable
+            String researchOrganization) {
         public FirstLoginConsentDTO {
             Objects.requireNonNull(noticeVersion, "noticeVersion");
         }
     }
 
     public record ResearchConsentDTO(
+            @NonNull String noticeVersion,
+
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
-            boolean granted) {}
+            boolean granted,
+
+            @Schema(description = "The organisation this control named on screen") @Nullable
+            String researchOrganization) {
+        public ResearchConsentDTO {
+            Objects.requireNonNull(noticeVersion, "noticeVersion");
+        }
+    }
 }

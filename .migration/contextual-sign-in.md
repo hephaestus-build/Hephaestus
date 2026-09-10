@@ -17,12 +17,13 @@ gate runs on requests from existing sessions too, so signed-in users meet it as 
 finishes rather than at their next sign-in. A browser tab left open on the old setup screen during the
 upgrade shows an error and needs a full refresh, not the page's own retry.
 
-The recorded version covers the organisation the research question named as well as the wording, so
-changing `HEPHAESTUS_RESEARCH_ORGANIZATION` later asks every account again rather than carrying an
-answer over to a different name.
+Every research decision now records the organisation it was asked about, so changing
+`HEPHAESTUS_RESEARCH_ORGANIZATION` later asks each account again rather than carrying an answer over to
+a different name. Terms acceptance is untouched by that change.
 
 Nothing is dropped from the database this release. `consent_notice` and its archived `2026-08-30`
-wording stay exactly as the baseline seeded them, and `consent_decision.notice_sha256` only loses its
-`NOT NULL`: decisions recorded from here on identify their wording by `notice_version`, which points
-at the release that published it. A replica still running the previous image keeps working against
-this schema, and rolling the image back stays possible. A later release removes both.
+wording stay exactly as the baseline seeded them; `consent_decision.notice_sha256` only loses its
+`NOT NULL`, and `research_organization` is added alongside it. Decisions recorded from here on identify
+their wording by `notice_version`, which points at the release that published it. A replica still
+running the previous image keeps working against this schema, and rolling the image back stays
+possible. A later release removes the archive and the digest.

@@ -11,6 +11,20 @@
         and keeps rolling back the application image an option. The next release drops both; until it
         does, the object exclusions in application/build.gradle.kts keep the drift gate quiet.
     -->
+    <!--
+        The organisation a research question named is instance configuration, so unlike the wording it
+        is not in any release: after a rename nothing but this column can say who an account was
+        actually asked about. Additive and nullable, so the previous release ignores it and keeps
+        writing rows this one still understands.
+    -->
+    <changeSet id="1789067582535-0" author="hephaestus">
+        <addColumn tableName="consent_decision">
+            <column name="research_organization" type="varchar(255)"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="consent_decision" columnName="research_organization"/>
+        </rollback>
+    </changeSet>
     <changeSet id="1789067582535-1" author="hephaestus">
         <dropNotNullConstraint tableName="consent_decision" columnName="notice_sha256" columnDataType="varchar(64)"/>
         <rollback>
@@ -36,6 +50,7 @@ CREATE OR REPLACE FUNCTION public.enforce_consent_decision_append_only() RETURNS
                    AND OLD.mechanism = NEW.mechanism
                    AND OLD.notice_version = NEW.notice_version
                    AND OLD.notice_sha256 IS NOT DISTINCT FROM NEW.notice_sha256
+                   AND OLD.research_organization IS NOT DISTINCT FROM NEW.research_organization
                    AND OLD.occurred_at = NEW.occurred_at THEN
                     RETURN NEW;
                 END IF;

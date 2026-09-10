@@ -49,6 +49,7 @@ export interface ConsentChoice {
 	noticeVersion: string;
 	termsAccepted: boolean;
 	participateInResearch?: boolean;
+	researchOrganization?: string;
 }
 
 export type ConsentSubmission = { status: "idle" } | { status: "saving" } | { status: "error" };
@@ -192,9 +193,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 	const researchOrganization =
 		state.status === "ready" ? state.notice.researchOrganization : undefined;
 	const asksAboutResearch = researchOrganization !== undefined;
-	// `noticeVersion` also covers the research organisation named below, which the server composes and
-	// this page only echoes; `wordingVersion` is the half this bundle is responsible for rendering.
-	const stale = state.status === "ready" && state.notice.wordingVersion !== WORDING_VERSION;
+	const stale = state.status === "ready" && state.notice.noticeVersion !== WORDING_VERSION;
 	const answered = !asksAboutResearch || answer !== undefined;
 	const ready = state.status === "ready" && !stale && termsAccepted && answered;
 
@@ -236,7 +235,12 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 		state.onSubmit({
 			noticeVersion: state.notice.noticeVersion,
 			termsAccepted: true,
-			...(asksAboutResearch && { participateInResearch: answer === "yes" }),
+			// The organisation is rendered from this same response, so echoing it is what binds the
+			// answer to the question that was on screen rather than to whatever is configured now.
+			...(researchOrganization !== undefined && {
+				participateInResearch: answer === "yes",
+				researchOrganization,
+			}),
 		});
 	}
 

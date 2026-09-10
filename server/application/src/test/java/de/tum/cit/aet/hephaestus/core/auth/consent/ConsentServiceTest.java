@@ -22,12 +22,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 class ConsentServiceTest extends BaseUnitTest {
 
-    private static final ConsentProperties AET = new ConsentProperties("AET");
+    private static final String VERSION = ConsentService.WORDING_VERSION;
+    private static final String ORG = "AET";
+    private static final ConsentProperties AET = new ConsentProperties(ORG);
     private static final ConsentProperties NO_STUDY = new ConsentProperties(" ");
-    private static final String VERSION = new ConsentService(
-                    mock(ConsentDecisionRepository.class), mock(AccountRepository.class), AET)
-            .currentNoticeVersion();
-    private static final String NO_STUDY_VERSION = ConsentService.WORDING_VERSION;
 
     private final ConsentDecisionRepository decisionRepository = mock(ConsentDecisionRepository.class);
     private final AccountRepository accountRepository = mock(AccountRepository.class);
@@ -47,13 +45,14 @@ class ConsentServiceTest extends BaseUnitTest {
         return new ConsentService(decisionRepository, accountRepository, NO_STUDY);
     }
 
-    private static ConsentDecision researchDecision(boolean granted, String noticeVersion) {
+    private static ConsentDecision researchDecision(boolean granted, String noticeVersion, String organisation) {
         return new ConsentDecision(
                 new Account("Ada"),
                 ConsentDecision.Purpose.RESEARCH_PARTICIPATION,
                 granted,
                 ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL,
-                noticeVersion);
+                noticeVersion,
+                organisation);
     }
 
     private void researchOnRecord(ConsentDecision decision) {
@@ -70,7 +69,8 @@ class ConsentServiceTest extends BaseUnitTest {
 
     @Test
     void shouldAppendSeparateDecisionsWhenFirstLoginIsCompletedWithoutResearch() {
-        serviceWithResearch().completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO(VERSION, true, false));
+        serviceWithResearch()
+                .completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO(VERSION, true, false, ORG));
 
         assertThat(saved(3))
                 .extracting(ConsentDecision::getPurpose)
@@ -88,7 +88,7 @@ class ConsentServiceTest extends BaseUnitTest {
     @Test
     void shouldRejectStaleNoticeVersionWithoutWritingAnything() {
         assertThatThrownBy(() -> serviceWithResearch()
-                        .completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO("obsolete", true, true)))
+                        .completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO("obsolete", true, true, ORG)))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
@@ -99,9 +99,10 @@ class ConsentServiceTest extends BaseUnitTest {
 
     @Test
     void shouldRecordTheLaterAnswerWhenTwoSetupSubmissionsDisagree() {
-        researchOnRecord(researchDecision(true, VERSION));
+        researchOnRecord(researchDecision(true, VERSION, ORG));
 
-        serviceWithResearch().completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO(VERSION, true, false));
+        serviceWithResearch()
+                .completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO(VERSION, true, false, ORG));
 
         assertThat(saved(3))
                 .filteredOn(decision -> decision.getPurpose() == ConsentDecision.Purpose.RESEARCH_PARTICIPATION)
@@ -111,7 +112,7 @@ class ConsentServiceTest extends BaseUnitTest {
 
     @Test
     void shouldNotAppendAnythingWhenTheSameSetupSubmissionArrivesTwice() {
-        researchOnRecord(researchDecision(true, VERSION));
+        researchOnRecord(researchDecision(true, VERSION, ORG));
         when(decisionRepository.findFirstByAccountIdAndPurposeOrderByOccurredAtDescIdDesc(
                         42L, ConsentDecision.Purpose.TERMS_ACCEPTANCE))
                 .thenReturn(Optional.of(new ConsentDecision(
@@ -119,7 +120,8 @@ class ConsentServiceTest extends BaseUnitTest {
                         ConsentDecision.Purpose.TERMS_ACCEPTANCE,
                         true,
                         ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL,
-                        VERSION)));
+                        VERSION,
+                        null)));
         when(decisionRepository.findFirstByAccountIdAndPurposeOrderByOccurredAtDescIdDesc(
                         42L, ConsentDecision.Purpose.PRIVACY_NOTICE_ACKNOWLEDGEMENT))
                 .thenReturn(Optional.of(new ConsentDecision(
@@ -127,18 +129,21 @@ class ConsentServiceTest extends BaseUnitTest {
                         ConsentDecision.Purpose.PRIVACY_NOTICE_ACKNOWLEDGEMENT,
                         true,
                         ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL,
-                        VERSION)));
+                        VERSION,
+                        null)));
 
-        serviceWithResearch().completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO(VERSION, true, true));
+        serviceWithResearch()
+                .completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO(VERSION, true, true, ORG));
 
         verify(decisionRepository, never()).save(any());
     }
 
     @Test
     void shouldSupersedeAnAnswerGivenAgainstAnOlderNotice() {
-        researchOnRecord(researchDecision(true, "2026-08-30"));
+        researchOnRecord(researchDecision(true, "2026-08-30", ORG));
 
-        serviceWithResearch().completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO(VERSION, true, true));
+        serviceWithResearch()
+                .completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO(VERSION, true, true, ORG));
 
         assertThat(saved(3).get(2))
                 .satisfies(decision -> assertThat(decision.getNoticeVersion()).isEqualTo(VERSION));
@@ -147,21 +152,20 @@ class ConsentServiceTest extends BaseUnitTest {
     @Test
     void shouldNotAskAboutResearchWhenNoOrganisationIsConfigured() {
         serviceWithoutResearch()
-                .completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO(NO_STUDY_VERSION, true, null));
+                .completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO(VERSION, true, null, null));
 
         assertThat(saved(2))
                 .extracting(ConsentDecision::getPurpose)
                 .containsExactly(
                         ConsentDecision.Purpose.TERMS_ACCEPTANCE,
                         ConsentDecision.Purpose.PRIVACY_NOTICE_ACKNOWLEDGEMENT);
-        verify(decisionRepository).isCompletedForNotice(42L, NO_STUDY_VERSION, false);
+        verify(decisionRepository).isCompletedForNotice(42L, VERSION, null);
     }
 
     @Test
     void shouldRejectAResearchAnswerNobodyAskedFor() {
         assertThatThrownBy(() -> serviceWithoutResearch()
-                        .completeFirstLogin(
-                                42L, new ConsentService.FirstLoginConsentDTO(NO_STUDY_VERSION, true, false)))
+                        .completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO(VERSION, true, false, null)))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
@@ -172,7 +176,7 @@ class ConsentServiceTest extends BaseUnitTest {
     @Test
     void shouldRejectAMissingResearchAnswerWhenAnOrganisationIsConfigured() {
         assertThatThrownBy(() -> serviceWithResearch()
-                        .completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO(VERSION, true, null)))
+                        .completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO(VERSION, true, null, ORG)))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
@@ -183,7 +187,7 @@ class ConsentServiceTest extends BaseUnitTest {
     @Test
     void shouldRefuseToChangeResearchParticipationWhenNoOrganisationIsConfigured() {
         assertThatThrownBy(() -> serviceWithoutResearch()
-                        .setResearchParticipation(42L, new ConsentService.ResearchConsentDTO(true)))
+                        .setResearchParticipation(42L, new ConsentService.ResearchConsentDTO(VERSION, true, ORG)))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
@@ -192,51 +196,79 @@ class ConsentServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldTieTheNoticeVersionToTheOrganisationTheQuestionNames() {
-        ConsentService other =
-                new ConsentService(decisionRepository, accountRepository, new ConsentProperties("Another lab"));
+    void shouldArchiveTheOrganisationTheQuestionNamed() {
+        serviceWithResearch()
+                .completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO(VERSION, true, true, ORG));
 
-        assertThat(serviceWithResearch().currentNoticeVersion())
-                .isNotEqualTo(other.currentNoticeVersion())
-                .isNotEqualTo(serviceWithoutResearch().currentNoticeVersion())
-                .startsWith(ConsentService.WORDING_VERSION)
-                .hasSizeLessThanOrEqualTo(32);
+        assertThat(saved(3))
+                .filteredOn(decision -> decision.getPurpose() == ConsentDecision.Purpose.RESEARCH_PARTICIPATION)
+                .singleElement()
+                .satisfies(decision ->
+                        assertThat(decision.getResearchOrganization()).isEqualTo(ORG));
+        assertThat(saved(3))
+                .filteredOn(decision -> decision.getPurpose() != ConsentDecision.Purpose.RESEARCH_PARTICIPATION)
+                .allSatisfy(decision ->
+                        assertThat(decision.getResearchOrganization()).isNull());
+    }
+
+    @Test
+    void shouldRejectASubmissionNamingAnOrganisationThisInstanceNoLongerRuns() {
+        assertThatThrownBy(() -> serviceWithResearch()
+                        .completeFirstLogin(
+                                42L, new ConsentService.FirstLoginConsentDTO(VERSION, true, true, "Another lab")))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+
+        verify(decisionRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectASettingsSubmissionNamingASupersededOrganisation() {
+        assertThatThrownBy(() -> serviceWithResearch()
+                        .setResearchParticipation(
+                                42L, new ConsentService.ResearchConsentDTO(VERSION, true, "Another lab")))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+
+        verify(decisionRepository, never()).save(any());
     }
 
     @Test
     void shouldNotCarryAGrantAcrossAChangeOfResearchOrganisation() {
-        researchOnRecord(researchDecision(true, VERSION));
+        researchOnRecord(researchDecision(true, VERSION, ORG));
         ConsentService other =
                 new ConsentService(decisionRepository, accountRepository, new ConsentProperties("Another lab"));
 
         assertThat(other.participatesInResearch(42L)).isFalse();
-        verify(decisionRepository, never()).isCompletedForNotice(42L, VERSION, true);
     }
 
     @Test
     void shouldReportNoParticipationWhileNoStudyIsConfigured() {
-        researchOnRecord(researchDecision(true, VERSION));
+        researchOnRecord(researchDecision(true, VERSION, ORG));
 
         assertThat(serviceWithoutResearch().participatesInResearch(42L)).isFalse();
         assertThat(serviceWithoutResearch().status(42L).participateInResearch()).isFalse();
     }
 
     @Test
-    void shouldRecordAnAnswerFromSettingsWhenTheOneOnRecordPredatesTheCurrentNotice() {
-        when(decisionRepository.isCompletedForNotice(eq(42L), eq(VERSION), eq(true)))
+    void shouldRecordAnAnswerFromSettingsWhenTheOneOnRecordNamedAnotherOrganisation() {
+        when(decisionRepository.isCompletedForNotice(eq(42L), eq(VERSION), eq(ORG)))
                 .thenReturn(true);
-        researchOnRecord(researchDecision(true, "2026-08-30"));
+        researchOnRecord(researchDecision(true, VERSION, "Another lab"));
 
-        serviceWithResearch().setResearchParticipation(42L, new ConsentService.ResearchConsentDTO(true));
+        serviceWithResearch().setResearchParticipation(42L, new ConsentService.ResearchConsentDTO(VERSION, true, ORG));
 
         assertThat(saved(1))
                 .singleElement()
-                .satisfies(decision -> assertThat(decision.getNoticeVersion()).isEqualTo(VERSION));
+                .satisfies(decision ->
+                        assertThat(decision.getResearchOrganization()).isEqualTo(ORG));
     }
 
     @Test
     void shouldReportTheConfiguredResearchOrganisation() {
-        when(decisionRepository.isCompletedForNotice(eq(42L), eq(VERSION), eq(true)))
+        when(decisionRepository.isCompletedForNotice(eq(42L), eq(VERSION), eq(ORG)))
                 .thenReturn(true);
 
         assertThat(serviceWithResearch().status(42L).researchOrganization()).isEqualTo("AET");

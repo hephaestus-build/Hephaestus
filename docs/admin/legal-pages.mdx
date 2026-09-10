@@ -44,13 +44,18 @@ HEPHAESTUS_RESEARCH_ORGANIZATION="Technical University of Munich (AET)"
 Leave it unset — the default — and no question is asked: first-login setup is the terms alone, the
 account-settings switch is hidden, and `PUT /user/consent/research` answers 404.
 
-**Changing this value is a new question, and it is treated as one.** The recorded notice version
-covers the wording *and* the organisation the question named, because consent to a study is consent to
-the organisation running it. Turn a study on, off, or over to a different name and every account's
-completion lapses: they are asked again at their next request, and until they answer, nothing they
-granted to the previous name authorises anything — `participatesInResearch` reports false. Earlier
-decisions stay in the ledger as the record of what was asked and answered at the time. A cosmetic
-rename therefore costs every account one more setup screen; make it deliberately.
+**Changing this value is a new question, and it is treated as one.** Every research decision records
+the organisation it was asked about, in `consent_decision.research_organization`, because consent to a
+study is consent to the organisation running it — and because after a rename nothing else can say who
+an account was actually asked about. Point the setting at a different name and no account's grant to
+the previous one authorises anything: `participatesInResearch` reports false, setup asks again, and
+the earlier decisions stay in the ledger as the record of what was asked and answered at the time.
+Terms acceptance is unaffected, since the terms did not change. A cosmetic rename therefore costs
+every account one more setup screen; make it deliberately.
+
+Both the setup screen and the settings switch send back the organisation they displayed, and a
+submission naming one this instance no longer runs is refused with `409`. A tab left open across a
+change cannot record a decision about an organisation its reader never saw.
 
 Hephaestus records the answer; it does not enforce it. No server code reads the decision to exclude a
 refusing or withdrawn account from processing, so an operator running a study must apply the current

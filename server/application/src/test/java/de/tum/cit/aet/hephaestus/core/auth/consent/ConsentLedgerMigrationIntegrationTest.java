@@ -51,6 +51,17 @@ class ConsentLedgerMigrationIntegrationTest {
     }
 
     @Test
+    void shouldArchiveTheOrganisationTheQuestionNamed() throws Exception {
+        try (Connection connection = connect()) {
+            long decisionId = insertDecision(
+                    connection, insertAccount(connection), ConsentService.WORDING_VERSION, null, "A research group");
+
+            assertThat(columnOf(connection, "research_organization", decisionId))
+                    .isEqualTo("A research group");
+        }
+    }
+
+    @Test
     void shouldKeepTheLedgerAppendOnlyAndStillPermitErasure() throws Exception {
         try (Connection connection = connect()) {
             long accountId = insertAccount(connection);
@@ -83,13 +94,25 @@ class ConsentLedgerMigrationIntegrationTest {
 
     private static long insertDecision(Connection connection, long accountId, String version, @Nullable String digest)
             throws Exception {
+        return insertDecision(connection, accountId, version, digest, null);
+    }
+
+    private static long insertDecision(
+            Connection connection,
+            long accountId,
+            String version,
+            @Nullable String digest,
+            @Nullable String organisation)
+            throws Exception {
         try (PreparedStatement statement = connection.prepareStatement("INSERT INTO consent_decision "
-                + "(account_id, purpose, granted, mechanism, notice_version, notice_sha256, occurred_at) "
-                + "VALUES (?, 'RESEARCH_PARTICIPATION', true, 'FIRST_LOGIN_INTERSTITIAL', ?, ?, now()) "
+                + "(account_id, purpose, granted, mechanism, notice_version, notice_sha256, "
+                + "research_organization, occurred_at) "
+                + "VALUES (?, 'RESEARCH_PARTICIPATION', true, 'FIRST_LOGIN_INTERSTITIAL', ?, ?, ?, now()) "
                 + "RETURNING id")) {
             statement.setLong(1, accountId);
             statement.setString(2, version);
             statement.setString(3, digest);
+            statement.setString(4, organisation);
             try (ResultSet rows = statement.executeQuery()) {
                 rows.next();
                 return rows.getLong(1);
