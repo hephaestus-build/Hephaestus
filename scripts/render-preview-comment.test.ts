@@ -288,12 +288,14 @@ void test("uses stable, disambiguated groups with complete headings and atomic l
 });
 
 void test("renders metadata as literal text rather than Markdown or HTML", () => {
+	const group = "UI/*Button* #1\n<script><SCRIPT><ScRiPt>";
+	const title = "[label](https://evil.example) ![image] `code` ~~strike~~ _em_ | &lt;tag&gt;";
 	const [comment] = renderPreviewComments(
 		"Preview",
 		[
 			{
-				group: "UI/*Button* #1\n<script>",
-				title: "[label](https://evil.example) ![image] `code` ~~strike~~ _em_ | &lt;tag&gt;",
+				group,
+				title,
 				url: "https://preview.example/",
 			},
 		],
@@ -302,7 +304,30 @@ void test("renders metadata as literal text rather than Markdown or HTML", () =>
 	);
 	assert.ok(comment?.includes("#### UI/\\*Button\\* \\#1 &lt;script&gt;"));
 	assert.ok(comment?.includes("\\`code\\` \\~\\~strike\\~\\~ \\_em\\_ \\| &amp;lt;tag&amp;gt;"));
-	assert.doesNotMatch(comment ?? "", /<script>|!\[image\]/);
+	assert.ok(comment);
+	const nodes = fromMarkdown(comment).children;
+	assert.deepEqual(
+		nodes.map((node) => node.type),
+		["paragraph", "heading", "paragraph"],
+	);
+	const heading = nodes.find((node) => node.type === "heading");
+	assert.ok(heading);
+	assert.deepEqual(
+		heading.children.map((node) => (node.type === "text" ? node.value : node.type)),
+		[`${group.replaceAll("\n", " ")} (1)`],
+	);
+	const paragraph = nodes.at(-1);
+	assert.ok(paragraph?.type === "paragraph");
+	assert.deepEqual(
+		paragraph.children.map((node) => node.type),
+		["link"],
+	);
+	const link = paragraph.children[0];
+	assert.ok(link?.type === "link");
+	assert.deepEqual(
+		link.children.map((node) => (node.type === "text" ? node.value : node.type)),
+		[title],
+	);
 });
 
 void test("refuses an indivisible oversized link rather than silently dropping it", () => {
