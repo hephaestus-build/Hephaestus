@@ -53,8 +53,8 @@ export function ResearchParticipationSection({
 							>
 								privacy notice (opens in a new tab)
 							</a>{" "}
-							and may invite you to occasional surveys. Turn this off to withdraw consent and stop
-							new research processing.
+							and may invite you to occasional surveys. Turning it off records your withdrawal,
+							dated and kept with the version of the notice you were shown.
 						</FieldDescription>
 					</FieldContent>
 					<Switch

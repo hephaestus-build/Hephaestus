@@ -11,7 +11,7 @@ import {
 import { useId, useState } from "react";
 
 import type { ConsentStatus } from "@/api/types.gen";
-import { AuthWash } from "@/components/auth/AuthWash";
+import { AuthSurface } from "@/components/auth/AuthSurface";
 import { LegalLinks } from "@/components/auth/LegalLinks";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -90,9 +90,6 @@ const ANSWERS = [
 
 type Answer = (typeof ANSWERS)[number]["value"];
 
-/** One string for the heading and the group's name, which have to stay identical. */
-const RESEARCH_QUESTION = "Take part in the research?";
-
 /**
  * The page deliberately does not number itself. A member is handed workspace setup after this, and a
  * changed notice brings an existing user back through it, so "step 1 of n" is a claim this screen
@@ -124,8 +121,7 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 	}
 
 	return (
-		<div className="relative isolate min-h-svh overflow-hidden bg-background">
-			<AuthWash />
+		<AuthSurface>
 			<div className="mx-auto w-full max-w-2xl space-y-8 px-6 py-10 md:py-16">
 				<HephaestusLogo markClassName="size-7" wordmarkClassName="text-lg" />
 
@@ -204,12 +200,9 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 						</Section>
 
 						<Section
-							title={RESEARCH_QUESTION}
-							description={
-								<span id={`${id}-research-help`}>
-									Nothing is selected for you, and Hephaestus works exactly the same either way.
-								</span>
-							}
+							id={`${id}-research`}
+							title="Take part in the research?"
+							description="Nothing is selected for you, and Hephaestus works exactly the same either way."
 							className="space-y-5"
 						>
 							<dl className="grid gap-4 sm:grid-cols-3">
@@ -226,46 +219,40 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 								))}
 							</dl>
 
-							{/* A `role="radiogroup"` is not named by an enclosing heading, so it needs its own
-							    name, and the "nothing is selected for you" guidance has to reach it as a
-							    description rather than as loose text beside the answers. */}
 							<RadioGroup
 								value={answer ?? null}
 								onValueChange={(value) => setAnswer(value ?? undefined)}
 								disabled={submitting}
-								aria-label={RESEARCH_QUESTION}
-								aria-describedby={`${id}-research-help`}
+								aria-labelledby={`${id}-research-title`}
+								aria-describedby={`${id}-research-description`}
 								className="grid gap-3 sm:grid-cols-2"
 							>
 								{ANSWERS.map(({ value, icon: Icon, title, detail }) => (
-									// `--mentor`, not `FieldLabel`'s `--primary`, which is near-black in light and
-									// near-white in dark — either way a card filled with it reads as disabled
-									// rather than chosen. Both themes have to be overridden: the primitive ships
-									// `dark:has-data-checked:*` rules that outrank an unprefixed override.
-									// oxlint-disable-next-line jsx-a11y/label-has-associated-control -- The rule cannot fold the mapped `title` into label text; the radio is nested and named by `aria-labelledby`.
+									// `--mentor`, not `FieldLabel`'s `--primary`: primary is near-black in light and
+									// near-white in dark, so a card filled with it reads as disabled either way.
+									// Both themes need overriding — the primitive's own `dark:` rules outrank an
+									// unprefixed one.
 									<FieldLabel
 										key={value}
 										htmlFor={`${id}-${value}`}
 										className="transition-colors has-data-checked:border-mentor has-data-checked:bg-mentor/5 has-data-unchecked:hover:border-mentor/40 dark:has-data-checked:border-mentor/60 dark:has-data-checked:bg-mentor/10"
 									>
-										<Field>
-											<div className="flex items-center justify-between gap-3">
-												<span className="inline-flex size-10 items-center justify-center rounded-xl border bg-background">
+										<Field orientation="horizontal">
+											<FieldContent>
+												<span className="mb-3 inline-flex size-10 w-fit items-center justify-center rounded-xl border bg-background">
 													<Icon className="size-5" aria-hidden="true" />
 												</span>
-												<RadioGroupItem
-													id={`${id}-${value}`}
-													value={value}
-													aria-labelledby={`${id}-${value}-title`}
-													aria-describedby={`${id}-${value}-detail`}
-												/>
-											</div>
-											<FieldContent>
 												<FieldTitle id={`${id}-${value}-title`} className="text-base font-semibold">
 													{title}
 												</FieldTitle>
 												<FieldDescription id={`${id}-${value}-detail`}>{detail}</FieldDescription>
 											</FieldContent>
+											<RadioGroupItem
+												id={`${id}-${value}`}
+												value={value}
+												aria-labelledby={`${id}-${value}-title`}
+												aria-describedby={`${id}-${value}-detail`}
+											/>
 										</Field>
 									</FieldLabel>
 								))}
@@ -303,6 +290,6 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 
 				<LegalLinks />
 			</div>
-		</div>
+		</AuthSurface>
 	);
 }

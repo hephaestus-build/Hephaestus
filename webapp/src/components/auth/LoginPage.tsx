@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-import { AuthWash } from "@/components/auth/AuthWash";
+import { AuthSurface } from "@/components/auth/AuthSurface";
 import { SignInButtons, type SignInButtonsProps } from "@/components/auth/SignInButtons";
 import { SignInNotice } from "@/components/auth/SignInNotice";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
@@ -8,7 +8,7 @@ import { HephIcon } from "@/components/brand/HephIcon";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 // Never display raw OAuth error parameters; they can contain provider details. A `Map` rather than
-// an object literal, so a code of `__proto__` or `toString` cannot reach an inherited value.
+// an object literal, so a code of `__proto__` cannot reach an inherited value.
 const ERROR_COPY = new Map([
 	[
 		"access_denied",
@@ -44,8 +44,7 @@ export function LoginPage({ title = "Sign in to Hephaestus", error, ...signIn }:
 	const errorCopy = error ? (ERROR_COPY.get(error) ?? GENERIC_ERROR) : undefined;
 
 	return (
-		<div className="relative isolate grid min-h-svh overflow-hidden lg:grid-cols-2">
-			<AuthWash />
+		<AuthSurface className="grid lg:grid-cols-2">
 			<div className="flex flex-col gap-8 p-6 md:p-10">
 				<Link
 					to="/"
@@ -73,7 +72,7 @@ export function LoginPage({ title = "Sign in to Hephaestus", error, ...signIn }:
 			</div>
 
 			<BrandAside />
-		</div>
+		</AuthSurface>
 	);
 }
 

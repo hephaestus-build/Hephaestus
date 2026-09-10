@@ -21,8 +21,7 @@ export function LoginDialog({ open, onClose, ...signIn }: LoginDialogProps) {
 				if (!next) onClose();
 			}}
 		>
-			{/* The notice in the body is the description; naming it would repeat it to a screen reader. */}
-			<DialogContent aria-describedby={undefined}>
+			<DialogContent>
 				<DialogHeader className="pr-8">
 					<DialogTitle>Sign in to Hephaestus</DialogTitle>
 				</DialogHeader>

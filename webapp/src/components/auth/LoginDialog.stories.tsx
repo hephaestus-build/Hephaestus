@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
+import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import { Stateful } from "@/stories/stateful";
+import { expectDismissed } from "@/test/overlay";
 
 import { LoginDialog } from "./LoginDialog";
 
@@ -50,9 +51,7 @@ export const Dismiss: Story = {
 		const dialog = within(await screen.findByRole("dialog"));
 		await userEvent.click(dialog.getByRole("button", { name: "Close" }));
 		await expect(args.onClose).toHaveBeenCalled();
-		// Base UI holds a popup mounted until its exit animation finishes, so `open={false}` on its
-		// own does not prove the dialog left.
-		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		await expectDismissed();
 	},
 };
 export const Narrow: Story = {

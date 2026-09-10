@@ -165,7 +165,7 @@ export const Narrow: Story = {
 	},
 };
 
-/** A checked card in dark: the primitive's own `dark:has-data-checked:` rules outrank a plain override. */
+/** Dark, with an answer selected: a checked card must not read as a disabled one. */
 export const Dark: Story = {
 	globals: { theme: "dark" },
 	play: async () => {

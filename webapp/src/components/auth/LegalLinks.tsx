@@ -2,10 +2,7 @@ import { Link, type LinkProps } from "@tanstack/react-router";
 
 import { cn } from "@/lib/utils";
 
-/**
- * The `auth` surface renders no site footer, so sign-in and onboarding carry these themselves. Both
- * open in a new tab: leaving mid-flow would drop an unsaved consent answer.
- */
+/** The `auth` surface renders no site footer, so sign-in and onboarding carry these themselves. */
 export function LegalLinks({ className }: { className?: string }) {
 	return (
 		<nav
@@ -22,6 +19,7 @@ export function LegalLinks({ className }: { className?: string }) {
 	);
 }
 
+/** Opens in a new tab: leaving mid-flow would drop an unsaved consent answer. */
 export function LegalLink({ to, children }: { to: LinkProps["to"]; children: string }) {
 	return (
 		<Link

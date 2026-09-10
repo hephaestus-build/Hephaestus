@@ -15,9 +15,8 @@ export function currentUserQueryOptions() {
 		...getCurrentUserOptions(),
 		retry: false,
 		staleTime: QUERY_STALE_TIME_MS,
-		// Route guards await this shared request even when AuthProvider has no mounted observer.
-		// Leave its lifetime independent of observer unmounts; explicit query cancellation still
-		// discards the result when the session ends.
+		// Route guards await this shared request even when AuthProvider has no mounted observer, so
+		// its lifetime is deliberately independent of observer unmounts — hence no `signal`.
 		queryFn: async () => {
 			const { data, error, response } = await getCurrentUser();
 			if (data !== undefined && response?.ok) return data;
@@ -85,7 +84,6 @@ function fullyDecode(value: string): string {
 		try {
 			decoded = decodeURIComponent(current);
 		} catch {
-			// Stop decoding malformed percent escapes.
 			return current;
 		}
 		if (decoded === current) {

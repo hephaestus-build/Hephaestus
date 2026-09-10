@@ -17,6 +17,20 @@ These overrides affect `/imprint` and `/privacy`, not the first-login consent no
 currently selects the immutable `2026-08-30` notice, which names TUM/AET as the operator and research
 organization. There is no supported operator-specific replacement mechanism for that notice.
 
+The sign-in and first-login screens carry their own `/privacy` and `/imprint` links, because they
+render without the site footer. Configure both pages before the first user signs in.
+
+The first-login screen records three decisions against the notice version shown: terms acceptance,
+privacy-notice acknowledgement, and a separate research answer. Nothing is recorded until the account
+holder submits, and either research answer completes setup. Later research decisions are recorded from
+account settings. [Your data in Hephaestus](/user/privacy#signing-in-and-choosing-research-participation)
+describes the same screen for the person answering it.
+
+Hephaestus records the research answer; it does not enforce it. No server code reads the decision to
+exclude a refusing or withdrawn account from processing, so an operator using this data for research
+must apply the current decision in their own exports and analyses. The recorded answer is evidence of
+what was asked, not a technical control.
+
 Non-TUM operators must resolve this before opening the service to users. Editing the baseline or
 updating the existing notice is not a safe replacement: recorded consent decisions reference its
 version and content hash. An operator-specific notice needs a new immutable version and server-side
@@ -86,12 +100,15 @@ This is the recommended mode for self-hosters. You author two Markdown files and
    volumes:
      - name: legal-overrides
        configMap:
-         name: hephaestus-legal-overrides
+         name: hephaestus-legal-overrides # keys: imprint.md, privacy.md
    volumeMounts:
      - name: legal-overrides
        mountPath: /usr/share/nginx/html/legal-overrides
        readOnly: true
    ```
+
+   To overlay only some of the files onto an existing directory, use `items` with `subPath`, or a
+   `projected` volume — a whole-ConfigMap mount hides the directory's original contents.
 
 3. On Coolify, add `/usr/share/nginx/html/legal-overrides` as a **Bind Mount** (not a Volume) so the files remain editable from the host filesystem. The file paths are checked on each request, so you can update them by editing the files in the mount — no redeploy needed.
 
@@ -145,34 +162,3 @@ Finally, open `/imprint` and `/privacy` in a browser. If the red "not configured
 ## Changing the texts over time
 
 Markdown files are static resources. Overrides under `/legal-overrides/` are served with `Cache-Control: no-cache, must-revalidate`, so an edit on the host takes effect on the next page load (browsers revalidate every time). The bundled `/legal/` layer is served with `max-age=300`, so edits to a bundled profile require a rebuild and up to five minutes for caches to clear. When you ship a new bundled profile that replaces a previous one, update the text in place under `webapp/public/legal/profiles/<profile>/` and rebuild the image; there is no extra registry to maintain.
-
-## Sign-in and research participation
-
-The public `/privacy` page and the archived onboarding notice are separate. **Editing a Markdown
-privacy override does not change the archived notice or research invitation**, which name TUM/AET.
-A different controller or study requires a matching onboarding notice and invitation before enrollment.
-
-Sign-in and onboarding carry their own `/privacy` and `/imprint` links, because those screens render
-without the site footer. Both layers therefore have to be configured before the service opens.
-
-Onboarding records terms acceptance, privacy-notice acknowledgement and the separate research choice
-against the archived notice version. Nothing is recorded until the member submits, and either
-research answer completes setup. Account settings record later research decisions. See
-[the user guide](/user/privacy#signing-in-and-choosing-research-participation) for the participant flow.
-
-Before using data for research:
-
-- Obtain the required institutional and ethics review. Specify purposes, data categories, recipients,
-  retention and withdrawal handling in participant information; pseudonymised data remains personal data.
-- Keep refusal and withdrawal free of consequences for access, assessment, employment or service quality.
-  Address supervisor–student and employer–employee power imbalances.
-- Preserve the information participants saw. Obtain renewed consent before processing for a new purpose
-  outside the existing consent; updating `/privacy` alone does not renew consent.
-- Verify that every research export and analysis honours the current decision, including withdrawals.
-  The onboarding record alone does not establish enforcement in downstream tools or existing datasets.
-- Assess experiments and additional data collection against the approved protocol and consent scope;
-  a general participation choice is not blanket permission for altered feedback or indefinite reuse.
-
-The [EDPB consent guidelines](https://www.edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-052020-consent-under-regulation-2016679_en)
-cover freely given, specific, informed consent, withdrawal and scientific research. Recruitment rate is
-not a substitute for participant understanding or voluntary choice.
