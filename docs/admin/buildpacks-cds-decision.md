@@ -18,7 +18,9 @@ prebuilt archive instead; Liquibase's share of startup is unaffected.
 
 `builder-noble-java-tiny` applies the Spring Boot buildpack. With `BP_JVM_CDS_ENABLED=true` the launcher runs once at build time (the "CDS training run") to load the bean-graph classes, archives them to `/workspace/application.jsa`, and bakes `-XX:SharedArchiveFile=/workspace/application.jsa` into the launcher. At runtime the JVM mmaps the archive instead of class-loading from JARs.
 
-The training run boots under the `cds-training` profile (`application-cds-training.yml`), which disables Liquibase + JDBC-metadata probing and pins the Hibernate dialect so context refresh succeeds without a reachable Postgres. Coolify's runtime `SPRING_PROFILES_ACTIVE=prod` overrides the buildpack-baked default (Paketo writes `env.launch/<KEY>.default`, which yields to the runtime env).
+The training run boots under the `cds-training` profile (`application-cds-training.yml`), which disables Liquibase + JDBC-metadata probing and identifies PostgreSQL without opening a connection so context refresh succeeds without a reachable Postgres. Coolify's runtime `SPRING_PROFILES_ACTIVE=prod` overrides the buildpack-baked default (Paketo writes `env.launch/<KEY>.default`, which yields to the runtime env).
+
+The [build-only profile boundary](./runtime-roles.mdx#build-only-profiles) keeps runtime bootstrap out of training and rejects a production/build-profile combination. Authentication types remain available for class loading without configured deployment secrets.
 
 The run image is used unmodified; the server needs no `git` binary (`GitDiffOperations` uses JGit).
 

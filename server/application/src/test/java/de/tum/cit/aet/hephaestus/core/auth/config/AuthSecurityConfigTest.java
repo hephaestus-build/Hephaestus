@@ -9,6 +9,12 @@ import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Base64;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
@@ -23,7 +29,14 @@ import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequ
  * on every restart and differ per replica), while dev/CI tolerate it with a generated key. Mirrors
  * {@code JwtSigningKeySealer}'s prod fail-fast. Fails if either guard is removed.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class AuthSecurityConfigTest extends BaseUnitTest {
+
+    private static MockEnvironment environment(String... profiles) {
+        var environment = new MockEnvironment();
+        environment.setActiveProfiles(profiles);
+        return environment;
+    }
 
     private static AuthProperties propsWithKey(String key) {
         AuthProperties properties = mock(AuthProperties.class);
@@ -35,30 +48,43 @@ class AuthSecurityConfigTest extends BaseUnitTest {
         return Base64.getEncoder().encodeToString(new byte[bytes]);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"specs", "cds-training"})
+    void shouldCreateEphemeralArtifactKeysWithoutRuntimeWarnings(String profile, CapturedOutput output) {
+        byte[] first = AuthSecurityConfig.resolveStateCookieKey(propsWithKey(""), environment(profile));
+        byte[] second = AuthSecurityConfig.resolveStateCookieKey(propsWithKey(""), environment(profile));
+        assertThat(first).hasSize(32).isNotEqualTo(second);
+        assertThat(output.getAll()).doesNotContain("WARN");
+        assertThatThrownBy(
+                        () -> AuthSecurityConfig.resolveStateCookieKey(propsWithKey(""), environment(profile, "prod")))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
     @Test
     void blankKeyInProdFailsClosed() {
-        assertThatThrownBy(() -> AuthSecurityConfig.resolveStateCookieKey(propsWithKey(""), true))
+        assertThatThrownBy(() -> AuthSecurityConfig.resolveStateCookieKey(propsWithKey(""), environment("prod")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("required in production");
     }
 
     @Test
     void blankKeyOutsideProdGeneratesEphemeral32ByteKey() {
-        byte[] key = AuthSecurityConfig.resolveStateCookieKey(propsWithKey(""), false);
+        byte[] key = AuthSecurityConfig.resolveStateCookieKey(propsWithKey(""), environment("dev"));
 
         assertThat(key).hasSize(32);
     }
 
     @Test
     void configuredKeyIsDecodedAndUsedEvenInProd() {
-        byte[] key = AuthSecurityConfig.resolveStateCookieKey(propsWithKey(base64Key(32)), true);
+        byte[] key = AuthSecurityConfig.resolveStateCookieKey(propsWithKey(base64Key(32)), environment("prod"));
 
         assertThat(key).hasSize(32);
     }
 
     @Test
     void configuredKeyOfWrongLengthIsRejected() {
-        assertThatThrownBy(() -> AuthSecurityConfig.resolveStateCookieKey(propsWithKey(base64Key(16)), false))
+        assertThatThrownBy(
+                        () -> AuthSecurityConfig.resolveStateCookieKey(propsWithKey(base64Key(16)), environment("dev")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("32 bytes");
     }
