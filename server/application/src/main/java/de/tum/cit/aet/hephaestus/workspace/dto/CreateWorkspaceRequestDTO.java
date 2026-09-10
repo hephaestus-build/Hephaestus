@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.workspace.dto;
 
-import de.tum.cit.aet.hephaestus.core.security.ServerUrlValidator;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.validation.ScmServerUrl;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
@@ -73,6 +73,7 @@ public record CreateWorkspaceRequestDTO(
                         "Custom server URL for self-hosted GitLab instances. Must use HTTPS. Defaults to https://gitlab.com if not specified.",
                 example = "https://gitlab.example.com")
         @Nullable
+        @ScmServerUrl
         String serverUrl) {
     @AssertTrue(message = "Personal access token is required")
     @Schema(hidden = true)
@@ -86,20 +87,5 @@ public record CreateWorkspaceRequestDTO(
     @SuppressWarnings("PMD.UnusedPrivateMethod")
     private boolean isKindSupported() {
         return kind == IntegrationKind.GITHUB || kind == IntegrationKind.GITLAB;
-    }
-
-    @AssertTrue(message = "Server URL must use HTTPS and must not point to private/reserved addresses")
-    @Schema(hidden = true)
-    @SuppressWarnings("PMD.UnusedPrivateMethod")
-    private boolean isServerUrlSafe() {
-        if (serverUrl == null || serverUrl.isBlank()) {
-            return true;
-        }
-        try {
-            ServerUrlValidator.validate(serverUrl);
-            return true;
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
     }
 }

@@ -374,7 +374,10 @@ public class DockerSandboxAdapter implements SandboxManager {
         String spanId = MDC.get(StructuredLogKeys.SPAN_ID);
         if (traceId != null && spanId != null) {
             env.put("TRACE_ID", traceId);
-            env.put("TRACEPARENT", "00-" + traceId + "-" + spanId + "-00");
+            env.put(
+                    "TRACEPARENT",
+                    "00-" + traceId + "-" + spanId + "-"
+                            + ("01".equals(MDC.get(StructuredLogKeys.TRACE_FLAGS)) ? "01" : "00"));
         }
     }
 

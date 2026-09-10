@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -17,6 +18,7 @@ import org.springframework.validation.annotation.Validated;
  * @param certPath directory containing Docker client TLS certificates
  * @param containerRuntime Docker runtime name (unset uses the daemon default; runsc selects gVisor)
  * @param appServerContainerId container attached to job networks (unset falls back to HOSTNAME)
+ * @param owner stable installation identifier, shared by roles using the same database
  * @param cli Docker executable used for interactive sandbox attachment
  */
 @Validated
@@ -30,7 +32,10 @@ public record DockerSandboxProperties(
         @Nullable String certPath,
         @Nullable String containerRuntime,
         @Nullable String appServerContainerId,
-        @DefaultValue("docker") @NotBlank String cli) {
+        @DefaultValue("docker") @NotBlank String cli,
+
+        @DefaultValue("default") @NotBlank @Pattern(regexp = "[a-z0-9][a-z0-9-]{0,62}")
+        String owner) {
 
     // Both Java and CLI clients must use explicit certificates, not different ambient defaults.
     @AssertTrue(message = "cert-path must be set when tls-verify is enabled")

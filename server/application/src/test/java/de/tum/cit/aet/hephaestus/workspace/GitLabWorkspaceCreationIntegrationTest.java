@@ -250,7 +250,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
         assertNotNull(problem.getProperties());
         assertThat(problem.getProperties().get("errors"))
                 .asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class))
-                .containsKey("serverUrlSafe");
+                .containsKey("serverUrl");
 
         assertThat(workspaceRepository.findByWorkspaceSlug("gitlab-http")).isEmpty();
     }

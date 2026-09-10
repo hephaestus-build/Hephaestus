@@ -21,8 +21,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        DockerSandboxProperties properties =
-                new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "docker");
+        DockerSandboxProperties properties = new DockerSandboxProperties(
+                "unix:///var/run/docker.sock", false, null, null, null, "docker", "default");
         securityPolicy = new ContainerSecurityPolicy(properties, null);
     }
 
@@ -138,8 +138,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
 
         @Test
         void shouldUseGlobalRuntime() {
-            DockerSandboxProperties propsWithRuntime =
-                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, "runsc", null, "docker");
+            DockerSandboxProperties propsWithRuntime = new DockerSandboxProperties(
+                    "unix:///var/run/docker.sock", false, null, "runsc", null, "docker", "default");
             ContainerSecurityPolicy policyWithRuntime = new ContainerSecurityPolicy(propsWithRuntime, null);
 
             DockerOperations.HostConfigSpec config = policyWithRuntime.buildHostConfig(
@@ -165,7 +165,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
             UUID jobId = UUID.randomUUID();
             Map<String, String> labels = securityPolicy.buildLabels(jobId);
 
-            assertThat(labels).containsEntry("hephaestus.managed", "true");
+            assertThat(labels).containsEntry("hephaestus.sandbox-owner", "default");
+            assertThat(labels).doesNotContainKey("hephaestus.managed");
             assertThat(labels).containsEntry("hephaestus.job-id", jobId.toString());
         }
     }
@@ -176,7 +177,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
         @Test
         void shouldIncludeSeccompWhenProvided() {
             ContainerSecurityPolicy policyWithSeccomp = new ContainerSecurityPolicy(
-                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "docker"),
+                    new DockerSandboxProperties(
+                            "unix:///var/run/docker.sock", false, null, null, null, "docker", "default"),
                     "{\"defaultAction\":\"SCMP_ACT_ERRNO\"}");
 
             DockerOperations.HostConfigSpec config = policyWithSeccomp.buildHostConfig(
@@ -329,8 +331,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
 
         @Test
         void shouldPreventRuntimeDowngrade() {
-            DockerSandboxProperties propsWithRuntime =
-                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, "runsc", null, "docker");
+            DockerSandboxProperties propsWithRuntime = new DockerSandboxProperties(
+                    "unix:///var/run/docker.sock", false, null, "runsc", null, "docker", "default");
             ContainerSecurityPolicy policyWithRuntime = new ContainerSecurityPolicy(propsWithRuntime, null);
 
             SecurityProfile runcProfile = new SecurityProfile("runc", "none", List.of("ALL"), Map.of());

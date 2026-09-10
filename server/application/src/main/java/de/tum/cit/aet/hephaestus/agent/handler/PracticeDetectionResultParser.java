@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
@@ -341,12 +342,12 @@ public class PracticeDetectionResultParser {
         public ValidatedObservation coerceCoherence(boolean isDefectDetector, boolean advisoryOnly) {
             Presence p = presence;
             Assessment a = assessment;
-            String r = evidenceRationale;
             if (isDefectDetector && a == Assessment.GOOD && p == Presence.PRESENT) {
-                p = Presence.NOT_APPLICABLE;
-                a = null;
-                r = "[auto-downgraded: defect-detector practice has no clean-bill-of-health observation] "
-                        + evidenceRationale;
+                throw new ObservationsRefusedException(
+                        "incoherent_assessment",
+                        "Practice " + practiceSlug
+                                + " targets harmful behaviour: PRESENT/GOOD is inconsistent. Reassess the original"
+                                + " evidence; inconsistency does not establish that the practice is inapplicable.");
             }
             if (!p.carriesValence()) {
                 a = null;
@@ -363,7 +364,7 @@ public class PracticeDetectionResultParser {
             if (p == presence && a == assessment && s == severity) {
                 return this;
             }
-            return new ValidatedObservation(practiceSlug, summary, p, a, s, evidence, r);
+            return new ValidatedObservation(practiceSlug, summary, p, a, s, evidence, evidenceRationale);
         }
     }
 
