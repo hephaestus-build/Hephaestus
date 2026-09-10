@@ -297,7 +297,7 @@ class DockerClientOperationsTest extends BaseUnitTest {
 
             when(cmd.exec()).thenReturn(List.of(container));
 
-            var results = ops.listContainersByLabel("hephaestus.managed", "true");
+            var results = ops.listContainersByLabel("hephaestus.sandbox-owner", "default");
 
             assertThat(results).hasSize(1);
             assertThat(results.get(0).id()).isEqualTo("ctr-1");
@@ -321,7 +321,7 @@ class DockerClientOperationsTest extends BaseUnitTest {
 
             when(cmd.exec()).thenReturn(List.of(container));
 
-            var results = ops.listContainersByLabel("hephaestus.managed", "true");
+            var results = ops.listContainersByLabel("hephaestus.sandbox-owner", "default");
 
             assertThat(results).hasSize(1);
             assertThat(results.get(0).name()).isEmpty();
@@ -341,15 +341,15 @@ class DockerClientOperationsTest extends BaseUnitTest {
 
             Network network = mock(Network.class);
             when(network.getId()).thenReturn("net-1");
-            when(network.getName()).thenReturn("agent-net-abc");
+            when(network.getName()).thenReturn("hephaestus-sandbox-default--abc");
 
             when(cmd.exec()).thenReturn(List.of(network));
 
-            var results = ops.listNetworksByName("agent-net-");
+            var results = ops.listNetworksByName("hephaestus-sandbox-default--");
 
             assertThat(results).hasSize(1);
             assertThat(results.get(0).id()).isEqualTo("net-1");
-            assertThat(results.get(0).name()).isEqualTo("agent-net-abc");
+            assertThat(results.get(0).name()).isEqualTo("hephaestus-sandbox-default--abc");
         }
     }
 

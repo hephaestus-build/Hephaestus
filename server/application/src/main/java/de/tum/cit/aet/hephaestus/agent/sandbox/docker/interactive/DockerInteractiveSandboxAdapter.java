@@ -67,6 +67,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
     private final InteractiveSandboxMetrics metrics;
     private final ObjectMapper mapper;
     private final DockerCli dockerCli;
+    private final String owner;
     private final int gatewayPort;
     private final Executor closeExecutor;
     private final MentorProxyCredentialRegistry mentorProxyCredentialRegistry;
@@ -95,6 +96,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
         this.mapper = mapper;
         this.closeExecutor = closeExecutor;
         this.dockerCli = new DockerCli(dockerProperties);
+        this.owner = dockerProperties.owner();
         this.gatewayPort = gatewayPort;
         this.mentorProxyCredentialRegistry = mentorProxyCredentialRegistry;
         java.util.Arrays.setAll(attachLocks, ignored -> new Object());
@@ -152,8 +154,8 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             DockerOperations.HostConfigSpec hostConfig =
                     securityPolicy.buildHostConfig(secProfile, spec.resourceLimits(), spec.networkPolicy());
             Map<String, String> labels = Map.of(
-                    SandboxLabels.MANAGED,
-                    "true",
+                    SandboxLabels.OWNER,
+                    owner,
                     SandboxLabels.KIND,
                     SandboxLabels.KIND_INTERACTIVE,
                     SandboxLabels.SESSION_ID,

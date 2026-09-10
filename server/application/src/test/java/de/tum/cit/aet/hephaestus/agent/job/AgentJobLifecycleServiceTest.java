@@ -81,7 +81,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
                 usageRecorder,
                 objectMapper,
                 feedbackDispatchRepository,
-                new AgentJobTelemetry(new SimpleMeterRegistry()));
+                new AgentJobTelemetry(new SimpleMeterRegistry(), io.micrometer.tracing.Tracer.NOOP));
 
         workspace = new Workspace();
         workspace.setId(1L);

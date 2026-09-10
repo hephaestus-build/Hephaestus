@@ -27,6 +27,15 @@ public class ObservationAdmissionService {
     /** Where a refusal's reason is kept, so the run says what happened to it after the sandbox is gone. */
     public static final String REFUSAL_METADATA_KEY = "observation_admission_refusal";
 
+    static boolean observationsWereRefused(AgentJob job) {
+        return job.getMetadata() != null
+                && !job.getMetadata()
+                        .path(REFUSAL_METADATA_KEY)
+                        .path("reasonCode")
+                        .asString()
+                        .isBlank();
+    }
+
     static void requireMatchingCompositionDigest(AgentJob job) {
         String admitted = job.getMetadata() == null
                 ? ""
@@ -83,6 +92,7 @@ public class ObservationAdmissionService {
         }
         ObjectNode metadata =
                 currentMetadata instanceof ObjectNode object ? object.deepCopy() : mapper.createObjectNode();
+        metadata.remove(REFUSAL_METADATA_KEY);
         metadata.put(DIGEST_METADATA_KEY, digest);
         job.setMetadata(metadata);
         jobs.save(job);

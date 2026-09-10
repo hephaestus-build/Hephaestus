@@ -529,6 +529,7 @@ public class FeedbackLedgerRecorder {
     /** Stores the exact separately composed human-approval body before any provider side effect. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordProposal(AgentJob job, @Nullable DeliveryContent delivery, List<ValidatedObservation> proposed) {
+        publishFeedbackLaneTrigger(job);
         final int position = APPROVAL_UNIT_ORDINAL;
         if (delivery == null || delivery.mrNote() == null) return;
         String body = PullRequestCommentPoster.sanitize(delivery.mrNote());

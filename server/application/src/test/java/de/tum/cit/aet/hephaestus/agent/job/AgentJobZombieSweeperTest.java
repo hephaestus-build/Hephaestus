@@ -96,7 +96,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
                 lifecycleService,
                 usageRecorder,
                 meterRegistry,
-                new AgentJobTelemetry(meterRegistry));
+                new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP));
     }
 
     private ConfigSnapshot admittedSnapshot(int timeoutSeconds) {

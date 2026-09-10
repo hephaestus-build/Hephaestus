@@ -50,6 +50,16 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldClearPreviousRefusalWhenObservationsAreAdmitted() {
+        ObjectNode metadata = mapper.createObjectNode();
+        metadata.putObject(ObservationAdmissionService.REFUSAL_METADATA_KEY).put("reasonCode", "no_valid_observations");
+        job.setMetadata(metadata);
+        assertThat(ObservationAdmissionService.observationsWereRefused(job)).isTrue();
+        service.admit(job.getId(), mapper.createArrayNode());
+        assertThat(ObservationAdmissionService.observationsWereRefused(job)).isFalse();
+    }
+
+    @Test
     void samePayloadReplaysWithoutAdmittingTwice() {
         ArrayNode payload = mapper.createArrayNode().add("one");
         ObjectNode first = service.admit(job.getId(), payload);

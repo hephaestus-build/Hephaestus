@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
+import java.text.BreakIterator;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -69,8 +71,6 @@ public final class DeveloperTextSanitizer {
             + "\\bsatisf\\w+\\s+the\\s+[\\w-]+\\s+requirement\\b"
             + ")");
 
-    private static final Pattern SENTENCE_SEPARATOR = Pattern.compile("(?<=[.!?])\\s+");
-
     private static final Pattern ENVELOPE_TAIL = Pattern.compile("[\"'\\\\]*[}\\]][\"'\\\\]+\\s*$");
 
     public static boolean isGradingMeta(@Nullable String text) {
@@ -84,18 +84,15 @@ public final class DeveloperTextSanitizer {
         // Literal "\r\n"/"\n"/"\t" escapes survive a round trip through the runner's JSON envelope.
         String unescaped = text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "    ");
         StringBuilder kept = new StringBuilder(unescaped.length());
-        Matcher sep = SENTENCE_SEPARATOR.matcher(unescaped);
-        int pos = 0;
-        while (sep.find()) {
-            String sentence = unescaped.substring(pos, sep.start());
+        BreakIterator sentences = BreakIterator.getSentenceInstance(Locale.ROOT);
+        sentences.setText(unescaped);
+        for (int start = sentences.first(), end = sentences.next();
+                end != BreakIterator.DONE;
+                start = end, end = sentences.next()) {
+            String sentence = unescaped.substring(start, end);
             if (!GRADING_SENTENCE.matcher(sentence).find()) {
-                kept.append(sentence).append(unescaped, sep.start(), sep.end());
+                kept.append(sentence);
             }
-            pos = sep.end();
-        }
-        String tail = unescaped.substring(pos);
-        if (!GRADING_SENTENCE.matcher(tail).find()) {
-            kept.append(tail);
         }
         String out = kept.toString();
         out = out.replaceAll("[ \\t]{2,}", " ")

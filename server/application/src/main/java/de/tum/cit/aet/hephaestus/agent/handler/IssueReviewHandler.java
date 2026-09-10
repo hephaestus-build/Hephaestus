@@ -235,6 +235,7 @@ public class IssueReviewHandler implements JobTypeHandler {
 
     @Override
     public void deliver(AgentJob job) {
+        if (ObservationAdmissionService.observationsWereRefused(job)) return;
         if (feedbackDeliveryService.recoverAutomaticPackageIfPresent(job)) return;
         ObservationAdmissionService.requireMatchingCompositionDigest(job);
         List<PracticeDetectionResultParser.ValidatedObservation> observations =

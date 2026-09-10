@@ -124,7 +124,7 @@ public class PracticeFeedbackDeliveryPolicy {
         long workspaceId = requireWorkspaceId(job);
         Workspace workspace = activePracticeWorkspace(workspaceId);
         boolean instanceMayDeliver = !silentModeQuery.isSilentModeEngaged();
-        if (!instanceMayDeliver) {
+        if (!instanceMayDeliver && isExternalSurface(surface)) {
             Resolution resolution = resolve(
                     job,
                     surface,
@@ -241,7 +241,7 @@ public class PracticeFeedbackDeliveryPolicy {
         long workspaceId = requireWorkspaceId(job);
         Workspace workspace = activePracticeWorkspace(workspaceId);
         boolean instanceMayDeliver = !silentModeQuery.isSilentModeEngaged();
-        if (!instanceMayDeliver) {
+        if (!instanceMayDeliver && isExternalSurface(surface)) {
             Resolution resolution = resolve(
                     job,
                     surface,
