@@ -48,6 +48,18 @@ describe("workspace route gate", () => {
 		);
 		expect((await land("/w/acme")).pathname).toBe("/w/acme/onboarding");
 	});
+	it("preserves the original destination including search and fragment", async () => {
+		listWorkspaces("acme");
+		server.use(
+			http.get("*/workspaces/acme/onboarding/me", () =>
+				HttpResponse.json({ ...workspaceOnboarding(), enabled: true, needsWelcome: true }),
+			),
+		);
+		const destination = "/w/acme/teams?view=mine#feedback";
+		const location = await land(destination);
+		expect(location.pathname).toBe("/w/acme/onboarding");
+		expect(location.search).toMatchObject({ returnTo: destination });
+	});
 	it("does not redirect the onboarding page into itself", async () => {
 		listWorkspaces("acme");
 		server.use(

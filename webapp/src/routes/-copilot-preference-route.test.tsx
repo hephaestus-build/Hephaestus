@@ -33,16 +33,18 @@ it("withholds the floating composer for No AI and after a failed preference refe
 	const user = userEvent.setup();
 	const preference: WorkspaceOnboarding = { ...workspaceOnboarding(), aiChoice: "NO_AI" };
 	mockCopilot(preference);
-	const { queryClient } = renderRouteAtWithRouter("/w/acme/onboarding");
-	await screen.findByRole("heading", { name: /Welcome to/ }, ROUTE_RENDER_WAIT);
+	const { queryClient } = renderRouteAtWithRouter("/w/acme/teams");
+	await screen.findByRole("heading", { name: "Teams" }, ROUTE_RENDER_WAIT);
 	expect(screen.queryByRole("button", { name: "Open Heph, AI mentor" })).toBeNull();
 	const key = getMemberOnboardingQueryKey({ path: { workspaceSlug: "acme" } });
+	const optedIn: WorkspaceOnboarding = {
+		...preference,
+		aiChoice: "ON_PREMISES",
+		aiOptions: [{ choice: "ON_PREMISES", mentorReady: true, practiceReviewsReady: true }],
+	};
+	server.use(http.get("*/workspaces/acme/onboarding/me", () => HttpResponse.json(optedIn)));
 	await act(async () => {
-		queryClient.setQueryData<WorkspaceOnboarding>(key, {
-			...preference,
-			aiChoice: "ON_PREMISES",
-			aiOptions: [{ choice: "ON_PREMISES", mentorReady: true, practiceReviewsReady: true }],
-		});
+		queryClient.setQueryData(key, optedIn);
 	});
 	await user.click(await screen.findByRole("button", { name: "Open Heph, AI mentor" }));
 	await screen.findByRole("textbox");
@@ -72,7 +74,7 @@ it("starts a separate floating conversation with the new workspace's transport",
 			},
 		),
 	);
-	const { router } = renderRouteAtWithRouter("/w/acme/onboarding");
+	const { router } = renderRouteAtWithRouter("/w/acme/teams");
 	await user.click(
 		await screen.findByRole("button", { name: "Open Heph, AI mentor" }, ROUTE_RENDER_WAIT),
 	);
@@ -81,7 +83,7 @@ it("starts a separate floating conversation with the new workspace's transport",
 	expect(requests[0]?.workspace).toBe("acme");
 	await act(async () => {
 		await router.navigate({
-			to: "/w/$workspaceSlug/onboarding",
+			to: "/w/$workspaceSlug/teams",
 			params: { workspaceSlug: "other" },
 		});
 	});
@@ -94,4 +96,15 @@ it("starts a separate floating conversation with the new workspace's transport",
 	await waitFor(() => expect(requests).toHaveLength(2));
 	expect(requests[1]?.workspace).toBe("other");
 	expect(requests[1]?.id).not.toBe(requests[0]?.id);
+});
+
+it("keeps setup free of the floating composer even when AI is available", async () => {
+	mockCopilot({
+		...workspaceOnboarding(),
+		aiChoice: "ON_PREMISES",
+		aiOptions: [{ choice: "ON_PREMISES", mentorReady: true, practiceReviewsReady: true }],
+	});
+	renderRouteAtWithRouter("/w/acme/onboarding");
+	await screen.findByRole("heading", { name: /Welcome to/ }, ROUTE_RENDER_WAIT);
+	expect(screen.queryByRole("button", { name: "Open Heph, AI mentor" })).toBeNull();
 });

@@ -26,7 +26,12 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 				.query(getMemberOnboardingOptions({ path: { workspaceSlug: params.workspaceSlug } }))
 				.catch(() => undefined);
 			if (onboarding?.needsWelcome)
-				throw redirect({ to: "/w/$workspaceSlug/onboarding", params, replace: true });
+				throw redirect({
+					to: "/w/$workspaceSlug/onboarding",
+					params,
+					search: { returnTo: location.href },
+					replace: true,
+				});
 			return;
 		}
 

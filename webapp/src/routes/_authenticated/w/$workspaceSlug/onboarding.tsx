@@ -11,16 +11,47 @@ import {
 import type { WorkspaceOnboarding } from "@/api/types.gen";
 import { WorkspaceOnboardingPage } from "@/components/onboarding/WorkspaceOnboardingPage";
 import { useAuth } from "@/integrations/auth/AuthContext";
-import { problemDetailOf } from "@/lib/problem-detail";
+import { safeReturnTo } from "@/integrations/auth/guard";
+import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/onboarding")({
+	staticData: { surface: "auth" },
+	validateSearch: (search): { returnTo?: string; step?: "accounts" } => ({
+		returnTo: typeof search.returnTo === "string" ? search.returnTo : undefined,
+		step: search.step === "accounts" ? "accounts" : undefined,
+	}),
 	remountDeps: ({ params }) => params.workspaceSlug,
 	component: OnboardingRoute,
 });
 
+/** A setup return must stay in this workspace, including after URL path normalization. */
+function workspaceReturnTo(value: string | undefined, workspaceSlug: string) {
+	const base = `/w/${encodeURIComponent(workspaceSlug)}`;
+	const url = new URL(safeReturnTo(value), "https://workspace.invalid");
+	let pathname: string;
+	try {
+		pathname = decodeURIComponent(url.pathname);
+	} catch {
+		return base;
+	}
+	const workspacePath = `/w/${workspaceSlug}`;
+	if (
+		pathname.includes("\\") ||
+		pathname.includes("%") ||
+		pathname.split("/").some((segment) => segment === "." || segment === "..") ||
+		(pathname !== workspacePath && !pathname.startsWith(`${workspacePath}/`)) ||
+		pathname === `${workspacePath}/onboarding` ||
+		pathname.startsWith(`${workspacePath}/onboarding/`)
+	)
+		return base;
+	return `${url.pathname}${url.search}${url.hash}`;
+}
+
 function OnboardingRoute() {
 	const { workspaceSlug } = Route.useParams();
 	const navigate = Route.useNavigate();
+	const { returnTo, step } = Route.useSearch();
+	const destination = workspaceReturnTo(returnTo, workspaceSlug);
 	const queryClient = useQueryClient();
 	const { linkAccount } = useAuth();
 	const path = { workspaceSlug };
@@ -28,26 +59,46 @@ function OnboardingRoute() {
 	const updateCache = (data: WorkspaceOnboarding, variables: { path: { workspaceSlug: string } }) =>
 		queryClient.setQueryData(getMemberOnboardingQueryKey({ path: variables.path }), data);
 	const leave = () => {
-		void navigate({ to: "/w/$workspaceSlug", params: path });
+		void navigate({ href: destination, replace: true });
 	};
-	const choice = useMutation({ ...updateMemberAiChoiceMutation(), onSuccess: updateCache });
-	const completion = useMutation({ ...completeMemberOnboardingMutation(), onSuccess: updateCache });
+	const refreshOnConflict = async (
+		error: unknown,
+		variables: { path: { workspaceSlug: string } },
+	) => {
+		if (problemStatusOf(error) === 409)
+			await queryClient.invalidateQueries({
+				queryKey: getMemberOnboardingQueryKey({ path: variables.path }),
+			});
+	};
+	const choice = useMutation({
+		...updateMemberAiChoiceMutation(),
+		onSuccess: updateCache,
+		onError: refreshOnConflict,
+	});
+	const completion = useMutation({
+		...completeMemberOnboardingMutation(),
+		onSuccess: updateCache,
+		onError: refreshOnConflict,
+	});
 	const dismissal = useMutation({ ...dismissMemberOnboardingMutation(), onSuccess: updateCache });
 	const error = choice.error ?? completion.error ?? dismissal.error;
 	return (
 		<WorkspaceOnboardingPage
+			initialStep={step === "accounts" ? "accounts" : "choice"}
 			state={
-				query.isPending
-					? { status: "loading" }
+				query.data
+					? {
+							status: "ready",
+							data: query.data,
+							refresh: query.isFetching
+								? { status: "pending" }
+								: query.isError
+									? { status: "error", error: query.error, onRetry: () => void query.refetch() }
+									: undefined,
+						}
 					: query.isError
-						? {
-								status: "error",
-								error: query.error,
-								onRetry: () => {
-									void query.refetch();
-								},
-							}
-						: { status: "ready", data: query.data }
+						? { status: "error", error: query.error, onRetry: () => void query.refetch() }
+						: { status: "loading" }
 			}
 			pending={
 				choice.isPending
@@ -59,10 +110,15 @@ function OnboardingRoute() {
 							: undefined
 			}
 			saveError={error ? problemDetailOf(error) : undefined}
-			onChoose={(value) => {
+			onChoose={async (value) => {
 				completion.reset();
 				dismissal.reset();
-				choice.mutate({ path, body: { choice: value } });
+				try {
+					await choice.mutateAsync({ path, body: { choice: value } });
+					return true;
+				} catch {
+					return false;
+				}
 			}}
 			onComplete={() => {
 				choice.reset();
@@ -82,7 +138,10 @@ function OnboardingRoute() {
 				void query.refetch();
 			}}
 			onLink={(registrationId) =>
-				linkAccount(registrationId, `/w/${encodeURIComponent(workspaceSlug)}/onboarding`)
+				linkAccount(
+					registrationId,
+					`/w/${encodeURIComponent(workspaceSlug)}/onboarding?${new URLSearchParams({ returnTo: destination, step: "accounts" })}`,
+				)
 			}
 		/>
 	);

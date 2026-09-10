@@ -137,10 +137,11 @@ const preview: Preview = {
 				// below every segment that does, silently. That includes segments nobody wrote: a story
 				// with no explicit title gets one derived from its path.
 				order: [
+					"Onboarding",
+					"Workspace",
 					"Workspace admin",
 					"Instance admin",
 					"Practice trace",
-					"Workspace",
 					"Profile",
 					"Surveys",
 					"Common",
