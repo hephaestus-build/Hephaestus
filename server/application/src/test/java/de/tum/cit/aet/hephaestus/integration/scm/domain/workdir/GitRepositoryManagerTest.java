@@ -725,8 +725,9 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         @DisplayName("excludes a symlink instead of following it out of the tree")
         void shouldExcludeSymlinksAndSaySo() throws Exception {
             manager = createManager(true);
+            Path escapingLink = sourceRepoPath.resolve("escape.txt");
             try (Git sourceGit = createSourceRepo()) {
-                Files.createSymbolicLink(sourceRepoPath.resolve("escape.txt"), Path.of("../../../etc/passwd"));
+                Files.createSymbolicLink(escapingLink, Path.of("../../../etc/passwd"));
                 sourceGit.add().addFilepattern("escape.txt").call();
                 String sha = sourceGit
                         .commit()
@@ -745,6 +746,9 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                     assertThat(snapshot.limitations()).contains("SYMLINK_EXCLUDED");
                     assertThat(snapshot.complete()).isFalse();
                 }
+            } finally {
+                // Unlink the fixture without following its target during temporary-directory cleanup.
+                Files.deleteIfExists(escapingLink);
             }
         }
 
