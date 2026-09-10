@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent } from "storybook/test";
 import { withStandardPage } from "@/stories/decorators";
+import { expectUnavailable } from "@/test/controls";
 import { expectNoPageOverflow } from "@/test/reflow";
 import { githubTarget } from "./github-access-fixtures";
 import { WorkspaceGithubAccessPage } from "./WorkspaceGithubAccessPage";
@@ -71,11 +72,12 @@ export const RequestsWithoutDirectory: Story = {
 	},
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Add GitHub target" }));
-		await expect(
-			canvas.getByRole("checkbox", {
-				name: "Use directory eligibility instead of access requests",
-			}),
-		).toBeDisabled();
+		const directoryChoice = canvas.getByRole("checkbox", {
+			name: "Use directory eligibility instead of access requests",
+		});
+		await expectUnavailable(directoryChoice);
+		await userEvent.click(directoryChoice);
+		await expect(directoryChoice).not.toBeChecked();
 		await expect(
 			canvas.getByRole("button", { name: "Save and create approval link" }),
 		).toBeEnabled();
