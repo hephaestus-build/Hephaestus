@@ -31,7 +31,7 @@ export function DevSignInForm({ returnTo }: { returnTo?: string }) {
 	return (
 		<div className="flex flex-col gap-2 rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 p-3">
 			<p className="text-xs font-medium text-muted-foreground">Dev sign-in (non-production)</p>
-			{/* aria-live so the dev-form error is announced, mirroring LoginCard's OAuth-error region. */}
+			{/* aria-live so the dev-form error is announced, mirroring the sign-in page's OAuth-error region. */}
 			<div aria-live="assertive" aria-atomic="true">
 				{error ? (
 					<Alert variant="destructive">

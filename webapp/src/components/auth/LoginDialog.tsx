@@ -24,10 +24,8 @@ export function LoginDialog({ open, onClose, ...signIn }: LoginDialogProps) {
 		>
 			<DialogContent>
 				<DialogHeader className="pr-8">
-					<DialogTitle>Welcome to Hephaestus</DialogTitle>
-					<DialogDescription>
-						Sign in to find your workspace and grow your engineering practice.
-					</DialogDescription>
+					<DialogTitle>Sign in to Hephaestus</DialogTitle>
+					<DialogDescription>Your first sign-in creates your account.</DialogDescription>
 				</DialogHeader>
 				<DialogBody className="space-y-4">
 					<SignInButtons {...signIn} />

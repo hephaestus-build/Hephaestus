@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { toast } from "sonner";
 
-import { LoginCard } from "@/components/auth/LoginCard";
+import { LoginPage } from "@/components/auth/LoginPage";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { ACCOUNT_DELETED_NOTICE_KEY } from "@/integrations/auth/account-deleted-notice";
 import { useAuth } from "@/integrations/auth/AuthContext";
@@ -19,10 +19,10 @@ export const Route = createFileRoute("/login")({
 		returnTo: typeof search.returnTo === "string" ? search.returnTo : undefined,
 		error: typeof search.error === "string" ? search.error : undefined,
 	}),
-	component: LoginPage,
+	component: LoginRoute,
 });
 
-function LoginPage() {
+function LoginRoute() {
 	const providers = useSignInProviders();
 	const { error, returnTo } = Route.useSearch();
 	const { login, isAuthenticated } = useAuth();
@@ -47,10 +47,8 @@ function LoginPage() {
 	}, []);
 
 	return (
-		<LoginCard
+		<LoginPage
 			options={providers}
-			title="Welcome to Hephaestus"
-			description="Your AI mentor for growing as a software engineer."
 			error={error}
 			onSignIn={(registrationId) => login(registrationId, returnTo)}
 			devReturnTo={returnTo}

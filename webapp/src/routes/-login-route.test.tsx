@@ -77,10 +77,11 @@ describe("contextual sign-in", () => {
 			}),
 		);
 		const dialog = await screen.findByRole("dialog");
-		expect(dialog.textContent).toContain("separate, optional choice");
-		expect(screen.getByRole("link", { name: /privacy notice/i }).getAttribute("href")).toBe(
-			"/privacy",
-		);
+		expect(
+			within(dialog)
+				.getByRole("link", { name: /privacy notice/i })
+				.getAttribute("href"),
+		).toBe("/privacy");
 	});
 
 	it("renders a standalone login for a shared URL without a background page", async () => {

@@ -20,7 +20,7 @@ export function SignInButtons({ options, onSignIn, devReturnTo }: SignInButtonsP
 	if (options.status === "error") {
 		return (
 			<div className="space-y-3">
-				<p role="alert">Couldn't load sign-in options.</p>
+				<p role="alert">We couldn't load the sign-in options.</p>
 				<Button variant="outline" onClick={options.onRetry}>
 					Try again
 				</Button>
@@ -28,8 +28,10 @@ export function SignInButtons({ options, onSignIn, devReturnTo }: SignInButtonsP
 		);
 	}
 	if (options.status === "loading") {
+		// `aria-label` on a plain container is a prohibited attribute; the name has to be real text.
 		return (
-			<div className="space-y-2" aria-label="Loading sign-in options">
+			<div className="flex flex-col gap-2" aria-busy="true">
+				<span className="sr-only">Loading sign-in options…</span>
 				<Skeleton className="h-9 w-full" />
 				<Skeleton className="h-9 w-full" />
 			</div>
@@ -42,7 +44,7 @@ export function SignInButtons({ options, onSignIn, devReturnTo }: SignInButtonsP
 	);
 	if (oauthProviders.length === 0 && !hasDevSignIn) {
 		return (
-			<p className="text-muted-foreground">
+			<p className="text-sm text-muted-foreground">
 				No sign-in options are configured. Contact this instance's operator.
 			</p>
 		);

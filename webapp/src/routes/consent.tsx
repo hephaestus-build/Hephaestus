@@ -7,7 +7,7 @@ import {
 	getConsentStatusOptions,
 	getConsentStatusQueryKey,
 } from "@/api/@tanstack/react-query.gen";
-import { ConsentDialog, type ConsentSubmission } from "@/components/auth/ConsentDialog";
+import { ConsentPage, type ConsentSubmission } from "@/components/auth/ConsentPage";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { resolveCurrentUser, safeReturnTo } from "@/integrations/auth/guard";
 
@@ -30,10 +30,10 @@ export const Route = createFileRoute("/consent")({
 			.catch(() => undefined);
 		if (consent?.completed) throw redirect({ href: safeReturnTo(search.returnTo) });
 	},
-	component: ConsentPage,
+	component: ConsentRoute,
 });
 
-function ConsentPage() {
+function ConsentRoute() {
 	const { returnTo } = Route.useSearch();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
@@ -56,12 +56,12 @@ function ConsentPage() {
 
 	if (isError)
 		return (
-			<ConsentDialog
+			<ConsentPage
 				state={{ status: "error", onRetry: () => void refetch() }}
 				onSignOut={() => void logout()}
 			/>
 		);
-	if (!data) return <ConsentDialog state={{ status: "loading" }} onSignOut={() => void logout()} />;
+	if (!data) return <ConsentPage state={{ status: "loading" }} onSignOut={() => void logout()} />;
 
 	const submission: ConsentSubmission = mutation.isPending
 		? { status: "saving", participateInResearch: mutation.variables.body.participateInResearch }
@@ -69,7 +69,7 @@ function ConsentPage() {
 			? { status: "error" }
 			: { status: "idle" };
 	return (
-		<ConsentDialog
+		<ConsentPage
 			key={data.noticeVersion}
 			state={{
 				status: "ready",

@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { getWorkspaceOptions } from "@/api/@tanstack/react-query.gen";
-import { LoginCard } from "@/components/auth/LoginCard";
+import { LoginPage } from "@/components/auth/LoginPage";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { resolveCurrentUser } from "@/integrations/auth/guard";
@@ -25,10 +25,10 @@ export const Route = createFileRoute("/w/$workspaceSlug/login")({
 			});
 		}
 	},
-	component: WorkspaceLoginPage,
+	component: WorkspaceLoginRoute,
 });
 
-function WorkspaceLoginPage() {
+function WorkspaceLoginRoute() {
 	const providers = useSignInProviders();
 	const { workspaceSlug } = Route.useParams();
 	const { error } = Route.useSearch();
@@ -45,10 +45,9 @@ function WorkspaceLoginPage() {
 		: "Sign in to your workspace";
 
 	return (
-		<LoginCard
+		<LoginPage
 			options={providers}
 			title={heading}
-			description="Sign in to continue to this workspace."
 			error={error}
 			onSignIn={(registrationId) => login(registrationId, `/w/${workspaceSlug}`)}
 			devReturnTo={`/w/${workspaceSlug}`}
