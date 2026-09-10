@@ -11,12 +11,13 @@ const TOOL_BUDGETS = [
 
 export function checkChunkBudget(code: string, moduleIds: string[]) {
 	const bytes = Buffer.byteLength(code);
-	if (bytes <= 500_000) return;
 	const budget = TOOL_BUDGETS.find(({ module }) =>
 		moduleIds.some((id) => id.replaceAll("\\", "/").endsWith(module)),
 	);
-	if (!budget)
+	if (!budget) {
+		if (bytes <= 500_000) return;
 		throw new Error(`Unrecognized oversized Storybook chunk: ${bytes} bytes (limit 500000)`);
+	}
 	const gzip = gzipSync(code).byteLength;
 	if (bytes > budget.bytes || gzip > budget.gzip) {
 		throw new Error(

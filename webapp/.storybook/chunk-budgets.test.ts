@@ -1,3 +1,5 @@
+import { gzipSync } from "node:zlib";
+
 import { expect, it } from "vitest";
 
 import { checkChunkBudget } from "./chunk-budgets";
@@ -28,4 +30,14 @@ it("enforces compressed size as well as raw size", () => {
 	expect(() => checkChunkBudget(code, ["/repo/node_modules/axe-core/axe.js"])).toThrow(
 		"gzip bytes",
 	);
+});
+
+it("enforces tooling gzip budgets below the ordinary raw chunk limit", () => {
+	const code = Array.from({ length: 90_000 }, (_, index) => index.toString(36)).join("-");
+	expect(Buffer.byteLength(code)).toBeLessThanOrEqual(500_000);
+	expect(gzipSync(code).byteLength).toBeGreaterThan(165_000);
+	expect(() => checkChunkBudget(code, ["/repo/node_modules/axe-core/axe.js"])).toThrow(
+		"gzip bytes",
+	);
+	expect(checkChunkBudget(code, ["/src/Example.stories.tsx"])).toBeUndefined();
 });

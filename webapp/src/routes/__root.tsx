@@ -1,3 +1,4 @@
+import { ErrorBoundary } from "@sentry/react";
 import { type QueryClient, useQuery } from "@tanstack/react-query";
 import {
 	createRootRouteWithContext,
@@ -118,9 +119,11 @@ function RootLayout() {
 			</ProviderColorScope>
 			<Toaster />
 			{showCopilot && (
-				<Suspense fallback={null}>
-					<GlobalCopilot />
-				</Suspense>
+				<ErrorBoundary fallback={<></>} handled>
+					<Suspense fallback={null}>
+						<GlobalCopilot />
+					</Suspense>
+				</ErrorBoundary>
 			)}
 			<FeatureFlagDevTools />
 			{!isLoading && isAuthenticated ? <GlobalSurvey /> : null}

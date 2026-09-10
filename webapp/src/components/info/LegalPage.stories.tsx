@@ -67,8 +67,8 @@ function makeResolver(key: FixtureKey): typeof resolveLegalContent {
 	});
 }
 
-// The production warning is once per page, so it may already have fired in Docs or a rerun.
-// Assert every emitted warning, rather than requiring a fresh warning on every mount.
+// LegalPage.test.tsx requires each page's warning exactly once across mounts. Docs and reruns
+// share that production state, so a story asserts any new diagnostics without resetting it.
 function captureDisclaimerWarning(page: LegalPageId) {
 	const expected = `[legal] Disclaimer fallback served for page=${page}. Configure LEGAL_PROFILE or mount /legal-overrides/. See docs/admin/legal-pages.`;
 	// oxlint-disable-next-line no-console -- Unexpected diagnostics must remain visible while the intentional fallback warning is asserted.

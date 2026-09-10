@@ -134,22 +134,33 @@ describe("LegalPage — XSS guardrail", () => {
 		expect(int.getAttribute("rel")).toBeNull();
 	});
 
-	it("renders the disclaimer banner when resolver returns disclaimer source", async () => {
-		using warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-		const resolver: typeof resolveLegalContent = async () => ({
-			markdown: "# fallback",
-			source: "disclaimer",
-			profile: "",
-		});
-		const { findByRole } = render(
-			<LegalPage page="imprint" title={LEGAL_PAGE_TITLES.imprint} resolver={resolver} />,
-		);
-		// Asserted on the copy: a bare "an alert rendered" passes just as happily on the "unable to
-		// load" alert, which says the opposite about the deployment.
-		const banner = await findByRole("alert");
-		expect(banner.textContent).toMatch(/has not been configured with a legal profile/i);
-		expect(warn).toHaveBeenCalledExactlyOnceWith(
-			"[legal] Disclaimer fallback served for page=imprint. Configure LEGAL_PROFILE or mount /legal-overrides/. See docs/admin/legal-pages.",
-		);
-	});
+	it.each(["imprint", "privacy"] as const)(
+		"renders the %s disclaimer and warns exactly once across page mounts",
+		async (page) => {
+			using warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const resolver: typeof resolveLegalContent = async () => ({
+				markdown: "# fallback",
+				source: "disclaimer",
+				profile: "",
+			});
+			const expected = `[legal] Disclaimer fallback served for page=${page}. Configure LEGAL_PROFILE or mount /legal-overrides/. See docs/admin/legal-pages.`;
+			const first = render(
+				<LegalPage page={page} title={LEGAL_PAGE_TITLES[page]} resolver={resolver} />,
+			);
+			// The load-error alert says the opposite about the deployment; assert the disclaimer copy.
+			expect((await first.findByRole("alert")).textContent).toMatch(
+				/has not been configured with a legal profile/i,
+			);
+			expect(warn).toHaveBeenCalledExactlyOnceWith(expected);
+			first.unmount();
+
+			const remounted = render(
+				<LegalPage page={page} title={LEGAL_PAGE_TITLES[page]} resolver={resolver} />,
+			);
+			expect((await remounted.findByRole("alert")).textContent).toMatch(
+				/has not been configured with a legal profile/i,
+			);
+			expect(warn).toHaveBeenCalledExactlyOnceWith(expected);
+		},
+	);
 });
