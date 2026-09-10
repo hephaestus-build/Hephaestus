@@ -76,8 +76,9 @@ of live-provider behavior.
 Test checks show totals and failed suites/cases, not an inventory of successful tests. Source-file
 lookup runs only when failure annotations are needed. The complete unit, integration, database and
 Storybook JUnit reports remain downloadable for fourteen days, including successful runs. Chromatic
-prints warnings/errors alongside the structured visual-coverage summary; its full CLI log is retained
-with the Storybook reports.
+prints warnings/errors alongside the structured visual-coverage summary; its JUnit report is retained
+with the Storybook reports. Do not publish its debug log or diagnostics file: they can contain
+credential-bearing signed URLs even when the project token is masked.
 Reporter action inputs read `job.status` and explicit continued-step outcomes: status-check functions
 such as `failure()` are valid in a step's `if` condition, not in its `with` inputs. The CI contract
 parses those input expressions without status functions and tests successful and failed outcomes.
@@ -804,18 +805,29 @@ verdict also requires a passing coverage report.
 
 | Verdict | Meaning and action |
 | --- | --- |
-| `tested-build` | The returned build has captured snapshots and passed without errors. It may be a reused approved build, not new captures in this CI run. |
+| `tested-build` | The returned build has captured snapshots and a terminal successful JUnit report with no unfinished or failed test cases. It may be a reused approved build, not new captures in this CI run. |
 | `inherited` | The returned build reused baseline snapshots without new captures. Valid TurboSnap coverage, but not a newly tested recovery baseline. |
 | `quota-skipped` | An account limit blocked coverage. The job fails; an account owner must resolve the limit. |
 | `failed` | Visual differences or component/interaction errors need review. Fix errors; accept only intentional, inspected differences. |
 | `unavailable` | Chromatic failed or returned insufficient coverage evidence. The job fails; inspect the build, action logs and account limits before retrying. |
 | `policy-skipped` | Fork PRs and `dependabot/` or `renovate/` branches do not run credentialed visual tests. Interaction tests still run; this is not visual approval. |
 
-`scripts/report-chromatic.ts` interprets the action's public outputs and
-[CLI exit codes](https://www.chromatic.com/docs/cli/#exit-codes). Counts describe the returned
-build, which Chromatic can reuse; they do not establish when snapshots were captured. Accepted
-builds can retain nonzero change counts. Missing outputs fail closed, and account limits are not
-always distinguishable from other failures. Review this contract when updating the action.
+`scripts/report-chromatic.ts` requires both the action's public outputs and its fresh JUnit report.
+The workflow removes the previous report before invoking Chromatic and uses one explicit report
+filename for validation and artifact upload. The report must identify the same returned build,
+have status `PASSED` or `ACCEPTED`, and contain only successful terminal test cases with no reported
+failures. Missing, malformed, mismatched, incomplete, or nonterminal evidence fails closed.
+
+[CLI exit codes](https://www.chromatic.com/docs/cli/#exit-codes) and positive capture counters alone
+are insufficient: publish-only mode can return zero even after an account-limit warning, while
+snapshot records are still `IN_PROGRESS`. Check project UI testing/review settings as well as billing
+when the log says no UI tests or UI review are enabled. Publication is not a completed visual run.
+
+Counts describe the returned build, which Chromatic can reuse; they do not establish when snapshots
+were captured. Accepted builds can retain nonzero change counts. Chromatic's JUnit writer marks both
+skipped and preserved records as skipped, so that marker alone does not reject a successful inherited
+baseline. Nor do snapshot and test counts share a promised equality: the gate checks terminal
+structured evidence instead of subtracting counters. Review this contract when updating the action.
 
 For visual verification of a fork contribution, a maintainer can review it and run a trusted
 same-repository branch. Do not expose project secrets to forks or use `pull_request_target`
@@ -824,7 +836,7 @@ to bypass the policy.
 ### Recovering quota and the baseline
 
 1. An account owner checks the project's current quota/billing and the linked build's results.
-   Resolve any account limit before retrying.
+   Resolve any account limit and confirm UI tests or UI review are enabled before retrying.
 2. Coordinate one full run on the current `main` commit after confirming snapshot capacity.
    From the repository root:
 

@@ -543,6 +543,25 @@ void describe("CI contract", () => {
 		assert.equal(reporters.size, 6);
 	});
 
+	void test("Chromatic retains structured evidence without credential-bearing debug files", async () => {
+		const workflow = parseDocument(
+			await readFile(".github/workflows/ci-quality-gates.yml", "utf8"),
+		);
+		const jobPath = ["jobs", "webapp-stories"];
+		const chromatic = step(workflow, jobPath, "chromaui/action");
+		assert.equal(chromatic.has("logFile"), false);
+		assert.equal(chromatic.has("diagnosticsFile"), false);
+		assert.equal(chromatic.get("logLevel"), "warn");
+		assert.equal(chromatic.get("junitReport"), "chromatic-report.xml");
+		const retained = stepInputs(
+			namedStep(workflow, jobPath, "Retain full Storybook and visual test diagnostics"),
+		);
+		assert.deepEqual(asString(retained.get("path"), "report paths").trim().split("\n"), [
+			"webapp/test-results",
+			"webapp/chromatic-report.xml",
+		]);
+	});
+
 	void test("buildpack reporting changes exercise the image pipeline", async () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const filter = step(workflow, ["jobs", "detect-changes"], "dorny/paths-filter");

@@ -141,6 +141,8 @@ jobs:
         run: |
           vp run --filter webapp build-storybook
           test -s webapp/storybook-static/preview-stats.json
+      - name: Clear previous Chromatic evidence
+        run: node scripts/report-chromatic.ts --clear
       - name: Chromatic visual testing
         id: chromatic
         continue-on-error: true
@@ -157,10 +159,9 @@ jobs:
           autoAcceptChanges: false
           exitZeroOnChanges: false
           exitOnceUploaded: false
-          # Console failures and the structured coverage summary are enough; retain full CLI logs.
+          # Debug log files contain signed URLs; retain structured test evidence instead.
           logLevel: warn
-          logFile: chromatic.log
-          junitReport: true
+          junitReport: chromatic-report.xml
         env:
           CHROMATIC_BRANCH: ${{ github.head_ref || github.ref_name }}
           CHROMATIC_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -238,7 +239,7 @@ jobs:
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
           name: "Test Results - Chromatic"
-          path: "webapp/chromatic-build-*.xml"
+          path: "webapp/chromatic-report.xml"
           reporter: java-junit
           list-suites: failed
           list-tests: failed
@@ -252,8 +253,7 @@ jobs:
           name: storybook-reports-${{ github.run_attempt }}
           path: |
             webapp/test-results
-            webapp/chromatic-build-*.xml
-            webapp/chromatic.log
+            webapp/chromatic-report.xml
           retention-days: 14
           if-no-files-found: warn
       - name: Evaluate stories checks

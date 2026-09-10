@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { test } from "node:test";
 
-import { coverageSummary, visualVerdict } from "./report-chromatic.ts";
+import { coverageSummary, verifyTerminalReport, visualVerdict } from "./report-chromatic.ts";
+
+const buildUrl = "https://www.chromatic.com/build?appId=abc&number=123";
+function terminalReport(status = "PASSED", testStatus = "PASSED", skipped = false) {
+	return `<testsuites><testsuite tests="1" failures="0" errors="0" skipped="${skipped ? 1 : 0}"><properties><property name="buildNumber" value="123"/><property name="buildUrl" value="https://www.chromatic.com/build?appId=abc&amp;number=123"/><property name="buildStatus" value="${status}"/></properties><testcase><properties><property name="result" value="${testStatus}"/></properties>${skipped ? "<skipped/>" : ""}</testcase></testsuite></testsuites>`;
+}
 
 const tested = {
+	CHROMATIC_BUILD_URL: buildUrl,
 	CHROMATIC_OUTCOME: "success",
 	CHROMATIC_CODE: "0",
 	CHROMATIC_CAPTURED: "10",
@@ -19,9 +25,18 @@ const tested = {
 };
 
 void test("distinguishes tested-build evidence, inherited and absent coverage", () => {
-	assert.equal(visualVerdict(tested).state, "tested-build");
-	assert.match(coverageSummary(tested), /do not prove new captures in this CI run/);
-	assert.equal(visualVerdict({ ...tested, CHROMATIC_CAPTURED: "0" }).state, "inherited");
+	assert.equal(visualVerdict(tested, terminalReport()).state, "tested-build");
+	assert.match(
+		coverageSummary(tested, terminalReport()),
+		/do not prove new captures in this CI run/,
+	);
+	assert.equal(
+		visualVerdict(
+			{ ...tested, CHROMATIC_CAPTURED: "0" },
+			terminalReport("ACCEPTED", "PASSED", true),
+		).state,
+		"inherited",
+	);
 	assert.equal(
 		visualVerdict({ ...tested, CHROMATIC_CAPTURED: "0", CHROMATIC_INHERITED: "0" }).pass,
 		false,
@@ -98,7 +113,10 @@ void test("CLI writes its summary and fails closed even with no outputs", () => 
 			] as const
 		).entries()) {
 			const summary = join(dir, `${index}.md`);
-			const run = spawnSync(process.execPath, ["scripts/report-chromatic.ts"], {
+			mkdirSync(join(dir, "webapp"), { recursive: true });
+			writeFileSync(join(dir, "webapp/chromatic-report.xml"), terminalReport());
+			const run = spawnSync(process.execPath, [resolve("scripts/report-chromatic.ts")], {
+				cwd: dir,
 				env: { ...env, GITHUB_STEP_SUMMARY: summary },
 				encoding: "utf8",
 			});
@@ -113,9 +131,82 @@ void test("CLI writes its summary and fails closed even with no outputs", () => 
 });
 
 void test("accepted/reused builds may retain a nonzero change count", () => {
-	assert.equal(visualVerdict({ ...tested, CHROMATIC_CHANGES: "2" }).state, "tested-build");
+	assert.equal(
+		visualVerdict({ ...tested, CHROMATIC_CHANGES: "2" }, terminalReport("ACCEPTED")).state,
+		"tested-build",
+	);
 	assert.equal(
 		visualVerdict({ ...tested, CHROMATIC_CHANGES: "2", CHROMATIC_CODE: "1" }).pass,
 		false,
 	);
+});
+
+void test("publish-only builds cannot pass from positive counters and exit zero", () => {
+	const cases = Array.from(
+		{ length: 1926 },
+		(_, index) =>
+			`<testcase><properties><property name="result" value="${index < 266 ? "IN_PROGRESS" : "PASSED"}"/></properties>${index < 266 ? "" : "<skipped/>"}</testcase>`,
+	).join("");
+	const xml = `<testsuites><testsuite tests="1926" skipped="1660" errors="0" failures="0"><properties><property name="buildNumber" value="5185"/><property name="buildStatus" value="IN_PROGRESS"/><property name="buildUrl" value="https://www.chromatic.com/build?appId=abc&amp;number=5185"/></properties>${cases}</testsuite></testsuites>`;
+	const env = {
+		...tested,
+		CHROMATIC_CAPTURED: "266",
+		CHROMATIC_INHERITED: "0",
+		CHROMATIC_TESTS: "1820",
+		CHROMATIC_BUILD_URL: "https://www.chromatic.com/build?appId=abc&number=5185",
+	};
+	assert.equal(visualVerdict(env, xml).pass, false);
+	assert.match(coverageSummary(env, xml), /IN_PROGRESS/);
+	assert.doesNotMatch(coverageSummary(env, xml), /passed without errors/);
+});
+
+void test("terminal report and child outcomes are required, independently of counts", () => {
+	for (const status of [
+		"IN_PROGRESS",
+		"PENDING",
+		"BROKEN",
+		"FAILED",
+		"CANCELLED",
+		"DENIED",
+		"unknown",
+	]) {
+		assert.equal(visualVerdict(tested, terminalReport(status)).pass, false);
+		assert.equal(visualVerdict(tested, terminalReport("PASSED", status)).pass, false);
+	}
+	assert.equal(visualVerdict(tested).pass, false);
+	for (const xml of [
+		"",
+		"<testsuites>",
+		"<testsuites/>",
+		terminalReport().replace('tests="1"', 'tests="2"'),
+		terminalReport().replace('errors="0"', 'errors="1"'),
+		terminalReport().replace("</testcase>", "<error/></testcase>"),
+	])
+		assert.equal(visualVerdict(tested, xml).pass, false);
+	assert.match(
+		verifyTerminalReport(
+			terminalReport(),
+			"https://www.chromatic.com/build?appId=other&number=123",
+		) ?? "",
+		/does not identify/,
+	);
+});
+
+void test("clear step prevents an old successful report approving a skipped upload", () => {
+	const dir = mkdtempSync(join(tmpdir(), "chromatic-stale-"));
+	try {
+		mkdirSync(join(dir, "webapp"));
+		writeFileSync(join(dir, "webapp/chromatic-report.xml"), terminalReport());
+		const script = resolve("scripts/report-chromatic.ts");
+		assert.equal(spawnSync(process.execPath, [script, "--clear"], { cwd: dir }).status, 0);
+		const result = spawnSync(process.execPath, [script], {
+			cwd: dir,
+			env: tested,
+			encoding: "utf8",
+		});
+		assert.equal(result.status, 1);
+		assert.match(result.stdout, /Missing structured Chromatic report evidence/);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
 });
