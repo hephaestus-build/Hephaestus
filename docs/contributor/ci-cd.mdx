@@ -504,6 +504,7 @@ why the label is the authority, and which alternatives were priced and declined,
 | `pull-request.yml` | PR opened, edited, synchronized, reopened, ready for review | Validates the title against the policy `commitlint.config.ts` exports, without installing the workspace, checks that every commit resolves to the pull request's author, and assigns the author when the pull request opens |
 | `ci-quality-gates.yml` | Called by cicd.yml | Selects quality legs, clean-install verification and story tests |
 | `ci-quality-leg.yml` | Called by ci-quality-gates.yml | Shared formatting, lint, type-check and unit-test execution for each selected task-graph leg |
+| `cache-toolchain.yml` | Main push changing install inputs or setup | Seeds trusted Linux and Windows install caches without repeating quality gates |
 | `ci-build.yml` | Called by cicd.yml | Runs the OpenAPI, schema, database and browser E2E gates against the server artifact packaged by cicd.yml |
 | `ci-tests.yml` | Called by cicd.yml | The server unit, architecture and integration suites, compiled from source |
 | `ci-docker-build.yml` | Called by cicd.yml | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images |
@@ -584,6 +585,13 @@ fallback. The action verifies the native cache file exists on each runner, inclu
 changed upstream cache contract must be reviewed rather than silently losing reuse. Registry
 metadata itself is not cached by this action. A dependency update is cold under its new key; only
 later runs with the same inputs can reuse the default branch's verdict.
+
+`cache-toolchain.yml` performs a frozen install on Linux and Windows after a main-branch push changes
+these inputs or the setup workflow/action. Ordinary main CI skips quality legs, so this dedicated
+producer keeps both platforms warm without duplicating their gates. It is separate from release
+validation: a failed or expired cache is a normal cold install, not a reason to block a release.
+Rerunning the original main-push cache workflow can replenish an expired entry; manual dispatch and
+pull requests cannot publish verification verdicts.
 
 Java quality verdicts are not stored in the Vite task cache: Gradle owns their task inputs and outputs.
 GraphQL generation opts into Gradle's build cache using the plugin's declared inputs and outputs.

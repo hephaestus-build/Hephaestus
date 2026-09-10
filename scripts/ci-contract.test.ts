@@ -2762,3 +2762,44 @@ void test(
 			}
 	},
 );
+
+void test("toolchain cache producers cover Linux and Windows without repeating quality gates", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/cache-toolchain.yml", "utf8"));
+	const triggers = workflow.get("on");
+	assert.ok(isMap(triggers));
+	assert.deepEqual(triggers.toJSON(), {
+		push: {
+			branches: ["main"],
+			paths: [
+				"package.json",
+				"pnpm-lock.yaml",
+				"pnpm-workspace.yaml",
+				".npmrc",
+				".github/actions/setup-toolchain/**",
+				".github/workflows/cache-toolchain.yml",
+			],
+		},
+	});
+	const jobs = workflow.get("jobs");
+	assert.ok(isMap(jobs));
+	assert.equal(jobs.items.length, 1);
+	const install = jobs.get("install");
+	assert.ok(isMap(install));
+	assert.equal(install.get("runs-on"), `\${{ matrix.os }}`);
+	assert.equal(install.has("if"), false);
+	const platforms = install.getIn(["strategy", "matrix", "os"]);
+	assert.ok(isSeq(platforms));
+	assert.deepEqual(platforms.toJSON(), ["ubuntu-latest", "windows-latest"]);
+	assert.equal(install.getIn(["strategy", "fail-fast"]), false);
+	const steps = install.get("steps");
+	assert.ok(isSeq(steps));
+	assert.equal(steps.items.length, 2);
+	const checkout = steps.items[0];
+	const setup = steps.items[1];
+	assert.ok(isMap(checkout) && isMap(setup));
+	assert.match(String(checkout.get("uses")), /^actions\/checkout@/);
+	assert.equal(checkout.getIn(["with", "persist-credentials"]), false);
+	assert.equal(setup.get("uses"), "./.github/actions/setup-toolchain");
+	assert.equal(setup.getIn(["with", "install"]), "frozen");
+	assert.equal(setup.has("if"), false);
+});
