@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import java.io.Serial;
 import java.util.Locale;
 
 /**
@@ -10,6 +11,9 @@ import java.util.Locale;
  * that needs the plaintext gets this answer.
  */
 public class CredentialUnreadableException extends RuntimeException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private final long connectionId;
     private final IntegrationKind kind;

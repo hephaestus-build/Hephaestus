@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
+import java.io.Serial;
 import java.io.Serializable;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
@@ -38,6 +39,9 @@ public class PracticeReviewPersonTarget {
     @AllArgsConstructor
     @EqualsAndHashCode
     public static class Key implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         @Nullable
         private Long workspaceId;
