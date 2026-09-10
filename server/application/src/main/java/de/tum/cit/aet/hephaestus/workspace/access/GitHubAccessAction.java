@@ -66,14 +66,14 @@ public class GitHubAccessAction {
     @Column(name = "configuration_version", nullable = false)
     private long configurationVersion;
 
-    @Column(name = "directory_configuration_version")
-    private @Nullable Long directoryConfigurationVersion;
+    @Column(name = "eligibility_configuration_version")
+    private @Nullable Long eligibilityConfigurationVersion;
 
-    @Column(name = "directory_capture_started_at")
-    private @Nullable Instant directoryCaptureStartedAt;
+    @Column(name = "eligibility_captured_at")
+    private @Nullable Instant eligibilityCapturedAt;
 
-    @Column(name = "directory_source_version")
-    private @Nullable Instant directorySourceVersion;
+    @Column(name = "eligibility_source_version")
+    private @Nullable Instant eligibilitySourceVersion;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)

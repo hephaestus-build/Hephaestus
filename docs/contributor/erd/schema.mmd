@@ -533,9 +533,9 @@ erDiagram
         BIGINT configuration_version "NOT NULL"
         TIMESTAMPTZ confirmed_at
         TIMESTAMPTZ created_at "NOT NULL"
-        TIMESTAMPTZ directory_capture_started_at
-        BIGINT directory_configuration_version
-        TIMESTAMPTZ directory_source_version
+        TIMESTAMPTZ eligibility_captured_at
+        BIGINT eligibility_configuration_version
+        TIMESTAMPTZ eligibility_source_version
         VARCHAR(32) failure_code
         VARCHAR(512) failure_reason
         BIGINT github_user_id "NOT NULL"
@@ -582,14 +582,14 @@ erDiagram
         JSONB owner_authorization
         BIGINT configuration_version "NOT NULL"
         BIGINT connection_id FK,UK "NOT NULL"
-        BIGINT directory_provider_id FK "NOT NULL"
+        BIGINT directory_provider_id FK
         JSONB draft_group_ids "NOT NULL"
         VARCHAR(32) failure_code
         VARCHAR(512) failure_reason
         TIMESTAMPTZ handoff_expires_at
         VARCHAR(64) handoff_hash UK
         BIGINT handoff_issued_by_account_id FK
-        VARCHAR(512) issuer "NOT NULL"
+        VARCHAR(512) issuer
         TIMESTAMPTZ last_attempt_at
         TIMESTAMPTZ last_confirmed_at
         BIGINT organization_id
@@ -597,7 +597,7 @@ erDiagram
         BOOLEAN paused "NOT NULL"
         BIGINT pending_installation_id "NOT NULL"
         JSONB preview
-        VARCHAR(64) registration_id "NOT NULL"
+        VARCHAR(64) registration_id
         VARCHAR(100) requested_organization "NOT NULL"
         VARCHAR(100) requested_team
         TIMESTAMPTZ retry_at
@@ -606,6 +606,8 @@ erDiagram
         VARCHAR(16) status "NOT NULL"
         BIGINT version "NOT NULL"
         BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT request_team_id
+        VARCHAR(16) source "NOT NULL"
     }
 
     IdentityLink {

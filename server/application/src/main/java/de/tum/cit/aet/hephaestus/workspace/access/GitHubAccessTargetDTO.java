@@ -17,6 +17,7 @@ public record GitHubAccessTargetDTO(
         @NonNull Long installationId,
         @Nullable Long organizationId,
         @Nullable Long scopeId,
+        GitHubAccessTarget.@NonNull Source source,
         GitHubAccessTarget.@NonNull Status status,
         @NonNull Boolean paused,
         @NonNull Boolean authorityHeld,

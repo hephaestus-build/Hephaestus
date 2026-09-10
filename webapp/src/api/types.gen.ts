@@ -1641,6 +1641,7 @@ export type GitHubAccessConfiguration = {
   groupIds: Array<string>;
   installationId: number;
   organization: string;
+  source: 'REQUEST' | 'DIRECTORY';
   team?: string;
 };
 
@@ -1662,6 +1663,7 @@ export type GitHubAccessHandoffPreview = {
   groupIds: Array<string>;
   installationId: number;
   organization: string;
+  source: 'REQUEST' | 'DIRECTORY';
   team?: string;
   workspaceName: string;
 };
@@ -1752,6 +1754,7 @@ export type GitHubAccessTarget = {
   preview?: GitHubAccessPreview;
   retryAt?: Date;
   scopeId?: number;
+  source: 'REQUEST' | 'DIRECTORY';
   status: 'DRAFT' | 'ACTIVE' | 'ENDING' | 'ENDED';
   team?: string;
 };

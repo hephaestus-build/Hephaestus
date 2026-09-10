@@ -33,9 +33,17 @@ previews, job failures or configuration audit records.
 
 ## Two approvals, different responsibilities
 
-The workspace owner selects currently approved directory groups and drafts an organization or team
-target. Each target has its own connection and job lease. There is no one-organization-per-workspace
-limit.
+The workspace owner drafts an organization or team target and selects its eligibility source:
+
+- **Access requests** is the default and needs no directory. Only current, approved requests with
+  unexpired workspace access and their original linked identities qualify. Delivery is restricted to
+  the workspace's own GitHub organization. Configure an organization target and a target for each team
+  you offer; a team target includes only requests whose approved details include that synchronized team.
+- **Directory groups** is optional. Select groups from an active, approved directory policy. These
+  targets can manage independently authorized organizations and teams without changing request access.
+
+Each target has its own connection and job lease. Its source, organization and team cannot change
+after authority is acquired; end the target before replacing that scope.
 
 The owner shares an expiring approval link with a GitHub organization owner. Its capability is in a URL
 fragment, not a query string; do not copy it into tickets, analytics or logs. It expires after ten
@@ -44,7 +52,7 @@ signs in recently as themselves and links their GitHub.com identity. They do not
 membership. Impersonation cannot authorize a target.
 
 After that organization-owner authorization, the workspace owner runs a preview and approves the exact
-fresh inventory and directory evidence. Changing groups or the installation requires fresh consent.
+fresh inventory and eligibility evidence. Changing groups or the installation requires fresh consent.
 An ownership transfer requires approval by the new workspace owner before new grants resume.
 
 Database exclusion constraints prevent different workspaces from holding overlapping organization-wide
@@ -58,6 +66,9 @@ workspace. Sharing a connection, login or installation is not a transfer.
 - Invitations are pending access, not accepted membership. Developers must accept their GitHub
   organization invitations. A team-only target waits for existing organization membership; it does not
   silently grant broader organization access. Configure an organization target first when needed.
+- Request expiry is checked on every reconciliation, independently of the notification scheduler.
+  A pending renewal never extends access. Suspensions and changes to the approved request's identities
+  or teams also stop grants and trigger removal of the affected managed access.
 - Existing ordinary access or invitations are unmanaged until the workspace owner explicitly adopts
   them. Protected owners, team maintainers, outside collaborators and enterprise-inherited access are
   not adopted or automatically removed.
@@ -68,6 +79,11 @@ workspace. Sharing a connection, login or installation is not a transfer.
 - Incomplete, stale, disabled or unavailable directory evidence cannot authorize mass removal. Confirmed
   local exits, such as account deletion, identity unlinking, unenrollment or ending management, remain
   recorded even when GitHub cannot be reached.
+- Optional request-history cleanup waits for confirmed removals, including unresolved invitations and
+  writes whose outcome is unknown. Missing credentials or a paused target never count as removal.
+  When cleanup is due, finished membership records, their action history and private preview identities
+  in that workspace are erased together with the request history. Shared accounts and other workspaces
+  follow their own retention controls.
 
 GitHub's team-membership and organization-removal endpoints address users by login, not native ID,
 and expose no atomic identity precondition. Hephaestus pins the native identity, resolves and checks

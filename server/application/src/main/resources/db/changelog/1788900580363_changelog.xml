@@ -241,4 +241,50 @@
             ALTER TABLE config_audit_event ADD CONSTRAINT ck_config_audit_event_entity_type CHECK (entity_type IN ('PRACTICE_REVIEW_SETTINGS', 'AGENT_BINDING', 'AGENT_CONFIG', 'AI_CONFIG_BINDING', 'WORKSPACE_ROLE', 'WORKSPACE_FEATURES', 'WORKSPACE_STATUS', 'WORKSPACE_TOKEN', 'WORKSPACE_VISIBILITY', 'PRACTICE_ACTIVE', 'PRACTICE_USAGE', 'PRACTICE_DEFINITION', 'PRACTICE_GROUP', 'PRACTICE_AREA', 'CURATED_PRACTICE', 'CURATED_PRACTICE_GROUP', 'CURATED_PRACTICE_AREA', 'WORKSPACE_INSTANCE_LLM_BUDGET', 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET', 'WORKSPACE_LLM_BUDGET', 'WORKSPACE_BYO_LLM_BUDGET', 'REVIEW_BACKFILL_RUN', 'REVIEW_SWEEP_SCHEDULE', 'WORKSPACE_LLM_CONNECTION', 'WORKSPACE_LLM_MODEL', 'DIRECTORY_POLICY', 'WORKSPACE_ACCESS_POLICY', 'WORKSPACE_ACCESS_REQUEST', 'GITHUB_ACCESS_POLICY', 'GITHUB_ACCESS_MEMBERSHIP'));
         </sql>
     </changeSet>
+    <changeSet id="1788900580363-19" author="hephaestus">
+        <renameColumn tableName="github_access_action" oldColumnName="directory_capture_started_at" newColumnName="eligibility_captured_at" columnDataType="TIMESTAMP(6) WITH TIME ZONE"/>
+    </changeSet>
+    <changeSet id="1788900580363-20" author="hephaestus">
+        <renameColumn tableName="github_access_action" oldColumnName="directory_configuration_version" newColumnName="eligibility_configuration_version" columnDataType="BIGINT"/>
+    </changeSet>
+    <changeSet id="1788900580363-21" author="hephaestus">
+        <renameColumn tableName="github_access_action" oldColumnName="directory_source_version" newColumnName="eligibility_source_version" columnDataType="TIMESTAMP(6) WITH TIME ZONE"/>
+    </changeSet>
+    <changeSet id="1788900580363-22" author="hephaestus">
+        <addColumn tableName="github_access_target">
+            <column name="request_team_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1788900580363-23" author="hephaestus">
+        <addColumn tableName="github_access_target">
+            <column name="source" type="VARCHAR(16)" defaultValue="DIRECTORY">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <dropDefaultValue tableName="github_access_target" columnName="source" columnDataType="VARCHAR(16)"/>
+    </changeSet>
+    <changeSet id="1788900580363-27" author="hephaestus">
+        <dropNotNullConstraint columnDataType="bigint" columnName="directory_provider_id" tableName="github_access_target"/>
+    </changeSet>
+    <changeSet id="1788900580363-28" author="hephaestus">
+        <dropNotNullConstraint columnDataType="varchar(512)" columnName="issuer" tableName="github_access_target"/>
+    </changeSet>
+    <changeSet id="1788900580363-29" author="hephaestus">
+        <dropNotNullConstraint columnDataType="varchar(64)" columnName="registration_id" tableName="github_access_target"/>
+    </changeSet>
+    <changeSet id="1788900580363-30" author="hephaestus">
+        <comment>Eligibility sources retain distinct provenance; a held request team scope pins its approved local team.</comment>
+        <sql><![CDATA[
+            UPDATE github_access_target SET preview = NULL;
+            ALTER TABLE github_access_target ADD CONSTRAINT ck_github_access_target_source CHECK (
+                (source = 'DIRECTORY' AND directory_provider_id IS NOT NULL AND registration_id IS NOT NULL
+                    AND issuer IS NOT NULL AND request_team_id IS NULL)
+                OR (source = 'REQUEST' AND directory_provider_id IS NULL AND registration_id IS NULL
+                    AND issuer IS NULL AND draft_group_ids = '[]'::jsonb AND approved_group_ids = '[]'::jsonb
+                    AND (request_team_id IS NULL OR request_team_id > 0)
+                    AND (NOT authority_held OR (scope_id = 0 AND request_team_id IS NULL)
+                        OR (scope_id > 0 AND request_team_id IS NOT NULL)))
+            );
+        ]]></sql>
+    </changeSet>
 </databaseChangeLog>

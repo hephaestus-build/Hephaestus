@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class GitHubAccessAuthorizationService {
     private final GitHubAccessTargetRepository targets;
     private final GitHubAccessPolicyService policies;
+    private final GitHubAccessEligibilityService evidence;
     private final AccountIdentityQuery identities;
     private final GitProviderRegistry providers;
     private final ConnectionRepository connections;
@@ -101,6 +102,7 @@ public class GitHubAccessAuthorizationService {
                         && (!Objects.equals(target.getOrganizationId(), verified.organizationId())
                                 || !Objects.equals(target.getScopeId(), verified.scopeId()))))
             throw new IllegalArgumentException("The approval or target changed; obtain a fresh approval link");
+        evidence.bindScope(target, verified.organizationId(), verified.scopeId());
         var before = GitHubAccessAudit.Policy.of(target);
         target.setOrganizationId(verified.organizationId());
         target.setScopeId(verified.scopeId());

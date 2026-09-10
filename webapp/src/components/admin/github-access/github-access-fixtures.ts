@@ -8,6 +8,7 @@ export const githubTarget: GitHubAccessTarget = {
 	installationId: 500,
 	organizationId: 1000,
 	scopeId: 0,
+	source: "DIRECTORY",
 	status: "ACTIVE",
 	paused: false,
 	authorityHeld: true,

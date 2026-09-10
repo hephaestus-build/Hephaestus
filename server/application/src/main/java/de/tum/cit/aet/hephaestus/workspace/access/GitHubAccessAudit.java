@@ -9,6 +9,7 @@ public final class GitHubAccessAudit {
     private GitHubAccessAudit() {}
 
     public record Policy(
+            GitHubAccessTarget.Source source,
             GitHubAccessTarget.Status status,
             boolean paused,
             boolean authorityHeld,
@@ -22,6 +23,7 @@ public final class GitHubAccessAudit {
         public static Policy of(GitHubAccessTarget target) {
             var authorization = target.getAuthorization();
             return new Policy(
+                    target.getSource(),
                     target.getStatus(),
                     target.isPaused(),
                     target.isAuthorityHeld(),

@@ -17,10 +17,14 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Clie
 import de.tum.cit.aet.hephaestus.integration.core.sync.*;
 import de.tum.cit.aet.hephaestus.integration.core.sync.api.SyncJobDTO;
 import de.tum.cit.aet.hephaestus.integration.directory.KeycloakDirectoryClient;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.OrganizationalIdentityIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.*;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.directory.*;
+import de.tum.cit.aet.hephaestus.workspace.onboarding.WorkspaceAccessDetails;
+import de.tum.cit.aet.hephaestus.workspace.onboarding.WorkspaceAccessPolicySettings;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -94,6 +98,18 @@ class GitHubAccessIntegrationTest extends OrganizationalIdentityIntegrationTest 
 
     @Autowired
     private CredentialBundleConverter credentialConverter;
+
+    @Autowired
+    private OrganizationRepository organizations;
+
+    @Autowired
+    private IdentityProviderRepository identityProviders;
+
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Autowired
+    private tools.jackson.databind.ObjectMapper mapper;
 
     private Account owner;
     private Account organizationOwner;
@@ -212,6 +228,112 @@ class GitHubAccessIntegrationTest extends OrganizationalIdentityIntegrationTest 
         assertThat(member(id).isManaged()).isTrue();
         verify(githubAccess, times(2)).grant(any(), eq(61L));
         verify(githubAccess).revoke(any(), eq(61L));
+    }
+
+    @Test
+    void shouldDeliverAnApprovedRequestWithoutDirectoryConfigurationAndRevokeItAtExpiry() {
+        directories.delete(directory);
+        long githubProvider = registry.resolveProviderId("GITHUB", "https://github.com");
+        var organization = new Organization();
+        organization.setProvider(identityProviders.findById(githubProvider).orElseThrow());
+        organization.setNativeId(1000L);
+        organization.setLogin("example-org");
+        organization.setName("Example organization");
+        organization.setHtmlUrl("https://github.com/example-org");
+        organization.setLastSyncAt(Instant.now());
+        workspace.setOrganization(organizations.saveAndFlush(organization));
+        workspace.setAccountLogin("example-org");
+        workspace = workspaces.saveAndFlush(workspace);
+        long accountId = Objects.requireNonNull(developer.getId());
+        var identity = links.findActiveByAccountId(accountId).stream()
+                .filter(link -> link.getProviderId() == githubProvider)
+                .findFirst()
+                .orElseThrow();
+        var details = new WorkspaceAccessDetails(
+                Objects.requireNonNull(owner.getId()), List.of(), Instant.now().plusSeconds(3600));
+        var policy = new WorkspaceAccessPolicySettings(
+                "github",
+                "Introduction",
+                "Acknowledgement",
+                List.of(),
+                List.of(),
+                1L,
+                List.of(),
+                90,
+                14,
+                "admin@example.test",
+                null);
+        Long requestId = jdbc.queryForObject(
+                """
+                INSERT INTO workspace_access_request(workspace_id,account_id,version,status,submitted_at,policy_version,
+                    policy_snapshot,submission,approved_details)
+                VALUES (?,?,0,'APPROVED',now(),0,?::jsonb,?::jsonb,?::jsonb) RETURNING id
+                """,
+                Long.class,
+                workspace.getId(),
+                accountId,
+                mapper.writeValueAsString(policy),
+                mapper.writeValueAsString(Map.of(
+                        "details",
+                        details,
+                        "identityLinkIds",
+                        List.of(identity.getId()),
+                        "acknowledgedNoticeKeys",
+                        List.of())),
+                mapper.writeValueAsString(details));
+        var membership = workspaceMembers
+                .findByWorkspace_IdAndAccountId(workspace.getId(), accountId)
+                .orElseThrow();
+        membership.setSource(WorkspaceAccountMembership.Source.REQUEST);
+        membership.setAccessRequestId(Objects.requireNonNull(requestId));
+        membership.setExpiresAt(details.expiresAt());
+        workspaceMembers.saveAndFlush(membership);
+
+        long target = activeTarget(Map.of(
+                "organization", "example-org", "installationId", 500, "source", "REQUEST", "groupIds", List.of()));
+        run(target, false, SyncJobStatus.SUCCEEDED);
+        assertThat(member(target).isManaged()).isTrue();
+        assertThat(member(target).getDirectoryIdentityLinkId()).isNull();
+        assertThat(external.get()).isEqualTo(GitHubAccessClient.State.PENDING);
+        assertThat(transactions.<Boolean>execute(
+                        status -> lifecycle.canEraseAccessRequests(workspace.getId(), accountId)))
+                .isFalse();
+
+        membership.setExpiresAt(Instant.now().minusSeconds(60));
+        workspaceMembers.saveAndFlush(membership);
+        run(target, false, SyncJobStatus.SUCCEEDED);
+        assertThat(external.get()).isEqualTo(GitHubAccessClient.State.ABSENT);
+        assertThat(member(target).isManaged()).isFalse();
+        assertThat(transactions.<Boolean>execute(
+                        status -> lifecycle.canEraseAccessRequests(workspace.getId(), accountId)))
+                .isTrue();
+        transactions.executeWithoutResult(status -> lifecycle.eraseAccessRequestData(workspace.getId(), accountId));
+        assertThat(members.findByWorkspace_IdAndTarget_IdAndGithubUserId(workspace.getId(), target, 61L))
+                .isEmpty();
+        assertThat(actions.findTop50ByWorkspace_IdAndTarget_IdOrderByCreatedAtDesc(workspace.getId(), target))
+                .isEmpty();
+        assertThat(targets.findByIdAndWorkspace_Id(target, workspace.getId())
+                        .orElseThrow()
+                        .getPreview())
+                .isNull();
+    }
+
+    @Test
+    void shouldRevokeExpiredAccessWithoutWaitingForTheOnboardingScheduler() {
+        long id = activeTarget();
+        run(id, false, SyncJobStatus.SUCCEEDED);
+        assertThat(member(id).isManaged()).isTrue();
+        var membership = workspaceMembers
+                .findByWorkspace_IdAndAccountId(workspace.getId(), Objects.requireNonNull(developer.getId()))
+                .orElseThrow();
+        membership.setExpiresAt(Instant.now().minusSeconds(60));
+        workspaceMembers.saveAndFlush(membership);
+
+        run(id, false, SyncJobStatus.SUCCEEDED);
+
+        assertThat(member(id).isManaged()).isFalse();
+        assertThat(member(id).getExternalState()).isEqualTo(GitHubAccessClient.State.ABSENT);
+        assertThat(external.get()).isEqualTo(GitHubAccessClient.State.ABSENT);
     }
 
     @Test
@@ -502,7 +624,15 @@ class GitHubAccessIntegrationTest extends OrganizationalIdentityIntegrationTest 
         client.put()
                 .uri(path("/" + id))
                 .headers(headers -> headers.setBearerAuth(token(owner)))
-                .bodyValue(Map.of("organization", "other-org", "installationId", 500, "groupIds", List.of("eligible")))
+                .bodyValue(Map.of(
+                        "organization",
+                        "other-org",
+                        "installationId",
+                        500,
+                        "source",
+                        "DIRECTORY",
+                        "groupIds",
+                        List.of("eligible")))
                 .exchange()
                 .expectStatus()
                 .isBadRequest();
@@ -608,6 +738,8 @@ class GitHubAccessIntegrationTest extends OrganizationalIdentityIntegrationTest 
                 "engineering",
                 "installationId",
                 502,
+                "source",
+                "DIRECTORY",
                 "groupIds",
                 List.of("eligible")));
         run(second, false, SyncJobStatus.SUCCEEDED);
@@ -705,7 +837,15 @@ class GitHubAccessIntegrationTest extends OrganizationalIdentityIntegrationTest 
     }
 
     private Map<String, Object> configuration() {
-        return Map.of("organization", "example-org", "installationId", 500, "groupIds", List.of("eligible"));
+        return Map.of(
+                "organization",
+                "example-org",
+                "installationId",
+                500,
+                "source",
+                "DIRECTORY",
+                "groupIds",
+                List.of("eligible"));
     }
 
     private WebTestClient.ResponseSpec authorize(String token) {

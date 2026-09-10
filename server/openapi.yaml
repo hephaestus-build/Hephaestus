@@ -11548,7 +11548,7 @@ components:
             maxLength: 255
             minLength: 0
           maxItems: 100
-          minItems: 1
+          minItems: 0
           uniqueItems: true
         installationId:
           type: integer
@@ -11558,6 +11558,11 @@ components:
           type: string
           maxLength: 100
           minLength: 0
+        source:
+          type: string
+          enum:
+          - REQUEST
+          - DIRECTORY
         team:
           type: string
           maxLength: 100
@@ -11566,6 +11571,7 @@ components:
       - groupIds
       - installationId
       - organization
+      - source
     GitHubAccessDecision:
       type: object
       properties:
@@ -11611,6 +11617,11 @@ components:
           format: int64
         organization:
           type: string
+        source:
+          type: string
+          enum:
+          - REQUEST
+          - DIRECTORY
         team:
           type: string
         workspaceName:
@@ -11619,6 +11630,7 @@ components:
       - groupIds
       - installationId
       - organization
+      - source
       - workspaceName
     GitHubAccessInventoryMember:
       type: object
@@ -11873,6 +11885,11 @@ components:
         scopeId:
           type: integer
           format: int64
+        source:
+          type: string
+          enum:
+          - REQUEST
+          - DIRECTORY
         status:
           type: string
           enum:
@@ -11895,6 +11912,7 @@ components:
       - members
       - organization
       - paused
+      - source
       - status
     GitHubProvider:
       type: object

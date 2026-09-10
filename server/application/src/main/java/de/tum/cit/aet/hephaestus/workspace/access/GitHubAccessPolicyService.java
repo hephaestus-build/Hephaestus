@@ -16,8 +16,6 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceAccountMembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
-import de.tum.cit.aet.hephaestus.workspace.directory.DirectoryPolicy;
-import de.tum.cit.aet.hephaestus.workspace.directory.DirectoryPolicyRepository;
 import de.tum.cit.aet.hephaestus.workspace.exception.InsufficientWorkspacePermissionsException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -46,14 +44,17 @@ public class GitHubAccessPolicyService {
     private final GitHubAccessActionRepository actions;
     private final WorkspaceRepository workspaces;
     private final WorkspaceAccountMembershipRepository workspaceMembers;
-    private final DirectoryPolicyRepository directories;
-    private final GitHubAccessDirectoryEvidence evidence;
+    private final GitHubAccessEligibilityService evidence;
     private final ConnectionRepository connections;
     private final ConfigAuditPort audit;
     private final Clock clock;
 
     public record Configuration(
-            String organization, @Nullable String team, long installationId, Set<String> groupIds) {}
+            String organization,
+            @Nullable String team,
+            long installationId,
+            GitHubAccessTarget.Source source,
+            Set<String> groupIds) {}
 
     public record Handoff(GitHubAccessTarget target, String token) {
         @Override
@@ -77,12 +78,6 @@ public class GitHubAccessPolicyService {
                 || input.installationId() <= 0)
             throw new IllegalArgumentException(
                     "Provide a GitHub organization login, optional team slug and Access App installation ID");
-        var directory = directories
-                .findByWorkspace_Id(workspaceId)
-                .filter(value -> value.getStatus() == DirectoryPolicy.Status.ACTIVE)
-                .orElseThrow(() -> new IllegalArgumentException("Approve an active directory policy first"));
-        if (input.groupIds().isEmpty() || !directory.getApprovedGroupIds().containsAll(input.groupIds()))
-            throw new IllegalArgumentException("Select currently approved directory groups");
         GitHubAccessTarget target = targetId == null ? new GitHubAccessTarget() : required(workspaceId, targetId);
         var before = targetId == null ? null : GitHubAccessAudit.Policy.of(target);
         if (target.getStatus() == GitHubAccessTarget.Status.ENDED
@@ -90,11 +85,11 @@ public class GitHubAccessPolicyService {
             throw new IllegalArgumentException(
                     "An ending target cannot grant access; create a new target after teardown");
         if (target.isAuthorityHeld()
-                && (!target.getDirectoryProviderId().equals(directory.getIdentityProviderId())
+                && (target.getSource() != input.source()
                         || !target.getRequestedOrganization().equalsIgnoreCase(input.organization())
                         || !Objects.equals(target.getRequestedTeam(), input.team())))
             throw new IllegalArgumentException(
-                    "End the existing target before changing its organization, team or directory source");
+                    "End the existing target before changing its organization, team or eligibility source");
         if (targetId == null) {
             target.setWorkspace(workspace);
             var connection = connections.saveAndFlush(new Connection(
@@ -104,10 +99,9 @@ public class GitHubAccessPolicyService {
                     new GitHubAccessConfig(Set.of())));
             connection.setDisplayName("GitHub access: " + input.organization());
             target.setConnectionId(connection.getId());
-            target.setRegistrationId(directory.getRegistrationId());
-            target.setIssuer(directory.getIssuer());
-            target.setDirectoryProviderId(directory.getIdentityProviderId());
         }
+        target.setSource(input.source());
+        evidence.configure(target, input.groupIds());
         target.setRequestedOrganization(input.organization());
         target.setRequestedTeam(input.team());
         target.setPendingInstallationId(input.installationId());
@@ -163,7 +157,7 @@ public class GitHubAccessPolicyService {
                 || preview.configurationVersion() != target.getConfigurationVersion()
                 || authorization.configurationVersion() != target.getConfigurationVersion()
                 || clock.instant().isAfter(preview.github().capturedAt().plus(Duration.ofMinutes(10)))
-                || !evidence.sameCapture(preview.directory(), evidence.read(target, true)))
+                || !evidence.sameCapture(preview.eligibility(), evidence.read(target, true)))
             throw new IllegalArgumentException(
                     "Refresh the preview after organization-owner approval before approving this policy");
         if (target.getStatus() == GitHubAccessTarget.Status.ENDING
@@ -259,7 +253,7 @@ public class GitHubAccessPolicyService {
         var context = WorkspaceContextHolder.getContext();
         var caller = SecurityUtils.getCurrentAccountId()
                 .flatMap(id -> workspaceMembers.findByWorkspace_IdAndAccountId(workspaceId, id))
-                .filter(member -> !member.isSuspended());
+                .filter(member -> member.isActiveAt(clock.instant()));
         boolean owner =
                 caller.map(member -> member.getRole() == WorkspaceRole.OWNER).orElse(false);
         boolean admin =
@@ -285,7 +279,7 @@ public class GitHubAccessPolicyService {
         return accountId != null
                 && workspaceMembers
                         .findByWorkspace_IdAndAccountId(workspaceId, accountId)
-                        .filter(member -> !member.isSuspended() && member.getRole() == WorkspaceRole.OWNER)
+                        .filter(member -> member.isActiveAt(clock.instant()) && member.getRole() == WorkspaceRole.OWNER)
                         .isPresent();
     }
 

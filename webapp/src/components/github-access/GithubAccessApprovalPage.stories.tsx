@@ -16,6 +16,7 @@ const meta = {
 				workspaceName: "Engineering",
 				organization: "example-org",
 				installationId: 500,
+				source: "DIRECTORY",
 				groupIds: ["engineering"],
 			},
 			onPreview: fn(),

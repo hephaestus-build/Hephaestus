@@ -113,10 +113,10 @@ export function WorkspaceGithubAccessPage(props: WorkspaceGithubAccessPageProps)
 				actions={
 					<Link
 						className={buttonVariants({ variant: "outline" })}
-						to="/w/$workspaceSlug/admin/directory"
+						to="/w/$workspaceSlug/admin/access"
 						params={{ workspaceSlug }}
 					>
-						Directory policy
+						Access requests
 					</Link>
 				}
 			/>
@@ -153,10 +153,7 @@ export function WorkspaceGithubAccessPage(props: WorkspaceGithubAccessPageProps)
 					)}
 					{isOwner && (
 						<div className="flex flex-wrap gap-2">
-							<Button
-								disabled={busy || !state.data.configured || state.approvedGroups.length === 0}
-								onClick={() => setEditing("new")}
-							>
+							<Button disabled={busy || !state.data.configured} onClick={() => setEditing("new")}>
 								Add GitHub target
 							</Button>
 							{state.data.installationUrl && (
@@ -171,7 +168,7 @@ export function WorkspaceGithubAccessPage(props: WorkspaceGithubAccessPageProps)
 							)}
 							{state.approvedGroups.length === 0 && (
 								<p className="w-full text-sm text-muted-foreground">
-									Approve directory groups before adding a target.
+									Access requests work without a directory. Directory eligibility is optional.
 								</p>
 							)}
 						</div>
@@ -232,7 +229,10 @@ export function WorkspaceGithubAccessPage(props: WorkspaceGithubAccessPageProps)
 											{target.team ? ` / ${target.team}` : " / Organization"}
 										</h2>
 										<p className="text-sm text-muted-foreground">
-											{statusLabels[target.status]} ·{" "}
+											{target.source === "REQUEST"
+												? "Approved access requests"
+												: "Approved directory groups"}{" "}
+											· {statusLabels[target.status]} ·{" "}
 											{target.paused
 												? "Writes paused — access remains"
 												: "Writes may proceed after current checks"}
@@ -608,6 +608,9 @@ function GithubTargetForm({
 	const [team, setTeam] = useState(target?.team ?? "");
 	const [installation, setInstallation] = useState(String(target?.installationId ?? ""));
 	const [selected, setSelected] = useState(target?.draftGroupIds ?? []);
+	const [source, setSource] = useState<GitHubAccessConfiguration["source"]>(
+		target?.source ?? "REQUEST",
+	);
 	const [error, setError] = useState<unknown>();
 	const showBusy = useSpinDelay(busy, { delay: 1000, minDuration: 500 });
 	return (
@@ -620,12 +623,31 @@ function GithubTargetForm({
 					organization: organization.trim(),
 					team: team.trim() || undefined,
 					installationId: Number(installation),
-					groupIds: selected,
+					source,
+					groupIds: source === "DIRECTORY" ? selected : [],
 				}).catch(setError);
 			}}
 		>
 			<h2 className="font-semibold">{target ? "Revise GitHub target" : "Add GitHub target"}</h2>
 			<FieldGroup>
+				<Field orientation="horizontal">
+					<Checkbox
+						id={`${id}-directory`}
+						checked={source === "DIRECTORY"}
+						disabled={target?.authorityHeld === true || groups.length === 0}
+						onCheckedChange={(checked) => setSource(checked ? "DIRECTORY" : "REQUEST")}
+					/>
+					<FieldContent>
+						<FieldLabel htmlFor={`${id}-directory`}>
+							Use directory eligibility instead of access requests
+						</FieldLabel>
+						<FieldDescription>
+							By default, only approved, unexpired requests are delivered to this workspace's GitHub
+							organization. A team target includes only requests approved for that synchronized
+							team.
+						</FieldDescription>
+					</FieldContent>
+				</Field>
 				<Field orientation="responsive">
 					<FieldContent>
 						<FieldLabel htmlFor={`${id}-org`}>Organization login</FieldLabel>
@@ -676,25 +698,27 @@ function GithubTargetForm({
 					/>
 				</Field>
 			</FieldGroup>
-			<fieldset className="space-y-2">
-				<legend className="mb-2 text-sm font-medium">Approved directory groups</legend>
-				{groups.map((group) => (
-					<Field key={group} orientation="horizontal">
-						<Checkbox
-							id={`${id}-${group}`}
-							checked={selected.includes(group)}
-							onCheckedChange={(checked) =>
-								setSelected(
-									checked ? [...selected, group] : selected.filter((value) => value !== group),
-								)
-							}
-						/>
-						<FieldLabel htmlFor={`${id}-${group}`} className="break-all">
-							{group}
-						</FieldLabel>
-					</Field>
-				))}
-			</fieldset>
+			{source === "DIRECTORY" && (
+				<fieldset className="space-y-2">
+					<legend className="mb-2 text-sm font-medium">Approved directory groups</legend>
+					{groups.map((group) => (
+						<Field key={group} orientation="horizontal">
+							<Checkbox
+								id={`${id}-${group}`}
+								checked={selected.includes(group)}
+								onCheckedChange={(checked) =>
+									setSelected(
+										checked ? [...selected, group] : selected.filter((value) => value !== group),
+									)
+								}
+							/>
+							<FieldLabel htmlFor={`${id}-${group}`} className="break-all">
+								{group}
+							</FieldLabel>
+						</Field>
+					))}
+				</fieldset>
+			)}
 			<p className="text-sm text-muted-foreground">
 				Saving requires fresh organization-owner consent and a new preview approval. Previously
 				managed access and pending removals remain recorded. Native scopes cannot be changed after
@@ -702,7 +726,7 @@ function GithubTargetForm({
 			</p>
 			{error !== undefined && <QueryErrorAlert title="Couldn't save this target" error={error} />}
 			<div className="flex flex-wrap gap-2">
-				<Button disabled={busy || selected.length === 0}>
+				<Button type="submit" disabled={busy || (source === "DIRECTORY" && selected.length === 0)}>
 					{showBusy && <Spinner />}
 					{busy ? "Saving…" : "Save and create approval link"}
 				</Button>

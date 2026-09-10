@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.spi.IdentityUnlinkParticipant;
 import de.tum.cit.aet.hephaestus.integration.access.github.GitHubAccessFailure;
 import de.tum.cit.aet.hephaestus.workspace.spi.DirectorySubjectRetention;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAccessRetentionParticipant;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeBlockedException;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeContributor;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeGuard;
@@ -29,12 +30,30 @@ public class GitHubAccessLifecycle
                 AccountErasureContributor,
                 WorkspacePurgeGuard,
                 WorkspacePurgeContributor,
-                DirectorySubjectRetention {
+                DirectorySubjectRetention,
+                WorkspaceAccessRetentionParticipant {
     private final GitHubAccessTargetRepository targets;
     private final GitHubAccessMembershipRepository memberships;
     private final GitHubAccessActionRepository actions;
     private final GitProviderRegistry providers;
     private final ConfigAuditPort audit;
+
+    @Override
+    public boolean canEraseAccessRequests(Long workspaceId, Long accountId) {
+        return memberships.findByWorkspace_IdAndAccountId(workspaceId, accountId).stream()
+                .noneMatch(this::hasObligation);
+    }
+
+    @Override
+    public void eraseAccessRequestData(Long workspaceId, Long accountId) {
+        if (!canEraseAccessRequests(workspaceId, accountId))
+            throw new IllegalStateException("Confirm external removals before erasing their access history");
+        for (var member : memberships.findByWorkspace_IdAndAccountId(workspaceId, accountId)) {
+            actions.deleteAllByWorkspace_IdAndMembership_Id(workspaceId, member.getId());
+            memberships.delete(member);
+        }
+        targets.erasePreviewIdentityInWorkspace(workspaceId, accountId);
+    }
 
     @Override
     public List<String> retainedSubjects(long workspaceId, long providerId) {
@@ -59,7 +78,7 @@ public class GitHubAccessLifecycle
         for (var member : memberships.findByAccountId(accountId)) {
             boolean exactGithub =
                     github && Long.toString(member.getGithubUserId()).equals(subject);
-            boolean exactDirectory = member.getTarget().getDirectoryProviderId().equals(providerId)
+            boolean exactDirectory = providerId.equals(member.getTarget().getDirectoryProviderId())
                     && subject.equals(member.getDirectorySubject());
             if (exactGithub || exactDirectory) requestRevocation(member);
         }

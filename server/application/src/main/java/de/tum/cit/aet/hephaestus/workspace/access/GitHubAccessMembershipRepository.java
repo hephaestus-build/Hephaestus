@@ -17,6 +17,8 @@ public interface GitHubAccessMembershipRepository extends JpaRepository<GitHubAc
             "Current-account status, unlink and erasure address only rows owned by the authenticated or erased account")
     List<GitHubAccessMembership> findByAccountId(Long accountId);
 
+    List<GitHubAccessMembership> findByWorkspace_IdAndAccountId(Long workspaceId, Long accountId);
+
     @org.springframework.data.jpa.repository.Query(
             "SELECT DISTINCT m.directorySubject FROM GitHubAccessMembership m WHERE m.workspace.id = :workspaceId AND m.target.directoryProviderId = :providerId AND m.directorySubject IS NOT NULL AND (m.managed = true OR m.revocationRequested = true)")
     List<String> trackedDirectorySubjects(Long workspaceId, Long providerId);

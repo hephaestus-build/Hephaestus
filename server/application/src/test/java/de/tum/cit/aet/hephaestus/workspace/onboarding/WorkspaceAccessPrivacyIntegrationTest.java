@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace.onboarding;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -9,6 +10,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceAccountMembership;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceAccountMembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAccessRetentionParticipant;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
@@ -158,7 +160,12 @@ class WorkspaceAccessPrivacyIntegrationTest extends BaseIntegrationTest {
         renewal.setDecidedAt(NOW);
         requests.saveAndFlush(renewal);
         var guarded = new WorkspaceAccessRetention(
-                workspaces, memberships, requests, notifications, List.of((workspaceId, applicantId) -> false), later);
+                workspaces,
+                memberships,
+                requests,
+                notifications,
+                List.of(mock(WorkspaceAccessRetentionParticipant.class)),
+                later);
         guarded.eraseDue(workspace.getId());
         assertThat(requests.findById(expired.getId())).isPresent();
 

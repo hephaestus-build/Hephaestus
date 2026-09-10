@@ -120,7 +120,7 @@ function GithubAccessContainer({ workspaceSlug }: { workspaceSlug: string }) {
 		onError: report,
 	});
 	const state: GithubAccessPageState =
-		query.isPending || membership.isPending || (isOwner && directory.isPending)
+		query.isPending || membership.isPending
 			? { status: "loading" }
 			: query.isError || membership.isError
 				? {

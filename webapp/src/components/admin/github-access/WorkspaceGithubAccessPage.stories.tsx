@@ -57,7 +57,28 @@ export const Empty: Story = {
 		await expect(canvas.getByRole("textbox", { name: "Organization login" })).toHaveValue("");
 		await expect(
 			canvas.getByRole("button", { name: "Save and create approval link" }),
+		).toBeEnabled();
+		await expect(
+			canvas.getByRole("checkbox", {
+				name: "Use directory eligibility instead of access requests",
+			}),
+		).not.toBeChecked();
+	},
+};
+export const RequestsWithoutDirectory: Story = {
+	args: {
+		state: { status: "ready", data: { configured: true, targets: [] }, approvedGroups: [] },
+	},
+	play: async ({ canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Add GitHub target" }));
+		await expect(
+			canvas.getByRole("checkbox", {
+				name: "Use directory eligibility instead of access requests",
+			}),
 		).toBeDisabled();
+		await expect(
+			canvas.getByRole("button", { name: "Save and create approval link" }),
+		).toBeEnabled();
 	},
 };
 export const AppNotConfigured: Story = {

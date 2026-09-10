@@ -51,9 +51,17 @@ public interface GitHubAccessTargetRepository extends JpaRepository<GitHubAccess
     @Modifying
     @Query(
             value =
-                    "UPDATE github_access_target t SET preview = NULL WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(t.preview -> 'directory' -> 'candidates') c WHERE (c ->> 'accountId')::bigint = :accountId)",
+                    "UPDATE github_access_target t SET preview = NULL WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(t.preview -> 'eligibility' -> 'candidates') c WHERE (c ->> 'accountId')::bigint = :accountId)",
             nativeQuery = true)
     void erasePreviewIdentity(long accountId);
+
+    @Modifying
+    @Query(value = """
+        UPDATE github_access_target t SET preview = NULL WHERE t.workspace_id = :workspaceId
+          AND EXISTS (SELECT 1 FROM jsonb_array_elements(t.preview -> 'eligibility' -> 'candidates') c
+            WHERE (c ->> 'accountId')::bigint = :accountId)
+        """, nativeQuery = true)
+    void erasePreviewIdentityInWorkspace(Long workspaceId, Long accountId);
 
     void deleteAllByWorkspace_Id(Long workspaceId);
 }

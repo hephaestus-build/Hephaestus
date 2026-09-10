@@ -38,6 +38,7 @@ class GitHubAccessLifecycleTest {
         target.setId(20L);
         target.setWorkspace(workspace);
         target.setDirectoryProviderId(30L);
+        target.setSource(GitHubAccessTarget.Source.DIRECTORY);
         target.setStatus(GitHubAccessTarget.Status.ACTIVE);
         target.setAuthorityHeld(true);
         member.setId(40L);
@@ -54,6 +55,41 @@ class GitHubAccessLifecycleTest {
         when(targets.findByWorkspace_IdOrderById(10L)).thenReturn(List.of(target));
         when(memberships.findByWorkspace_IdAndTarget_IdOrderById(10L, 20L)).thenReturn(List.of(member));
         when(providers.findProviderId("GITHUB", "https://github.com")).thenReturn(Optional.of(100L));
+    }
+
+    @Test
+    void shouldRetainRequestsUntilManagedAccessHasBeenRemoved() {
+        when(memberships.findByWorkspace_IdAndAccountId(10L, 50L)).thenReturn(List.of(member));
+        member.setManaged(true);
+        assertThat(lifecycle.canEraseAccessRequests(10L, 50L)).isFalse();
+        member.setManaged(false);
+        member.setRevocationRequested(true);
+        assertThat(lifecycle.canEraseAccessRequests(10L, 50L)).isFalse();
+        member.setRevocationRequested(false);
+        assertThat(lifecycle.canEraseAccessRequests(10L, 50L)).isTrue();
+    }
+
+    @Test
+    void shouldRetainRequestsWhenAnUnconfirmedWriteMayHaveGrantedAccess() {
+        when(memberships.findByWorkspace_IdAndAccountId(10L, 50L)).thenReturn(List.of(member));
+        var action = new GitHubAccessAction();
+        action.setMembership(member);
+        action.setStatus(GitHubAccessAction.Status.MANUAL_RECOVERY);
+        when(actions.findByWorkspace_IdAndTarget_IdAndStatusInOrderById(
+                        10L, 20L, Set.of(GitHubAccessAction.Status.PENDING, GitHubAccessAction.Status.MANUAL_RECOVERY)))
+                .thenReturn(List.of(action));
+        assertThat(lifecycle.canEraseAccessRequests(10L, 50L)).isFalse();
+        assertThatThrownBy(() -> lifecycle.eraseAccessRequestData(10L, 50L)).isInstanceOf(IllegalStateException.class);
+        verify(memberships, never()).delete(any());
+        verify(actions, never()).deleteAllByWorkspace_IdAndMembership_Id(anyLong(), anyLong());
+    }
+
+    @Test
+    void shouldNotRetainAnotherWorkspacesRequestsForAnUnrelatedObligation() {
+        when(memberships.findByWorkspace_IdAndAccountId(10L, 50L)).thenReturn(List.of(member));
+        member.setManaged(true);
+        assertThat(lifecycle.canEraseAccessRequests(11L, 50L)).isTrue();
+        assertThat(lifecycle.canEraseAccessRequests(10L, 51L)).isTrue();
     }
 
     @Test

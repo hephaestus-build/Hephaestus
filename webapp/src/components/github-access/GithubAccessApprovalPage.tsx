@@ -87,12 +87,16 @@ export function GithubAccessApprovalPage({
 								</dd>
 								<dt className="font-medium">Access App installation</dt>
 								<dd>{state.preview.installationId}</dd>
-								<dt className="font-medium">Directory groups</dt>
-								<dd className="break-all">{state.preview.groupIds.join(", ")}</dd>
+								<dt className="font-medium">Eligibility</dt>
+								<dd className="break-all">
+									{state.preview.source === "REQUEST"
+										? "Approved, unexpired access requests"
+										: `Directory groups: ${state.preview.groupIds.join(", ")}`}
+								</dd>
 							</dl>
 							<p className="text-sm">
 								You authorize Hephaestus Access to manage this scope for the named workspace under
-								its approved directory policy. Existing access still requires explicit adoption.
+								its approved eligibility policy. Existing access still requires explicit adoption.
 								Your consent does not make you a workspace member or change the normal repository
 								App's permissions.
 							</p>

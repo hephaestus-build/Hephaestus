@@ -27,6 +27,11 @@ import org.jspecify.annotations.Nullable;
 @Setter
 @NoArgsConstructor
 public class GitHubAccessTarget {
+    public enum Source {
+        REQUEST,
+        DIRECTORY
+    }
+
     public enum Status {
         DRAFT,
         ACTIVE,
@@ -72,14 +77,22 @@ public class GitHubAccessTarget {
     @Column(name = "scope_name", length = 255)
     private @Nullable String scopeName;
 
-    @Column(name = "registration_id", nullable = false, length = 64)
-    private String registrationId;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source", nullable = false, length = 16)
+    private Source source = Source.REQUEST;
 
-    @Column(nullable = false, length = 512)
-    private String issuer;
+    /** Pins the approved local team to the authorized native scope; mirror loss is not a departure. */
+    @Column(name = "request_team_id")
+    private @Nullable Long requestTeamId;
 
-    @Column(name = "directory_provider_id", nullable = false)
-    private Long directoryProviderId;
+    @Column(name = "registration_id", length = 64)
+    private @Nullable String registrationId;
+
+    @Column(length = 512)
+    private @Nullable String issuer;
+
+    @Column(name = "directory_provider_id")
+    private @Nullable Long directoryProviderId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)

@@ -35,7 +35,7 @@ public class GitHubAccessReconciliation {
     private final GitHubAccessMembershipRepository members;
     private final GitHubAccessActionRepository actions;
     private final GitHubAccessPolicyService policies;
-    private final GitHubAccessDirectoryEvidence evidence;
+    private final GitHubAccessEligibilityService evidence;
     private final AccountIdentityQuery identities;
     private final GitProviderRegistry providers;
     private final WorkspaceAccountMembershipRepository workspaceMembers;
@@ -54,8 +54,8 @@ public class GitHubAccessReconciliation {
             @Nullable Long organizationId,
             @Nullable Long scopeId,
             GitHubAccessEvidence.@Nullable Authorization authorization,
-            GitHubAccessEvidence.@Nullable Directory directory,
-            @Nullable String directoryBlocker,
+            GitHubAccessEvidence.@Nullable Eligibility eligibility,
+            @Nullable String eligibilityBlocker,
             List<Person> people,
             boolean preview,
             boolean sourceEnded) {}
@@ -65,18 +65,18 @@ public class GitHubAccessReconciliation {
     public Input snapshot(long workspaceId, long connectionId, boolean preview) {
         var target = targets.findByConnectionIdAndWorkspace_Id(connectionId, workspaceId)
                 .orElseThrow();
-        GitHubAccessEvidence.Directory directory = null;
+        GitHubAccessEvidence.Eligibility eligibility = null;
         String blocker = null;
         try {
-            directory = evidence.read(target, preview);
+            eligibility = evidence.read(target, preview);
         } catch (IllegalArgumentException unavailable) {
             blocker = unavailable.getMessage();
         }
         List<Person> people = new ArrayList<>();
         for (var member : members.findByWorkspace_IdAndTarget_IdOrderById(workspaceId, target.getId()))
             people.add(new Person(member.getGithubUserId(), member.getAccountId()));
-        if (directory != null) {
-            for (var candidate : directory.candidates()) {
+        if (eligibility != null) {
+            for (var candidate : eligibility.candidates()) {
                 Long id = candidate.githubUserId();
                 if (id != null && people.stream().noneMatch(person -> person.githubUserId() == id))
                     people.add(new Person(id, candidate.accountId()));
@@ -89,7 +89,7 @@ public class GitHubAccessReconciliation {
                 target.getOrganizationId(),
                 target.getScopeId(),
                 target.getAuthorization(),
-                directory,
+                eligibility,
                 blocker,
                 List.copyOf(people),
                 preview,
@@ -100,7 +100,7 @@ public class GitHubAccessReconciliation {
     @Transactional
     public void retainDepartures(Input input) {
         policies.lockActive(input.workspaceId());
-        lockDirectorySource(input);
+        lockEligibilitySource(input);
         input.people().stream()
                 .map(Person::accountId)
                 .filter(Objects::nonNull)
@@ -147,10 +147,10 @@ public class GitHubAccessReconciliation {
         policies.lockActive(input.workspaceId());
         var target = policies.required(input.workspaceId(), input.targetId());
         requireVersion(input, target);
-        var directory = input.directory();
-        if (directory == null || !evidence.sameCapture(directory, evidence.read(target, true)))
-            throw failure(Reason.INCOMPLETE, "Refresh the directory evidence before previewing GitHub access");
-        target.setPreview(new GitHubAccessEvidence.Preview(input.configurationVersion(), directory, inventory));
+        var eligibility = input.eligibility();
+        if (eligibility == null || !evidence.sameCapture(eligibility, evidence.read(target, true)))
+            throw failure(Reason.INCOMPLETE, "Refresh the eligibility evidence before previewing GitHub access");
+        target.setPreview(new GitHubAccessEvidence.Preview(input.configurationVersion(), eligibility, inventory));
         target.setLastConfirmedAt(clock.instant());
         target.setFailureCode(null);
         target.setFailureReason(null);
@@ -225,9 +225,9 @@ public class GitHubAccessReconciliation {
             member.setBlocker(
                     !member.isEnrolled() && observed.state() == GitHubAccessClient.State.ABSENT
                             ? null
-                            : input.directoryBlocker() == null
+                            : input.eligibilityBlocker() == null
                                     ? "No current approved eligibility for a new grant"
-                                    : input.directoryBlocker());
+                                    : input.eligibilityBlocker());
             return null;
         }
         if (observed.state() == GitHubAccessClient.State.PROTECTED) {
@@ -242,11 +242,11 @@ public class GitHubAccessReconciliation {
         action.setScopeId(Objects.requireNonNull(target.getScopeId()));
         action.setGithubUserId(member.getGithubUserId());
         action.setConfigurationVersion(target.getConfigurationVersion());
-        var directory = input.directory();
-        if (directory != null) {
-            action.setDirectoryConfigurationVersion(directory.configurationVersion());
-            action.setDirectoryCaptureStartedAt(directory.captureStartedAt());
-            action.setDirectorySourceVersion(directory.sourceVersion());
+        var eligibility = input.eligibility();
+        if (eligibility != null) {
+            action.setEligibilityConfigurationVersion(eligibility.configurationVersion());
+            action.setEligibilityCapturedAt(eligibility.captureStartedAt());
+            action.setEligibilitySourceVersion(eligibility.sourceVersion());
         }
         action.setType(type);
         action.setCreatedAt(clock.instant());
@@ -354,8 +354,7 @@ public class GitHubAccessReconciliation {
             boolean removalOnly =
                     member.isRevocationRequested() || target.getStatus() == GitHubAccessTarget.Status.ENDING;
             if (!removalOnly && !eligible(input, target, member))
-                throw new IllegalArgumentException(
-                        "Approve current directory eligibility before adopting this membership");
+                throw new IllegalArgumentException("Approve current eligibility before adopting this membership");
             member.setManaged(true);
             member.setManualException(false);
             member.setExceptionReason(null);
@@ -441,11 +440,11 @@ public class GitHubAccessReconciliation {
                     before,
                     GitHubAccessAudit.Policy.of(target)));
         }
-        boolean unlinked = input.directory() != null
-                && input.directory().candidates().stream().anyMatch(candidate -> candidate.githubUserId() == null);
+        boolean unlinked = input.eligibility() != null
+                && input.eligibility().candidates().stream().anyMatch(candidate -> candidate.githubUserId() == null);
         boolean unresolved = pending
                 || unlinked
-                || input.directoryBlocker() != null
+                || input.eligibilityBlocker() != null
                 || all.stream().anyMatch(member -> member.getBlocker() != null && !member.isManualException());
         target.setLastConfirmedAt(clock.instant());
         if (!unresolved) {
@@ -458,28 +457,28 @@ public class GitHubAccessReconciliation {
             target.setFailureReason(
                     unlinked
                             ? "Eligible developers must link their GitHub.com identities before access can be granted"
-                            : input.directoryBlocker() != null
-                                    ? input.directoryBlocker()
+                            : input.eligibilityBlocker() != null
+                                    ? input.eligibilityBlocker()
                                     : "Some memberships need attention; inspect the per-person blockers and pending actions");
         }
         return unresolved;
     }
 
-    private void lockDirectorySource(Input input) {
+    private void lockEligibilitySource(Input input) {
         evidence.lockSource(targets.findByIdAndWorkspace_Id(input.targetId(), input.workspaceId())
                 .orElseThrow());
     }
 
     private GitHubAccessTarget lock(Input input, Person person) {
         policies.lockActive(input.workspaceId());
-        lockDirectorySource(input);
+        lockEligibilitySource(input);
         var authorization = input.authorization();
-        var directory = input.directory();
+        var eligibility = input.eligibility();
         Stream.concat(
                         Stream.of(person.accountId(), authorization == null ? null : authorization.accountId()),
-                        directory == null
+                        eligibility == null
                                 ? Stream.empty()
-                                : directory.candidates().stream()
+                                : eligibility.candidates().stream()
                                         .filter(candidate ->
                                                 Objects.equals(candidate.githubUserId(), person.githubUserId()))
                                         .map(GitHubAccessEvidence.Candidate::accountId))
@@ -530,32 +529,43 @@ public class GitHubAccessReconciliation {
         Long directoryLink = member.getDirectoryIdentityLinkId();
         if (accountId == null
                 || githubLink == null
-                || directoryLink == null
                 || identities
                         .account(accountId)
                         .filter(AccountIdentityQuery.AccountView::active)
                         .isEmpty()
                 || workspaceMembers
                         .findByWorkspace_IdAndAccountId(input.workspaceId(), accountId)
-                        .filter(value -> !value.isSuspended())
+                        .filter(value -> value.isActiveAt(clock.instant()))
                         .isEmpty()
-                || !hasGithubLink(accountId, githubLink, member.getGithubUserId())
+                || !hasGithubLink(accountId, githubLink, member.getGithubUserId())) return true;
+        if (target.getSource() == GitHubAccessTarget.Source.REQUEST) {
+            try {
+                return evidence.read(target, false).candidates().stream()
+                        .noneMatch(candidate -> candidate.accountId() == accountId
+                                && Objects.equals(candidate.githubUserId(), member.getGithubUserId())
+                                && Objects.equals(candidate.githubIdentityLinkId(), githubLink));
+            } catch (IllegalArgumentException unavailable) {
+                return false;
+            }
+        }
+        if (directoryLink == null
                 || identities.activeLinksForAccount(accountId).stream()
                         .noneMatch(link -> link.identityLinkId().equals(directoryLink)
                                 && link.gitProviderId().equals(target.getDirectoryProviderId())
                                 && link.subject().equals(member.getDirectorySubject()))) return true;
-        var directory = input.directory();
-        if (directory == null || !directory.confirmedDepartures().contains(member.getDirectorySubject())) return false;
+        var eligibility = input.eligibility();
+        if (eligibility == null || !eligibility.confirmedDepartures().contains(member.getDirectorySubject()))
+            return false;
         try {
-            return evidence.sameCapture(directory, evidence.read(target, false));
+            return evidence.sameCapture(eligibility, evidence.read(target, false));
         } catch (IllegalArgumentException unavailable) {
             return false;
         }
     }
 
     private boolean eligible(Input input, GitHubAccessTarget target, GitHubAccessMembership member) {
-        var directory = input.directory();
-        if (directory == null
+        var eligibility = input.eligibility();
+        if (eligibility == null
                 || target.getStatus() != GitHubAccessTarget.Status.ACTIVE
                 || member.isManualException()
                 || member.isRevocationRequested()
@@ -565,11 +575,11 @@ public class GitHubAccessReconciliation {
                 || target.getAuthorization().configurationVersion() != target.getConfigurationVersion()
                 || mustRevoke(input, target, member)) return false;
         try {
-            if (!evidence.sameCapture(directory, evidence.read(target, false))) return false;
+            if (!evidence.sameCapture(eligibility, evidence.read(target, false))) return false;
         } catch (IllegalArgumentException unavailable) {
             return false;
         }
-        boolean candidate = directory.candidates().stream()
+        boolean candidate = eligibility.candidates().stream()
                 .anyMatch(value -> Objects.equals(value.accountId(), member.getAccountId())
                         && Objects.equals(value.githubUserId(), member.getGithubUserId())
                         && Objects.equals(value.githubIdentityLinkId(), member.getGithubIdentityLinkId())
@@ -594,9 +604,9 @@ public class GitHubAccessReconciliation {
     }
 
     private void rebind(Input input, GitHubAccessMembership member) {
-        var directory = input.directory();
-        if (directory == null) return;
-        directory.candidates().stream()
+        var eligibility = input.eligibility();
+        if (eligibility == null) return;
+        eligibility.candidates().stream()
                 .filter(candidate -> Objects.equals(candidate.githubUserId(), member.getGithubUserId()))
                 .findFirst()
                 .ifPresent(candidate -> {
@@ -609,10 +619,10 @@ public class GitHubAccessReconciliation {
     }
 
     private GitHubAccessMembership newMember(Input input, Person person, GitHubAccessTarget target) {
-        var directory = input.directory();
-        var candidate = directory == null
+        var eligibility = input.eligibility();
+        var candidate = eligibility == null
                 ? null
-                : directory.candidates().stream()
+                : eligibility.candidates().stream()
                         .filter(value -> Objects.equals(value.githubUserId(), person.githubUserId()))
                         .findFirst()
                         .orElse(null);

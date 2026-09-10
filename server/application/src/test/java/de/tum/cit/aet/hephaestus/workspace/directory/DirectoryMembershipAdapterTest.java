@@ -21,7 +21,8 @@ class DirectoryMembershipAdapterTest {
                 mock(WorkspaceAccountMembershipRepository.class),
                 mock(AccountIdentityQuery.class),
                 mock(ConfigAuditPort.class),
-                mock(DirectoryPolicyRepository.class));
+                mock(DirectoryPolicyRepository.class),
+                java.util.List.of());
         var workspace = new Workspace();
         workspace.setId(1L);
         var membership = new WorkspaceAccountMembership();

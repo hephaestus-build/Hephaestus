@@ -42,7 +42,8 @@ public class GitHubAccessController {
             @NotBlank @Size(max = 100) String organization,
             @Nullable @Size(max = 100) String team,
             @NotNull @Positive Long installationId,
-            @NotNull @Size(min = 1, max = 100) Set<@NotBlank @Size(max = 255) String> groupIds) {}
+            @NotNull GitHubAccessTarget.Source source,
+            @NotNull @Size(max = 100) Set<@NotBlank @Size(max = 255) String> groupIds) {}
 
     public record GitHubAccessHandoffDTO(
             @NonNull GitHubAccessTargetDTO target, @NonNull String token) {
@@ -192,6 +193,6 @@ public class GitHubAccessController {
 
     private static GitHubAccessPolicyService.Configuration configuration(GitHubAccessConfigurationDTO input) {
         return new GitHubAccessPolicyService.Configuration(
-                input.organization(), input.team(), input.installationId(), input.groupIds());
+                input.organization(), input.team(), input.installationId(), input.source(), input.groupIds());
     }
 }

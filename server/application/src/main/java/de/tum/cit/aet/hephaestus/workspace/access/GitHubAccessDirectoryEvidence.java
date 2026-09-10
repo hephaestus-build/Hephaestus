@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.workspace.directory.DirectoryPolicy;
 import de.tum.cit.aet.hephaestus.workspace.directory.DirectoryPolicyRepository;
 import de.tum.cit.aet.hephaestus.workspace.directory.DirectoryPolicyService;
 import de.tum.cit.aet.hephaestus.workspace.directory.DirectorySnapshot;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -38,10 +39,25 @@ public class GitHubAccessDirectoryEvidence {
     private final AccountIdentityQuery identities;
     private final GitProviderRegistry providers;
     private final WorkspaceAccountMembershipRepository memberships;
+    private final Clock clock;
+
+    public void configure(GitHubAccessTarget target, Set<String> groups) {
+        var policy = policies.findByWorkspace_Id(target.getWorkspace().getId())
+                .filter(value -> value.getStatus() == DirectoryPolicy.Status.ACTIVE)
+                .orElseThrow(() -> unavailable("Approve an active directory policy first"));
+        if (groups.isEmpty() || !policy.getApprovedGroupIds().containsAll(groups))
+            throw unavailable("Select currently approved directory groups");
+        if (target.isAuthorityHeld() && !sameSource(policy, target))
+            throw unavailable("End the existing target before changing its directory source");
+        target.setRegistrationId(policy.getRegistrationId());
+        target.setIssuer(policy.getIssuer());
+        target.setDirectoryProviderId(policy.getIdentityProviderId());
+        target.setRequestTeamId(null);
+    }
 
     // Unavailable evidence is a normal hold, not a rollback of independently confirmed departures.
     @Transactional(noRollbackFor = IllegalArgumentException.class)
-    public GitHubAccessEvidence.Directory read(GitHubAccessTarget target, boolean draft) {
+    public GitHubAccessEvidence.Eligibility read(GitHubAccessTarget target, boolean draft) {
         long workspaceId = target.getWorkspace().getId();
         DirectoryPolicy policy = policies.findByWorkspace_Id(workspaceId)
                 .orElseThrow(
@@ -50,8 +66,8 @@ public class GitHubAccessDirectoryEvidence {
         if (policy.getStatus() != DirectoryPolicy.Status.ACTIVE || !sameSource(policy, target))
             throw unavailable(
                     "The approved directory source is paused, ended or replaced; GitHub grants require an active matching source");
-        var source = sources.approvedSourceForUpdate(target.getRegistrationId())
-                .filter(value -> value.providerId() == target.getDirectoryProviderId()
+        var source = sources.approvedSourceForUpdate(Objects.requireNonNull(target.getRegistrationId()))
+                .filter(value -> Objects.equals(value.providerId(), target.getDirectoryProviderId())
                         && value.issuer().equals(target.getIssuer()))
                 .orElseThrow(
                         () -> unavailable(
@@ -79,7 +95,7 @@ public class GitHubAccessDirectoryEvidence {
                 .forEach(departed::add);
         var linked = identities.accountsForSubjects(source.providerId(), eligible.keySet());
         Set<Long> enrolled = memberships.findByWorkspace_Id(workspaceId).stream()
-                .filter(member -> !member.isSuspended())
+                .filter(member -> member.isActiveAt(clock.instant()))
                 .map(member -> member.getAccountId())
                 .collect(Collectors.toSet());
         Long githubProvider =
@@ -108,10 +124,13 @@ public class GitHubAccessDirectoryEvidence {
                     directoryLink.identityLinkId(),
                     directoryLink.subject(),
                     githubUserId == null || githubLink == null ? null : githubLink.identityLinkId(),
-                    githubUserId));
+                    githubUserId,
+                    null,
+                    null));
         }
         candidates.sort(Comparator.comparingLong(GitHubAccessEvidence.Candidate::accountId));
-        return new GitHubAccessEvidence.Directory(
+        return new GitHubAccessEvidence.Eligibility(
+                GitHubAccessTarget.Source.DIRECTORY,
                 policy.getConfigurationVersion(),
                 evidence.startedAt(),
                 source.updatedAt(),
@@ -124,7 +143,7 @@ public class GitHubAccessDirectoryEvidence {
     /** Directory capture holds the provider before accounts, including across different workspaces. */
     @Transactional(propagation = Propagation.MANDATORY)
     public void lockSource(GitHubAccessTarget target) {
-        sources.approvedSourceForUpdate(target.getRegistrationId());
+        sources.approvedSourceForUpdate(Objects.requireNonNull(target.getRegistrationId()));
     }
 
     /** An explicit end/replacement is intent, unlike a failed read or a disabled operator source. */
@@ -133,13 +152,6 @@ public class GitHubAccessDirectoryEvidence {
         return policies.findByWorkspace_Id(target.getWorkspace().getId())
                 .map(policy -> policy.getStatus() == DirectoryPolicy.Status.ENDED || !sameSource(policy, target))
                 .orElse(false);
-    }
-
-    public boolean sameCapture(GitHubAccessEvidence.Directory first, GitHubAccessEvidence.Directory second) {
-        return first.configurationVersion() == second.configurationVersion()
-                && first.captureStartedAt().equals(second.captureStartedAt())
-                && first.sourceVersion().equals(second.sourceVersion())
-                && first.groupIds().equals(second.groupIds());
     }
 
     private boolean sameSource(DirectoryPolicy policy, GitHubAccessTarget target) {

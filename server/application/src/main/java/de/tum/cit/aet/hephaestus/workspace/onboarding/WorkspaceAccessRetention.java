@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.workspace.onboarding;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceAccountMembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAccessRetentionGuard;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAccessRetentionParticipant;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -22,7 +22,7 @@ class WorkspaceAccessRetention {
     private final WorkspaceAccountMembershipRepository memberships;
     private final WorkspaceAccessRequestRepository requests;
     private final WorkspaceAccessNotificationRepository notifications;
-    private final List<WorkspaceAccessRetentionGuard> guards;
+    private final List<WorkspaceAccessRetentionParticipant> participants;
     private final Clock clock;
 
     @Transactional
@@ -36,7 +36,9 @@ class WorkspaceAccessRetention {
             var history = requests.findByWorkspace_IdAndAccountIdOrderBySubmittedAtDescIdDesc(
                     workspaceId, accountId, Pageable.unpaged());
             if (history.isEmpty() || !history.stream().allMatch(request -> isDue(request, now))) continue;
-            if (!guards.stream().allMatch(guard -> guard.canEraseAccessRequests(workspaceId, accountId))) continue;
+            if (!participants.stream()
+                    .allMatch(participant -> participant.canEraseAccessRequests(workspaceId, accountId))) continue;
+            participants.forEach(participant -> participant.eraseAccessRequestData(workspaceId, accountId));
             memberships.clearAccessRequestForAccount(workspaceId, accountId);
             notifications.deleteAllByWorkspace_IdAndRequest_AccountId(workspaceId, accountId);
             requests.deleteAllByWorkspace_IdAndAccountId(workspaceId, accountId);

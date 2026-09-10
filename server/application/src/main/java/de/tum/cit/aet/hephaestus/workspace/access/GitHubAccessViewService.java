@@ -89,6 +89,7 @@ public class GitHubAccessViewService {
             @NonNull String organization,
             @Nullable String team,
             @NonNull Long installationId,
+            GitHubAccessTarget.@NonNull Source source,
             @NonNull Set<String> groupIds) {}
 
     @Transactional(readOnly = true)
@@ -100,6 +101,7 @@ public class GitHubAccessViewService {
                 input.organization(),
                 input.team(),
                 input.installationId(),
+                target.getSource(),
                 Set.copyOf(target.getDraftGroupIds()));
     }
 
@@ -148,8 +150,8 @@ public class GitHubAccessViewService {
                 ? null
                 : new GitHubAccessPreviewDTO(
                         preview.github().capturedAt(),
-                        preview.directory().candidates().size(),
-                        (int) preview.directory().candidates().stream()
+                        preview.eligibility().candidates().size(),
+                        (int) preview.eligibility().candidates().stream()
                                 .filter(candidate -> candidate.githubUserId() == null)
                                 .count(),
                         preview.github().unlinkedInvitations(),
@@ -166,6 +168,7 @@ public class GitHubAccessViewService {
                 target.getPendingInstallationId(),
                 target.getOrganizationId(),
                 target.getScopeId(),
+                target.getSource(),
                 target.getStatus(),
                 target.isPaused(),
                 target.isAuthorityHeld(),

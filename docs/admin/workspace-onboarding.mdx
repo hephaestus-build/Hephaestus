@@ -41,6 +41,11 @@ instant, independently of the scheduler or email transport. Pending renewals nev
 External organization and team changes are separate operations: local approval or expiry does not claim
 that a provider invitation or removal has completed.
 
+For a GitHub workspace, configure [GitHub access delivery](./github-access) to send invitations and
+deliver the approved team choices automatically. This uses a separate Access App and does not require
+a directory. GitLab, Slack and Outline identities can be linked during onboarding, but their external
+membership changes remain manual.
+
 ## Email transport
 
 Configure Spring Mail with `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT` and the authentication and TLS

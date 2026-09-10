@@ -18,6 +18,7 @@ const target: Wire<GitHubAccessTarget> = {
 	authorityHeld: true,
 	authorized: true,
 	configurationVersion: 2,
+	source: "DIRECTORY",
 	draftGroupIds: ["engineering"],
 	approvedGroupIds: [],
 	members: [],
@@ -64,6 +65,34 @@ function fixture(role: "OWNER" | "ADMIN") {
 }
 
 describe("workspace GitHub access route", () => {
+	it("can configure request delivery while the optional directory is unavailable", async () => {
+		fixture("OWNER");
+		const submitted: unknown[] = [];
+		server.use(
+			http.get("*/workspaces/acme/directory-access", () => new HttpResponse(null, { status: 503 })),
+			http.post("*/workspaces/acme/github-access", async ({ request }) => {
+				submitted.push(await request.json());
+				return HttpResponse.json({
+					target: { ...target, source: "REQUEST" },
+					token: "a".repeat(43),
+				});
+			}),
+		);
+		renderRouteAt("/w/acme/admin/github-access");
+		const user = userEvent.setup();
+		await user.click(
+			await screen.findByRole("button", { name: "Add GitHub target" }, ROUTE_RENDER_WAIT),
+		);
+		await user.type(screen.getByRole("textbox", { name: "Organization login" }), "example-org");
+		await user.type(screen.getByRole("spinbutton", { name: "Access App installation ID" }), "500");
+		await user.click(screen.getByRole("button", { name: "Save and create approval link" }));
+		await waitFor(() =>
+			expect(submitted).toStrictEqual([
+				{ organization: "example-org", installationId: 500, source: "REQUEST", groupIds: [] },
+			]),
+		);
+	});
+
 	it("does not carry a private approval capability into another workspace", async () => {
 		const workspace = fixture("OWNER");
 		const capability = "a".repeat(43);

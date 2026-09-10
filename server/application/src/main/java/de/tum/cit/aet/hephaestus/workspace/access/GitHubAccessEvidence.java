@@ -27,20 +27,23 @@ public final class GitHubAccessEvidence {
     public record Candidate(
             long accountId,
             String displayName,
-            long directoryIdentityLinkId,
-            String directorySubject,
+            @Nullable Long directoryIdentityLinkId,
+            @Nullable String directorySubject,
             @Nullable Long githubIdentityLinkId,
-            @Nullable Long githubUserId) {}
+            @Nullable Long githubUserId,
+            @Nullable Long requestId,
+            @Nullable Instant expiresAt) {}
 
-    public record Directory(
+    public record Eligibility(
+            GitHubAccessTarget.Source source,
             long configurationVersion,
             Instant captureStartedAt,
-            Instant sourceVersion,
+            @Nullable Instant sourceVersion,
             Set<String> groupIds,
             Map<String, String> groupNames,
             List<Candidate> candidates,
             Set<String> confirmedDepartures) {
-        public Directory {
+        public Eligibility {
             groupIds = Set.copyOf(groupIds);
             groupNames = Map.copyOf(groupNames);
             candidates = List.copyOf(candidates);
@@ -48,5 +51,5 @@ public final class GitHubAccessEvidence {
         }
     }
 
-    public record Preview(long configurationVersion, Directory directory, GitHubAccessClient.Inventory github) {}
+    public record Preview(long configurationVersion, Eligibility eligibility, GitHubAccessClient.Inventory github) {}
 }
