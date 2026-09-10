@@ -1,5 +1,12 @@
-import { CheckIcon } from "lucide-react";
-import { useId, useState } from "react";
+import {
+	ActivityIcon,
+	CheckIcon,
+	ClockIcon,
+	FlaskConicalIcon,
+	ShieldCheckIcon,
+	TrendingUpIcon,
+} from "lucide-react";
+import { type ReactNode, useId, useState } from "react";
 
 import type { ConsentStatus } from "@/api/types.gen";
 import { LegalLinks } from "@/components/auth/LegalLinks";
@@ -51,19 +58,23 @@ export interface ConsentPageProps {
  */
 const RESEARCH_FACTS = [
 	{
+		icon: TrendingUpIcon,
 		term: "Why it matters",
-		detail: "What we learn from real teams is what makes the feedback better.",
+		detail: "What we learn from real projects is what makes the feedback better.",
 	},
 	{
+		icon: ActivityIcon,
 		term: "What you share",
 		detail: "How you use Hephaestus, and how you respond to its feedback.",
 	},
 	{
+		icon: ClockIcon,
 		term: "What it asks of you",
 		detail: "Nothing extra to do. Occasionally, an optional survey.",
 	},
 ];
 
+/** No icons here. A glyph on one answer and not the other is the thumb on the scale. */
 const ANSWERS = [
 	{
 		value: "yes",
@@ -79,25 +90,31 @@ const ANSWERS = [
 
 type Answer = (typeof ANSWERS)[number]["value"];
 
-/** Hidden: the number is a visual index, and the state it shows is announced by the control it tracks. */
-function StepMarker({ step, done }: { step: number; done: boolean }) {
+/**
+ * The step's own icon until it is answered, then a check. Both are decoration: the heading names the
+ * step and the control inside it announces its own state.
+ */
+function StepMarker({ icon, done }: { icon: ReactNode; done: boolean }) {
 	return (
 		<span
 			aria-hidden="true"
 			className={cn(
-				"mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium transition-colors",
-				done ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground",
+				"inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors [&_svg]:size-4",
+				done ? "bg-mentor text-mentor-foreground" : "bg-mentor/10 text-mentor",
 			)}
 		>
-			{done ? <CheckIcon className="size-3.5" /> : step}
+			{done ? <CheckIcon /> : icon}
 		</span>
 	);
 }
 
 /**
- * The numbers count the two decisions on this screen and nothing beyond it. A member is handed
- * workspace setup afterwards and a changed notice brings an existing account back here, so a counter
- * that claimed to measure the whole of onboarding would be wrong for most of the people reading it.
+ * Heph carries the page, so `--mentor` is its accent throughout: the bubble it speaks from, and the
+ * marker on each step. `PageHeader` and its lucide icon belong to the app chrome, which is not up yet.
+ *
+ * The steps are not numbered. A member is handed workspace setup after this and a changed notice
+ * brings an existing account back here, so "step 1 of n" would be a claim about a flow this screen
+ * cannot see; the markers say what is answered, which is a claim it can make.
  */
 export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 	const submitting = state.status === "ready" && state.submission.status === "saving";
@@ -148,22 +165,25 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 			<PageLayout className="max-w-2xl px-6 py-10">
 				<HephaestusLogo markClassName="size-7" wordmarkClassName="text-lg" />
 
-				{/* Heph's own greeting rather than `PageHeader`: this is the one screen where it speaks,
-				    and the app chrome that header belongs to is not up yet. Illustration scale, not icon
-				    scale, so it reads as the character talking rather than as the mark printed twice. */}
-				<header className="flex items-start gap-4">
-					<HephIcon className="shrink-0" size={64} pad={2} />
-					<div className="min-w-0 space-y-1">
-						<h1 className="break-words text-2xl font-semibold tracking-tight">
-							Let's get you set up
-						</h1>
-						<p className="max-w-2xl text-sm text-muted-foreground">
-							I'm Heph. I read the work your team already does and give you feedback on the
-							practices your project cares about.
-						</p>
-						<p aria-live="polite" className="max-w-2xl text-sm font-medium">
-							{narration}
-						</p>
+				<header className="space-y-4">
+					<h1 className="break-words text-2xl font-semibold tracking-tight">
+						Let's get you set up
+					</h1>
+					<div className="flex items-start gap-3">
+						<HephIcon className="shrink-0" size={64} pad={2} />
+						{/* The tail is opaque so it covers the bubble's own border; a tinted fill would let
+						    that edge show straight through it. */}
+						<div className="relative min-w-0 flex-1 rounded-xl border border-mentor/30 bg-card p-3 before:absolute before:top-6 before:-left-1.5 before:size-3 before:rotate-45 before:border-b before:border-l before:border-mentor/30 before:bg-card before:content-[''] sm:p-4">
+							<p className="sr-only">Heph says:</p>
+							<p className="text-sm leading-relaxed">
+								I'm Heph, the mentor in Hephaestus. I read the work you already do, give you
+								feedback on the practices your project cares about, and talk it through whenever you
+								ask.
+							</p>
+							<p aria-live="polite" className="mt-2 text-sm font-medium">
+								{narration}
+							</p>
+						</div>
 					</div>
 				</header>
 
@@ -188,17 +208,18 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 					<>
 						<Section
 							title={
-								<span className="flex items-start gap-2">
-									<StepMarker step={1} done={termsAccepted} />
+								<span className="flex items-start gap-3">
+									<StepMarker icon={<ShieldCheckIcon />} done={termsAccepted} />
 									<span className="min-w-0">What Hephaestus does with your data</span>
 								</span>
 							}
 							description="Your acceptance is recorded together with this exact notice."
 						>
-							<div className="space-y-4 rounded-lg border p-4">
+							<div className="space-y-4 rounded-lg border bg-muted/30 p-4">
 								{/* The archived notice, verbatim. It is the text the acceptance is recorded against,
-								    so nothing may summarise or reorder it here. */}
-								<div className="max-w-prose space-y-4 text-sm leading-relaxed">
+								    so nothing may summarise or reorder it here. The panel is the measure: a prose cap
+								    inside it would leave a dead third of the panel that reads as a rendering fault. */}
+								<div className="space-y-4 text-sm leading-relaxed">
 									{state.notice.noticeText.split("\n\n").map((paragraph, index) => (
 										<p key={index}>{paragraph}</p>
 									))}
@@ -224,17 +245,20 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 						<Section
 							id={`${id}-research`}
 							title={
-								<span className="flex items-start gap-2">
-									<StepMarker step={2} done={answer !== undefined} />
+								<span className="flex items-start gap-3">
+									<StepMarker icon={<FlaskConicalIcon />} done={answer !== undefined} />
 									<span className="min-w-0">Take part in the research?</span>
 								</span>
 							}
 							description="Optional, and reversible in settings. Nothing is selected for you, and Hephaestus works exactly the same either way."
 						>
 							<dl className="grid gap-4 sm:grid-cols-3">
-								{RESEARCH_FACTS.map(({ term, detail }) => (
+								{RESEARCH_FACTS.map(({ icon: Icon, term, detail }) => (
 									<div key={term} className="space-y-1">
-										<dt className="text-sm font-medium">{term}</dt>
+										<dt className="flex items-center gap-2 text-sm font-medium">
+											<Icon className="size-4 shrink-0 text-mentor" aria-hidden="true" />
+											{term}
+										</dt>
 										<dd className="text-sm leading-relaxed text-muted-foreground">{detail}</dd>
 									</div>
 								))}
