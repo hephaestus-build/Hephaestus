@@ -13,12 +13,13 @@ only for the TUM/AET deployment it describes; other operators must supply their 
 
 ## First-login consent notice
 
-These overrides affect `/imprint` and `/privacy`, not the first-login consent notice. The server
-currently selects the immutable `2026-08-30` notice, which names TUM/AET as the operator and research
-organization. There is no supported operator-specific replacement mechanism for that notice.
+The first-login screen carries no operator-specific text. It states the terms of use and points to
+`/privacy` and `/imprint` for who runs the deployment, what it stores and for how long, so the same
+wording is accurate on every instance and these overrides are what make it complete.
 
 The sign-in and first-login screens carry their own `/privacy` and `/imprint` links, because they
-render without the site footer. Configure both pages before the first user signs in.
+render without the site footer. **Configure both pages before the first user signs in**: on a
+deployment that still serves the placeholder, the first-login screen points at nothing.
 
 The first-login screen records three decisions against the notice version shown: terms acceptance,
 privacy-notice acknowledgement, and a separate research answer. Nothing is recorded until the account
@@ -31,10 +32,14 @@ exclude a refusing or withdrawn account from processing, so an operator using th
 must apply the current decision in their own exports and analyses. The recorded answer is evidence of
 what was asked, not a technical control.
 
-Non-TUM operators must resolve this before opening the service to users. Editing the baseline or
-updating the existing notice is not a safe replacement: recorded consent decisions reference its
-version and content hash. An operator-specific notice needs a new immutable version and server-side
-selection of that version.
+The research question is asked on every deployment, and only the TUM/AET instance runs a study behind
+it. An operator with no research programme should treat a grant as unused rather than as authorization
+for anything.
+
+`ConsentService.CURRENT_NOTICE_VERSION` identifies the wording an account accepted; the wording itself
+is the screen, published in a signed release and immutable in git. A deployment that changes the words
+changes that constant in the same commit, or its ledger will record acceptances of the new wording
+against the version of the old one.
 
 ## Operator obligations
 

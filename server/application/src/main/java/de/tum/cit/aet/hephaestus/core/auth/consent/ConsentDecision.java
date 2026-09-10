@@ -45,29 +45,21 @@ public class ConsentDecision {
     @Column(name = "mechanism", nullable = false, length = 32)
     private Mechanism mechanism;
 
+    /** Which wording the account was shown — {@link ConsentService#CURRENT_NOTICE_VERSION} owns it. */
     @Column(name = "notice_version", nullable = false, length = 32)
     private String noticeVersion;
-
-    @Column(name = "notice_sha256", nullable = false, length = 64)
-    private String noticeSha256;
 
     @CreationTimestamp(source = SourceType.DB)
     @Column(name = "occurred_at", nullable = false, updatable = false)
     private @Nullable Instant occurredAt;
 
     public ConsentDecision(
-            Account account,
-            Purpose purpose,
-            boolean granted,
-            Mechanism mechanism,
-            String noticeVersion,
-            String noticeSha256) {
+            Account account, Purpose purpose, boolean granted, Mechanism mechanism, String noticeVersion) {
         this.account = account;
         this.purpose = purpose;
         this.granted = granted;
         this.mechanism = mechanism;
         this.noticeVersion = noticeVersion;
-        this.noticeSha256 = noticeSha256;
     }
 
     public enum Purpose {

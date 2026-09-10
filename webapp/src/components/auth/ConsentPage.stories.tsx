@@ -9,15 +9,8 @@ import { ConsentPage, type ConsentPageProps, type ConsentSubmission } from "./Co
 
 const notice = {
 	completed: false,
-	noticeVersion: "2026-08-30",
+	noticeVersion: "2026-09-10",
 	participateInResearch: false,
-	noticeText: [
-		"Hephaestus is operated by the Technical University of Munich (TUM), Research Group for Applied Education Technologies (AET).",
-		"Hephaestus analyzes your GitHub, GitLab, Slack and Outline activity against your team's engineering practices to provide practice feedback. Platform operation uses the public-task basis described in the privacy notice; accepting the terms is not consent to research.",
-		"Terms of use: use Hephaestus lawfully and only for workspaces and data you are authorized to access. Feedback is advisory, may be inaccurate, and must not be used as the sole basis for grading, employment, or access decisions.",
-		"You may access, rectify or erase your data, restrict or object to processing, complain to a supervisory authority, and withdraw any research consent at any time without affecting your use of Hephaestus. Read the full privacy notice for recipients, retention periods and contact details.",
-		"Separately, you may choose to let AET use your Hephaestus usage and feedback data for academic research and invite you to occasional surveys. This is optional, starts only if you opt in, and declining has no effect on the service.",
-	].join("\n\n"),
 };
 const onSubmit = fn();
 const onRetry = fn();
@@ -93,13 +86,11 @@ export const TakingPart: Story = {
 	play: async () => {
 		await acceptTerms();
 		await answer(/Yes, take part/);
-		await expect(
-			screen.getByText("You can change your research answer later in settings."),
-		).toBeVisible();
+		await expect(screen.getByText("You can change your answer later in settings.")).toBeVisible();
 		await expect(screen.getByText("That's everything. Let's get to work.")).toBeVisible();
 		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await expect(onSubmit).toHaveBeenCalledWith({
-			noticeVersion: "2026-08-30",
+			noticeVersion: "2026-09-10",
 			termsAccepted: true,
 			participateInResearch: true,
 		});
@@ -112,7 +103,7 @@ export const DecliningResearch: Story = {
 		await answer(/don't take part/);
 		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await expect(onSubmit).toHaveBeenCalledWith({
-			noticeVersion: "2026-08-30",
+			noticeVersion: "2026-09-10",
 			termsAccepted: true,
 			participateInResearch: false,
 		});

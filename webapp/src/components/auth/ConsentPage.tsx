@@ -2,14 +2,18 @@ import {
 	ActivityIcon,
 	CheckIcon,
 	ClockIcon,
+	FileTextIcon,
 	FlaskConicalIcon,
+	type LucideIcon,
+	ScaleIcon,
 	ShieldCheckIcon,
 	TrendingUpIcon,
+	TriangleAlertIcon,
 } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 
 import type { ConsentStatus } from "@/api/types.gen";
-import { LegalLinks } from "@/components/auth/LegalLinks";
+import { LegalLink, LegalLinks } from "@/components/auth/LegalLinks";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { HephIcon } from "@/components/brand/HephIcon";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -52,11 +56,49 @@ export interface ConsentPageProps {
 		  };
 }
 
+interface Fact {
+	icon: LucideIcon;
+	term: string;
+	detail: ReactNode;
+}
+
+/**
+ * The notice, in full. It says nothing about who operates this instance — that is the privacy notice
+ * and the imprint, which every operator configures and this page links to, so the same words are
+ * true on every deployment.
+ *
+ * Editing anything here publishes a new notice: bump `ConsentService.CURRENT_NOTICE_VERSION`, or the
+ * ledger will record acceptances of these words against the version of the previous ones.
+ */
+const TERMS: readonly Fact[] = [
+	{
+		icon: ScaleIcon,
+		term: "Use it lawfully",
+		detail: "Only for the workspaces and the data you are allowed to access.",
+	},
+	{
+		icon: TriangleAlertIcon,
+		term: "Feedback can be wrong",
+		detail:
+			"It is advisory, and never the only basis for a grading, employment or access decision.",
+	},
+	{
+		icon: ShieldCheckIcon,
+		term: "Your data",
+		detail: (
+			<>
+				Who runs this instance, what it stores and for how long is in the{" "}
+				<LegalLink to="/privacy">privacy notice</LegalLink>.
+			</>
+		),
+	},
+];
+
 /**
  * Everything that argues for taking part lives out here rather than inside the "yes" answer. An
  * answer carrying more reasons than its opposite is the asymmetry EDPB 03/2022 calls deceptive.
  */
-const RESEARCH_FACTS = [
+const RESEARCH: readonly Fact[] = [
 	{
 		icon: TrendingUpIcon,
 		term: "Why it matters",
@@ -79,22 +121,38 @@ const ANSWERS = [
 	{
 		value: "yes",
 		title: "Yes, take part",
-		detail: "My usage and feedback data may be used for the research described above.",
+		detail: "My usage and feedback may be used for the research.",
 	},
 	{
 		value: "no",
 		title: "No, don't take part",
-		detail: "None of my data is used for research. Everything else works the same.",
+		detail: "None of my data is used for research.",
 	},
 ] as const;
 
 type Answer = (typeof ANSWERS)[number]["value"];
 
+function FactList({ facts }: { facts: readonly Fact[] }) {
+	return (
+		<dl className="grid gap-4 sm:grid-cols-3">
+			{facts.map(({ icon: Icon, term, detail }) => (
+				<div key={term} className="space-y-1">
+					<dt className="flex items-center gap-2 text-sm font-medium">
+						<Icon className="size-4 shrink-0 text-mentor" aria-hidden="true" />
+						{term}
+					</dt>
+					<dd className="text-sm leading-relaxed text-muted-foreground">{detail}</dd>
+				</div>
+			))}
+		</dl>
+	);
+}
+
 /**
  * The step's own icon until it is answered, then a check. Both are decoration: the heading names the
  * step and the control inside it announces its own state.
  */
-function StepMarker({ icon, done }: { icon: ReactNode; done: boolean }) {
+function StepMarker({ icon: Icon, done }: { icon: LucideIcon; done: boolean }) {
 	return (
 		<span
 			aria-hidden="true"
@@ -103,7 +161,7 @@ function StepMarker({ icon, done }: { icon: ReactNode; done: boolean }) {
 				done ? "bg-mentor text-mentor-foreground" : "bg-mentor/10 text-mentor",
 			)}
 		>
-			{done ? <CheckIcon /> : icon}
+			{done ? <CheckIcon /> : <Icon />}
 		</span>
 	);
 }
@@ -128,16 +186,16 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 	// and reaches the button through `aria-describedby`, so focusing Continue does not replay it.
 	const narration =
 		state.status === "loading"
-			? "Give me a moment — I'm fetching the notice."
+			? "Give me a moment — I'm fetching your setup."
 			: state.status === "error"
-				? "I couldn't fetch the notice just now."
+				? "I couldn't fetch your setup just now."
 				: termsAccepted && answer !== undefined
 					? "That's everything. Let's get to work."
 					: termsAccepted
 						? "Thanks. One question to go, and either answer is fine by me."
 						: answer !== undefined
 							? "Noted. Just the terms left."
-							: "Two things first: what happens to your data, and whether you'd like to take part in the research.";
+							: "Two things first: the rules, and whether you'd like to take part in the research.";
 
 	const hint =
 		state.status !== "ready"
@@ -148,7 +206,7 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 					? "Accept the terms to continue."
 					: answer === undefined
 						? "Answer the research question to continue."
-						: "You can change your research answer later in settings.";
+						: "You can change your answer later in settings.";
 
 	function submit() {
 		if (state.status !== "ready" || !ready || submitting) return;
@@ -192,13 +250,13 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 				{state.status === "error" ? (
 					<QueryErrorAlert
 						error={state.error}
-						title="Couldn't load the notice"
+						title="Couldn't load your setup"
 						onRetry={state.onRetry}
 					/>
 				) : state.status === "loading" ? (
 					<div className="space-y-6" aria-busy="true">
-						<span className="sr-only">Loading the notice…</span>
-						<Skeleton className="h-64 w-full" />
+						<span className="sr-only">Loading…</span>
+						<Skeleton className="h-32 w-full" />
 						<div className="grid gap-3 sm:grid-cols-2">
 							<Skeleton className="h-20" />
 							<Skeleton className="h-20" />
@@ -209,35 +267,23 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 						<Section
 							title={
 								<span className="flex items-start gap-3">
-									<StepMarker icon={<ShieldCheckIcon />} done={termsAccepted} />
-									<span className="min-w-0">What Hephaestus does with your data</span>
+									<StepMarker icon={FileTextIcon} done={termsAccepted} />
+									<span className="min-w-0">Terms and privacy</span>
 								</span>
 							}
-							description="Your acceptance is recorded together with this exact notice."
 						>
-							<div className="space-y-4 rounded-lg border bg-muted/30 p-4">
-								{/* The archived notice, verbatim. It is the text the acceptance is recorded against,
-								    so nothing may summarise or reorder it here. The panel is the measure: a prose cap
-								    inside it would leave a dead third of the panel that reads as a rendering fault. */}
-								<div className="space-y-4 text-sm leading-relaxed">
-									{state.notice.noticeText.split("\n\n").map((paragraph, index) => (
-										<p key={index}>{paragraph}</p>
-									))}
-								</div>
-								<Separator />
-								<Field orientation="horizontal">
-									<Checkbox
-										id={`${id}-terms`}
-										checked={termsAccepted}
-										disabled={submitting}
-										onCheckedChange={setTermsAccepted}
-									/>
-									<FieldContent>
-										<FieldLabel htmlFor={`${id}-terms`}>I accept the terms of use</FieldLabel>
-										<FieldDescription>Accepting is not consent to research.</FieldDescription>
-									</FieldContent>
-								</Field>
-							</div>
+							<FactList facts={TERMS} />
+							<Field orientation="horizontal">
+								<Checkbox
+									id={`${id}-terms`}
+									checked={termsAccepted}
+									disabled={submitting}
+									onCheckedChange={setTermsAccepted}
+								/>
+								<FieldContent>
+									<FieldLabel htmlFor={`${id}-terms`}>I accept the terms of use</FieldLabel>
+								</FieldContent>
+							</Field>
 						</Section>
 
 						<Separator />
@@ -246,23 +292,13 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 							id={`${id}-research`}
 							title={
 								<span className="flex items-start gap-3">
-									<StepMarker icon={<FlaskConicalIcon />} done={answer !== undefined} />
+									<StepMarker icon={FlaskConicalIcon} done={answer !== undefined} />
 									<span className="min-w-0">Take part in the research?</span>
 								</span>
 							}
-							description="Optional, and reversible in settings. Nothing is selected for you, and Hephaestus works exactly the same either way."
+							description="Optional, and Hephaestus works the same either way. The research is run by the organisation the privacy notice names."
 						>
-							<dl className="grid gap-4 sm:grid-cols-3">
-								{RESEARCH_FACTS.map(({ icon: Icon, term, detail }) => (
-									<div key={term} className="space-y-1">
-										<dt className="flex items-center gap-2 text-sm font-medium">
-											<Icon className="size-4 shrink-0 text-mentor" aria-hidden="true" />
-											{term}
-										</dt>
-										<dd className="text-sm leading-relaxed text-muted-foreground">{detail}</dd>
-									</div>
-								))}
-							</dl>
+							<FactList facts={RESEARCH} />
 
 							<RadioGroup
 								value={answer ?? null}

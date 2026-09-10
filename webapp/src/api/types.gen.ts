@@ -767,7 +767,6 @@ export type ConnectionSyncStatus = {
 
 export type ConsentStatus = {
   completed: boolean;
-  noticeText: string;
   noticeVersion: string;
   participateInResearch: boolean;
 };

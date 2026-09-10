@@ -18,16 +18,21 @@ import org.springframework.web.server.ResponseStatusException;
 @WorkspaceAgnostic("Consent decisions belong to an account, not a workspace")
 public class ConsentService {
 
+    /**
+     * Identifies the wording the account was shown. The wording itself is the first-login screen in
+     * the webapp, published in a signed release and immutable in git, so this version is a pointer
+     * into that history rather than a row anyone could edit afterwards.
+     *
+     * <p>Bump it in the same commit that changes any of those words. Leaving it means the ledger
+     * records acceptances of the new wording against the version of the old one.
+     */
+    static final String CURRENT_NOTICE_VERSION = "2026-09-10";
+
     private final ConsentDecisionRepository decisionRepository;
-    private final ConsentNoticeRepository noticeRepository;
     private final AccountRepository accountRepository;
 
-    public ConsentService(
-            ConsentDecisionRepository decisionRepository,
-            ConsentNoticeRepository noticeRepository,
-            AccountRepository accountRepository) {
+    public ConsentService(ConsentDecisionRepository decisionRepository, AccountRepository accountRepository) {
         this.decisionRepository = decisionRepository;
-        this.noticeRepository = noticeRepository;
         this.accountRepository = accountRepository;
     }
 
@@ -37,13 +42,11 @@ public class ConsentService {
     }
 
     private ConsentStatusDTO currentStatus(Long accountId) {
-        ConsentNotice notice = currentNotice();
         ConsentDecision research = latest(accountId, ConsentDecision.Purpose.RESEARCH_PARTICIPATION);
         return new ConsentStatusDTO(
-                notice.getVersion(),
-                notice.getNoticeText(),
+                CURRENT_NOTICE_VERSION,
                 isCurrentNoticeCompleted(accountId),
-                research != null && research.isGranted() && notice.getVersion().equals(research.getNoticeVersion()));
+                research != null && research.isGranted() && CURRENT_NOTICE_VERSION.equals(research.getNoticeVersion()));
     }
 
     @Transactional(readOnly = true)
@@ -52,13 +55,12 @@ public class ConsentService {
     }
 
     private boolean isCurrentNoticeCompleted(Long accountId) {
-        return decisionRepository.isCompletedForNotice(accountId, ConsentNotice.CURRENT_VERSION);
+        return decisionRepository.isCompletedForNotice(accountId, CURRENT_NOTICE_VERSION);
     }
 
     @Transactional
     public ConsentStatusDTO completeFirstLogin(Long accountId, FirstLoginConsentDTO request) {
-        ConsentNotice notice = currentNotice();
-        if (!notice.getVersion().equals(request.noticeVersion())) {
+        if (!CURRENT_NOTICE_VERSION.equals(request.noticeVersion())) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "The transparency notice has changed; review it again");
         }
@@ -66,30 +68,27 @@ public class ConsentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Terms must be accepted to use Hephaestus");
         }
         Account account = requireAccountForUpdate(accountId);
-        if (!hasCurrentGrant(accountId, ConsentDecision.Purpose.TERMS_ACCEPTANCE, notice.getVersion())) {
+        if (!hasCurrentGrant(accountId, ConsentDecision.Purpose.TERMS_ACCEPTANCE)) {
             append(
                     account,
                     ConsentDecision.Purpose.TERMS_ACCEPTANCE,
                     true,
-                    ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL,
-                    notice);
+                    ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL);
         }
-        if (!hasCurrentGrant(accountId, ConsentDecision.Purpose.PRIVACY_NOTICE_ACKNOWLEDGEMENT, notice.getVersion())) {
+        if (!hasCurrentGrant(accountId, ConsentDecision.Purpose.PRIVACY_NOTICE_ACKNOWLEDGEMENT)) {
             append(
                     account,
                     ConsentDecision.Purpose.PRIVACY_NOTICE_ACKNOWLEDGEMENT,
                     true,
-                    ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL,
-                    notice);
+                    ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL);
         }
         ConsentDecision research = latest(accountId, ConsentDecision.Purpose.RESEARCH_PARTICIPATION);
-        if (research == null || !notice.getVersion().equals(research.getNoticeVersion())) {
+        if (research == null || !CURRENT_NOTICE_VERSION.equals(research.getNoticeVersion())) {
             append(
                     account,
                     ConsentDecision.Purpose.RESEARCH_PARTICIPATION,
                     request.participateInResearch(),
-                    ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL,
-                    notice);
+                    ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL);
         }
         decisionRepository.flush();
         return currentStatus(accountId);
@@ -101,7 +100,6 @@ public class ConsentService {
             throw new ResponseStatusException(
                     HttpStatus.PRECONDITION_REQUIRED, "Complete the current transparency notice first");
         }
-        ConsentNotice notice = currentNotice();
         Account account = requireAccountForUpdate(accountId);
         ConsentDecision current = latest(accountId, ConsentDecision.Purpose.RESEARCH_PARTICIPATION);
         if (current == null || current.isGranted() != request.granted()) {
@@ -109,8 +107,7 @@ public class ConsentService {
                     account,
                     ConsentDecision.Purpose.RESEARCH_PARTICIPATION,
                     request.granted(),
-                    ConsentDecision.Mechanism.ACCOUNT_SETTINGS,
-                    notice);
+                    ConsentDecision.Mechanism.ACCOUNT_SETTINGS);
         }
         decisionRepository.flush();
         return currentStatus(accountId);
@@ -119,13 +116,7 @@ public class ConsentService {
     @Transactional(readOnly = true)
     public boolean participatesInResearch(Long accountId) {
         ConsentDecision latest = latest(accountId, ConsentDecision.Purpose.RESEARCH_PARTICIPATION);
-        return latest != null && latest.isGranted() && ConsentNotice.CURRENT_VERSION.equals(latest.getNoticeVersion());
-    }
-
-    private ConsentNotice currentNotice() {
-        return noticeRepository
-                .findById(ConsentNotice.CURRENT_VERSION)
-                .orElseThrow(() -> new IllegalStateException("Current consent notice is not archived"));
+        return latest != null && latest.isGranted() && CURRENT_NOTICE_VERSION.equals(latest.getNoticeVersion());
     }
 
     private Account requireAccountForUpdate(Long accountId) {
@@ -134,9 +125,9 @@ public class ConsentService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
     }
 
-    private boolean hasCurrentGrant(Long accountId, ConsentDecision.Purpose purpose, String noticeVersion) {
+    private boolean hasCurrentGrant(Long accountId, ConsentDecision.Purpose purpose) {
         ConsentDecision decision = latest(accountId, purpose);
-        return decision != null && decision.isGranted() && noticeVersion.equals(decision.getNoticeVersion());
+        return decision != null && decision.isGranted() && CURRENT_NOTICE_VERSION.equals(decision.getNoticeVersion());
     }
 
     private @Nullable ConsentDecision latest(Long accountId, ConsentDecision.Purpose purpose) {
@@ -146,18 +137,12 @@ public class ConsentService {
     }
 
     private void append(
-            Account account,
-            ConsentDecision.Purpose purpose,
-            boolean granted,
-            ConsentDecision.Mechanism mechanism,
-            ConsentNotice notice) {
-        decisionRepository.save(
-                new ConsentDecision(account, purpose, granted, mechanism, notice.getVersion(), notice.getSha256()));
+            Account account, ConsentDecision.Purpose purpose, boolean granted, ConsentDecision.Mechanism mechanism) {
+        decisionRepository.save(new ConsentDecision(account, purpose, granted, mechanism, CURRENT_NOTICE_VERSION));
     }
 
     public record ConsentStatusDTO(
             @NonNull String noticeVersion,
-            @NonNull String noticeText,
 
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
             boolean completed,

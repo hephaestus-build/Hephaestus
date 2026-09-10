@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,16 +21,12 @@ import org.springframework.web.server.ResponseStatusException;
 class ConsentServiceTest extends BaseUnitTest {
 
     private final ConsentDecisionRepository decisionRepository = mock(ConsentDecisionRepository.class);
-    private final ConsentNoticeRepository noticeRepository = mock(ConsentNoticeRepository.class);
     private final AccountRepository accountRepository = mock(AccountRepository.class);
     private ConsentService service;
 
     @BeforeEach
     void setUp() {
-        service = new ConsentService(decisionRepository, noticeRepository, accountRepository);
-        when(noticeRepository.findById(ConsentNotice.CURRENT_VERSION))
-                .thenReturn(Optional.of(
-                        new ConsentNotice(ConsentNotice.CURRENT_VERSION, "Archived notice", "sha256", Instant.EPOCH)));
+        service = new ConsentService(decisionRepository, accountRepository);
         when(decisionRepository.findFirstByAccountIdAndPurposeOrderByOccurredAtDescIdDesc(any(), any()))
                 .thenReturn(Optional.empty());
         when(accountRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(new Account("Ada")));
@@ -39,7 +34,8 @@ class ConsentServiceTest extends BaseUnitTest {
 
     @Test
     void shouldAppendSeparateDecisionsWhenFirstLoginIsCompletedWithoutResearch() {
-        service.completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO("2026-08-30", true, false));
+        service.completeFirstLogin(
+                42L, new ConsentService.FirstLoginConsentDTO(ConsentService.CURRENT_NOTICE_VERSION, true, false));
 
         ArgumentCaptor<ConsentDecision> decisions = ArgumentCaptor.forClass(ConsentDecision.class);
         verify(decisionRepository, org.mockito.Mockito.times(3)).save(decisions.capture());
@@ -51,8 +47,7 @@ class ConsentServiceTest extends BaseUnitTest {
                         ConsentDecision.Purpose.RESEARCH_PARTICIPATION);
         assertThat(decisions.getAllValues().get(2).isGranted()).isFalse();
         assertThat(decisions.getAllValues()).allSatisfy(decision -> {
-            assertThat(decision.getNoticeVersion()).isEqualTo("2026-08-30");
-            assertThat(decision.getNoticeSha256()).isEqualTo("sha256");
+            assertThat(decision.getNoticeVersion()).isEqualTo(ConsentService.CURRENT_NOTICE_VERSION);
             assertThat(decision.getMechanism()).isEqualTo(ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL);
         });
     }

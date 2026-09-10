@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!--
+        The first-login notice is no longer a row. Its wording is the setup screen in the webapp,
+        published in a signed release and immutable in git, and consent_decision.notice_version
+        points into that history. The archived 2026-08-30 text and its digest stay reproducible from
+        db/changelog/0000000000000_baseline_v0_77_4.sql, which reached main and is never edited, so
+        no evidence of what an account was shown is lost with the table.
+
+        Order matters: the composite foreign key spans notice_sha256 and the archive's unique key,
+        so it goes before either of them.
+    -->
+    <changeSet id="1789067582535-1" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <foreignKeyConstraintExists foreignKeyName="sfk_consent_decision_notice" foreignKeyTableName="consent_decision"/>
+        </preConditions>
+        <dropForeignKeyConstraint baseTableName="consent_decision" constraintName="sfk_consent_decision_notice"/>
+        <rollback>
+            <addForeignKeyConstraint baseTableName="consent_decision" baseColumnNames="notice_version, notice_sha256" constraintName="sfk_consent_decision_notice" referencedTableName="consent_notice" referencedColumnNames="version, sha256"/>
+        </rollback>
+    </changeSet>
+    <!--
+        The append-only guard compares every column of the row erasure is allowed to change, so it has
+        to stop naming notice_sha256 before the column goes. Left as it was, it raises "record old has
+        no field notice_sha256" on the one UPDATE it is meant to permit, and account erasure fails.
+    -->
+    <changeSet id="1789067582535-2" author="hephaestus">
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.enforce_consent_decision_append_only() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+            BEGIN
+                IF TG_OP = 'UPDATE'
+                   AND OLD.account_id IS NOT NULL AND NEW.account_id IS NULL
+                   AND OLD.id = NEW.id
+                   AND OLD.purpose = NEW.purpose
+                   AND OLD.granted = NEW.granted
+                   AND OLD.mechanism = NEW.mechanism
+                   AND OLD.notice_version = NEW.notice_version
+                   AND OLD.occurred_at = NEW.occurred_at THEN
+                    RETURN NEW;
+                END IF;
+                RAISE EXCEPTION 'consent_decision is append-only';
+            END;
+            $$;
+]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.enforce_consent_decision_append_only() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+            BEGIN
+                IF TG_OP = 'UPDATE'
+                   AND OLD.account_id IS NOT NULL AND NEW.account_id IS NULL
+                   AND OLD.id = NEW.id
+                   AND OLD.purpose = NEW.purpose
+                   AND OLD.granted = NEW.granted
+                   AND OLD.mechanism = NEW.mechanism
+                   AND OLD.notice_version = NEW.notice_version
+                   AND OLD.notice_sha256 = NEW.notice_sha256
+                   AND OLD.occurred_at = NEW.occurred_at THEN
+                    RETURN NEW;
+                END IF;
+                RAISE EXCEPTION 'consent_decision is append-only';
+            END;
+            $$;
+]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1789067582535-3" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="consent_decision" columnName="notice_sha256"/>
+        </preConditions>
+        <dropColumn columnName="notice_sha256" tableName="consent_decision"/>
+        <rollback>
+            <stop>The per-decision digest cannot be recovered by rollback; restore a pre-upgrade database backup.</stop>
+        </rollback>
+    </changeSet>
+    <changeSet id="1789067582535-4" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="consent_notice"/>
+        </preConditions>
+        <dropTable tableName="consent_notice"/>
+        <rollback>
+            <stop>The archived notice cannot be recovered by rollback; restore a pre-upgrade database backup.</stop>
+        </rollback>
+    </changeSet>
+    <!-- The trigger went with the table; its function would otherwise outlive everything that called it. -->
+    <changeSet id="1789067582535-5" author="hephaestus">
+        <sql>DROP FUNCTION IF EXISTS public.enforce_consent_notice_immutable();</sql>
+        <rollback>
+            <sql><![CDATA[
+CREATE FUNCTION public.enforce_consent_notice_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+            BEGIN
+                RAISE EXCEPTION 'consent_notice is immutable';
+            END;
+            $$;
+]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -9,8 +9,7 @@ import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harnes
 
 const notice = {
 	completed: false,
-	noticeText: "Hephaestus analyzes connected activity.\n\nResearch participation is optional.",
-	noticeVersion: "2026-08-30",
+	noticeVersion: "2026-09-10",
 	participateInResearch: false,
 };
 

@@ -8890,15 +8890,12 @@ components:
       properties:
         completed:
           type: boolean
-        noticeText:
-          type: string
         noticeVersion:
           type: string
         participateInResearch:
           type: boolean
       required:
       - completed
-      - noticeText
       - noticeVersion
       - participateInResearch
     Contributor:
