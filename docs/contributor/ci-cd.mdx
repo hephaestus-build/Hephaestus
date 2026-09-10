@@ -797,6 +797,32 @@ Extend the pipeline at the ownership boundary that changed; do not copy an exist
 
 `scripts/ci-contract.test.ts` owns the workflow invariants; extend it when the service introduces one.
 
+## Static preview comments
+
+Storybook and documentation previews list every published story or page from changed source files,
+using the built Storybook index and Docusaurus metadata rather than guessing routes. The lists are
+not a dependency-impact report: changing a component without changing its story file does not add
+that component's stories. Unpublished or deleted entries cannot link to a preview page.
+
+Stories are grouped by their full Storybook component title (including its sidebar path), and pages
+by their source directory. Each group shows its count and all its links, with no collapsed sections
+or item cap. Headings and wrapping link paragraphs keep the paths readable without repeating them
+for every variant or introducing a wide table.
+
+`scripts/render-preview-comment.ts` writes a JSON array of complete Markdown comments. The shared
+renderer keeps whole links together and repeats the group heading when a group spans comments.
+Large lists continue in numbered comments below GitHub's 65,536-character limit; every part retains
+the preview link, total count, checked-out commit and build logs. An individual link too large to fit
+fails explicitly rather than dropping content.
+
+`scripts/publish-preview-comments.ts` uses the GitHub SDK provided by `actions/github-script` to
+update the preview's existing bot comments in place. It validates the entire artifact before
+writing, paginates existing comments, skips unchanged bodies, and deletes surplus parts only after
+publishing every current part. GitHub does not offer atomic multi-comment updates; a failed run
+fails the publication step and a retry converges without duplicate comments. Teardown replaces the
+main comment and deletes continuation parts for both previews. A delayed publisher that observes a
+closed pull request also retires its comments instead of restoring live links.
+
 ## Chromatic visual coverage
 
 The Stories job reports visual coverage separately from interaction tests and the
