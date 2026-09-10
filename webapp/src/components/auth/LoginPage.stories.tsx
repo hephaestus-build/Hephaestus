@@ -55,7 +55,7 @@ export const DevelopmentSignIn: Story = {
 	},
 };
 
-/** The aside is dropped below `lg`, so the form has to stand on its own down to 320px. */
+/** A provider name long enough to wrap, at the narrowest supported width. */
 export const Narrow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: expectNoPageOverflow,

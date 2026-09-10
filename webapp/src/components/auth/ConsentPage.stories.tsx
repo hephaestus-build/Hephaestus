@@ -165,7 +165,6 @@ export const Narrow: Story = {
 	},
 };
 
-/** Dark, with an answer selected: a checked card must not read as a disabled one. */
 export const Dark: Story = {
 	globals: { theme: "dark" },
 	play: async () => {

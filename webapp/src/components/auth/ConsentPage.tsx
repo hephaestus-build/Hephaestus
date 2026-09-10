@@ -1,20 +1,12 @@
-import {
-	CircleOffIcon,
-	ClockIcon,
-	FileCheck2Icon,
-	FlaskConicalIcon,
-	GraduationCapIcon,
-	LineChartIcon,
-	ShieldCheckIcon,
-	Undo2Icon,
-} from "lucide-react";
+import { ShieldCheckIcon } from "lucide-react";
 import { useId, useState } from "react";
 
 import type { ConsentStatus } from "@/api/types.gen";
-import { AuthSurface } from "@/components/auth/AuthSurface";
 import { LegalLinks } from "@/components/auth/LegalLinks";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { PageHeader } from "@/components/core/PageHeader";
+import { PageLayout } from "@/components/core/PageLayout";
 import { Section } from "@/components/core/Section";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -27,6 +19,7 @@ import {
 	FieldTitle,
 } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -57,17 +50,14 @@ export interface ConsentPageProps {
  */
 const RESEARCH_FACTS = [
 	{
-		icon: GraduationCapIcon,
 		term: "Why it matters",
 		detail: "What we learn from real teams is what makes the feedback better.",
 	},
 	{
-		icon: LineChartIcon,
 		term: "What you share",
 		detail: "How you use Hephaestus, and how you respond to its feedback.",
 	},
 	{
-		icon: ClockIcon,
 		term: "What it asks of you",
 		detail: "Nothing extra to do. Occasionally, an optional survey.",
 	},
@@ -76,13 +66,11 @@ const RESEARCH_FACTS = [
 const ANSWERS = [
 	{
 		value: "yes",
-		icon: FlaskConicalIcon,
 		title: "Yes, take part",
 		detail: "My usage and feedback data may be used for the research described above.",
 	},
 	{
 		value: "no",
-		icon: CircleOffIcon,
 		title: "No, don't take part",
 		detail: "None of my data is used for research. Everything else works the same.",
 	},
@@ -121,39 +109,18 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 	}
 
 	return (
-		<AuthSurface>
-			<div className="mx-auto w-full max-w-2xl space-y-8 px-6 py-10 md:py-16">
+		<div className="min-h-svh bg-background">
+			{/* Narrower than `PageLayout`'s default: this surface has no sidebar taking the other half. */}
+			<PageLayout className="max-w-3xl px-6 py-10">
 				<HephaestusLogo markClassName="size-7" wordmarkClassName="text-lg" />
 
-				<header className="space-y-4">
-					<span className="inline-flex size-12 items-center justify-center rounded-2xl border bg-muted/50 text-mentor">
-						<ShieldCheckIcon className="size-6" aria-hidden="true" />
-					</span>
-					<div className="space-y-2">
-						<p className="text-sm font-medium text-muted-foreground">Account setup</p>
-						<h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
-							Before you continue
-						</h1>
-					</div>
-					{state.status === "ready" && (
-						<>
-							<p className="max-w-2xl text-base leading-relaxed text-muted-foreground">
-								Two things: what Hephaestus does with your data, and whether you want to take part
-								in the research.
-							</p>
-							<div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
-								<span className="inline-flex items-center gap-1.5">
-									<FileCheck2Icon className="size-4" aria-hidden="true" />
-									Recorded with the exact notice you see here
-								</span>
-								<span className="inline-flex items-center gap-1.5">
-									<Undo2Icon className="size-4" aria-hidden="true" />
-									Your research answer is reversible in settings
-								</span>
-							</div>
-						</>
-					)}
-				</header>
+				<PageHeader
+					icon={<ShieldCheckIcon />}
+					title="Before you continue"
+					description="Two things: what Hephaestus does with your data, and whether you want to take part in the research."
+				/>
+
+				<Separator />
 
 				{state.status === "error" ? (
 					<QueryErrorAlert
@@ -162,28 +129,29 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 						onRetry={state.onRetry}
 					/>
 				) : state.status === "loading" ? (
-					<div className="space-y-8" aria-busy="true">
+					<div className="space-y-6" aria-busy="true">
 						<span className="sr-only">Loading the notice…</span>
-						<Skeleton className="h-72 w-full rounded-2xl" />
+						<Skeleton className="h-64 w-full" />
 						<div className="grid gap-3 sm:grid-cols-2">
-							<Skeleton className="h-32 rounded-lg" />
-							<Skeleton className="h-32 rounded-lg" />
+							<Skeleton className="h-20" />
+							<Skeleton className="h-20" />
 						</div>
 					</div>
 				) : (
 					<>
 						<Section
 							title="What you're accepting"
-							className="space-y-4 rounded-2xl border bg-card p-5 text-card-foreground sm:p-6"
+							description="Your acceptance is recorded together with this exact notice."
 						>
-							{/* The archived notice, verbatim. It is the text the acceptance is recorded against,
-							    so nothing may summarise or reorder it here. */}
-							<div className="max-w-prose space-y-4 text-sm leading-relaxed">
-								{state.notice.noticeText.split("\n\n").map((paragraph, index) => (
-									<p key={index}>{paragraph}</p>
-								))}
-							</div>
-							<div className="border-t pt-4">
+							<div className="space-y-4 rounded-lg border p-4">
+								{/* The archived notice, verbatim. It is the text the acceptance is recorded against,
+								    so nothing may summarise or reorder it here. */}
+								<div className="max-w-prose space-y-4 text-sm leading-relaxed">
+									{state.notice.noticeText.split("\n\n").map((paragraph, index) => (
+										<p key={index}>{paragraph}</p>
+									))}
+								</div>
+								<Separator />
 								<Field orientation="horizontal">
 									<Checkbox
 										id={`${id}-terms`}
@@ -199,22 +167,18 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 							</div>
 						</Section>
 
+						<Separator />
+
 						<Section
 							id={`${id}-research`}
 							title="Take part in the research?"
-							description="Nothing is selected for you, and Hephaestus works exactly the same either way."
-							className="space-y-5"
+							description="Optional, and reversible in settings. Nothing is selected for you, and Hephaestus works exactly the same either way."
 						>
 							<dl className="grid gap-4 sm:grid-cols-3">
-								{RESEARCH_FACTS.map(({ icon: Icon, term, detail }) => (
-									<div key={term}>
-										<dt className="flex items-center gap-2 text-sm font-medium">
-											<span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border bg-background text-mentor">
-												<Icon className="size-4" aria-hidden="true" />
-											</span>
-											{term}
-										</dt>
-										<dd className="mt-2 text-sm leading-relaxed text-muted-foreground">{detail}</dd>
+								{RESEARCH_FACTS.map(({ term, detail }) => (
+									<div key={term} className="space-y-1">
+										<dt className="text-sm font-medium">{term}</dt>
+										<dd className="text-sm leading-relaxed text-muted-foreground">{detail}</dd>
 									</div>
 								))}
 							</dl>
@@ -227,24 +191,11 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 								aria-describedby={`${id}-research-description`}
 								className="grid gap-3 sm:grid-cols-2"
 							>
-								{ANSWERS.map(({ value, icon: Icon, title, detail }) => (
-									// `--mentor`, not `FieldLabel`'s `--primary`: primary is near-black in light and
-									// near-white in dark, so a card filled with it reads as disabled either way.
-									// Both themes need overriding — the primitive's own `dark:` rules outrank an
-									// unprefixed one.
-									<FieldLabel
-										key={value}
-										htmlFor={`${id}-${value}`}
-										className="transition-colors has-data-checked:border-mentor has-data-checked:bg-mentor/5 has-data-unchecked:hover:border-mentor/40 dark:has-data-checked:border-mentor/60 dark:has-data-checked:bg-mentor/10"
-									>
+								{ANSWERS.map(({ value, title, detail }) => (
+									<FieldLabel key={value} htmlFor={`${id}-${value}`}>
 										<Field orientation="horizontal">
 											<FieldContent>
-												<span className="mb-3 inline-flex size-10 w-fit items-center justify-center rounded-xl border bg-background">
-													<Icon className="size-5" aria-hidden="true" />
-												</span>
-												<FieldTitle id={`${id}-${value}-title`} className="text-base font-semibold">
-													{title}
-												</FieldTitle>
+												<FieldTitle id={`${id}-${value}-title`}>{title}</FieldTitle>
 												<FieldDescription id={`${id}-${value}-detail`}>{detail}</FieldDescription>
 											</FieldContent>
 											<RadioGroupItem
@@ -268,7 +219,10 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 					</>
 				)}
 
-				<footer className="flex flex-col gap-4 border-t pt-5 sm:flex-row-reverse sm:items-center sm:justify-between">
+				<Separator />
+
+				{/* Sign out sits at the far edge from Continue: only one of the two is recoverable. */}
+				<footer className="flex flex-col gap-4 sm:flex-row-reverse sm:items-center sm:justify-between">
 					<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
 						{outstanding && <p className="text-sm text-muted-foreground">{outstanding}</p>}
 						{state.status === "ready" && (
@@ -289,7 +243,7 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 				</footer>
 
 				<LegalLinks />
-			</div>
-		</AuthSurface>
+			</PageLayout>
+		</div>
 	);
 }
