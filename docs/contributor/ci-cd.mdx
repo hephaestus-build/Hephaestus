@@ -286,7 +286,7 @@ advanced → Disable CodeQL**, not something a workflow file can do.
 ### Scorecard baseline
 
 `security/scorecard-baseline.json` owns the minimum every enforced Scorecard check must hold, the
-four exclusions with their reasons, and what each enforced check is scored over. Checks are compared
+exclusions with their reasons, and what each enforced check is scored over. Checks are compared
 one at a time, so an improvement cannot offset a regression, and a check the baseline does not name
 is not enforced. Lowering a minimum also edits the map in `scripts/check-scorecard.test.ts`, so the
 change is visible in the pull request that makes it.
@@ -317,6 +317,53 @@ It is a workflow of its own because
 [OpenSSF restricts the publishing job](https://github.com/ossf/scorecard-action#workflow-restrictions)
 to allowlisted actions. Reproduce it with `node scripts/check-scorecard.ts`, or
 `node --test scripts/check-scorecard.test.ts` without network access.
+
+#### Gradle dependency inventory and the Vulnerabilities exclusion
+
+Scorecard's `Vulnerabilities` check does not read the dependency graph submitted to GitHub or
+Dependabot's alerts. The [pinned action's dependencies](https://github.com/ossf/scorecard-action/blob/2d1146689b8cda280b9bc96326124645441f03bc/go.mod)
+select Scorecard 5.5.0 and OSV Scanner 2.3.2. [Scorecard's OSV client](https://github.com/ossf/scorecard/blob/v5.5.0/clients/osv.go)
+scans the checkout recursively and queries its Git commit. The
+[Gradle verification-metadata extractor](https://github.com/google/osv-scalibr/blob/cf20290d7624/extractor/filesystem/language/java/gradleverificationmetadataxml/gradleverificationmetadataxml.go)
+turns every component's group, name and version in `server/gradle/verification-metadata.xml` into a
+package, ignoring its artifact entries and whether Gradle selected that version.
+
+That file is a checksum allowlist, not a resolved dependency graph. Gradle can need an older
+version's POM or module descriptor while selecting a patched JAR; metadata generation also retains
+previously trusted artifacts. For example, resolution reads Jackson 2.15.3 module descriptors and
+the Commons Lang 3.16.0 POM even though the lockfile selects patched versions: their verification
+entries contain only `.module` or `.pom` artifacts, not JARs. Removing their checksums to quiet OSV
+would break fresh dependency verification, not fix a dependency. Pruning obsolete JAR hashes alone
+would still leave these descriptor-only entries in OSV's inventory.
+
+Reproduce the distinction for the Gradle sources from the repository root with the
+[OSV Scanner release used by the action](https://github.com/google/osv-scanner/releases/tag/v2.3.2):
+
+```sh
+osv-scanner scan source --format json --all-packages \
+  --lockfile server/application/gradle.lockfile \
+  --lockfile server/generated-clients/gradle.lockfile \
+  --lockfile server/gradle/verification-metadata.xml
+```
+
+Each result names its `source.path`, package coordinates and version, and any advisory's affected
+ranges. `--all-packages` also includes the patched lockfile entries, so compare the same package
+across sources rather than treating every reported version as selected. Exit 1 means vulnerabilities
+were reported; an extraction or network error is not a clean assessment. The advisories investigated
+in [#2078](https://github.com/hephaestus-build/Hephaestus/issues/2078) all came from verification
+metadata, not either resolved lockfile. The script classpath is separate: those lockfiles do not
+cover the GraphQL and OpenAPI build plugins. `server/build.gradle.kts` forces their GraphQL Java and
+Handlebars dependencies to patched versions; check `./server/gradlew -p server buildEnvironment`
+when diagnosing those packages rather than inferring their absence from an application lockfile.
+Re-run the checks when the action or dependencies change; the recorded observation is not an
+exemption for a new advisory against a resolved package.
+
+This inventory limitation justifies excluding the Scorecard `Vulnerabilities` check, not relaxing
+other gates. The baseline records that reason; its other exclusions have separate policy reasons.
+The [dependency vulnerability gate](#security-and-supply-chain-controls) and release image policy remain
+enforced. Restore the check when its input distinguishes verified descriptors and historical hashes
+from selected dependencies; do not alter dependency submission or disable checksum verification to
+change its score.
 
 ## Environments
 
