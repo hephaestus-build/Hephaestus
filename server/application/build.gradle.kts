@@ -45,6 +45,8 @@ dependencies {
     runtimeOnly(libs.postgresql)
     runtimeOnly(libs.h2)
     compileOnly(libs.lombok)
+    // docker-java exposes Immutables metadata; consumers need annotations, not its processor.
+    compileOnly(libs.immutables.value.annotations)
     implementation(libs.spring.modulith.starter.core)
     testImplementation(libs.spring.modulith.starter.test)
     testImplementation(libs.spring.boot.starter.test) {
@@ -85,6 +87,9 @@ dependencies {
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
     annotationProcessor(libs.therapi.scribe)
     testCompileOnly(libs.lombok)
+    testCompileOnly(libs.immutables.value.annotations)
+    // PostgreSQL test types carry Checker Framework annotations that javac must resolve.
+    testCompileOnly(libs.checker.qual)
     testAnnotationProcessor(libs.lombok)
     testAnnotationProcessor(libs.therapi.scribe)
     errorprone(libs.errorprone.core)
@@ -108,7 +113,7 @@ tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(
         // Spring, JPA and JUnit annotations are runtime metadata, not processor inputs. Javac's
         // processing lint reports every unclaimed runtime annotation despite successful processing.
-        listOf("-Xlint:all,-processing", "-XDaddTypeAnnotationsToSymbol=true")
+        listOf("-Werror", "-Xlint:all,-processing", "-XDaddTypeAnnotationsToSymbol=true")
     )
     options.errorprone {
         disableAllChecks.set(true)

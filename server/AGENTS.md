@@ -27,6 +27,9 @@ are not here: write code that reads like the file you are editing.
   `databaseTest` and `liveTest` each own their JUnit tag filter. Every non-live tier excludes `live`.
 - **`clean` is not cache-disabled.** Use `--no-build-cache` as well for a cold measurement.
   Configuration cache reuses task configuration; build cache reuses declared task outputs.
+- **Handwritten javac warnings fail compilation.** Application and test sources use `-Werror`;
+  generated clients stay in their separate module. Missing dependency annotation metadata belongs
+  on the needed compile-only classpath, not in lint suppressions or annotation processors.
 - **One build invocation per checkout at a time.** Gradle owns the module `build/` directories.
 - **Tests always execute when requested.** Test result caching and up-to-date skipping are disabled;
   PostgreSQL, containers and provider state are not content-addressed inputs. Compilation remains
