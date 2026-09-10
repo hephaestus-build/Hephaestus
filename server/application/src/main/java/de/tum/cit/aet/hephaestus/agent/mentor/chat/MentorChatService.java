@@ -218,6 +218,8 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         }
     }
 
+    // Closing the scope is the operation; its binding is intentionally unread.
+    @SuppressWarnings("try")
     private MentorChatMetrics.Outcome runTurnInternal(
             MentorTurnRequest request,
             MentorChannel channel,
@@ -286,6 +288,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             // sandbox unsubscribes — and orphans — a turn already streaming. Serialising the
             // open_thread → terminal-chunk window makes the second turn wait instead.
             MentorTurnLock.SandboxKey sandboxKey = new MentorTurnLock.SandboxKey(request.workspaceId(), user.getId());
+
             try (var ignored = turnLock.acquireSandboxLock(sandboxKey)) {
                 try {
                     client.openThread(request.threadId()).get(10, TimeUnit.SECONDS);

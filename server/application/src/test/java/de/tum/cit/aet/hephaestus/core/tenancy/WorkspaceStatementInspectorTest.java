@@ -43,9 +43,12 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         verifyNoInteractions(reporter, scopedTables);
     }
 
+    // Closing the scope is the operation; its binding is intentionally unread.
+    @SuppressWarnings("try")
     @Test
     void bypassActiveSkipsEverything() {
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
+
         try (TenancyBypass.Scope ignored = TenancyBypass.open("test")) {
             inspector.inspect("SELECT * FROM pull_request");
         }

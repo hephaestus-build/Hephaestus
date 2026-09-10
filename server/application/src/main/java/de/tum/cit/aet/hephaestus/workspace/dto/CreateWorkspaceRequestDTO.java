@@ -45,9 +45,9 @@ public record CreateWorkspaceRequestDTO(
         @NotNull(message = "Account type is required") @Schema(description = "Type of account (USER or ORG)") @Nullable
         AccountType accountType,
 
-        @Deprecated(forRemoval = true)
         @Schema(
                 description = "Deprecated: ignored by the server. The authenticated user always becomes the owner.",
+                deprecated = true,
                 requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Nullable
         Long ownerUserId,
@@ -75,6 +75,11 @@ public record CreateWorkspaceRequestDTO(
         @Nullable
         @ScmServerUrl
         String serverUrl) {
+    @Deprecated(forRemoval = true)
+    public @Nullable Long ownerUserId() {
+        return ownerUserId;
+    }
+
     @AssertTrue(message = "Personal access token is required")
     @Schema(hidden = true)
     @SuppressWarnings("PMD.UnusedPrivateMethod")

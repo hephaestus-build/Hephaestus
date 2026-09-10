@@ -72,8 +72,6 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
         this.identityLinkAuthentication = identityLinkAuthentication;
         this.clock = clock;
         this.appBaseUrl = stripTrailingSlash(webappBaseUrl);
-        setAlwaysUseDefaultTargetUrl(false);
-        setDefaultTargetUrl("/");
     }
 
     private static String stripTrailingSlash(String value) {
