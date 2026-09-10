@@ -1,8 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.ratelimit;
 
-import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.BucketConfiguration;
-import io.github.bucket4j.Refill;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -86,7 +84,7 @@ public record AuthRateLimitProperties(
          */
         public BucketConfiguration bucketConfiguration() {
             return BucketConfiguration.builder()
-                    .addLimit(Bandwidth.classic(capacity, Refill.intervally(capacity, period)))
+                    .addLimit(limit -> limit.capacity(capacity).refillIntervally(capacity, period))
                     .build();
         }
     }

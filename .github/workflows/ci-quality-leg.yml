@@ -122,7 +122,20 @@ jobs:
           name: "Test Results - Webapp Unit"
           path: "webapp/test-results/junit-*.xml"
           reporter: java-junit
+          list-suites: failed
+          list-tests: failed
+          # Source lookup is needed only for failure annotations, not successful summaries.
+          max-annotations: ${{ failure() && 50 || 0 }}
           fail-on-error: false
+
+      - name: Retain full webapp unit-test reports
+        if: inputs.leg == 'webapp' && !cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: webapp-unit-reports-${{ github.run_attempt }}
+          path: webapp/test-results
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Summarize webapp unit tests
         if: inputs.leg == 'webapp' && !cancelled()

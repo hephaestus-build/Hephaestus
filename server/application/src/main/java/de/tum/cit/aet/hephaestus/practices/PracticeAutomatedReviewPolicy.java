@@ -38,9 +38,8 @@ public record PracticeAutomatedReviewPolicy(
 
         @NonNull
         @NotNull
-        @Valid
         @Schema(description = "Claims the selected evidence cannot support even when every requirement passes")
-        List<PracticeEvidenceLimitation> knownLimitations,
+        List<@Valid PracticeEvidenceLimitation> knownLimitations,
 
         @Nullable
         @Valid

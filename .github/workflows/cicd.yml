@@ -226,6 +226,7 @@ jobs:
               - 'project.code-workspace'
               - '.vscode/settings.json'
             application-server-image:
+              - 'scripts/summarize-buildpack-log.ts'
               - 'server/application/src/main/**'
               - 'server/application/build.gradle.kts'
               - 'server/application/gradle.lockfile'

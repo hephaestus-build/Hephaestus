@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
+import java.io.Serial;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -80,9 +81,8 @@ public class ObservationAdmissionService {
             case ISSUE_REVIEW -> issues.admitObservations(job, submitted);
             default -> throw new IllegalArgumentException("Job type does not admit review observations");
         }
-        ObjectNode metadata = currentMetadata instanceof ObjectNode object
-                ? (ObjectNode) object.deepCopy()
-                : mapper.createObjectNode();
+        ObjectNode metadata =
+                currentMetadata instanceof ObjectNode object ? object.deepCopy() : mapper.createObjectNode();
         metadata.put(DIGEST_METADATA_KEY, digest);
         job.setMetadata(metadata);
         jobs.save(job);
@@ -100,9 +100,8 @@ public class ObservationAdmissionService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordRefusal(UUID jobId, String reasonCode, String reason) {
         jobs.findById(jobId).ifPresent(job -> {
-            ObjectNode metadata = job.getMetadata() instanceof ObjectNode object
-                    ? (ObjectNode) object.deepCopy()
-                    : mapper.createObjectNode();
+            ObjectNode metadata =
+                    job.getMetadata() instanceof ObjectNode object ? object.deepCopy() : mapper.createObjectNode();
             ObjectNode refusal = mapper.createObjectNode();
             refusal.put("reasonCode", reasonCode);
             refusal.put("reason", reason);
@@ -157,7 +156,7 @@ public class ObservationAdmissionService {
                 citation.properties().forEach(entry -> copy.set(entry.getKey(), entry.getValue()));
                 boolean anchorable = "scm.pull-request.diff"
                                 .equals(citation.path("sourceKind").asString())
-                        && citation.path("path").isTextual()
+                        && citation.path("path").isString()
                         && citation.path("startLine").isIntegralNumber()
                         && validLines
                                 .getOrDefault(citation.path("path").asString(), new java.util.TreeSet<>())
@@ -171,5 +170,9 @@ public class ObservationAdmissionService {
         return out;
     }
 
-    public static class AdmissionConflictException extends RuntimeException {}
+    public static class AdmissionConflictException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+    }
 }

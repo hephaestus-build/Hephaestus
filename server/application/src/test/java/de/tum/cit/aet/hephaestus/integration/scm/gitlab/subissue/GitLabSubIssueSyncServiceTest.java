@@ -133,7 +133,11 @@ class GitLabSubIssueSyncServiceTest extends BaseUnitTest {
 
     @SafeVarargs
     private void mockWorkItemResponse(Map<String, Object>... nodes) {
-        assertVendorCouldReturn(GITLAB, "GetProjectWorkItemHierarchy", "project.workItems.nodes", List.of(nodes));
+        List<Map<String, Object>> nodeList = new java.util.ArrayList<>(nodes.length);
+        for (Map<String, Object> node : nodes) {
+            nodeList.add(node);
+        }
+        assertVendorCouldReturn(GITLAB, "GetProjectWorkItemHierarchy", "project.workItems.nodes", nodeList);
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
         when(graphQlClientProvider.forScope(anyLong())).thenReturn(client);
 
@@ -145,7 +149,7 @@ class GitLabSubIssueSyncServiceTest extends BaseUnitTest {
         when(requestSpec.execute()).thenReturn(Mono.just(response));
 
         ClientResponseField nodesField = mock(ClientResponseField.class);
-        doReturn(List.of(nodes)).when(nodesField).toEntityList(Map.class);
+        doReturn(nodeList).when(nodesField).toEntityList(Map.class);
         when(response.field("project.workItems.nodes")).thenReturn(nodesField);
 
         ClientResponseField pageInfoField = mock(ClientResponseField.class);

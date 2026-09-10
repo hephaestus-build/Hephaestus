@@ -69,7 +69,23 @@ published.
 
 The browser job retains `webapp-e2e-results`, including `e2e-server.log`, for seven days on
 success as well as failure. Inspect server startup and shutdown output even when browser assertions
-pass; a passing suite does not prove that background work started correctly.
+pass; a passing suite does not prove that background work started correctly. Its coverage summary
+names credential-gated live checks and their skipped reasons; the ordinary suite is not evidence
+of live-provider behavior.
+
+Test checks show totals and failed suites/cases, not an inventory of successful tests. Source-file
+lookup runs only when failure annotations are needed. The complete unit, integration, database and
+Storybook JUnit reports remain downloadable for fourteen days, including successful runs. Chromatic
+prints warnings/errors alongside the structured visual-coverage summary; its full CLI log is retained
+with the Storybook reports.
+
+Image builds retain the complete `buildpacks-log` artifact for fourteen days. The console shows a
+first example and totals for repeated JVM archive-eligibility exclusions (unsupported location,
+already-linked class, signed JAR, JFR event class). These describe classes CDS cannot archive, not
+failed application operations. All preload and verification failures remain visible, including
+optional framework adapters: a previously investigated class can fail for a different reason after
+an update. Unfamiliar diagnostics and archive failures also remain visible; the reporting pipe cannot
+change the image build's exit status.
 
 The four quality legs call `ci-quality-leg.yml` independently. Job-level conditions omit unchanged
 legs before a runner is allocated; selected legs do not cancel each other on failure. Each runs
@@ -157,6 +173,13 @@ changesets rather than adding one. [Release management](./release-management.mdx
 | OpenSSF Scorecard | `main` pushes, branch-protection changes, and weekly; never on pull requests | reports | code scanning and a run artifact |
 | Scorecard ratchet | the same events, plus on demand | fails when a check scores below `security/scorecard-baseline.json`; on a push, only for the checks that commit decides | job summary and a run artifact |
 | Renovate | configured schedule and vulnerability alerts | pull requests require normal review and CI | dependency dashboard |
+
+Image scanning also reads embedded SBOMs shipped by image builders. Trivy's third-party-SBOM
+advisory describes that additional inventory's provenance; it does not mean the image was scanned
+only through the separately published release SBOM. Keep those embedded inventories and the
+scanner's vendor-severity provenance visible rather than changing severity sources or disabling
+analyzers to remove a warning. The vulnerability policy result and retained scanner JSON carry the
+actual verdict.
 
 One check owns the dependency verdict: the dependency vulnerability gate in `ci-security-scan.yml`,
 a second Trivy pass in `table` format over the same checkout. It runs on pull requests and on `main`

@@ -157,7 +157,9 @@ jobs:
           autoAcceptChanges: false
           exitZeroOnChanges: false
           exitOnceUploaded: false
-          logLevel: info
+          # Console failures and the structured coverage summary are enough; retain full CLI logs.
+          logLevel: warn
+          logFile: chromatic.log
           junitReport: true
         env:
           CHROMATIC_BRANCH: ${{ github.head_ref || github.ref_name }}
@@ -226,6 +228,10 @@ jobs:
           name: "Test Results - Webapp Stories"
           path: "webapp/test-results/junit-storybook.xml"
           reporter: java-junit
+          list-suites: failed
+          list-tests: failed
+          # Source lookup is needed only for failure annotations, not successful summaries.
+          max-annotations: ${{ (failure() || steps.tests.outcome == 'failure') && 50 || 0 }}
           fail-on-error: false
       - name: Upload Chromatic test results
         if: always() && startsWith(steps.chromatic.outputs.storybookUrl, 'http')
@@ -234,7 +240,22 @@ jobs:
           name: "Test Results - Chromatic"
           path: "webapp/chromatic-build-*.xml"
           reporter: java-junit
+          list-suites: failed
+          list-tests: failed
+          # Source lookup is needed only for failure annotations, not successful summaries.
+          max-annotations: ${{ (failure() || steps.chromatic.outcome == 'failure') && 50 || 0 }}
           fail-on-error: false
+      - name: Retain full Storybook and visual test diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: storybook-reports-${{ github.run_attempt }}
+          path: |
+            webapp/test-results
+            webapp/chromatic-build-*.xml
+            webapp/chromatic.log
+          retention-days: 14
+          if-no-files-found: warn
       - name: Evaluate stories checks
         if: always()
         env:

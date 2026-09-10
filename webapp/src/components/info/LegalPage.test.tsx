@@ -135,7 +135,7 @@ describe("LegalPage — XSS guardrail", () => {
 	});
 
 	it("renders the disclaimer banner when resolver returns disclaimer source", async () => {
-		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		using warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		const resolver: typeof resolveLegalContent = async () => ({
 			markdown: "# fallback",
 			source: "disclaimer",
@@ -148,7 +148,8 @@ describe("LegalPage — XSS guardrail", () => {
 		// load" alert, which says the opposite about the deployment.
 		const banner = await findByRole("alert");
 		expect(banner.textContent).toMatch(/has not been configured with a legal profile/i);
-		expect(warn).toHaveBeenCalled();
-		warn.mockRestore();
+		expect(warn).toHaveBeenCalledExactlyOnceWith(
+			"[legal] Disclaimer fallback served for page=imprint. Configure LEGAL_PROFILE or mount /legal-overrides/. See docs/admin/legal-pages.",
+		);
 	});
 });

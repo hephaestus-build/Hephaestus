@@ -192,11 +192,16 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 // Selected by kind rather than by position: the list is whatever the registered domains
                 // declare reviewable, so an index would pin the wrong thing the first time a domain is added.
                 .jsonPath("$.workTypes[*].artifactKind")
-                .value(containsInAnyOrder("scm.pull_request", "scm.issue", "chat.conversation_thread", "docs.document"))
+                .value((java.util.List<String> value) -> org.hamcrest.MatcherAssert.assertThat(
+                        value,
+                        containsInAnyOrder(
+                                "scm.pull_request", "scm.issue", "chat.conversation_thread", "docs.document")))
                 .jsonPath("$.workTypes[?(@.artifactKind == 'scm.pull_request')].recommendedNeeds[1].sourceKind")
-                .value(contains("scm.pull-request.diff"))
+                .value((java.util.List<String> value) ->
+                        org.hamcrest.MatcherAssert.assertThat(value, contains("scm.pull-request.diff")))
                 .jsonPath("$.workTypes[?(@.artifactKind == 'scm.pull_request')].allowedSources[0].displayName")
-                .value(contains("Pull request details"))
+                .value((java.util.List<String> value) ->
+                        org.hamcrest.MatcherAssert.assertThat(value, contains("Pull request details")))
                 .jsonPath("$.workTypes[?(@.artifactKind == 'scm.pull_request')].allowedSources[0].description")
                 .exists();
     }
@@ -755,7 +760,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .isCreated()
                     .expectBody()
                     .jsonPath("$.bindings[0].signals")
-                    .value(contains(ScmSignals.PULL_REQUEST_OPENED.value()));
+                    .value((java.util.List<String> value) -> org.hamcrest.MatcherAssert.assertThat(
+                            value, contains(ScmSignals.PULL_REQUEST_OPENED.value())));
         }
 
         @Test

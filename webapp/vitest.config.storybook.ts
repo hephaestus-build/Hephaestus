@@ -51,7 +51,7 @@ export default defineConfig({
 			instances: [{ browser: "chromium" }],
 		},
 		setupFiles: [".storybook/vitest.setup.ts"],
-		reporters: ["verbose", "junit"],
+		reporters: ["default", "junit"],
 		outputFile: {
 			junit: "./test-results/junit-storybook.xml",
 		},

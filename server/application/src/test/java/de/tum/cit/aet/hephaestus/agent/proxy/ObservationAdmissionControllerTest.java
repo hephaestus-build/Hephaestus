@@ -57,7 +57,7 @@ class ObservationAdmissionControllerTest {
         assertThatThrownBy(() -> controller.admit(validRequest(), authentication(LlmUsageSourceType.AGENT_JOB, id)))
                 .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
                     // Not 5xx: a 5xx is what the sandbox repeats, and repeating puts the same question.
-                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
                     assertThat(e.getReason()).contains("quoted the diff");
                 });
         assertThat(meterRegistry

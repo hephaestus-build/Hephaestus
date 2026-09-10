@@ -496,6 +496,17 @@ void describe("CI contract", () => {
 		assert.ok(asArray(filters.e2e, "browser test paths").includes(".java-version"));
 	});
 
+	void test("buildpack reporting changes exercise the image pipeline", async () => {
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const filter = step(workflow, ["jobs", "detect-changes"], "dorny/paths-filter");
+		const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
+		assert.ok(
+			asArray(filters["application-server-image"], "image paths").includes(
+				"scripts/summarize-buildpack-log.ts",
+			),
+		);
+	});
+
 	void test("security mutation checks follow their Gradle launcher and toolchain inputs", async () => {
 		const workflow = parseDocument(
 			await readFile(".github/workflows/security-mutation.yml", "utf8"),
@@ -978,6 +989,7 @@ void describe("CI contract", () => {
 			}
 			const environment = {
 				APPLICATION_DIRECTORY: directory,
+				RUNNER_TEMP: directory,
 				GITHUB_RUN_ID: "1",
 				INPUT_IMAGE_NAME: "hephaestus-build/application-server",
 				INPUT_REGISTRY: "ghcr.io",
@@ -996,6 +1008,17 @@ void describe("CI contract", () => {
 			const invoked = await readFile(calls, "utf8");
 			assert.doesNotMatch(invoked, /--publish/);
 			assert.match(invoked, /^pack build .*--trust-builder/m);
+			// A reporting pipe must never turn a failed archive build into a successful image.
+			await writeFile(
+				path.join(directory, "pack"),
+				"#!/bin/sh\necho archive failed >&2\nexit 23\n",
+			);
+			const failedBuild = await runStep(shell, { ...environment, PUBLISH: "false" });
+			assert.equal(failedBuild.failed, true);
+			assert.match(
+				await readFile(path.join(directory, "buildpacks.log"), "utf8"),
+				/archive failed/,
+			);
 		},
 	);
 

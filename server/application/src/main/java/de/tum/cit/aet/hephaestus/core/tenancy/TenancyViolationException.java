@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.tenancy;
 
+import java.io.Serial;
 import java.util.Set;
 
 /**
@@ -13,6 +14,11 @@ import java.util.Set;
  */
 public final class TenancyViolationException extends RuntimeException {
 
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    // Set.copyOf produces a serializable immutable set when its String elements are serializable.
+    @SuppressWarnings("serial")
     private final Set<String> unguardedTables;
 
     public TenancyViolationException(Set<String> unguardedTables) {

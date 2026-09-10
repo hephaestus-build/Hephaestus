@@ -105,7 +105,9 @@ tasks.processTestResources {
 
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(
-        listOf("-Xlint:all,-deprecation", "-XDaddTypeAnnotationsToSymbol=true")
+        // Spring, JPA and JUnit annotations are runtime metadata, not processor inputs. Javac's
+        // processing lint reports every unclaimed runtime annotation despite successful processing.
+        listOf("-Xlint:all,-processing", "-XDaddTypeAnnotationsToSymbol=true")
     )
     options.errorprone {
         disableAllChecks.set(true)
@@ -133,6 +135,9 @@ pmd {
 }
 
 tasks.withType<Pmd>().configureEach {
+    // Resolve platform types against the same JDK as the analysis task, not an implicit host JDK.
+    classpath =
+        files(classpath, javaLauncher.map { it.metadata.installationPath.file("lib/jrt-fs.jar") })
     reports.xml.required.set(true)
     val reportFile = reports.xml.outputLocation
     // Gradle counts rule violations, but PMD's recoverable analysis errors do not fail its task.

@@ -44,7 +44,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -188,7 +191,8 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void persistInFlight_happyPath() {
+    @ExtendWith(OutputCaptureExtension.class)
+    void persistInFlight_happyPath(CapturedOutput output) {
         ChatThread thread = persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, "hello");
         UUID assistantId = UUID.randomUUID();
         MentorTurnPersistence.TurnPersistenceCookie cookie =
@@ -198,6 +202,8 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         ChatMessage assistant = chatMessageRepository.findById(assistantId).orElseThrow();
         assertThat(assistant.getRole()).isEqualTo(ChatMessage.Role.ASSISTANT);
         assertThat(assistant.getStatus()).isEqualTo(ChatMessage.Status.in_flight);
+        assertThat(assistant.getParentMessageId()).isEqualTo(cookie.userMessageId());
+        assertThat(output).doesNotContain("HHH90032022");
 
         ChatMessage userMessage =
                 chatMessageRepository.findById(cookie.userMessageId()).orElseThrow();
@@ -223,6 +229,21 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         assertThatThrownBy(() ->
                         persistence.persistInFlight(thread, "second", UUID.randomUUID(), null, admittedMentorConfig()))
                 .isInstanceOf(TurnAlreadyInFlightException.class);
+    }
+
+    @Test
+    void shouldRollBackTheNewParentWhenAnotherTurnAlreadyExists() {
+        ChatThread thread = persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, "first");
+        persistence.persistInFlight(thread, "first", UUID.randomUUID(), null, admittedMentorConfig());
+        UUID rejectedUserId = UUID.randomUUID();
+        UUID rejectedAssistantId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> persistence.persistInFlight(
+                        thread, "second", rejectedAssistantId, rejectedUserId, admittedMentorConfig()))
+                .isInstanceOf(TurnAlreadyInFlightException.class);
+
+        assertThat(chatMessageRepository.findById(rejectedUserId)).isEmpty();
+        assertThat(chatMessageRepository.findById(rejectedAssistantId)).isEmpty();
     }
 
     @Test
@@ -634,7 +655,22 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
     }
 
     private MentorInFlightReaper reaperWithAnUnsafeWindow() {
-        return new MentorInFlightReaper(chatMessageRepository, accounting, meterRegistry, Duration.ofMinutes(10));
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(MentorInFlightReaper.class);
+        var events = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        events.start();
+        logger.addAppender(events);
+        try {
+            var reaper =
+                    new MentorInFlightReaper(chatMessageRepository, accounting, meterRegistry, Duration.ofMinutes(10));
+            assertThat(events.list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(ch.qos.logback.classic.Level.WARN);
+                assertThat(event.getFormattedMessage()).contains("PT10M is unsafe", "using PT3H10M");
+            });
+            return reaper;
+        } finally {
+            logger.detachAppender(events);
+            events.stop();
+        }
     }
 
     private void setCreatedAt(UUID messageId, Instant createdAt) throws Exception {

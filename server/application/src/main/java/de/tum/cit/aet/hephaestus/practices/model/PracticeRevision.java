@@ -155,10 +155,14 @@ public class PracticeRevision {
             this.groupIcon = group.getIcon();
             this.groupColor = group.getColor();
         }
-        this.reviewRuleFingerprint = computeReviewRuleFingerprint();
+        this.reviewRuleFingerprint = calculateReviewRuleFingerprint();
     }
 
     public String computeReviewRuleFingerprint() {
+        return calculateReviewRuleFingerprint();
+    }
+
+    private String calculateReviewRuleFingerprint() {
         return ReviewRuleFingerprint.of(
                 slug, name, bindings, criteria, precomputeScript, automatedReviewPolicy, groupSlug);
     }

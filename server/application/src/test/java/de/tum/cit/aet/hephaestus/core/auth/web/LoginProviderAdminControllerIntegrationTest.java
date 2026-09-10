@@ -12,7 +12,6 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -20,7 +19,6 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * ({@code app_admin}) may manage login providers, the create response carries the upstream redirect
  * URI, and the sealed client secret is never returned.
  */
-@Sql(scripts = "/db/auth-event-sequence.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 class LoginProviderAdminControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired

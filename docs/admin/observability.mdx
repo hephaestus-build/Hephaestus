@@ -75,3 +75,14 @@ That returns the request's own log lines, the lifecycle events of any job it enq
 `agent.job.*` events above), and the proxy calls made on its behalf. A job triggered by the scheduler
 rather than a request mints its own trace ID, so its lifecycle is still joinable even though no HTTP
 response ever carried it.
+
+## HTTP route metrics
+
+`http.server.requests` uses route templates, not individual workspace slugs, message IDs, or query
+strings. Its URI-tag budget is 256: enough for the supported route inventory and the framework's
+bounded unmatched-request and management tags. A new URI beyond the budget is refused rather than
+creating unbounded time series. A limit warning therefore means metrics are incomplete and needs
+investigation, not a logging-level change.
+
+When the limit is reached, inspect the actual `uri` tag values first. Concrete IDs or URLs indicate
+a tagging defect; fix that before considering a larger budget. Do not turn off the bound.

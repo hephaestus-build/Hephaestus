@@ -249,6 +249,14 @@ checks the webapp version, not the readiness of every service; use host metrics 
 Compose result. A promotion with **freeze** records the hold without waiting for a version change.
 Skipped automatic promotions do not start an environment deployment.
 
+The promotion job summary names this boundary explicitly, including when a version check fails or
+is skipped for a hold. It does not fetch host metrics: their textfile collector and authenticated
+monitoring access belong to the host, not to the public application. Confirm a fresh successful
+reconciliation and the expected release/channel commit on **each** participating host, then inspect
+its Compose health and service logs. A matching frontend version alone says nothing about server,
+worker, webhook, database, NATS, or integration readiness. Do not expose management endpoints to
+make the public version check stand in for that operator verification.
+
 ## What it will not do
 
 **It does not roll back a failed deploy.** A failed apply may leave some services updated. Schema

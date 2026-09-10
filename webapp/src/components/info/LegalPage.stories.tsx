@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { expect, spyOn } from "storybook/test";
 
 import {
 	LEGAL_PAGE_TITLES,
@@ -66,6 +67,24 @@ function makeResolver(key: FixtureKey): typeof resolveLegalContent {
 	});
 }
 
+// The production warning is once per page, so it may already have fired in Docs or a rerun.
+// Assert every emitted warning, rather than requiring a fresh warning on every mount.
+function captureDisclaimerWarning(page: LegalPageId) {
+	const expected = `[legal] Disclaimer fallback served for page=${page}. Configure LEGAL_PROFILE or mount /legal-overrides/. See docs/admin/legal-pages.`;
+	// oxlint-disable-next-line no-console -- Unexpected diagnostics must remain visible while the intentional fallback warning is asserted.
+	const original = console.warn;
+	const warning = spyOn(console, "warn").mockImplementation((...args: unknown[]) => {
+		if (args.length !== 1 || args[0] !== expected) original(...args);
+	});
+	return async () => {
+		try {
+			for (const args of warning.mock.calls) await expect(args).toEqual([expected]);
+		} finally {
+			warning.mockRestore();
+		}
+	};
+}
+
 const meta = {
 	component: LegalPage,
 	tags: ["autodocs"],
@@ -107,6 +126,12 @@ export const TumaetPrivacy: Story = {
 };
 
 export const DisclaimerImprint: Story = {
+	beforeEach: () => captureDisclaimerWarning("imprint"),
+	play: async ({ canvas }) => {
+		await expect(canvas.findByRole("alert")).resolves.toHaveTextContent(
+			"has not been configured with a legal profile",
+		);
+	},
 	args: {
 		page: "imprint",
 		title: LEGAL_PAGE_TITLES.imprint,
@@ -115,6 +140,12 @@ export const DisclaimerImprint: Story = {
 };
 
 export const DisclaimerPrivacy: Story = {
+	beforeEach: () => captureDisclaimerWarning("privacy"),
+	play: async ({ canvas }) => {
+		await expect(canvas.findByRole("alert")).resolves.toHaveTextContent(
+			"has not been configured with a legal profile",
+		);
+	},
 	args: {
 		page: "privacy",
 		title: LEGAL_PAGE_TITLES.privacy,

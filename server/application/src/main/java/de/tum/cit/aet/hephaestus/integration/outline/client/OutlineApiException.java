@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.outline.client;
 
+import java.io.Serial;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -12,6 +13,9 @@ import org.jspecify.annotations.Nullable;
  * {@code outlineRestApiRetry} decorator retries the former with backoff and gives up on the latter.
  */
 public class OutlineApiException extends RuntimeException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private final boolean retryable;
 
