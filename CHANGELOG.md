@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.79.0
+
+### Minor Changes
+
+- Retires achievements, including badges, skill trees, unlock notifications, and achievement administration. Activity history, practice feedback, leaderboards, leagues, and XP progression remain available.
+
+  **Operators:** Remove links and integrations that use achievement pages or API endpoints, and stop sending `achievementsEnabled` in workspace feature updates. This upgrade permanently deletes stored achievement progress and the old workspace flag. Back up the database and stop all application runtime roles before upgrading; older versions must not run against the upgraded schema.
+
+- Practice reviews and precomputed analysis use the input locations declared by each task instead of assuming a fixed folder layout. Precomputed analysis also supports script paths containing URL-special characters such as `#`.
+
+  Precomputed analysis now has a whole-stage deadline and a per-file output limit, so a stuck or excessively noisy script can fall back to review without precomputed hints.
+
+### Patch Changes
+
+- Repository collaborator permissions now sync again. Workspaces whose repositories use collaborator permissions saw the sync abort partway with a tenancy error, leaving the permissions Hephaestus held for that repository stale until the next full resync.
+- Source builds now fail when static analysis cannot finish, instead of accepting an incomplete check as a pass.
+
+  Source builds also reject missing dependency locks instead of silently resolving unpinned dependencies.
+
+  API contract generation no longer starts scheduled background jobs or pulls container images.
+  Scheduling now respects the runtime-role switch even with Spring Modulith on the classpath.
+
+- The migration guide's current release lookup, compatibility policy, documentation and help links now point directly to the current repository and documentation site. Historical release image locations and signing identities remain unchanged.
+- Container builds no longer wait for an unavailable database during startup optimization. Production startup continues to reject unsealed signing keys.
+- The build no longer resolves a vulnerable `graphql-java` or `handlebars` while generating provider clients. Neither reached a running Hephaestus — they are used only to generate code at build time — so no deployment is affected.
+- Source builds now use a verified Gradle wrapper, reuse unchanged compilation outputs, and select server tests explicitly by tier. Release images continue to use the same packaged application verified by the API and browser checks. Existing deployments require no configuration changes.
+- An instance whose NATS server URI is blank or missing its `nats://` scheme now starts far enough to print the configuration readiness report that names the setting, instead of stopping on an internal error that said nothing about which value was wrong. The URI is required of the server and webhook roles, and the shipped default is blank, so this was every first production start of those roles that had not set it yet. A NATS URI whose scheme is written in capitals is also no longer reported as needing action, since the client accepts it.
+- Updates the server's bundled Bouncy Castle cryptography library to fix [CVE-2026-8149](https://github.com/advisories/GHSA-mx76-r943-rf8g). No configuration changes are required.
+- A preview deployment's header badge now says which pull request it is of, and links to it. Every preview called itself "Preview", so a browser tab open on one gave no way to tell which change it was showing, or to get back to the pull request it came from.
+- A host that has not been promoted yet now says so. The deployment reconciler reported the missing channel as an unhandled error, so the first thing a new self-hosted instance logged was a stack trace rather than the sentence naming the environment and the workflow that publishes it.
+- Startup now derives the abandoned mentor-turn cleanup window from the maximum allowed turn duration instead of reporting the built-in default as unsafe. Explicitly configured windows still cannot interrupt a turn that is allowed to run.
+- Signing out works again. The browser could not find the CSRF token the server requires, so the server rejected the request and the app reported that it could not confirm the sign-out. Other actions that change something were rejected the same way. Instances that never set `XSRF_COOKIE_NAME`, which is every instance following the shipped configuration, were affected.
+- Stay signed in across breaks with a default 24-hour renewable cookie and a fixed 7-day sign-in limit. Sensitive actions still require a recent sign-in. Tabs coordinate session renewal, and temporary renewal failures no longer redirect you to sign-in. Explicit operator timeout overrides remain unchanged.
+
+  Cookie-authenticated actions now consistently require CSRF protection, including when a bearer header is also present.
+
+  Failed sign-out now reports an error instead of appearing successful. Impersonation changes coordinate with session renewal, and revoked sessions no longer prevent the sign-in page from listing providers.
+
+  Sessions that end during renewal now return an authentication refusal instead of reporting success.
+
+- The workspace isolation check is exact about which single-row statements it exempts. A statement whose key predicates sat behind a SQL comment, or whose assignment read from a second table, could be treated as addressing one keyed row when it did not. Both keyed exemptions are now held to the same rule: every assignment must be a bound parameter. No released version exempted these shapes.
+- Worker-only deployments now reclaim idle mentor sessions and orphaned sandbox resources periodically. Stalled writes to a mentor runtime are now interrupted by the configured timeout, even while Docker cleanup is waiting for a response. Generating the API contract no longer runs sandbox cleanup against the local Docker daemon.
+
 ## 0.78.0
 
 ### Minor Changes
