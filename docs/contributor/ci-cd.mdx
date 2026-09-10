@@ -659,6 +659,12 @@ When release preflight is required, it owns image vulnerability scanning for bot
 the image-build workflows omit their duplicate amd64 scans. Other published builds retain those
 scans. The final gate rejects a required preflight that is skipped, cancelled or unsuccessful.
 
+The build scan resolves its immutable image reference through
+`scripts/resolve-image-scan-subject.ts`, using the same platform resolver in `scripts/lib/image-scan.ts` as scheduled rescans. An index must
+contain the requested platform; a missing platform or malformed index fails instead of falling back
+to whichever architecture the scanner's host would choose. A single manifest is resolved through
+that same immutable reference.
+
 ## Image identity
 
 Every consumer resolves an image through the commit the run built it from, and

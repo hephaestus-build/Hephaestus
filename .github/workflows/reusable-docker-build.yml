@@ -470,22 +470,7 @@ jobs:
         env:
           IMAGE_REF: ${{ inputs.registry }}/${{ inputs.image-name }}@${{ inputs.single-arch && needs.build.outputs.manifest-digest || needs.merge.outputs.manifest-digest }}
           INPUT_IMAGE_NAME: ${{ inputs.image-name }}
-        run: |
-          set -euo pipefail
-          echo "image=${INPUT_IMAGE_NAME##*/}" >> "$GITHUB_OUTPUT"
-          raw=$(docker buildx imagetools inspect "$IMAGE_REF" --raw)
-          if jq -e 'has("manifests")' <<< "$raw" > /dev/null; then
-            digest=$(jq -er 'first(.manifests[]
-              | select(.platform.os == "linux" and .platform.architecture == "amd64")
-              | .digest)' <<< "$raw")
-          else
-            digest=$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$IMAGE_REF")
-          fi
-          if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
-            echo "::error::No linux/amd64 digest for $IMAGE_REF (got: ${digest:-<empty>})"
-            exit 1
-          fi
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+        run: node scripts/resolve-image-scan-subject.ts
 
       # A blocking gate inherits Trivy's database availability as a hard dependency, so the
       # retries and the mirror fallback live in one action rather than in each caller.
