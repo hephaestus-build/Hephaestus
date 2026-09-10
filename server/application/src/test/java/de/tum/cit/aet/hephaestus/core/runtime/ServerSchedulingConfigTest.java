@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.leaderboard.LeaderboardTaskScheduler;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -40,10 +41,14 @@ class ServerSchedulingConfigTest extends BaseUnitTest {
     @ParameterizedTest
     @ValueSource(strings = {"specs", "cds-training"})
     void shouldNotScheduleBackgroundWorkInBuildProfiles(String profile) {
-        runner.withPropertyValues("spring.profiles.active=" + profile)
-                .run(context -> assertThat(context.getBeansOfType(ScheduledTaskHolder.class).values().stream()
-                                .flatMap(holder -> holder.getScheduledTasks().stream()))
-                        .isEmpty());
+        runner.withUserConfiguration(LeaderboardTaskScheduler.class)
+                .withPropertyValues("spring.profiles.active=" + profile)
+                .run(context -> {
+                    assertThat(context).hasNotFailed().doesNotHaveBean(LeaderboardTaskScheduler.class);
+                    assertThat(context.getBeansOfType(ScheduledTaskHolder.class).values().stream()
+                                    .flatMap(holder -> holder.getScheduledTasks().stream()))
+                            .isEmpty();
+                });
     }
 
     static class BackgroundWork {

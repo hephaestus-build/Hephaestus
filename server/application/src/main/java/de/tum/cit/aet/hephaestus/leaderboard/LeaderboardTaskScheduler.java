@@ -61,10 +61,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  */
 @Order(value = Ordered.LOWEST_PRECEDENCE)
 @Component
-// Excluded from `specs` too: that profile boots the full context with an empty H2 and no schema, and
-// scheduleAllWorkspaces() reads `workspace` on ApplicationReadyEvent — an unswallowed boot-time DB read
-// that would fail spec generation with a cryptic "table not found" (see application-specs.yml).
-@Profile("!test & !specs")
+// Build profiles have neither workspace data to schedule nor a server TaskScheduler.
+@Profile("!test & !specs & !cds-training")
 @ConditionalOnProperty(name = RuntimeRole.SERVER_PROPERTY, havingValue = "true", matchIfMissing = true)
 public class LeaderboardTaskScheduler {
 
