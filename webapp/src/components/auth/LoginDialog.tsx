@@ -4,7 +4,6 @@ import {
 	Dialog,
 	DialogBody,
 	DialogContent,
-	DialogDescription,
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
@@ -22,10 +21,10 @@ export function LoginDialog({ open, onClose, ...signIn }: LoginDialogProps) {
 				if (!next) onClose();
 			}}
 		>
-			<DialogContent>
+			{/* The notice in the body is the description; naming it would repeat it to a screen reader. */}
+			<DialogContent aria-describedby={undefined}>
 				<DialogHeader className="pr-8">
 					<DialogTitle>Sign in to Hephaestus</DialogTitle>
-					<DialogDescription>Your first sign-in creates your account.</DialogDescription>
 				</DialogHeader>
 				<DialogBody className="space-y-4">
 					<SignInButtons {...signIn} />

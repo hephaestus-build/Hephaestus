@@ -20,7 +20,7 @@ export function LegalLinks({ className }: { className?: string }) {
 	);
 }
 
-function LegalLink({ href, children }: { href: string; children: string }) {
+export function LegalLink({ href, children }: { href: string; children: string }) {
 	return (
 		<a
 			href={href}

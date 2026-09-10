@@ -104,7 +104,7 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 					<p className="max-w-prose text-muted-foreground">
 						{isResearchStep
 							? "This is the research described in the notice you just read. Taking part is optional and does not change what Hephaestus does for you."
-							: "Please read this before you start — it includes the terms of use."}
+							: "The notice below also contains the terms of use you are accepting."}
 					</p>
 				</CardHeader>
 

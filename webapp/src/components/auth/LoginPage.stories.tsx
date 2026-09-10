@@ -24,11 +24,14 @@ export const Default: Story = {
 	play: async ({ args }) => {
 		await userEvent.click(await screen.findByRole("button", { name: "Continue with GitHub" }));
 		await expect(args.onSignIn).toHaveBeenCalledWith("github");
-		await expect(screen.getByRole("link", { name: /Privacy notice/ })).toHaveAttribute(
+		await expect(screen.getByRole("link", { name: /privacy notice/i })).toHaveAttribute(
 			"href",
 			"/privacy",
 		);
-		await expect(screen.getByRole("link", { name: /Imprint/ })).toHaveAttribute("href", "/imprint");
+		await expect(screen.getByRole("link", { name: /imprint/i })).toHaveAttribute(
+			"href",
+			"/imprint",
+		);
 	},
 };
 export const Cancelled: Story = { args: { error: "access_denied" } };

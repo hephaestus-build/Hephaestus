@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { SignInButtons, type SignInButtonsProps } from "@/components/auth/SignInButtons";
 import { SignInNotice } from "@/components/auth/SignInNotice";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
+import { HephIcon } from "@/components/brand/HephIcon";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 // Never display raw OAuth error parameters; they can contain provider details.
@@ -51,12 +52,7 @@ export function LoginPage({
 
 				<div className="flex flex-1 items-center justify-center">
 					<div className="flex w-full max-w-sm flex-col gap-6">
-						<div className="space-y-1.5">
-							<h1 className="text-2xl font-semibold tracking-tight text-balance">{title}</h1>
-							<p className="text-sm text-muted-foreground">
-								Your first sign-in creates your account.
-							</p>
-						</div>
+						<h1 className="text-2xl font-semibold tracking-tight text-balance">{title}</h1>
 						<div aria-live="assertive" aria-atomic="true">
 							{errorCopy ? (
 								<Alert variant="destructive">
@@ -71,25 +67,23 @@ export function LoginPage({
 				</div>
 			</div>
 
-			<OnboardingAside />
+			<BrandAside />
 		</div>
 	);
 }
 
-const NEXT_STEPS = [
-	{ title: "Sign in", detail: "Use the provider account you already have. No new password." },
-	{ title: "See how your data is used", detail: "A short notice, then you accept the terms." },
-	{
-		title: "Choose whether to join the research",
-		detail: "Optional, and you can change your mind later.",
-	},
-];
-
-/** Dropped below `lg`, where the form needs the width: it previews setup rather than being part of it. */
-function OnboardingAside() {
+/**
+ * Nothing here may describe what happens after sign-in. This screen cannot tell a first-time visitor
+ * from someone whose session expired, and only the first of those is sent through onboarding — so a
+ * "what happens next" list is a claim that is wrong for most of the people reading it.
+ *
+ * Dropped below `lg`, where the form needs the width. It is the landing page's own lede, so arriving
+ * at sign-in first is told the same thing.
+ */
+function BrandAside() {
 	return (
-		<aside className="hidden flex-col justify-center gap-10 border-l border-border bg-muted/40 p-10 lg:flex">
-			{/* The landing page's own lede, so arriving at sign-in first says the same thing. */}
+		<aside className="hidden flex-col items-start justify-center gap-6 border-l border-border bg-muted/40 p-10 lg:flex">
+			<HephIcon size={88} pad={8} strokeWidth={1.4} />
 			<p className="max-w-md text-lg leading-relaxed text-pretty">
 				<span className="font-semibold text-foreground">
 					The mentoring feedback a senior would give.
@@ -98,26 +92,6 @@ function OnboardingAside() {
 					For everyone, not only the people they have time for.
 				</span>
 			</p>
-
-			<div className="max-w-md space-y-4">
-				<h2 className="text-sm font-medium">What happens next</h2>
-				<ol className="space-y-4">
-					{NEXT_STEPS.map(({ title, detail }, index) => (
-						<li key={title} className="flex gap-3 text-sm">
-							<span
-								aria-hidden="true"
-								className="flex size-6 shrink-0 items-center justify-center rounded-full border border-muted-foreground/30 text-xs font-medium text-muted-foreground"
-							>
-								{index + 1}
-							</span>
-							<span>
-								<span className="block font-medium">{title}</span>
-								<span className="block text-muted-foreground">{detail}</span>
-							</span>
-						</li>
-					))}
-				</ol>
-			</div>
 		</aside>
 	);
 }
