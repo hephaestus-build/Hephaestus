@@ -324,6 +324,27 @@ erDiagram
         TIMESTAMPTZ evaluated_at "NOT NULL"
     }
 
+    DirectoryPolicy {
+        BIGINT id PK
+        JSONB active_snapshot
+        TIMESTAMPTZ approved_at
+        BIGINT approved_by_account_id FK
+        JSONB approved_group_ids "NOT NULL"
+        BIGINT configuration_version "NOT NULL"
+        BIGINT connection_id FK "NOT NULL"
+        JSONB draft_group_ids "NOT NULL"
+        VARCHAR(512) failure_reason
+        VARCHAR(16) health "NOT NULL"
+        BIGINT identity_provider_id FK "NOT NULL"
+        VARCHAR(512) issuer "NOT NULL"
+        TIMESTAMPTZ last_attempt_at
+        JSONB preview_snapshot
+        VARCHAR(64) registration_id "NOT NULL"
+        VARCHAR(16) status "NOT NULL"
+        BIGINT version "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+    }
+
     Discussion {
         BIGINT id PK
         TIMESTAMPTZ created_at
@@ -755,6 +776,7 @@ erDiagram
         BOOLEAN seeded_from_env "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at "NOT NULL"
+        JSONB directory_group_ids "NOT NULL"
     }
 
     MentorSlackThread {
@@ -1593,6 +1615,8 @@ erDiagram
     %% Relationships
     %% One-to-One relationships
     ChatMessage ||--|| ChatMessageVote : has
+    Workspace ||--|| DirectoryPolicy : has
+    Connection ||--|| DirectoryPolicy : has
     DiscussionComment ||--|| Discussion : references
     PracticeRevision ||--|| Practice : references
     Workspace ||--|| PracticeCatalogInstallation : has
@@ -1634,6 +1658,8 @@ erDiagram
     Feedback ||--o{ DeliveryPolicyEvaluation : references
     AgentJob ||--o{ DeliveryPolicyEvaluation : references
     Workspace ||--o{ DeliveryPolicyEvaluation : has
+    Account ||--o{ DirectoryPolicy : has
+    IdentityProvider ||--o{ DirectoryPolicy : has
     User ||--o{ Discussion : references
     User ||--o{ Discussion : authored_by
     DiscussionCategory ||--o{ Discussion : has
