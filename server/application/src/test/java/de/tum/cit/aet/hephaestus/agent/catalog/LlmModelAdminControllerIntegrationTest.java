@@ -41,7 +41,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
 
     private LlmModelDTO createModel(Long connectionId, String slug) {
         // Models start inactive until an explicit price declaration is supplied.
-        var request = new CreateLlmModelRequestDTO(slug, "Test Model", "gpt-5", null, null, null, false);
+        var request = new CreateLlmModelRequestDTO(slug, "Test Model", "gpt-5", null, null, null, null, false);
         return Objects.requireNonNull(webTestClient
                 .post()
                 .uri("/admin/llm/connections/{connectionId}/models", connectionId)
@@ -87,7 +87,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .jsonPath("$.length()")
                 .isEqualTo(1);
 
-        var updateRequest = new UpdateLlmModelRequestDTO("Renamed Model", null, null, null, null);
+        var updateRequest = new UpdateLlmModelRequestDTO("Renamed Model", null, null, null, null, null);
         webTestClient
                 .patch()
                 .uri("/admin/llm/models/{id}", created.id())
@@ -279,7 +279,8 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .contentType(MediaType.APPLICATION_JSON)
                 // Different slug, SAME upstream model id as "dup-first" — only the upstream-id guard can
                 // reject this, so a pass cannot be the slug-conflict handler answering by accident.
-                .bodyValue(new CreateLlmModelRequestDTO("dup-second", "Test Model", "gpt-5", null, null, null, false))
+                .bodyValue(new CreateLlmModelRequestDTO(
+                        "dup-second", "Test Model", "gpt-5", null, null, null, null, false))
                 .exchange()
                 .expectStatus()
                 .isEqualTo(409)

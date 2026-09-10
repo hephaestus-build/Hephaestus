@@ -6,6 +6,7 @@ import type { LlmModel } from "@/api/types.gen";
 import { AdminLlmModelsSection } from "./AdminLlmModelsSection";
 
 const model: LlmModel = {
+	processingLocation: "UNCLASSIFIED",
 	id: 7,
 	slug: "gpt-5",
 	displayName: "GPT-5",

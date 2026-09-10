@@ -6,6 +6,7 @@ import type { AgentBinding, AvailableLlmModel } from "@/api/types.gen";
 import { AgentBindingsPage, type AgentBindingsPageProps } from "./AgentBindingsPage";
 
 const model: AvailableLlmModel = {
+	processingLocation: "UNCLASSIFIED",
 	id: 20,
 	scope: "SHARED",
 	displayName: "GPT Test",
@@ -15,6 +16,7 @@ const model: AvailableLlmModel = {
 };
 
 const detectionBinding: AgentBinding = {
+	processingLocation: "UNCLASSIFIED",
 	purpose: "PRACTICE_REVIEW",
 	instanceModelId: 20,
 	enabled: true,
@@ -82,6 +84,7 @@ describe("AgentBindingsPage", () => {
 		expect(onSave).toHaveBeenCalledWith(
 			"PRACTICE_REVIEW",
 			expect.objectContaining({ instanceModelId: 20, enabled: true }),
+			"UNCLASSIFIED",
 		);
 	});
 
@@ -130,6 +133,7 @@ describe("AgentBindingsPage", () => {
 		expect(onSave).toHaveBeenCalledWith(
 			"PRACTICE_REVIEW",
 			expect.objectContaining({ timeoutSeconds: 45 }),
+			"UNCLASSIFIED",
 		);
 	});
 
@@ -152,6 +156,7 @@ describe("AgentBindingsPage", () => {
 		expect(onSave).toHaveBeenCalledWith(
 			"PRACTICE_REVIEW",
 			expect.objectContaining({ timeoutSeconds: 10800 }),
+			"UNCLASSIFIED",
 		);
 	});
 
@@ -197,6 +202,6 @@ describe("AgentBindingsPage", () => {
 
 		fireEvent.click(clearAssignment);
 
-		expect(onTurnOff).toHaveBeenCalledWith("PRACTICE_REVIEW");
+		expect(onTurnOff).toHaveBeenCalledWith("PRACTICE_REVIEW", "UNCLASSIFIED");
 	});
 });

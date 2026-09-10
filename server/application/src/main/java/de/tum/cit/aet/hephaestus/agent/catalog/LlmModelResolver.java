@@ -25,7 +25,8 @@ public class LlmModelResolver {
     public ResolvedLlmModel resolve(ModelBindingSource config) {
         LlmModel instance = config.getInstanceModel();
         if (instance != null) {
-            if (!isUsable(instance, config.getWorkspace().getId())) {
+            if (!isUsable(instance, config.getWorkspace().getId())
+                    || !matchesLocation(config, instance.getProcessingLocation())) {
                 throw unavailable();
             }
             LlmConnection c = instance.getConnection();
@@ -39,7 +40,8 @@ public class LlmModelResolver {
         }
         WorkspaceLlmModel byo = config.getWorkspaceModel();
         if (byo != null) {
-            if (!isUsable(byo, config.getWorkspace().getId())) {
+            if (!isUsable(byo, config.getWorkspace().getId())
+                    || !matchesLocation(config, byo.getProcessingLocation())) {
                 throw unavailable();
             }
             WorkspaceLlmConnection c = byo.getConnection();
@@ -62,10 +64,33 @@ public class LlmModelResolver {
     public boolean isAvailable(ModelBindingSource config) {
         LlmModel instance = config.getInstanceModel();
         if (instance != null) {
-            return isUsable(instance, config.getWorkspace().getId());
+            return isUsable(instance, config.getWorkspace().getId())
+                    && matchesLocation(config, instance.getProcessingLocation());
         }
         WorkspaceLlmModel byo = config.getWorkspaceModel();
-        return byo != null && isUsable(byo, config.getWorkspace().getId());
+        return byo != null
+                && isUsable(byo, config.getWorkspace().getId())
+                && matchesLocation(config, byo.getProcessingLocation());
+    }
+
+    private static boolean matchesLocation(ModelBindingSource source, LlmProcessingLocation location) {
+        return source.getProcessingLocation() == LlmProcessingLocation.UNCLASSIFIED
+                || source.getProcessingLocation() == location;
+    }
+
+    @Transactional(readOnly = true)
+    public LlmProcessingLocation processingLocation(ConnectionRef ref) {
+        if (ref.modelId() == null || ref.workspaceId() == null) return LlmProcessingLocation.UNCLASSIFIED;
+        if (ref.scope() == FundingSource.INSTANCE) {
+            return llmModelRepository
+                    .findById(ref.modelId())
+                    .map(LlmModel::getProcessingLocation)
+                    .orElse(LlmProcessingLocation.UNCLASSIFIED);
+        }
+        return workspaceLlmModelRepository
+                .findByIdAndWorkspaceId(ref.modelId(), ref.workspaceId())
+                .map(WorkspaceLlmModel::getProcessingLocation)
+                .orElse(LlmProcessingLocation.UNCLASSIFIED);
     }
 
     private boolean isUsable(LlmModel model, Long workspaceId) {

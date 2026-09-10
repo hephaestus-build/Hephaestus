@@ -65,7 +65,10 @@ class AgentBindingServiceTest extends BaseUnitTest {
     void upsertBindsAnAvailableInstanceModel() {
         Workspace w = workspace();
         when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
-        when(bindingRepository.findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW))
+        when(bindingRepository.findByWorkspaceIdAndPurposeAndProcessingLocation(
+                        1L,
+                        AgentPurpose.PRACTICE_REVIEW,
+                        de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation.UNCLASSIFIED))
                 .thenReturn(Optional.empty());
         LlmModel model = new LlmModel();
         model.setId(99L);
@@ -74,7 +77,11 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var request = new AgentBindingRequestDTO(99L, null, 300, 2, true, true);
-        WorkspaceAgentBinding saved = service.upsertBinding(context(), AgentPurpose.PRACTICE_REVIEW, request);
+        WorkspaceAgentBinding saved = service.upsertBinding(
+                context(),
+                AgentPurpose.PRACTICE_REVIEW,
+                de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation.UNCLASSIFIED,
+                request);
 
         assertThat(saved.getWorkspace()).isSameAs(w);
         assertThat(saved.getPurpose()).isEqualTo(AgentPurpose.PRACTICE_REVIEW);
@@ -107,7 +114,10 @@ class AgentBindingServiceTest extends BaseUnitTest {
     void upsertRejectsAModelThatIsNotAvailableToTheWorkspace() {
         Workspace w = workspace();
         when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
-        when(bindingRepository.findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW))
+        when(bindingRepository.findByWorkspaceIdAndPurposeAndProcessingLocation(
+                        1L,
+                        AgentPurpose.PRACTICE_REVIEW,
+                        de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation.UNCLASSIFIED))
                 .thenReturn(Optional.empty());
         LlmModel model = new LlmModel();
         model.setId(99L);
@@ -115,7 +125,11 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(false);
 
         var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
-        assertThatThrownBy(() -> service.upsertBinding(context(), AgentPurpose.PRACTICE_REVIEW, request))
+        assertThatThrownBy(() -> service.upsertBinding(
+                        context(),
+                        AgentPurpose.PRACTICE_REVIEW,
+                        de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation.UNCLASSIFIED,
+                        request))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(bindingRepository, never()).save(any());
     }
@@ -124,11 +138,18 @@ class AgentBindingServiceTest extends BaseUnitTest {
     void upsertRejectsWhenNotExactlyOneModelIsProvided() {
         Workspace w = workspace();
         when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
-        when(bindingRepository.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR))
+        when(bindingRepository.findByWorkspaceIdAndPurposeAndProcessingLocation(
+                        1L,
+                        AgentPurpose.MENTOR,
+                        de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation.UNCLASSIFIED))
                 .thenReturn(Optional.empty());
 
         var bothNull = new AgentBindingRequestDTO(null, null, null, null, null, true);
-        assertThatThrownBy(() -> service.upsertBinding(context(), AgentPurpose.MENTOR, bothNull))
+        assertThatThrownBy(() -> service.upsertBinding(
+                        context(),
+                        AgentPurpose.MENTOR,
+                        de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation.UNCLASSIFIED,
+                        bothNull))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -141,10 +162,16 @@ class AgentBindingServiceTest extends BaseUnitTest {
         bound.setId(42L);
         existing.setInstanceModel(bound);
         existing.setEnabled(true);
-        when(bindingRepository.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR))
+        when(bindingRepository.findByWorkspaceIdAndPurposeAndProcessingLocation(
+                        1L,
+                        AgentPurpose.MENTOR,
+                        de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation.UNCLASSIFIED))
                 .thenReturn(Optional.of(existing));
 
-        service.deleteBinding(context(), AgentPurpose.MENTOR);
+        service.deleteBinding(
+                context(),
+                AgentPurpose.MENTOR,
+                de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation.UNCLASSIFIED);
 
         verify(bindingRepository).delete(existing);
 

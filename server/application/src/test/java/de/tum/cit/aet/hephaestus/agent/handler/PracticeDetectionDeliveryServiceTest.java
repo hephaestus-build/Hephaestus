@@ -56,6 +56,21 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
+    @org.junit.jupiter.api.BeforeEach
+    void allowMemberAiForUnrelatedScenarios() {
+        org.mockito.Mockito.lenient()
+                .when(memberAiPolicy.permitsReview(
+                        org.mockito.ArgumentMatchers.anyLong(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
+        org.mockito.Mockito.lenient()
+                .when(memberAiPolicy.allowsResult(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
+    }
+
+    @org.mockito.Mock
+    private de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy memberAiPolicy;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -102,7 +117,8 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 eventPublisher,
                 objectMapper,
                 cas,
-                sourceCatalogs);
+                sourceCatalogs,
+                memberAiPolicy);
 
         lenient().when(sourceCatalogs.isSourceUsePermitted(any(), any(), any())).thenReturn(true);
 
@@ -286,6 +302,16 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         lenient().when(revision.getAutomatedReviewPolicy()).thenReturn(practice.getAutomatedReviewPolicy());
         lenient().when(revision.getBindings()).thenReturn(practice.getBindings());
         lenient().when(practiceRevisionRepository.findById(revisionId)).thenReturn(Optional.of(revision));
+    }
+
+    @Test
+    void shouldNotAdmitObservationsAfterDeveloperChoosesNoAi() {
+        when(memberAiPolicy.allowsResult(testJob)).thenReturn(false);
+        assertThatThrownBy(() ->
+                        service.deliver(testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT))))
+                .isInstanceOf(JobDeliveryException.class)
+                .hasMessageContaining("AI preference");
+        verifyNoInteractions(observationRepository, eventPublisher);
     }
 
     @Nested

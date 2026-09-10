@@ -27,6 +27,12 @@ public record UpdateWorkspaceLlmModelRequestDTO(
         @Nullable @Schema(description = "Whether the model supports a reasoning mode")
         Boolean supportsReasoning,
 
+        @Nullable
+        @Schema(
+                description =
+                        "Operator-declared processing location; unclassified models cannot serve a member's explicit location choice")
+        LlmProcessingLocation processingLocation,
+
         @Nullable @Schema(description = "Active toggle") Boolean enabled,
 
         @Nullable @Schema(description = "Pricing mode; when given, replaces the price wholesale (see class docs)")

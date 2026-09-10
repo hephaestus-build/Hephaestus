@@ -173,14 +173,14 @@ public class ReviewBackfillDriver {
         if (!Boolean.TRUE.equals(workspace.getFeatures().getPracticesEnabled())) {
             return ReviewBackfillPauseReason.WORKSPACE_UNAVAILABLE;
         }
-        WorkspaceAgentBinding binding = bindingRepository
-                .findByWorkspaceIdAndPurposeWithModels(workspace.getId(), AgentPurpose.PRACTICE_REVIEW)
+        var bindings = bindingRepository.findByWorkspaceIdWithModels(workspace.getId()).stream()
+                .filter(binding -> binding.getPurpose() == AgentPurpose.PRACTICE_REVIEW)
                 .filter(WorkspaceAgentBinding::isEnabled)
-                .orElse(null);
-        if (binding == null) {
-            return ReviewBackfillPauseReason.REVIEW_MODEL_UNBOUND;
-        }
-        if (llmBudgetService.blockSubmission(workspace, "REVIEW_BACKFILL", binding.getFundingSource())) {
+                .toList();
+        if (bindings.isEmpty()) return ReviewBackfillPauseReason.REVIEW_MODEL_UNBOUND;
+        if (bindings.stream()
+                .allMatch(binding ->
+                        llmBudgetService.blockSubmission(workspace, "REVIEW_BACKFILL", binding.getFundingSource()))) {
             return ReviewBackfillPauseReason.BUDGET_EXHAUSTED;
         }
         return null;

@@ -3,6 +3,7 @@ import { minutesAfter } from "@/components/common/story-clock";
 
 export const mockAvailableModels: AvailableLlmModel[] = [
 	{
+		processingLocation: "UNCLASSIFIED",
 		id: 1,
 		scope: "SHARED",
 		displayName: "GPT-5",
@@ -13,6 +14,7 @@ export const mockAvailableModels: AvailableLlmModel[] = [
 		supportsReasoning: true,
 	},
 	{
+		processingLocation: "UNCLASSIFIED",
 		id: 2,
 		scope: "SHARED",
 		displayName: "Local Llama (self-hosted)",
@@ -21,6 +23,7 @@ export const mockAvailableModels: AvailableLlmModel[] = [
 		supportsReasoning: false,
 	},
 	{
+		processingLocation: "UNCLASSIFIED",
 		id: 10,
 		scope: "WORKSPACE",
 		displayName: "My OpenAI key",

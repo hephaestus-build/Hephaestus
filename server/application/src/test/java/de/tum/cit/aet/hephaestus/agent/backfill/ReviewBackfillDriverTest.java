@@ -18,7 +18,6 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -107,8 +106,7 @@ class ReviewBackfillDriverTest extends BaseUnitTest {
     @Test
     void aWorkspaceWithNoEnabledBindingPausesRatherThanFailing() {
         ReviewBackfillRun run = running();
-        when(bindingRepository.findByWorkspaceIdAndPurposeWithModels(WORKSPACE_ID, AgentPurpose.PRACTICE_REVIEW))
-                .thenReturn(Optional.empty());
+        when(bindingRepository.findByWorkspaceIdWithModels(WORKSPACE_ID)).thenReturn(java.util.List.of());
 
         driver().advance(run);
 
@@ -159,8 +157,8 @@ class ReviewBackfillDriverTest extends BaseUnitTest {
     private void enabledBinding() {
         WorkspaceAgentBinding binding = new WorkspaceAgentBinding();
         binding.setEnabled(true);
-        when(bindingRepository.findByWorkspaceIdAndPurposeWithModels(WORKSPACE_ID, AgentPurpose.PRACTICE_REVIEW))
-                .thenReturn(Optional.of(binding));
+        binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        when(bindingRepository.findByWorkspaceIdWithModels(WORKSPACE_ID)).thenReturn(java.util.List.of(binding));
     }
 
     private void fundedAndEnabled() {

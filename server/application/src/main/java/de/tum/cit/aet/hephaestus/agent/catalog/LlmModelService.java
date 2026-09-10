@@ -111,6 +111,9 @@ public class LlmModelService {
         if (request.supportsReasoning() != null) {
             model.setSupportsReasoning(request.supportsReasoning());
         }
+        if (request.processingLocation() != null) {
+            model.setProcessingLocation(request.processingLocation());
+        }
         if (request.enabled() != null) {
             if (request.enabled()) {
                 requireActivatable(model);
@@ -165,6 +168,9 @@ public class LlmModelService {
         }
         if (request.supportsReasoning() != null) {
             model.setSupportsReasoning(request.supportsReasoning());
+        }
+        if (request.processingLocation() != null) {
+            model.setProcessingLocation(request.processingLocation());
         }
         if (request.enabled() != null) {
             model.setEnabled(request.enabled());

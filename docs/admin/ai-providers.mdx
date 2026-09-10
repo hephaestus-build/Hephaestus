@@ -262,3 +262,52 @@ slug is API surface; the title is what the UI shows.
 - **Budgets, caps, and what a cap pauses:** [Workspace budgets and alerting](./production-setup#workspace-budgets-and-alerting).
 - **The environment variables that *are* deploy-time facts:** [Instance-wide LLM settings](./production-setup#instance-wide-llm-settings).
 - **Nothing is being reviewed:** [When a workspace goes quiet](./practice-review#when-a-workspace-goes-quiet).
+
+## Workspace member choices and processing locations
+
+Owners configure **Administration → Member onboarding** after membership is already managed by the
+workspace's existing mechanism. The welcome is hidden by default. Configure models before enabling
+it, and wait until every runtime role has been upgraded before creating location-specific assignments.
+
+1. In either model console, declare each model's **Processing location**: **On-premises**, **Private
+   cloud**, or **Unclassified**. This is an operator declaration, not an automatic residency check.
+   Verify the model's actual endpoint, gateway routing, subprocessors, and data-handling agreement
+   before assigning a location. A hostname alone is not evidence of where processing happens.
+2. In the workspace's **AI models**, choose a processing location and assign a model to **Practice
+   reviews** and/or **Heph**. Each purpose and location has an independent assignment. The model must
+   be available to the workspace and classified for that location. Existing grants, price declarations,
+   funding sources, feature switches, and budgets still apply.
+3. Configure the welcome text and optional required Slack or Outline links under **Member onboarding**.
+   A required link needs an active integration and an enabled account-linking provider for the same
+   server. Slack also needs the configured team; Outline needs the configured instance identity.
+4. Enable **Show a welcome on first visit**. From then on, personal AI activity requires an explicit
+   member choice. Unknown or unlinked developers are not assumed to have agreed.
+
+**Workspace default** preserves existing assignments for workspaces that have never required member
+choices. It is never a fallback for a member who selected a processing location. Existing models
+migrate as **Unclassified**; Hephaestus does not infer a location from their names or endpoints.
+
+Members may choose **No AI** even when model configuration or required account links are unavailable.
+This stops new practice reviews about them and new conversations with Heph in that workspace, not
+membership or access to existing feedback. A review is checked against the developer whose work is
+being reviewed, not the administrator who requested it. Changing a preference is checked again at
+execution, before each model request, and before new feedback is accepted or delivered. An outbound
+request already in progress cannot be recalled, and the choice does not remove shared source content
+from other members' reviews.
+
+### Changing or pausing setup
+
+Clear a required account link to make it optional. A disconnected required integration stays visible
+as unavailable until it is repaired or its requirement is removed; it is not silently waived. Disabling
+a sign-in provider does not erase an already verified matching link.
+
+Hiding the welcome does **not** clear saved choices or restore unrestricted AI for members who have
+not chosen. Members can still open **Workspace preferences**. Disabling a model or changing its
+classification stops incompatible new requests; it never substitutes another location. Turning an
+assignment off and on does not change a member's preference.
+
+The schema upgrade is additive apart from widening the assignment's uniqueness key to include its
+location. A rollback is supported before onboarding settings, member preferences, or location-specific
+assignments have been saved. Once used, rollback is deliberately refused: losing a saved refusal could
+restore unrestricted processing. Recover through a [verified pre-upgrade backup](./backup-restore),
+not by deleting member preferences to bypass the safeguard.

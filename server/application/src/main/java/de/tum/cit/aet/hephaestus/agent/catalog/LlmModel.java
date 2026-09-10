@@ -79,6 +79,11 @@ public class LlmModel {
     @Column(name = "supports_reasoning", nullable = false)
     private boolean supportsReasoning = false;
 
+    @ColumnDefault("'UNCLASSIFIED'")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "processing_location", nullable = false, length = 24)
+    private LlmProcessingLocation processingLocation = LlmProcessingLocation.UNCLASSIFIED;
+
     @ColumnDefault("'GRANTED'")
     @Enumerated(EnumType.STRING)
     @Column(name = "visibility", nullable = false, length = 16)

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.config;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -11,6 +12,7 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "A workspace's agent binding for one purpose")
 public record AgentBindingDTO(
         @NonNull AgentPurpose purpose,
+        @NonNull LlmProcessingLocation processingLocation,
         @Nullable Long instanceModelId,
         @Nullable Long workspaceModelId,
         int timeoutSeconds,
@@ -23,6 +25,7 @@ public record AgentBindingDTO(
     public static AgentBindingDTO from(WorkspaceAgentBinding binding, boolean ready) {
         return new AgentBindingDTO(
                 binding.getPurpose(),
+                binding.getProcessingLocation(),
                 binding.getInstanceModel() == null
                         ? null
                         : binding.getInstanceModel().getId(),

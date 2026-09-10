@@ -46,6 +46,7 @@ describe("AdminLlmModelFormDialog", () => {
 	it("keeps the upstream model identity immutable", () => {
 		const onSave = vi.fn<AdminLlmModelFormDialogProps["onSave"]>();
 		const editing: LlmModel = {
+			processingLocation: "UNCLASSIFIED",
 			id: 1,
 			slug: "gpt-5",
 			displayName: "GPT-5",
@@ -143,6 +144,7 @@ describe("AdminLlmModelFormDialog", () => {
 	it("turns an active model off when its price becomes unknown", () => {
 		const onSave = vi.fn<AdminLlmModelFormDialogProps["onSave"]>();
 		const editing: LlmModel = {
+			processingLocation: "UNCLASSIFIED",
 			id: 2,
 			slug: "gpt-5-active",
 			displayName: "GPT-5 active",

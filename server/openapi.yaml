@@ -2508,6 +2508,16 @@ paths:
           enum:
           - PRACTICE_REVIEW
           - MENTOR
+      - in: query
+        name: processingLocation
+        required: false
+        schema:
+          type: string
+          default: UNCLASSIFIED
+          enum:
+          - UNCLASSIFIED
+          - ON_PREMISES
+          - PRIVATE_CLOUD
       responses:
         "204":
           description: Binding removed
@@ -2532,6 +2542,16 @@ paths:
           enum:
           - PRACTICE_REVIEW
           - MENTOR
+      - in: query
+        name: processingLocation
+        required: false
+        schema:
+          type: string
+          default: UNCLASSIFIED
+          enum:
+          - UNCLASSIFIED
+          - ON_PREMISES
+          - PRIVATE_CLOUD
       requestBody:
         content:
           application/json:
@@ -4043,6 +4063,173 @@ paths:
       summary: Update leaderboard notification preferences
       tags:
       - workspace
+  /workspaces/{workspaceSlug}/onboarding/me:
+    get:
+      operationId: getMemberOnboarding
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboarding"
+          description: OK
+      summary: Get first-visit guidance and your AI choice in this workspace
+      tags:
+      - workspace-onboarding
+  /workspaces/{workspaceSlug}/onboarding/me/ai-choice:
+    put:
+      operationId: updateMemberAiChoice
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberAiChoiceRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboarding"
+          description: OK
+      summary: Change your AI choice without changing workspace membership
+      tags:
+      - workspace-onboarding
+  /workspaces/{workspaceSlug}/onboarding/me/completion:
+    put:
+      operationId: completeMemberOnboarding
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OnboardingCompletionRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboarding"
+          description: OK
+      summary: Finish first-visit guidance after required account links are complete
+      tags:
+      - workspace-onboarding
+  /workspaces/{workspaceSlug}/onboarding/me/dismissal:
+    put:
+      operationId: dismissMemberOnboarding
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboarding"
+          description: OK
+      summary: Continue to the workspace without treating dismissal as an AI choice
+        or completed setup
+      tags:
+      - workspace-onboarding
+  /workspaces/{workspaceSlug}/onboarding/settings:
+    get:
+      operationId: getMemberOnboardingSettings
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboardingSettings"
+          description: OK
+      summary: Get this workspace's member-onboarding settings
+      tags:
+      - workspace-onboarding
+    put:
+      operationId: updateMemberOnboardingSettings
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceOnboardingSettings"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboardingSettings"
+          description: OK
+      summary: Configure first-visit guidance and required workspace account links
+      tags:
+      - workspace-onboarding
+  /workspaces/{workspaceSlug}/onboarding/settings/links:
+    get:
+      operationId: getMemberOnboardingLinkOptions
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkspaceOnboardingLink"
+          description: OK
+      summary: List workspace account links available for onboarding requirements
+      tags:
+      - workspace-onboarding
   /workspaces/{workspaceSlug}/outline/collections:
     get:
       operationId: listOutlineCollections
@@ -7819,6 +8006,12 @@ components:
         maxConcurrentJobs:
           type: integer
           format: int32
+        processingLocation:
+          type: string
+          enum:
+          - UNCLASSIFIED
+          - ON_PREMISES
+          - PRIVATE_CLOUD
         purpose:
           type: string
           enum:
@@ -7835,6 +8028,7 @@ components:
           format: int64
       required:
       - enabled
+      - processingLocation
       - purpose
       - ready
     AgentBindingRequest:
@@ -8206,6 +8400,13 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
+        processingLocation:
+          type: string
+          description: Operator-declared processing location
+          enum:
+          - UNCLASSIFIED
+          - ON_PREMISES
+          - PRIVATE_CLOUD
         scope:
           type: string
           description: SHARED (instance catalog) or WORKSPACE (your own provider)
@@ -8220,6 +8421,7 @@ components:
       - displayName
       - id
       - pricingMode
+      - processingLocation
       - scope
       - supportsReasoning
     BackfillSummary:
@@ -9040,6 +9242,14 @@ components:
           format: int32
           description: Maximum output tokens
           minimum: 1
+        processingLocation:
+          type: string
+          description: Operator-declared processing location; unclassified models
+            cannot serve a member's explicit location choice
+          enum:
+          - UNCLASSIFIED
+          - ON_PREMISES
+          - PRIVATE_CLOUD
         slug:
           type: string
           description: Optional internal slug; generated from displayName when omitted
@@ -9406,6 +9616,14 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
+        processingLocation:
+          type: string
+          description: Operator-declared processing location; unclassified models
+            cannot serve a member's explicit location choice
+          enum:
+          - UNCLASSIFIED
+          - ON_PREMISES
+          - PRIVATE_CLOUD
         slug:
           type: string
           description: Optional internal slug; generated from displayName when omitted
@@ -10862,6 +11080,13 @@ components:
           type: integer
           format: int32
           description: Maximum output tokens
+        processingLocation:
+          type: string
+          description: Operator-declared processing location
+          enum:
+          - UNCLASSIFIED
+          - ON_PREMISES
+          - PRIVATE_CLOUD
         slug:
           type: string
           description: Unique slug within the connection
@@ -10889,6 +11114,7 @@ components:
       - enabled
       - grantedWorkspaceIds
       - id
+      - processingLocation
       - slug
       - supportsReasoning
       - upstreamModelId
@@ -11092,6 +11318,17 @@ components:
       - scopes
       - type
       - updatedAt
+    MemberAiChoiceRequest:
+      type: object
+      properties:
+        choice:
+          type: string
+          enum:
+          - NO_AI
+          - ON_PREMISES
+          - PRIVATE_CLOUD
+      required:
+      - choice
     ObservationDetail:
       type: object
       description: Full practice observation detail including delivered feedback and
@@ -11296,6 +11533,12 @@ components:
       - practiceName
       - practiceSlug
       - summary
+    OnboardingCompletionRequest:
+      type: object
+      properties:
+        revision:
+          type: integer
+          format: int64
     OutcomeVector:
       type: object
       properties:
@@ -14445,6 +14688,7 @@ components:
           - PRACTICES_DISABLED
           - NO_ACTIVE_PRACTICE
           - REVIEW_MODEL_UNBOUND
+          - MEMBER_AI_DECLINED
           - PRACTICE_AUTONOMY_OFF
           - BUDGET_EXHAUSTED
           - SUBJECT_UNLINKED
@@ -15327,6 +15571,7 @@ components:
           - PRACTICES_DISABLED
           - NO_ACTIVE_PRACTICE
           - REVIEW_MODEL_UNBOUND
+          - MEMBER_AI_DECLINED
           - PRACTICE_AUTONOMY_OFF
           - BUDGET_EXHAUSTED
           - SUBJECT_UNLINKED
@@ -15596,6 +15841,14 @@ components:
           format: int32
           description: Maximum output tokens
           minimum: 1
+        processingLocation:
+          type: string
+          description: Operator-declared processing location; unclassified models
+            cannot serve a member's explicit location choice
+          enum:
+          - UNCLASSIFIED
+          - ON_PREMISES
+          - PRIVATE_CLOUD
         supportsReasoning:
           type: boolean
           description: Whether the model supports a reasoning mode
@@ -16014,6 +16267,14 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
+        processingLocation:
+          type: string
+          description: Operator-declared processing location; unclassified models
+            cannot serve a member's explicit location choice
+          enum:
+          - UNCLASSIFIED
+          - ON_PREMISES
+          - PRIVATE_CLOUD
         supportsReasoning:
           type: boolean
           description: Whether the model supports a reasoning mode
@@ -16291,6 +16552,23 @@ components:
       - status
       - updatedAt
       - workspaceSlug
+    WorkspaceAiOption:
+      type: object
+      properties:
+        choice:
+          type: string
+          enum:
+          - NO_AI
+          - ON_PREMISES
+          - PRIVATE_CLOUD
+        mentorReady:
+          type: boolean
+        practiceReviewsReady:
+          type: boolean
+      required:
+      - choice
+      - mentorReady
+      - practiceReviewsReady
     WorkspaceListItem:
       type: object
       description: Summary information about a workspace for list views
@@ -16470,6 +16748,13 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
+        processingLocation:
+          type: string
+          description: Operator-declared processing location
+          enum:
+          - UNCLASSIFIED
+          - ON_PREMISES
+          - PRIVATE_CLOUD
         slug:
           type: string
           description: Unique slug within the workspace
@@ -16492,6 +16777,7 @@ components:
       - enabled
       - id
       - pricingMode
+      - processingLocation
       - slug
       - supportsReasoning
       - upstreamModelId
@@ -16648,6 +16934,100 @@ components:
         userName:
           type: string
           description: Display name of the user
+    WorkspaceOnboarding:
+      type: object
+      properties:
+        aiChoice:
+          type: string
+          enum:
+          - NO_AI
+          - ON_PREMISES
+          - PRIVATE_CLOUD
+        aiChoiceRequired:
+          type: boolean
+        aiOptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceAiOption"
+        completed:
+          type: boolean
+        enabled:
+          type: boolean
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceOnboardingLink"
+        needsWelcome:
+          type: boolean
+        revision:
+          type: integer
+          format: int64
+        welcomeMarkdown:
+          type: string
+        workspaceName:
+          type: string
+      required:
+      - aiChoiceRequired
+      - aiOptions
+      - completed
+      - enabled
+      - links
+      - needsWelcome
+      - revision
+      - welcomeMarkdown
+      - workspaceName
+    WorkspaceOnboardingLink:
+      type: object
+      properties:
+        available:
+          type: boolean
+        connectionId:
+          type: integer
+          format: int64
+        displayName:
+          type: string
+        linked:
+          type: boolean
+        providerType:
+          type: string
+        registrationId:
+          type: string
+        required:
+          type: boolean
+        teamName:
+          type: string
+      required:
+      - available
+      - connectionId
+      - displayName
+      - linked
+      - providerType
+      - required
+    WorkspaceOnboardingSettings:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        requiredConnectionIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+            exclusiveMinimum: 0
+          maxItems: 20
+          minItems: 0
+        revision:
+          type: integer
+          format: int64
+        welcomeMarkdown:
+          type: string
+          maxLength: 20000
+          minLength: 0
+      required:
+      - enabled
+      - requiredConnectionIds
+      - revision
+      - welcomeMarkdown
     WorkspaceProviders:
       type: object
       description: Available workspace creation providers and their configuration

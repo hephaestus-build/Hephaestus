@@ -95,6 +95,29 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class AgentJobExecutorTest extends BaseUnitTest {
+    @org.junit.jupiter.api.BeforeEach
+    void allowMemberAiForUnrelatedScenarios() {
+        org.mockito.Mockito.lenient()
+                .when(memberAiPolicy.permitsReview(
+                        org.mockito.ArgumentMatchers.anyLong(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
+        org.mockito.Mockito.lenient()
+                .when(memberAiPolicy.allowsResult(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
+        org.mockito.Mockito.lenient()
+                .when(memberAiPolicy.binding(
+                        org.mockito.ArgumentMatchers.anyLong(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> bindingRepository.findByWorkspaceIdAndPurpose(
+                        invocation.getArgument(0),
+                        de.tum.cit.aet.hephaestus.agent.config.AgentPurpose.PRACTICE_REVIEW));
+    }
+
+    @org.mockito.Mock
+    private de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy memberAiPolicy;
 
     @Mock
     private ExecutionArchiveService executionArchive;
@@ -156,7 +179,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 executionArchive,
                 AGENT_PROPS,
                 jobRepository,
-                bindingRepository,
+                memberAiPolicy,
                 handlerRegistry,
                 practiceAgent,
                 workerJwtIssuer,
@@ -242,6 +265,19 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 .execute(any());
     }
 
+    @Test
+    void shouldCancelAQueuedReviewBeforeBudgetOrSandboxWhenDeveloperHasChosenNoAi() {
+        when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any())).thenReturn(Optional.of(job));
+        when(memberAiPolicy.permitsReview(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
+                .thenReturn(false);
+        when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        executor.processJob(jobId);
+        assertThat(job.getStatus()).isEqualTo(AgentJobStatus.CANCELLED);
+        assertThat(job.getCancellationReason()).isEqualTo(AgentJobCancellationReason.MEMBER_AI_DECLINED);
+        verify(sandboxManager, never()).execute(any());
+        verify(llmBudgetService, never()).decide(anyLong());
+    }
+
     private static Workspace workspaceStub() {
         Workspace workspace = new Workspace();
         workspace.setId(99L);
@@ -289,7 +325,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     AGENT_PROPS,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,
@@ -1036,7 +1072,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     AGENT_PROPS,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,
@@ -1100,7 +1136,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     AGENT_PROPS,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,
@@ -1162,7 +1198,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     AGENT_PROPS,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,
@@ -1217,7 +1253,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     AGENT_PROPS,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,
@@ -1279,7 +1315,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     AGENT_PROPS,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,
@@ -1338,7 +1374,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     AGENT_PROPS,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,
@@ -1397,7 +1433,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     AGENT_PROPS,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,
@@ -1444,7 +1480,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     AGENT_PROPS,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,
@@ -1883,7 +1919,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     AGENT_PROPS,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,
@@ -1963,7 +1999,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     AGENT_PROPS,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,
@@ -2012,7 +2048,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     smallBatch,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,
@@ -2076,7 +2112,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                         executionArchive,
                         AGENT_PROPS,
                         jobRepository,
-                        bindingRepository,
+                        memberAiPolicy,
                         handlerRegistry,
                         practiceAgent,
                         workerJwtIssuer,
@@ -2125,7 +2161,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                         executionArchive,
                         AGENT_PROPS,
                         jobRepository,
-                        bindingRepository,
+                        memberAiPolicy,
                         handlerRegistry,
                         practiceAgent,
                         workerJwtIssuer,
@@ -2168,7 +2204,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     AGENT_PROPS,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,
@@ -2212,7 +2248,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     AGENT_PROPS,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,
@@ -2273,7 +2309,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     AGENT_PROPS,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,
@@ -2313,7 +2349,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     executionArchive,
                     AGENT_PROPS,
                     jobRepository,
-                    bindingRepository,
+                    memberAiPolicy,
                     handlerRegistry,
                     practiceAgent,
                     workerJwtIssuer,

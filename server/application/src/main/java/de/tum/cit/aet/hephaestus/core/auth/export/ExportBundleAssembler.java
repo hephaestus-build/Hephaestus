@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceAiExport;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -35,6 +36,7 @@ public class ExportBundleAssembler {
     private final AccountPreferencesQuery preferencesQuery;
     private final GitProviderRegistry gitProviderRegistry;
     private final Clock clock;
+    private final AccountWorkspaceAiExport workspaceAiExport;
 
     public ExportBundleAssembler(
             AccountService accountService,
@@ -43,7 +45,8 @@ public class ExportBundleAssembler {
             AccountWorkspaceMembershipQuery workspaceMembershipQuery,
             AccountPreferencesQuery preferencesQuery,
             GitProviderRegistry gitProviderRegistry,
-            Clock clock) {
+            Clock clock,
+            AccountWorkspaceAiExport workspaceAiExport) {
         this.accountService = accountService;
         this.accountFeatureRepository = accountFeatureRepository;
         this.authEventRepository = authEventRepository;
@@ -51,6 +54,7 @@ public class ExportBundleAssembler {
         this.preferencesQuery = preferencesQuery;
         this.gitProviderRegistry = gitProviderRegistry;
         this.clock = clock;
+        this.workspaceAiExport = workspaceAiExport;
     }
 
     @Transactional(readOnly = true)
@@ -101,7 +105,8 @@ public class ExportBundleAssembler {
                 memberships,
                 featureFlags,
                 preferences,
-                authEvents);
+                authEvents,
+                workspaceAiExport.preferences(accountId));
     }
 
     private ExportBundle.Identity toIdentity(IdentityLink il) {

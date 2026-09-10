@@ -13,6 +13,7 @@ import { AdminLlmModelFormDialog } from "./AdminLlmModelFormDialog";
 import type { WorkspaceOption } from "./workspace-options";
 
 const mockModel: LlmModel = {
+	processingLocation: "UNCLASSIFIED",
 	id: 1,
 	slug: "gpt-5-eu",
 	displayName: "GPT-5",

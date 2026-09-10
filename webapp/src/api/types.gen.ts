@@ -110,6 +110,7 @@ export type AgentBinding = {
   enabled: boolean;
   instanceModelId?: number;
   maxConcurrentJobs?: number;
+  processingLocation: 'UNCLASSIFIED' | 'ON_PREMISES' | 'PRIVATE_CLOUD';
   purpose: 'PRACTICE_REVIEW' | 'MENTOR';
   /**
    * True when the bound model is available to run right now
@@ -407,6 +408,10 @@ export type AvailableLlmModel = {
    * Pricing mode
    */
   pricingMode: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
+  /**
+   * Operator-declared processing location
+   */
+  processingLocation: 'UNCLASSIFIED' | 'ON_PREMISES' | 'PRIVATE_CLOUD';
   /**
    * SHARED (instance catalog) or WORKSPACE (your own provider)
    */
@@ -879,6 +884,10 @@ export type CreateLlmModelRequest = {
    */
   maxOutputTokens?: number;
   /**
+   * Operator-declared processing location; unclassified models cannot serve a member's explicit location choice
+   */
+  processingLocation?: 'UNCLASSIFIED' | 'ON_PREMISES' | 'PRIVATE_CLOUD';
+  /**
    * Optional internal slug; generated from displayName when omitted
    */
   slug?: string;
@@ -1136,6 +1145,10 @@ export type CreateWorkspaceLlmModelRequest = {
    * Pricing mode (default UNPRICED)
    */
   pricingMode?: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
+  /**
+   * Operator-declared processing location; unclassified models cannot serve a member's explicit location choice
+   */
+  processingLocation?: 'UNCLASSIFIED' | 'ON_PREMISES' | 'PRIVATE_CLOUD';
   /**
    * Optional internal slug; generated from displayName when omitted
    */
@@ -2074,6 +2087,10 @@ export type LlmModel = {
    */
   maxOutputTokens?: number;
   /**
+   * Operator-declared processing location
+   */
+  processingLocation: 'UNCLASSIFIED' | 'ON_PREMISES' | 'PRIVATE_CLOUD';
+  /**
    * Unique slug within the connection
    */
   slug: string;
@@ -2233,6 +2250,10 @@ export type LoginProviderView = {
   updatedAt: Date;
 };
 
+export type MemberAiChoiceRequest = {
+  choice: 'NO_AI' | 'ON_PREMISES' | 'PRIVATE_CLOUD';
+};
+
 /**
  * Full practice observation detail including delivered feedback and evidence
  */
@@ -2370,6 +2391,10 @@ export type ObservationList = {
    * Observation summary
    */
   summary: string;
+};
+
+export type OnboardingCompletionRequest = {
+  revision?: number;
 };
 
 export type OutcomeVector = {
@@ -4425,7 +4450,7 @@ export type ReviewRequestOutcome = {
   /**
    * The controlled-vocabulary reason nothing was started; absent when a review was started
    */
-  reason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  reason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
   /**
    * The reason as one sentence for the person who asked. Render it verbatim: it is written next to the reason it explains so that every surface says the same thing, and a re-worded copy is how a screen and a support answer come to disagree.
    */
@@ -5046,7 +5071,7 @@ export type TracedSignal = {
   /**
    * Why it ended in that state; null once it triggered a review
    */
-  stateReason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  stateReason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
 };
 
 export type TrendOpportunity = {
@@ -5229,6 +5254,10 @@ export type UpdateLlmModelRequest = {
    * Maximum output tokens
    */
   maxOutputTokens?: number;
+  /**
+   * Operator-declared processing location; unclassified models cannot serve a member's explicit location choice
+   */
+  processingLocation?: 'UNCLASSIFIED' | 'ON_PREMISES' | 'PRIVATE_CLOUD';
   /**
    * Whether the model supports a reasoning mode
    */
@@ -5571,6 +5600,10 @@ export type UpdateWorkspaceLlmModelRequest = {
    */
   pricingMode?: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
   /**
+   * Operator-declared processing location; unclassified models cannot serve a member's explicit location choice
+   */
+  processingLocation?: 'UNCLASSIFIED' | 'ON_PREMISES' | 'PRIVATE_CLOUD';
+  /**
    * Whether the model supports a reasoning mode
    */
   supportsReasoning?: boolean;
@@ -5818,6 +5851,12 @@ export type Workspace = {
   workspaceSlug: string;
 };
 
+export type WorkspaceAiOption = {
+  choice: 'NO_AI' | 'ON_PREMISES' | 'PRIVATE_CLOUD';
+  mentorReady: boolean;
+  practiceReviewsReady: boolean;
+};
+
 /**
  * Summary information about a workspace for list views
  */
@@ -5987,6 +6026,10 @@ export type WorkspaceLlmModel = {
    */
   pricingMode: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
   /**
+   * Operator-declared processing location
+   */
+  processingLocation: 'UNCLASSIFIED' | 'ON_PREMISES' | 'PRIVATE_CLOUD';
+  /**
    * Unique slug within the workspace
    */
   slug: string;
@@ -6120,6 +6163,37 @@ export type WorkspaceMembership = {
    * Display name of the user
    */
   userName?: string;
+};
+
+export type WorkspaceOnboarding = {
+  aiChoice?: 'NO_AI' | 'ON_PREMISES' | 'PRIVATE_CLOUD';
+  aiChoiceRequired: boolean;
+  aiOptions: Array<WorkspaceAiOption>;
+  completed: boolean;
+  enabled: boolean;
+  links: Array<WorkspaceOnboardingLink>;
+  needsWelcome: boolean;
+  revision: number;
+  welcomeMarkdown: string;
+  workspaceName: string;
+};
+
+export type WorkspaceOnboardingLink = {
+  available: boolean;
+  connectionId: number;
+  displayName: string;
+  linked: boolean;
+  providerType: string;
+  registrationId?: string;
+  required: boolean;
+  teamName?: string;
+};
+
+export type WorkspaceOnboardingSettings = {
+  enabled: boolean;
+  requiredConnectionIds: Array<number>;
+  revision: number;
+  welcomeMarkdown: string;
 };
 
 /**
@@ -8755,7 +8829,9 @@ export type DeleteAgentData = {
     workspaceSlug: string;
     purpose: 'PRACTICE_REVIEW' | 'MENTOR';
   };
-  query?: never;
+  query?: {
+    processingLocation?: 'UNCLASSIFIED' | 'ON_PREMISES' | 'PRIVATE_CLOUD';
+  };
   url: '/workspaces/{workspaceSlug}/agents/{purpose}';
 };
 
@@ -8777,7 +8853,9 @@ export type ConfigureAgentData = {
     workspaceSlug: string;
     purpose: 'PRACTICE_REVIEW' | 'MENTOR';
   };
-  query?: never;
+  query?: {
+    processingLocation?: 'UNCLASSIFIED' | 'ON_PREMISES' | 'PRIVATE_CLOUD';
+  };
   url: '/workspaces/{workspaceSlug}/agents/{purpose}';
 };
 
@@ -10001,6 +10079,153 @@ export type UpdateNotificationsResponses = {
 };
 
 export type UpdateNotificationsResponse = UpdateNotificationsResponses[keyof UpdateNotificationsResponses];
+
+export type GetMemberOnboardingData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/me';
+};
+
+export type GetMemberOnboardingResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboarding;
+};
+
+export type GetMemberOnboardingResponse = GetMemberOnboardingResponses[keyof GetMemberOnboardingResponses];
+
+export type UpdateMemberAiChoiceData = {
+  body: MemberAiChoiceRequest;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/me/ai-choice';
+};
+
+export type UpdateMemberAiChoiceResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboarding;
+};
+
+export type UpdateMemberAiChoiceResponse = UpdateMemberAiChoiceResponses[keyof UpdateMemberAiChoiceResponses];
+
+export type CompleteMemberOnboardingData = {
+  body: OnboardingCompletionRequest;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/me/completion';
+};
+
+export type CompleteMemberOnboardingResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboarding;
+};
+
+export type CompleteMemberOnboardingResponse = CompleteMemberOnboardingResponses[keyof CompleteMemberOnboardingResponses];
+
+export type DismissMemberOnboardingData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/me/dismissal';
+};
+
+export type DismissMemberOnboardingResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboarding;
+};
+
+export type DismissMemberOnboardingResponse = DismissMemberOnboardingResponses[keyof DismissMemberOnboardingResponses];
+
+export type GetMemberOnboardingSettingsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/settings';
+};
+
+export type GetMemberOnboardingSettingsResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboardingSettings;
+};
+
+export type GetMemberOnboardingSettingsResponse = GetMemberOnboardingSettingsResponses[keyof GetMemberOnboardingSettingsResponses];
+
+export type UpdateMemberOnboardingSettingsData = {
+  body: WorkspaceOnboardingSettings;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/settings';
+};
+
+export type UpdateMemberOnboardingSettingsResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboardingSettings;
+};
+
+export type UpdateMemberOnboardingSettingsResponse = UpdateMemberOnboardingSettingsResponses[keyof UpdateMemberOnboardingSettingsResponses];
+
+export type GetMemberOnboardingLinkOptionsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/settings/links';
+};
+
+export type GetMemberOnboardingLinkOptionsResponses = {
+  /**
+   * OK
+   */
+  200: Array<WorkspaceOnboardingLink>;
+};
+
+export type GetMemberOnboardingLinkOptionsResponse = GetMemberOnboardingLinkOptionsResponses[keyof GetMemberOnboardingLinkOptionsResponses];
 
 export type ListOutlineCollectionsData = {
   body?: never;

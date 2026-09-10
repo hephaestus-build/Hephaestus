@@ -25,8 +25,16 @@ import {
 	FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import { LLM_PROCESSING_LOCATIONS } from "@/lib/llm-processing-location";
 
 import { BudgetExhaustedAlert } from "./BudgetExhaustedAlert";
 import { ModelPicker, type ModelSelection } from "./ModelPicker";
@@ -116,8 +124,12 @@ export interface AgentBindingsPageProps {
 	pendingPurposes: ReadonlySet<Purpose>;
 	saveRevisions?: Partial<Record<Purpose, number>>;
 	onRetry: () => void;
-	onSave: (purpose: Purpose, body: AgentBindingRequest) => void;
-	onTurnOff: (purpose: Purpose) => void;
+	onSave: (
+		purpose: Purpose,
+		body: AgentBindingRequest,
+		processingLocation: AgentBinding["processingLocation"],
+	) => void;
+	onTurnOff: (purpose: Purpose, processingLocation: AgentBinding["processingLocation"]) => void;
 }
 
 export function AgentBindingsPage({
@@ -137,7 +149,14 @@ export function AgentBindingsPage({
 	onSave,
 	onTurnOff,
 }: AgentBindingsPageProps) {
-	const bindingFor = (purpose: Purpose) => bindings.find((b) => b.purpose === purpose);
+	const [processingLocation, setProcessingLocation] =
+		useState<AgentBinding["processingLocation"]>("UNCLASSIFIED");
+	const bindingFor = (purpose: Purpose) =>
+		bindings.find((b) => b.purpose === purpose && b.processingLocation === processingLocation);
+	const locationOptions = LLM_PROCESSING_LOCATIONS.map((location) => ({
+		...location,
+		label: location.value === "UNCLASSIFIED" ? "Workspace default" : location.label,
+	}));
 	const featureEnabled = (purpose: Purpose): boolean =>
 		purpose === "MENTOR" ? mentorEnabled : practicesEnabled;
 
@@ -183,13 +202,53 @@ export function AgentBindingsPage({
 					<div className="space-y-6">
 						<section className="space-y-4">
 							<h2 className="text-lg font-semibold">Model assignments</h2>
+							<FieldGroup>
+								<Field orientation="responsive">
+									<div>
+										<FieldLabel htmlFor="model-assignment-location">Processing location</FieldLabel>
+										<FieldDescription>
+											Member choices use only their selected location. They never fall back to the
+											workspace default.
+										</FieldDescription>
+									</div>
+									<Select
+										items={locationOptions}
+										value={processingLocation}
+										disabled={pendingPurposes.size > 0}
+										onValueChange={(location) => {
+											if (location) setProcessingLocation(location);
+										}}
+									>
+										<SelectTrigger
+											id="model-assignment-location"
+											className="w-full @md/field-group:w-56"
+										>
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent aria-label="Processing location">
+											{locationOptions.map((location) => (
+												<SelectItem key={location.value} value={location.value}>
+													{location.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</Field>
+							</FieldGroup>
 							{PURPOSES.map((meta) => (
 								<AgentPurposeCard
-									key={`${meta.purpose}:${saveRevisions?.[meta.purpose] ?? 0}`}
+									key={`${processingLocation}:${meta.purpose}:${saveRevisions?.[meta.purpose] ?? 0}`}
 									meta={meta}
 									workspaceSlug={workspaceSlug}
 									binding={bindingFor(meta.purpose)}
-									availableModels={availableModels}
+									processingLocation={processingLocation}
+									availableModels={
+										processingLocation === "UNCLASSIFIED"
+											? availableModels
+											: availableModels.filter(
+													(model) => model.processingLocation === processingLocation,
+												)
+									}
 									featureEnabled={featureEnabled(meta.purpose)}
 									pending={pendingPurposes.has(meta.purpose)}
 									onSave={onSave}
@@ -207,17 +266,23 @@ export function AgentBindingsPage({
 }
 
 interface AgentPurposeCardProps {
+	processingLocation: AgentBinding["processingLocation"];
 	meta: PurposeMeta;
 	workspaceSlug: string;
 	binding?: AgentBinding;
 	availableModels: AvailableLlmModel[];
 	featureEnabled: boolean;
 	pending: boolean;
-	onSave: (purpose: Purpose, body: AgentBindingRequest) => void;
-	onTurnOff: (purpose: Purpose) => void;
+	onSave: (
+		purpose: Purpose,
+		body: AgentBindingRequest,
+		processingLocation: AgentBinding["processingLocation"],
+	) => void;
+	onTurnOff: (purpose: Purpose, processingLocation: AgentBinding["processingLocation"]) => void;
 }
 
 function AgentPurposeCard({
+	processingLocation,
 	meta,
 	workspaceSlug,
 	binding,
@@ -271,14 +336,18 @@ function AgentPurposeCard({
 			if (timeout.value == null || concurrency.value == null) setShowAdvanced(true);
 			return;
 		}
-		onSave(meta.purpose, {
-			instanceModelId: selection.scope === "SHARED" ? selection.id : undefined,
-			workspaceModelId: selection.scope === "WORKSPACE" ? selection.id : undefined,
-			timeoutSeconds: timeout.value,
-			maxConcurrentJobs: concurrency.value,
-			allowInternet,
-			enabled,
-		});
+		onSave(
+			meta.purpose,
+			{
+				instanceModelId: selection.scope === "SHARED" ? selection.id : undefined,
+				workspaceModelId: selection.scope === "WORKSPACE" ? selection.id : undefined,
+				timeoutSeconds: timeout.value,
+				maxConcurrentJobs: concurrency.value,
+				allowInternet,
+				enabled,
+			},
+			processingLocation,
+		);
 	};
 
 	return (
@@ -433,7 +502,7 @@ function AgentPurposeCard({
 								type="button"
 								variant="outline"
 								size="sm"
-								onClick={() => onTurnOff(meta.purpose)}
+								onClick={() => onTurnOff(meta.purpose, processingLocation)}
 								disabled={pending}
 							>
 								Clear assignment

@@ -13,4 +13,6 @@ public enum AgentJobCancellationReason {
     BUDGET_EXHAUSTED,
     /** The catalog binding was revoked or changed between submit and claim. */
     MODEL_UNAVAILABLE,
+    /** A developer declined AI or has not made the workspace-required choice. */
+    MEMBER_AI_DECLINED,
 }

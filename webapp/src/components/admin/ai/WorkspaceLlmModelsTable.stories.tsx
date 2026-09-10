@@ -12,6 +12,7 @@ async function openDeleteConfirm(canvas: StoryContext["canvas"], name: RegExp) {
 
 const mockModels: WorkspaceLlmModel[] = [
 	{
+		processingLocation: "UNCLASSIFIED",
 		id: 1,
 		slug: "gpt-5-mini",
 		displayName: "GPT-5 mini",
@@ -26,6 +27,7 @@ const mockModels: WorkspaceLlmModel[] = [
 		createdAt: new Date("2026-06-01T10:00:00Z"),
 	},
 	{
+		processingLocation: "UNCLASSIFIED",
 		id: 2,
 		slug: "local-llama",
 		displayName: "Local Llama",

@@ -43,6 +43,7 @@ const AGENTS_QUERY_KEY = listAgentsQueryKey({ path: { workspaceSlug: "acme" } })
 
 function binding(purpose: AgentBinding["purpose"], instanceModelId: number): AgentBinding {
 	return {
+		processingLocation: "UNCLASSIFIED",
 		purpose,
 		instanceModelId,
 		enabled: true,

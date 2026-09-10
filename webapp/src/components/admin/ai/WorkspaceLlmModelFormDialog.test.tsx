@@ -33,6 +33,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 	it("keeps the upstream model identity immutable", () => {
 		const onUpdate = vi.fn();
 		const editing: WorkspaceLlmModel = {
+			processingLocation: "UNCLASSIFIED",
 			id: 1,
 			slug: "gpt-5",
 			displayName: "GPT-5",
@@ -63,6 +64,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 	it("turns an active model off when its price becomes unknown", () => {
 		const onUpdate = vi.fn();
 		const editing: WorkspaceLlmModel = {
+			processingLocation: "UNCLASSIFIED",
 			id: 2,
 			slug: "gpt-5-active",
 			displayName: "GPT-5 active",

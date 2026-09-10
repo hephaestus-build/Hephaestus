@@ -109,6 +109,19 @@ class LlmModelResolverTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRefuseUnclassifiedOrMismatchedModelsForAnExplicitLocation() {
+        var binding = binding();
+        binding.setInstanceModel(model);
+        binding.setProcessingLocation(LlmProcessingLocation.ON_PREMISES);
+        assertThat(resolver.isAvailable(binding)).isFalse();
+        model.setProcessingLocation(LlmProcessingLocation.PRIVATE_CLOUD);
+        assertThat(resolver.isAvailable(binding)).isFalse();
+        assertThatThrownBy(() -> resolver.resolve(binding)).isInstanceOf(IllegalStateException.class);
+        model.setProcessingLocation(LlmProcessingLocation.ON_PREMISES);
+        assertThat(resolver.isAvailable(binding)).isTrue();
+    }
+
+    @Test
     void shouldRejectDisabledModelBeforeBuildingRuntimeConfiguration() {
         model.setEnabled(false);
         WorkspaceAgentBinding binding = binding();

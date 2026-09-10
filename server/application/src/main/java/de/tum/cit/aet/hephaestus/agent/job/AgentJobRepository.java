@@ -23,6 +23,7 @@ import tools.jackson.databind.JsonNode;
 
 @Repository
 public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
+
     @Modifying(flushAutomatically = true)
     @Query("DELETE FROM AgentJob j WHERE j.workspace.id = :workspaceId")
     int deleteAllByWorkspaceId(@Param("workspaceId") Long workspaceId);

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.config;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.util.List;
 import java.util.Optional;
@@ -26,18 +27,32 @@ public interface WorkspaceAgentBindingRepository extends JpaRepository<Workspace
             + "WHERE b.workspace.id = :workspaceId")
     List<WorkspaceAgentBinding> findByWorkspaceIdWithModels(@Param("workspaceId") Long workspaceId);
 
+    @Query("SELECT b FROM WorkspaceAgentBinding b WHERE b.workspace.id = :workspaceId AND b.purpose = :purpose "
+            + "AND b.processingLocation = de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation.UNCLASSIFIED")
     Optional<WorkspaceAgentBinding> findByWorkspaceIdAndPurpose(Long workspaceId, AgentPurpose purpose);
+
+    @Query("SELECT b FROM WorkspaceAgentBinding b LEFT JOIN FETCH b.instanceModel im LEFT JOIN FETCH im.connection "
+            + "LEFT JOIN FETCH b.workspaceModel wm LEFT JOIN FETCH wm.connection "
+            + "WHERE b.workspace.id = :workspaceId AND b.purpose = :purpose AND b.processingLocation = :location")
+    Optional<WorkspaceAgentBinding> findByWorkspaceIdAndPurposeAndProcessingLocation(
+            Long workspaceId, AgentPurpose purpose, LlmProcessingLocation location);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM WorkspaceAgentBinding b WHERE b.workspace.id = :workspaceId AND b.id = :id")
+    Optional<WorkspaceAgentBinding> findByWorkspaceIdAndIdForUpdate(Long workspaceId, Long id);
 
     /** As {@link #findByWorkspaceIdWithModels}, for one purpose. */
     @Query("SELECT b FROM WorkspaceAgentBinding b "
             + "LEFT JOIN FETCH b.instanceModel im LEFT JOIN FETCH im.connection "
             + "LEFT JOIN FETCH b.workspaceModel wm LEFT JOIN FETCH wm.connection "
-            + "WHERE b.workspace.id = :workspaceId AND b.purpose = :purpose")
+            + "WHERE b.workspace.id = :workspaceId AND b.purpose = :purpose "
+            + "AND b.processingLocation = de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation.UNCLASSIFIED")
     Optional<WorkspaceAgentBinding> findByWorkspaceIdAndPurposeWithModels(
             @Param("workspaceId") Long workspaceId, @Param("purpose") AgentPurpose purpose);
 
     /** Row-lock the binding for admission's re-resolve/re-price, mirroring the model row lock order. */
-    @Query("SELECT b FROM WorkspaceAgentBinding b WHERE b.workspace.id = :workspaceId AND b.purpose = :purpose")
+    @Query("SELECT b FROM WorkspaceAgentBinding b WHERE b.workspace.id = :workspaceId AND b.purpose = :purpose "
+            + "AND b.processingLocation = de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation.UNCLASSIFIED")
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     Optional<WorkspaceAgentBinding> findByWorkspaceIdAndPurposeForUpdate(
             @Param("workspaceId") Long workspaceId, @Param("purpose") AgentPurpose purpose);

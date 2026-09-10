@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.config;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
@@ -21,10 +22,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * A workspace's agents: what model, with what limits, runs each {@link AgentPurpose}. There is
- * exactly one agent per purpose, so the purpose is its natural key and {@code PUT} is idempotent.
+ * one assignment per purpose and processing location; {@code PUT} is idempotent within that pair.
  */
 @WorkspaceScopedController
 @RequestMapping("/agents")
@@ -61,8 +63,10 @@ public class AgentBindingController {
     public ResponseEntity<AgentBindingDTO> configureAgent(
             WorkspaceContext workspaceContext,
             @PathVariable AgentPurpose purpose,
+            @RequestParam(defaultValue = "UNCLASSIFIED") LlmProcessingLocation processingLocation,
             @Valid @RequestBody AgentBindingRequestDTO request) {
-        WorkspaceAgentBinding binding = agentBindingService.upsertBinding(workspaceContext, purpose, request);
+        WorkspaceAgentBinding binding =
+                agentBindingService.upsertBinding(workspaceContext, purpose, processingLocation, request);
         return ResponseEntity.ok(AgentBindingDTO.from(binding, agentBindingService.isReady(binding)));
     }
 
@@ -71,8 +75,11 @@ public class AgentBindingController {
     @ApiResponse(responseCode = "204", description = "Binding removed")
     @RequireAtLeastWorkspaceAdmin
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "AGENT_BINDING")
-    public ResponseEntity<Void> deleteAgent(WorkspaceContext workspaceContext, @PathVariable AgentPurpose purpose) {
-        agentBindingService.deleteBinding(workspaceContext, purpose);
+    public ResponseEntity<Void> deleteAgent(
+            WorkspaceContext workspaceContext,
+            @PathVariable AgentPurpose purpose,
+            @RequestParam(defaultValue = "UNCLASSIFIED") LlmProcessingLocation processingLocation) {
+        agentBindingService.deleteBinding(workspaceContext, purpose, processingLocation);
         return ResponseEntity.noContent().build();
     }
 }

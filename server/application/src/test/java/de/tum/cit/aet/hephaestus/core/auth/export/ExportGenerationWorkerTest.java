@@ -57,7 +57,8 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
     void shouldSetPayloadExpiryAndReadyWhenGenerationSucceeds() {
         AccountExport export = existingExport();
         ExportBundle.Profile profile = new ExportBundle.Profile(ACCOUNT_ID, "User", null, "ACTIVE", NOW);
-        ExportBundle bundle = new ExportBundle("v1", NOW, profile, List.of(), List.of(), List.of(), null, List.of());
+        ExportBundle bundle = new ExportBundle(
+                "v1", NOW, profile, List.of(), List.of(), List.of(), null, List.of(), java.util.List.of());
         when(assembler.assemble(ACCOUNT_ID)).thenReturn(bundle);
         when(objectMapper.writeValueAsBytes(bundle)).thenReturn(new byte[] {1, 2, 3});
 

@@ -9,7 +9,7 @@ import org.jspecify.annotations.Nullable;
  * binding.
  */
 public interface ModelBindingSource {
-    Long getId();
+    LlmProcessingLocation getProcessingLocation();
 
     @Nullable
     LlmModel getInstanceModel();
@@ -24,6 +24,4 @@ public interface ModelBindingSource {
     boolean isAllowInternet();
 
     int getTimeoutSeconds();
-
-    int getMaxConcurrentJobs();
 }

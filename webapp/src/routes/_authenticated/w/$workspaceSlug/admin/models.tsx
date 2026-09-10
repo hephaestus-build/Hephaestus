@@ -58,14 +58,25 @@ function ModelsContainer() {
 	const cacheSavedBinding = (saved: AgentBinding) =>
 		queryClient.setQueryData<AgentBinding[]>(bindingsKey, (current) => {
 			const bindings = current ?? [];
-			return bindings.some((b) => b.purpose === saved.purpose)
-				? bindings.map((b) => (b.purpose === saved.purpose ? saved : b))
+			return bindings.some(
+				(b) => b.purpose === saved.purpose && b.processingLocation === saved.processingLocation,
+			)
+				? bindings.map((b) =>
+						b.purpose === saved.purpose && b.processingLocation === saved.processingLocation
+							? saved
+							: b,
+					)
 				: [...bindings, saved];
 		});
 
-	const dropCachedBinding = (purpose: Purpose) =>
+	const dropCachedBinding = (
+		purpose: Purpose,
+		processingLocation: AgentBinding["processingLocation"],
+	) =>
 		queryClient.setQueryData<AgentBinding[]>(bindingsKey, (current) =>
-			(current ?? []).filter((b) => b.purpose !== purpose),
+			(current ?? []).filter(
+				(b) => b.purpose !== purpose || b.processingLocation !== processingLocation,
+			),
 		);
 
 	const [saveRevisions, setSaveRevisions] = useState<Partial<Record<Purpose, number>>>({});
@@ -90,7 +101,10 @@ function ModelsContainer() {
 	const deleteAgent = useMutation({
 		...filedUnder(agentWriteKey, deleteAgentMutation()),
 		onSuccess: (_data, variables) => {
-			dropCachedBinding(variables.path.purpose);
+			dropCachedBinding(
+				variables.path.purpose,
+				variables.query?.processingLocation ?? "UNCLASSIFIED",
+			);
 			bumpSaveRevision(variables.path.purpose);
 			void invalidateBindings();
 			toast.success(`${PURPOSE_TITLES[variables.path.purpose]} turned off`);
@@ -131,8 +145,16 @@ function ModelsContainer() {
 					void query.refetch();
 				}
 			}}
-			onSave={(purpose, body) => configureAgent.mutate({ path: { workspaceSlug, purpose }, body })}
-			onTurnOff={(purpose) => deleteAgent.mutate({ path: { workspaceSlug, purpose } })}
+			onSave={(purpose, body, processingLocation) =>
+				configureAgent.mutate({
+					path: { workspaceSlug, purpose },
+					query: { processingLocation },
+					body,
+				})
+			}
+			onTurnOff={(purpose, processingLocation) =>
+				deleteAgent.mutate({ path: { workspaceSlug, purpose }, query: { processingLocation } })
+			}
 		/>
 	);
 }

@@ -39,6 +39,7 @@ export const SIGNAL_STATE_REASON_LABELS: Record<SignalStateReason, string> = {
 		"The author, repository, or base branch is outside the workspace's review coverage",
 	WORKSPACE_INACTIVE: "The workspace was not active",
 	PRACTICES_DISABLED: "Practice reviews are switched off for this workspace",
+	MEMBER_AI_DECLINED: "The developer has not enabled AI practice reviews in this workspace",
 	NO_ACTIVE_PRACTICE: "No practice was watching for this when it happened",
 	// States the fact and stops: the instruction to act on it travels with the link in
 	// REFUSAL_FIXES, which only readers who can act on it are shown.

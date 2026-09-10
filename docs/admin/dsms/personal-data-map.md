@@ -47,3 +47,13 @@ more than 48 hours.
 
 Review this map with the [record of processing](./record-of-processing.md),
 [artifact-source governance](./artifact-source-governance.md), and the public privacy statement.
+
+## Member onboarding preferences
+
+`workspace_member_onboarding` stores an account's AI choice and welcome/completion timestamps in a
+workspace. The account export includes its own rows; account erasure deletes them. Workspace purge
+also deletes them. `workspace_onboarding_settings` stores the welcome Markdown and required integration
+identifiers; the text can contain personal data and is removed with workspace purge, not an individual
+account's erasure. Operators must keep welcome text relevant to the team rather than recording
+individuals' decisions there. Neither table has an independent expiry. Configuration changes also follow
+the existing configuration-audit retention policy.

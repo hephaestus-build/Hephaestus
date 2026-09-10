@@ -17,7 +17,12 @@ const sections = {
 	"past-work": sectionBody("past-work"),
 };
 
-const readyBinding = { purpose: "PRACTICE_REVIEW", enabled: true, ready: true } as const;
+const readyBinding = {
+	processingLocation: "UNCLASSIFIED",
+	purpose: "PRACTICE_REVIEW",
+	enabled: true,
+	ready: true,
+} as const;
 
 const meta = {
 	title: "Workspace admin/Practices/Review/Overview",

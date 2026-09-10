@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.config;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation;
 import de.tum.cit.aet.hephaestus.agent.catalog.ModelBindingSource;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
@@ -34,15 +35,15 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>Routing and credentials live in the selected catalog model. Exactly one of
  * {@link #instanceModel} / {@link #workspaceModel} is set ({@code ck_workspace_agent_binding_single_model}
- * enforces it); no row for a purpose means it is unconfigured (off).
+ * enforces it); no row for a purpose and location means that route is unconfigured (off).
  */
 @Entity
 @Table(
         name = "workspace_agent_binding",
         uniqueConstraints =
                 @UniqueConstraint(
-                        name = "uk_workspace_agent_binding_purpose",
-                        columnNames = {"workspace_id", "purpose"}))
+                        name = "uk_workspace_agent_binding_purpose_location",
+                        columnNames = {"workspace_id", "purpose", "processing_location"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -66,6 +67,12 @@ public class WorkspaceAgentBinding implements ModelBindingSource {
     @Enumerated(EnumType.STRING)
     @Column(name = "purpose", nullable = false, length = 32)
     private AgentPurpose purpose;
+
+    /** UNCLASSIFIED is the existing workspace default, never a fallback for an explicit member choice. */
+    @Enumerated(EnumType.STRING)
+    @ColumnDefault("'UNCLASSIFIED'")
+    @Column(name = "processing_location", nullable = false, length = 24)
+    private LlmProcessingLocation processingLocation = LlmProcessingLocation.UNCLASSIFIED;
 
     @ColumnDefault("true")
     @Column(name = "enabled", nullable = false)

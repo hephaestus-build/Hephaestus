@@ -338,7 +338,7 @@ class LlmModelServiceTest extends BaseUnitTest {
     class UpstreamIdConflict {
 
         private CreateLlmModelRequestDTO createRequest(String upstreamModelId) {
-            return new CreateLlmModelRequestDTO("gpt-5-eu", "GPT-5 EU", upstreamModelId, null, null, null, null);
+            return new CreateLlmModelRequestDTO("gpt-5-eu", "GPT-5 EU", upstreamModelId, null, null, null, null, null);
         }
 
         @Test
@@ -346,7 +346,7 @@ class LlmModelServiceTest extends BaseUnitTest {
             model.setEnabled(true);
             model.getConnection().setEnabled(true);
             when(priceRepository.findByModelIdAndEffectiveToIsNull(7L)).thenReturn(Optional.empty());
-            UpdateLlmModelRequestDTO request = new UpdateLlmModelRequestDTO("Renamed", null, null, null, null);
+            UpdateLlmModelRequestDTO request = new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null);
 
             assertThatThrownBy(() -> modelService.update(7L, request))
                     .isInstanceOf(IllegalArgumentException.class)
@@ -372,7 +372,7 @@ class LlmModelServiceTest extends BaseUnitTest {
         @Test
         void updateKeepsImmutableUpstreamModelIdAndAuditsTheModelAndConnectionItChanged() {
             stubModelSavePassthrough();
-            UpdateLlmModelRequestDTO request = new UpdateLlmModelRequestDTO("Renamed", null, null, null, null);
+            UpdateLlmModelRequestDTO request = new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null);
 
             LlmModel result = modelService.update(7L, request);
 
@@ -384,7 +384,7 @@ class LlmModelServiceTest extends BaseUnitTest {
         @Test
         void refusesToCreateAModelThatIsAlreadyActive() {
             CreateLlmModelRequestDTO active =
-                    new CreateLlmModelRequestDTO("gpt-5-eu", "GPT-5 EU", "gpt-5", null, null, null, true);
+                    new CreateLlmModelRequestDTO("gpt-5-eu", "GPT-5 EU", "gpt-5", null, null, null, null, true);
 
             assertThatThrownBy(() -> modelService.create(3L, active))
                     .isInstanceOf(IllegalArgumentException.class)

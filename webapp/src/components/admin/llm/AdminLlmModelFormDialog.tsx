@@ -110,6 +110,7 @@ function AdminLlmModelFormDialogContent({
 			contextWindow: fields.contextWindow.trim() ? Number(fields.contextWindow) : undefined,
 			maxOutputTokens: fields.maxOutputTokens.trim() ? Number(fields.maxOutputTokens) : undefined,
 			supportsReasoning: fields.supportsReasoning,
+			processingLocation: fields.processingLocation,
 			enabled: fields.enabled,
 		};
 		const metadata: CreateLlmModelRequest | UpdateLlmModelRequest = isEdit

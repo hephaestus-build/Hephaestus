@@ -26,6 +26,9 @@ public record AvailableLlmModelDTO(
         @NonNull @Schema(description = "Whether the model supports a reasoning mode")
         Boolean supportsReasoning,
 
+        @NonNull @Schema(description = "Operator-declared processing location")
+        LlmProcessingLocation processingLocation,
+
         @NonNull @Schema(description = "Pricing mode") PricingMode pricingMode,
 
         @Nullable @Schema(description = "Input rate per 1M tokens (USD)")
@@ -47,6 +50,7 @@ public record AvailableLlmModelDTO(
                 model.getDisplayName(),
                 model.getConnection().getDisplayName(),
                 model.isSupportsReasoning(),
+                model.getProcessingLocation(),
                 pricingMode,
                 currentPrice != null ? currentPrice.getPer1mInputUsd() : null,
                 currentPrice != null ? currentPrice.getPer1mOutputUsd() : null,
@@ -61,6 +65,7 @@ public record AvailableLlmModelDTO(
                 model.getDisplayName(),
                 model.getConnection().getDisplayName(),
                 model.isSupportsReasoning(),
+                model.getProcessingLocation(),
                 model.getPricingMode(),
                 model.getPer1mInputUsd(),
                 model.getPer1mOutputUsd(),

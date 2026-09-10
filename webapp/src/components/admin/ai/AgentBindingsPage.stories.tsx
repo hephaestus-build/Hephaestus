@@ -19,6 +19,7 @@ async function openPracticeReviewAdvanced(canvas: StoryContext["canvas"]) {
 }
 
 const detectionBinding: AgentBinding = {
+	processingLocation: "UNCLASSIFIED",
 	purpose: "PRACTICE_REVIEW",
 	instanceModelId: 1,
 	enabled: true,

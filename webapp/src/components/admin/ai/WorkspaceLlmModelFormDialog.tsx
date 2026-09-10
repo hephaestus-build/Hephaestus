@@ -95,6 +95,7 @@ function WorkspaceLlmModelFormDialogContent({
 			contextWindow: fields.contextWindow.trim() ? Number(fields.contextWindow) : undefined,
 			maxOutputTokens: fields.maxOutputTokens.trim() ? Number(fields.maxOutputTokens) : undefined,
 			supportsReasoning: fields.supportsReasoning,
+			processingLocation: fields.processingLocation,
 			enabled: isEdit ? fields.enabled : false,
 			pricingMode: price.pricingMode,
 			per1mInputUsd: price.pricingMode === "PRICED" ? price.per1mInputUsd : undefined,

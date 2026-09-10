@@ -31,6 +31,12 @@ public record CreateWorkspaceLlmModelRequestDTO(
         @Nullable @Schema(description = "Whether the model supports a reasoning mode")
         Boolean supportsReasoning,
 
+        @Nullable
+        @Schema(
+                description =
+                        "Operator-declared processing location; unclassified models cannot serve a member's explicit location choice")
+        LlmProcessingLocation processingLocation,
+
         @Nullable @Schema(description = "Whether the model is active (default false)")
         Boolean enabled,
 

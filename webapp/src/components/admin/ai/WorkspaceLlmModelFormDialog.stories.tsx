@@ -8,6 +8,7 @@ import { expectDialogFitsViewport } from "@/test/reflow";
 import { WorkspaceLlmModelFormDialog } from "./WorkspaceLlmModelFormDialog";
 
 const mockModel: WorkspaceLlmModel = {
+	processingLocation: "UNCLASSIFIED",
 	id: 1,
 	slug: "gpt-5-mini",
 	displayName: "GPT-5 mini",

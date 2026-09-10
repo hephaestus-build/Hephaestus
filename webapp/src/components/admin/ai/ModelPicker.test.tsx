@@ -8,6 +8,7 @@ import { ModelPicker, type ModelPickerProps } from "./ModelPicker";
 
 const models: AvailableLlmModel[] = [
 	{
+		processingLocation: "UNCLASSIFIED",
 		id: 1,
 		scope: "SHARED",
 		displayName: "GPT-5",
@@ -18,6 +19,7 @@ const models: AvailableLlmModel[] = [
 		supportsReasoning: true,
 	},
 	{
+		processingLocation: "UNCLASSIFIED",
 		id: 2,
 		scope: "WORKSPACE",
 		displayName: "GPT-5",

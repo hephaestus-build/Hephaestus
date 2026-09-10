@@ -89,7 +89,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
 
     private CreateWorkspaceLlmModelRequestDTO enabledUnpricedCreateRequest() {
         return new CreateWorkspaceLlmModelRequestDTO(
-                "gpt-5", "GPT-5", "gpt-5", null, null, null, true, null, null, null, null, null, null);
+                "gpt-5", "GPT-5", "gpt-5", null, null, null, null, true, null, null, null, null, null, null);
     }
 
     private CreateWorkspaceLlmModelRequestDTO createRequest(
@@ -100,6 +100,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                 "gpt-5",
                 "GPT-5",
                 "gpt-5",
+                null,
                 null,
                 null,
                 null,
@@ -227,6 +228,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                     null,
                     null,
                     null,
+                    null,
                     true,
                     PricingMode.PRICED,
                     new BigDecimal("3.00"),
@@ -257,7 +259,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
             UpdateWorkspaceLlmModelRequestDTO request = new UpdateWorkspaceLlmModelRequestDTO(
-                    "New name", null, null, null, null, null, null, null, null, null, null);
+                    "New name", null, null, null, null, null, null, null, null, null, null, null);
 
             WorkspaceLlmModel result = modelService.update(workspaceContext, 7L, request);
 
@@ -308,7 +310,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
             UpdateWorkspaceLlmModelRequestDTO request = new UpdateWorkspaceLlmModelRequestDTO(
-                    "Renamed", null, null, null, null, null, null, null, null, null, null);
+                    "Renamed", null, null, null, null, null, null, null, null, null, null, null);
 
             WorkspaceLlmModel result = modelService.update(workspaceContext, 7L, request);
 

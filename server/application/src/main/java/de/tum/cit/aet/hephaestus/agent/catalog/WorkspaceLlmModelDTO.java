@@ -38,6 +38,9 @@ public record WorkspaceLlmModelDTO(
         @NonNull @Schema(description = "Whether the model supports a reasoning mode")
         Boolean supportsReasoning,
 
+        @NonNull @Schema(description = "Operator-declared processing location")
+        LlmProcessingLocation processingLocation,
+
         @NonNull @Schema(description = "Active toggle") Boolean enabled,
         @NonNull @Schema(description = "Pricing mode") PricingMode pricingMode,
 
@@ -70,6 +73,7 @@ public record WorkspaceLlmModelDTO(
                 model.getContextWindow(),
                 model.getMaxOutputTokens(),
                 model.isSupportsReasoning(),
+                model.getProcessingLocation(),
                 model.isEnabled(),
                 model.getPricingMode(),
                 model.getPer1mInputUsd(),

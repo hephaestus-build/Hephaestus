@@ -95,6 +95,19 @@ import tools.jackson.databind.node.ObjectNode;
 /** Uses a real translator and lock with a recording emitter and synchronous sandbox stream. */
 @MockitoSettings(strictness = Strictness.LENIENT)
 class MentorChatServiceTest extends BaseUnitTest {
+    @org.junit.jupiter.api.BeforeEach
+    void allowMemberAiForUnrelatedScenarios() {
+        org.mockito.Mockito.lenient()
+                .when(memberAiRouting.binding(
+                        org.mockito.ArgumentMatchers.anyLong(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> agentBindingRepository.findByWorkspaceIdAndPurpose(
+                        invocation.getArgument(0), de.tum.cit.aet.hephaestus.agent.config.AgentPurpose.MENTOR));
+    }
+
+    @org.mockito.Mock
+    private de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter memberAiRouting;
 
     private static final long WORKSPACE_ID = 1L;
     private static final long USER_ID = 99L;
@@ -229,7 +242,6 @@ class MentorChatServiceTest extends BaseUnitTest {
         return new MentorChatService(
                 userRepository,
                 chatThreadRepository,
-                agentBindingRepository,
                 workspaceContextBuilder,
                 mentorPiAdapter,
                 sandboxServiceProvider(interactiveSandboxService),
@@ -242,7 +254,8 @@ class MentorChatServiceTest extends BaseUnitTest {
                 new MentorChatMetrics(meterRegistry),
                 llmBudgetService,
                 llmAdmissionService,
-                proxyCredentialRegistry);
+                proxyCredentialRegistry,
+                memberAiRouting);
     }
 
     @Test
@@ -444,7 +457,7 @@ class MentorChatServiceTest extends BaseUnitTest {
 
         assertThat(String.join("\n", emitter.rawData))
                 .contains(
-                        "Hephaestus is not ready to mentor in this workspace yet. Connect a mentor model, then try again.");
+                        "Your AI preference or this workspace’s model settings do not currently allow conversations with Heph. Review Workspace preferences or ask a workspace owner to check the model assignment.");
         verify(interactiveSandboxService, never()).attach(any());
     }
 
@@ -458,7 +471,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertThat(emitter.recordedTypes()).contains("error");
         assertThat(String.join("\n", emitter.rawData))
                 .contains(
-                        "Hephaestus is not ready to mentor in this workspace yet. Connect a mentor model, then try again.")
+                        "Your AI preference or this workspace’s model settings do not currently allow conversations with Heph. Review Workspace preferences or ask a workspace owner to check the model assignment.")
                 .doesNotContain("workspace " + WORKSPACE_ID);
         try {
             verify(interactiveSandboxService, never()).attach(any());

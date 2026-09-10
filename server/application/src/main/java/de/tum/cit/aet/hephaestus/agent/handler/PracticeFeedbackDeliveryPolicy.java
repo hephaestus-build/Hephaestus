@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
 import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
@@ -50,6 +51,7 @@ import tools.jackson.databind.JsonNode;
 public class PracticeFeedbackDeliveryPolicy {
 
     private final ConversationSourceLiveness conversationSourceLiveness;
+    private final ReviewMemberAiPolicy memberAiPolicy;
     private final DocumentProjection documentProjection;
     private final IssueRepository issueRepository;
     private final PullRequestRepository pullRequestRepository;
@@ -78,8 +80,10 @@ public class PracticeFeedbackDeliveryPolicy {
             PracticeRepository practiceRepository,
             FeedbackApprovalRepository approvalRepository,
             ConversationSourceLiveness conversationSourceLiveness,
+            ReviewMemberAiPolicy memberAiPolicy,
             DocumentProjection documentProjection) {
         this.conversationSourceLiveness = conversationSourceLiveness;
+        this.memberAiPolicy = memberAiPolicy;
         this.documentProjection = documentProjection;
         this.issueRepository = issueRepository;
         this.pullRequestRepository = pullRequestRepository;
@@ -540,6 +544,7 @@ public class PracticeFeedbackDeliveryPolicy {
             @Nullable String repository,
             @Nullable String baseBranch,
             @Nullable String artifactKind) {
+        FactAnswer effectiveConsent = memberAiPolicy.allowsResult(job) ? consent : FactAnswer.of(false);
         Long admittedRevision = job.getPracticeRolloutRevision();
         Long evaluatedRevision =
                 workspace == null ? null : workspace.getReviewSettings().getRolloutRevision();
@@ -561,7 +566,7 @@ public class PracticeFeedbackDeliveryPolicy {
                                 workspace.getReviewSettings().getDeliveryStatus() == PracticeDeliveryStatus.ACTIVE),
                 coverage == null ? FactAnswer.NOT_APPLICABLE : FactAnswer.of(coverage.admitted()),
                 autonomy.authorized(),
-                consent,
+                effectiveConsent,
                 artifactEligible,
                 artifactRefusal));
         DeliveryPolicyFactsSnapshot snapshot = new DeliveryPolicyFactsSnapshot(
@@ -574,7 +579,7 @@ public class PracticeFeedbackDeliveryPolicy {
                 coverage == null ? null : coverage.repositoryMatched(),
                 coverage == null ? null : coverage.branchMatched(),
                 coverage == null ? null : coverage.personMatched(),
-                recordedConsent(consent),
+                recordedConsent(effectiveConsent),
                 workspace == null ? null : workspace.getReviewSettings().getDeliveryStatus(),
                 job.getPracticeTriggerMode(),
                 autonomy.facts());

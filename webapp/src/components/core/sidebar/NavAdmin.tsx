@@ -34,6 +34,7 @@ import {
 
 export interface NavAdminProps {
 	workspaceSlug: string;
+	isOwner?: boolean;
 	integrationKinds: ReadonlyArray<IntegrationCatalogEntry["kind"]>;
 	scmProviderType?: "GITHUB" | "GITLAB";
 }
@@ -58,6 +59,7 @@ function useSectionOpen(onSection: boolean) {
 export function NavAdmin({
 	workspaceSlug,
 	integrationKinds,
+	isOwner = false,
 	scmProviderType = "GITHUB",
 }: NavAdminProps) {
 	const matchRoute = useMatchRoute();
@@ -107,6 +109,18 @@ export function NavAdmin({
 		<SidebarGroup>
 			<SidebarGroupLabel>Administration</SidebarGroupLabel>
 			<SidebarMenu>
+				{isOwner && (
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							tooltip="Member onboarding"
+							isActive={Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/onboarding" }))}
+							render={<Link to="/w/$workspaceSlug/admin/onboarding" params={{ workspaceSlug }} />}
+						>
+							<BookUser />
+							<span>Member onboarding</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
+				)}
 				<SidebarMenuItem>
 					<SidebarMenuButton
 						tooltip="Workspace settings"

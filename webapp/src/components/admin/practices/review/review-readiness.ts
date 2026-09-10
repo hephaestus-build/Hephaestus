@@ -29,7 +29,8 @@ export const REVIEW_RUNNING_DEFS: StatusDefs<ReviewRunningTone> = {
 		label: "Reviews are running",
 		icon: CircleCheckIcon,
 		badgeVariant: "success",
-		description: "Practice reviews are on and a review model is ready, so new work gets reviewed.",
+		description:
+			"Practice reviews are on and a review model is ready. Eligible work can be reviewed; each developer’s AI choice still applies.",
 	},
 	checking: {
 		label: "Checking reviews",
@@ -64,4 +65,10 @@ export function reviewRunningTone({ enabled, model }: ReviewRunningState): Revie
 	if (model.status === "error") return "unconfirmed";
 	if (!reviewModelRunnable(model)) return "blocked";
 	return "running";
+}
+
+/** Any configured processing location can make workspace reviews runnable; individual choices still apply. */
+export function availableReviewBinding(bindings: AgentBinding[]): AgentBinding | undefined {
+	const reviews = bindings.filter((binding) => binding.purpose === "PRACTICE_REVIEW");
+	return reviews.find((binding) => binding.enabled && binding.ready) ?? reviews[0];
 }

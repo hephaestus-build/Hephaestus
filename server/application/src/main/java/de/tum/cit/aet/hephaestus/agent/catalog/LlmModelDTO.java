@@ -38,6 +38,9 @@ public record LlmModelDTO(
         @NonNull @Schema(description = "Whether the model supports a reasoning mode")
         Boolean supportsReasoning,
 
+        @NonNull @Schema(description = "Operator-declared processing location")
+        LlmProcessingLocation processingLocation,
+
         @NonNull @Schema(description = "Share with all workspaces (PUBLIC) or only selected ones (GRANTED)")
         ModelVisibility visibility,
 
@@ -65,6 +68,7 @@ public record LlmModelDTO(
                 model.getContextWindow(),
                 model.getMaxOutputTokens(),
                 model.isSupportsReasoning(),
+                model.getProcessingLocation(),
                 model.getVisibility(),
                 grantedWorkspaceIds,
                 model.isEnabled(),

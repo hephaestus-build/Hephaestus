@@ -10,9 +10,10 @@ import {
 
 interface NavFooterProps {
 	isAppAdmin?: boolean;
+	workspaceSlug?: string;
 }
 
-export function NavFooter({ isAppAdmin = false }: NavFooterProps) {
+export function NavFooter({ isAppAdmin = false, workspaceSlug }: NavFooterProps) {
 	return (
 		<>
 			{isAppAdmin && (
@@ -29,6 +30,17 @@ export function NavFooter({ isAppAdmin = false }: NavFooterProps) {
 				</>
 			)}
 			<SidebarMenu>
+				{workspaceSlug && (
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							tooltip="Workspace preferences"
+							render={<Link to="/w/$workspaceSlug/onboarding" params={{ workspaceSlug }} />}
+						>
+							<ShieldCheck />
+							<span>Workspace preferences</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
+				)}
 				<SidebarMenuItem>
 					<SidebarMenuButton tooltip="User settings" render={<Link to="/settings" />}>
 						<UserRoundCog />

@@ -1,5 +1,14 @@
 import { AlertTriangle } from "lucide-react";
 import { useId } from "react";
+import type { LlmModel } from "@/api/types.gen";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { LLM_PROCESSING_LOCATIONS } from "@/lib/llm-processing-location";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -27,6 +36,7 @@ export interface LlmModelFieldsValue {
 	contextWindow: string;
 	maxOutputTokens: string;
 	supportsReasoning: boolean;
+	processingLocation: LlmModel["processingLocation"];
 	enabled: boolean;
 	price: PriceModeValue;
 }
@@ -37,6 +47,7 @@ type EditedModel = {
 	contextWindow?: number;
 	maxOutputTokens?: number;
 	supportsReasoning?: boolean;
+	processingLocation?: LlmModel["processingLocation"];
 	enabled?: boolean;
 };
 
@@ -50,6 +61,7 @@ export function modelFieldsValueOf(
 		contextWindow: model?.contextWindow != null ? String(model.contextWindow) : "",
 		maxOutputTokens: model?.maxOutputTokens != null ? String(model.maxOutputTokens) : "",
 		supportsReasoning: model?.supportsReasoning ?? false,
+		processingLocation: model?.processingLocation ?? "UNCLASSIFIED",
 		enabled: model?.enabled ?? false,
 		price,
 	};
@@ -217,6 +229,36 @@ export function LlmModelFields({
 					)}
 				</Field>
 			</div>
+
+			<Field>
+				<FieldLabel htmlFor={`${idPrefix}-processing-location`}>Processing location</FieldLabel>
+				<Select
+					items={LLM_PROCESSING_LOCATIONS}
+					value={value.processingLocation}
+					onValueChange={(location) => {
+						if (location) update({ processingLocation: location });
+					}}
+				>
+					<SelectTrigger
+						id={`${idPrefix}-processing-location`}
+						aria-describedby={`${idPrefix}-processing-location-help`}
+					>
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent aria-label="Processing location">
+						{LLM_PROCESSING_LOCATIONS.map((location) => (
+							<SelectItem key={location.value} value={location.value}>
+								{location.label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				<FieldDescription id={`${idPrefix}-processing-location-help`}>
+					Declare where this model actually processes data, including any gateway routing.
+					Unclassified models cannot serve a member's location choice. Changing this can stop active
+					work.
+				</FieldDescription>
+			</Field>
 
 			<Field orientation="horizontal">
 				<Checkbox

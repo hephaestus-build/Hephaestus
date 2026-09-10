@@ -7,6 +7,7 @@ import { AdminLlmModelsSection } from "./AdminLlmModelsSection";
 
 const mockModels: LlmModel[] = [
 	{
+		processingLocation: "UNCLASSIFIED",
 		id: 1,
 		slug: "gpt-5-eu",
 		displayName: "GPT-5",
@@ -28,6 +29,7 @@ const mockModels: LlmModel[] = [
 		createdAt: new Date("2026-05-01T10:00:00Z"),
 	},
 	{
+		processingLocation: "UNCLASSIFIED",
 		id: 2,
 		slug: "local-llama",
 		displayName: "Local Llama (self-hosted)",
@@ -48,6 +50,7 @@ const mockModels: LlmModel[] = [
 		createdAt: new Date("2026-05-01T10:00:00Z"),
 	},
 	{
+		processingLocation: "UNCLASSIFIED",
 		id: 3,
 		slug: "unpriced-model",
 		displayName: "New model (not priced yet)",

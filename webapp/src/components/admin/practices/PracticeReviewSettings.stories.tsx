@@ -8,6 +8,7 @@ import { mockReviewSettings } from "./story-mock-data";
 
 const settings = mockReviewSettings({ deliverToMerged: false });
 const readyBinding: AgentBinding = {
+	processingLocation: "UNCLASSIFIED",
 	purpose: "PRACTICE_REVIEW",
 	enabled: true,
 	ready: true,

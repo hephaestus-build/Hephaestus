@@ -8,6 +8,7 @@ import { ModelPicker } from "./ModelPicker";
 
 const mockModels: AvailableLlmModel[] = [
 	{
+		processingLocation: "UNCLASSIFIED",
 		id: 1,
 		scope: "SHARED",
 		displayName: "GPT-5",
@@ -18,6 +19,7 @@ const mockModels: AvailableLlmModel[] = [
 		supportsReasoning: true,
 	},
 	{
+		processingLocation: "UNCLASSIFIED",
 		id: 2,
 		scope: "SHARED",
 		displayName: "Local Llama (self-hosted)",
@@ -26,6 +28,7 @@ const mockModels: AvailableLlmModel[] = [
 		supportsReasoning: false,
 	},
 	{
+		processingLocation: "UNCLASSIFIED",
 		id: 10,
 		scope: "WORKSPACE",
 		displayName: "My OpenAI key",

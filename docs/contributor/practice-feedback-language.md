@@ -148,3 +148,11 @@ Severity, feedback routing and result counts use the derived outcome, not assess
 server, sandbox tool contract and database reject contradictory axes. They never manufacture a
 judgment by defaulting status, presence, assessment or severity. See the
 [review pipeline](./practice-review-pipeline.mdx) for capture and delivery boundaries.
+## Member onboarding and AI choices
+
+**Member onboarding** is first-visit guidance after existing workspace membership. It is not an
+admission request, approval, entitlement, or provisioning workflow. **Workspace preferences** is the
+member-facing place to change an **AI choice**: **On-premises**, **Private cloud**, or **No AI**.
+A **processing location** is the operator-declared location of a model; **Unclassified** makes no
+location claim. **Workspace default** is the legacy assignment, never a fallback for an explicit
+member choice. These are preferences and configuration, not research consent.

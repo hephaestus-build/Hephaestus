@@ -62,6 +62,38 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class AgentJobServiceTest extends BaseUnitTest {
+    @org.junit.jupiter.api.BeforeEach
+    void allowMemberAiForUnrelatedScenarios() {
+        org.mockito.Mockito.lenient()
+                .when(memberAiPolicy.permitsReview(
+                        org.mockito.ArgumentMatchers.anyLong(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
+        org.mockito.Mockito.lenient()
+                .when(memberAiPolicy.allowsResult(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
+        org.mockito.Mockito.lenient()
+                .when(memberAiPolicy.binding(
+                        org.mockito.ArgumentMatchers.anyLong(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> agentBindingRepository
+                        .findByWorkspaceIdAndPurposeWithModels(
+                                invocation.getArgument(0),
+                                de.tum.cit.aet.hephaestus.agent.config.AgentPurpose.PRACTICE_REVIEW)
+                        .filter(de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding::isEnabled));
+        var handler = org.mockito.Mockito.mock(JobTypeHandler.class);
+        org.mockito.Mockito.lenient()
+                .when(handlerRegistry.getHandler(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(handler);
+        org.mockito.Mockito.lenient()
+                .when(handler.createSubmission(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(ignored -> createSubmission());
+    }
+
+    @org.mockito.Mock
+    private de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy memberAiPolicy;
 
     @Mock
     private AgentJobRepository agentJobRepository;
@@ -104,7 +136,7 @@ class AgentJobServiceTest extends BaseUnitTest {
     void setUp() {
         service = new AgentJobService(
                 agentJobRepository,
-                agentBindingRepository,
+                memberAiPolicy,
                 workspaceRepository,
                 connectionService,
                 handlerRegistry,
@@ -207,6 +239,16 @@ class AgentJobServiceTest extends BaseUnitTest {
                 TransactionCallback<?> callback = inv.getArgument(0);
                 return callback.doInTransaction(mock(TransactionStatus.class));
             });
+        }
+
+        @Test
+        void shouldRefuseNewReviewsWhenDeveloperHasChosenNoAi() {
+            when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
+            when(memberAiPolicy.permitsReview(eq(1L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
+                    .thenReturn(false);
+            assertThat(service.submit(1L, AgentJobType.PULL_REQUEST_REVIEW, mock(JobSubmissionRequest.class), null))
+                    .isEmpty();
+            verify(agentJobRepository, never()).saveAndFlush(any());
         }
 
         @Test
