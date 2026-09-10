@@ -175,7 +175,7 @@ jobs:
           list-suites: failed
           list-tests: failed
           # Source lookup is needed only for failure annotations, not successful summaries.
-          max-annotations: ${{ failure() && 50 || 0 }}
+          max-annotations: ${{ job.status == 'failure' && 50 || 0 }}
           fail-on-error: false
 
       - name: Retain full database test reports

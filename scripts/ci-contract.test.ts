@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
 
+import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
 import { type Document, isMap, isScalar, isSeq, parseDocument, visit, type YAMLMap } from "yaml";
 
 import { evaluate as evaluateVulnerabilityPolicy } from "./check-release-vulnerabilities.ts";
@@ -494,6 +495,52 @@ void describe("CI contract", () => {
 				assert.ok(paths.includes(input), `${gate} must include ${input}`);
 		}
 		assert.ok(asArray(filters.e2e, "browser test paths").includes(".java-version"));
+	});
+
+	void test("test-report inputs use permitted expressions and annotate every failed test leg", async () => {
+		const reporters = new Set<string>();
+		for (const [file, source] of await workflowSources()) {
+			visit(parseDocument(source), {
+				Map(_key, declaration) {
+					if (!String(declaration.get("uses")).startsWith("dorny/test-reporter@")) return;
+					const inputs = stepInputs(declaration);
+					const template = asString(inputs.get("max-annotations"), `${file} max-annotations`);
+					const expression = template.match(/^\$\{\{([\s\S]+)}}$/)?.[1];
+					assert.ok(expression, `${file} must calculate annotation count`);
+					// Status functions are available in step `if`, not action `with` inputs.
+					// No custom status functions are registered: the native expression parser rejects them.
+					const parsed = new Parser(
+						new Lexer(expression).lex().tokens,
+						["job", "steps"],
+						[],
+					).parse();
+					const name = String(inputs.get("name"));
+					reporters.add(`${file}: ${name}`);
+					for (const status of ["success", "failure", "cancelled"])
+						for (const tests of ["success", "failure", "skipped"])
+							for (const chromatic of ["success", "failure", "skipped"]) {
+								const context: unknown = JSON.parse(
+									JSON.stringify({
+										job: { status },
+										steps: { tests: { outcome: tests }, chromatic: { outcome: chromatic } },
+									}),
+									data.reviver,
+								);
+								assert.ok(context instanceof data.Dictionary);
+								const failed =
+									status === "failure" ||
+									(name === "Test Results - Webapp Stories" && tests === "failure") ||
+									(name === "Test Results - Chromatic" && chromatic === "failure");
+								assert.equal(
+									new Evaluator(parsed, context).evaluate().coerceString(),
+									failed ? "50" : "0",
+									`${file}: ${name}, ${status}, tests=${tests}, chromatic=${chromatic}`,
+								);
+							}
+				},
+			});
+		}
+		assert.equal(reporters.size, 6);
 	});
 
 	void test("buildpack reporting changes exercise the image pipeline", async () => {

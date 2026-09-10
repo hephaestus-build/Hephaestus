@@ -231,7 +231,7 @@ jobs:
           list-suites: failed
           list-tests: failed
           # Source lookup is needed only for failure annotations, not successful summaries.
-          max-annotations: ${{ (failure() || steps.tests.outcome == 'failure') && 50 || 0 }}
+          max-annotations: ${{ (job.status == 'failure' || steps.tests.outcome == 'failure') && 50 || 0 }}
           fail-on-error: false
       - name: Upload Chromatic test results
         if: always() && startsWith(steps.chromatic.outputs.storybookUrl, 'http')
@@ -243,7 +243,7 @@ jobs:
           list-suites: failed
           list-tests: failed
           # Source lookup is needed only for failure annotations, not successful summaries.
-          max-annotations: ${{ (failure() || steps.chromatic.outcome == 'failure') && 50 || 0 }}
+          max-annotations: ${{ (job.status == 'failure' || steps.chromatic.outcome == 'failure') && 50 || 0 }}
           fail-on-error: false
       - name: Retain full Storybook and visual test diagnostics
         if: always()

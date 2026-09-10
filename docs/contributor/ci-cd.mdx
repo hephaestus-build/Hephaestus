@@ -78,6 +78,9 @@ lookup runs only when failure annotations are needed. The complete unit, integra
 Storybook JUnit reports remain downloadable for fourteen days, including successful runs. Chromatic
 prints warnings/errors alongside the structured visual-coverage summary; its full CLI log is retained
 with the Storybook reports.
+Reporter action inputs read `job.status` and explicit continued-step outcomes: status-check functions
+such as `failure()` are valid in a step's `if` condition, not in its `with` inputs. The CI contract
+parses those input expressions without status functions and tests successful and failed outcomes.
 
 Image builds retain the complete `buildpacks-log` artifact for fourteen days. The console shows a
 first example and totals for repeated JVM archive-eligibility exclusions (unsupported location,
