@@ -14,41 +14,18 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Assembles the {@link ExportBundle} for one account by aggregating data the principal owns from
- * five sources:
- *
- * <ol>
- *   <li><b>account profile</b> + <b>own identity links</b> — {@link AccountService} ({@code core.auth} domain)</li>
- *   <li><b>feature flags</b> — {@link AccountFeatureRepository} ({@code core.auth} domain)</li>
- *   <li><b>auth events (last 12 months)</b> — {@link AuthEventRepository} ({@code core.auth} audit)</li>
- *   <li><b>workspace memberships</b> — {@link AccountWorkspaceMembershipQuery} (auth-spi → {@code workspace})</li>
- *   <li><b>account preferences</b> — {@link AccountPreferencesQuery} (auth-spi → {@code account})</li>
- * </ol>
- *
- * <p>The two cross-module sources are reached only through the {@code core.auth.spi} named
- * interface (implemented in {@code workspace} / {@code account}); this module never imports those
- * modules' domain types. The {@code Account → login} bridge ({@code IdentityLink.usernameAtSignup})
- * is owned here and fed to the workspace/preferences queries.
- *
- * <h2>Disclosure discipline</h2>
- * Only the fields enumerated in {@link ExportBundle} are emitted. Tokens, encrypted credential
- * blobs, JWT signing keys, password-equivalents (there are none in this system), and any other
- * account's data are structurally excluded — there is no code path here that reads them.
- */
+/** Maps account-owned data to the explicit field allowlist in {@link ExportBundle}. */
 @ConditionalOnServerRole
 @Component
 @WorkspaceAgnostic("GDPR export aggregates an account's own data across workspaces; not workspace-scoped")
 public class ExportBundleAssembler {
 
-    /** GDPR Art. 20 auth-event window. */
+    /** Auth-event export window. */
     private static final int AUTH_EVENT_WINDOW_MONTHS = 12;
 
     private final AccountService accountService;
@@ -81,14 +58,6 @@ public class ExportBundleAssembler {
         Account account = accountService.requireById(accountId);
         List<IdentityLink> identities = accountService.activeIdentities(accountId);
 
-        Set<String> logins = new LinkedHashSet<>();
-        for (IdentityLink link : identities) {
-            if (link.getUsernameAtSignup() != null
-                    && !link.getUsernameAtSignup().isBlank()) {
-                logins.add(link.getUsernameAtSignup());
-            }
-        }
-
         ExportBundle.Profile profile = new ExportBundle.Profile(
                 Objects.requireNonNull(account.getId()),
                 account.getDisplayName(),
@@ -101,17 +70,14 @@ public class ExportBundleAssembler {
                 identities.stream().map(this::toIdentity).toList();
 
         List<ExportBundle.WorkspaceMembership> memberships =
-                workspaceMembershipQuery.membershipsForLogins(logins).stream()
+                workspaceMembershipQuery.membershipsForAccount(accountId).stream()
                         .map(m -> new ExportBundle.WorkspaceMembership(m.workspaceSlug(), m.workspaceName(), m.role()))
                         .toList();
 
         List<String> featureFlags = accountFeatureRepository.findFlagsByAccountId(accountId);
 
-        // Preferences are keyed by a single SCM login; use the principal's primary (first active)
-        // login. Absent if no preferences row exists yet.
-        ExportBundle.Preferences preferences = logins.stream()
-                .findFirst()
-                .flatMap(preferencesQuery::preferencesForLogin)
+        ExportBundle.Preferences preferences = preferencesQuery
+                .preferencesForAccount(accountId)
                 .map(p -> new ExportBundle.Preferences(p.participateInResearch(), p.practiceFeedbackDeliveryEnabled()))
                 .orElse(null);
 
@@ -122,11 +88,7 @@ public class ExportBundleAssembler {
                 .minusMonths(AUTH_EVENT_WINDOW_MONTHS)
                 .toInstant();
         List<ExportBundle.AuthEvent> authEvents = authEventRepository.findByAccountSince(accountId, since).stream()
-                // GDPR Art. 20(4): the export "shall not adversely affect the rights and freedoms of
-                // others." Impersonation rows are authored about this subject BY ANOTHER account (the
-                // operator) and carry that operator's id (acting_account_id) + operator-supplied reason
-                // (details) — operator-accountability audit records, not data this subject provided
-                // (Art. 20(1)). Excluded from the portable bundle; they remain in the immutable auth_event log.
+                // Operator-authored impersonation records remain in the audit log, not the portable bundle.
                 .filter(e -> !isImpersonationEvent(e))
                 .map(ExportBundleAssembler::toAuthEvent)
                 .toList();
@@ -155,8 +117,7 @@ public class ExportBundleAssembler {
     }
 
     private static ExportBundle.AuthEvent toAuthEvent(AuthEvent e) {
-        // NOTE (Art. 20(4) chokepoint): this mapper deliberately never reads e.getActingAccountId()
-        // or e.getDetails() — both can reference / be authored by another account. Do NOT add them.
+        // Exclude acting-account ids and details: they can contain another account's data.
         return new ExportBundle.AuthEvent(
                 e.getId() != null ? e.getId().getOccurredAt() : null,
                 e.getEventType() != null ? e.getEventType().name() : null,

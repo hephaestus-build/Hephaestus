@@ -153,15 +153,15 @@ public class SlackInteractivityHandler {
     }
 
     private void setResearchParticipation(long workspaceId, String teamId, String slackUserId, boolean participate) {
-        Optional<String> login = identityResolver.resolveDeveloperLogin(workspaceId, teamId, slackUserId);
-        if (login.isEmpty()) {
+        Optional<Long> memberId = identityResolver.resolveActiveMemberId(workspaceId, teamId, slackUserId);
+        if (memberId.isEmpty()) {
             log.debug(
                     "slack.interactivity: research consent toggle from unlinked Slack user {} in team {} — skipping",
                     slackUserId,
                     teamId);
             return;
         }
-        researchParticipationCommand.setForLogin(login.get(), participate, ConsentSource.SLACK_APP_HOME);
+        researchParticipationCommand.setForUserId(memberId.get(), participate, ConsentSource.SLACK_APP_HOME);
         followUpExecutor.execute(() -> refreshHomeBestEffort(teamId, slackUserId));
     }
 

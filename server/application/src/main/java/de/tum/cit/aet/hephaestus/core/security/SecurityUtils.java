@@ -20,16 +20,9 @@ public final class SecurityUtils {
 
     private SecurityUtils() {}
 
-    /**
-     * Get the login of the current user.
-     *
-     * @return the login of the current user.
-     */
+    /** Display login of the pinned actor or session; not an identity key. */
     public static Optional<String> getCurrentUserLogin() {
-        // Inside a workspace request the active identity is the account's SCM user for that workspace's
-        // provider (set by WorkspaceContextFilter), which may differ from the session's login. Outside a
-        // workspace, the JWT preferred_username is authoritative. See CurrentScmIdentityHolder.
-        Optional<String> workspaceScoped = CurrentScmIdentityHolder.get();
+        Optional<String> workspaceScoped = CurrentScmIdentityHolder.getLogin();
         if (workspaceScoped.isPresent()) {
             return workspaceScoped;
         }
@@ -43,24 +36,11 @@ public final class SecurityUtils {
         return Optional.empty();
     }
 
-    /**
-     * Get the login of the current user or throw an exception if not authenticated.
-     *
-     * @return the login of the current user.
-     * @throws IllegalStateException if no authenticated user is found.
-     */
     public static String getCurrentUserLoginOrThrow() {
         return getCurrentUserLogin().orElseThrow(() -> new IllegalStateException("No authenticated user found"));
     }
 
-    /**
-     * Get the Hephaestus-native account id of the current principal — the JWT {@code sub} (ADR 0017).
-     * Unlike {@link #getCurrentUserLogin()} (a single {@code preferred_username}), the account id is the
-     * stable handle to the account's FULL set of federated identities, so callers can resolve workspace
-     * access across every linked provider login rather than just the one the session signed in with.
-     *
-     * @return the account id, or empty if unauthenticated / the {@code sub} is not a numeric account id.
-     */
+    /** Native account id from the JWT subject, independent of the sign-in provider. */
     public static Optional<Long> getCurrentAccountId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {

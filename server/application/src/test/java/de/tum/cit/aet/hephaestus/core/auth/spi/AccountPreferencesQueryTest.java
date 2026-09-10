@@ -36,7 +36,7 @@ class AccountPreferencesQueryTest extends BaseUnitTest {
     private static AccountPreferencesQuery preferences(@Nullable Boolean stored) {
         return new AccountPreferencesQuery() {
             @Override
-            public Optional<PreferencesView> preferencesForLogin(String login) {
+            public Optional<PreferencesView> preferencesForAccount(Long accountId) {
                 return Optional.empty();
             }
 

@@ -3,7 +3,8 @@ package de.tum.cit.aet.hephaestus.core.auth.spi;
 import java.util.Optional;
 
 public interface AccountPreferencesQuery {
-    Optional<PreferencesView> preferencesForLogin(String login);
+    /** Preferences for the first-linked SCM actor; the account-level projection contains one preference set. */
+    Optional<PreferencesView> preferencesForAccount(Long accountId);
 
     Optional<PreferencesView> preferencesForUserId(long userId);
 

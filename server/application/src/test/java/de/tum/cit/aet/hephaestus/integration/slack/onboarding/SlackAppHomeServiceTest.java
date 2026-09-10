@@ -16,6 +16,7 @@ import com.slack.api.model.view.View;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorReadinessQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery.PreferencesView;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackHephaestusUiLinks;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
@@ -85,8 +86,8 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
 
     @Test
     void linkedParticipatingMember_rendersDisclosureAndOptOutToggle_noQuietHours() throws Exception {
-        when(identityResolver.resolveDeveloperLogin(7L, "T1", "U1")).thenReturn(Optional.of("octocat"));
-        when(preferencesQuery.preferencesForLogin("octocat")).thenReturn(Optional.of(new PreferencesView(true, true)));
+        when(identityResolver.resolveDeveloper(7L, "T1", "U1")).thenReturn(Optional.of(developer()));
+        when(preferencesQuery.preferencesForUserId(314L)).thenReturn(Optional.of(new PreferencesView(true, true)));
 
         View view = service.buildHomeView(7L, "T1", "U1");
 
@@ -114,8 +115,8 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
 
     @Test
     void linkedNonParticipatingMember_rendersOptInToggle() {
-        when(identityResolver.resolveDeveloperLogin(7L, "T1", "U1")).thenReturn(Optional.of("octocat"));
-        when(preferencesQuery.preferencesForLogin("octocat")).thenReturn(Optional.of(new PreferencesView(false, true)));
+        when(identityResolver.resolveDeveloper(7L, "T1", "U1")).thenReturn(Optional.of(developer()));
+        when(preferencesQuery.preferencesForUserId(314L)).thenReturn(Optional.of(new PreferencesView(false, true)));
 
         View view = service.buildHomeView(7L, "T1", "U1");
 
@@ -127,14 +128,16 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
 
     @Test
     void unlinkedMember_showsMessageControlAndLinkCta_noResearchToggle() {
-        when(identityResolver.resolveDeveloperLogin(7L, "T1", "U1")).thenReturn(Optional.empty());
+        when(identityResolver.resolveDeveloper(7L, "T1", "U1")).thenReturn(Optional.empty());
         List<LayoutBlock> cta = List.of(section(s -> s.text(markdownText("LINK_ME_MARKER"))));
         when(onboardingService.linkCtaBlocks()).thenReturn(cta);
 
         View view = service.buildHomeView(7L, "T1", "U1");
 
         String rendered = view.getBlocks().toString();
-        assertThat(rendered).contains("LINK_ME_MARKER");
+        assertThat(rendered)
+                .contains("LINK_ME_MARKER", "Check account access", "No active linked workspace member")
+                .doesNotContain("Not linked");
         assertThat(rendered).contains(SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT);
         assertThat(rendered).doesNotContain(SlackAppHomeService.ACTION_RESEARCH_OPT_OUT);
         assertThat(rendered).doesNotContain(SlackAppHomeService.ACTION_RESEARCH_OPT_IN);
@@ -145,7 +148,7 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
     void optedOutMember_rendersChannelMessageOptIn() {
         when(participantConsentRepository.existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(7L, "U1"))
                 .thenReturn(true);
-        when(identityResolver.resolveDeveloperLogin(7L, "T1", "U1")).thenReturn(Optional.empty());
+        when(identityResolver.resolveDeveloper(7L, "T1", "U1")).thenReturn(Optional.empty());
         when(onboardingService.linkCtaBlocks()).thenReturn(List.of(section(s -> s.text(markdownText("LINK")))));
 
         View view = service.buildHomeView(7L, "T1", "U1");
@@ -159,8 +162,8 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
     @Test
     void mentorNotReady_rendersUnavailableStatus() {
         when(mentorReadinessQuery.isReady(7L)).thenReturn(false);
-        when(identityResolver.resolveDeveloperLogin(7L, "T1", "U1")).thenReturn(Optional.of("octocat"));
-        when(preferencesQuery.preferencesForLogin("octocat")).thenReturn(Optional.of(new PreferencesView(true, true)));
+        when(identityResolver.resolveDeveloper(7L, "T1", "U1")).thenReturn(Optional.of(developer()));
+        when(preferencesQuery.preferencesForUserId(314L)).thenReturn(Optional.of(new PreferencesView(true, true)));
 
         View view = service.buildHomeView(7L, "T1", "U1");
 
@@ -179,8 +182,8 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
     @Test
     void onHomeOpened_linkedMember_publishesHomeView() {
         when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(7L));
-        when(identityResolver.resolveDeveloperLogin(7L, "T1", "U1")).thenReturn(Optional.of("octocat"));
-        when(preferencesQuery.preferencesForLogin("octocat")).thenReturn(Optional.of(new PreferencesView(true, true)));
+        when(identityResolver.resolveDeveloper(7L, "T1", "U1")).thenReturn(Optional.of(developer()));
+        when(preferencesQuery.preferencesForUserId(314L)).thenReturn(Optional.of(new PreferencesView(true, true)));
 
         service.onHomeOpened("T1", "U1");
 
@@ -193,5 +196,12 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
         service.onHomeOpened("T1", "");
 
         verifyNoInteractions(workspaceResolver, messageService);
+    }
+
+    private static User developer() {
+        var user = new User();
+        user.setId(314L);
+        user.setLogin("octocat");
+        return user;
     }
 }

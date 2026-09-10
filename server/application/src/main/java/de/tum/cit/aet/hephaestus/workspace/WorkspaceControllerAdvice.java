@@ -2,7 +2,9 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.workspace.exception.InsufficientWorkspacePermissionsException;
 import de.tum.cit.aet.hephaestus.workspace.exception.InvalidWorkspaceSlugException;
+import de.tum.cit.aet.hephaestus.workspace.exception.LastOwnerRemovalException;
 import de.tum.cit.aet.hephaestus.workspace.exception.RepositoryAlreadyMonitoredException;
 import de.tum.cit.aet.hephaestus.workspace.exception.RepositoryManagementNotAllowedException;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceLifecycleViolationException;
@@ -27,14 +29,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-/**
- * Centralized error mapper for workspace-related exceptions across all endpoints.
- * <p>
- * This advice has highest precedence to ensure workspace-specific exceptions
- * are handled before the global fallback handler. It applies globally because
- * workspace exceptions can originate from various controllers during workspace
- * context resolution.
- */
 @RestControllerAdvice
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class WorkspaceControllerAdvice {
@@ -63,6 +57,22 @@ public class WorkspaceControllerAdvice {
                 HttpStatus.CONFLICT,
                 "Workspace slug conflict",
                 userFacingDetail(Objects.requireNonNullElse(exception.getMessage(), "Unexpected error")));
+    }
+
+    @ExceptionHandler(InsufficientWorkspacePermissionsException.class)
+    ProblemDetail handleInsufficientPermissions(InsufficientWorkspacePermissionsException exception) {
+        return problem(
+                HttpStatus.FORBIDDEN,
+                "Insufficient workspace permissions",
+                Objects.requireNonNullElse(exception.getMessage(), "Access denied"));
+    }
+
+    @ExceptionHandler(LastOwnerRemovalException.class)
+    ProblemDetail handleLastOwnerRemoval(LastOwnerRemovalException exception) {
+        return problem(
+                HttpStatus.CONFLICT,
+                "Workspace owner required",
+                Objects.requireNonNullElse(exception.getMessage(), "The workspace must retain an owner"));
     }
 
     @ExceptionHandler(RepositoryAlreadyMonitoredException.class)

@@ -381,14 +381,10 @@ obligation. Only what is different about the multi-file stack is listed here.
 
 ## Global admin privileges
 
-Accounts with `app_role = 'APP_ADMIN'` carry the `app_admin` authority in their JWT (`admin` is a reserved string that is actively stripped — it is the per-workspace role name, never an instance authority). This grants them:
-
-- Automatic workspace ADMIN privileges for workspaces where they have membership (they are auto-elevated to workspace ADMIN level)
-- Ability to manage workspace settings, members, and repositories in their member workspaces
-- **Cannot** perform OWNER-only operations (e.g., workspace ownership transfer) unless explicitly granted the OWNER role in that workspace
-- **Must have workspace membership** (any role: OWNER, ADMIN, or MEMBER) to access the workspace
-
-This allows platform administrators to troubleshoot and manage workspaces where they are members, with automatic admin privileges, without needing explicit ADMIN role assignment in the database.
+Instance admins can access any active workspace with ADMIN privileges, even without workspace
+membership. Elevation does not grant OWNER privileges; owner-only operations require an explicit
+OWNER membership. See [Instance administration](/contributor/instance-admin#who-is-an-instance-admin)
+for the authority and [elevated-access audit policy](/contributor/instance-admin#elevated-workspace-access).
 
 ## Operational tips
 
