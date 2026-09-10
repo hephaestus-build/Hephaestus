@@ -32,6 +32,7 @@ import {
 } from "./pi-observation-normalize.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { loadProviderConfig, registerHephaestusProvider } from "./pi-provider.ts";
+import { ReviewTrace } from "./pi-review-trace.ts";
 import {
 	buildReviewTree,
 	mapConcurrent,
@@ -69,6 +70,7 @@ import {
 	newUsageLedger,
 	type UsageReport,
 } from "./pi-runner-usage.ts";
+import { stopSession } from "./pi-session-lifecycle.ts";
 import { forkSessions, reconnaissanceSeed } from "./pi-session-tree.ts";
 import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
 
@@ -168,6 +170,8 @@ const TASK_PATH = `${CWD}/task.json`;
 const taskEnvelope = readTaskEnvelope();
 const INPUT_PATHS = resolveTaskPaths(CWD, taskEnvelope.paths);
 const OUTPUT = `${CWD}/out`;
+const reviewTrace = process.env.PI_REVIEW_CAPTURE === "true" ? new ReviewTrace(OUTPUT) : undefined;
+process.on("exit", (code) => reviewTrace?.finish(code));
 const RESULT_PATH = outputPath(OUTPUT, "result.json");
 const REVIEW_STATE_PATH = outputPath(OUTPUT, "review-state.json");
 const WATCHDOG_PATH = outputPath(OUTPUT, "watchdog-killed.json");
@@ -1609,10 +1613,12 @@ function scheduleDeadline(timeoutMs: number, onTimeout: () => void) {
 	return { elapsed, timer, state };
 }
 
-/** Clear queued steering before disposal so aborting cannot start a queued continuation. */
-function stopSession(session: AgentSession) {
+/** Timers request cancellation; the owning finally block drains events before disposal. */
+function abortSession(session: AgentSession) {
 	session.clearQueue();
-	session.dispose();
+	void session.abort().catch((error) => {
+		console.error(`[pi-runner] session abort failed: ${errorText(error)}`);
+	});
 }
 
 function scheduleTurnTimers(
@@ -1641,7 +1647,7 @@ function scheduleTurnTimers(
 		console.error(
 			`[pi-runner] turn ${turnNumber}/${turnCount} exhausted its fair share — aborting this turn`,
 		);
-		stopSession(session);
+		abortSession(session);
 	});
 	return { softTimer, hardTimer: hard.timer, hardDeadline: hard.elapsed, state };
 }
@@ -1671,6 +1677,7 @@ async function main() {
 			agentDir: AGENT_DIR ?? getAgentDir(),
 			settingsManager,
 			...SANDBOX_RESOURCE_LOADER_OPTIONS,
+			extensionFactories: reviewTrace ? [reviewTrace.extension] : [],
 			agentsFilesOverride: () => ({
 				agentsFiles: [{ path: orchestratorPath, content: orchestrator }],
 			}),
@@ -1721,8 +1728,11 @@ async function main() {
 		trackedSession: AgentSession,
 		label: string,
 		pace: RecordingPace | null = null,
-	) =>
-		trackedSession.subscribe((event: AgentSessionEvent) => {
+	) => {
+		const sessionId = trackedSession.sessionManager.getSessionId();
+		reviewTrace?.session(sessionId, label, trackedSession.sessionManager.getSessionFile());
+		return trackedSession.subscribe((event: AgentSessionEvent) => {
+			reviewTrace?.event(sessionId, event);
 			if (event.type === "tool_execution_start") {
 				console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
 			}
@@ -1786,6 +1796,7 @@ async function main() {
 			}
 			events.push({ type: `${label}:${event.type}`, timestamp: Date.now() });
 		});
+	};
 
 	/**
 	 * @param notReached the practices this review never settled, named for the composer so nothing it
@@ -1806,7 +1817,9 @@ async function main() {
 				agentDir: AGENT_DIR,
 				tools: ["read", "grep", "report_feedback", "report_summary"],
 				customTools: [grepTool, feedbackTool, buildSummaryTool()],
-				sessionManager: SessionManager.inMemory(),
+				sessionManager: reviewTrace
+					? SessionManager.create(CWD, reviewTrace.sessionDir)
+					: SessionManager.inMemory(),
 				settingsManager,
 				resourceLoader: await loadResources(),
 				modelRuntime,
@@ -1823,8 +1836,8 @@ async function main() {
 		);
 		if (compositionMs === 0) {
 			console.error("[pi-runner] Composition budget exhausted — preserving admitted observations");
+			await stopSession(composerSession);
 			unsubscribeComposer();
-			stopSession(composerSession);
 			persistComposedFeedback();
 			return;
 		}
@@ -1832,7 +1845,7 @@ async function main() {
 			console.error(
 				`[pi-runner] Composition timeout — preserving observations and composed units so far`,
 			);
-			stopSession(composerSession);
+			abortSession(composerSession);
 		});
 		try {
 			await Promise.race([
@@ -1843,8 +1856,8 @@ async function main() {
 			]);
 		} finally {
 			clearTimeout(compositionDeadline.timer);
+			await stopSession(composerSession);
 			unsubscribeComposer();
-			stopSession(composerSession);
 			persistComposedFeedback();
 		}
 		const combinedUsage = extractUsageFromSession(composerSession.state, streamUsage);
@@ -1863,7 +1876,7 @@ async function main() {
 		hardAbort.abort();
 		console.error(`[pi-runner] Hard timeout — aborting ${activeSessions.size} active session(s)`);
 		for (const activeSession of activeSessions) {
-			stopSession(activeSession);
+			abortSession(activeSession);
 		}
 	};
 	const initialWindowMs = Math.max(0, reviewDeadline - Date.now());
@@ -1883,7 +1896,7 @@ async function main() {
 		process.env.PI_REVIEW_CONCURRENCY,
 		tree.practiceCount,
 	);
-	const sessionDir = `${CWD}/.sessions`;
+	const sessionDir = reviewTrace?.sessionDir ?? `${CWD}/.sessions`;
 	console.error(
 		`[pi-runner] Review tree: ${tree.practiceCount} practices, ${tree.groups.length} evidence group(s), concurrency=${concurrency}`,
 	);
@@ -1907,7 +1920,7 @@ async function main() {
 			if (hardAbort.signal.aborted || Date.now() >= reviewDeadline) {
 				hardAborted = true;
 				hardAbort.abort();
-				stopSession(reconSession);
+				await stopSession(reconSession);
 			} else {
 				const unsubscribeRecon = subscribeSession(reconSession, "recon:shared");
 				activeSessions.add(reconSession);
@@ -1915,7 +1928,7 @@ async function main() {
 					deriveReconBudget(INITIAL_TIMEOUT_MS),
 					reviewDeadline - Date.now(),
 				);
-				const reconDeadline = scheduleDeadline(reconBudgetMs, () => stopSession(reconSession));
+				const reconDeadline = scheduleDeadline(reconBudgetMs, () => abortSession(reconSession));
 				try {
 					const groupScope = tree.groups
 						.map((group) => `${group.id} [${group.practiceSlugs.join(", ")}]`)
@@ -1942,8 +1955,8 @@ async function main() {
 				} finally {
 					clearTimeout(reconDeadline.timer);
 					activeSessions.delete(reconSession);
+					await stopSession(reconSession);
 					unsubscribeRecon();
-					stopSession(reconSession);
 				}
 			}
 		} catch (error) {
@@ -1977,7 +1990,7 @@ async function main() {
 					if (hardAbort.signal.aborted || Date.now() >= reviewDeadline) {
 						hardAborted = true;
 						hardAbort.abort();
-						stopSession(observerSession);
+						await stopSession(observerSession);
 						return;
 					}
 					const unsubscribeObserver = subscribeSession(
@@ -2018,8 +2031,8 @@ async function main() {
 						clearTimeout(timers.softTimer);
 						clearTimeout(timers.hardTimer);
 						activeSessions.delete(observerSession);
+						await stopSession(observerSession);
 						unsubscribeObserver();
-						stopSession(observerSession);
 					}
 				} catch (error) {
 					console.error(`[pi-runner] observer ${group.id} failed: ${errorText(error)}`);
@@ -2084,7 +2097,7 @@ async function main() {
 			retryAbort.abort();
 			console.error(`[pi-runner] Retry hard timeout — aborting`);
 			for (const activeSession of activeSessions) {
-				stopSession(activeSession);
+				abortSession(activeSession);
 			}
 		},
 	);
@@ -2127,7 +2140,9 @@ async function main() {
 						customTools: [grepTool, retryTool],
 						sessionManager: priorSessionFile
 							? SessionManager.open(priorSessionFile, sessionDir)
-							: SessionManager.inMemory(),
+							: reviewTrace
+								? SessionManager.create(CWD, reviewTrace.sessionDir)
+								: SessionManager.inMemory(),
 						settingsManager,
 						resourceLoader: await loadResources(),
 						modelRuntime,
@@ -2138,7 +2153,7 @@ async function main() {
 					if (retryIsOver()) {
 						retryAborted = true;
 						retryAbort.abort();
-						stopSession(retrySession);
+						await stopSession(retrySession);
 						return;
 					}
 					const remainingRetryMs = Math.max(0, retryStartMs + retry.windowMs - Date.now());
@@ -2155,7 +2170,7 @@ async function main() {
 						retriesRemaining,
 					);
 					const retryDeadline = scheduleDeadline(retryBudgetMs, () => {
-						stopSession(retrySession);
+						abortSession(retrySession);
 					});
 					try {
 						await Promise.race([
@@ -2170,8 +2185,8 @@ async function main() {
 					} finally {
 						clearTimeout(retryDeadline.timer);
 						activeSessions.delete(retrySession);
+						await stopSession(retrySession);
 						unsubscribeRetry();
-						stopSession(retrySession);
 					}
 				} catch (error) {
 					console.error(`[pi-runner] retry ${group.id} failed: ${errorText(error)}`);

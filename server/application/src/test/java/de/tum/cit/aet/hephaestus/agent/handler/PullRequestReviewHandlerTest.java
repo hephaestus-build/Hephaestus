@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
@@ -119,6 +120,17 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                         org.mockito.Mockito.mock(FeedbackLedgerRecorder.class)),
                 observationRepository);
         lenient().when(cas.get(anyString())).thenReturn(java.util.Optional.of(new byte[0]));
+    }
+
+    @Test
+    void shouldFinishWithoutComposingFeedbackWhenObservationsWereRefused() {
+        var refused = new de.tum.cit.aet.hephaestus.agent.job.AgentJob();
+        var metadata = objectMapper.createObjectNode();
+        metadata.putObject(ObservationAdmissionService.REFUSAL_METADATA_KEY).put("reasonCode", "no_valid_observations");
+        refused.setMetadata(metadata);
+        org.assertj.core.api.Assertions.assertThatCode(() -> handler.deliver(refused))
+                .doesNotThrowAnyException();
+        org.mockito.Mockito.verifyNoInteractions(feedbackService, observationRepository, deliveryService);
     }
 
     @Test
@@ -509,6 +521,27 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             lenient().when(observation.getOccurrenceKey()).thenReturn("occ-" + practice.getSlug());
             lenient().when(observation.getRecurrenceKey()).thenReturn("rk-" + practice.getSlug());
             return observation;
+        }
+
+        @Test
+        void shouldRefuseInconsistentPinnedAssessmentBeforePersistingObservations() {
+            String rawOutput = """
+                    {"observations": [{
+                      "practiceSlug": "avoids-insecure-defaults-and-over-broad-permissions",
+                      "summary": "The harmful behaviour is good",
+                      "presence": "PRESENT",
+                      "assessment": "GOOD",
+                      "evidenceRationale": "Original evidence rationale",
+                      "evidence": {}
+                    }]}
+                    """;
+            AgentJob job = jobWithOutput(rawOutput);
+
+            assertThatThrownBy(() -> admit(job, rawOutput))
+                    .isInstanceOfSatisfying(
+                            ObservationsRefusedException.class,
+                            e -> assertThat(e.reasonCode()).isEqualTo("incoherent_assessment"));
+            verifyNoInteractions(deliveryService, feedbackService, observationRepository);
         }
 
         @Test

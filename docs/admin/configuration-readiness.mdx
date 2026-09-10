@@ -172,17 +172,31 @@ For the single-host deployment, keep the local Unix socket default. Docker-speci
 The gateway keeps its independent `hephaestus.sandbox.gateway.*` settings; resource limits, capacity
 and workspace transfer limits remain under `hephaestus.sandbox.*`.
 
-| Property under `hephaestus.sandbox.docker` | Environment variable | Default |
-| --- | --- | --- |
-| `host` | `SANDBOX_DOCKER_HOST` | `unix:///var/run/docker.sock` |
-| `tls-verify` | `SANDBOX_DOCKER_TLS_VERIFY` | `false` |
-| `cert-path` | `SANDBOX_DOCKER_CERT_PATH` | unset |
-| `container-runtime` | `SANDBOX_DOCKER_CONTAINER_RUNTIME` | Docker daemon default |
-| `app-server-container-id` | `SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID` | container `HOSTNAME` |
-| `cli` | `SANDBOX_DOCKER_CLI` | `docker` |
+| Property under `hephaestus.sandbox.docker` | Environment variable                     | Default                       |
+| ------------------------------------------ | ---------------------------------------- | ----------------------------- |
+| `host`                                     | `SANDBOX_DOCKER_HOST`                    | `unix:///var/run/docker.sock` |
+| `tls-verify`                               | `SANDBOX_DOCKER_TLS_VERIFY`              | `false`                       |
+| `cert-path`                                | `SANDBOX_DOCKER_CERT_PATH`               | unset                         |
+| `container-runtime`                        | `SANDBOX_DOCKER_CONTAINER_RUNTIME`       | Docker daemon default         |
+| `app-server-container-id`                  | `SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID` | container `HOSTNAME`          |
+| `cli`                                      | `SANDBOX_DOCKER_CLI`                     | `docker`                      |
+| `owner`                                    | `SANDBOX_DOCKER_OWNER`                   | `default`                     |
 
 Compose forwards these variables to `application-server` and `application-worker`. Leave the
 container-ID override empty so each container uses its own `HOSTNAME` when joining job networks.
+
+Use a distinct `owner` for each installation that shares a Docker daemon but uses a different
+database. All worker-capable roles of the same installation must use the same stable value.
+It accepts 1–63 lowercase letters, digits and hyphens, starting with a letter or digit.
+Container inventory, capacity accounting and cleanup select the `hephaestus.sandbox-owner` label;
+job and interactive-session networks use `hephaestus-sandbox-<owner>--<UUID>`.
+This prevents accidental cross-installation cleanup; it is not an authorization boundary against
+a process with Docker daemon access.
+
+Before upgrading from unscoped sandbox ownership or changing `owner`, drain reviews and interactive
+sessions and stop that installation's workers. Remove its remaining containers and networks only
+after verifying ownership. The new cleanup does not adopt legacy `hephaestus.managed=true`
+containers or `agent-net-` networks, or resources belonging to a previous owner.
 
 Java operations and interactive Docker CLI commands use the same host, TLS and certificate settings.
 Inherited `DOCKER_CONTEXT`, `DOCKER_HOST` and Docker TLS environment variables do not override

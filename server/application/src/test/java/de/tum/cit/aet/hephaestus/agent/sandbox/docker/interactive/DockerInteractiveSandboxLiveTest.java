@@ -101,8 +101,8 @@ class DockerInteractiveSandboxLiveTest {
     @BeforeEach
     void setUp() throws Exception {
         SandboxProperties sandboxProperties = new SandboxProperties(5, 10, 60, 209_715_200L, 500_000, null);
-        var dockerProperties =
-                new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "docker");
+        var dockerProperties = new DockerSandboxProperties(
+                "unix:///var/run/docker.sock", false, null, null, null, "docker", "default");
         // Tight TTL so idle eviction tests don't have to wait minutes.
         InteractiveSandboxProperties interactiveProperties = new InteractiveSandboxProperties(
                 /* idleTtlSeconds */ 2,
@@ -125,7 +125,8 @@ class DockerInteractiveSandboxLiveTest {
 
         dockerOps = new DockerClientOperations(dockerClient, dockerClient);
         dockerWaitExecutor = Executors.newCachedThreadPool();
-        containerManager = new SandboxContainerManager(dockerOps, image -> {}, sandboxProperties, dockerWaitExecutor);
+        containerManager =
+                new SandboxContainerManager(dockerOps, image -> {}, sandboxProperties, "default", dockerWaitExecutor);
         networkManager = new SandboxNetworkManager(dockerOps, dockerProperties);
         workspaceManager = new SandboxWorkspaceManager(dockerOps);
         securityPolicy = new ContainerSecurityPolicy(dockerProperties, null);
@@ -470,7 +471,7 @@ class DockerInteractiveSandboxLiveTest {
                     .findFirst();
             assertThat(match).as("Container with our SESSION_ID label exists").isPresent();
             assertThat(match.get().labels().get(SandboxLabels.KIND)).isEqualTo(SandboxLabels.KIND_INTERACTIVE);
-            assertThat(match.get().labels().get(SandboxLabels.MANAGED)).isEqualTo("true");
+            assertThat(match.get().labels().get(SandboxLabels.OWNER)).isEqualTo("default");
             sb.close(Duration.ofSeconds(2));
         }
     }

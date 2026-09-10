@@ -8,9 +8,8 @@ import { describe, test } from "node:test";
 import { duplicatePorts } from "./check-ports.ts";
 import { withDisposableDatabase } from "./db-utils.ts";
 import { loadConfig } from "./e2e-setup.ts";
-import { isHostname } from "./jean-public-test.ts";
 import { updateEnv } from "./jean-setup.ts";
-import { positivePort, readEnvFile } from "./lib/env.ts";
+import { isHostname, positivePort, readEnvFile } from "./lib/env.ts";
 
 await describe("environment parsing", async () => {
 	await test("parses data without evaluating shell syntax", async () => {

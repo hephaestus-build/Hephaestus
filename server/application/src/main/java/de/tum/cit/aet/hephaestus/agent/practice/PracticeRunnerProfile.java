@@ -27,6 +27,8 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-runner-composition.ts",
             "pi-review-tree.ts",
             "pi-session-tree.ts",
+            "pi-session-lifecycle.ts",
+            "pi-review-trace.ts",
             SandboxLayout.PROVIDER_HELPER_FILENAME);
 
     private static final List<String> PROMPTS = List.of(SandboxLayout.FEEDBACK_COMPOSER_PROMPT_FILENAME);

@@ -4,11 +4,13 @@ import { access, open, readFile, readlink, rm, writeFile } from "node:fs/promise
 import { dirname, join } from "node:path";
 import { Client } from "pg";
 
-import { positivePort, readEnvFile } from "./lib/env.ts";
+import { isHostname, positivePort, readEnvFile, requiredEnv } from "./lib/env.ts";
 import { output, run, succeeds } from "./lib/process.ts";
 
 const root = join(import.meta.dirname, "..");
-const host = process.env.HEPHAESTUS_PUBLIC_TEST_HOST ?? "hephaestus-test.felixdietrich.com";
+// No default: the host this runs against is an operator's own instance, and naming one here would
+// publish it. The run says which host it needs and stops.
+const host = requiredEnv(process.env, "HEPHAESTUS_PUBLIC_TEST_HOST");
 if (!isHostname(host)) throw new Error("HEPHAESTUS_PUBLIC_TEST_HOST must be a DNS hostname");
 const origin = `https://${host}`;
 const appPort = positivePort(
@@ -30,13 +32,6 @@ const traefikFile =
 const logFile = process.env.HEPHAESTUS_PUBLIC_TEST_SERVER_LOG ?? "/tmp/heph-public-server.log";
 const pidFile = process.env.HEPHAESTUS_PUBLIC_TEST_PID_FILE ?? "/tmp/heph-public-server.pid";
 const nginxFile = process.env.HEPHAESTUS_PUBLIC_TEST_NGINX_CONF ?? "/tmp/heph-local-nginx.conf";
-
-export function isHostname(value: string): boolean {
-	return (
-		value.length <= 253 &&
-		value.split(".").every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(label))
-	);
-}
 
 async function request(path: string, init?: RequestInit): Promise<Response> {
 	return fetch(`${origin}${path}`, {

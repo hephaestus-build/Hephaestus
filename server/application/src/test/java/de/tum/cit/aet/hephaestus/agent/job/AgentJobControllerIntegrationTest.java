@@ -17,6 +17,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import tools.jackson.databind.ObjectMapper;
 
+@org.springframework.test.context.TestPropertySource(
+        properties = "hephaestus.practice-review.execution-capture.enabled=true")
 class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
@@ -48,6 +50,22 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         job.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of(
                 "agent_type", "CLAUDE_CODE", "model", "claude-sonnet-4-20250514", "upstreamModelId", "gpt-5.4-mini")));
         return agentJobRepository.save(job);
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldNotExposePrivateExecutionEvidenceOverHttp() {
+        Workspace workspace = setupWorkspace();
+        AgentJob job = createJob(workspace, AgentJobStatus.COMPLETED);
+        for (String suffix : java.util.List.of("execution-archive", "execution-archive/0/files/" + "a".repeat(64))) {
+            webTestClient
+                    .get()
+                    .uri("/workspaces/{slug}/agents/jobs/{id}/" + suffix, workspace.getWorkspaceSlug(), job.getId())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isNotFound();
+        }
     }
 
     @Test

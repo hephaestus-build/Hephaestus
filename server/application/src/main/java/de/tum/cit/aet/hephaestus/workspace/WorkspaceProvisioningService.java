@@ -5,7 +5,7 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
-import de.tum.cit.aet.hephaestus.core.security.ServerUrlValidator;
+import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -52,6 +52,7 @@ public class WorkspaceProvisioningService {
     private final AuthenticatedGitProviderUserService authenticatedGitProviderUserService;
     private final ConnectionService connectionService;
     private final WebClient webClient;
+    private final ScmServerEndpointPolicy endpoints;
 
     /**
      * Per-kind availability providers — used to derive default server URLs for PAT
@@ -71,7 +72,9 @@ public class WorkspaceProvisioningService {
             WorkspaceMembershipService workspaceMembershipService,
             AuthenticatedGitProviderUserService authenticatedGitProviderUserService,
             ConnectionService connectionService,
-            List<WorkspaceProviderAvailability> providerAvailabilityList) {
+            List<WorkspaceProviderAvailability> providerAvailabilityList,
+            ScmServerEndpointPolicy endpoints) {
+        this.endpoints = endpoints;
         this.workspaceProperties = workspaceProperties;
         this.workspaceRepository = workspaceRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
@@ -300,9 +303,7 @@ public class WorkspaceProvisioningService {
         if (!isBlank(configServerUrl)) {
             String url = Objects.requireNonNull(configServerUrl).trim();
             url = url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
-            // SSRF string-layer check on the user-supplied URL (scheme/host/literal-private-IP), matching
-            // GitLabPreflightService. The ssrfGuarded connector additionally blocks DNS-rebind at connect.
-            ServerUrlValidator.validate(url);
+            endpoints.validate(url);
             return url;
         }
         WorkspaceProviderAvailability gitLabAvailability = providerAvailability.get(IntegrationKind.GITLAB);
@@ -338,12 +339,7 @@ public class WorkspaceProvisioningService {
             }
         }
 
-        // ssrfGuarded (not systemDns): serverUrl is user-supplied (workspace config), so the outbound
-        // DNS must be filtered at connect time — same SSRF sink as GitLabPreflightService. The string
-        // form is additionally validated in resolveGitLabServerUrl.
-        WebClient gitlabClient = WebClient.builder()
-                .clientConnector(WebClientConnectors.ssrfGuarded())
-                .build();
+        WebClient gitlabClient = endpoints.clientFor(serverUrl);
 
         GitLabTokenUserResponse userInfo = null;
         try {

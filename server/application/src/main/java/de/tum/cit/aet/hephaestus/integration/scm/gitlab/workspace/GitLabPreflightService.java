@@ -2,8 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
-import de.tum.cit.aet.hephaestus.core.security.ServerUrlValidator;
+import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabGroupDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabPreflightResponseDTO;
@@ -14,7 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 /**
@@ -32,7 +30,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
  *   <li>Return structured success/failure result</li>
  * </ol>
  *
- * @see ServerUrlValidator for SSRF protection on user-provided server URLs
+ * @see ScmServerEndpointPolicy for SSRF protection on user-provided server URLs
  */
 @Service
 public class GitLabPreflightService {
@@ -41,16 +39,11 @@ public class GitLabPreflightService {
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
     private final GitLabProperties gitLabProperties;
-    private final WebClient webClient;
+    private final ScmServerEndpointPolicy endpoints;
 
-    public GitLabPreflightService(GitLabProperties gitLabProperties) {
+    public GitLabPreflightService(GitLabProperties gitLabProperties, ScmServerEndpointPolicy endpoints) {
         this.gitLabProperties = gitLabProperties;
-        // ssrfGuarded (not systemDns): serverUrl is user-supplied, so the outbound DNS must be filtered
-        // at connect time. ServerUrlValidator already blocks literal private IPs; the guarded resolver
-        // extends that same policy to hostnames that RESOLVE to private IPs, closing the DNS-rebind bypass.
-        this.webClient = WebClient.builder()
-                .clientConnector(WebClientConnectors.ssrfGuarded())
-                .build();
+        this.endpoints = endpoints;
     }
 
     /**
@@ -67,7 +60,8 @@ public class GitLabPreflightService {
 
         // Try personal token endpoint first
         try {
-            GitLabUserResponse user = webClient
+            GitLabUserResponse user = endpoints
+                    .clientFor(resolvedUrl)
                     .get()
                     .uri(resolvedUrl + "/api/v4/user")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -103,7 +97,8 @@ public class GitLabPreflightService {
 
     private GitLabPreflightResponseDTO validateGroupToken(String token, String serverUrl, String groupFullPath) {
         try {
-            GitLabGroupResponse group = webClient
+            GitLabGroupResponse group = endpoints
+                    .clientFor(serverUrl)
                     .get()
                     .uri(serverUrl + "/api/v4/groups/{groupPath}", groupFullPath)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -147,7 +142,8 @@ public class GitLabPreflightService {
         String resolvedUrl = resolveAndValidateServerUrl(serverUrl);
 
         try {
-            List<GitLabGroupListItem> groups = webClient
+            List<GitLabGroupListItem> groups = endpoints
+                    .clientFor(resolvedUrl)
                     .get()
                     .uri(resolvedUrl + "/api/v4/groups?min_access_level=10&per_page=100&order_by=name&sort=asc")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -181,8 +177,7 @@ public class GitLabPreflightService {
         String trimmed = serverUrl.trim();
         String normalized = trimmed.endsWith("/") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
 
-        // SSRF validation — throws IllegalArgumentException if unsafe
-        ServerUrlValidator.validate(normalized);
+        endpoints.validate(normalized);
 
         return normalized;
     }

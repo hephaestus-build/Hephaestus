@@ -352,6 +352,10 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         verify(feedbackRepository).save(saved.capture());
         assertThat(saved.getValue().getThreadKey()).isNotBlank();
         assertThat(saved.getValue().getReviewedRevision()).isEqualTo("abc123");
+        assertThat(saved.getValue().getDeliveryState()).isEqualTo(FeedbackDeliveryState.AWAITING_APPROVAL);
+        verify(eventPublisher)
+                .publishEvent(new de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent(
+                        job.getId(), job.getWorkspace().getId()));
         assertThat(saved.getValue().getProposedPracticeSlugs()).containsExactly("practice");
         assertThat(saved.getValue().getProposedPlacements())
                 .extracting(placement -> placement.type().name())
