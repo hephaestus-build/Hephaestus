@@ -17,10 +17,9 @@ import org.springframework.stereotype.Component;
  *   <li><b>GitHub</b>: the {@code /user} email is unreliable, so the trusted signal is the
  *       {@code primary && verified} entry surfaced by {@link GitHubEmailOAuth2UserService} into the
  *       {@code email} + {@code email_verified} attributes.</li>
- *   <li><b>GitLab</b>: signs in via the OAuth2 flow ({@code /api/v4/user}), which carries no
- *       verification attestation — so {@code email} is stored but left unverified. A future OIDC
- *       login provider would surface {@code email_verified} on the {@link OidcUser} and be trusted
- *       by the generic check below.</li>
+ *   <li><b>GitLab</b>: the authenticated {@code /api/v4/user} response's {@code confirmed_at}
+ *       is adapted by {@link GitLabEmailAttributes}; absent/malformed confirmation and temporary
+ *       OAuth placeholder addresses remain unverified.</li>
  * </ul>
  *
  * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html">OIDC Core §5.1</a>
@@ -41,7 +40,7 @@ public class VerifiedEmailResolver {
 
     /**
      * True only when the IdP attests verification: OIDC ID-token {@code email_verified == true}, or the
-     * GitHub user service's injected {@code email_verified == true} attribute. Absent/false ⇒ unverified.
+     * provider adapter's injected {@code email_verified == true} attribute. Absent/false ⇒ unverified.
      */
     private static boolean emailVerified(OAuth2User principal) {
         if (principal instanceof OidcUser oidc) {

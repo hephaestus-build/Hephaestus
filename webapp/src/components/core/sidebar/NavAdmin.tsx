@@ -6,6 +6,7 @@ import {
 	CircleDollarSign,
 	ClipboardCheck,
 	LayoutGridIcon,
+	KeyRound,
 	ListChecks,
 	PlugZapIcon,
 	ScanEye,
@@ -66,6 +67,7 @@ export function NavAdmin({
 	const onWorkspaceSettings = Boolean(
 		matchRoute({ to: "/w/$workspaceSlug/admin/settings", fuzzy: false }),
 	);
+	const onAccess = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/access", fuzzy: true }));
 	const onMembers = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/members", fuzzy: true }));
 	const onTeams = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/teams", fuzzy: true }));
 	const onReview = Boolean(
@@ -115,6 +117,16 @@ export function NavAdmin({
 					>
 						<Settings2 />
 						<span>Settings</span>
+					</SidebarMenuButton>
+				</SidebarMenuItem>
+				<SidebarMenuItem>
+					<SidebarMenuButton
+						tooltip="Access"
+						isActive={onAccess}
+						render={<Link to="/w/$workspaceSlug/admin/access" params={{ workspaceSlug }} />}
+					>
+						<KeyRound />
+						<span>Access</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
 				<SidebarMenuItem>

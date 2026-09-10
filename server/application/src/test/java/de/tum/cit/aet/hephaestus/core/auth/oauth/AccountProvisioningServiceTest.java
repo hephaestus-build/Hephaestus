@@ -60,6 +60,9 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
         identityLinkRepository = mock(IdentityLinkRepository.class);
         GitProviderRegistry gitProviderRegistry = mock(GitProviderRegistry.class);
         verifiedEmailResolver = mock(VerifiedEmailResolver.class);
+        lenient()
+                .when(verifiedEmailResolver.resolve(any(), any()))
+                .thenReturn(new VerifiedEmailResolver.ResolvedEmail(null, false));
         accountJitCreator = mock(AccountJitCreator.class);
         adminBootstrapPolicy = mock(AdminBootstrapPolicy.class);
         loginProviderRepository = mock(LoginProviderRepository.class);
@@ -204,7 +207,7 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
         useOutlineProvider();
         when(identityLinkRepository.findActiveByProviderSubject(eq(PROVIDER_ID), eq("0aa1bb2c-user"), any()))
                 .thenReturn(Optional.empty());
-        when(accountRepository.findById(42L)).thenReturn(Optional.of(accountWithId(42L)));
+        when(accountRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(accountWithId(42L)));
         // The flat "team_id" attribute OutlineAuthInfoUserService emits (flattened from data.team.id).
         OAuth2User outlinePrincipal = new DefaultOAuth2User(
                 List.of(new SimpleGrantedAuthority("ROLE_USER")),
@@ -358,7 +361,7 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
     void link_bindsToCurrentAccount() {
         when(identityLinkRepository.findActiveByProviderSubject(eq(PROVIDER_ID), eq("sub-1"), any()))
                 .thenReturn(Optional.empty());
-        when(accountRepository.findById(42L)).thenReturn(Optional.of(accountWithId(42L)));
+        when(accountRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(accountWithId(42L)));
 
         var result =
                 service.resolveOrProvision("github", "sub-1", principal(), AuthIntentCookie.Intent.link(42L, null));
@@ -415,5 +418,45 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
                 .hasMessageContaining("authenticated account binding");
 
         verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldCompleteMissingVerifiedContactWhenAnInstitutionalIdentityIsLinked() {
+        useOidcProvider();
+        var account = accountWithId(42L);
+        account.setPrimaryEmail("unverified@example.com");
+        when(accountRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(account));
+        when(verifiedEmailResolver.resolve(eq("organization"), any()))
+                .thenReturn(new VerifiedEmailResolver.ResolvedEmail("verified@example.com", true));
+        var result = service.resolveOrProvision(
+                "organization",
+                "sub-1",
+                oidcPrincipal("https://identity.example.com/realms/team"),
+                AuthIntentCookie.Intent.link(42L, null));
+        assertThat(result.account().getId()).isEqualTo(42L);
+        assertThat(result.account().getPrimaryEmail()).isEqualTo("verified@example.com");
+        assertThat(result.account().getPrimaryEmailVerifiedAt()).isEqualTo(NOW);
+        verify(accountJitCreator, never()).create(any(), any());
+    }
+
+    @Test
+    void shouldPreserveAnExistingVerifiedContactWhenAnotherIdentityIsLinked() {
+        var account = accountWithId(42L);
+        account.setPrimaryEmail("chosen@example.com");
+        account.setPrimaryEmailVerifiedAt(NOW.minusSeconds(60));
+        when(accountRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(account));
+        service.resolveOrProvision("github", "sub-1", principal(), AuthIntentCookie.Intent.link(42L, null));
+        assertThat(account.getPrimaryEmail()).isEqualTo("chosen@example.com");
+        assertThat(account.getPrimaryEmailVerifiedAt()).isEqualTo(NOW.minusSeconds(60));
+    }
+
+    @Test
+    void shouldNotVerifyContactWhenLinkedProviderDoesNotAttestIt() {
+        var account = accountWithId(42L);
+        account.setPrimaryEmail("unverified@example.com");
+        when(accountRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(account));
+        service.resolveOrProvision("github", "sub-1", principal(), AuthIntentCookie.Intent.link(42L, null));
+        assertThat(account.getPrimaryEmail()).isEqualTo("unverified@example.com");
+        assertThat(account.getPrimaryEmailVerifiedAt()).isNull();
     }
 }

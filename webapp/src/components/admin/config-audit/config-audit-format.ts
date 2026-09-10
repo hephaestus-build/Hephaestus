@@ -19,6 +19,8 @@ const RENAMED_ENTITY_TYPE_LABELS = {
 export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
 	PRACTICE_REVIEW_SETTINGS: "Review settings",
 	AGENT_BINDING: "AI binding",
+	WORKSPACE_ACCESS_POLICY: "Workspace access policy",
+	WORKSPACE_ACCESS_REQUEST: "Workspace access request",
 	WORKSPACE_ROLE: "Workspace role",
 	WORKSPACE_FEATURES: "Feature flags",
 	WORKSPACE_STATUS: "Workspace status",

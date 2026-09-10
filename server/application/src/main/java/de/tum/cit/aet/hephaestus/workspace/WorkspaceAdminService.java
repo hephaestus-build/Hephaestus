@@ -47,7 +47,7 @@ public class WorkspaceAdminService {
                 .map(IdentityProviderType::from)
                 .orElse(null);
         var owner = membershipRepository.findByWorkspace_Id(ws.getId()).stream()
-                .filter(member -> !member.isSuspended() && member.getRole() == WorkspaceRole.OWNER)
+                .filter(member -> member.isActive() && member.getRole() == WorkspaceRole.OWNER)
                 .findFirst()
                 .orElse(null);
         Long ownerAccountId = owner == null ? null : owner.getAccountId();
@@ -67,7 +67,7 @@ public class WorkspaceAdminService {
                 ownerName,
                 ownerAccountId,
                 membershipRepository.findByWorkspace_Id(ws.getId()).stream()
-                        .filter(member -> !member.isSuspended())
+                        .filter(member -> member.isActive())
                         .count(),
                 ws.getCreatedAt());
     }

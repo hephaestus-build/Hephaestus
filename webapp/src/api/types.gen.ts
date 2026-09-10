@@ -609,7 +609,7 @@ export type ConfigAuditEntryView = {
    */
   elevatedViaInstanceAdmin: boolean;
   entityId?: string;
-  entityType?: 'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL';
+  entityType?: 'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_ACCESS_POLICY' | 'WORKSPACE_ACCESS_REQUEST' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL';
   id?: number;
   newValue?: string;
   occurredAt?: Date;
@@ -625,6 +625,12 @@ export type ConfigurationFact = {
   roles: Array<'SERVER' | 'WORKER' | 'WEBHOOK'>;
   status: 'SATISFIED' | 'ACTION_REQUIRED' | 'NOT_CONFIGURED' | 'NOT_APPLICABLE';
   subject: string;
+};
+
+export type ConfigureWorkspaceAccessPolicy = {
+  enabled?: boolean;
+  settings: WorkspaceAccessPolicySettings;
+  version?: number;
 };
 
 /**
@@ -1939,6 +1945,11 @@ export type LeagueChange = {
   login: string;
 };
 
+export type LinkRequirement = {
+  registrationId: string;
+  teamId?: string;
+};
+
 /**
  * A provider instance the current user is linked to: its type + server-url origin.
  */
@@ -2597,6 +2608,12 @@ export type PlacePracticeRequest = {
    * Zero-based position in the destination
    */
   position: number;
+};
+
+export type PolicyNotice = {
+  key: string;
+  markdown: string;
+  title: string;
 };
 
 /**
@@ -4372,6 +4389,13 @@ export type ReviewSweepSchedule = {
   nextRunAt: Date;
 };
 
+export type ReviewWorkspaceAccessRequest = {
+  comment?: string;
+  decision: 'APPROVE' | 'REQUEST_CHANGES' | 'REJECT';
+  details?: WorkspaceAccessDetails;
+  version?: number;
+};
+
 /**
  * Developer-facing view of a practice — criteria absent by construction
  */
@@ -4570,6 +4594,14 @@ export type SubmitSurvey = {
   answers: {
     [key: string]: string;
   };
+};
+
+export type SubmitWorkspaceAccessRequest = {
+  acknowledgedNoticeKeys: Array<string>;
+  comments?: string;
+  details: WorkspaceAccessDetails;
+  introductionAcknowledged?: boolean;
+  policyVersion?: number;
 };
 
 export type Survey = {
@@ -5654,6 +5686,121 @@ export type Workspace = {
   workspaceSlug: string;
 };
 
+export type WorkspaceAccessAdmission = {
+  state: 'ACTIVE' | 'REQUEST' | 'CHECK_UNAVAILABLE' | 'RENEWAL' | 'MANAGED';
+};
+
+/**
+ * Every approval has an absolute end; a pending renewal never moves it.
+ */
+export type WorkspaceAccessDetails = {
+  expiresAt: Date;
+  maintainerAccountId: number;
+  teamIds: Array<number>;
+};
+
+export type WorkspaceAccessEntry = {
+  acceptingRequests?: boolean;
+  primaryProvider?: WorkspaceAccessProvider;
+  workspaceName: string;
+};
+
+export type WorkspaceAccessForm = {
+  accessActive?: boolean;
+  acknowledgementLabel: string;
+  introductionMarkdown: string;
+  maintainers: Array<WorkspaceAccessMaintainerOption>;
+  maximumDurationDays?: number;
+  notices: Array<PolicyNotice>;
+  policyVersion?: number;
+  requestableTeams: Array<WorkspaceAccessTeamOption>;
+  requiredLinks: Array<WorkspaceAccessLinkOption>;
+  verifiedContactAvailable?: boolean;
+};
+
+export type WorkspaceAccessLinkOption = {
+  displayName: string;
+  linked?: boolean;
+  providerType: string;
+  registrationId: string;
+  serverUrl: string;
+  teamId?: string;
+};
+
+export type WorkspaceAccessMaintainerOption = {
+  accountId: number;
+  displayName: string;
+};
+
+export type WorkspaceAccessNotification = {
+  attempts?: number;
+  id: number;
+  kind: 'SUBMITTED' | 'DECIDED' | 'REMINDER' | 'EXPIRED';
+  nextAttemptAt: Date;
+  reason?: 'SILENT_MODE' | 'MAIL_NOT_CONFIGURED' | 'NO_VERIFIED_CONTACT' | 'INVALID_CONTACT' | 'DELIVERY_FAILED' | 'REQUEST_REPLACED';
+  sentAt?: Date;
+  state: 'PENDING' | 'SENT' | 'FAILED' | 'CANCELLED';
+};
+
+export type WorkspaceAccessPolicy = {
+  emailConfigured?: boolean;
+  enabled?: boolean;
+  settings?: WorkspaceAccessPolicySettings;
+  version?: number;
+};
+
+/**
+ * Workspace policy acknowledgements are not the account's optional research consent.
+ */
+export type WorkspaceAccessPolicySettings = {
+  acknowledgementLabel: string;
+  adminMailbox: string;
+  introductionMarkdown: string;
+  maintainerTeamId: number;
+  maximumDurationDays?: number;
+  notices: Array<PolicyNotice>;
+  personalDataRetentionDays?: number;
+  primaryRegistrationId: string;
+  reminderDays?: number;
+  requestableTeamIds: Array<number>;
+  requiredLinks: Array<LinkRequirement>;
+};
+
+export type WorkspaceAccessProvider = {
+  displayName: string;
+  providerType: string;
+  registrationId: string;
+  serverUrl: string;
+};
+
+export type WorkspaceAccessRequest = {
+  accessActive?: boolean;
+  accountId: number;
+  approvedDetails?: WorkspaceAccessDetails;
+  comments?: string;
+  decidedAt?: Date;
+  decisionComment?: string;
+  displayName: string;
+  effectiveExpiresAt?: Date;
+  id: number;
+  policyVersion?: number;
+  requestedDetails: WorkspaceAccessDetails;
+  status: 'SUBMITTED' | 'CHANGES_REQUESTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'SUPERSEDED';
+  submittedAt: Date;
+  version?: number;
+};
+
+export type WorkspaceAccessReviewOptions = {
+  maintainers: Array<WorkspaceAccessMaintainerOption>;
+  maximumDurationDays?: number;
+  requestableTeams: Array<WorkspaceAccessTeamOption>;
+};
+
+export type WorkspaceAccessTeamOption = {
+  id: number;
+  name: string;
+};
+
 /**
  * Account access, independent of whether this developer has an SCM profile.
  */
@@ -5661,9 +5808,10 @@ export type WorkspaceAccountMembership = {
   accountId: number;
   createdAt?: Date;
   displayName: string;
+  expiresAt?: Date;
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
   scmUserLogin?: string;
-  source?: 'MANUAL' | 'SCM' | 'DIRECTORY' | 'MIGRATED';
+  source?: 'MANUAL' | 'SCM' | 'DIRECTORY' | 'REQUEST' | 'MIGRATED';
   suspended: boolean;
 };
 
@@ -6108,7 +6256,7 @@ export type AdminListConfigAuditEventsData = {
     workspaceId?: number;
     page?: number;
     size?: number;
-    entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
+    entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_ACCESS_POLICY' | 'WORKSPACE_ACCESS_REQUEST' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
     entityId?: string;
     changedKey?: string;
     action?: Array<'CREATED' | 'UPDATED' | 'DELETED'>;
@@ -7900,6 +8048,286 @@ export type GetWorkspaceResponses = {
 
 export type GetWorkspaceResponse = GetWorkspaceResponses[keyof GetWorkspaceResponses];
 
+export type GetWorkspaceAccessEntryData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/access-entry';
+};
+
+export type GetWorkspaceAccessEntryResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceAccessEntry;
+};
+
+export type GetWorkspaceAccessEntryResponse = GetWorkspaceAccessEntryResponses[keyof GetWorkspaceAccessEntryResponses];
+
+export type RetryWorkspaceAccessNotificationData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    notificationId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/access-notifications/{notificationId}/retries';
+};
+
+export type RetryWorkspaceAccessNotificationResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceAccessNotification;
+};
+
+export type RetryWorkspaceAccessNotificationResponse = RetryWorkspaceAccessNotificationResponses[keyof RetryWorkspaceAccessNotificationResponses];
+
+export type GetWorkspaceAccessPolicyData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/access-policy';
+};
+
+export type GetWorkspaceAccessPolicyResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceAccessPolicy;
+};
+
+export type GetWorkspaceAccessPolicyResponse = GetWorkspaceAccessPolicyResponses[keyof GetWorkspaceAccessPolicyResponses];
+
+export type ConfigureWorkspaceAccessPolicyData = {
+  body: ConfigureWorkspaceAccessPolicy;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/access-policy';
+};
+
+export type ConfigureWorkspaceAccessPolicyResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceAccessPolicy;
+};
+
+export type ConfigureWorkspaceAccessPolicyResponse = ConfigureWorkspaceAccessPolicyResponses[keyof ConfigureWorkspaceAccessPolicyResponses];
+
+export type GetWorkspaceAccessRequestsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: {
+    status?: 'SUBMITTED' | 'CHANGES_REQUESTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'SUPERSEDED';
+    page?: number;
+  };
+  url: '/workspaces/{workspaceSlug}/access-requests';
+};
+
+export type GetWorkspaceAccessRequestsResponses = {
+  /**
+   * OK
+   */
+  200: Array<WorkspaceAccessRequest>;
+};
+
+export type GetWorkspaceAccessRequestsResponse = GetWorkspaceAccessRequestsResponses[keyof GetWorkspaceAccessRequestsResponses];
+
+export type GetMyWorkspaceAccessRequestsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/access-requests/me';
+};
+
+export type GetMyWorkspaceAccessRequestsResponses = {
+  /**
+   * OK
+   */
+  200: Array<WorkspaceAccessRequest>;
+};
+
+export type GetMyWorkspaceAccessRequestsResponse = GetMyWorkspaceAccessRequestsResponses[keyof GetMyWorkspaceAccessRequestsResponses];
+
+export type SubmitWorkspaceAccessRequestData = {
+  body: SubmitWorkspaceAccessRequest;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/access-requests/me';
+};
+
+export type SubmitWorkspaceAccessRequestResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceAccessRequest;
+};
+
+export type SubmitWorkspaceAccessRequestResponse = SubmitWorkspaceAccessRequestResponses[keyof SubmitWorkspaceAccessRequestResponses];
+
+export type CheckWorkspaceOrganizationMembershipData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/access-requests/me/admission';
+};
+
+export type CheckWorkspaceOrganizationMembershipResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceAccessAdmission;
+};
+
+export type CheckWorkspaceOrganizationMembershipResponse = CheckWorkspaceOrganizationMembershipResponses[keyof CheckWorkspaceOrganizationMembershipResponses];
+
+export type GetWorkspaceAccessFormData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/access-requests/me/form';
+};
+
+export type GetWorkspaceAccessFormResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceAccessForm;
+};
+
+export type GetWorkspaceAccessFormResponse = GetWorkspaceAccessFormResponses[keyof GetWorkspaceAccessFormResponses];
+
+export type WithdrawWorkspaceAccessRequestData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    requestId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/access-requests/me/{requestId}';
+};
+
+export type WithdrawWorkspaceAccessRequestResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceAccessRequest;
+};
+
+export type WithdrawWorkspaceAccessRequestResponse = WithdrawWorkspaceAccessRequestResponses[keyof WithdrawWorkspaceAccessRequestResponses];
+
+export type GetWorkspaceAccessReviewOptionsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/access-requests/options';
+};
+
+export type GetWorkspaceAccessReviewOptionsResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceAccessReviewOptions;
+};
+
+export type GetWorkspaceAccessReviewOptionsResponse = GetWorkspaceAccessReviewOptionsResponses[keyof GetWorkspaceAccessReviewOptionsResponses];
+
+export type ReviewWorkspaceAccessRequestData = {
+  body: ReviewWorkspaceAccessRequest;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    requestId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/access-requests/{requestId}';
+};
+
+export type ReviewWorkspaceAccessRequestResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceAccessRequest;
+};
+
+export type ReviewWorkspaceAccessRequestResponse = ReviewWorkspaceAccessRequestResponses[keyof ReviewWorkspaceAccessRequestResponses];
+
+export type GetWorkspaceAccessNotificationsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    requestId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/access-requests/{requestId}/notifications';
+};
+
+export type GetWorkspaceAccessNotificationsResponses = {
+  /**
+   * OK
+   */
+  200: Array<WorkspaceAccessNotification>;
+};
+
+export type GetWorkspaceAccessNotificationsResponse = GetWorkspaceAccessNotificationsResponses[keyof GetWorkspaceAccessNotificationsResponses];
+
 export type ListAgentsData = {
   body?: never;
   path: {
@@ -8106,7 +8534,7 @@ export type ListWorkspaceConfigAuditEventsData = {
   query?: {
     page?: number;
     size?: number;
-    entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
+    entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_ACCESS_POLICY' | 'WORKSPACE_ACCESS_REQUEST' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
     entityId?: string;
     changedKey?: string;
     action?: Array<'CREATED' | 'UPDATED' | 'DELETED'>;

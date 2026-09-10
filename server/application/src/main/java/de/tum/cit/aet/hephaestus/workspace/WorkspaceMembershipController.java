@@ -35,7 +35,7 @@ public class WorkspaceMembershipController {
                 .orElseThrow(() -> new AccessForbiddenException("Sign in to view your membership"));
         var membership = memberships
                 .find(context.id(), accountId)
-                .filter(member -> !member.isSuspended())
+                .filter(member -> member.isActive())
                 .orElse(null);
         if (SecurityUtils.isSuperAdmin() && (membership == null || membership.getRole() == WorkspaceRole.MEMBER)) {
             var name = identities
@@ -49,6 +49,7 @@ public class WorkspaceMembershipController {
                     membership == null ? null : membership.getSource(),
                     false,
                     membership == null ? null : membership.getCreatedAt(),
+                    membership == null ? null : membership.getExpiresAt(),
                     CurrentScmIdentityHolder.getLogin().orElse(null)));
         }
         if (membership == null) throw new EntityNotFoundException("WorkspaceAccountMembership", accountId);
@@ -100,6 +101,7 @@ public class WorkspaceMembershipController {
                 member.getSource(),
                 member.isSuspended(),
                 member.getCreatedAt(),
+                member.getExpiresAt(),
                 SecurityUtils.getCurrentAccountId()
                         .filter(member.getAccountId()::equals)
                         .flatMap(id -> CurrentScmIdentityHolder.getLogin())

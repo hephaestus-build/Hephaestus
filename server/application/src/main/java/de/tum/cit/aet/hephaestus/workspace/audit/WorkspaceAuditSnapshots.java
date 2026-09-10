@@ -46,11 +46,21 @@ public final class WorkspaceAuditSnapshots {
             @Nullable Instant rotatedAt) implements ConfigAuditSnapshot {}
 
     public record AccountMembershipSnapshot(
-            Long accountId, WorkspaceRole role, WorkspaceAccountMembership.Source source, boolean suspended)
+            Long accountId,
+            WorkspaceRole role,
+            WorkspaceAccountMembership.Source source,
+            boolean suspended,
+            @Nullable Instant expiresAt,
+            @Nullable Long accessRequestId)
             implements ConfigAuditSnapshot {
         public static AccountMembershipSnapshot of(WorkspaceAccountMembership membership) {
             return new AccountMembershipSnapshot(
-                    membership.getAccountId(), membership.getRole(), membership.getSource(), membership.isSuspended());
+                    membership.getAccountId(),
+                    membership.getRole(),
+                    membership.getSource(),
+                    membership.isSuspended(),
+                    membership.getExpiresAt(),
+                    membership.getAccessRequestId());
         }
     }
 

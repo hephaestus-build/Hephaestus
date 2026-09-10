@@ -24,6 +24,17 @@ conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
    creates it and appends its `<include>` to `master.xml`; later runs add change sets to it. It then
    refreshes the ERD. With no drift it writes nothing.
 
+   On a stacked branch, pass its immediate parent so that the parent's migration is not mistaken
+   for this branch's file:
+
+   ```bash
+   vp run db:draft-changelog --base feat/parent-branch
+   ```
+
+   Without `--base`, ownership is measured against `origin/main` (or local `main` when the remote
+   reference is absent). Multiple candidate files and files already published on main are rejected
+   before any database work. Staged and untracked drafts both count as this branch's existing file.
+
 3. **Review the change sets.** Keep the real deltas and remove what the diff only inferred. Prefer
    `renameColumn` over a drop-and-add pair, start new sequences at `1` unless there is a data
    migration plan, and follow the destructive-change policy below. Use preconditions to reject

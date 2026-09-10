@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.AuthIntentCookie;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.CookieOAuth2AuthorizationRequestRepository;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.GitHubEmailOAuth2UserService;
+import de.tum.cit.aet.hephaestus.core.auth.oauth.GitLabEmailAttributes;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.HephaestusAuthFailureHandler;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.HephaestusAuthSuccessHandler;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.OutlineAuthInfoUserService;
@@ -130,21 +131,26 @@ public class AuthSecurityConfig {
      * registration id — the id is operator-chosen (it need not be {@code github}), and GitHub login is
      * github.com-only (GHE out of scope), so the host is the stable signal. Outline is self-hosted (no
      * stable host), so it is routed by the {@code login_provider} row's provider TYPE. The GitLab login
-     * is OAuth2 (scope {@code read_user}, no {@code openid}), so it takes the default service and reads
-     * its email from {@code /api/v4/user} — see {@code LoginProviderClientRegistrationRepository}.
+     * is OAuth2 (scope {@code read_user}, no {@code openid}); its framework attributes converter adapts
+     * the confirmed primary email from {@code /api/v4/user} to the shared verification contract.
      */
     @Bean
     public OAuth2UserService<OAuth2UserRequest, OAuth2User> oauthUserService() {
         var github = new GitHubEmailOAuth2UserService();
         var outline = new OutlineAuthInfoUserService();
+        var gitlab = new DefaultOAuth2UserService();
+        gitlab.setAttributesConverter(request -> GitLabEmailAttributes::withVerification);
         var fallback = new DefaultOAuth2UserService();
         return request -> {
             ClientRegistration registration = request.getClientRegistration();
             if (isGitHub(registration)) {
                 return github.loadUser(request);
             }
-            if (isOutline(registration)) {
+            if (isProvider(registration, LoginProvider.ProviderType.OUTLINE)) {
                 return outline.loadUser(request);
+            }
+            if (isProvider(registration, LoginProvider.ProviderType.GITLAB)) {
+                return gitlab.loadUser(request);
             }
             return fallback.loadUser(request);
         };
@@ -156,10 +162,10 @@ public class AuthSecurityConfig {
         return userInfoUri != null && userInfoUri.startsWith(GITHUB_USERINFO_PREFIX);
     }
 
-    private boolean isOutline(ClientRegistration registration) {
+    private boolean isProvider(ClientRegistration registration, LoginProvider.ProviderType type) {
         return loginProviderRepository
                 .findByRegistrationId(registration.getRegistrationId())
-                .map(provider -> provider.getType() == LoginProvider.ProviderType.OUTLINE)
+                .map(provider -> provider.getType() == type)
                 .orElse(false);
     }
 

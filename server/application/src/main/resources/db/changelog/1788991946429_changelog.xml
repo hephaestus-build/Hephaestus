@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1788991946429-1" author="hephaestus">
+        <createTable tableName="workspace_access_notification">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="workspace_access_notificationPK"/>
+            </column>
+            <column name="attempts" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="kind" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="next_attempt_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reason" type="VARCHAR(32)"/>
+            <column name="sent_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="state" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="request_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1788991946429-2" author="hephaestus">
+        <createTable tableName="workspace_access_policy">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="workspace_access_policyPK"/>
+            </column>
+            <column name="enabled" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="settings" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1788991946429-3" author="hephaestus">
+        <createTable tableName="workspace_access_request">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="workspace_access_requestPK"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="approved_details" type="JSONB"/>
+            <column name="decided_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="decided_by_account_id" type="BIGINT"/>
+            <column name="decision_comment" type="VARCHAR(4000)"/>
+            <column name="policy_snapshot" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="policy_version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(24)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="submission" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="submitted_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="supersedes_request_id" type="BIGINT"/>
+            <column name="version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1788991946429-4" author="hephaestus">
+        <addColumn tableName="workspace_account_membership">
+            <column name="access_request_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1788991946429-5" author="hephaestus">
+        <addColumn tableName="workspace_account_membership">
+            <column name="expires_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1788991946429-6" author="hephaestus">
+        <addUniqueConstraint columnNames="workspace_id, request_id, kind" constraintName="uq_workspace_access_notification_request_kind" tableName="workspace_access_notification"/>
+    </changeSet>
+    <changeSet id="1788991946429-7" author="hephaestus">
+        <addUniqueConstraint columnNames="workspace_id" constraintName="uq_workspace_access_policy_workspace" tableName="workspace_access_policy"/>
+    </changeSet>
+    <changeSet id="1788991946429-8" author="hephaestus">
+        <createIndex indexName="idx_workspace_access_notification_due" tableName="workspace_access_notification">
+            <column name="state"/>
+            <column name="next_attempt_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1788991946429-9" author="hephaestus">
+        <createIndex indexName="idx_workspace_access_request_account" tableName="workspace_access_request">
+            <column name="workspace_id"/>
+            <column name="account_id"/>
+            <column name="submitted_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1788991946429-10" author="hephaestus">
+        <createIndex indexName="idx_workspace_access_request_status" tableName="workspace_access_request">
+            <column name="workspace_id"/>
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1788991946429-11" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="request_id" baseTableName="workspace_access_notification" constraintName="fk_workspace_access_notification_request" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace_access_request" validate="true"/>
+    </changeSet>
+    <changeSet id="1788991946429-12" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="workspace_access_notification" constraintName="fk_workspace_access_notification_workspace" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
+    <changeSet id="1788991946429-13" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="workspace_access_policy" constraintName="fk_workspace_access_policy_workspace" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
+    <changeSet id="1788991946429-14" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="workspace_access_request" constraintName="fk_workspace_access_request_workspace" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
+    <changeSet id="1788991946429-15" author="hephaestus">
+        <addUniqueConstraint columnNames="id, workspace_id, account_id" constraintName="uq_workspace_access_request_account" tableName="workspace_access_request"/>
+    </changeSet>
+    <changeSet id="1788991946429-16" author="hephaestus">
+        <addUniqueConstraint columnNames="id, workspace_id" constraintName="uq_workspace_access_request_workspace" tableName="workspace_access_request"/>
+    </changeSet>
+    <changeSet id="1788991946429-17" author="hephaestus">
+        <comment>Workspace and account keys keep request provenance tenant-bound. Account tombstones are erased by the owning module.</comment>
+        <addForeignKeyConstraint baseTableName="workspace_access_request" baseColumnNames="account_id" referencedTableName="account" referencedColumnNames="id" constraintName="sfk_workspace_access_request_account"/>
+        <addForeignKeyConstraint baseTableName="workspace_access_request" baseColumnNames="decided_by_account_id" referencedTableName="account" referencedColumnNames="id" constraintName="sfk_workspace_access_request_reviewer"/>
+        <addForeignKeyConstraint baseTableName="workspace_access_request" baseColumnNames="supersedes_request_id, workspace_id, account_id" referencedTableName="workspace_access_request" referencedColumnNames="id, workspace_id, account_id" constraintName="sfk_workspace_access_request_previous" deferrable="true" initiallyDeferred="true"/>
+        <addForeignKeyConstraint baseTableName="workspace_access_notification" baseColumnNames="request_id, workspace_id" referencedTableName="workspace_access_request" referencedColumnNames="id, workspace_id" constraintName="sfk_workspace_access_notification_scope"/>
+        <addForeignKeyConstraint baseTableName="workspace_account_membership" baseColumnNames="access_request_id, workspace_id, account_id" referencedTableName="workspace_access_request" referencedColumnNames="id, workspace_id, account_id" constraintName="sfk_workspace_account_membership_request"/>
+        <sql><![CDATA[
+            ALTER TABLE workspace_account_membership DROP CONSTRAINT ck_workspace_account_membership_source;
+            ALTER TABLE workspace_account_membership ADD CONSTRAINT ck_workspace_account_membership_source
+                CHECK (source IN ('MANUAL', 'SCM', 'DIRECTORY', 'MIGRATED', 'REQUEST'));
+            ALTER TABLE config_audit_event DROP CONSTRAINT ck_config_audit_event_entity_type;
+            ALTER TABLE config_audit_event ADD CONSTRAINT ck_config_audit_event_entity_type
+                CHECK (entity_type IN ('PRACTICE_REVIEW_SETTINGS', 'AGENT_BINDING', 'AGENT_CONFIG', 'AI_CONFIG_BINDING', 'WORKSPACE_ROLE', 'WORKSPACE_FEATURES', 'WORKSPACE_STATUS', 'WORKSPACE_TOKEN', 'WORKSPACE_VISIBILITY', 'PRACTICE_ACTIVE', 'PRACTICE_USAGE', 'PRACTICE_DEFINITION', 'PRACTICE_GROUP', 'PRACTICE_AREA', 'CURATED_PRACTICE', 'CURATED_PRACTICE_GROUP', 'CURATED_PRACTICE_AREA', 'WORKSPACE_INSTANCE_LLM_BUDGET', 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET', 'WORKSPACE_LLM_BUDGET', 'WORKSPACE_BYO_LLM_BUDGET', 'REVIEW_BACKFILL_RUN', 'REVIEW_SWEEP_SCHEDULE', 'WORKSPACE_LLM_CONNECTION', 'WORKSPACE_LLM_MODEL', 'WORKSPACE_ACCESS_POLICY', 'WORKSPACE_ACCESS_REQUEST'));
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

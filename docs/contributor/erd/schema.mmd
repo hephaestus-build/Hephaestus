@@ -1453,6 +1453,43 @@ erDiagram
         BIGINT practice_config_version "NOT NULL"
     }
 
+    WorkspaceAccessNotification {
+        BIGINT id PK
+        INTEGER attempts "NOT NULL"
+        VARCHAR(16) kind UK "NOT NULL"
+        TIMESTAMPTZ next_attempt_at "NOT NULL"
+        VARCHAR(32) reason
+        TIMESTAMPTZ sent_at
+        VARCHAR(16) state "NOT NULL"
+        BIGINT request_id FK,UK "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+    }
+
+    WorkspaceAccessPolicy {
+        BIGINT id PK
+        BOOLEAN enabled "NOT NULL"
+        JSONB settings "NOT NULL"
+        BIGINT version "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+    }
+
+    WorkspaceAccessRequest {
+        BIGINT id PK,UK
+        BIGINT account_id FK,UK "NOT NULL"
+        JSONB approved_details
+        TIMESTAMPTZ decided_at
+        BIGINT decided_by_account_id FK
+        VARCHAR(4000) decision_comment
+        JSONB policy_snapshot "NOT NULL"
+        BIGINT policy_version "NOT NULL"
+        VARCHAR(24) status "NOT NULL"
+        JSONB submission "NOT NULL"
+        TIMESTAMPTZ submitted_at "NOT NULL"
+        BIGINT supersedes_request_id FK
+        BIGINT version "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+    }
+
     WorkspaceAccountMembership {
         BIGINT id PK
         BIGINT account_id FK,UK "NOT NULL"
@@ -1461,6 +1498,8 @@ erDiagram
         VARCHAR(16) source "NOT NULL"
         BOOLEAN suspended "NOT NULL"
         BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT access_request_id FK
+        TIMESTAMPTZ expires_at
     }
 
     WorkspaceAgentBinding {
@@ -1560,6 +1599,8 @@ erDiagram
     PullRequestReviewComment ||--|| PullRequestReviewThread : reviewed
     User ||--|| UserPreference : has
     Organization ||--|| Workspace : has
+    Workspace ||--|| WorkspaceAccessPolicy : has
+    WorkspaceAccessRequest ||--|| WorkspaceAccountMembership : belongs_to
 
     %% One-to-Many relationships
     Account ||--o{ AccountExport : has
@@ -1706,6 +1747,13 @@ erDiagram
     Workspace ||--o{ SyncJob : has
     IdentityProvider ||--o{ Team : references
     IdentityProvider ||--o{ User : references
+    WorkspaceAccessRequest ||--o{ WorkspaceAccessNotification : request_id
+    Workspace ||--o{ WorkspaceAccessNotification : has
+    WorkspaceAccessRequest ||--o{ WorkspaceAccessNotification : request_id
+    Workspace ||--o{ WorkspaceAccessRequest : has
+    Account ||--o{ WorkspaceAccessRequest : account_id
+    WorkspaceAccessRequest ||--o{ WorkspaceAccessRequest : references
+    Account ||--o{ WorkspaceAccessRequest : decided_by_account_id
     Workspace ||--o{ WorkspaceAccountMembership : belongs_to
     Account ||--o{ WorkspaceAccountMembership : belongs_to
     LlmModel ||--o{ WorkspaceAgentBinding : references

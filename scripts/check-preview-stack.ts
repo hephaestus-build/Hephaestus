@@ -27,6 +27,15 @@ const OWN_IMAGE_PREFIX = "ghcr.io/hephaestus-build/";
  * added to the reference and not considered here fails the build.
  */
 const DELIBERATELY_OMITTED = new Set([
+	// A preview may contain cloned applicant addresses; SMTP must stay unconfigured there.
+	"HEPHAESTUS_EMAIL_FROM",
+	"SPRING_MAIL_HOST",
+	"SPRING_MAIL_PASSWORD",
+	"SPRING_MAIL_PORT",
+	"SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH",
+	"SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE",
+	"SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED",
+	"SPRING_MAIL_USERNAME",
 	// Organizational login stays unavailable in previews; staging issuer approval must not leak into a clone.
 	"HEPHAESTUS_AUTH_OIDC_ALLOWED_ISSUERS",
 	"GITLAB_DEFAULT_SERVER_URL",

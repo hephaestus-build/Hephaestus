@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent } from "storybook/test";
 
+import { daysBefore } from "@/components/common/story-clock";
+
 import { WorkspaceMembershipPanel } from "./WorkspaceMembershipPanel";
 
 const meta = {
@@ -71,5 +73,27 @@ export const AwaitingFirstOwner: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText(/assign its first owner/);
 		await expect(canvas.getByRole("button", { name: "Add member" })).toBeEnabled();
+	},
+};
+
+export const ExpiredRequest: Story = {
+	args: {
+		isOwner: false,
+		members: [
+			{
+				accountId: 3,
+				displayName: "Expired applicant",
+				role: "MEMBER",
+				source: "REQUEST",
+				suspended: false,
+				expiresAt: daysBefore(1),
+			},
+		],
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Expired")).toBeVisible();
+		await expect(
+			canvas.queryByRole("button", { name: "Edit access for Expired applicant" }),
+		).not.toBeInTheDocument();
 	},
 };

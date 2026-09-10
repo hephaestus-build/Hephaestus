@@ -54,7 +54,8 @@ public class WorkspaceAccountMembershipService {
         } else {
             requirePermission(
                     workspace,
-                    membership.getSource() == WorkspaceAccountMembership.Source.DIRECTORY
+                    (membership.getSource() == WorkspaceAccountMembership.Source.DIRECTORY
+                                    || membership.getSource() == WorkspaceAccountMembership.Source.REQUEST)
                             ? WorkspaceRole.OWNER
                             : membership.getRole());
             if (role != WorkspaceRole.OWNER) requireNotLastOwner(workspace, membership);
@@ -62,6 +63,8 @@ public class WorkspaceAccountMembershipService {
         membership.setRole(role);
         membership.setSource(WorkspaceAccountMembership.Source.MANUAL);
         membership.setSuspended(false);
+        membership.setExpiresAt(null);
+        membership.setAccessRequestId(null);
         var saved = memberships.save(membership);
         if (before == null)
             audit.record(ConfigAuditEntry.created(
@@ -104,7 +107,7 @@ public class WorkspaceAccountMembershipService {
         var context = WorkspaceContextHolder.getContext();
         var current = SecurityUtils.getCurrentAccountId()
                 .flatMap(accountId -> memberships.findByWorkspace_IdAndAccountId(workspace.getId(), accountId))
-                .filter(member -> !member.isSuspended());
+                .filter(member -> member.isActive());
         boolean owner =
                 current.map(member -> member.getRole() == WorkspaceRole.OWNER).orElse(false);
         boolean admin =
@@ -122,7 +125,7 @@ public class WorkspaceAccountMembershipService {
     }
 
     private void requireNotLastOwner(Workspace workspace, WorkspaceAccountMembership membership) {
-        if (!membership.isSuspended()
+        if (membership.isActive()
                 && membership.getRole() == WorkspaceRole.OWNER
                 && memberships.countByWorkspace_IdAndRoleAndSuspendedFalse(workspace.getId(), WorkspaceRole.OWNER) <= 1)
             throw new LastOwnerRemovalException(workspace.getWorkspaceSlug());
