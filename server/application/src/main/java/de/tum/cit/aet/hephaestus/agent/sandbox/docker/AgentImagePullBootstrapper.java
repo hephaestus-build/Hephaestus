@@ -17,10 +17,10 @@ import org.springframework.stereotype.Component;
  * Pre-pulls the agent container image on startup. Part of the worker capability (the Docker
  * sandbox), so it shares the worker-role gate with {@code DockerSandboxConfiguration} — present
  * in the monolith ({@code matchIfMissing=true}), absent on non-worker pods.
- * API contract introspection does not run containers and must not contact the Docker registry.
+ * Artifact generation does not run containers and must not contact the Docker registry.
  */
 @Component
-@Profile("!specs")
+@Profile("!specs & !cds-training")
 @ConditionalOnProperty(name = RuntimeRole.WORKER_PROPERTY, havingValue = "true", matchIfMissing = true)
 public class AgentImagePullBootstrapper {
 

@@ -31,17 +31,13 @@ hephaestus:
             outline:
                 client-id: ""
                 client-secret: ""
-    # OpenAPI generation boots the full Spring context; HmacOAuthStateService fails fast
-    # without a webhook/oauth-state secret. Use a deterministic placeholder for the spec run.
-    webhook:
-        secret: "specs-only-placeholder-secret-do-not-use-in-prod"
     # Enable Slack/Outline admin endpoints so they surface in the generated client. The vendor
     # clients themselves aren't called during the spec run — just the controllers are loaded.
     integration:
         slack:
             enabled: true
-            client-id: "specs-only-placeholder-client-id"
-            client-secret: "specs-only-placeholder-client-secret"
+            client-id: ""
+            client-secret: ""
         outline:
             enabled: true
     runtime:
