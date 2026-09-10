@@ -124,6 +124,8 @@ void test("body validation uses the current description rather than a stale reru
 		["A clear description", "Generated with a tool", true],
 		["Generated with a tool", "A clear description", false],
 		[null, "Generated with a tool", true],
+		["Both API artifacts were regenerated with zero diff.", null, true],
+		["The client was REGENERATED WITH the updated spec.", null, true],
 	] as const) {
 		const result = spawnSync(
 			process.execPath,
