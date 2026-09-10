@@ -123,15 +123,16 @@ export function ConsentPage({ state, onSignOut }: ConsentPageProps) {
 						</div>
 					) : isResearchStep ? (
 						<dl className="max-w-prose space-y-4">
+							{/* A `dl` may only hold `dt`/`dd` pairs, wrapped at most one `div` deep. */}
 							{RESEARCH_POINTS.map(({ icon: Icon, term, detail }) => (
-								<div key={term} className="flex gap-3">
-									<span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-mentor/10 text-mentor">
-										<Icon className="size-4" aria-hidden="true" />
-									</span>
-									<div>
-										<dt className="font-medium">{term}</dt>
-										<dd className="text-muted-foreground">{detail}</dd>
-									</div>
+								<div key={term}>
+									<dt className="flex items-center gap-3 font-medium">
+										<span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-mentor/10 text-mentor">
+											<Icon className="size-4" aria-hidden="true" />
+										</span>
+										{term}
+									</dt>
+									<dd className="mt-1 ml-11 text-muted-foreground">{detail}</dd>
 								</div>
 							))}
 						</dl>
