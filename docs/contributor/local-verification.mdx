@@ -86,6 +86,13 @@ discard the local cache. In CI the cache restores per [CI/CD](./ci-cd.mdx#caches
 their inputs and cached outputs; Vite does not cache a second verdict over the Java build. The scoped
 commands `format:java:check` and `lint:java` use the same native tasks. Test execution remains uncached.
 
+Gradle reports individual deprecations through `org.gradle.warning.mode=all`. The pinned
+[GraphQL code-generation plugin](https://github.com/kobylynskyi/graphql-java-codegen/blob/v5.10.0/plugins/gradle/graphql-java-codegen-gradle-plugin/src/main/java/io/github/kobylynskyi/graphql/codegen/gradle/GraphQLCodegenGradleTask.java#L1022)
+still exposes nullable `Boolean isX()` properties that Gradle 10 will stop recognizing. This needs
+upstream `getX()` accessors preserving nullable semantics, not primitive defaults or disabled
+warnings. Cached generation can omit these diagnostics; a quiet warm run does not prove the
+dependency has been repaired.
+
 `vp run --no-cache check` disables Vite's cache, not Gradle's. To inspect a Java check without task-output
 or configuration-cache reuse, run:
 
