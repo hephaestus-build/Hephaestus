@@ -1,0 +1,145 @@
+---
+id: github-access
+title: GitHub access provisioning
+sidebar_position: 24
+description: Configure the separate Access App, authorize scopes and recover pending external-access changes.
+---
+
+# GitHub access provisioning
+
+Hephaestus Access is a **separate GitHub App**, not an extra permission on the normal repository
+integration. It manages approved organization memberships and team memberships for independently
+configured workspace targets. GitLab linking continues to work, but external membership provisioning
+for GitLab, Slack and Outline is not supported.
+
+## Register and configure the Access App
+
+1. Register a GitHub App named appropriately for your deployment, with **organization Members: write**.
+   Do not grant repository permissions or additional organization permissions. GitHub's implicit
+   Metadata: read permission is allowed. The normal Hephaestus App must retain its existing permissions.
+2. Disable webhooks for this App. The access reconciler polls each approved target using the existing
+   connection job runtime; installing an App does not itself authorize a workspace policy.
+3. Generate an RSA private key. Store it in the deployment's secret manager and make it available only
+   to the server runtime. Never paste it into workspace configuration or a support request.
+4. Set the optional server variables `GITHUB_ACCESS_APP_ID`, `GITHUB_ACCESS_APP_SLUG` and
+   `GITHUB_ACCESS_PRIVATE_KEY`. The App ID must differ from the normal Hephaestus App's ID.
+5. An organization owner installs the App in each intended GitHub organization. Give the workspace
+   owner the installation ID. Merely knowing that ID does not grant access to a private team inventory.
+
+The application verifies the installation's App, immutable organization identity, suspension state and
+exact permission set before minting a short-lived token. Installation credentials use the existing
+encrypted connection store. Private keys and short-lived tokens are never included in target status,
+previews, job failures or configuration audit records.
+
+## Two approvals, different responsibilities
+
+The workspace owner drafts an organization or team target and selects its eligibility source:
+
+- **Access requests** is the default and needs no directory. Only current, approved requests with
+  unexpired workspace access and their original linked identities qualify. Delivery is restricted to
+  the workspace's own GitHub organization. Configure an organization target and a target for each team
+  you offer; a team target includes only requests whose approved details include that synchronized team.
+- **Directory groups** is optional. Select groups from an active, approved directory policy. These
+  targets can manage independently authorized organizations and teams without changing request access.
+
+Each target has its own connection and job lease. Its source, organization and team cannot change
+after authority is acquired; end the target before replacing that scope.
+
+The owner shares an expiring approval link with a GitHub organization owner. Its capability is in a URL
+fragment, not a query string; do not copy it into tickets, analytics or logs. It expires after ten
+minutes, is single-use and is bound to the workspace, target and configuration version. The recipient
+signs in recently as themselves and links their GitHub.com identity. They do not need workspace
+membership. Impersonation cannot authorize a target.
+
+After that organization-owner authorization, the workspace owner runs a preview and approves the exact
+fresh inventory and eligibility evidence. Changing groups or the installation requires fresh consent.
+An ownership transfer requires approval by the new workspace owner before new grants resume.
+
+Database exclusion constraints prevent different workspaces from holding overlapping organization-wide
+and team-level authority. Distinct team scopes can be assigned independently. The same workspace may
+hold an organization target and its team targets, but not duplicate identical scopes. To transfer a
+scope, end the old target, confirm its managed removals, and obtain new approval in the destination
+workspace. Sharing a connection, login or installation is not a transfer.
+
+## Membership behavior
+
+- Invitations are pending access, not accepted membership. Developers must accept their GitHub
+  organization invitations. A team-only target waits for existing organization membership; it does not
+  silently grant broader organization access. Configure an organization target first when needed.
+- Request expiry is checked on every reconciliation, independently of the notification scheduler.
+  A pending renewal never extends access. Suspensions and changes to the approved request's identities
+  or teams also stop grants and trigger removal of the affected managed access.
+- Existing ordinary access or invitations are unmanaged until the workspace owner explicitly adopts
+  them. Protected owners, team maintainers, outside collaborators and enterprise-inherited access are
+  not adopted or automatically removed.
+- An organization removal waits while any team access remains. Reconcile managed team departures first;
+  unrelated team access needs an explicit organization-owner decision.
+- An owner may retain access as an audited manual exception. Resetting that exception does not silently
+  adopt the remaining access.
+- Incomplete, stale, disabled or unavailable directory evidence cannot authorize mass removal. Confirmed
+  local exits, such as account deletion, identity unlinking, unenrollment or ending management, remain
+  recorded even when GitHub cannot be reached.
+- Optional request-history cleanup waits for confirmed removals, including unresolved invitations and
+  writes whose outcome is unknown. Missing credentials or a paused target never count as removal.
+  When cleanup is due, finished membership records, their action history and private preview identities
+  in that workspace are erased together with the request history. Shared accounts and other workspaces
+  follow their own retention controls.
+
+GitHub's team-membership and organization-removal endpoints address users by login, not native ID,
+and expose no atomic identity precondition. Hephaestus pins the native identity, resolves and checks
+its current login immediately before and after a write, and never substitutes an old username on retry.
+A changed login around an unconfirmed action stops automatic retries and preserves the historical
+login for manual inspection. This is not a provider-side compare-and-swap guarantee: the organization
+owner must inspect both identities and the approved scope after an identity-change warning before
+adopting access or accepting an unmanaged exception.
+
+## Recovery
+
+| State | Operator or owner action |
+| --- | --- |
+| App not configured | Configure the separate App; do not increase the normal App's permissions. |
+| Missing or excessive permissions | Restore the documented permission set, then obtain fresh owner consent. |
+| App suspended | Ask the organization owner to restore the installation, then retry the target. |
+| App uninstalled or reinstalled | Restore the App and renew the handoff with the new installation ID. The immutable organization/team must match the existing authority. |
+| Credential encryption failure | Restore the configured encryption key or rewrite installation credentials through fresh authorization. Follow the credential rotation runbook. |
+| Authorizing account or link removed | Obtain a new handoff from the current workspace owner and consent from a currently linked organization owner. Pending removals remain. |
+| Rate limited or provider unavailable | Respect the recorded retry time. Other targets progress independently. |
+| Unconfirmed grant after timeout/crash | Reconciliation reads back first. If access exists without a confirmed grant, explicitly adopt it or retain it as an unmanaged exception; do not repeat the invitation blindly. |
+| Unconfirmed removal | Retry read-back. A successful request alone is not a completed removal. |
+| Stale policy or directory evidence | Refresh directory evidence, preview and approve again. An old plan cannot expand access. |
+
+Pause blocks **all membership writes**, including removals. Silent Mode does the same instance-wide.
+Reads can continue where credentials and authorization permit. Resuming revalidates policy, identities,
+organization-owner authority and evidence before writing. Paused access still exists externally.
+
+Account erasure removes attribution and private preview data but retains the minimal native GitHub ID
+needed to finish an outstanding removal. Workspace purge is blocked while authority or unresolved
+external changes remain. If a workspace is suspended, reactivate it before reconciling teardown. End
+management explicitly before purging; do not delete target or connection rows to clear a blocker.
+Ending a target never uninstalls the organization-owned App, which may serve other approved targets.
+
+## Controlled rollout and rollback
+
+Start with a non-production organization and a small directory group. Review existing invitations and
+protected access, authorize one scope, preview, and explicitly approve it. Verify invitation acceptance,
+an opt-out, its provider-confirmed removal and a rejoin before enabling additional targets. The shipped
+fixture suites use no real organization credentials and perform no live membership mutations.
+
+For an emergency stop, pause the affected target or enable Silent Mode. This is a stop in writes, not a
+revocation. To retire the feature, restore working credentials and consent, end targets, finish and
+verify removals, and then remove the optional App configuration. Do not roll back the database schema
+while obligations remain. A binary rollback that cannot read this feature's ledger requires restoring a
+verified database backup together with the matching binary and separately accounting for GitHub changes
+made since that backup.
+
+Inspect per-target status, pending actions and connection job warnings. A job with unresolved access is
+not a clean success. Alert on sustained pending revocations or manual-recovery obligations, not merely
+on HTTP error rates; a credentials outage can leave existing access in place without new traffic.
+
+The Prometheus gauges `hephaestus_github_access_pending_removals` and
+`hephaestus_github_access_manual_recovery` count persisted obligations without identity or workspace
+labels. For a baseline alert, use `hephaestus_github_access_pending_removals > 0` for 30 minutes and
+`hephaestus_github_access_manual_recovery > 0` for 5 minutes. Route these to an operator who can inspect
+the target's reason and contact its current workspace and organization owners. Adjust durations to your
+onboarding/offboarding expectations; do not silence a pending-removal alert merely because the target
+is paused.

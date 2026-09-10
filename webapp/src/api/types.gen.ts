@@ -609,7 +609,7 @@ export type ConfigAuditEntryView = {
    */
   elevatedViaInstanceAdmin: boolean;
   entityId?: string;
-  entityType?: 'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_ACCESS_POLICY' | 'WORKSPACE_ACCESS_REQUEST' | 'DIRECTORY_POLICY' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL';
+  entityType?: 'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_ACCESS_POLICY' | 'WORKSPACE_ACCESS_REQUEST' | 'DIRECTORY_POLICY' | 'GITHUB_ACCESS_POLICY' | 'GITHUB_ACCESS_MEMBERSHIP' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL';
   id?: number;
   newValue?: string;
   occurredAt?: Date;
@@ -676,10 +676,10 @@ export type ConnectionDetail = {
   createdAt?: Date;
   credentialsUnreadableSince?: Date;
   displayName?: string;
-  family?: 'SCM' | 'MESSAGING' | 'DOCUMENTATION' | 'DIRECTORY';
+  family?: 'SCM' | 'MESSAGING' | 'DOCUMENTATION' | 'DIRECTORY' | 'ACCESS';
   id?: number;
   instanceKey?: string;
-  kind?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
+  kind?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY' | 'GITHUB_ACCESS';
   state?: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'UNINSTALLED';
   stateReason?: string;
   updatedAt?: Date;
@@ -696,10 +696,10 @@ export type ConnectionSummary = {
   createdAt?: Date;
   credentialsUnreadableSince?: Date;
   displayName?: string;
-  family?: 'SCM' | 'MESSAGING' | 'DOCUMENTATION' | 'DIRECTORY';
+  family?: 'SCM' | 'MESSAGING' | 'DOCUMENTATION' | 'DIRECTORY' | 'ACCESS';
   id?: number;
   instanceKey?: string;
-  kind?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
+  kind?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY' | 'GITHUB_ACCESS';
   state?: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'UNINSTALLED';
   stateReason?: string;
   updatedAt?: Date;
@@ -736,7 +736,7 @@ export type ConnectionSyncStatus = {
   /**
    * Integration kind
    */
-  kind: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
+  kind: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY' | 'GITHUB_ACCESS';
   /**
    * When the last inbound webhook/event was processed for this connection, if any
    */
@@ -1616,6 +1616,149 @@ export type FxRateInfo = {
   source: 'ECB';
 };
 
+export type GitHubAccessAction = {
+  configurationVersion: number;
+  confirmedAt?: Date;
+  createdAt: Date;
+  failureReason?: string;
+  githubUserId: number;
+  id: number;
+  retryAt?: Date;
+  status: 'PENDING' | 'CONFIRMED' | 'INVALIDATED' | 'MANUAL_RECOVERY';
+  type: 'GRANT' | 'REVOKE';
+};
+
+export type GitHubAccessApproval = {
+  configurationVersion: number;
+  previewCapturedAt: Date;
+};
+
+export type GitHubAccessCapability = {
+  token: string;
+};
+
+export type GitHubAccessConfiguration = {
+  groupIds: Array<string>;
+  installationId: number;
+  organization: string;
+  source: 'REQUEST' | 'DIRECTORY';
+  team?: string;
+};
+
+export type GitHubAccessDecision = {
+  decision: 'ADOPT' | 'MANUAL_EXCEPTION' | 'RESET_EXCEPTION';
+  reason?: string;
+};
+
+export type GitHubAccessEnrollment = {
+  enrolled: boolean;
+};
+
+export type GitHubAccessHandoff = {
+  target: GitHubAccessTarget;
+  token: string;
+};
+
+export type GitHubAccessHandoffPreview = {
+  groupIds: Array<string>;
+  installationId: number;
+  organization: string;
+  source: 'REQUEST' | 'DIRECTORY';
+  team?: string;
+  workspaceName: string;
+};
+
+export type GitHubAccessInventoryMember = {
+  explanation?: string;
+  githubUserId: number;
+  login: string;
+  state: 'ABSENT' | 'PENDING' | 'ACTIVE' | 'WAITING_ORGANIZATION' | 'PROTECTED';
+};
+
+export type GitHubAccessMember = {
+  accountId?: number;
+  blocker?: string;
+  confirmedAt?: Date;
+  displayName: string;
+  enrolled: boolean;
+  exceptionReason?: string;
+  externalState?: 'ABSENT' | 'PENDING' | 'ACTIVE' | 'WAITING_ORGANIZATION' | 'PROTECTED';
+  githubLogin?: string;
+  githubUserId: number;
+  managed: boolean;
+  manualException: boolean;
+  revocationRequested: boolean;
+};
+
+export type GitHubAccessOffer = {
+  blocker?: string;
+  confirmedAt?: Date;
+  enrolled: boolean;
+  externalState?: 'ABSENT' | 'PENDING' | 'ACTIVE' | 'WAITING_ORGANIZATION' | 'PROTECTED';
+  invitationUrl: string;
+  managed: boolean;
+  organization: string;
+  paused: boolean;
+  revocationRequested: boolean;
+  scopeName?: string;
+  targetId: number;
+  workspaceId: number;
+  workspaceName: string;
+  workspaceSlug: string;
+};
+
+export type GitHubAccessPause = {
+  paused: boolean;
+};
+
+export type GitHubAccessPreview = {
+  awaitingIdentity: number;
+  capturedAt: Date;
+  eligiblePeople: number;
+  inventory: Array<GitHubAccessInventoryMember>;
+  unlinkedInvitations: number;
+};
+
+export type GitHubAccessRenewal = {
+  installationId: number;
+};
+
+export type GitHubAccessState = {
+  configured: boolean;
+  installationUrl?: string;
+  targets: Array<GitHubAccessTarget>;
+};
+
+/**
+ * Administrative status contains no credentials, handoff hashes or raw directory subjects.
+ */
+export type GitHubAccessTarget = {
+  actions: Array<GitHubAccessAction>;
+  approvedAt?: Date;
+  approvedGroupIds: Array<string>;
+  authorityHeld: boolean;
+  authorized: boolean;
+  configurationVersion: number;
+  connectionId: number;
+  draftGroupIds: Array<string>;
+  failureCode?: 'NOT_CONFIGURED' | 'CREDENTIALS' | 'SUSPENDED' | 'UNINSTALLED' | 'PERMISSIONS' | 'TARGET_CHANGED' | 'IDENTITY_CHANGED' | 'AUTHORITY_LOST' | 'RATE_LIMITED' | 'UNAVAILABLE' | 'INCOMPLETE' | 'WRITE_UNCONFIRMED' | 'SILENT_MODE' | 'CANCELLED';
+  failureReason?: string;
+  id: number;
+  installationId: number;
+  lastAttemptAt?: Date;
+  lastConfirmedAt?: Date;
+  members: Array<GitHubAccessMember>;
+  organization: string;
+  organizationId?: number;
+  paused: boolean;
+  preview?: GitHubAccessPreview;
+  retryAt?: Date;
+  scopeId?: number;
+  source: 'REQUEST' | 'DIRECTORY';
+  status: 'DRAFT' | 'ACTIVE' | 'ENDING' | 'ENDED';
+  team?: string;
+};
+
 /**
  * GitHub provider configuration
  */
@@ -1842,7 +1985,7 @@ export type InAppFeedback = {
  *  <code>group_id</code>; GitHub needs nothing because the install URL is server-configured).
  */
 export type InitiateConnectionRequest = {
-  kind: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
+  kind: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY' | 'GITHUB_ACCESS';
   userInput?: {
     [key: string]: string;
   };
@@ -1920,7 +2063,7 @@ export type IntegrationCatalogEntry = {
   /**
    * Integration kind
    */
-  kind: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
+  kind: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY' | 'GITHUB_ACCESS';
 };
 
 /**
@@ -3054,7 +3197,7 @@ export type PracticeGroupReviewedWork = {
   channelName?: string;
   id: number;
   number?: number;
-  provider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
+  provider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY' | 'GITHUB_ACCESS';
   repositoryName?: string;
   title?: string;
   type: string;
@@ -3918,7 +4061,7 @@ export type ReviewArtifact = {
   /**
    * Source provider, when recorded
    */
-  provider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
+  provider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY' | 'GITHUB_ACCESS';
   /**
    * Provider-qualified repository path for SCM artifacts
    */
@@ -4422,7 +4565,7 @@ export type ReviewRunTarget = {
    * Provider-visible work-item number
    */
   number?: number;
-  provider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY';
+  provider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE' | 'KEYCLOAK_DIRECTORY' | 'GITHUB_ACCESS';
   repositoryName?: string;
   title: string;
   type: string;
@@ -6297,7 +6440,7 @@ export type AdminListAuthEventsData = {
     size?: number;
     accountId?: number;
     actingAccountId?: number;
-    eventType?: Array<'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
+    eventType?: Array<'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'GITHUB_ACCESS_AUTHORIZED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
     result?: Array<'SUCCESS' | 'FAILURE'>;
     from?: Date;
     to?: Date;
@@ -6320,7 +6463,7 @@ export type AdminExportAuthEventsData = {
   query?: {
     accountId?: number;
     actingAccountId?: number;
-    eventType?: Array<'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
+    eventType?: Array<'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'GITHUB_ACCESS_AUTHORIZED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
     result?: Array<'SUCCESS' | 'FAILURE'>;
     from?: Date;
     to?: Date;
@@ -6344,7 +6487,7 @@ export type AdminListConfigAuditEventsData = {
     workspaceId?: number;
     page?: number;
     size?: number;
-    entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_ACCESS_POLICY' | 'WORKSPACE_ACCESS_REQUEST' | 'DIRECTORY_POLICY' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
+    entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_ACCESS_POLICY' | 'WORKSPACE_ACCESS_REQUEST' | 'DIRECTORY_POLICY' | 'GITHUB_ACCESS_POLICY' | 'GITHUB_ACCESS_MEMBERSHIP' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
     entityId?: string;
     changedKey?: string;
     action?: Array<'CREATED' | 'UPDATED' | 'DELETED'>;
@@ -7877,6 +8020,72 @@ export type GetUserFeaturesResponses = {
 
 export type GetUserFeaturesResponse = GetUserFeaturesResponses[keyof GetUserFeaturesResponses];
 
+export type GetMyGitHubAccessData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/user/github-access';
+};
+
+export type GetMyGitHubAccessResponses = {
+  /**
+   * OK
+   */
+  200: Array<GitHubAccessOffer>;
+};
+
+export type GetMyGitHubAccessResponse = GetMyGitHubAccessResponses[keyof GetMyGitHubAccessResponses];
+
+export type AuthorizeGitHubAccessHandoffData = {
+  body: GitHubAccessCapability;
+  path?: never;
+  query?: never;
+  url: '/user/github-access/approval';
+};
+
+export type AuthorizeGitHubAccessHandoffResponses = {
+  /**
+   * No Content
+   */
+  204: void;
+};
+
+export type AuthorizeGitHubAccessHandoffResponse = AuthorizeGitHubAccessHandoffResponses[keyof AuthorizeGitHubAccessHandoffResponses];
+
+export type PreviewGitHubAccessHandoffData = {
+  body: GitHubAccessCapability;
+  path?: never;
+  query?: never;
+  url: '/user/github-access/approval/preview';
+};
+
+export type PreviewGitHubAccessHandoffResponses = {
+  /**
+   * OK
+   */
+  200: GitHubAccessHandoffPreview;
+};
+
+export type PreviewGitHubAccessHandoffResponse = PreviewGitHubAccessHandoffResponses[keyof PreviewGitHubAccessHandoffResponses];
+
+export type ChangeMyGitHubAccessEnrollmentData = {
+  body: GitHubAccessEnrollment;
+  path: {
+    targetId: number;
+  };
+  query?: never;
+  url: '/user/github-access/{targetId}';
+};
+
+export type ChangeMyGitHubAccessEnrollmentResponses = {
+  /**
+   * OK
+   */
+  200: Array<GitHubAccessOffer>;
+};
+
+export type ChangeMyGitHubAccessEnrollmentResponse = ChangeMyGitHubAccessEnrollmentResponses[keyof ChangeMyGitHubAccessEnrollmentResponses];
+
 export type ListLinkedIdentitiesData = {
   body?: never;
   path?: never;
@@ -8674,7 +8883,7 @@ export type ListWorkspaceConfigAuditEventsData = {
   query?: {
     page?: number;
     size?: number;
-    entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_ACCESS_POLICY' | 'WORKSPACE_ACCESS_REQUEST' | 'DIRECTORY_POLICY' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
+    entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_ACCESS_POLICY' | 'WORKSPACE_ACCESS_REQUEST' | 'DIRECTORY_POLICY' | 'GITHUB_ACCESS_POLICY' | 'GITHUB_ACCESS_MEMBERSHIP' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
     entityId?: string;
     changedKey?: string;
     action?: Array<'CREATED' | 'UPDATED' | 'DELETED'>;
@@ -9268,6 +9477,225 @@ export type UpdateFeaturesResponses = {
 };
 
 export type UpdateFeaturesResponse = UpdateFeaturesResponses[keyof UpdateFeaturesResponses];
+
+export type GetGitHubAccessTargetsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/github-access';
+};
+
+export type GetGitHubAccessTargetsResponses = {
+  /**
+   * OK
+   */
+  200: GitHubAccessState;
+};
+
+export type GetGitHubAccessTargetsResponse = GetGitHubAccessTargetsResponses[keyof GetGitHubAccessTargetsResponses];
+
+export type CreateGitHubAccessTargetData = {
+  body: GitHubAccessConfiguration;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/github-access';
+};
+
+export type CreateGitHubAccessTargetResponses = {
+  /**
+   * OK
+   */
+  200: GitHubAccessHandoff;
+};
+
+export type CreateGitHubAccessTargetResponse = CreateGitHubAccessTargetResponses[keyof CreateGitHubAccessTargetResponses];
+
+export type EndGitHubAccessTargetData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    targetId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/github-access/{targetId}';
+};
+
+export type EndGitHubAccessTargetResponses = {
+  /**
+   * OK
+   */
+  200: GitHubAccessTarget;
+};
+
+export type EndGitHubAccessTargetResponse = EndGitHubAccessTargetResponses[keyof EndGitHubAccessTargetResponses];
+
+export type ConfigureGitHubAccessTargetData = {
+  body: GitHubAccessConfiguration;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    targetId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/github-access/{targetId}';
+};
+
+export type ConfigureGitHubAccessTargetResponses = {
+  /**
+   * OK
+   */
+  200: GitHubAccessHandoff;
+};
+
+export type ConfigureGitHubAccessTargetResponse = ConfigureGitHubAccessTargetResponses[keyof ConfigureGitHubAccessTargetResponses];
+
+export type ApproveGitHubAccessTargetData = {
+  body: GitHubAccessApproval;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    targetId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/github-access/{targetId}/approvals';
+};
+
+export type ApproveGitHubAccessTargetResponses = {
+  /**
+   * OK
+   */
+  200: GitHubAccessTarget;
+};
+
+export type ApproveGitHubAccessTargetResponse = ApproveGitHubAccessTargetResponses[keyof ApproveGitHubAccessTargetResponses];
+
+export type RenewGitHubAccessHandoffData = {
+  body: GitHubAccessRenewal;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    targetId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/github-access/{targetId}/handoffs';
+};
+
+export type RenewGitHubAccessHandoffResponses = {
+  /**
+   * OK
+   */
+  200: GitHubAccessHandoff;
+};
+
+export type RenewGitHubAccessHandoffResponse = RenewGitHubAccessHandoffResponses[keyof RenewGitHubAccessHandoffResponses];
+
+export type DecideGitHubAccessMembershipData = {
+  body: GitHubAccessDecision;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    targetId: number;
+    githubUserId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/github-access/{targetId}/members/{githubUserId}/decision';
+};
+
+export type DecideGitHubAccessMembershipResponses = {
+  /**
+   * OK
+   */
+  200: GitHubAccessTarget;
+};
+
+export type DecideGitHubAccessMembershipResponse = DecideGitHubAccessMembershipResponses[keyof DecideGitHubAccessMembershipResponses];
+
+export type PauseGitHubAccessTargetData = {
+  body: GitHubAccessPause;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    targetId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/github-access/{targetId}/pause';
+};
+
+export type PauseGitHubAccessTargetResponses = {
+  /**
+   * OK
+   */
+  200: GitHubAccessTarget;
+};
+
+export type PauseGitHubAccessTargetResponse = PauseGitHubAccessTargetResponses[keyof PauseGitHubAccessTargetResponses];
+
+export type PreviewGitHubAccessTargetData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    targetId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/github-access/{targetId}/previews';
+};
+
+export type PreviewGitHubAccessTargetResponses = {
+  /**
+   * Accepted
+   */
+  202: SyncJob;
+};
+
+export type PreviewGitHubAccessTargetResponse = PreviewGitHubAccessTargetResponses[keyof PreviewGitHubAccessTargetResponses];
+
+export type ReconcileGitHubAccessTargetData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    targetId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/github-access/{targetId}/reconciliations';
+};
+
+export type ReconcileGitHubAccessTargetResponses = {
+  /**
+   * Accepted
+   */
+  202: SyncJob;
+};
+
+export type ReconcileGitHubAccessTargetResponse = ReconcileGitHubAccessTargetResponses[keyof ReconcileGitHubAccessTargetResponses];
 
 export type GetLeaderboardData = {
   body?: never;

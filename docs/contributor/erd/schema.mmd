@@ -527,6 +527,89 @@ erDiagram
         VARCHAR(255) on_behalf_of_login
     }
 
+    GithubAccessAction {
+        BIGINT id PK
+        INTEGER attempts "NOT NULL"
+        BIGINT configuration_version "NOT NULL"
+        TIMESTAMPTZ confirmed_at
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ eligibility_captured_at
+        BIGINT eligibility_configuration_version
+        TIMESTAMPTZ eligibility_source_version
+        VARCHAR(32) failure_code
+        VARCHAR(512) failure_reason
+        BIGINT github_user_id "NOT NULL"
+        TIMESTAMPTZ last_attempt_at
+        BIGINT organization_id "NOT NULL"
+        VARCHAR(32) provider_state
+        TIMESTAMPTZ retry_at
+        BIGINT scope_id "NOT NULL"
+        VARCHAR(32) status "NOT NULL"
+        VARCHAR(16) type "NOT NULL"
+        BIGINT membership_id FK "NOT NULL"
+        BIGINT target_id FK "NOT NULL"
+        BIGINT workspace_id FK "NOT NULL"
+    }
+
+    GithubAccessMembership {
+        BIGINT id PK,UK
+        BIGINT account_id FK
+        VARCHAR(512) blocker
+        TIMESTAMPTZ confirmed_at
+        BIGINT directory_identity_link_id
+        VARCHAR(512) directory_subject
+        BOOLEAN enrolled "NOT NULL"
+        VARCHAR(512) exception_reason
+        VARCHAR(32) external_state
+        BIGINT github_identity_link_id
+        VARCHAR(100) github_login
+        BIGINT github_user_id UK "NOT NULL"
+        BIGINT invitation_id
+        BOOLEAN managed "NOT NULL"
+        BOOLEAN manual_exception "NOT NULL"
+        BOOLEAN revocation_requested "NOT NULL"
+        BIGINT version "NOT NULL"
+        BIGINT target_id FK,UK "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+    }
+
+    GithubAccessTarget {
+        BIGINT id PK,UK
+        TIMESTAMPTZ approved_at
+        BIGINT approved_by_account_id FK
+        JSONB approved_group_ids "NOT NULL"
+        BOOLEAN authority_held "NOT NULL"
+        JSONB owner_authorization
+        BIGINT configuration_version "NOT NULL"
+        BIGINT connection_id FK,UK "NOT NULL"
+        BIGINT directory_provider_id FK
+        JSONB draft_group_ids "NOT NULL"
+        VARCHAR(32) failure_code
+        VARCHAR(512) failure_reason
+        TIMESTAMPTZ handoff_expires_at
+        VARCHAR(64) handoff_hash UK
+        BIGINT handoff_issued_by_account_id FK
+        VARCHAR(512) issuer
+        TIMESTAMPTZ last_attempt_at
+        TIMESTAMPTZ last_confirmed_at
+        BIGINT organization_id
+        VARCHAR(100) organization_login
+        BOOLEAN paused "NOT NULL"
+        BIGINT pending_installation_id "NOT NULL"
+        JSONB preview
+        VARCHAR(64) registration_id
+        VARCHAR(100) requested_organization "NOT NULL"
+        VARCHAR(100) requested_team
+        TIMESTAMPTZ retry_at
+        BIGINT scope_id
+        VARCHAR(255) scope_name
+        VARCHAR(16) status "NOT NULL"
+        BIGINT version "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT request_team_id
+        VARCHAR(16) source "NOT NULL"
+    }
+
     IdentityLink {
         BIGINT id PK
         BIGINT account_id FK "NOT NULL"
@@ -1618,6 +1701,7 @@ erDiagram
     Workspace ||--|| DirectoryPolicy : has
     Connection ||--|| DirectoryPolicy : has
     DiscussionComment ||--|| Discussion : references
+    Connection ||--|| GithubAccessTarget : has
     PracticeRevision ||--|| Practice : references
     Workspace ||--|| PracticeCatalogInstallation : has
     WorkspaceMembership ||--|| PracticeReviewPersonTarget : reviewed
@@ -1683,6 +1767,19 @@ erDiagram
     User ||--o{ GitCommit : authored_by
     User ||--o{ GitCommit : references
     Repository ||--o{ GitCommit : has
+    GithubAccessMembership ||--o{ GithubAccessAction : membership_id
+    GithubAccessTarget ||--o{ GithubAccessAction : target_id
+    Workspace ||--o{ GithubAccessAction : has
+    GithubAccessMembership ||--o{ GithubAccessAction : membership_id
+    GithubAccessTarget ||--o{ GithubAccessAction : target_id
+    GithubAccessTarget ||--o{ GithubAccessMembership : target_id
+    Workspace ||--o{ GithubAccessMembership : belongs_to
+    Account ||--o{ GithubAccessMembership : belongs_to
+    GithubAccessTarget ||--o{ GithubAccessMembership : target_id
+    Workspace ||--o{ GithubAccessTarget : has
+    Account ||--o{ GithubAccessTarget : approved_by_account_id
+    IdentityProvider ||--o{ GithubAccessTarget : references
+    Account ||--o{ GithubAccessTarget : handoff_issued_by_account_id
     Account ||--o{ IdentityLink : has
     IdentityProvider ||--o{ IdentityLink : references
     Repository ||--o{ Issue : has

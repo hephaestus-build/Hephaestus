@@ -1,0 +1,50 @@
+---
+id: github-access
+title: GitHub access
+description: Complete invitations, understand managed access and leave a GitHub target safely.
+---
+
+# GitHub access
+
+Your workspace can offer access to GitHub organizations and teams through an approved access request
+or, optionally, approved organizational groups. Link your own GitHub.com account in account settings. Hephaestus uses your verified GitHub
+identity, not a matching email address or username, to determine where an invitation can be sent.
+
+## Joining
+
+1. Follow the workspace's access-request page and wait for approval, or join a workspace offered through
+   your linked organizational identity. An organizational account is not required unless the workspace
+   asks you to link one.
+2. Link your GitHub.com account in account settings.
+3. Open your GitHub access status. If an organization invitation is pending, follow its invitation link
+   and accept it on GitHub. A pending invitation is not yet active membership.
+4. If a team target is waiting for organization membership, accept the organization invitation first.
+   Your workspace owner may need to configure an organization target before team access can proceed.
+
+Existing membership is not automatically taken over. Your workspace owner must explicitly adopt it,
+or keep it as a manual exception. Owners and other protected access are not automatically managed.
+
+## Leaving and rejoining
+
+You can leave an offered target from your GitHub access status. This requests removal of managed access;
+it does not claim that GitHub has already removed it. The status continues to show pending work until
+GitHub confirms the result. Rejoining changes your preference, but still requires current eligibility.
+An earlier pending removal must finish before a new grant can be made safely.
+
+Reaching your approved expiry, losing organizational eligibility, unlinking a required identity or deleting your account can also end
+managed access. Hephaestus removes only the access its workspace was authorized to manage, not unrelated
+manual access. If GitHub or the directory is unavailable, the status explains the remaining blocker.
+Request a renewal before your access expires; a pending renewal does not extend the approved end date.
+
+## Paused or blocked access
+
+A paused target still has its existing GitHub access. Pausing stops changes, including removals; it does
+not revoke membership. Your workspace administrator can inspect and retry blocked targets. Policy,
+adoption and manual-exception decisions belong to your workspace owner.
+
+GitHub organization owners may receive a short-lived approval link from a workspace owner. Sign in as
+yourself, link your GitHub identity and review the requested workspace and scope before consenting. You
+do not need to join that workspace. An expired or used link must be replaced by its workspace owner.
+
+GitLab accounts can still be linked to Hephaestus. Automatic external membership management for GitLab,
+Slack and Outline is not supported.

@@ -183,6 +183,9 @@ public class ConnectionAdminService {
             IntegrationKind kind, Map<String, String> userInput, @Nullable String instanceKey) {
         Set<String> enabledStreams = new HashSet<>();
         return switch (kind) {
+            case GITHUB_ACCESS ->
+                throw new IllegalArgumentException(
+                        "Configure GitHub access through its organization-owner approval flow");
             case KEYCLOAK_DIRECTORY ->
                 throw new IllegalArgumentException("Configure directory access from workspace member administration");
             case GITLAB -> {

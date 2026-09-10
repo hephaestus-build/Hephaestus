@@ -27,8 +27,9 @@ public enum IdentityProviderType {
      */
     public static IdentityProviderType from(IntegrationKind kind) {
         return switch (kind) {
-            case KEYCLOAK_DIRECTORY ->
-                throw new IllegalArgumentException("A directory connection is not a sign-in identity provider");
+            case KEYCLOAK_DIRECTORY, GITHUB_ACCESS ->
+                throw new IllegalArgumentException(
+                        "An access-management connection is not a sign-in identity provider");
             case GITHUB -> GITHUB;
             case GITLAB -> GITLAB;
             case SLACK, OUTLINE ->

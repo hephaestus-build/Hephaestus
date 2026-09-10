@@ -6,4 +6,5 @@ public enum IntegrationFamily {
     MESSAGING,
     DOCUMENTATION,
     DIRECTORY,
+    ACCESS,
 }

@@ -11,6 +11,20 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 interface WorkspaceAccessRequestRepository extends JpaRepository<WorkspaceAccessRequest, Long> {
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.workspace.onboarding.WorkspaceAccessRequestRepository$CurrentApproval(r, m.expiresAt)
+        FROM WorkspaceAccessRequest r
+        JOIN WorkspaceAccountMembership m ON m.workspace.id = r.workspace.id
+            AND m.accountId = r.accountId AND m.accessRequestId = r.id
+        WHERE r.workspace.id = :workspaceId AND r.status = 'APPROVED'
+            AND m.source = 'REQUEST' AND m.suspended = false AND m.expiresAt > :now
+        ORDER BY r.accountId
+        """)
+    List<CurrentApproval> findCurrentApprovals(
+            @Param("workspaceId") Long workspaceId, @Param("now") java.time.Instant now);
+
+    record CurrentApproval(WorkspaceAccessRequest request, java.time.Instant membershipExpiry) {}
+
     Optional<WorkspaceAccessRequest> findByIdAndWorkspace_Id(Long id, Long workspaceId);
 
     List<WorkspaceAccessRequest> findByWorkspace_IdAndAccountIdOrderBySubmittedAtDescIdDesc(

@@ -19,11 +19,13 @@ import { SyncNowButton } from "./SyncNowButton";
 const DETAIL_ROUTE: Record<
 	IntegrationCatalogEntry["kind"],
 	| "/w/$workspaceSlug/admin/directory"
+	| "/w/$workspaceSlug/admin/github-access"
 	| "/w/$workspaceSlug/admin/integrations/scm"
 	| "/w/$workspaceSlug/admin/integrations/slack"
 	| "/w/$workspaceSlug/admin/integrations/outline"
 > = {
 	KEYCLOAK_DIRECTORY: "/w/$workspaceSlug/admin/directory",
+	GITHUB_ACCESS: "/w/$workspaceSlug/admin/github-access",
 	GITHUB: "/w/$workspaceSlug/admin/integrations/scm",
 	GITLAB: "/w/$workspaceSlug/admin/integrations/scm",
 	SLACK: "/w/$workspaceSlug/admin/integrations/slack",
@@ -31,6 +33,7 @@ const DETAIL_ROUTE: Record<
 };
 
 const KIND_ICON: Record<IntegrationCatalogEntry["kind"], React.ReactNode> = {
+	GITHUB_ACCESS: <GithubIcon className="size-5" />,
 	KEYCLOAK_DIRECTORY: <NetworkIcon className="size-5" />,
 	GITHUB: <GithubIcon className="size-5" />,
 	GITLAB: <GitlabIcon className="size-5" />,

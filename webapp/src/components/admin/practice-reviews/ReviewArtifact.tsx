@@ -41,6 +41,7 @@ type ArtifactGlyph = ComponentType<{ className?: string; "aria-hidden"?: boolean
 
 const PROVIDER_ICONS = {
 	KEYCLOAK_DIRECTORY: undefined,
+	GITHUB_ACCESS: undefined,
 	GITHUB: GithubIcon,
 	GITLAB: GitlabIcon,
 	SLACK: SlackIcon,

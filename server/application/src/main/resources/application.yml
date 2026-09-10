@@ -194,6 +194,10 @@ springdoc:
     writer-with-order-by-keys: true
 
 hephaestus:
+    github-access:
+        app-id: ${GITHUB_ACCESS_APP_ID:0}
+        app-slug: ${GITHUB_ACCESS_APP_SLUG:}
+        private-key: ${GITHUB_ACCESS_PRIVATE_KEY:}
     database:
         allow-insecure-remote: ${HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE:false}
     auth:

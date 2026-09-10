@@ -13,11 +13,13 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as ConsentRouteImport } from './routes/consent'
+import { Route as GithubAccessApprovalRouteImport } from './routes/github-access-approval'
 import { Route as ImprintRouteImport } from './routes/imprint'
 import { Route as LandingRouteImport } from './routes/landing'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedGithubAccessRouteImport } from './routes/_authenticated/github-access'
 import { Route as AuthenticatedIntegrationsRouteImport } from './routes/_authenticated/integrations'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
@@ -50,6 +52,7 @@ import { Route as AuthenticatedAdminCatalogPracticesNewRouteImport } from './rou
 import { Route as AuthenticatedWWorkspaceSlugAdminAccessRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/access'
 import { Route as AuthenticatedWWorkspaceSlugAdminAuditRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/audit'
 import { Route as AuthenticatedWWorkspaceSlugAdminDirectoryRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/directory'
+import { Route as AuthenticatedWWorkspaceSlugAdminGithubAccessRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/github-access'
 import { Route as AuthenticatedWWorkspaceSlugAdminIntegrationsRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/integrations'
 import { Route as AuthenticatedWWorkspaceSlugAdminMembersRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/members'
 import { Route as AuthenticatedWWorkspaceSlugAdminModelsRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/models'
@@ -111,6 +114,11 @@ const ConsentRoute = ConsentRouteImport.update({
   path: '/consent',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GithubAccessApprovalRoute = GithubAccessApprovalRouteImport.update({
+  id: '/github-access-approval',
+  path: '/github-access-approval',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ImprintRoute = ImprintRouteImport.update({
   id: '/imprint',
   path: '/imprint',
@@ -136,6 +144,12 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedGithubAccessRoute =
+  AuthenticatedGithubAccessRouteImport.update({
+    id: '/github-access',
+    path: '/github-access',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedIntegrationsRoute =
   AuthenticatedIntegrationsRouteImport.update({
     id: '/integrations',
@@ -318,6 +332,12 @@ const AuthenticatedWWorkspaceSlugAdminDirectoryRoute =
   AuthenticatedWWorkspaceSlugAdminDirectoryRouteImport.update({
     id: '/directory',
     path: '/directory',
+    getParentRoute: () => AuthenticatedWWorkspaceSlugAdminRouteRoute,
+  } as any)
+const AuthenticatedWWorkspaceSlugAdminGithubAccessRoute =
+  AuthenticatedWWorkspaceSlugAdminGithubAccessRouteImport.update({
+    id: '/github-access',
+    path: '/github-access',
     getParentRoute: () => AuthenticatedWWorkspaceSlugAdminRouteRoute,
   } as any)
 const AuthenticatedWWorkspaceSlugAdminIntegrationsRoute =
@@ -599,11 +619,13 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/consent': typeof ConsentRoute
+  '/github-access-approval': typeof GithubAccessApprovalRoute
   '/imprint': typeof ImprintRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/github-access': typeof AuthenticatedGithubAccessRoute
   '/integrations': typeof AuthenticatedIntegrationsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -636,6 +658,7 @@ export interface FileRoutesByFullPath {
   '/w/$workspaceSlug/admin/access': typeof AuthenticatedWWorkspaceSlugAdminAccessRoute
   '/w/$workspaceSlug/admin/audit': typeof AuthenticatedWWorkspaceSlugAdminAuditRoute
   '/w/$workspaceSlug/admin/directory': typeof AuthenticatedWWorkspaceSlugAdminDirectoryRoute
+  '/w/$workspaceSlug/admin/github-access': typeof AuthenticatedWWorkspaceSlugAdminGithubAccessRoute
   '/w/$workspaceSlug/admin/integrations': typeof AuthenticatedWWorkspaceSlugAdminIntegrationsRouteWithChildren
   '/w/$workspaceSlug/admin/members': typeof AuthenticatedWWorkspaceSlugAdminMembersRoute
   '/w/$workspaceSlug/admin/models': typeof AuthenticatedWWorkspaceSlugAdminModelsRoute
@@ -682,10 +705,12 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/consent': typeof ConsentRoute
+  '/github-access-approval': typeof GithubAccessApprovalRoute
   '/imprint': typeof ImprintRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
+  '/github-access': typeof AuthenticatedGithubAccessRoute
   '/integrations': typeof AuthenticatedIntegrationsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -714,6 +739,7 @@ export interface FileRoutesByTo {
   '/w/$workspaceSlug/admin/access': typeof AuthenticatedWWorkspaceSlugAdminAccessRoute
   '/w/$workspaceSlug/admin/audit': typeof AuthenticatedWWorkspaceSlugAdminAuditRoute
   '/w/$workspaceSlug/admin/directory': typeof AuthenticatedWWorkspaceSlugAdminDirectoryRoute
+  '/w/$workspaceSlug/admin/github-access': typeof AuthenticatedWWorkspaceSlugAdminGithubAccessRoute
   '/w/$workspaceSlug/admin/members': typeof AuthenticatedWWorkspaceSlugAdminMembersRoute
   '/w/$workspaceSlug/admin/models': typeof AuthenticatedWWorkspaceSlugAdminModelsRoute
   '/w/$workspaceSlug/admin/settings': typeof AuthenticatedWWorkspaceSlugAdminSettingsRoute
@@ -756,11 +782,13 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/about': typeof AboutRoute
   '/consent': typeof ConsentRoute
+  '/github-access-approval': typeof GithubAccessApprovalRoute
   '/imprint': typeof ImprintRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/_authenticated/github-access': typeof AuthenticatedGithubAccessRoute
   '/_authenticated/integrations': typeof AuthenticatedIntegrationsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -793,6 +821,7 @@ export interface FileRoutesById {
   '/_authenticated/w/$workspaceSlug/admin/access': typeof AuthenticatedWWorkspaceSlugAdminAccessRoute
   '/_authenticated/w/$workspaceSlug/admin/audit': typeof AuthenticatedWWorkspaceSlugAdminAuditRoute
   '/_authenticated/w/$workspaceSlug/admin/directory': typeof AuthenticatedWWorkspaceSlugAdminDirectoryRoute
+  '/_authenticated/w/$workspaceSlug/admin/github-access': typeof AuthenticatedWWorkspaceSlugAdminGithubAccessRoute
   '/_authenticated/w/$workspaceSlug/admin/integrations': typeof AuthenticatedWWorkspaceSlugAdminIntegrationsRouteWithChildren
   '/_authenticated/w/$workspaceSlug/admin/members': typeof AuthenticatedWWorkspaceSlugAdminMembersRoute
   '/_authenticated/w/$workspaceSlug/admin/models': typeof AuthenticatedWWorkspaceSlugAdminModelsRoute
@@ -841,11 +870,13 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/consent'
+    | '/github-access-approval'
     | '/imprint'
     | '/landing'
     | '/login'
     | '/privacy'
     | '/admin'
+    | '/github-access'
     | '/integrations'
     | '/settings'
     | '/auth/callback'
@@ -878,6 +909,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/admin/access'
     | '/w/$workspaceSlug/admin/audit'
     | '/w/$workspaceSlug/admin/directory'
+    | '/w/$workspaceSlug/admin/github-access'
     | '/w/$workspaceSlug/admin/integrations'
     | '/w/$workspaceSlug/admin/members'
     | '/w/$workspaceSlug/admin/models'
@@ -924,10 +956,12 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/consent'
+    | '/github-access-approval'
     | '/imprint'
     | '/landing'
     | '/login'
     | '/privacy'
+    | '/github-access'
     | '/integrations'
     | '/settings'
     | '/auth/callback'
@@ -956,6 +990,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/admin/access'
     | '/w/$workspaceSlug/admin/audit'
     | '/w/$workspaceSlug/admin/directory'
+    | '/w/$workspaceSlug/admin/github-access'
     | '/w/$workspaceSlug/admin/members'
     | '/w/$workspaceSlug/admin/models'
     | '/w/$workspaceSlug/admin/settings'
@@ -997,11 +1032,13 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/about'
     | '/consent'
+    | '/github-access-approval'
     | '/imprint'
     | '/landing'
     | '/login'
     | '/privacy'
     | '/_authenticated/admin'
+    | '/_authenticated/github-access'
     | '/_authenticated/integrations'
     | '/_authenticated/settings'
     | '/auth/callback'
@@ -1034,6 +1071,7 @@ export interface FileRouteTypes {
     | '/_authenticated/w/$workspaceSlug/admin/access'
     | '/_authenticated/w/$workspaceSlug/admin/audit'
     | '/_authenticated/w/$workspaceSlug/admin/directory'
+    | '/_authenticated/w/$workspaceSlug/admin/github-access'
     | '/_authenticated/w/$workspaceSlug/admin/integrations'
     | '/_authenticated/w/$workspaceSlug/admin/members'
     | '/_authenticated/w/$workspaceSlug/admin/models'
@@ -1082,6 +1120,7 @@ export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AboutRoute: typeof AboutRoute
   ConsentRoute: typeof ConsentRoute
+  GithubAccessApprovalRoute: typeof GithubAccessApprovalRoute
   ImprintRoute: typeof ImprintRoute
   LandingRoute: typeof LandingRoute
   LoginRoute: typeof LoginRoute
@@ -1122,6 +1161,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/github-access-approval': {
+      id: '/github-access-approval'
+      path: '/github-access-approval'
+      fullPath: '/github-access-approval'
+      preLoaderRoute: typeof GithubAccessApprovalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/imprint': {
       id: '/imprint'
       path: '/imprint'
@@ -1155,6 +1201,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AuthenticatedAdminRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/github-access': {
+      id: '/_authenticated/github-access'
+      path: '/github-access'
+      fullPath: '/github-access'
+      preLoaderRoute: typeof AuthenticatedGithubAccessRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/integrations': {
@@ -1379,6 +1432,13 @@ declare module '@tanstack/react-router' {
       path: '/directory'
       fullPath: '/w/$workspaceSlug/admin/directory'
       preLoaderRoute: typeof AuthenticatedWWorkspaceSlugAdminDirectoryRouteImport
+      parentRoute: typeof AuthenticatedWWorkspaceSlugAdminRouteRoute
+    }
+    '/_authenticated/w/$workspaceSlug/admin/github-access': {
+      id: '/_authenticated/w/$workspaceSlug/admin/github-access'
+      path: '/github-access'
+      fullPath: '/w/$workspaceSlug/admin/github-access'
+      preLoaderRoute: typeof AuthenticatedWWorkspaceSlugAdminGithubAccessRouteImport
       parentRoute: typeof AuthenticatedWWorkspaceSlugAdminRouteRoute
     }
     '/_authenticated/w/$workspaceSlug/admin/integrations': {
@@ -1883,6 +1943,7 @@ interface AuthenticatedWWorkspaceSlugAdminRouteRouteChildren {
   AuthenticatedWWorkspaceSlugAdminAccessRoute: typeof AuthenticatedWWorkspaceSlugAdminAccessRoute
   AuthenticatedWWorkspaceSlugAdminAuditRoute: typeof AuthenticatedWWorkspaceSlugAdminAuditRoute
   AuthenticatedWWorkspaceSlugAdminDirectoryRoute: typeof AuthenticatedWWorkspaceSlugAdminDirectoryRoute
+  AuthenticatedWWorkspaceSlugAdminGithubAccessRoute: typeof AuthenticatedWWorkspaceSlugAdminGithubAccessRoute
   AuthenticatedWWorkspaceSlugAdminIntegrationsRoute: typeof AuthenticatedWWorkspaceSlugAdminIntegrationsRouteWithChildren
   AuthenticatedWWorkspaceSlugAdminMembersRoute: typeof AuthenticatedWWorkspaceSlugAdminMembersRoute
   AuthenticatedWWorkspaceSlugAdminModelsRoute: typeof AuthenticatedWWorkspaceSlugAdminModelsRoute
@@ -1900,6 +1961,8 @@ const AuthenticatedWWorkspaceSlugAdminRouteRouteChildren: AuthenticatedWWorkspac
       AuthenticatedWWorkspaceSlugAdminAuditRoute,
     AuthenticatedWWorkspaceSlugAdminDirectoryRoute:
       AuthenticatedWWorkspaceSlugAdminDirectoryRoute,
+    AuthenticatedWWorkspaceSlugAdminGithubAccessRoute:
+      AuthenticatedWWorkspaceSlugAdminGithubAccessRoute,
     AuthenticatedWWorkspaceSlugAdminIntegrationsRoute:
       AuthenticatedWWorkspaceSlugAdminIntegrationsRouteWithChildren,
     AuthenticatedWWorkspaceSlugAdminMembersRoute:
@@ -1992,6 +2055,7 @@ const AuthenticatedWWorkspaceSlugRouteRouteWithChildren =
 
 interface AuthenticatedRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren
+  AuthenticatedGithubAccessRoute: typeof AuthenticatedGithubAccessRoute
   AuthenticatedIntegrationsRoute: typeof AuthenticatedIntegrationsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedWWorkspaceSlugRouteRoute: typeof AuthenticatedWWorkspaceSlugRouteRouteWithChildren
@@ -2002,6 +2066,7 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
+  AuthenticatedGithubAccessRoute: AuthenticatedGithubAccessRoute,
   AuthenticatedIntegrationsRoute: AuthenticatedIntegrationsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedWWorkspaceSlugRouteRoute:
@@ -2020,6 +2085,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AboutRoute: AboutRoute,
   ConsentRoute: ConsentRoute,
+  GithubAccessApprovalRoute: GithubAccessApprovalRoute,
   ImprintRoute: ImprintRoute,
   LandingRoute: LandingRoute,
   LoginRoute: LoginRoute,

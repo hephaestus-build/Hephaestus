@@ -15,6 +15,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
         scripts = "/db/auth-event-sequence.sql",
         executionPhase = org.springframework.test.context.jdbc.Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 public abstract class OrganizationalIdentityIntegrationTest extends RealAuthIntegrationTest {
+    @MockitoBean
+    protected de.tum.cit.aet.hephaestus.integration.access.github.GitHubAccessClient githubAccess;
+
     @MockitoBean(name = "oidcRequestFactory")
     protected ClientHttpRequestFactory requests;
 }

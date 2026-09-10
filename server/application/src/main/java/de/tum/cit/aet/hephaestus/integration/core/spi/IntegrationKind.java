@@ -21,7 +21,9 @@ public enum IntegrationKind {
     /** Outline knowledge base (getoutline.com cloud or a self-hosted host). */
     OUTLINE(IntegrationFamily.DOCUMENTATION),
     /** Read-only organizational eligibility; never a practice-review source. */
-    KEYCLOAK_DIRECTORY(IntegrationFamily.DIRECTORY);
+    KEYCLOAK_DIRECTORY(IntegrationFamily.DIRECTORY),
+    /** Separately authorized GitHub organization and team membership writes; never a review source. */
+    GITHUB_ACCESS(IntegrationFamily.ACCESS);
 
     private final IntegrationFamily family;
 

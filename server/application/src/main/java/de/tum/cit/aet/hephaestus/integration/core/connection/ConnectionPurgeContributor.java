@@ -94,6 +94,7 @@ public class ConnectionPurgeContributor implements WorkspacePurgeContributor {
             case SLACK -> "Slack";
             case OUTLINE -> "Outline";
             case KEYCLOAK_DIRECTORY -> "Keycloak directory";
+            case GITHUB_ACCESS -> "Hephaestus Access";
         };
     }
 
