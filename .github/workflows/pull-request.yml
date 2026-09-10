@@ -214,8 +214,8 @@ jobs:
           script: |
             const { writeFile } = require("node:fs/promises");
 
-            // Kept equal to `scripts/lib/model-attribution.ts` by
-            // `scripts/model-attribution.test.ts`; this job has no checkout to import it from.
+            // Mirrors `scripts/lib/model-attribution.ts`; this job has no checkout to import it.
+            // `scripts/pull-request-workflows.test.ts` executes this policy against real descriptions.
             const patterns = [
               {
                 name: "a Co-Authored-By trailer naming a model or tool",
@@ -223,7 +223,7 @@ jobs:
                   /^co-authored-by:.*(?:claude|codex|copilot|gpt|openai|anthropic|gemini|cursor|noreply@anthropic\.com)/im,
               },
               { name: "a Claude-Session trailer", pattern: /^claude-session:/im },
-              { name: 'a "Generated with" marker', pattern: /generated with/i },
+              { name: 'a "Generated with" marker', pattern: /\bgenerated with\b/i },
               { name: "a claude.ai/code or session link", pattern: /claude\.ai\/(?:code|session)/i },
             ];
             const findAttribution = (text) =>

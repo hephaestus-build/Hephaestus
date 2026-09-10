@@ -12,7 +12,10 @@ export default defineConfig({
 	retries: process.env.CI ? 1 : 0,
 	failOnFlakyTests: !!process.env.CI,
 	timeout: 60_000,
-	reporter: process.env.CI ? [["github"]] : [["list"]],
+	reporter: [
+		...(process.env.CI ? [["github"] as const] : [["list"] as const]),
+		["./e2e/coverage-reporter.ts"],
+	],
 	use: {
 		baseURL: E2E_BASE_URL,
 		trace: "on-first-retry",

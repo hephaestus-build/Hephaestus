@@ -92,6 +92,10 @@ or on "the only" result, and never write cleanup that another test depends on ha
 
 ## Things that bite
 
+- **Keep proxied methods overridable.** Spring's class-based proxies and Hibernate entity proxies
+  cannot intercept a `final` method. To avoid an overridable constructor call, use constructor-local
+  values or a private calculation helper instead; making the public method `final` can read
+  uninitialized proxy fields rather than the target's state.
 - **`Issue` is SINGLE_TABLE with `PullRequest` as a subclass.** A JPQL query over `Issue` therefore
   returns pull requests too. Any query that means "issues only" must say `WHERE TYPE(i) = Issue`
   explicitly — see `MentorContextQueryRepository` and `ReviewableArtifactOwnershipRepository`. A test

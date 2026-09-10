@@ -45,6 +45,10 @@ jobs:
           name: "Test Results - App Server Verification"
           path: "server/application/build/test-results/*/TEST-*.xml"
           reporter: java-junit
+          list-suites: failed
+          list-tests: failed
+          # Source lookup is needed only for failure annotations, not successful summaries.
+          max-annotations: ${{ job.status == 'failure' && 50 || 0 }}
           fail-on-error: false
       - name: Retain raw test reports
         if: ${{ !cancelled() }}
@@ -88,6 +92,10 @@ jobs:
           name: "Test Results - App Server Integration (${{ matrix.shard }})"
           path: "server/application/build/test-results/integrationTest/TEST-*.xml"
           reporter: java-junit
+          list-suites: failed
+          list-tests: failed
+          # Source lookup is needed only for failure annotations, not successful summaries.
+          max-annotations: ${{ job.status == 'failure' && 50 || 0 }}
           fail-on-error: false
       - name: Retain raw test reports
         if: ${{ !cancelled() }}

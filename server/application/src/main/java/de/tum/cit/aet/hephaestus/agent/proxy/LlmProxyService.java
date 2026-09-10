@@ -76,6 +76,7 @@ class LlmProxyService {
         this.accounting = accounting;
     }
 
+    @SuppressWarnings("try") // The scope installs the current span and restores it on close.
     public @Nullable ResponseEntity<?> proxy(
             HttpServletRequest request,
             HttpServletResponse response,

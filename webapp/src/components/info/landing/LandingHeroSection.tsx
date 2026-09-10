@@ -1,5 +1,6 @@
 import { CircleCheck, MessageSquare, Square } from "lucide-react";
-import { motion, stagger, useReducedMotion } from "motion/react";
+import { motion, stagger } from "motion/react";
+import { useMediaQuery } from "usehooks-ts";
 import { LandingSignInCta } from "@/components/auth/LandingSignInCta";
 import { GithubIcon, GitlabIcon } from "@/components/icons/brand";
 import { Badge } from "@/components/ui/badge";
@@ -203,7 +204,7 @@ export function HeroScene() {
 }
 
 export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
-	const reduceMotion = useReducedMotion();
+	const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 	return (
 		<section
 			aria-labelledby="landing-hero-heading"

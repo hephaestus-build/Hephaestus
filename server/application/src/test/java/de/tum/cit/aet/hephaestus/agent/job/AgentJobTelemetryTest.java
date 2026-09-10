@@ -36,6 +36,7 @@ class AgentJobTelemetryTest {
     }
 
     @Test
+    @SuppressWarnings("try") // The scope makes the span current until this block ends.
     void shouldExportARealExecutionSpanWithoutInventingASubmissionParent() {
         var exporter = org.mockito.Mockito.mock(io.opentelemetry.sdk.trace.export.SpanExporter.class);
         org.mockito.Mockito.when(exporter.export(org.mockito.ArgumentMatchers.any()))
