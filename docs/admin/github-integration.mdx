@@ -55,6 +55,21 @@ Use [`external-app-icon-1024.png`](/img/brand/external-app-icon-1024.png) as its
   be installed on organizations when public; **Only on this account** restricts it to its owner.
   Installation and repository selection are still required.
 
+### Workspace attachment
+
+An existing GitHub installation stays bound to its workspace when the account is renamed. A new or
+reinstalled GitHub App installation can reuse a matching-name workspace only when the workspace has
+already recorded the same immutable GitHub organization identity. A PAT connection with a stored
+token remains in PAT mode.
+
+Personal-account workspaces and older organization workspaces that have not synchronized their
+organization identity cannot establish that match from an account name alone. The installation gets
+a separate workspace with an available slug; the existing workspace and its access remain unchanged.
+Before migrating an organization from PAT mode, synchronize its organization identity and remove the
+PAT credential when ready to switch. A name match never transfers ownership or private conversations.
+If an old synchronized organization still holds a reused GitHub name, refresh that organization's
+identity before retrying the installation; the conflicting identities are rejected rather than merged.
+
 ### Permission model
 
 **Core** permissions support synchronization and feedback delivery. **Provisioned** reads are

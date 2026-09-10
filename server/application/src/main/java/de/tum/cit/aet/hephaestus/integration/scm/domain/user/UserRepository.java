@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.user;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
-import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -145,14 +144,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
         return findAllByTeamIds(List.of(teamId));
     }
 
-    /** A pinned actor id is authoritative; the login fallback applies only outside a pinned context. */
+    /** Only a verified actor pinned by the workspace boundary or a non-HTTP caller identifies the developer. */
     default Optional<User> getCurrentUser() {
-        var actorId = CurrentScmIdentityHolder.getUserId();
-        if (actorId.isPresent()) {
-            return findById(actorId.get());
-        }
-        var currentUserLogin = SecurityUtils.getCurrentUserLogin();
-        return currentUserLogin.flatMap(this::findByLogin);
+        return CurrentScmIdentityHolder.getUserId().flatMap(this::findById);
     }
 
     default User getCurrentUserElseThrow() {

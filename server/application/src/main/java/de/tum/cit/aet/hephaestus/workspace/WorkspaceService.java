@@ -2,11 +2,12 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
@@ -69,6 +70,7 @@ public class WorkspaceService {
     // Core repositories
     private final WorkspaceRepository workspaceRepository;
     private final UserRepository userRepository;
+    private final CurrentAccountUsers currentAccountUsers;
 
     // Services
     private final WorkspaceSlugService workspaceSlugService;
@@ -83,6 +85,7 @@ public class WorkspaceService {
     public WorkspaceService(
             WorkspaceRepository workspaceRepository,
             UserRepository userRepository,
+            CurrentAccountUsers currentAccountUsers,
             WorkspaceSlugService workspaceSlugService,
             WorkspaceSettingsService workspaceSettingsService,
             LeaguePointsRecalculator leaguePointsRecalculator,
@@ -92,6 +95,7 @@ public class WorkspaceService {
             PlatformTransactionManager transactionManager) {
         this.workspaceRepository = workspaceRepository;
         this.userRepository = userRepository;
+        this.currentAccountUsers = currentAccountUsers;
         this.workspaceSlugService = workspaceSlugService;
         this.workspaceSettingsService = workspaceSettingsService;
         this.leaguePointsRecalculator = leaguePointsRecalculator;
@@ -171,9 +175,14 @@ public class WorkspaceService {
         String personalAccessToken =
                 Objects.requireNonNull(request.personalAccessToken(), "personalAccessToken is required");
 
-        // Always prefer the authenticated user to prevent privilege escalation.
-        // Fall back to the deprecated ownerUserId only when no auth context exists (e.g. tests).
-        Long ownerUserId = userRepository.getCurrentUser().map(User::getId).orElse(request.ownerUserId());
+        // Creation has no workspace identity yet. Resolve the account's verified actors directly.
+        Long ownerUserId = SecurityUtils.getCurrentAccountId().isPresent()
+                ? currentAccountUsers.resolve().stream()
+                        .map(user -> Objects.requireNonNull(user.getId()))
+                        .findFirst()
+                        .orElseThrow(() ->
+                                new AccessForbiddenException("Connect an SCM account before creating a workspace"))
+                : request.ownerUserId();
 
         Workspace workspace =
                 createWorkspaceInTransaction(workspaceSlug, displayName, accountLogin, accountType, ownerUserId);

@@ -106,6 +106,12 @@ missing actor's saved signup username belongs to another native id on the same p
 returns `409 Conflict` rather than reassigning the username. A non-numeric provider subject also
 returns `409`; this path does not fetch fresh provider data.
 
+Workspace creation resolves the authenticated account's verified actors directly because there is no
+workspace context to pin yet. Workspace-scoped developer reads require the pinned actor; an elevated
+instance administrator without membership has no developer identity and never inherits one from a
+display login. GitHub installation attachment follows the immutable identity requirements documented
+in [GitHub integration](../admin/github-integration#workspace-attachment).
+
 ## Async Work
 
 `WorkspaceContextExecutor.wrap` captures the workspace context and MDC for a background task; it does
