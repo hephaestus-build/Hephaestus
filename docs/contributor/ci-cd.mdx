@@ -565,6 +565,23 @@ with APT configuration scoped to that installation process. Unrelated vendor rep
 participate; repository signatures and package hashes remain enforced. The pinned Playwright CLI
 then installs Chromium as the runner user so the browser cache retains its normal ownership.
 
+Repository-local actions require checkout first. Jobs without checkout use the external SHA-pinned
+action directly rather than checking out the repository only to reach a wrapper. The reusable
+image builder also uses the external login action because its registry is a caller input, whereas
+`ghcr-login` intentionally authenticates only to GHCR. Browser E2E boots the packaged JAR without
+Gradle, so it sets up Java directly; OpenAPI autocommit builds the JAR and uses `setup-caches`.
+Preview controllers keep their trusted sparse bootstrap checkouts explicit: a repository-local
+action is unavailable before checkout. Their inventory job uses `github-script`'s bundled Node;
+controller jobs that invoke Node scripts use `setup-toolchain` without a package install.
+
+Image verification stays beside publishing. The single-platform step signs and verifies one image;
+the merge job signs recursively, then verifies the index; the alias job verifies each immutable
+subject before moving its tags. Merge and alias jobs need no checkout or repository toolchain just
+to verify registry evidence. `scripts/ci-provenance.test.ts` executes all three shell paths and pins
+the same repository/workflow signature identity, GitHub OIDC issuer and owner-constrained
+attestation verification, including rejection before alias publication. Signing remains in
+`reusable-docker-build.yml`, so a refactor cannot silently change the certificate identity.
+
 ### Caches
 
 A run restores caches from its own branch and from `main`, never from a sibling branch. Task-cache
@@ -607,19 +624,16 @@ exact-match cache cannot refresh build outputs after source-only changes. Config
 reuse remains within a job: no encryption key is configured, so the
 action does not persist configuration-cache entries across jobs.
 
-Repository-local actions require checkout first. Jobs without checkout use the external SHA-pinned
-action directly rather than checking out the repository only to reach a wrapper. The reusable
-image builder also uses the external login action because its registry is a caller input, whereas
-`ghcr-login` intentionally authenticates only to GHCR. Browser E2E boots the packaged JAR without
-Gradle, so it sets up Java directly; OpenAPI autocommit builds the JAR and uses `setup-caches`.
-
 ## Path filters
 
 `detect-changes` in `cicd.yml` selects legs from the changed paths on the two events that are a
 diff: a pull request against its base, and a merge group against `merge_group.base_sha..head_sha`. A
-push to `main` and a dispatch validate a whole commit and run every leg, which `detect-changes`
-publishes as `unfiltered`. Same-repository pull requests also run `Build` and `Docker` regardless of
-paths, because previews need every image at the head SHA; no other event has a preview.
+push to `main` and a dispatch publish `unfiltered` selection flags rather than filtering a diff.
+Selection does not override the outer event guards: ordinary main pushes omit Quality, Test,
+Security, Actionlint, Zizmor and Compose, and skip the API/schema/database/browser jobs inside
+`Build`; release-version pushes repeat those checks. Main still packages and publishes images and
+runs CodeQL. Same-repository pull requests also run `Build` and `Docker` regardless of paths, because
+previews need every image at the head SHA; no other event has a preview.
 
 | Selects | Paths |
 | --- | --- |
@@ -724,11 +738,17 @@ reaches no such commit builds every image itself. `detect-changes` resolves that
   validation. Either survivor must pass release preflight; the merge queue separately validates
   the final merge tree. Ordinary PRs, forks, main pushes and merge groups retain separate lanes.
 - A run on `main` that leaves a per-commit record — `codeql.yml`, `semgrep.yml`, `scorecard.yml`,
-  `scorecard-ratchet.yml` — is never cancelled, because it is the only run that commit will get and
-  its absence is what a later score reads as a gap. Those workflows write
+  `scorecard-ratchet.yml` — does not cancel an in-progress predecessor when another commit arrives;
+  a missing record can become a gap in a later score. Those workflows write
   `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}`, and `scripts/ci-contract.test.ts`
   holds every `main` push to it; a workflow whose newest run simply replaces the last, such as the
-  docs deploy, is named there as the exception.
+  docs deploy, is named there as the exception. GitHub can still replace a **pending** run in the
+  same [concurrency group](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency):
+  `cancel-in-progress: false` protects running work, not every queued commit. Post-merge verification
+  must use the actual completed run for the converged main head, not infer success from this setting.
+  GitHub's native `queue: max` can retain more pending runs, but the required Actionlint parser
+  [does not yet support it](https://github.com/rhysd/actionlint/issues/657). Adopt it when a supported
+  validator release is available; do not suppress workflow syntax checks or add a custom queue.
 
 ## Monitoring CI
 
