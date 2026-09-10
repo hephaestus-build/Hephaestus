@@ -85,7 +85,7 @@ const NEXT_STEPS = [
 	},
 ];
 
-/** Only the wide layout has room for it, and everything it says is repeated during onboarding. */
+/** Dropped below `lg`, where the form needs the width: it previews setup rather than being part of it. */
 function OnboardingAside() {
 	return (
 		<aside className="hidden flex-col justify-center gap-10 border-l border-border bg-muted/40 p-10 lg:flex">
