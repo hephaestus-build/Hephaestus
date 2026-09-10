@@ -245,11 +245,11 @@ class DockerInteractiveSandboxLiveTest {
     }
 
     private static JsonNode echo(String payload) {
-        return ((ObjectNode) MAPPER.createObjectNode().put("type", "echo")).put("payload", payload);
+        return (MAPPER.createObjectNode().put("type", "echo")).put("payload", payload);
     }
 
     private static JsonNode emit(int count, String tag) {
-        return ((ObjectNode) MAPPER.createObjectNode().put("type", "emit").put("count", count)).put("tag", tag);
+        return (MAPPER.createObjectNode().put("type", "emit").put("count", count)).put("tag", tag);
     }
 
     @Nested

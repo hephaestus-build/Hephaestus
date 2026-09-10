@@ -123,9 +123,9 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
         if (issue == null || issue.getDeletedAt() != null) {
             return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
         }
-        if (ScmSignals.ISSUE_UPDATED.value().equals(metadata.path("signal").asText())) {
+        if (ScmSignals.ISSUE_UPDATED.value().equals(metadata.path("signal").asString())) {
             String admittedRevision =
-                    metadata.path(AgentJob.SIGNAL_REVISION_METADATA_KEY).asText("");
+                    metadata.path(AgentJob.SIGNAL_REVISION_METADATA_KEY).asString("");
             String currentRevision = ScmSignals.issueUpdatedRevision(ScmEventPayload.IssueData.from(issue))
                     .value();
             // A keyed job with no admission revision predates this fence and cannot be checked against

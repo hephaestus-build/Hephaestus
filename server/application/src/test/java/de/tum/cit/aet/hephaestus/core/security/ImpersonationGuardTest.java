@@ -71,9 +71,9 @@ class ImpersonationGuardTest extends BaseUnitTest {
         assertThat(o.status()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
         assertThat(o.contentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         JsonNode problem = objectMapper.readTree(o.body());
-        assertThat(problem.get("title").asText()).isEqualTo("Forbidden");
-        assertThat(problem.get("instance").asText()).isEqualTo("/user");
-        assertThat(problem.findValue("code").asText()).isEqualTo("impersonation_read_only");
+        assertThat(problem.get("title").asString()).isEqualTo("Forbidden");
+        assertThat(problem.get("instance").asString()).isEqualTo("/user");
+        assertThat(problem.findValue("code").asString()).isEqualTo("impersonation_read_only");
     }
 
     @Test

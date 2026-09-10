@@ -565,9 +565,16 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .jsonPath("$[0].standing")
                     .isEqualTo("MIXED")
                     .jsonPath("$[0].guidance")
-                    .value(String.class, org.hamcrest.Matchers.startsWith("Your recent feedback is mixed in "))
+                    .value(
+                            String.class,
+                            value -> org.hamcrest.MatcherAssert.assertThat(
+                                    value, org.hamcrest.Matchers.startsWith("Your recent feedback is mixed in ")))
                     .jsonPath("$[0].guidance")
-                    .value(String.class, org.hamcrest.Matchers.containsString("with both strengths and room to grow."));
+                    .value(
+                            String.class,
+                            value -> org.hamcrest.MatcherAssert.assertThat(
+                                    value,
+                                    org.hamcrest.Matchers.containsString("with both strengths and room to grow.")));
         }
 
         @Test

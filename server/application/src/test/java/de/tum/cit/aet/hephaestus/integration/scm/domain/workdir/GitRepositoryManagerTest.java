@@ -136,9 +136,12 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             assertThat(manager.isRepositoryCloned(999L)).isFalse();
         }
 
+        // Closing the scope is the operation; its binding is intentionally unread.
+        @SuppressWarnings("try")
         @Test
         void shouldReturnTrueForClonedRepository() throws Exception {
             manager = createManager(true);
+
             try (Git sourceGit = createSourceRepo()) {
                 manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
                 assertThat(manager.isRepositoryCloned(1L)).isTrue();
@@ -158,6 +161,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                     .hasMessageContaining("not enabled");
         }
 
+        // Closing the scope is the operation; its binding is intentionally unread.
+        @SuppressWarnings("try")
         @Test
         void shouldCloneRepositoryOnFirstCall() throws Exception {
             manager = createManager(true);
@@ -336,6 +341,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
     @Nested
     class CommitExists {
 
+        // Closing the scope is the operation; its binding is intentionally unread.
+        @SuppressWarnings("try")
         @Test
         void shouldReturnFalseWhenValidObjectIdIsAbsent() throws Exception {
             manager = createManager(true);
@@ -444,6 +451,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             }
         }
 
+        // Closing the scope is the operation; its binding is intentionally unread.
+        @SuppressWarnings("try")
         @Test
         void shouldThrowForUnresolvableToSha() throws Exception {
             manager = createManager(true);
@@ -620,6 +629,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             }
         }
 
+        // Closing the scope is the operation; its binding is intentionally unread.
+        @SuppressWarnings("try")
         @Test
         void shouldReturnNullForNonExistentBranch() throws Exception {
             manager = createManager(true);
@@ -838,6 +849,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             }
         }
 
+        // Closing the scope is the operation; its binding is intentionally unread.
+        @SuppressWarnings("try")
         @Test
         void shouldThrowForUnresolvableCommit() throws Exception {
             manager = createManager(true);
