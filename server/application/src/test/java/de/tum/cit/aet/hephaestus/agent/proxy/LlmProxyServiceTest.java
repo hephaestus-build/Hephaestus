@@ -77,7 +77,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                         usageAccumulator,
                         mentorTurnUsageAccumulator,
                         new SimpleMeterRegistry(),
-                        OBJECT_MAPPER));
+                        OBJECT_MAPPER),
+                requestPolicy);
     }
 
 
@@ -434,7 +435,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             usageAccumulator,
                             mentorTurnUsageAccumulator,
                             new SimpleMeterRegistry(),
-                            OBJECT_MAPPER));
+                            OBJECT_MAPPER),
+                    requestPolicy);
             var routing = routing("openai-completions");
             authenticate(routing);
             when(resolver.resolveProxyCredential(any()))
@@ -507,7 +509,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             usageAccumulator,
                             mentorTurnUsageAccumulator,
                             streamingMeterRegistry,
-                            OBJECT_MAPPER));
+                            OBJECT_MAPPER),
+                    requestPolicy);
         }
 
         @AfterEach

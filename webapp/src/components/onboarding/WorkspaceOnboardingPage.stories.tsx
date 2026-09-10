@@ -46,7 +46,7 @@ const meta = {
 	title: "Workspace/Member onboarding",
 	component: WorkspaceOnboardingPage,
 	tags: ["autodocs"],
-	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
+	parameters: { layout: "fullscreen", chromatic: { viewports: [320, 1440] } },
 	args: {
 		state: { status: "ready", data: welcome },
 		onChoose: fn(),
@@ -143,11 +143,35 @@ export const NarrowViewport: Story = {
 	args: {
 		state: {
 			status: "ready",
-			data: { ...welcome, workspaceName: "International engineering and research collaboration" },
+			data: {
+				...welcome,
+				workspaceName: "International engineering and research collaboration",
+				welcomeMarkdown:
+					"## Start here\n\n- Read your team’s practices\n- Ask questions in Slack\n\n```text\nhttps://engineering.example.com/teams/international-collaboration/onboarding/first-week/checklist-with-a-long-unbroken-identifier\n```",
+			},
 		},
 	},
 	globals: { viewport: { value: "reflow", isRotated: false } },
 	play: async () => {
 		await expectNoPageOverflow();
+	},
+};
+
+export const ExistingWorkspaceDefaults: Story = {
+	args: {
+		state: {
+			status: "ready",
+			data: { ...welcome, enabled: false, aiChoiceRequired: false, needsWelcome: false, links: [] },
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText(
+				"Choose an AI preference, or continue with your workspace’s existing AI defaults.",
+			),
+		).toBeVisible();
+		await expect(
+			canvas.queryByText("Choose an AI preference, or continue without enabling AI for yourself."),
+		).toBeNull();
 	},
 };

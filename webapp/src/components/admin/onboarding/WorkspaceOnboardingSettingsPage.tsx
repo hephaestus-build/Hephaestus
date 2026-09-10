@@ -189,6 +189,7 @@ function SettingsForm({
 				</p>
 				<Button
 					variant="outline"
+					nativeButton={false}
 					render={<Link to="/w/$workspaceSlug/admin/models" params={{ workspaceSlug }} />}
 				>
 					Configure AI models

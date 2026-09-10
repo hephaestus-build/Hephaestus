@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
@@ -8,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
@@ -180,6 +182,7 @@ public class AgentJobExecutor {
 
     private final Optional<WorkerCapacityState> capacityState;
     private final Optional<WorkerProperties> workerProperties;
+    private final ObservationAdmissionService observationAdmission;
     /** Null only when the worker role is off; stamped on claimed jobs to fence terminal writes. */
     private final @Nullable String workerId;
     /** Poll-thread-owned, hence unsynchronized. */
@@ -205,7 +208,8 @@ public class AgentJobExecutor {
             LlmBudgetService llmBudgetService,
             @Nullable LlmAdmissionService llmAdmissionService,
             Optional<WorkerCapacityState> capacityState,
-            Optional<WorkerProperties> workerProperties) {
+            Optional<WorkerProperties> workerProperties,
+            ObservationAdmissionService observationAdmission) {
         this.executionArchive = executionArchive;
         this.agentProperties = agentProperties;
         this.jobRepository = jobRepository;
@@ -225,6 +229,7 @@ public class AgentJobExecutor {
         this.llmAdmissionService = llmAdmissionService;
         this.capacityState = capacityState;
         this.workerProperties = workerProperties;
+        this.observationAdmission = observationAdmission;
         this.workerId = workerProperties.map(WorkerProperties::resolvedWorkerId).orElse(null);
 
         this.concurrencyRejected = Counter.builder(AgentMetrics.AGENT_JOB_CONCURRENCY_REJECTED)
@@ -1130,6 +1135,9 @@ public class AgentJobExecutor {
             ConfigSnapshot snapshot;
             try {
                 ConfigSnapshot submitted = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
+                if (java.util.Objects.requireNonNullElse(
+                                submitted.processingLocation(), LlmProcessingLocation.UNCLASSIFIED)
+                        != binding.getProcessingLocation()) return refuseUnavailableModel(job);
                 if (llmAdmissionService != null) {
                     var admitted = llmAdmissionService.admit(binding);
                     var ref = admitted.connection();
@@ -1150,11 +1158,10 @@ public class AgentJobExecutor {
                 return refuseUnavailableModel(job);
             }
 
-            // Admission above holds the binding row lock (joined into this transaction), so this count
-            // cannot race a sibling claim.
+            // Admission holds this location's binding row lock until the RUNNING transition commits.
             {
-                long runningCount = jobRepository.countByWorkspaceIdAndPurposeAndStatusIn(
-                        job.getWorkspace().getId(), purpose, Set.of(AgentJobStatus.RUNNING));
+                long runningCount = jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+                        job.getWorkspace().getId(), purpose, binding.getProcessingLocation());
                 if (runningCount >= binding.getMaxConcurrentJobs()) {
                     concurrencyRejected.increment();
                     log.info(
@@ -1479,6 +1486,17 @@ public class AgentJobExecutor {
                         Duration.between(deliveryStarted, Instant.now()));
             } catch (Exception e) {
                 log.warn("Delivery failed for job {} (output saved, job still COMPLETED): {}", jobId, e.getMessage());
+                if (e instanceof ObservationsRefusedException refusal) {
+                    try {
+                        observationAdmission.recordRefusal(jobId, refusal.reasonCode(), refusal.reason());
+                    } catch (RuntimeException recordingFailed) {
+                        log.warn(
+                                "Could not record observation refusal: jobId={}, reason={}",
+                                jobId,
+                                refusal.reasonCode(),
+                                recordingFailed);
+                    }
+                }
                 // Preserve the comment id from a partial delivery: the comment may already be posted.
                 persistDeliveryStatus(jobId, DeliveryStatus.FAILED, deliverJob.getDeliveryCommentId());
                 jobTelemetry.transition(

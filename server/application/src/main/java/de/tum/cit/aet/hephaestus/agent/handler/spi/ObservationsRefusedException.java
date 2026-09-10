@@ -3,10 +3,9 @@ package de.tum.cit.aet.hephaestus.agent.handler.spi;
 import java.io.Serial;
 
 /**
- * A review whose observations the server will not record: the run finished, and what it submitted
- * does not support a claim about anyone's work. This is a decision the review stage took, not a
- * failure of the machinery around it, so the sandbox is told so and stops rather than repeating the
- * submission against a server that will refuse it again for the same reason.
+ * A review whose observations the server will not record, either because the evidence does not
+ * support them or because recording them is no longer permitted. This is a review-stage decision,
+ * not a machinery failure: the sandbox stops rather than repeating a refused submission.
  *
  * <p>The reason code is a stable, lowercase name for the refusal, for metrics and logs — never the
  * message, which names one job.

@@ -112,7 +112,12 @@ export const OnlyThePendingCardIsFrozen: Story = {
 export const AdvancedDisclosure: Story = {
 	play: async ({ canvas }) => {
 		await openPracticeReviewAdvanced(canvas);
-		purposeCard(canvas, "Practice reviews").getByLabelText("Timeout (seconds)");
+		const reviews = purposeCard(canvas, "Practice reviews");
+		await expect(reviews.getByLabelText("Max concurrent runs")).toHaveValue(3);
+		const mentor = purposeCard(canvas, "Heph");
+		await userEvent.click(mentor.getByRole("button", { name: /Advanced/ }));
+		await expect(mentor.queryByLabelText("Max concurrent runs")).toBeNull();
+		await expect(mentor.getByLabelText("Timeout (seconds)")).toHaveValue(10800);
 	},
 };
 

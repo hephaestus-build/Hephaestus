@@ -1,24 +1,44 @@
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
+
+import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
 import { Chat } from "@/components/mentor/Chat";
 import { Copilot } from "@/components/mentor/Copilot";
 import { defaultPartRenderers } from "@/components/mentor/renderers";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useMentorChat } from "@/hooks/use-mentor-chat";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { useFeatureFlag } from "@/integrations/feature-flags";
+import { mentorPreferenceReason } from "@/lib/mentor-preference";
 
+/**
+ * Keyed on the workspace so a conversation never carries over into the next workspace, and gated on
+ * the member's own AI choice there: "No AI" hides the composer rather than letting a send fail.
+ */
 export default function GlobalCopilot() {
+	const { workspaceSlug } = useActiveWorkspaceSlug();
+	const { features, isLoading: featuresLoading } = useWorkspaceFeatures(workspaceSlug);
+	const preference = useQuery({
+		...getMemberOnboardingOptions({ path: { workspaceSlug: workspaceSlug ?? "" } }),
+		enabled: Boolean(workspaceSlug),
+	});
+	if (
+		!workspaceSlug ||
+		featuresLoading ||
+		!features?.mentorEnabled ||
+		!preference.isSuccess ||
+		mentorPreferenceReason(preference.data)
+	)
+		return null;
+	return <WorkspaceCopilot key={workspaceSlug} workspaceSlug={workspaceSlug} />;
+}
+
+function WorkspaceCopilot({ workspaceSlug }: { workspaceSlug: string }) {
 	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader
 	// already is, rather than as a toast away from the conversation that failed.
 	const mentorChat = useMentorChat({});
 
 	const router = useRouter();
-	const { isAuthenticated, isLoading } = useAuth();
-	const { enabled: hasMentorAccess } = useFeatureFlag("MENTOR_ACCESS");
-	const { workspaceSlug } = useActiveWorkspaceSlug();
-	const { features, isLoading: featuresLoading } = useWorkspaceFeatures(workspaceSlug);
 
 	const handleMessageSubmit = ({ text }: { text: string }) => {
 		if (!text.trim()) return;
@@ -41,17 +61,6 @@ export default function GlobalCopilot() {
 			toast.error("Couldn't copy that to the clipboard.");
 		});
 	};
-
-	if (
-		isLoading ||
-		featuresLoading ||
-		!isAuthenticated ||
-		!workspaceSlug ||
-		!hasMentorAccess ||
-		!features?.mentorEnabled
-	) {
-		return null;
-	}
 
 	return (
 		<Copilot

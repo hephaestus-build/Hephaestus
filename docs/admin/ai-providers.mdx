@@ -277,6 +277,8 @@ it, and wait until every runtime role has been upgraded before creating location
    reviews** and/or **Heph**. Each purpose and location has an independent assignment. The model must
    be available to the workspace and classified for that location. Existing grants, price declarations,
    funding sources, feature switches, and budgets still apply.
+   The **Max concurrent runs** limit applies independently to each processing location. A running
+   review keeps occupying its location's slot even if its model assignment changes.
 3. Configure the welcome text and optional required Slack or Outline links under **Member onboarding**.
    A required link needs an active integration and an enabled account-linking provider for the same
    server. Slack also needs the configured team; Outline needs the configured instance identity.

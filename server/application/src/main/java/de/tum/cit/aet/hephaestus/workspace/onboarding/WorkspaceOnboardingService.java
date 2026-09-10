@@ -115,6 +115,9 @@ class WorkspaceOnboardingService {
         requireSelf();
         var workspace = lockWorkspace(context.id());
         requireMember(context.id(), accountId);
+        if (!settings.findByWorkspaceId(context.id())
+                .map(WorkspaceOnboardingSettings::isEnabled)
+                .orElse(false)) return memberState(context, accountId);
         var member = members.findByWorkspace_IdAndAccountId(context.id(), accountId)
                 .orElseGet(() -> {
                     var created = new WorkspaceMemberOnboarding();

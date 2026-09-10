@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Navigate, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Navigate, Outlet, useMatchRoute } from "@tanstack/react-router";
 
 import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -11,6 +11,7 @@ import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { useFeatureFlag } from "@/integrations/feature-flags";
+import { mentorPreferenceReason } from "@/lib/mentor-preference";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor")({
 	staticData: { surface: "fullscreen" },
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor")(
 });
 
 function MentorLayout() {
+	const isThread = Boolean(useMatchRoute()({ to: "/w/$workspaceSlug/mentor/$threadId" }));
 	const { workspaceSlug, isLoading: isWorkspaceLoading } = useActiveWorkspaceSlug();
 	const preference = useQuery({
 		...getMemberOnboardingOptions({ path: { workspaceSlug: workspaceSlug ?? "" } }),
@@ -88,23 +90,13 @@ function MentorLayout() {
 				</section>
 			</StandardPageSurface>
 		);
-	const choice = preference.data.aiChoice;
-	const reason =
-		choice === "NO_AI"
-			? "no-ai"
-			: choice == null && preference.data.aiChoiceRequired
-				? "choice-required"
-				: choice != null &&
-					  !preference.data.aiOptions.some(
-							(option) => option.choice === choice && option.mentorReady,
-					  )
-					? "unavailable"
-					: undefined;
+	const reason = mentorPreferenceReason(preference.data);
 	if (reason && workspaceSlug)
 		return (
-			<StandardPageSurface>
+			<div className="flex min-h-0 flex-1 flex-col">
 				<WorkspaceMentorPreferenceNotice workspaceSlug={workspaceSlug} reason={reason} />
-			</StandardPageSurface>
+				{isThread && <Outlet />}
+			</div>
 		);
 	return <Outlet />;
 }

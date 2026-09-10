@@ -14,6 +14,7 @@ import { useAuth } from "@/integrations/auth/AuthContext";
 import { problemDetailOf } from "@/lib/problem-detail";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/onboarding")({
+	remountDeps: ({ params }) => params.workspaceSlug,
 	component: OnboardingRoute,
 });
 
@@ -24,19 +25,17 @@ function OnboardingRoute() {
 	const { linkAccount } = useAuth();
 	const path = { workspaceSlug };
 	const query = useQuery(getMemberOnboardingOptions({ path }));
-	const updateCache = (data: WorkspaceOnboarding) =>
-		queryClient.setQueryData(getMemberOnboardingQueryKey({ path }), data);
-	const leave = (data: WorkspaceOnboarding) => {
-		updateCache(data);
+	const updateCache = (data: WorkspaceOnboarding, variables: { path: { workspaceSlug: string } }) =>
+		queryClient.setQueryData(getMemberOnboardingQueryKey({ path: variables.path }), data);
+	const leave = () => {
 		void navigate({ to: "/w/$workspaceSlug", params: path });
 	};
 	const choice = useMutation({ ...updateMemberAiChoiceMutation(), onSuccess: updateCache });
-	const completion = useMutation({ ...completeMemberOnboardingMutation(), onSuccess: leave });
-	const dismissal = useMutation({ ...dismissMemberOnboardingMutation(), onSuccess: leave });
+	const completion = useMutation({ ...completeMemberOnboardingMutation(), onSuccess: updateCache });
+	const dismissal = useMutation({ ...dismissMemberOnboardingMutation(), onSuccess: updateCache });
 	const error = choice.error ?? completion.error ?? dismissal.error;
 	return (
 		<WorkspaceOnboardingPage
-			key={workspaceSlug}
 			state={
 				query.isPending
 					? { status: "loading" }
@@ -68,12 +67,16 @@ function OnboardingRoute() {
 			onComplete={() => {
 				choice.reset();
 				dismissal.reset();
-				if (query.data) completion.mutate({ path, body: { revision: query.data.revision } });
+				if (query.data)
+					completion.mutate(
+						{ path, body: { revision: query.data.revision } },
+						{ onSuccess: leave },
+					);
 			}}
 			onDismiss={() => {
 				choice.reset();
 				completion.reset();
-				dismissal.mutate({ path });
+				dismissal.mutate({ path }, { onSuccess: leave });
 			}}
 			onRefresh={() => {
 				void query.refetch();

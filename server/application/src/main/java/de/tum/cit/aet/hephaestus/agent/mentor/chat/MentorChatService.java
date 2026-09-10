@@ -657,9 +657,6 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                         CurrentScmIdentityHolder.getUserId().orElse(null))
                 .orElseThrow(
                         () -> new IllegalStateException("No mentor model is configured for workspace " + workspaceId));
-        if (!binding.isEnabled()) {
-            throw new IllegalStateException("The configured mentor model is not available");
-        }
         return MentorLlmConfig.fromAdmission(binding, llmAdmissionService.admit(binding));
     }
 

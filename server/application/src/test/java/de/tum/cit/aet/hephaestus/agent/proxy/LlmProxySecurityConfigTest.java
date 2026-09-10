@@ -226,6 +226,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         workspace.getId(),
                         600,
                         false,
+                        null,
                         null)
                 .toJson(OBJECT_MAPPER));
         return job;

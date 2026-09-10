@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.config;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation;
 import de.tum.cit.aet.hephaestus.agent.catalog.ModelBindingSource;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
@@ -43,7 +44,8 @@ public record ConfigSnapshot(
         @Nullable Long workspaceId,
         int timeoutSeconds,
         boolean allowInternet,
-        @Nullable LlmPriceSnapshot priceSnapshot) {
+        @Nullable LlmPriceSnapshot priceSnapshot,
+        @Nullable LlmProcessingLocation processingLocation) {
     /**
      * Bump only for a reshape (field removal, type change, semantic reinterpretation). Adding a
      * nullable field is compatible both ways and needs no bump.
@@ -85,7 +87,8 @@ public record ConfigSnapshot(
                 ref.workspaceId(),
                 source.getTimeoutSeconds(),
                 source.isAllowInternet(),
-                null);
+                null,
+                source.getProcessingLocation());
     }
 
     public ConfigSnapshot withPriceSnapshot(@Nullable LlmPriceSnapshot price) {
@@ -104,7 +107,8 @@ public record ConfigSnapshot(
                 workspaceId,
                 timeoutSeconds,
                 allowInternet,
-                price);
+                price,
+                processingLocation);
     }
 
     public JsonNode toJson(ObjectMapper objectMapper) {
@@ -172,6 +176,7 @@ public record ConfigSnapshot(
                 null,
                 timeoutSeconds,
                 allowInternet,
-                null);
+                null,
+                LlmProcessingLocation.UNCLASSIFIED);
     }
 }

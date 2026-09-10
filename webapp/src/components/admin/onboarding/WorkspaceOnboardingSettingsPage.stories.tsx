@@ -16,7 +16,7 @@ const meta = {
 	title: "Workspace admin/Member onboarding",
 	component: WorkspaceOnboardingSettingsPage,
 	tags: ["autodocs"],
-	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
+	parameters: { layout: "fullscreen", chromatic: { viewports: [320, 1440] } },
 	args: {
 		workspaceSlug: "engineering",
 		state: { status: "ready", settings, links: [] },

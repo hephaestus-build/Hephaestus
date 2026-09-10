@@ -59,9 +59,7 @@ public class ObservationAdmissionController {
         } catch (ObservationAdmissionService.AdmissionConflictException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Observations differ from the admitted payload", e);
         } catch (ObservationsRefusedException e) {
-            // A decision, not a defect: the review ran and what it submitted does not support a claim
-            // about anyone's work. Answering 5xx would have the sandbox repeat a submission this server
-            // refuses for the same reason every time, and would file the refusal as an internal error.
+            // A 5xx would retry a policy or evidence refusal and misreport it as an internal error.
             refusals.recordExecutionRefusal(e.reasonCode());
             admission.recordRefusal(jobId, e.reasonCode(), e.reason());
             log.info("Refused this review's observations ({}): jobId={}, {}", e.reasonCode(), jobId, e.reason());

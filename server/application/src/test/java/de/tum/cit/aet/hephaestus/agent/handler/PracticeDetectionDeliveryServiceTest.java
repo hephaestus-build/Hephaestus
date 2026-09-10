@@ -309,7 +309,9 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         when(memberAiPolicy.allowsResult(testJob)).thenReturn(false);
         assertThatThrownBy(() ->
                         service.deliver(testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT))))
-                .isInstanceOf(JobDeliveryException.class)
+                .isInstanceOfSatisfying(
+                        ObservationsRefusedException.class,
+                        refused -> assertThat(refused.reasonCode()).isEqualTo("member_ai_declined"))
                 .hasMessageContaining("AI preference");
         verifyNoInteractions(observationRepository, eventPublisher);
     }

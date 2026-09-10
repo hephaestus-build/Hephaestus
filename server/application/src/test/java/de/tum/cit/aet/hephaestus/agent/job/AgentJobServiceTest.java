@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
@@ -70,19 +69,6 @@ class AgentJobServiceTest extends BaseUnitTest {
                         org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any()))
                 .thenReturn(true);
-        org.mockito.Mockito.lenient()
-                .when(memberAiPolicy.allowsResult(org.mockito.ArgumentMatchers.any()))
-                .thenReturn(true);
-        org.mockito.Mockito.lenient()
-                .when(memberAiPolicy.binding(
-                        org.mockito.ArgumentMatchers.anyLong(),
-                        org.mockito.ArgumentMatchers.any(),
-                        org.mockito.ArgumentMatchers.any()))
-                .thenAnswer(invocation -> agentBindingRepository
-                        .findByWorkspaceIdAndPurposeWithModels(
-                                invocation.getArgument(0),
-                                de.tum.cit.aet.hephaestus.agent.config.AgentPurpose.PRACTICE_REVIEW)
-                        .filter(de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding::isEnabled));
         var handler = org.mockito.Mockito.mock(JobTypeHandler.class);
         org.mockito.Mockito.lenient()
                 .when(handlerRegistry.getHandler(org.mockito.ArgumentMatchers.any()))
@@ -97,9 +83,6 @@ class AgentJobServiceTest extends BaseUnitTest {
 
     @Mock
     private AgentJobRepository agentJobRepository;
-
-    @Mock
-    private WorkspaceAgentBindingRepository agentBindingRepository;
 
     @Mock
     private WorkspaceRepository workspaceRepository;
@@ -167,14 +150,7 @@ class AgentJobServiceTest extends BaseUnitTest {
         enabledBinding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         enabledBinding.setEnabled(true);
         enabledBinding.setTimeoutSeconds(600);
-        // Two lookups, deliberately: submit() discovers the binding WITH its models (it needs the
-        // funding source to pick the right cap), then re-reads it inside the write transaction.
-        lenient()
-                .when(agentBindingRepository.findByWorkspaceIdAndPurposeWithModels(1L, AgentPurpose.PRACTICE_REVIEW))
-                .thenReturn(Optional.of(enabledBinding));
-        lenient()
-                .when(agentBindingRepository.findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW))
-                .thenReturn(Optional.of(enabledBinding));
+        lenient().when(memberAiPolicy.binding(eq(1L), any(), any())).thenReturn(Optional.of(enabledBinding));
 
         lenient()
                 .when(llmModelResolver.resolve(any()))
@@ -252,20 +228,8 @@ class AgentJobServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldReturnEmptyWhenBindingIsDisabled() {
-            enabledBinding.setEnabled(false);
-            when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
-
-            Optional<AgentJob> result =
-                    service.submit(1L, AgentJobType.PULL_REQUEST_REVIEW, mock(JobSubmissionRequest.class), null);
-
-            assertThat(result).isEmpty();
-            verify(agentJobRepository, never()).saveAndFlush(any());
-        }
-
-        @Test
         void shouldReturnEmptyWhenPracticeIsUnbound() {
-            when(agentBindingRepository.findByWorkspaceIdAndPurposeWithModels(1L, AgentPurpose.PRACTICE_REVIEW))
+            when(memberAiPolicy.binding(eq(1L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.empty());
             when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
 
@@ -663,7 +627,7 @@ class AgentJobServiceTest extends BaseUnitTest {
 
         @Test
         void submitPreparedNamesTheReasonTheSubmissionActuallyStoppedOn() {
-            when(agentBindingRepository.findByWorkspaceIdAndPurposeWithModels(1L, AgentPurpose.PRACTICE_REVIEW))
+            when(memberAiPolicy.binding(eq(1L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.empty());
             when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
 

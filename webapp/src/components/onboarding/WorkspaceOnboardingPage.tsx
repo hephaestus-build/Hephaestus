@@ -13,7 +13,7 @@ import { useId, useState } from "react";
 
 import type { WorkspaceOnboarding } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
+import { UntrustedMarkdown, UNTRUSTED_MARKDOWN_PROSE } from "@/components/common/UntrustedMarkdown";
 import { PageLayout } from "@/components/core/PageLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -167,7 +167,7 @@ function WorkspaceSetup({
 					<h2 id={`${id}-welcome`} className="mb-3 text-lg font-semibold">
 						A welcome from your team
 					</h2>
-					<section aria-labelledby={`${id}-team-notes`}>
+					<section aria-labelledby={`${id}-team-notes`} className={UNTRUSTED_MARKDOWN_PROSE}>
 						<h3 id={`${id}-team-notes`} className="sr-only">
 							Workspace guidance
 						</h3>
@@ -185,8 +185,10 @@ function WorkspaceSetup({
 						id={`${id}-ai-help`}
 						className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground"
 					>
-						This controls practice reviews about you and conversations with Heph. Nothing is
-						selected for you, and we never switch processing locations without your choice.
+						This controls practice reviews about you and conversations with Heph.{" "}
+						{data.aiChoiceRequired || data.aiChoice
+							? "Nothing is selected for you, and we never switch processing locations without your choice."
+							: "Until you save a preference, your workspace’s existing AI defaults apply. Choose No AI to stop personal AI activity."}
 					</p>
 				</div>
 				<RadioGroup
@@ -369,7 +371,9 @@ function WorkspaceSetup({
 					{!allRequiredLinked
 						? "Finish connecting the required accounts, or continue and return to setup later."
 						: !data.aiChoice
-							? "Choose an AI preference, or continue without enabling AI for yourself."
+							? data.aiChoiceRequired
+								? "Choose an AI preference, or continue without enabling AI for yourself."
+								: "Choose an AI preference, or continue with your workspace’s existing AI defaults."
 							: "You can return to Workspace preferences at any time."}
 				</div>
 				<div className="flex flex-wrap gap-2">

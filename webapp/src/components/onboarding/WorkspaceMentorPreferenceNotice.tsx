@@ -32,7 +32,10 @@ export function WorkspaceMentorPreferenceNotice({
 						? "Choose On-premises, Private cloud, or No AI in Workspace preferences. Nothing is selected for you."
 						: "We won’t switch processing locations for you. You can change your preference or ask a workspace owner to check the model assignment."}
 			</p>
-			<Button render={<Link to="/w/$workspaceSlug/onboarding" params={{ workspaceSlug }} />}>
+			<Button
+				nativeButton={false}
+				render={<Link to="/w/$workspaceSlug/onboarding" params={{ workspaceSlug }} />}
+			>
 				Workspace preferences
 			</Button>
 		</section>

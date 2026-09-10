@@ -549,7 +549,8 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
                 null,
                 600,
                 false,
-                price);
+                price,
+                null);
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
         job.setId(java.util.UUID.randomUUID());
         Workspace workspace = new Workspace();

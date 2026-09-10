@@ -27,6 +27,7 @@ import { problemDetailOf } from "@/lib/problem-detail";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/models")({
 	head: workspaceAdminHead("AI models"),
+	remountDeps: ({ params }) => params.workspaceSlug,
 	component: ModelsContainer,
 });
 
@@ -52,31 +53,39 @@ function ModelsContainer() {
 
 	const pageQueries = [bindingsQuery, workspaceQuery, llmSettingsQuery, availableModelsQuery];
 
-	const bindingsKey = listAgentsQueryKey({ path: { workspaceSlug } });
-	const invalidateBindings = () => queryClient.invalidateQueries({ queryKey: bindingsKey });
+	const invalidateBindings = (path: { workspaceSlug: string }) =>
+		queryClient.invalidateQueries(
+			listAgentsOptions({ path: { workspaceSlug: path.workspaceSlug } }),
+		);
 
-	const cacheSavedBinding = (saved: AgentBinding) =>
-		queryClient.setQueryData<AgentBinding[]>(bindingsKey, (current) => {
-			const bindings = current ?? [];
-			return bindings.some(
-				(b) => b.purpose === saved.purpose && b.processingLocation === saved.processingLocation,
-			)
-				? bindings.map((b) =>
-						b.purpose === saved.purpose && b.processingLocation === saved.processingLocation
-							? saved
-							: b,
-					)
-				: [...bindings, saved];
-		});
+	const cacheSavedBinding = (saved: AgentBinding, path: { workspaceSlug: string }) =>
+		queryClient.setQueryData<AgentBinding[]>(
+			listAgentsQueryKey({ path: { workspaceSlug: path.workspaceSlug } }),
+			(current) => {
+				const bindings = current ?? [];
+				return bindings.some(
+					(b) => b.purpose === saved.purpose && b.processingLocation === saved.processingLocation,
+				)
+					? bindings.map((b) =>
+							b.purpose === saved.purpose && b.processingLocation === saved.processingLocation
+								? saved
+								: b,
+						)
+					: [...bindings, saved];
+			},
+		);
 
 	const dropCachedBinding = (
 		purpose: Purpose,
 		processingLocation: AgentBinding["processingLocation"],
+		path: { workspaceSlug: string },
 	) =>
-		queryClient.setQueryData<AgentBinding[]>(bindingsKey, (current) =>
-			(current ?? []).filter(
-				(b) => b.purpose !== purpose || b.processingLocation !== processingLocation,
-			),
+		queryClient.setQueryData<AgentBinding[]>(
+			listAgentsQueryKey({ path: { workspaceSlug: path.workspaceSlug } }),
+			(current) =>
+				(current ?? []).filter(
+					(b) => b.purpose !== purpose || b.processingLocation !== processingLocation,
+				),
 		);
 
 	const [saveRevisions, setSaveRevisions] = useState<Partial<Record<Purpose, number>>>({});
@@ -86,9 +95,9 @@ function ModelsContainer() {
 	const configureAgent = useMutation({
 		...filedUnder(agentWriteKey, configureAgentMutation()),
 		onSuccess: (saved, variables) => {
-			cacheSavedBinding(saved);
+			cacheSavedBinding(saved, variables.path);
 			bumpSaveRevision(variables.path.purpose);
-			void invalidateBindings();
+			void invalidateBindings(variables.path);
 			toast.success(`${PURPOSE_TITLES[variables.path.purpose]} saved`);
 		},
 		onError: (error, variables) => {
@@ -104,9 +113,10 @@ function ModelsContainer() {
 			dropCachedBinding(
 				variables.path.purpose,
 				variables.query?.processingLocation ?? "UNCLASSIFIED",
+				variables.path,
 			);
 			bumpSaveRevision(variables.path.purpose);
-			void invalidateBindings();
+			void invalidateBindings(variables.path);
 			toast.success(`${PURPOSE_TITLES[variables.path.purpose]} turned off`);
 		},
 		onError: (error, variables) => {

@@ -6,8 +6,10 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import org.junit.jupiter.api.Nested;
@@ -86,6 +88,19 @@ class ConfigSnapshotTest extends BaseUnitTest {
 
     @Nested
     class JsonRoundTrip {
+        @Test
+        void shouldPreserveTheFrozenProcessingLocationWhenRepricingAndSerializing() {
+            var binding = createBinding();
+            binding.setProcessingLocation(LlmProcessingLocation.ON_PREMISES);
+            stubResolver(binding);
+            var snapshot =
+                    ConfigSnapshot.from(binding, resolver).withPriceSnapshot(LlmPriceSnapshot.unpricedInstance());
+            binding.setProcessingLocation(LlmProcessingLocation.PRIVATE_CLOUD);
+
+            assertThat(ConfigSnapshot.fromJson(snapshot.toJson(OBJECT_MAPPER), OBJECT_MAPPER)
+                            .processingLocation())
+                    .isEqualTo(LlmProcessingLocation.ON_PREMISES);
+        }
 
         @Test
         void shouldSerializeAndDeserializeCorrectly() {
@@ -285,6 +300,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
                     null,
                     timeoutSeconds,
                     false,
+                    null,
                     null);
         }
 

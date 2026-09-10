@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -166,8 +167,13 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
             + "j.deliveryStatus = de.tum.cit.aet.hephaestus.agent.job.DeliveryStatus.PENDING))")
     boolean existsPurgeBlockingWork(@Param("workspaceId") Long workspaceId);
 
-    long countByWorkspaceIdAndPurposeAndStatusIn(
-            Long workspaceId, AgentPurpose purpose, Collection<AgentJobStatus> statuses);
+    @Query(value = """
+            SELECT COUNT(*) FROM agent_job
+            WHERE workspace_id = :workspaceId AND purpose = :#{#purpose.name()} AND status = 'RUNNING'
+              AND COALESCE(config_snapshot ->> 'processingLocation', 'UNCLASSIFIED') = :#{#location.name()}
+            """, nativeQuery = true)
+    long countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            Long workspaceId, AgentPurpose purpose, LlmProcessingLocation location);
 
     long countByWorkspaceIdAndPurposeAndCreatedAtGreaterThanEqual(
             Long workspaceId, AgentPurpose purpose, Instant createdAt);

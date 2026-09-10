@@ -168,9 +168,43 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
     }
 
     @Test
+    void shouldPreserveLegacyAiPermissionsWhenDismissingPreferencesWithoutAnEnabledWelcome() {
+        var user = persistUser("testuser");
+        var workspace = workspace("onboarding-legacy-dismiss", user);
+        assertThat(preferences.forDeveloper(workspace.getId(), user.getId()).permitsAi())
+                .isTrue();
+        assertThat(preferences.forDeveloper(workspace.getId(), null).permitsAi())
+                .isTrue();
+
+        client.put()
+                .uri("/workspaces/{slug}/onboarding/me/dismissal", workspace.getWorkspaceSlug())
+                .headers(headers -> headers.setBearerAuth(MEMBER))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.aiChoiceRequired")
+                .isEqualTo(false)
+                .jsonPath("$.completed")
+                .isEqualTo(false);
+
+        assertThat(members.findByWorkspace_IdAndAccountId(workspace.getId(), accountId(user)))
+                .isEmpty();
+        assertThat(preferences.forDeveloper(workspace.getId(), user.getId()).permitsAi())
+                .isTrue();
+        assertThat(preferences.forDeveloper(workspace.getId(), null).permitsAi())
+                .isTrue();
+    }
+
+    @Test
     void shouldNotCompleteSetupWithoutSavingAChoice() {
         var user = persistUser("testuser");
         var workspace = workspace("onboarding-dismiss", user);
+        var policy = new WorkspaceOnboardingSettings();
+        policy.setWorkspace(workspace);
+        policy.setEnabled(true);
+        policy.setAiChoiceRequired(true);
+        settings.saveAndFlush(policy);
         client.put()
                 .uri("/workspaces/{slug}/onboarding/me/dismissal", workspace.getWorkspaceSlug())
                 .headers(headers -> headers.setBearerAuth(MEMBER))
@@ -185,6 +219,8 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
         assertThat(member.getAiChoice()).isNull();
         assertThat(member.getWelcomedAt()).isNotNull();
         assertThat(member.getCompletedAt()).isNull();
+        assertThat(preferences.forDeveloper(workspace.getId(), user.getId()).permitsAi())
+                .isFalse();
         client.put()
                 .uri("/workspaces/{slug}/onboarding/me/completion", workspace.getWorkspaceSlug())
                 .headers(headers -> headers.setBearerAuth(MEMBER))

@@ -463,25 +463,27 @@ function AgentPurposeCard({
 										/>
 										{timeoutError && <FieldError id={timeoutErrorId}>{timeoutError}</FieldError>}
 									</Field>
-									<Field data-invalid={Boolean(concurrencyError)}>
-										<FieldLabel htmlFor={`${meta.purpose}-concurrency`}>
-											Max concurrent runs
-										</FieldLabel>
-										<Input
-											id={`${meta.purpose}-concurrency`}
-											type="number"
-											inputMode="numeric"
-											min={MIN_CONCURRENT_JOBS}
-											value={maxConcurrentJobs}
-											aria-invalid={Boolean(concurrencyError)}
-											aria-describedby={concurrencyError ? concurrencyErrorId : undefined}
-											onChange={(e) => setMaxConcurrentJobs(e.target.value)}
-											disabled={pending}
-										/>
-										{concurrencyError && (
-											<FieldError id={concurrencyErrorId}>{concurrencyError}</FieldError>
-										)}
-									</Field>
+									{meta.purpose === "PRACTICE_REVIEW" && (
+										<Field data-invalid={Boolean(concurrencyError)}>
+											<FieldLabel htmlFor={`${meta.purpose}-concurrency`}>
+												Max concurrent runs
+											</FieldLabel>
+											<Input
+												id={`${meta.purpose}-concurrency`}
+												type="number"
+												inputMode="numeric"
+												min={MIN_CONCURRENT_JOBS}
+												value={maxConcurrentJobs}
+												aria-invalid={Boolean(concurrencyError)}
+												aria-describedby={concurrencyError ? concurrencyErrorId : undefined}
+												onChange={(e) => setMaxConcurrentJobs(e.target.value)}
+												disabled={pending}
+											/>
+											{concurrencyError && (
+												<FieldError id={concurrencyErrorId}>{concurrencyError}</FieldError>
+											)}
+										</Field>
+									)}
 									<Field orientation="horizontal">
 										<FieldLabel htmlFor={`${meta.purpose}-internet`}>Internet access</FieldLabel>
 										<Switch

@@ -16,6 +16,7 @@ import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/onboarding")({
 	head: workspaceAdminHead("Member onboarding"),
+	remountDeps: ({ params }) => params.workspaceSlug,
 	beforeLoad: async ({ context, params }) => {
 		const membership = await resolveWorkspaceMembership(context.queryClient, params.workspaceSlug);
 		if (!hasMinimumWorkspaceRole(membership?.role, "OWNER"))
@@ -32,10 +33,13 @@ function OnboardingSettingsRoute() {
 	const links = useQuery(getMemberOnboardingLinkOptionsOptions({ path }));
 	const save = useMutation({
 		...updateMemberOnboardingSettingsMutation(),
-		onSuccess: (data) => {
-			queryClient.setQueryData(getMemberOnboardingSettingsQueryKey({ path }), data);
-			void queryClient.invalidateQueries(getMemberOnboardingOptions({ path }));
-			void links.refetch();
+		onSuccess: (data, variables) => {
+			const savedPath = variables.path;
+			queryClient.setQueryData(getMemberOnboardingSettingsQueryKey({ path: savedPath }), data);
+			void queryClient.invalidateQueries(getMemberOnboardingOptions({ path: savedPath }));
+			void queryClient.invalidateQueries(
+				getMemberOnboardingLinkOptionsOptions({ path: savedPath }),
+			);
 		},
 	});
 	return (
