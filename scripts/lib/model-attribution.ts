@@ -7,8 +7,9 @@
  * record who or what worked on a commit, and crediting a tool there is allowed.
  *
  * The workflow step has no checkout (`docs/contributor/ci-cd.mdx` explains why), so it cannot
- * import this module; its inline patterns are hand-kept equal to the ones below, which is what
- * `scripts/model-attribution.test.ts` exists to pin down.
+ * import this module; its inline patterns are hand-kept equal to the ones below.
+ * `scripts/pull-request-workflows.test.ts` exercises that policy; `scripts/model-attribution.test.ts`
+ * exercises this module.
  */
 
 const TOOL_NAMES = [
@@ -40,7 +41,7 @@ export const CLAUDE_SESSION_PATTERN = /^claude-session:/im;
 export const MODEL_ATTRIBUTION_PATTERNS: readonly AttributionPattern[] = [
 	{ name: "a Co-Authored-By trailer naming a model or tool", pattern: COAUTHOR_PATTERN },
 	{ name: "a Claude-Session trailer", pattern: CLAUDE_SESSION_PATTERN },
-	{ name: 'a "Generated with" marker', pattern: /generated with/i },
+	{ name: 'a "Generated with" marker', pattern: /\bgenerated with\b/i },
 	{ name: "a claude.ai/code or session link", pattern: /claude\.ai\/(?:code|session)/i },
 ];
 
