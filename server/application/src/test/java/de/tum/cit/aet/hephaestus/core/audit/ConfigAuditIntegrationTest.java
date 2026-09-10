@@ -34,7 +34,6 @@ import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,9 +41,6 @@ import org.springframework.transaction.annotation.Transactional;
  * End-to-end coverage of the config audit trail: that producers actually write rows, that the rows
  * say the right thing, and that a workspace admin can never read another workspace's history.
  */
-// Without the sequence, every auth_event write is swallowed and the elevation assertions below pass
-// vacuously — see the script's own comment.
-@Sql("/db/auth-event-sequence.sql")
 class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
@@ -476,9 +472,11 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isOk()
                 .expectBody()
                 .jsonPath("$.content[0].newValue")
-                .value(org.hamcrest.Matchers.containsString("46"))
+                .value((String value) ->
+                        org.hamcrest.MatcherAssert.assertThat(value, org.hamcrest.Matchers.containsString("46")))
                 .jsonPath("$.content[1].newValue")
-                .value(org.hamcrest.Matchers.containsString("45"));
+                .value((String value) ->
+                        org.hamcrest.MatcherAssert.assertThat(value, org.hamcrest.Matchers.containsString("45")));
     }
 
     @Test

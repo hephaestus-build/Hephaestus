@@ -124,6 +124,12 @@ server:
 
 # Actuator on the management port; health probes for Kubernetes liveness/readiness.
 management:
+    metrics:
+        web:
+            server:
+                # The API has more route templates than Boot's default 100. The integration test
+                # checks this bounded budget against registered mappings and rejects raw URI tags.
+                max-uri-tags: 256
     tracing:
         # Propagate trace context without sampling spans.
         sampling:
