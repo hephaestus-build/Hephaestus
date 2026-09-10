@@ -15,7 +15,6 @@ spring:
         hikari:
             maximum-pool-size: 10
             minimum-idle: 2
-            max-lifetime: 120000 # 2 minutes (shorter for faster cleanup)
             connection-timeout: 5000 # 5 seconds (fail fast)
             idle-timeout: 30000 # 30 seconds (faster cleanup)
             validation-timeout: 3000 # 3 seconds

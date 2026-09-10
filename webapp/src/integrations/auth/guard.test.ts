@@ -1,11 +1,11 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 
-import { isAppAdmin, resolveCurrentUser, safeReturnTo } from "./guard";
+import { currentUserQueryOptions, isAppAdmin, resolveCurrentUser, safeReturnTo } from "./guard";
 describe("safeReturnTo", () => {
 	describe("accepts same-origin absolute paths", () => {
 		it.each(["/", "/dashboard", "/w/acme/overview", "/a/b?x=1&y=2", "/path#frag", "/with-dash_x"])(
@@ -115,6 +115,47 @@ describe("resolveCurrentUser", () => {
 		serve(asAppRole("APP_ADMIN"));
 
 		expect(await resolveCurrentUser(client())).toMatchObject({ appRole: "APP_ADMIN" });
+	});
+
+	it("finishes route identity resolution when the last UI observer unmounts", async () => {
+		const queryClient = client();
+		let respond = (_response: Response) => {};
+		const response = new Promise<Response>((resolve) => {
+			respond = resolve;
+		});
+		const requested = vi.fn(() => response);
+		server.use(http.get("*/user", requested));
+		const observer = new QueryObserver(queryClient, currentUserQueryOptions());
+		const unsubscribe = observer.subscribe(vi.fn());
+		const resolved = resolveCurrentUser(queryClient).then(
+			(user) => ({ user }),
+			(error: unknown) => ({ error }),
+		);
+		await vi.waitFor(() => expect(requested).toHaveBeenCalledOnce());
+		unsubscribe();
+		respond(HttpResponse.json(currentUser));
+		expect(await resolved).toStrictEqual({ user: currentUser });
+		queryClient.clear();
+	});
+
+	it("does not restore identity after an explicit session cancellation", async () => {
+		const queryClient = client();
+		let respond = (_response: Response) => {};
+		const response = new Promise<Response>((resolve) => {
+			respond = resolve;
+		});
+		const requested = vi.fn(() => response);
+		server.use(http.get("*/user", requested));
+		const resolved = resolveCurrentUser(queryClient).then(
+			(user) => ({ user }),
+			(error: unknown) => ({ error }),
+		);
+		await vi.waitFor(() => expect(requested).toHaveBeenCalledOnce());
+		await queryClient.cancelQueries({ queryKey: currentUserQueryOptions().queryKey });
+		respond(HttpResponse.json(currentUser));
+		expect(await resolved).toHaveProperty("error");
+		expect(queryClient.getQueryData(currentUserQueryOptions().queryKey)).toBeUndefined();
+		queryClient.clear();
 	});
 
 	it("answers null only when the server confirms the session is unauthenticated", async () => {

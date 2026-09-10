@@ -231,14 +231,16 @@ jobs:
             SPRING_DOCKER_COMPOSE_ENABLED=false APPLICATION_HOST_URL=http://localhost:4200 \
             setsid java -jar "$SERVER_JAR" --spring.profiles.active=e2e,playwright > e2e-server.log 2>&1 &
           SERVER_PID=$!
-          timeout 5m bash -c 'until curl --fail --silent http://localhost:8080/actuator/health/liveness >/dev/null; do kill -0 '"${SERVER_PID}"' || exit 1; sleep 2; done'
+          # Liveness precedes ApplicationRunner completion; readiness includes signing-key initialization.
+          timeout 5m bash -c 'until curl --fail --silent http://localhost:8080/actuator/health/readiness >/dev/null; do kill -0 '"${SERVER_PID}"' || exit 1; sleep 2; done'
           curl --fail --silent --show-error -X POST http://localhost:8080/auth/dev-login \
             -H 'content-type: application/json' -d '{"username":"e2e","admin":true}' >/dev/null
           docker compose -f server/compose.yaml exec -T postgres \
             psql -v ON_ERROR_STOP=1 -U root -d hephaestus < webapp/e2e/seed.sql
           timeout --kill-after=30s 10m vp run --filter webapp test:e2e
+      # A green browser suite can still hide server startup failures. Preserve the raw log too.
       - name: Upload diagnostics
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: webapp-e2e-results

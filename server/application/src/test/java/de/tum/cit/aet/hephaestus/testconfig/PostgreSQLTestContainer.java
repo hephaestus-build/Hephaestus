@@ -117,7 +117,8 @@ public final class PostgreSQLTestContainer {
 
     public record TestDatabase(String jdbcUrl, String username, String password) {}
 
-    @SuppressWarnings("resource") // Closed by the JVM shutdown hook.
+    // Ryuk stops this singleton after JVM exit, keeping it available while Spring closes cached contexts.
+    @SuppressWarnings("resource")
     private static PostgreSQLContainer<?> createContainer() {
         PostgreSQLContainer<?> newContainer = new PostgreSQLContainer<>(DockerImageName.parse(new ImageFromDockerfile()
                                 .withDockerfile(
@@ -139,12 +140,6 @@ public final class PostgreSQLTestContainer {
                 newContainer.getJdbcUrl(),
                 newContainer.getUsername(),
                 newContainer.getDatabaseName());
-
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            if (newContainer.isRunning()) {
-                newContainer.stop();
-            }
-        }));
 
         return newContainer;
     }

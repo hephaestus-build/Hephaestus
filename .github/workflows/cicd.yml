@@ -776,6 +776,15 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  CodeQL:
+    name: CodeQL
+    uses: ./.github/workflows/codeql.yml
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+      security-events: write
+
   all-ci-passed:
     name: "CI Status Gate"
     timeout-minutes: 10
@@ -783,7 +792,7 @@ jobs:
     permissions:
       actions: read
       statuses: write
-    needs: [detect-changes, gradle-wrapper, workflow-lint, zizmor, Quality, server-package, application-server-image, Build, Security, Test, Changesets, Compose, Docker, Supported-host-smoke, Release-preflight]
+    needs: [detect-changes, gradle-wrapper, workflow-lint, zizmor, CodeQL, Quality, server-package, application-server-image, Build, Security, Test, Changesets, Compose, Docker, Supported-host-smoke, Release-preflight]
     if: always()
     steps:
       - name: Generate workflow timeline
@@ -840,6 +849,7 @@ jobs:
           echo "Package:        ${{ needs.server-package.result }}"
           echo "Server image:   ${{ needs.application-server-image.result }}"
           echo "Build:          ${{ needs.Build.result }}"
+          echo "CodeQL:         ${{ needs.CodeQL.result }}"
           echo "Security:       ${{ needs.Security.result }}"
           echo "Test:           ${{ needs.Test.result }}"
           echo "Changesets:     ${{ needs.Changesets.result }}"
@@ -856,6 +866,13 @@ jobs:
 
           if [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
             echo "status=cancelled" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          # The queue must retain its ref until analysis and SARIF upload finish.
+          if [[ "${{ needs.CodeQL.result }}" != "success" ]]; then
+            echo "CodeQL did not complete successfully."
+            echo "status=failure" >> $GITHUB_OUTPUT
             exit 1
           fi
 
@@ -887,6 +904,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Workflow | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| CodeQL | ${{ needs.CodeQL.result }} |" >> $GITHUB_STEP_SUMMARY
 
           result_to_emoji() {
             case "$1" in

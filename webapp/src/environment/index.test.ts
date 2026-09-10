@@ -3,10 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 /**
  * The module reads `window.__ENV__` once, at import, so each case loads it afresh.
  */
-async function deploymentFor(runtime: Window["__ENV__"]) {
+async function environmentFor(runtime: Window["__ENV__"]) {
 	vi.resetModules();
 	window.__ENV__ = runtime;
-	return (await import("./index")).default.deployment;
+	return (await import("./index")).default;
+}
+
+async function deploymentFor(runtime: Window["__ENV__"]) {
+	return (await environmentFor(runtime)).deployment;
 }
 
 afterEach(() => {
@@ -48,5 +52,27 @@ describe("preview pull request", () => {
 		});
 
 		expect(deployment.pullRequest).toBeUndefined();
+	});
+});
+
+describe("CSRF cookie name", () => {
+	it("falls back to the secure cookie the server sets when the deployment leaves it unset", async () => {
+		// The entrypoint writes every key of RuntimeEnvVars into window.__ENV__ whether the container
+		// has it or not, so an unset variable arrives as "", which the `??` default cannot rescue.
+		const environment = await environmentFor({
+			SENTRY_ENVIRONMENT: "production",
+			XSRF_COOKIE_NAME: "",
+		});
+
+		expect(environment.xsrfCookieName).toBe("__Host-XSRF-TOKEN");
+	});
+
+	it("keeps a name the deployment does set, which local http E2E needs without the __Host- prefix", async () => {
+		const environment = await environmentFor({
+			SENTRY_ENVIRONMENT: "local",
+			XSRF_COOKIE_NAME: "XSRF-TOKEN",
+		});
+
+		expect(environment.xsrfCookieName).toBe("XSRF-TOKEN");
 	});
 });

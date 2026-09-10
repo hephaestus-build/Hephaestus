@@ -108,6 +108,12 @@ sandbox gateway on the same port and needs the same firewall treatment as a spli
 webhook role turns the worker role off, so it opens no gateway — the three `sandbox.gateway` rows
 read `—` in that column.
 
+Sandbox maintenance follows the worker role in both split-out and single-container deployments.
+Idle mentor sessions and orphaned resources are cleaned periodically without enabling server-wide
+scheduled jobs on the worker. Stalled writes are checked on a separate thread so a slow Docker cleanup
+cannot delay their timeout. API-contract generation and CDS training do not run sandbox maintenance, server scheduled jobs or
+startup sync-job recovery.
+
 Only worker containers bind their HTTP and management endpoints to loopback: that is the `worker`
 overlay's doing, and a single-container install running all three roles still serves `/api/**` and
 the management endpoints on `SERVER_PORT`. On that topology the gateway is a second, narrower door
