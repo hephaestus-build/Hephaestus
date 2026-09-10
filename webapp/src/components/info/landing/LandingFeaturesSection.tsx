@@ -1,5 +1,6 @@
 import { FlaskConical } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
+import { useMediaQuery } from "usehooks-ts";
 import { getGroupVisual } from "@/components/admin/practice-catalog/group-visuals";
 import { SlackIcon } from "@/components/icons/brand";
 import { Badge } from "@/components/ui/badge";
@@ -48,7 +49,7 @@ function DiffLines({ removed, added }: { removed: string[]; added: string[] }) {
 }
 
 export function LandingFeaturesSection() {
-	const reduceMotion = useReducedMotion();
+	const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 	return (
 		<section
 			id="how-it-works"

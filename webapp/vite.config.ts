@@ -66,11 +66,22 @@ const viteConfig = {
 	],
 	build: {
 		sourcemap: "hidden" as const,
+		rolldownOptions: {
+			output: {
+				codeSplitting: {
+					// Keep the shared renderer cacheable across application releases. Do not collect all
+					// dependencies: feature libraries belong to the routes that actually use them.
+					groups: [
+						{ name: "react-runtime", test: /[/]node_modules[/](react|react-dom|scheduler)[/]/ },
+					],
+				},
+			},
+		},
 	},
 	test: {
 		globals: true,
 		environment: "jsdom",
-		exclude: [...configDefaults.exclude, "e2e/**"],
+		exclude: [...configDefaults.exclude, "e2e/**/*.spec.ts"],
 		setupFiles: ["./src/test/setup-msw.ts"],
 		reporters: ["default", "junit"],
 		outputFile: {

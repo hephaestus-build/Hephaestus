@@ -172,7 +172,20 @@ jobs:
           name: "Test Results - App Server Database"
           path: "server/application/build/test-results/databaseTest/TEST-*.xml"
           reporter: java-junit
+          list-suites: failed
+          list-tests: failed
+          # Source lookup is needed only for failure annotations, not successful summaries.
+          max-annotations: ${{ job.status == 'failure' && 50 || 0 }}
           fail-on-error: false
+
+      - name: Retain full database test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: database-test-reports-${{ github.run_attempt }}
+          path: server/application/build/test-results/databaseTest
+          retention-days: 14
+          if-no-files-found: warn
 
   webapp-e2e:
     name: "Webapp: E2E"

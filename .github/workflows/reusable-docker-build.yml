@@ -206,6 +206,11 @@ jobs:
           name: ${{ inputs.application-artifact }}
           path: ${{ runner.temp }}/application
 
+      - uses: ./.github/actions/setup-toolchain
+        if: inputs.use-buildpacks
+        with:
+          install: "none"
+
       # --trust-builder lets one creator container run every lifecycle phase; that is only safe
       # because the builder is pinned by digest.
       - name: Build with Buildpacks and CDS
@@ -230,12 +235,12 @@ jobs:
             # A local build has no registry to read a manifest back from, and nothing downstream of
             # a fork build consumes the digest, so the daemon's image ID is what it can report.
             pack build "$PER_ARCH_TAG" --path "${jars[0]}" --descriptor "$PROJECT_DESCRIPTOR" \
-              --run-image "$RUN_IMAGE" --platform "$MATRIX_PLATFORM" --trust-builder
+              --run-image "$RUN_IMAGE" --platform "$MATRIX_PLATFORM" --trust-builder 2>&1 | node scripts/summarize-buildpack-log.ts "$RUNNER_TEMP/buildpacks.log"
             echo "digest=$(docker image inspect --format '{{.Id}}' "$PER_ARCH_TAG")" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           pack build "$PER_ARCH_TAG" --path "${jars[0]}" --descriptor "$PROJECT_DESCRIPTOR" \
-            --run-image "$RUN_IMAGE" --platform "$MATRIX_PLATFORM" --publish --trust-builder
+            --run-image "$RUN_IMAGE" --platform "$MATRIX_PLATFORM" --publish --trust-builder 2>&1 | node scripts/summarize-buildpack-log.ts "$RUNNER_TEMP/buildpacks.log"
           # Buildpacks may wrap one platform in an index; capture its manifest, not the wrapper.
           RAW=$(docker buildx imagetools inspect "$PER_ARCH_TAG" --format '{{json .Manifest}}')
           if echo "$RAW" | jq -e '.manifests' >/dev/null 2>&1; then
@@ -251,6 +256,15 @@ jobs:
           fi
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "Per-arch digest: $DIGEST"
+
+      - name: Retain complete buildpack diagnostics
+        if: ${{ always() && inputs.use-buildpacks }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: buildpacks-log-${{ steps.prep.outputs.platform_pair }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/buildpacks.log
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Export digest
         env:
