@@ -419,6 +419,10 @@ void describe("CI contract", () => {
 	void test("the server package job is the only Gradle cache producer", async () => {
 		const action = parseDocument(await readFile(".github/actions/setup-caches/action.yml", "utf8"));
 		assert.equal(action.getIn(["inputs", "cache-write", "default"]), "false");
+		assert.equal(
+			namedStep(action, ["runs"], "Set up JDK").getIn(["with", "java-version-file"]),
+			".java-version",
+		);
 		const sources = await workflowSources();
 		const writers = [...sources].filter(([, source]) => source.includes('cache-write: "true"'));
 		assert.deepEqual(
@@ -2554,12 +2558,28 @@ void test("CodeQL runs advanced setup and excludes the Semgrep fixtures it would
 		for (const match of source.matchAll(new RegExp(`uses: ${action}@([\\w.-]+)`, "g")))
 			assert.match(match[1] ?? "", /^[a-f0-9]{40}$/, `${action} must be pinned by commit`);
 	const init = step(workflow, ["jobs", "analyze"], "github/codeql-action/init");
+	for (const input of ["debug", "debug-artifact-name", "debug-database-name"]) {
+		assert.equal(
+			init.has(input),
+			false,
+			"full debug databases are temporary evidence, not routine CI artifacts",
+		);
+	}
 	assert.match(
 		String(init.get("build-mode")),
 		/matrix\.language == 'java-kotlin' && 'manual' \|\| 'none'/,
 	);
-	const java = step(workflow, ["jobs", "analyze"], "actions/setup-java");
-	assert.equal(java.get("java-version-file"), ".java-version");
+	const java = namedStep(workflow, ["jobs", "analyze"], "Set up Java build");
+	assert.equal(java.get("uses"), "./.github/actions/setup-caches");
+	assert.equal(java.get("if"), "matrix.language == 'java-kotlin'");
+	assert.equal(java.has("with"), false, "analysis consumes the default read-only Gradle cache");
+	const steps = workflow.getIn(["jobs", "analyze", "steps"]);
+	assert.ok(isSeq(steps));
+	assert.ok(
+		steps.items.indexOf(java) <
+			steps.items.indexOf(namedStep(workflow, ["jobs", "analyze"], "Initialize CodeQL")),
+		"provision dependencies before starting the extractor",
+	);
 	const compile = namedStep(workflow, ["jobs", "analyze"], "Compile Java for analysis");
 	assert.equal(compile.get("if"), "matrix.language == 'java-kotlin'");
 	assert.equal(compile.get("working-directory"), "server");
@@ -2647,6 +2667,9 @@ void test("CodeQL selects languages with native change detection", async () => {
 		);
 	}
 	assert.ok(asArray(filters["java-kotlin"], "Java paths").includes("server/**"));
+	assert.ok(
+		asArray(filters["java-kotlin"], "Java paths").includes(".github/actions/setup-caches/**"),
+	);
 	assert.ok(asArray(filters["javascript-typescript"], "JS paths").includes("pnpm-lock.yaml"));
 });
 
