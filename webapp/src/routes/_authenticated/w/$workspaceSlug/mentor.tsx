@@ -5,6 +5,7 @@ import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { StandardPageSurface } from "@/components/core/StandardPageSurface";
 import { WorkspaceMentorPreferenceNotice } from "@/components/onboarding/WorkspaceMentorPreferenceNotice";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
@@ -78,9 +79,14 @@ function MentorLayout() {
 		);
 	if (preference.isPending)
 		return (
-			<div className="flex flex-1 items-center justify-center">
-				<Spinner aria-label="Loading AI preference" />
-			</div>
+			<StandardPageSurface>
+				<section aria-label="Heph" aria-busy="true" className="mx-auto max-w-xl space-y-4 p-6">
+					<Skeleton className="size-8" />
+					<Skeleton className="h-7 w-3/4" />
+					<Skeleton className="h-16 w-full" />
+					<Skeleton className="h-9 w-44" />
+				</section>
+			</StandardPageSurface>
 		);
 	const choice = preference.data.aiChoice;
 	const reason =

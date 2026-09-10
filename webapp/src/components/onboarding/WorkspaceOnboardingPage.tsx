@@ -74,6 +74,7 @@ export function WorkspaceOnboardingPage(props: WorkspaceOnboardingPageProps) {
 		return (
 			<PageLayout
 				className="max-w-5xl space-y-8"
+				role="region"
 				aria-label="Loading workspace setup"
 				aria-busy="true"
 			>

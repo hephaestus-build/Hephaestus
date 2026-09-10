@@ -287,6 +287,11 @@ it, and wait until every runtime role has been upgraded before creating location
 choices. It is never a fallback for a member who selected a processing location. Existing models
 migrate as **Unclassified**; Hephaestus does not infer a location from their names or endpoints.
 
+When individual member preferences exist, an unknown or unlinked reviewed developer cannot use that
+legacy default either: Hephaestus cannot safely distinguish them from a member whose identity was
+unlinked after choosing a location or No AI. Reconnect the developer's identity to restore their own
+preference; this does not change another identified member's choice or another workspace.
+
 Members may choose **No AI** even when model configuration or required account links are unavailable.
 This stops new practice reviews about them and new conversations with Heph in that workspace, not
 membership or access to existing feedback. A review is checked against the developer whose work is

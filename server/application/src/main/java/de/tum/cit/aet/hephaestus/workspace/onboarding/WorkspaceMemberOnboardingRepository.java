@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 interface WorkspaceMemberOnboardingRepository extends JpaRepository<WorkspaceMemberOnboarding, Long> {
     Optional<WorkspaceMemberOnboarding> findByWorkspace_IdAndAccountId(Long workspaceId, Long accountId);
 
+    boolean existsByWorkspace_Id(Long workspaceId);
+
     @Modifying
     @Query("DELETE FROM WorkspaceMemberOnboarding m WHERE m.workspace.id = :workspaceId")
     int deleteByWorkspaceId(Long workspaceId);

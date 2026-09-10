@@ -82,6 +82,8 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
                 .isEmpty();
         assertThat(preferences.forDeveloper(first.getId(), user.getId()).permitsAi())
                 .isFalse();
+        assertThat(preferences.forDeveloper(first.getId(), null).permitsAi()).isFalse();
+        assertThat(preferences.forDeveloper(second.getId(), null).permitsAi()).isTrue();
         assertThat(workspaceMembershipRepository.findByWorkspace_IdAndUser_Id(first.getId(), user.getId()))
                 .isPresent();
     }

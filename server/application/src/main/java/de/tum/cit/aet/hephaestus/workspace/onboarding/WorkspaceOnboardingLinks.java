@@ -76,11 +76,9 @@ class WorkspaceOnboardingLinks {
     }
 
     private static @Nullable String serverUrl(Connection connection) {
-        return switch (connection.getConfig()) {
-            case ConnectionConfig.SlackConfig ignored -> "https://slack.com";
-            case ConnectionConfig.OutlineConfig outline -> outline.serverUrl();
-            default -> null;
-        };
+        var config = connection.getConfig();
+        if (config instanceof ConnectionConfig.SlackConfig) return "https://slack.com";
+        return config instanceof ConnectionConfig.OutlineConfig outline ? outline.serverUrl() : null;
     }
 
     private static @Nullable String teamId(Connection connection) {

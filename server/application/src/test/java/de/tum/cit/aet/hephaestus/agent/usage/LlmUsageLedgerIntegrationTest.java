@@ -1,24 +1,33 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.within;
-import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnection;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
+import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobService;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
+import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
+import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -81,6 +90,15 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private LlmUsageAdminService llmUsageAdminService;
+
+    @Autowired
+    private WorkspaceLlmConnectionRepository workspaceConnections;
+
+    @Autowired
+    private WorkspaceLlmModelRepository workspaceModels;
+
+    @Autowired
+    private PracticeRepository practices;
 
     private Workspace setupWorkspace(String slug) {
         User owner = persistUser(slug + "-owner");
@@ -179,6 +197,17 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
      * resolves it first, because the cap that applies is the one belonging to whoever pays for it.
      */
     private WorkspaceAgentBinding bindDetectionTo(Workspace workspace, FundingSource fundingSource) {
+        workspace.getFeatures().setPracticesEnabled(true);
+        workspaceRepository.save(workspace);
+        var practice = new Practice();
+        practice.setWorkspace(workspace);
+        practice.setSlug("budget-review");
+        practice.setName("Budget review");
+        practice.setCriteria("Review the pull request");
+        practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
+        practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
+        practices.save(practice);
+
         WorkspaceAgentBinding binding = new WorkspaceAgentBinding();
         binding.setWorkspace(workspace);
         binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
@@ -186,8 +215,48 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         binding.setTimeoutSeconds(300);
         if (fundingSource == FundingSource.INSTANCE) {
             binding.setInstanceModel(instanceModel(workspace.getWorkspaceSlug()));
+        } else {
+            var connection = new WorkspaceLlmConnection();
+            connection.setWorkspace(workspace);
+            connection.setSlug("ledger-connection");
+            connection.setDisplayName("Ledger connection");
+            connection.setBaseUrl(LlmCatalogTestFixtures.BASE_URL);
+            connection.setApiProtocol(LlmCatalogTestFixtures.OPENAI_COMPLETIONS);
+            connection.setEnabled(true);
+            connection = workspaceConnections.save(connection);
+            var model = new WorkspaceLlmModel();
+            model.setWorkspace(workspace);
+            model.setConnection(connection);
+            model.setSlug("ledger-model");
+            model.setDisplayName("Ledger model");
+            model.setUpstreamModelId("ledger-model");
+            model.setEnabled(true);
+            binding.setWorkspaceModel(workspaceModels.save(model));
         }
         return bindingRepository.save(binding);
+    }
+
+    private PullRequestReviewSubmissionRequest reviewRequest() {
+        var pullRequest = new ScmEventPayload.PullRequestData(
+                456L,
+                42,
+                "Review budget isolation",
+                "Body",
+                Issue.State.OPEN,
+                false,
+                false,
+                10,
+                5,
+                3,
+                "https://github.com/owner/repo/pull/42",
+                new RepositoryRef(123L, "owner/repo", "main"),
+                789L,
+                Instant.now(),
+                Instant.now(),
+                null,
+                null,
+                null);
+        return new PullRequestReviewSubmissionRequest(pullRequest, "feature/budget", "abc123", "main");
     }
 
     private LlmModel instanceModel(String slug) {
@@ -348,17 +417,13 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         record(workspace.getId(), agentSample(UUID.randomUUID(), 0, 1000, price));
         double blockedBefore = blockedCount("instance");
 
-        var job = agentJobService.submit(
-                workspace.getId(), AgentJobType.PULL_REQUEST_REVIEW, mock(JobSubmissionRequest.class), null);
+        var job = agentJobService.submit(workspace.getId(), AgentJobType.PULL_REQUEST_REVIEW, reviewRequest(), null);
 
         assertThat(job).isEmpty();
         assertThat(blockedCount("instance")).isEqualTo(blockedBefore + 1);
     }
 
-    /**
-     * Detection bound to the workspace's own provider is a different purse and keeps running — it is
-     * refused only later, for lack of a resolvable model in this fixture, never by the host's cap.
-     */
+    /** Work funded by the workspace can still be queued when the instance-funded allowance is exhausted. */
     @Test
     void submitIsNotBlockedByTheInstanceCapWhenDetectionRunsOnTheWorkspacesOwnProvider() {
         Workspace workspace = setupWorkspace("ledger-block-byo-open");
@@ -369,17 +434,9 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         double instanceBlockedBefore = blockedCount("instance");
         double byoBlockedBefore = blockedCount("byo");
 
-        Throwable thrown = catchThrowable(() -> agentJobService.submit(
-                workspace.getId(), AgentJobType.PULL_REQUEST_REVIEW, mock(JobSubmissionRequest.class), null));
+        var job = agentJobService.submit(workspace.getId(), AgentJobType.PULL_REQUEST_REVIEW, reviewRequest(), null);
 
-        // A budget refusal is a QUIET return of Optional.empty(), never a throw. So a non-null
-        // throwable is the proof that execution reached past the gate — the fixture then has no
-        // reviewable subject and fails downstream, which is a different failure entirely. Without this
-        // assertion the test would still pass if the host's cap HAD refused the submission.
-        assertThat(thrown)
-                .as("submission ran past the budget gate and failed downstream instead")
-                .isNotNull();
-        assertThat(thrown).isNotInstanceOf(LlmBudgetExhaustedException.class);
+        assertThat(job).isPresent();
         assertThat(blockedCount("instance")).isEqualTo(instanceBlockedBefore);
         assertThat(blockedCount("byo")).isEqualTo(byoBlockedBefore);
     }
@@ -392,8 +449,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         bindDetectionTo(workspace, FundingSource.WORKSPACE);
         double blockedBefore = blockedCount("byo");
 
-        var job = agentJobService.submit(
-                workspace.getId(), AgentJobType.PULL_REQUEST_REVIEW, mock(JobSubmissionRequest.class), null);
+        var job = agentJobService.submit(workspace.getId(), AgentJobType.PULL_REQUEST_REVIEW, reviewRequest(), null);
 
         assertThat(job).isEmpty();
         assertThat(blockedCount("byo")).isEqualTo(blockedBefore + 1);
@@ -408,15 +464,9 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         double instanceBlockedBefore = blockedCount("instance");
         double byoBlockedBefore = blockedCount("byo");
 
-        Throwable thrown = catchThrowable(() -> agentJobService.submit(
-                workspace.getId(), AgentJobType.PULL_REQUEST_REVIEW, mock(JobSubmissionRequest.class), null));
+        var job = agentJobService.submit(workspace.getId(), AgentJobType.PULL_REQUEST_REVIEW, reviewRequest(), null);
 
-        // As above: a throw means the gate let this through. A zero BYO cap that reached across would
-        // instead have returned Optional.empty() with no throwable at all.
-        assertThat(thrown)
-                .as("the workspace's own cap did not pause shared-model work")
-                .isNotNull();
-        assertThat(thrown).isNotInstanceOf(LlmBudgetExhaustedException.class);
+        assertThat(job).isPresent();
         assertThat(blockedCount("instance")).isEqualTo(instanceBlockedBefore);
         assertThat(blockedCount("byo")).isEqualTo(byoBlockedBefore);
     }

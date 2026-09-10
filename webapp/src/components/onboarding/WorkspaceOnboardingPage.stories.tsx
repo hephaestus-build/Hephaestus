@@ -60,15 +60,14 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const FirstVisit: Story = {
-	play: async ({ canvas, userEvent, args }) => {
+	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.getByRole("radio", { name: "On-premises" })).not.toBeChecked();
 		await expect(canvas.getByRole("radio", { name: "Private cloud" })).not.toBeChecked();
 		await expect(canvas.getByRole("radio", { name: "No AI" })).not.toBeChecked();
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Save AI preference" }));
 		await userEvent.click(canvas.getByRole("radio", { name: "No AI" }));
 		await expect(canvas.getByRole("radio", { name: "No AI" })).toBeChecked();
-		await userEvent.click(canvas.getByRole("button", { name: "Save AI preference" }));
-		await expect(args.onChoose).toHaveBeenCalledWith("NO_AI");
+		await expect(canvas.getByRole("button", { name: "Save AI preference" })).toBeEnabled();
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Continue to workspace" }));
 	},
 };

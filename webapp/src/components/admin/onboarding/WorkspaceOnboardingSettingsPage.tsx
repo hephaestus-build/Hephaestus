@@ -36,7 +36,12 @@ export function WorkspaceOnboardingSettingsPage(props: WorkspaceOnboardingSettin
 				</p>
 			</header>
 			{props.state.status === "loading" ? (
-				<div aria-label="Loading onboarding settings" aria-busy="true" className="space-y-6">
+				<div
+					role="region"
+					aria-label="Loading onboarding settings"
+					aria-busy="true"
+					className="space-y-6"
+				>
 					<Skeleton className="h-20 w-full" />
 					<Skeleton className="h-48 w-full" />
 					<Skeleton className="h-32 w-full" />

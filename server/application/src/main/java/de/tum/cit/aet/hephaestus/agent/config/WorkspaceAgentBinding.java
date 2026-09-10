@@ -72,6 +72,7 @@ public class WorkspaceAgentBinding implements ModelBindingSource {
     @Enumerated(EnumType.STRING)
     @ColumnDefault("'UNCLASSIFIED'")
     @Column(name = "processing_location", nullable = false, length = 24)
+    @Getter(onMethod_ = @Override)
     private LlmProcessingLocation processingLocation = LlmProcessingLocation.UNCLASSIFIED;
 
     @ColumnDefault("true")

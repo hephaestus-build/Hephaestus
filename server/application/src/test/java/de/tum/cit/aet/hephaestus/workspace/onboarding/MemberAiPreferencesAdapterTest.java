@@ -76,4 +76,25 @@ class MemberAiPreferencesAdapterTest extends BaseUnitTest {
         assertThat(preferences.forDeveloper(1L, null).permitsAi()).isFalse();
         verifyNoInteractions(members);
     }
+
+    @Test
+    void shouldRefuseAnUnlinkedIdentityWhenIndividualPreferencesExistWithoutEnabledWelcome() {
+        linkedDeveloper();
+        when(identities.resolveActiveAccountId(7L, "123", null)).thenReturn(Optional.empty());
+        when(members.existsByWorkspace_Id(1L)).thenReturn(true);
+
+        assertThat(preferences.forDeveloper(1L, 20L).permitsAi()).isFalse();
+        assertThat(preferences.forDeveloper(1L, null).permitsAi()).isFalse();
+        assertThat(preferences.forDeveloper(2L, 20L).permitsAi()).isTrue();
+    }
+
+    @Test
+    void shouldPreserveTheLegacyDefaultForAnIdentifiedMemberWithoutTheirOwnPreference() {
+        linkedDeveloper();
+
+        when(members.existsByWorkspace_Id(1L)).thenReturn(true);
+
+        assertThat(preferences.forDeveloper(1L, null).permitsAi()).isFalse();
+        assertThat(preferences.forDeveloper(1L, 20L).permitsAi()).isTrue();
+    }
 }

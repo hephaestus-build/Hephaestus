@@ -138,8 +138,11 @@ export const MobileReflow: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("Practice reviews");
 		await expectNoPageOverflow();
-		await expectControlOnScreen(
-			purposeCard(canvas, "Practice reviews").getByRole("button", { name: "Save assignment" }),
-		);
+		const save = purposeCard(canvas, "Practice reviews").getByRole("button", {
+			name: "Save assignment",
+		});
+		// Vertical page scrolling is expected; saving must not need horizontal scrolling.
+		save.scrollIntoView({ block: "center" });
+		await expectControlOnScreen(save);
 	},
 };
