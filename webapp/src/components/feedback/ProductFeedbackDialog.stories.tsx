@@ -12,7 +12,7 @@ const context = {
 };
 
 const meta = {
-	title: "Surveys/Product feedback dialog",
+	title: "Product feedback/Feedback dialog",
 	component: ProductFeedbackDialog,
 	args: {
 		open: true,
@@ -75,6 +75,7 @@ export const BugReport: Story = {
 			dialog.getByRole("checkbox", { name: "Include page and browser details" }),
 		).toBeChecked();
 		await expectSettledVisible(dialog.getByText(context.pagePath));
+		await expectSettledVisible(dialog.getByText(context.userAgent));
 		await userEvent.type(dialog.getByRole("textbox", { name: "Message" }), "The list jumps.");
 		await userEvent.click(dialog.getByRole("button", { name: "Send" }));
 		await expect(args.onSubmit).toHaveBeenCalledWith({

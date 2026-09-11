@@ -91,6 +91,7 @@ final class FeedbackDTOs {
             @NonNull ParticipationCountsDTO participation) {}
 
     record ParticipationCountsDTO(
+            /** Every account shown the invitation, including those who then responded or declined. */
             @NonNull long invited,
             @NonNull long responded,
             @NonNull long declined) {}
@@ -101,6 +102,7 @@ final class FeedbackDTOs {
             @NonNull String description,
             @NonNull List<QuestionDTO> questions,
             @Nullable Instant endsAt,
+            /** The account has been shown this invitation; the webapp nudges only while false. */
             @NonNull boolean seen) {}
 
     record SubmitSurveyDTO(@NotNull @Size(max = 20) @NonNull List<@NotNull @Valid AnswerDTO> answers) {}
@@ -153,7 +155,7 @@ final class FeedbackDTOs {
             @NonNull String message,
             @Nullable String pagePath,
             @Nullable String userAgent,
-            @NonNull String appVersion,
+            @Nullable String appVersion,
             @NonNull Instant createdAt,
             @Nullable Instant resolvedAt,
             @Nullable FeedbackAccountRefDTO resolvedBy) {}

@@ -70,7 +70,7 @@ function AdminSurveysPage() {
 			<PageHeader
 				icon={<ClipboardList />}
 				title="Surveys"
-				description="Ask members a few questions when it suits them; invitations appear in the app header and never interrupt."
+				description="Ask members a few questions when it suits them; invitations wait in the app header and a new survey is announced once."
 				actions={
 					<DetailStackLink entry={surveyLevel()} className={buttonVariants()}>
 						<Plus className="mr-1.5 size-4" aria-hidden />
@@ -123,6 +123,7 @@ function AdminSurveysPage() {
 							onToggleActive={lifecycle.toggleActive}
 							onEnd={lifecycle.end}
 							onDelete={(survey) => {
+								// Close first: the level must never render a survey that is gone.
 								done();
 								lifecycle.remove(survey);
 							}}

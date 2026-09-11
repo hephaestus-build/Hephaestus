@@ -15,6 +15,6 @@ export const FEEDBACK_KIND_DEFS: StatusDefs<FeedbackItem["kind"]> = {
 		label: "Bug report",
 		icon: Bug,
 		badgeVariant: "outline",
-		description: "Something that did not work, with the page it happened on.",
+		description: "Something that did not work and, when the sender chose, the page it happened on.",
 	},
 };

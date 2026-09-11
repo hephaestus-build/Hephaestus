@@ -67,7 +67,6 @@ export const Default: Story = {
 		await expectSettledVisible(await screen.findByRole("heading", { name: adminSurvey.title }));
 		// 17 of 42 invited.
 		await expect(screen.getByText("40%")).toBeVisible();
-		// The rating question carries its average; the NPS question its score and its buckets.
 		await expect(screen.getByText("17 answered · Average 3.6")).toBeVisible();
 		await expect(screen.getByText("14 answered · Average 7.9 · NPS 21")).toBeVisible();
 		await expect(

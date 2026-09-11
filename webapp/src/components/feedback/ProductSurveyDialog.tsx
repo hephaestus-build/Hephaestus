@@ -29,7 +29,7 @@ export interface ProductSurveyDialogProps {
 	onDecline: () => void | Promise<void>;
 }
 
-/** The draft belongs to the host so closing keeps it; declining is kept visually quiet on purpose. */
+/** The draft belongs to the host so closing keeps it; declining is a ghost button so it never competes with Send. */
 export function ProductSurveyDialog({
 	survey,
 	open,

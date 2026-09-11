@@ -24,7 +24,6 @@ export interface AdminSurveyResultsLevelProps {
 	pending: boolean;
 	onToggleActive: (survey: Survey, active: boolean) => void;
 	onEnd: (survey: Survey) => void;
-	/** Deleting from inside the drawer closes it first, so the level never renders a survey that is gone. */
 	onDelete: (survey: Survey) => void;
 }
 

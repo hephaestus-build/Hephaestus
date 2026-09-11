@@ -192,12 +192,12 @@ class SurveyService {
     }
 
     @Transactional
-    public void restore(UUID id, Long workspaceId, Long accountId) {
+    public void undoDecline(UUID id, Long workspaceId, Long accountId) {
         open(id, workspaceId);
         participations
                 .findBySurveyIdAndAccountId(id, accountId)
                 .filter(participation -> participation.getStatus() == Status.DECLINED)
-                .orElseThrow(() -> new EntityNotFoundException("Survey dismissal", id.toString()))
+                .orElseThrow(() -> new EntityNotFoundException("Survey decline", id.toString()))
                 .reinvite();
     }
 
@@ -261,7 +261,6 @@ class SurveyService {
             Map<Status, Long> tally = tallies.getOrDefault(id, Map.of());
             long responded = tally.getOrDefault(Status.RESPONDED, 0L);
             long declined = tally.getOrDefault(Status.DECLINED, 0L);
-            // Every row was an invitation once, whatever it became.
             result.put(
                     id,
                     new ParticipationCountsDTO(

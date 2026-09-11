@@ -45,8 +45,8 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	args: { state: ready(surveys) },
 	play: async ({ canvas, args }) => {
-		// Availability is derived from the schedule, not stored. The status cell's whole name is the
-		// badge; the schedule cell's names carry the same words inside a longer phrase.
+		// The status cell's whole name is the badge; the schedule cell's names carry the same words
+		// inside a longer phrase.
 		await expect(canvas.getByRole("cell", { name: "Open" })).toBeVisible();
 		await expect(canvas.getByRole("cell", { name: "Scheduled" })).toBeVisible();
 		await expect(canvas.getByRole("cell", { name: "Paused" })).toBeVisible();

@@ -34,7 +34,6 @@ const ready = (
 export const Open: Story = {
 	args: { state: ready(openFeedback, "OPEN") },
 	play: async ({ canvas, args }) => {
-		// The registry decides the words; the item only carried the wire constant.
 		await expect(canvas.getAllByText("Bug report")).toHaveLength(1);
 		await expect(canvas.getAllByText("Feedback")).toHaveLength(2);
 		// An erased account and a submission from outside any workspace still read as sentences.

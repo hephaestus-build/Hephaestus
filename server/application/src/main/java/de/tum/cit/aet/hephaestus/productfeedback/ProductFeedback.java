@@ -41,9 +41,8 @@ public class ProductFeedback {
     @Column(name = "user_agent", length = 500)
     private @Nullable String userAgent;
 
-    /** The Hephaestus release that received the submission, recorded so a report outlives the upgrade that fixes it. */
-    @Column(name = "app_version", nullable = false, length = 64)
-    private String appVersion;
+    @Column(name = "app_version", length = 64)
+    private @Nullable String appVersion;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

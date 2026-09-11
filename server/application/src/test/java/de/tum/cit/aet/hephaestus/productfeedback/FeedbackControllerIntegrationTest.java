@@ -205,7 +205,7 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .expectBody(Void.class);
         webTestClient
                 .put()
-                .uri(member.path("/surveys/" + declined.id() + "/dismissal"))
+                .uri(member.path("/surveys/" + declined.id() + "/decline"))
                 .headers(member.headers())
                 .exchange()
                 .expectStatus()
@@ -218,7 +218,7 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         webTestClient
                 .delete()
-                .uri(member.path("/surveys/" + declined.id() + "/dismissal"))
+                .uri(member.path("/surveys/" + declined.id() + "/decline"))
                 .headers(member.headers())
                 .exchange()
                 .expectStatus()
@@ -226,7 +226,7 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .expectBody(Void.class);
         webTestClient
                 .delete()
-                .uri(member.path("/surveys/" + answered.id() + "/dismissal"))
+                .uri(member.path("/surveys/" + answered.id() + "/decline"))
                 .headers(member.headers())
                 .exchange()
                 .expectStatus()
@@ -254,7 +254,7 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         SurveyDTO survey = publish(member, member.workspace().getId(), textQuestion());
         webTestClient
                 .put()
-                .uri(member.path("/surveys/" + survey.id() + "/dismissal"))
+                .uri(member.path("/surveys/" + survey.id() + "/decline"))
                 .headers(member.headers())
                 .exchange()
                 .expectStatus()
@@ -436,7 +436,7 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         SurveyDTO survey = publish(member, member.workspace().getId(), textQuestion());
         webTestClient
                 .put()
-                .uri(member.path("/surveys/" + survey.id() + "/dismissal"))
+                .uri(member.path("/surveys/" + survey.id() + "/decline"))
                 .headers(member.headers())
                 .exchange()
                 .expectStatus()

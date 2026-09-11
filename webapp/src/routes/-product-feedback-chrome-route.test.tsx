@@ -45,7 +45,11 @@ describe("survey invitations in the app chrome", () => {
 		const user = userEvent.setup();
 		renderRouteAt("/settings");
 
-		await screen.findByRole("button", { name: "Feedback, 1 open survey" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole(
+			"button",
+			{ name: "Product feedback, 1 open survey" },
+			ROUTE_RENDER_WAIT,
+		);
 		await screen.findByText(`New survey: ${surveyInvitation.title}`);
 		await waitFor(() => expect(acknowledgements).toStrictEqual([surveyInvitation.id]));
 		expect(screen.queryByRole("dialog")).toBeNull();
@@ -67,7 +71,11 @@ describe("survey invitations in the app chrome", () => {
 		renderRouteAt("/settings");
 
 		await user.click(
-			await screen.findByRole("button", { name: "Feedback, 1 open survey" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole(
+				"button",
+				{ name: "Product feedback, 1 open survey" },
+				ROUTE_RENDER_WAIT,
+			),
 		);
 
 		const item = await screen.findByRole("menuitem", { name: /Help improve practice feedback/ });

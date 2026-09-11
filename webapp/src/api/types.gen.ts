@@ -1462,7 +1462,7 @@ export type FeedbackApproval = {
 
 export type FeedbackItem = {
   account?: FeedbackAccountRef;
-  appVersion: string;
+  appVersion?: string;
   createdAt: Date;
   id: string;
   kind: 'FEEDBACK' | 'BUG';
@@ -11573,7 +11573,7 @@ export type ListProductSurveyInvitationsResponses = {
 
 export type ListProductSurveyInvitationsResponse = ListProductSurveyInvitationsResponses[keyof ListProductSurveyInvitationsResponses];
 
-export type RestoreProductSurveyData = {
+export type UndoProductSurveyDeclineData = {
   body?: never;
   path: {
     /**
@@ -11583,17 +11583,17 @@ export type RestoreProductSurveyData = {
     surveyId: string;
   };
   query?: never;
-  url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/dismissal';
+  url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/decline';
 };
 
-export type RestoreProductSurveyResponses = {
+export type UndoProductSurveyDeclineResponses = {
   /**
    * OK
    */
   200: unknown;
 };
 
-export type DismissProductSurveyData = {
+export type DeclineProductSurveyData = {
   body?: never;
   path: {
     /**
@@ -11603,10 +11603,10 @@ export type DismissProductSurveyData = {
     surveyId: string;
   };
   query?: never;
-  url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/dismissal';
+  url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/decline';
 };
 
-export type DismissProductSurveyResponses = {
+export type DeclineProductSurveyResponses = {
   /**
    * OK
    */

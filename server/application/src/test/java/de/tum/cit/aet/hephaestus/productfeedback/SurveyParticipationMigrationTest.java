@@ -24,10 +24,6 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
-/**
- * A submission stored answers as {@code {"<questionId>": "<string>"}} whatever the question type; the
- * copy into {@code product_survey_participation} has to produce the list {@link SurveyService} reads.
- */
 @Tag("database")
 class SurveyParticipationMigrationTest {
 

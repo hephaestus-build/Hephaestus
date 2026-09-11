@@ -26,9 +26,8 @@ How members are invited and how they answer or decline is described in
 [Product feedback and surveys](/user/product-feedback). From a survey's actions:
 
 - **Pause** makes a survey unavailable; **Resume** restores availability within the original
-  schedule. Resuming neither extends the end time nor resets responses or declines. Availability
-  is checked when a response is submitted, but pausing does not cancel submissions already in
-  progress.
+  schedule. Resuming neither extends the end time nor resets responses or declines. A member who
+  is mid-answer when you pause is refused on send and keeps their draft.
 - **End now** closes an open survey at the current time. Members are no longer invited; responses
   stay. A scheduled survey has not started, so it cannot be ended; delete it instead.
 - **Delete** removes the survey and every response and decline it collected. This cannot be undone.
@@ -44,8 +43,8 @@ ratings, and skipped questions are not zeroes. Do not reuse product responses fo
 
 ## Act on feedback
 
-**Inbox** lists feedback and bug reports, open ones first. Each shows who sent it, from which
-workspace and page, and their browser and Hephaestus version when the report included them. **Mark
+**Inbox** lists feedback and bug reports. Each shows who sent it, from which workspace, the page
+and browser when the sender chose to attach them, and the Hephaestus release that received it. **Mark
 resolved** moves an item out of the open list; **Reopen** brings it back. Nobody is notified either
 way, and there are no submission notifications, so check the inbox regularly and follow your team's
 process for acting on reports.
@@ -55,7 +54,7 @@ process for acting on reports.
 Submissions are linked to accounts and stored on your instance. Users can choose to attach the
 displayed page path and their browser's user agent; query parameters, page contents and logs are
 never attached, and the Hephaestus release that received the report is recorded either way.
-Unsubmitted drafts are lost on refresh, workspace change or sign-out. Feedback is limited to one
+Drafts never reach the server. Feedback is limited to one
 submission per account per minute. Each account can respond to a survey once; a survey records when
 its invitation was first shown to an account, so the results page can report a completion rate.
 

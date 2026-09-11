@@ -37,7 +37,7 @@ const summary = {
 	questions: [{ questionId: "improve", answered: 9, counts: [] }],
 } satisfies Wire<SurveySummary>;
 
-/** The JSON body of a request, as an object; the mutation cache types it as `unknown`. */
+/** The JSON body of a request, as an object; `Request.json()` returns `any`. */
 async function recordOf(request: Request): Promise<Record<string, unknown>> {
 	const body: unknown = await request.json();
 	return isRecord(body) ? body : {};

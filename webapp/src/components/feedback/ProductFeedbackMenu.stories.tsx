@@ -7,7 +7,7 @@ import { surveyInvitation } from "./product-survey-fixtures";
 import { ProductFeedbackMenu } from "./ProductFeedbackMenu";
 
 const meta = {
-	title: "Surveys/Product feedback menu",
+	title: "Product feedback/Header menu",
 	component: ProductFeedbackMenu,
 	args: { invitations: [surveyInvitation], onSendFeedback: fn(), onOpenSurvey: fn() },
 	decorators: [(Story) => <div className="flex justify-end p-4">{<Story />}</div>],
@@ -19,7 +19,7 @@ type Story = StoryObj<typeof meta>;
 /** The count on the trigger is the only signal; nothing opens until the member chooses. */
 export const WithInvitation: Story = {
 	play: async ({ canvas, args }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Feedback, 1 open survey" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Product feedback, 1 open survey" }));
 		const menu = within(await screen.findByRole("menu"));
 		await expectSettledVisible(menu.getByText(/4 questions · about 2 minutes/));
 		await userEvent.click(menu.getByRole("menuitem", { name: /Help improve practice feedback/ }));
@@ -30,7 +30,7 @@ export const WithInvitation: Story = {
 export const NoSurveys: Story = {
 	args: { invitations: [] },
 	play: async ({ canvas, args }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Feedback" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Product feedback" }));
 		const menu = within(await screen.findByRole("menu"));
 		await expectSettledVisible(menu.getByText("No open surveys."));
 		await userEvent.click(menu.getByRole("menuitem", { name: "Report a bug" }));

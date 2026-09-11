@@ -48,17 +48,19 @@ public class FeedbackController {
         return ResponseEntity.noContent().build();
     }
 
-    @PutMapping("/surveys/{surveyId}/dismissal")
-    @Operation(operationId = "dismissProductSurvey", summary = "Decline a survey for the current account")
+    @PutMapping("/surveys/{surveyId}/decline")
+    @Operation(operationId = "declineProductSurvey", summary = "Decline a survey for the current account")
     public ResponseEntity<Void> decline(WorkspaceContext workspace, @PathVariable UUID surveyId) {
         surveys.decline(surveyId, workspace.id(), CurrentAccount.requireId());
         return ResponseEntity.noContent().build();
     }
 
-    @DeleteMapping("/surveys/{surveyId}/dismissal")
-    @Operation(operationId = "restoreProductSurvey", summary = "Undo a decline without touching a submitted response")
-    public ResponseEntity<Void> restore(WorkspaceContext workspace, @PathVariable UUID surveyId) {
-        surveys.restore(surveyId, workspace.id(), CurrentAccount.requireId());
+    @DeleteMapping("/surveys/{surveyId}/decline")
+    @Operation(
+            operationId = "undoProductSurveyDecline",
+            summary = "Undo a decline; a submitted response is never touched")
+    public ResponseEntity<Void> undoDecline(WorkspaceContext workspace, @PathVariable UUID surveyId) {
+        surveys.undoDecline(surveyId, workspace.id(), CurrentAccount.requireId());
         return ResponseEntity.noContent().build();
     }
 

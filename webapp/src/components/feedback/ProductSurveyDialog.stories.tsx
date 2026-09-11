@@ -8,7 +8,7 @@ import { surveyInvitation } from "./product-survey-fixtures";
 import { ProductSurveyDialog } from "./ProductSurveyDialog";
 
 const meta = {
-	title: "Surveys/Product survey dialog",
+	title: "Product feedback/Survey dialog",
 	component: ProductSurveyDialog,
 	args: {
 		survey: surveyInvitation,
@@ -44,6 +44,7 @@ export const Default: Story = {
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expectSettledVisible(dialog.getByText(/4 questions · about 2 minutes/));
+		await expect(dialog.getByText(/Closes in 6 days/)).toBeVisible();
 		await expect(dialog.getByRole("button", { name: "Send answers" })).toBeDisabled();
 	},
 };

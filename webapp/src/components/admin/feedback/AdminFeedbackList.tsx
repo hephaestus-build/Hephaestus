@@ -42,7 +42,7 @@ export interface AdminFeedbackListProps {
 }
 
 const EMPTY_COPY: Record<FeedbackStatusFilter, { title: string; description: string }> = {
-	OPEN: { title: "Inbox zero", description: "Nothing is waiting for a reply." },
+	OPEN: { title: "Inbox zero", description: "Nothing is waiting." },
 	RESOLVED: { title: "No resolved feedback yet", description: "Resolved feedback moves here." },
 	ALL: { title: "No feedback yet", description: "Members can send feedback from the header." },
 };
@@ -50,8 +50,8 @@ const EMPTY_COPY: Record<FeedbackStatusFilter, { title: string; description: str
 const SKELETON_ROWS = 3;
 
 /**
- * Feedback and bug reports as they arrived, newest first. Resolving is bookkeeping for the
- * administrators — nobody is notified — so it is one press and reversible.
+ * Feedback and bug reports, one card each. Resolving is bookkeeping for the administrators —
+ * nobody is notified — so it is one press and reversible.
  */
 export function AdminFeedbackList({ state, pendingIds, onTriage }: AdminFeedbackListProps) {
 	if (state.status === "error") {

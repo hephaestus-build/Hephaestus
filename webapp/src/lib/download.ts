@@ -1,6 +1,6 @@
 /**
- * Hands text to the browser as a file download. An anchor with `download` is the only way to name
- * the file without a server round-trip; it has to be in the document for Firefox to honour the
+ * The export needs the bearer token, so it cannot be a plain link; the response is handed to the
+ * browser as a named file instead. The anchor has to be in the document for Firefox to honour the
  * click.
  */
 export function saveTextFile(text: string, filename: string, mimeType: string): void {

@@ -6804,9 +6804,9 @@ paths:
         declined
       tags:
       - feedback
-  /workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/dismissal:
+  /workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/decline:
     delete:
-      operationId: restoreProductSurvey
+      operationId: undoProductSurveyDecline
       parameters:
       - description: Workspace slug
         in: path
@@ -6824,11 +6824,11 @@ paths:
       responses:
         "200":
           description: OK
-      summary: Undo a decline without touching a submitted response
+      summary: Undo a decline; a submitted response is never touched
       tags:
       - feedback
     put:
-      operationId: dismissProductSurvey
+      operationId: declineProductSurvey
       parameters:
       - description: Workspace slug
         in: path
@@ -10302,7 +10302,6 @@ components:
         workspace:
           $ref: "#/components/schemas/FeedbackWorkspaceRef"
       required:
-      - appVersion
       - createdAt
       - id
       - kind

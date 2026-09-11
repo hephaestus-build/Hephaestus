@@ -8,30 +8,16 @@ Product feedback collects identified submissions for instance administrators. It
 practice feedback and never leaves the instance. What administrators and members see is in the
 [operator guidance](/admin/product-feedback) and the [user guide](/user/product-feedback); erasure
 ownership is in the [personal-data map](/admin/dsms/personal-data-map). The code is
-`server/application/src/main/java/de/tum/cit/aet/hephaestus/productfeedback/`.
-
-## Model
-
-A `Survey` is published once and its questions are not editable afterwards; `Survey.isOpenFor` is the
-one home of availability, derived from the schedule, the pause flag and the targeted workspace, and
-never stored.
-
-A `SurveyParticipation` is one row per survey and account, keyed by the unique constraint on
-`(survey_id, account_id)`: it starts as `INVITED` when the invitation is first shown, becomes
-`RESPONDED` or `DECLINED`, and an undone decline returns it to `INVITED`. Answers are stored as a
-list of `{questionId, text | choices | rating}`; `SurveyQuestions` validates them against the frozen
-questions and produces the per-question summary.
-
-`ProductFeedback` carries the message, the context the sender opted into, the release that received
-it and inbox triage. Names next to any record come from the `AccountSummaryQuery` and
-`WorkspaceSummaryQuery` SPIs, one batch per page.
+`server/application/src/main/java/de/tum/cit/aet/hephaestus/productfeedback/`; `Survey`,
+`SurveyParticipation` and `SurveyQuestions` carry the model's rules in their Javadoc.
 
 ## Boundaries
 
 - Workspace endpoints require membership and derive the account from authentication; availability
   and workspace targeting are checked on every write. Instance administrator endpoints own
   authoring, lifecycle, results, export and the inbox.
-- The webapp owns drafts and the invitation cache (`use-product-feedback.ts`); the generated client
-  is the only HTTP boundary. A response or decline is handled once per account, not once per
-  workspace.
+- Drafts live in the root route's feedback controls (`__root.tsx`) and are dropped on reload,
+  workspace switch and sign-out; the invitation cache is `use-product-feedback.ts`. The generated
+  client is the only HTTP boundary. A response or decline is handled once per account, not once
+  per workspace.
 - Feedback is rate-limited by the unique constraint on `(account_id, submission_minute)`.

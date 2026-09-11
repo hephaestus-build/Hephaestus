@@ -3,10 +3,10 @@ import { toast } from "sonner";
 
 import {
 	acknowledgeProductSurveyInvitationMutation,
-	dismissProductSurveyMutation,
+	declineProductSurveyMutation,
 	listProductSurveyInvitationsOptions,
 	listProductSurveyInvitationsQueryKey,
-	restoreProductSurveyMutation,
+	undoProductSurveyDeclineMutation,
 	submitInstanceProductFeedbackMutation,
 	submitProductSurveyResponseMutation,
 	submitWorkspaceProductFeedbackMutation,
@@ -82,13 +82,13 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 			toast.success("Thank you — your response was sent to this instance's administrators.");
 		},
 	});
-	const restore = useMutation({
-		...restoreProductSurveyMutation(),
+	const undoDecline = useMutation({
+		...undoProductSurveyDeclineMutation(),
 		mutationKey: SURVEY_DECISION,
 		retry: false,
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
-			toast.success("Survey restored. You can answer it from Feedback in the header.");
+			toast.success("Decline undone. The survey is back under Product feedback in the header.");
 		},
 		onError: () =>
 			toast.error(
@@ -96,14 +96,14 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 			),
 	});
 	const decline = useMutation({
-		...dismissProductSurveyMutation(),
+		...declineProductSurveyMutation(),
 		mutationKey: SURVEY_DECISION,
 		retry: false,
 		onSuccess: (_, variables) => {
 			removeFromCaches(variables.path.surveyId);
 			toast.success("Survey declined.", {
 				duration: 15000,
-				action: { label: "Undo", onClick: () => restore.mutate({ path: variables.path }) },
+				action: { label: "Undo", onClick: () => undoDecline.mutate({ path: variables.path }) },
 			});
 		},
 	});
@@ -111,7 +111,7 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 		!workspaceSlug || queryClient.isMutating({ mutationKey: SURVEY_DECISION }) > 0;
 	return {
 		query,
-		isPending: submit.isPending || decline.isPending || restore.isPending,
+		isPending: submit.isPending || decline.isPending || undoDecline.isPending,
 		error: submit.isError
 			? submissionError(submit.error)
 			: decline.isError

@@ -37,7 +37,7 @@ export const surveyQuestions = [
 export const surveyInvitation = {
 	id: "11111111-1111-1111-1111-111111111111",
 	title: "Help improve practice feedback",
-	description: "Three quick questions to decide what the next release should focus on.",
+	description: "Four quick questions to decide what the next release should focus on.",
 	questions: surveyQuestions,
 	endsAt: daysAfter(6),
 	seen: true,

@@ -84,12 +84,13 @@ class SurveyServiceTest {
     void shouldUndoADeclineButNeverAResponse() {
         participation.decline(7L, NOW);
 
-        service.restore(survey.getId(), 7L, 42L);
+        service.undoDecline(survey.getId(), 7L, 42L);
         assertThat(participation.getStatus()).isEqualTo(Status.INVITED);
         assertThat(participation.getDecidedAt()).isNull();
 
         participation.respond(new ObjectMapper().createArrayNode(), 7L, NOW);
-        assertThatThrownBy(() -> service.restore(survey.getId(), 7L, 42L)).isInstanceOf(EntityNotFoundException.class);
+        assertThatThrownBy(() -> service.undoDecline(survey.getId(), 7L, 42L))
+                .isInstanceOf(EntityNotFoundException.class);
         assertThat(participation.getStatus()).isEqualTo(Status.RESPONDED);
     }
 
@@ -102,7 +103,8 @@ class SurveyServiceTest {
         assertThatThrownBy(() -> service.decline(survey.getId(), 7L, 42L)).isInstanceOf(EntityNotFoundException.class);
         assertThatThrownBy(() -> service.markInvited(survey.getId(), 7L, 42L))
                 .isInstanceOf(EntityNotFoundException.class);
-        assertThatThrownBy(() -> service.restore(survey.getId(), 7L, 42L)).isInstanceOf(EntityNotFoundException.class);
+        assertThatThrownBy(() -> service.undoDecline(survey.getId(), 7L, 42L))
+                .isInstanceOf(EntityNotFoundException.class);
         assertThat(participation.getStatus()).isEqualTo(Status.INVITED);
     }
 }

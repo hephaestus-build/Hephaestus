@@ -104,15 +104,13 @@ const QUESTION_TYPES = Object.keys(QUESTION_TYPE_LABELS)
 
 const NO_ERRORS: SurveyDraftErrors = { questionErrors: [] };
 
-/** The `aria-describedby` for a field: its help text, plus its error only while it has one. */
 function describedBy(...ids: (string | false | undefined)[]): string | undefined {
 	return ids.filter(Boolean).join(" ") || undefined;
 }
 
 /**
  * A guarded drawer level — `webapp/AGENTS.md` § Guarded levels — that writes one survey. The
- * questions are frozen once published, so the preview tab shows exactly what members will get
- * before the one decision this level offers.
+ * preview tab renders the same form members will get.
  */
 export function AdminSurveyComposer({
 	nested,
@@ -220,7 +218,6 @@ export function AdminSurveyComposer({
 			setView("edit");
 			return;
 		}
-		// After dispatch, not before: `track` needs the promise the dispatch returns.
 		unsavedChanges.track(onSubmit(toCreateSurvey(draft, publishedAt)));
 	};
 

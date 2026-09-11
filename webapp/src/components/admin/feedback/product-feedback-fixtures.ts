@@ -9,7 +9,7 @@ export const bugReport = {
 	account: { id: 2, displayName: "Grace Hopper", email: "grace@example.org" },
 	workspace: { id: 7, slug: "acme", displayName: "Acme" },
 	pagePath: "/w/acme/practices/code-review",
-	userAgent: "Firefox 131 on macOS",
+	userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:131.0) Gecko/20100101 Firefox/131.0",
 	appVersion: "0.71.0",
 	createdAt: minutesBefore(40),
 } satisfies FeedbackItem;
@@ -41,7 +41,8 @@ export const resolvedBugReport = {
 	account: { id: 4, displayName: "Margaret Hamilton", email: "margaret@example.org" },
 	workspace: { id: 7, slug: "acme", displayName: "Acme" },
 	pagePath: "/login",
-	userAgent: "Chrome 129 on Windows",
+	userAgent:
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
 	appVersion: "0.69.0",
 	createdAt: daysBefore(12),
 	resolvedAt: daysBefore(10),

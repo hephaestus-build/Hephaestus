@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
     <!--
-        product_survey_submission is copied into product_survey_participation, not renamed: the
-        immutability policy in docs/contributor/database-migration.mdx requires the previous release
-        to boot against this schema, and it still reads the old table. The drop is listed there under
-        pending contractions.
+        product_survey_submission is copied into product_survey_participation, not renamed: a table
+        that shipped in a release is dropped only in the release after the one that stopped writing
+        it (docs/contributor/database-migration.mdx, Changelog immutability policy, rule 3). The drop
+        is listed there under pending contractions.
     -->
     <changeSet id="1789117764980-1" author="hephaestus">
         <createTable tableName="product_survey_participation">
@@ -48,11 +48,8 @@
         </rollback>
     </changeSet>
     <!--
-        A submission stored its answers as one object keyed by question id, every value a string; a
-        participation stores a list of {questionId, text | choices | rating}. The copy reshapes each
-        answer by the type of the question it answers, so the application reads copied rows through
-        the same code as new ones. A blank answer is dropped as the application drops it; a
-        submission without answers stays without answers.
+        Reshaped per question type so copied rows read through the same code as new ones; blank
+        answers are dropped as the application drops them.
     -->
     <changeSet id="1789117764980-4" author="hephaestus">
         <preConditions onFail="MARK_RAN">
@@ -81,15 +78,9 @@ ON CONFLICT (survey_id, account_id) DO NOTHING;
 ]]></sql>
         <rollback/>
     </changeSet>
-    <!--
-        app_version is NOT NULL and the rows already in the table have no release to record. The
-        default exists only so this statement satisfies the constraint; the next changeset drops it.
-    -->
     <changeSet id="1789117764980-5" author="hephaestus">
         <addColumn tableName="product_feedback">
-            <column name="app_version" type="VARCHAR(64)" defaultValue="unknown">
-                <constraints nullable="false"/>
-            </column>
+            <column name="app_version" type="VARCHAR(64)"/>
             <column name="user_agent" type="VARCHAR(500)"/>
             <column name="resolved_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
             <column name="resolved_by_account_id" type="BIGINT"/>
@@ -102,12 +93,6 @@ ON CONFLICT (survey_id, account_id) DO NOTHING;
         </rollback>
     </changeSet>
     <changeSet id="1789117764980-6" author="hephaestus">
-        <dropDefaultValue tableName="product_feedback" columnName="app_version" columnDataType="VARCHAR(64)"/>
-        <rollback>
-            <addDefaultValue tableName="product_feedback" columnName="app_version" columnDataType="VARCHAR(64)" defaultValue="unknown"/>
-        </rollback>
-    </changeSet>
-    <changeSet id="1789117764980-7" author="hephaestus">
         <addForeignKeyConstraint baseTableName="product_feedback" baseColumnNames="resolved_by_account_id" constraintName="sfk_product_feedback_resolver" referencedTableName="account" referencedColumnNames="id" onDelete="SET NULL"/>
         <rollback>
             <dropForeignKeyConstraint baseTableName="product_feedback" constraintName="sfk_product_feedback_resolver"/>

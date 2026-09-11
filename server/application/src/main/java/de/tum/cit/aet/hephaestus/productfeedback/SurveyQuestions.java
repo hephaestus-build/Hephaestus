@@ -141,7 +141,6 @@ final class SurveyQuestions {
         };
     }
 
-    /** Promoters (9–10) minus detractors (0–6), as a percentage of all ratings, rounded to a whole number. */
     private static int nps(List<Integer> ratings) {
         long promoters = ratings.stream().filter(r -> r >= 9).count();
         long detractors = ratings.stream().filter(r -> r <= 6).count();

@@ -97,7 +97,6 @@ export const ManyQuestions: Story = {
 		await expect(
 			screen.getByText("This survey has 6 questions; response rates drop sharply beyond 5."),
 		).toBeVisible();
-		// The first question cannot move up, the last cannot move down.
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Move question 1 up" }));
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Move question 6 down" }));
 
@@ -131,7 +130,6 @@ export const Preview: Story = {
 			"What slowed you down in your first week?",
 		);
 		await userEvent.click(screen.getByRole("tab", { name: "Preview" }));
-		// The preview is what a member gets: the estimate comes from the questions, not the draft.
 		await expectSettledVisible(await screen.findByRole("heading", { name: "Onboarding check-in" }));
 		await expect(screen.getByText("1 question · under a minute")).toBeVisible();
 		await expect(screen.getByText(/What slowed you down in your first week\?/)).toBeVisible();

@@ -68,7 +68,7 @@ public class SurveyAdminController {
     @Operation(operationId = "adminDeleteProductSurvey", summary = "Delete a survey and every response to it")
     @AuditExempt(
             reason =
-                    "irreversibly removes members' answers without recording who did it: the config-audit vocabulary has no survey type, and widening it is a schema change")
+                    "irreversibly removes members' answers; the actor is not recorded until the config-audit vocabulary has a survey type")
     public ResponseEntity<Void> delete(@PathVariable UUID surveyId) {
         service.delete(surveyId);
         return ResponseEntity.noContent().build();

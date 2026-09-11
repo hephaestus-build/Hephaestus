@@ -36,7 +36,9 @@ export function ProductFeedbackMenu({
 		<DropdownMenu>
 			<DropdownMenuTrigger
 				aria-label={
-					count > 0 ? `Feedback, ${count} open ${count === 1 ? "survey" : "surveys"}` : "Feedback"
+					count > 0
+						? `Product feedback, ${count} open ${count === 1 ? "survey" : "surveys"}`
+						: "Product feedback"
 				}
 				render={<Button variant="ghost" size="icon" className="relative" />}
 			>

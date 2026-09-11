@@ -7,7 +7,7 @@ import { surveyQuestions } from "./product-survey-fixtures";
 import { ProductSurveyForm } from "./ProductSurveyForm";
 
 const meta = {
-	title: "Surveys/Product survey form",
+	title: "Product feedback/Survey form",
 	component: ProductSurveyForm,
 	args: { questions: surveyQuestions, draft: {}, onDraftChange: fn() },
 	render: (args) => (

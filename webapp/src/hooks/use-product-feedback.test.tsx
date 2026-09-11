@@ -97,7 +97,7 @@ describe("product feedback wire contract", () => {
 			http.post("*/workspaces/acme/product-feedback/surveys/:id/responses", () =>
 				HttpResponse.json({ status: 409 }, { status: 409 }),
 			),
-			http.put("*/workspaces/acme/product-feedback/surveys/:id/dismissal", () =>
+			http.put("*/workspaces/acme/product-feedback/surveys/:id/decline", () =>
 				HttpResponse.error(),
 			),
 		);
@@ -139,20 +139,20 @@ describe("product feedback wire contract", () => {
 		);
 	});
 
-	it("undoes an explicit decline through the dismissal resource", async () => {
+	it("undoes a decline from the toast", async () => {
 		let availableSurveys = [surveyInvitation];
-		let restoredId: string | readonly string[] | undefined;
+		let undoneId: string | readonly string[] | undefined;
 		server.use(
 			http.get("*/workspaces/acme/product-feedback/surveys", () =>
 				HttpResponse.json(availableSurveys),
 			),
-			http.put("*/workspaces/acme/product-feedback/surveys/:id/dismissal", () => {
+			http.put("*/workspaces/acme/product-feedback/surveys/:id/decline", () => {
 				availableSurveys = [];
 				return new HttpResponse(null, { status: 204 });
 			}),
-			http.delete("*/workspaces/acme/product-feedback/surveys/:id/dismissal", ({ params }) => {
+			http.delete("*/workspaces/acme/product-feedback/surveys/:id/decline", ({ params }) => {
 				availableSurveys = [surveyInvitation];
-				restoredId = params.id;
+				undoneId = params.id;
 				return new HttpResponse(null, { status: 204 });
 			}),
 		);
@@ -165,7 +165,7 @@ describe("product feedback wire contract", () => {
 		});
 		await userEvent.click(await screen.findByRole("button", { name: "Undo" }));
 		await waitFor(() => expect(result.current.query.data).toHaveLength(1));
-		expect(restoredId).toBe(surveyInvitation.id);
+		expect(undoneId).toBe(surveyInvitation.id);
 	});
 
 	it("marks an invitation as seen in every cached workspace without refetching", async () => {

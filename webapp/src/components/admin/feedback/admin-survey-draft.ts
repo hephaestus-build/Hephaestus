@@ -161,7 +161,6 @@ export function hasDraftErrors(errors: SurveyDraftErrors): boolean {
 	);
 }
 
-/** `publishedAt` is the moment of the submit, which stands in for a blank start. */
 export function toCreateSurvey(draft: SurveyDraft, publishedAt: Date): CreateSurvey {
 	return {
 		title: draft.title.trim(),
