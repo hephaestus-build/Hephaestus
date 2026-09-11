@@ -118,7 +118,7 @@ public class ReleaseCheckService {
     private static State apply(State current, ReleaseCheckClient.Outcome outcome, Instant now, boolean manual) {
         return switch (outcome) {
             case Found found -> completed(now, new Answer(found.release(), found.etag()));
-            case NotModified ignored ->
+            case NotModified() ->
                 current.answer() == null
                         // 304 to a request that sent no ETag: GitHub answered a question nobody asked.
                         ? failed(current, now, ReleaseCheckFailure.MALFORMED, null, manual)
