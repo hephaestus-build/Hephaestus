@@ -27,6 +27,7 @@ class CatalogContextPathConsistencyTest extends BaseUnitTest {
     /** Workspace-relative files the ContentSources actually write under {@code inputs/context/}. */
     private static final Set<String> REAL_CONTEXT_FILES = Set.of(
             "metadata.json",
+            "commits.json",
             "comments.json",
             "diff.patch",
             "diff_summary.md",

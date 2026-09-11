@@ -22,6 +22,7 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
     private static final Set<String> STAGED_INPUT_PATHS = new LinkedHashSet<>(java.util.List.of(
             // Pull request
             SandboxLayout.CONTEXT_PREFIX + "metadata.json",
+            SandboxLayout.CONTEXT_PREFIX + "commits.json",
             SandboxLayout.CONTEXT_PREFIX + "comments.json",
             SandboxLayout.CONTEXT_PREFIX + "diff.patch",
             SandboxLayout.CONTEXT_PREFIX + "diff_stat.txt",

@@ -278,7 +278,10 @@ of no-build dependency and JDK guesses. The single-use Gradle process runs insid
 neither cached classes nor a pre-existing daemon can bypass project compilation. Gradle's own
 generated version-catalog helpers, outside the project source tree, need not be recompiled or
 extracted on a cache hit. This compilation produces analysis inputs only: the packaged server
-remains owned by the build-once job. Actions and JavaScript/TypeScript retain no-build analysis.
+remains owned by the build-once job. Its explicit `codeqlExtraction=true` Gradle property skips
+the duplicate ErrorProne/NullAway pass only for analysis compilation. Normal builds and tests keep
+NullAway enabled by default; javac warnings, annotation processing and CodeQL queries are unchanged.
+Actions and JavaScript/TypeScript retain no-build analysis.
 
 `.github/workflows/codeql.yml` runs CodeQL under advanced setup: only advanced setup reads a
 committed config file, and `.github/codeql/codeql-config.yml` excludes `security/semgrep/**`,
