@@ -195,13 +195,16 @@ jobs:
         run: >-
           node scripts/render-preview-comment.ts storybook webapp/storybook-static
           "https://$PREVIEW_URL"
-          ${{ github.event.pull_request.base.sha }} "$RUNNER_TEMP/storybook-preview.md"
+          ${{ github.event.pull_request.base.sha }} "$RUNNER_TEMP/storybook-preview.json"
       - name: Publish Storybook preview links
         if: steps.storybook_preview.outcome == 'success'
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PREVIEW_COMMENT_PATH: ${{ runner.temp }}/storybook-preview.json
         with:
-          header: storybook-preview
-          path: ${{ runner.temp }}/storybook-preview.md
+          script: |
+            const { publishPreviewComments } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/publish-preview-comments.ts`);
+            await publishPreviewComments({ github, context, kind: "storybook", path: process.env.PREVIEW_COMMENT_PATH });
       - name: Create Storybook status check
         if: >-
           success() && ((github.event_name == 'pull_request' && steps.storybook_preview.outcome == 'success') ||

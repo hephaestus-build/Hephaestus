@@ -767,7 +767,10 @@ void describe("CI contract", () => {
 		assert.match(storybook, /surge \.\/webapp\/storybook-static/);
 		assert.match(storybook, /render-preview-comment\.ts storybook webapp\/storybook-static/);
 		assert.match(storybook, /github\.event\.pull_request\.base\.sha/);
-		assert.match(storybook, /path: \$\{\{ runner\.temp \}\}\/storybook-preview\.md/);
+		assert.match(
+			storybook,
+			/PREVIEW_COMMENT_PATH: \$\{\{ runner\.temp \}\}\/storybook-preview\.json/,
+		);
 		assert.match(storybook, /name: Create Storybook status check\s+if: >-\s+success\(\)/);
 	});
 
@@ -782,7 +785,32 @@ void describe("CI contract", () => {
 		assert.match(buildPreview, /fetch-depth: 0/);
 		assert.match(buildPreview, /render-preview-comment\.ts docs docs\/\.docusaurus/);
 		assert.match(buildPreview, /github\.event\.pull_request\.base\.sha/);
-		assert.match(job(docs, "preview"), /path: preview-comment\/docs-preview-comment\.md/);
+		assert.match(
+			job(docs, "preview"),
+			/PREVIEW_COMMENT_PATH: preview-comment\/docs-preview-comment\.json/,
+		);
+	});
+
+	void test("shares a continuation-aware publisher across both previews and teardown", async () => {
+		for (const [file, kind] of [
+			["ci-quality-gates.yml", "storybook"],
+			["cd-docs.yml", "docs"],
+		]) {
+			const source = await readFile(`.github/workflows/${file}`, "utf8");
+			assert.match(source, /scripts\/publish-preview-comments\.ts/);
+			assert.ok(source.includes(`kind: "${kind}", path: process.env.PREVIEW_COMMENT_PATH`));
+		}
+		const docs = parseDocument(await readFile(".github/workflows/cd-docs.yml", "utf8"));
+		for (const dependency of [
+			"scripts/publish-preview-comments.ts",
+			"scripts/lib/preview-comment.ts",
+		]) {
+			assert.ok(String(docs.getIn(["on", "pull_request", "paths"])).includes(dependency));
+		}
+		const teardown = await readFile(".github/workflows/cd-docs-teardown.yml", "utf8");
+		assert.match(teardown, /scripts\/publish-preview-comments\.ts/);
+		assert.match(teardown, /for \(const kind of \["docs", "storybook"\]\)/);
+		assert.match(teardown, /publishPreviewComments\(\{ github, context, kind \}\)/);
 	});
 
 	void test("routes tooling-only changes away from server infrastructure", async () => {
