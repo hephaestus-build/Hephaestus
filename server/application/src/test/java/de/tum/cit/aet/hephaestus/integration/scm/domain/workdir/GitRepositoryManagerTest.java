@@ -684,13 +684,13 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("skips a binary blob without counting it against any bound or ending the walk")
+        @DisplayName("skips a binary blob without counting it against the size bound or ending the walk")
         void shouldSkipABinaryBlobWithoutCountingItOrEndingTheWalk() throws Exception {
             DataSize bound = DataSize.ofKilobytes(64);
             manager = createManager(true, 20_000, bound, bound);
             try (Git sourceGit = createSourceRepo()) {
                 String source = "x\n".repeat(RawText.getBufferSize());
-                Files.write(sourceRepoPath.resolve("image.png"), new byte[(int) bound.toBytes() + 1]);
+                Files.write(sourceRepoPath.resolve("image.png"), new byte[(int) bound.toBytes()]);
                 Files.writeString(sourceRepoPath.resolve("src.java"), source);
                 sourceGit.add().addFilepattern(".").call();
                 String sha = commit(sourceGit, "Add an image beside a source file");

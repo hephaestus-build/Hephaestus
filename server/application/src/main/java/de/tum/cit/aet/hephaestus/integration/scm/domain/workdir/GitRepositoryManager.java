@@ -753,9 +753,9 @@ public class GitRepositoryManager {
      * {@link GitTreeSnapshot#limitations()} and makes {@link GitTreeSnapshot#complete()} false, so nothing
      * downstream can claim something is absent from a repository it only partly saw.
      *
-     * <p>A binary blob is skipped and not counted against the bounds: a practice review reads source, and
-     * an image or an archive shows it nothing. Nothing of a rejected blob reaches disk — its size comes
-     * from the object database, and the head the binary rule reads is held in memory.
+     * <p>A binary blob is skipped and not counted against the total-size bound: a practice review reads
+     * source, and an image or an archive shows it nothing. Nothing of a rejected blob reaches disk — its
+     * size comes from the object database, and the head the binary rule reads is held in memory.
      *
      * <p>Git handles are opened and closed entirely within this call rather than returned as lazy readers,
      * which would leave an {@code ObjectReader} and the repository read lock open across the staging
@@ -838,21 +838,22 @@ public class GitRepositoryManager {
                             }
                             ObjectId blobId = treeWalk.getObjectId(0);
                             long blobSize = reader.getObjectSize(blobId, Constants.OBJ_BLOB);
+                            if (blobSize > maxFileBytes) {
+                                // Never opened, not even to sniff it: JGit materialises a deltified object
+                                // in memory whatever its size. One outsized blob does not end the walk,
+                                // since dropping the rest of the tree with it would cost the review the
+                                // source it came for.
+                                limitations.add(TREE_LIMITATION_FILE_TOO_LARGE);
+                                log.debug("Skipping oversized file: path={}, size={}", sourcePath, blobSize);
+                                continue;
+                            }
                             Path target = stagingDir.resolve(sourcePath);
                             try (InputStream blob =
                                     reader.open(blobId, Constants.OBJ_BLOB).openStream()) {
-                                // Sniffed before either size bound: a skipped blob must not end the walk,
-                                // and an oversized image is a binary, not missing source.
+                                // Sniffed before the total-size bound: a skipped blob must not end the walk.
                                 byte[] head = blob.readNBytes(RawText.getBufferSize());
                                 if (RawText.isBinary(head, head.length, head.length >= blobSize)) {
                                     limitations.add(TREE_LIMITATION_BINARY);
-                                    continue;
-                                }
-                                if (blobSize > maxFileBytes) {
-                                    // One outsized blob does not end the walk: dropping the rest of the
-                                    // tree with it would cost the review the source it came for.
-                                    limitations.add(TREE_LIMITATION_FILE_TOO_LARGE);
-                                    log.debug("Skipping oversized file: path={}, size={}", sourcePath, blobSize);
                                     continue;
                                 }
                                 if (totalBytes + blobSize > maxTotalBytes) {
