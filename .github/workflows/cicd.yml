@@ -539,10 +539,53 @@ jobs:
           # A re-run of failed jobs keeps this artifact; a re-run of all jobs replaces it.
           overwrite: true
 
+  # Image policy has one advisory set per attempt. Failed-job reruns retain the producer's
+  # artifact ID; rerunning every job creates a new snapshot. Java identification is separate.
+  vulnerability-database:
+    name: "Image advisory database"
+    needs: [detect-changes]
+    if: |
+      needs.detect-changes.outputs.should_skip != 'true' && (
+        needs.detect-changes.outputs.release-preflight == 'true' ||
+        needs.detect-changes.outputs.release-images == 'true' ||
+        (needs.detect-changes.outputs.publishable == 'true' && (
+          needs.detect-changes.outputs.all-images == 'true' ||
+          needs.detect-changes.outputs.application-server-image == 'true' ||
+          needs.detect-changes.outputs.supported-host-smoke == 'true' ||
+          needs.detect-changes.outputs.webapp-image == 'true' ||
+          needs.detect-changes.outputs.agent-images == 'true' ||
+          needs.detect-changes.outputs.postgres-image == 'true' ||
+          needs.detect-changes.outputs.docker-config == 'true'
+        ))
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      artifact-id: ${{ steps.snapshot.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: ./.github/actions/setup-release-security-tools
+        with:
+          install-syft: "false"
+      - uses: ./.github/actions/download-trivy-db
+        id: database
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        id: snapshot
+        with:
+          name: trivy-db-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.database.outputs.database-directory }}
+          if-no-files-found: error
+          retention-days: 1
+
   application-server-image:
     name: "App Server image"
-    needs: [detect-changes, server-package]
-    if: needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'
+    needs: [detect-changes, server-package, vulnerability-database]
+    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.server-package.result == 'success' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') }}
     uses: ./.github/workflows/reusable-docker-build.yml
     permissions:
       contents: read
@@ -551,6 +594,7 @@ jobs:
       attestations: write
       artifact-metadata: write
     with:
+      database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
       image-name: "hephaestus-build/application-server"
       use-buildpacks: true
       application-artifact: server-build-${{ github.run_id }}
@@ -577,8 +621,9 @@ jobs:
 
   Security:
     uses: ./.github/workflows/ci-security-scan.yml
-    needs: [detect-changes]
+    needs: [detect-changes, vulnerability-database]
     if: |
+      !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
       needs.detect-changes.outputs.should_skip != 'true' && (
         needs.detect-changes.outputs.any-code == 'true' ||
@@ -590,6 +635,7 @@ jobs:
       contents: read
       security-events: write
     with:
+      database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       release_images_changed: ${{ (needs.detect-changes.outputs.release-images == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
 
@@ -629,11 +675,12 @@ jobs:
       SENTRY_AUTH_TOKEN: ${{ github.event_name == 'push' && secrets.SENTRY_AUTH_TOKEN || '' }}
       SENTRY_ORG: ${{ github.event_name == 'push' && secrets.SENTRY_ORG || '' }}
       SENTRY_PROJECT: ${{ github.event_name == 'push' && secrets.SENTRY_PROJECT || '' }}
-    needs: [detect-changes]
+    needs: [detect-changes, vulnerability-database]
     # Same-repository previews require every image at the PR head tag; unchanged images are aliased
     # here and the application image is built by Build. A fork and a merge group have no preview, so
     # their image builds stay path-filtered.
     if: |
+      !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
       needs.detect-changes.outputs.should_skip != 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.previews == 'true' ||
@@ -647,6 +694,7 @@ jobs:
       attestations: write
       artifact-metadata: write
     with:
+      database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
       single_arch: ${{ needs.detect-changes.outputs.single-arch }}
@@ -716,8 +764,8 @@ jobs:
   # release-management.mdx owns the evidence contract.
   Release-preflight:
     name: "Release evidence preflight"
-    needs: [detect-changes, application-server-image, Docker]
-    if: needs.detect-changes.outputs.release-preflight == 'true'
+    needs: [detect-changes, application-server-image, Docker, vulnerability-database]
+    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.application-server-image.result == 'success' && needs.Docker.result == 'success' && (needs.detect-changes.outputs.release-preflight == 'true') }}
     timeout-minutes: 45
     runs-on: ubuntu-latest
     permissions:
@@ -739,6 +787,7 @@ jobs:
       - uses: ./.github/actions/download-trivy-db
         with:
           max-age-hours: "24"
+          database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
           java-db: "true"
 
       - uses: ./.github/actions/ghcr-login
@@ -793,7 +842,7 @@ jobs:
     permissions:
       actions: read
       statuses: write
-    needs: [detect-changes, gradle-wrapper, workflow-lint, zizmor, CodeQL, Quality, server-package, application-server-image, Build, Security, Test, Changesets, Compose, Docker, Supported-host-smoke, Release-preflight]
+    needs: [detect-changes, vulnerability-database, gradle-wrapper, workflow-lint, zizmor, CodeQL, Quality, server-package, application-server-image, Build, Security, Test, Changesets, Compose, Docker, Supported-host-smoke, Release-preflight]
     if: always()
     steps:
       - name: Generate workflow timeline

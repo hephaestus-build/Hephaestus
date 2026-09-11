@@ -10,6 +10,10 @@ on:
       SENTRY_PROJECT:
         required: false
     inputs:
+      database-artifact:
+        description: "Immutable advisory database artifact ID selected by this CI run"
+        type: string
+        required: true
       scan-images:
         description: "Scan published images here unless the caller requires complete release evidence instead."
         type: boolean
@@ -72,6 +76,7 @@ jobs:
       SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
       SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
     with:
+      database-artifact: ${{ inputs.database-artifact }}
       image-name: "hephaestus-build/webapp"
       docker-file: "./webapp/Dockerfile"
       docker-context: "."
@@ -101,6 +106,7 @@ jobs:
       attestations: write
       artifact-metadata: write
     with:
+      database-artifact: ${{ inputs.database-artifact }}
       image-name: "hephaestus-build/agent-pi"
       docker-file: "./docker/agents/pi/Dockerfile"
       docker-context: "./docker/agents"
@@ -129,6 +135,7 @@ jobs:
       attestations: write
       artifact-metadata: write
     with:
+      database-artifact: ${{ inputs.database-artifact }}
       image-name: "hephaestus-build/postgres"
       docker-file: "./docker/postgres/Dockerfile"
       docker-context: "./docker/postgres"
