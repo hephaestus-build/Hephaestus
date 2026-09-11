@@ -6,4 +6,4 @@ Workspace owners can welcome new members with team guidance and required Slack o
 
 Owners can classify models and configure separate assignments for each processing location. First-visit guidance is optional and starts hidden; enabling it requires members to choose before new personal AI activity. Hiding it again never clears preferences or restores AI permission. Existing feedback and conversation history remain readable; workspace membership is unchanged.
 
-Member setup guides you through your AI choice and connected accounts without leaving you on a settings form. Saved choices survive Back, changed requirements can be refreshed and retried, and finishing setup returns you to the workspace page you originally opened.
+Member setup is one page in the same voice as sign-in setup: Heph explains what your choice changes, the three answers are presented equally, and required account links sit below. A link that is unavailable never holds you up, an error keeps your selection, and finishing returns you to the page you originally opened. You can change your AI choice at any time from the sidebar.

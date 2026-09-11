@@ -185,6 +185,24 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldFinishWhenRequiredAccountIsUnavailable() {
+        var workspace = member();
+        var policy = enabledPolicy();
+        policy.setRequiredConnectionIds(List.of(9L));
+        var row = new WorkspaceMemberOnboarding();
+        row.setWorkspace(workspace);
+        row.setAccountId(10L);
+        row.setAiChoice(MemberAiChoice.NO_AI);
+        when(members.findByWorkspace_IdAndAccountId(1L, 10L)).thenReturn(Optional.of(row));
+        when(links.options(1L, 10L, List.of(9L)))
+                .thenReturn(List.of(new WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO(
+                        9L, "Slack", "SLACK", null, null, true, false, false)));
+        service.complete(context, 10L, 3);
+        assertThat(row.getCompletedAt()).isEqualTo(NOW);
+        verify(members).save(row);
+    }
+
+    @Test
     void shouldFinishWithNoAiAndPersistWelcomeIndependently() {
         var workspace = member();
         enabledPolicy();

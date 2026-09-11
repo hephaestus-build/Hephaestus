@@ -100,8 +100,10 @@ class WorkspaceOnboardingService {
         var member = members.findByWorkspace_IdAndAccountId(context.id(), accountId)
                 .orElseThrow(() -> conflict("Choose your AI preference first; No AI is always available."));
         if (member.getAiChoice() == null) throw conflict("Choose your AI preference first; No AI is always available.");
+        // A required link the workspace cannot offer right now is the owner's to repair; it never
+        // holds a member's setup open.
         if (links.options(context.id(), accountId, policy.getRequiredConnectionIds()).stream()
-                .anyMatch(link -> link.required() && !link.linked()))
+                .anyMatch(link -> link.required() && link.available() && !link.linked()))
             throw conflict("Connect the required workspace accounts before finishing.");
         member.setWelcomedAt(clock.instant());
         member.setCompletedAt(clock.instant());
