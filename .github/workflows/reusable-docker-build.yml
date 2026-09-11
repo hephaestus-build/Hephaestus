@@ -117,6 +117,7 @@ jobs:
         with:
           driver: ${{ inputs.use-buildpacks && 'docker' || 'docker-container' }}
 
+      # Caller-selected registry, not GHCR-only; see ci-cd.mdx § Shared setup actions.
       - name: Log in to Container Registry
         if: inputs.publish
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -354,6 +355,7 @@ jobs:
           pattern: digests-${{ steps.prep.outputs.image_name }}-*
           merge-multiple: true
 
+      # Caller-selected registry, not GHCR-only; see ci-cd.mdx § Shared setup actions.
       - name: Log in to Container Registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -460,6 +462,7 @@ jobs:
         with:
           install-syft: "false"
 
+      # Caller-selected registry, not GHCR-only; see ci-cd.mdx § Shared setup actions.
       - name: Log in to Container Registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
