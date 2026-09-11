@@ -1,7 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 
+import { cn } from "cn";
 import { type StatusDef, statusToneClass } from "@/components/practice-vocabulary/status-def";
-import { cn } from "@/lib/utils";
 
 export interface ReviewRowProps {
 	status: StatusDef;

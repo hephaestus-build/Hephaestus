@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import {
 	type DeliveryFacts,
@@ -6,7 +7,6 @@ import {
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
 
 export type FeedbackBodyFeedback = DeliveryFacts & { body?: string };
 

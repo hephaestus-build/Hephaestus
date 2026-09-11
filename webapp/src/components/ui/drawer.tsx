@@ -5,7 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
 import { createContext, useContext } from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 type DrawerContextProps = {
 	hasSnapPoints: boolean;

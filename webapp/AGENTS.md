@@ -274,8 +274,8 @@ Never re-invent `role === "ADMIN"`; use the shared pieces:
 
 ## Styling
 
-Tailwind utilities composed with `cn()` (`@/lib/utils`), a direct re-export from the `cn` package.
-Keep this registry-configured entry point for class composition; it owns no custom merge logic.
+Compose Tailwind utilities with `import { cn } from "cn"` directly; do not add a local wrapper.
+`components.json` sets `aliases.utils` to `cn` so registry installs use the same package import.
 Prefer a semantic token from the `--color-*` block in `src/styles.css` over a hard-coded value;
 `text-muted-foreground`, `text-foreground`, `bg-background` and `border-border` carry most of the tree.
 Read that block rather than guessing a name.

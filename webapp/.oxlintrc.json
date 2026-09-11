@@ -427,10 +427,9 @@
 		// `AGENTS.md` § Testing states the query priority. A `data-testid` skips straight past it, and
 		// the accessible name it stands in for is the thing a screen reader needs anyway.
 		"react/forbid-dom-props": ["error", { "forbid": ["data-testid"] }],
-		// `cn()` is re-exported from `@/lib/utils`; see `AGENTS.md` § Styling. Keep application
-		// class composition on that entry point rather than restoring the previous dependencies.
-		// Every override that sets `no-restricted-imports` restates these restrictions: options
-		// replace rather than merge. The registry entry point needs no exception for a re-export.
+		// Import `cn()` directly from `cn`; see `AGENTS.md` § Styling. Do not restore the
+		// previous class-composition dependencies. Every override that sets `no-restricted-imports`
+		// restates these restrictions because options replace rather than merge.
 		"no-restricted-imports": [
 			"error",
 			{
@@ -441,8 +440,8 @@
 						"allowTypeImports": true,
 						"message": "React Compiler memoises at build time; `ref` is a plain prop in React 19."
 					},
-					{ "name": "clsx", "message": "Compose classes with `cn()` from `@/lib/utils`." },
-					{ "name": "tailwind-merge", "message": "Compose classes with `cn()` from `@/lib/utils`." }
+					{ "name": "clsx", "message": "Compose classes with `cn()` from `cn`." },
+					{ "name": "tailwind-merge", "message": "Compose classes with `cn()` from `cn`." }
 				]
 			}
 		],
@@ -490,10 +489,10 @@
 								"allowTypeImports": true,
 								"message": "React Compiler memoises at build time; `ref` is a plain prop in React 19."
 							},
-							{ "name": "clsx", "message": "Compose classes with `cn()` from `@/lib/utils`." },
+							{ "name": "clsx", "message": "Compose classes with `cn()` from `cn`." },
 							{
 								"name": "tailwind-merge",
-								"message": "Compose classes with `cn()` from `@/lib/utils`."
+								"message": "Compose classes with `cn()` from `cn`."
 							}
 						],
 						"patterns": [
@@ -523,10 +522,10 @@
 								"allowTypeImports": true,
 								"message": "React Compiler memoises at build time; `ref` is a plain prop in React 19."
 							},
-							{ "name": "clsx", "message": "Compose classes with `cn()` from `@/lib/utils`." },
+							{ "name": "clsx", "message": "Compose classes with `cn()` from `cn`." },
 							{
 								"name": "tailwind-merge",
-								"message": "Compose classes with `cn()` from `@/lib/utils`."
+								"message": "Compose classes with `cn()` from `cn`."
 							}
 						],
 						"patterns": [
@@ -558,10 +557,10 @@
 								"allowTypeImports": true,
 								"message": "React Compiler memoises at build time; `ref` is a plain prop in React 19."
 							},
-							{ "name": "clsx", "message": "Compose classes with `cn()` from `@/lib/utils`." },
+							{ "name": "clsx", "message": "Compose classes with `cn()` from `cn`." },
 							{
 								"name": "tailwind-merge",
-								"message": "Compose classes with `cn()` from `@/lib/utils`."
+								"message": "Compose classes with `cn()` from `cn`."
 							}
 						],
 						"patterns": [

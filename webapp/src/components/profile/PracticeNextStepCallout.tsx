@@ -1,6 +1,6 @@
+import { cn } from "cn";
 import { LightbulbIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
 
 export interface PracticeNextStepCalloutProps {
 	label: string;

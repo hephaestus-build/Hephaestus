@@ -2,6 +2,7 @@ import { TagIcon } from "@primer/octicons-react";
 import { Link } from "@tanstack/react-router";
 import { LogOut, Settings, User } from "lucide-react";
 
+import { cn } from "cn";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { ModeToggle } from "@/components/core/ModeToggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -19,7 +20,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getInitials } from "@/lib/avatar";
 import { firstNonBlank } from "@/lib/text";
-import { cn } from "@/lib/utils";
 import { type EnvironmentTone, resolveHeaderBadge } from "@/lib/version";
 
 const ENV_DOT: Record<EnvironmentTone, string> = {

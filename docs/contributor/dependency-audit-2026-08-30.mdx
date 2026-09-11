@@ -37,8 +37,8 @@ hooks live in `.vite-hooks/`. The 2026-08-30 dispositions above stand as recorde
 
 ## Update — 2026-09-11
 
-The SPA now uses [`cn`](https://github.com/shadcn-ui/cn) through its registry-configured styling entry
-point instead of maintaining a `clsx` + `tailwind-merge` wrapper. The docs package's unused direct
+The SPA now imports [`cn`](https://github.com/shadcn-ui/cn) directly instead of maintaining a
+`clsx` + `tailwind-merge` wrapper. The shadcn registry configuration also targets the package directly. The docs package's unused direct
 `clsx` dependency is also removed: no docs source imports it, and no direct dependency requires it as
 a peer. The earlier disposition remains the historical audit result, not the current dependency map.
 

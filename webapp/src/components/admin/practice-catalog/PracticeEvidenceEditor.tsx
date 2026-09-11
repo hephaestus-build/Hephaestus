@@ -2,6 +2,7 @@ import deepEqual from "fast-deep-equal";
 import { ChevronRightIcon, RotateCcwIcon } from "lucide-react";
 import { useState } from "react";
 
+import { cn } from "cn";
 import type {
 	PracticeEvidenceRequirement,
 	PracticeEvidenceSourceOption,
@@ -25,7 +26,6 @@ import {
 	FieldSet,
 } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { cn } from "@/lib/utils";
 
 /**
  * EXHAUSTIVE is deliberately not a segment here: it is REQUIRED plus one further claim, and it is

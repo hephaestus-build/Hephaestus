@@ -1,6 +1,6 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
 
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 /** The `auth` surface renders no site footer, so sign-in and onboarding carry these themselves. */
 export function LegalLinks({ className }: { className?: string }) {

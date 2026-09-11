@@ -1,11 +1,11 @@
 import { Sparkles, SquareArrowOutUpRight, SquarePen, X } from "lucide-react";
 import { type RefObject, useEffect, useRef, useState } from "react";
 
+import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 
 import { HephIcon } from "@/components/brand/HephIcon";
 

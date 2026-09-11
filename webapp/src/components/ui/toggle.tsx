@@ -1,7 +1,7 @@
 import { Toggle as TogglePrimitive } from "@base-ui/react/toggle";
 import { cva, type VariantProps } from "class-variance-authority";
 
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 // One state, one channel, so no two of them can look alike: hover owns the background, selection owns
 // the border colour and the type weight, focus-visible owns the ring, disabled owns the opacity.

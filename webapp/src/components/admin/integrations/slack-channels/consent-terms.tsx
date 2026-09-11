@@ -1,8 +1,8 @@
 import { BanIcon, CheckIcon, ClockIcon, type LucideIcon, PauseIcon } from "lucide-react";
 
+import { cn } from "cn";
 import type { SlackMonitoredChannel } from "@/api/types.gen";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
 /** The consent lifecycle states, sourced from the generated DTO so they never drift. */
 export type SlackConsentState = SlackMonitoredChannel["consentState"];

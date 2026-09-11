@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cn } from "./utils";
+import { cn } from "cn";
 
 describe("cn", () => {
 	it("joins conditional and nested inputs while resolving conflicts", () => {

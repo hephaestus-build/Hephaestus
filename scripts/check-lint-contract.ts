@@ -89,7 +89,7 @@ const fixtures: Fixture[] = [
 		source: 'const unsafe: string = JSON.parse("null"); void unsafe;',
 	},
 	{
-		path: "src/lib/utils.ts",
+		path: "src/lib/lint-contract-class-join.ts",
 		code: "eslint(no-restricted-imports)",
 		source: 'export { clsx } from "clsx";',
 	},

@@ -1,5 +1,6 @@
 import { CircleAlert, Copy, ShieldCheck } from "lucide-react";
 
+import { cn } from "cn";
 import type { CatalogPracticePreview, PracticeDefinitionOptions } from "@/api/types.gen";
 import { PracticeDefinitionPreview } from "@/components/admin/practice-adoption/PracticeDefinitionPreview";
 import { GroupPill } from "@/components/admin/practice-catalog/GroupPill";
@@ -32,7 +33,6 @@ import {
 	ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
 
 export type PracticeAdoptionState = PanelState<{
 	preview: CatalogPracticePreview;
