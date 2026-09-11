@@ -18,6 +18,7 @@ import java.util.Objects;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 
 class CredentialRotationServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
@@ -38,15 +39,15 @@ class CredentialRotationServiceIntegrationTest extends AbstractWorkspaceIntegrat
         User owner = persistUser("rotation-owner-" + System.nanoTime());
         Workspace workspace = createWorkspace(
                 "rotation-ws-" + System.nanoTime(), "Rotation Test", "rotation-org", AccountType.ORG, owner);
-        CredentialBundleConverter oldConverter = new CredentialBundleConverter(OLD_KEY, "test");
-        CredentialBundleConverter rotatingConverter = new CredentialBundleConverter(NEW_KEY, 2, OLD_KEY, 1, "test");
+        CredentialBundleConverter oldConverter = new CredentialBundleConverter(OLD_KEY, false);
+        CredentialBundleConverter rotatingConverter = new CredentialBundleConverter(NEW_KEY, 2, OLD_KEY, 1, false);
 
         Connection corrupt = connectionRepository.save(connection(workspace, "corrupt"));
         corrupt.setCredentials(TOKEN, oldConverter);
         byte[] corrupted =
                 Objects.requireNonNull(corrupt.getCredentialsEncrypted()).clone();
         corrupted[corrupted.length - 1] ^= 1;
-        corrupt.setCredentialsEncrypted(corrupted);
+        ReflectionTestUtils.setField(corrupt, "credentialsEncrypted", corrupted);
         corrupt = connectionRepository.save(corrupt);
         Connection healthy = connectionRepository.save(connection(workspace, "healthy"));
         healthy.setCredentials(TOKEN, oldConverter);

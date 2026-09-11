@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DiscardedEntry;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ParseResult;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -684,13 +686,17 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("defect-detector PRESENT/GOOD is coerced to NOT_APPLICABLE (severity null) with an audit note")
-        void defectDetectorObservedToNa() {
-            var out = observation(Presence.PRESENT, Severity.MAJOR).coerceCoherence(true, false);
-            assertThat(out.presence()).isEqualTo(Presence.NOT_APPLICABLE);
-            // Severity is a band only for a BAD observation (ADR 0022); a coerced NA observation has none.
-            assertThat(out.severity()).isNull();
-            assertThat(out.evidenceRationale()).startsWith("[auto-downgraded");
+        @DisplayName("inconsistent PRESENT/GOOD is refused without inventing inapplicability")
+        void shouldRefuseInconsistentAssessmentWithoutRewritingEvidence() {
+            var original = observation(Presence.PRESENT, Severity.MAJOR);
+            assertThatThrownBy(() -> original.coerceCoherence(true, false))
+                    .isInstanceOfSatisfying(ObservationsRefusedException.class, e -> {
+                        assertThat(e.reasonCode()).isEqualTo("incoherent_assessment");
+                        assertThat(e.reason()).contains("Practice p", "PRESENT/GOOD", "original evidence");
+                    });
+            assertThat(original.presence()).isEqualTo(Presence.PRESENT);
+            assertThat(original.assessment()).isEqualTo(Assessment.GOOD);
+            assertThat(original.evidenceRationale()).isEqualTo("evidenceRationale");
         }
 
         @Test
@@ -768,29 +774,19 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("defect-detector (PRESENT, GOOD) is still off-contract → coerced to NOT_APPLICABLE")
-        void defectDetectorPresentGoodCoercedToNa() {
-            // The refusal that survives, and the one that was always the real one: a PRESENT here would be
-            // the defect, so endorsing it praises a good act nobody observed.
-            var offContract = new ValidatedObservation(
-                    "p", "t", Presence.PRESENT, Assessment.GOOD, Severity.INFO, null, "evidenceRationale");
-            var out = offContract.coerceCoherence(true, false);
-            assertThat(out.presence()).isEqualTo(Presence.NOT_APPLICABLE);
-            assertThat(out.assessment()).isNull();
-            assertThat(out.evidenceRationale()).startsWith("[auto-downgraded");
-        }
-
-        @Test
-        @DisplayName("list helper applies the per-slug defect-detector flag")
-        void listHelperPerSlug() {
+        @DisplayName("list helper refuses inconsistent observations only for pinned defect-detector slugs")
+        void shouldRefuseInconsistentAssessmentOnlyForPinnedPractice() {
             var dd = new ValidatedObservation("sec", "t", Presence.PRESENT, Assessment.GOOD, Severity.INFO, null, "r");
             var ok = new ValidatedObservation(
                     "style", "t", Presence.PRESENT, Assessment.GOOD, Severity.MAJOR, null, "r");
-            var out = PracticeDetectionResultParser.coerceCoherence(List.of(dd, ok), Set.of("sec"));
-            assertThat(out.get(0).presence()).isEqualTo(Presence.NOT_APPLICABLE);
-            assertThat(out.get(1).presence()).isEqualTo(Presence.PRESENT);
-            // A PRESENT/GOOD (strength) observation carries no severity band under ADR 0022.
-            assertThat(out.get(1).severity()).isNull();
+            assertThatThrownBy(() -> PracticeDetectionResultParser.coerceCoherence(List.of(ok, dd), Set.of("sec")))
+                    .isInstanceOf(ObservationsRefusedException.class);
+            var out = PracticeDetectionResultParser.coerceCoherence(List.of(dd, ok), Set.of("other"));
+            assertThat(out).allSatisfy(observation -> {
+                assertThat(observation.presence()).isEqualTo(Presence.PRESENT);
+                assertThat(observation.assessment()).isEqualTo(Assessment.GOOD);
+                assertThat(observation.severity()).isNull();
+            });
         }
 
         // Advisory ceiling: craft/process critiques may not present as merge-blockers.
@@ -839,7 +835,7 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
         @DisplayName("a defect-detector slug that is NOT blocking-eligible still caps its BAD MAJOR to MINOR")
         void defectDetectorButAdvisoryCapsBadToMinor() {
             // A slug can be BOTH a defect-detector (in the set) AND advisory-only (not in BLOCKING_ELIGIBLE).
-            // The defect-detector GOOD->NA coercion does not touch a BAD observation, so the advisory ceiling must
+            // The defect-detector PRESENT/GOOD refusal does not touch a BAD observation, so the advisory ceiling must
             // apply independently: (ABSENT, BAD, MAJOR) -> MINOR.
             var ddAdvisory = new ValidatedObservation(
                     "describe-what-and-why", "t", Presence.ABSENT, Assessment.BAD, Severity.MAJOR, null, "r");

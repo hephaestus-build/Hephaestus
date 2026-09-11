@@ -31,15 +31,8 @@ public class PiRuntimeFactory {
 
     private static final Logger log = LoggerFactory.getLogger(PiRuntimeFactory.class);
 
-    /** Grace window before the sandbox hard-kills the runner — must fire before that deadline. */
+    /** Time reserved for runner shutdown and sandbox teardown, outside the model's work budget. */
     public static final int TIMEOUT_BUFFER_SECONDS = 60;
-
-    /**
-     * Floor for the self-watchdog budget, so a spec just above the minimum timeout does not compute an
-     * effectively-zero one. Must stay below {@code TIMEOUT_BUFFER_SECONDS * 1000}: the watchdog has to
-     * fire before the sandbox hard kill.
-     */
-    static final long MIN_BUDGET_MS = (TIMEOUT_BUFFER_SECONDS - 1) * 1000L;
 
     /** Turns the SDK repeats before a provider failure ends the session that hit it. */
     private static final int RETRY_MAX_ATTEMPTS = 5;
@@ -83,7 +76,7 @@ public class PiRuntimeFactory {
         inputFiles.putAll(promptScaffolding);
         inputFiles.putAll(spec.extraInputs());
 
-        long agentTimeoutMs = Math.max(MIN_BUDGET_MS, (long) (spec.timeoutSeconds() - TIMEOUT_BUFFER_SECONDS) * 1000);
+        long agentTimeoutMs = (spec.timeoutSeconds() - TIMEOUT_BUFFER_SECONDS) * 1000L;
         env.put("AGENT_BUDGET_MS", Long.toString(agentTimeoutMs));
 
         env.put("HOME", "/home/agent");

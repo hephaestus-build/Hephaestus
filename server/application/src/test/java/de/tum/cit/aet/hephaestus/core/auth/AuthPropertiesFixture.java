@@ -39,7 +39,7 @@ public final class AuthPropertiesFixture {
                 URI.create("http://localhost:8080"),
                 apiBasePath,
                 "hephaestus-spa",
-                Duration.ofMinutes(15),
+                Duration.ofHours(24),
                 AuthProperties.DEFAULT_COOKIE_NAME,
                 "",
                 Duration.ofHours(48),
@@ -47,7 +47,7 @@ public final class AuthPropertiesFixture {
                 List.of(),
                 "",
                 Duration.ofHours(1),
-                Duration.ofHours(12),
+                Duration.ofDays(7),
                 stepUpMaxAge,
                 false,
                 true);

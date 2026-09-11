@@ -28,12 +28,22 @@ interface RuntimeEnvVars {
 	DEPLOYED_AT?: string;
 }
 
+/**
+ * The name the server gives the CSRF double-submit cookie when `hephaestus.auth.cookie-secure` is
+ * on, which the `prod` profile requires of itself and every deployment runs under. A blank name
+ * matches no cookie, so it is a variable that was never set rather than a choice — unlike
+ * `SENTRY_DSN`, where blank deliberately turns reporting off. The entrypoint writes every key of
+ * `RuntimeEnvVars` into `window.__ENV__` whether the container has it or not, so an unset variable
+ * arrives as `""`, which no default beside it can rescue.
+ */
+const SECURE_XSRF_COOKIE_NAME = "__Host-XSRF-TOKEN";
+
 // Dev defaults (used when window.__ENV__ is not set)
 const defaults: RuntimeEnvVars = {
 	APPLICATION_VERSION: "DEV",
 	APPLICATION_CLIENT_URL: "http://localhost:4200",
 	APPLICATION_SERVER_URL: "http://localhost:8080",
-	XSRF_COOKIE_NAME: "__Host-XSRF-TOKEN",
+	XSRF_COOKIE_NAME: SECURE_XSRF_COOKIE_NAME,
 	SENTRY_ENVIRONMENT: "local",
 	SENTRY_DSN: "https://289f1f62feeb4f70a8878dc0101825cd@sentry.ase.in.tum.de/3",
 	LEGAL_PROFILE: "",
@@ -53,19 +63,40 @@ const DEPLOYMENT_NAMES: Record<string, string> = {
 };
 const deploymentEnvironment = env("SENTRY_ENVIRONMENT") || "local";
 
+/**
+ * Which pull request this preview is of. Every preview shares the name "Preview", so without this
+ * the header pill cannot say which one you are looking at.
+ *
+ * Coolify routes a preview at `pr<id>.<domain>` and passes no pull request variable of its own, so
+ * the hostname is where the number is — and the client URL is the one place that hostname is
+ * already present in the runtime config. Read only on a preview, so no other deployment can be
+ * given a pull request by a host that happens to be named this way.
+ */
+const previewPullRequest = ((): number | undefined => {
+	if (deploymentEnvironment !== "preview") return undefined;
+	try {
+		const [label] = new URL(env("APPLICATION_CLIENT_URL")).hostname.split(".");
+		const match = /^pr-?(\d+)$/.exec(label ?? "");
+		return match ? Number.parseInt(match[1] ?? "", 10) : undefined;
+	} catch {
+		return undefined;
+	}
+})();
+
 const environment = {
 	version: env("APPLICATION_VERSION").replace(/^v/, "") || "DEV",
 	deployment: {
 		environment: deploymentEnvironment,
 		name: DEPLOYMENT_NAMES[deploymentEnvironment] ?? "Local",
 		isProduction: deploymentEnvironment === "production",
+		pullRequest: previewPullRequest,
 	},
 	clientUrl: env("APPLICATION_CLIENT_URL"),
 	serverUrl: env("APPLICATION_SERVER_URL"),
 	// CSRF double-submit cookie name. `__Host-`-prefixed in production; dropped for local http E2E
 	// (the browser rejects `__Host-` cookies over http://localhost) — must match the server's
 	// hephaestus.auth.cookie-secure setting.
-	xsrfCookieName: env("XSRF_COOKIE_NAME"),
+	xsrfCookieName: env("XSRF_COOKIE_NAME") || SECURE_XSRF_COOKIE_NAME,
 
 	buildInfo: {
 		branch: env("GIT_BRANCH"),

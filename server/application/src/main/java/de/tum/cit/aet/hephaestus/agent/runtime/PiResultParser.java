@@ -277,8 +277,7 @@ public class PiResultParser {
                 break;
             }
             attempts++;
-            try (var parser =
-                    objectMapper.tokenStreamFactory().createParser(chars, bracePos, chars.length - bracePos)) {
+            try (var parser = objectMapper.createParser(chars, bracePos, chars.length - bracePos)) {
                 JsonNode node = objectMapper.readTree(parser);
                 if (node != null && node.isObject() && observationsNode(node) != null) {
                     return objectMapper.writeValueAsString(node);

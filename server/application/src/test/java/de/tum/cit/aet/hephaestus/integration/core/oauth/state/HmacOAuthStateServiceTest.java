@@ -15,8 +15,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.core.env.Environment;
+import org.springframework.mock.env.MockEnvironment;
 
+@ExtendWith(OutputCaptureExtension.class)
 class HmacOAuthStateServiceTest extends BaseUnitTest {
 
     private static final String SECRET = "unit-test-secret-with-enough-entropy-32b";
@@ -34,6 +41,24 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
             }
         }
         return new HmacOAuthStateService(properties, webhookProperties, environment, null);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"specs", "cds-training"})
+    void shouldUseEphemeralArtifactSecretsInsteadOfKnownPlaceholders(String profile, CapturedOutput output) {
+        var environment = new MockEnvironment();
+        environment.setActiveProfiles(profile);
+        var properties = new OAuthStateProperties(null, Duration.ofMinutes(10), Duration.ofDays(7));
+        var webhook = mock(WebhookProperties.class);
+        var first = new HmacOAuthStateService(properties, webhook, environment, null);
+        var second = new HmacOAuthStateService(properties, webhook, environment, null);
+        String state = first.issue(42L, IntegrationKind.GITHUB);
+        assertThat(first.consume(state).workspaceId()).isEqualTo(42L);
+        assertThatThrownBy(() -> second.consume(state)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(output.getAll()).doesNotContain("WARN");
+        environment.setActiveProfiles(profile, "prod");
+        assertThatThrownBy(() -> new HmacOAuthStateService(properties, webhook, environment, null))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test

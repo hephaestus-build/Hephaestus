@@ -11,7 +11,11 @@ services:
       - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./letsencrypt:/letsencrypt
+      # A named volume, not a path beside this file: under the reconciler this file lives in a
+      # per-release worktree, so a relative bind would put the ACME account and certificates in
+      # state that a release replaces. Traefik would then re-issue on every deployment and Let's
+      # Encrypt would rate-limit the domain into serving an untrusted certificate.
+      - letsencrypt:/letsencrypt
     command:
       - "--ping=true"
       - "--ping.entrypoint=http"
@@ -173,3 +177,6 @@ configs:
           </div>
       </article>
       </html>
+
+volumes:
+  letsencrypt:

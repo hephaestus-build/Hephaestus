@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -234,6 +235,7 @@ public class IssueReviewHandler implements JobTypeHandler {
 
     @Override
     public void deliver(AgentJob job) {
+        if (ObservationAdmissionService.observationsWereRefused(job)) return;
         if (feedbackDeliveryService.recoverAutomaticPackageIfPresent(job)) return;
         ObservationAdmissionService.requireMatchingCompositionDigest(job);
         List<PracticeDetectionResultParser.ValidatedObservation> observations =
@@ -301,7 +303,8 @@ public class IssueReviewHandler implements JobTypeHandler {
         output.put("rawOutput", raw.toString());
         var parsed = resultParser.parse(output);
         if (parsed.validObservations().isEmpty()) {
-            throw new JobDeliveryException("No valid observations in agent output: jobId=" + job.getId());
+            throw new ObservationsRefusedException(
+                    "no_valid_observations", "No valid observations in agent output: jobId=" + job.getId());
         }
         var admitted = new ArrayList<>(PracticeDetectionResultParser.coerceCoherence(
                 parsed.validObservations(), practiceCatalogInjector.defectDetectorSlugs(job)));

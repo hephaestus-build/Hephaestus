@@ -48,39 +48,23 @@ public record ComposedFeedbackUnit(
 
     public enum Action {
         NEW,
-        /** Replace a message that is queued and has not been read; {@link #supersedesThreadKey} says which. */
+        /** Request replacement of prepared feedback identified by {@link #supersedesThreadKey}. */
         SUPERSEDE,
-        /** Say nothing, and record why — so silence can be explained rather than look like a failure. */
         WITHHOLD,
     }
 
-    /**
-     * Why nothing is being said. Deliberately not
-     * {@link de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason}: that enum is a
-     * database CHECK constraint and every value in it is a reason <em>the server</em> held something
-     * back, while these are the composer's reasons. Mapping one onto the other means widening the
-     * constraint, which is a schema change and belongs with the unit that makes it.
-     */
+    /** Composer withholding decisions, distinct from server-enforced delivery suppression. */
     public enum WithholdReason {
-        /** Nothing moved at this locus since it was last measured. */
         NO_MATERIAL_CHANGE,
-        /** This person has already been told this. */
         ALREADY_SAID,
-        /** True, but not worth a message. */
         BELOW_BAR,
     }
 
     /**
-     * Structured notes for the mentor, which writes the actual turn against the live conversation.
+     * Mentor context, not developer-facing prose. Authorized observation evidence is staged separately.
      *
-     * @param situation what the run saw: factual, specific, artifacts named, in the composer's own terms.
-     *     Not addressed to the developer as "you", because a note written at them is a note that will be
-     *     read out
-     * @param capability the useful understanding or behaviour the conversation should support. It is a
-     *     goal, not a prescribed question or a rule that the mentor must withhold a clear conclusion
-     * @param evidenceSummary the concise basis for the note. The original authorized observation evidence
-     *     is staged separately, so this summary cannot become the mentor's only source of truth
-     * @param inConversationSignal an observable sign the conversation helped, not an instruction to relay
+     * @param capability understanding or behaviour to support, not a prescribed question
+     * @param inConversationSignal observable sign that the conversation helped
      */
     public record ConversationBrief(
             String situation,
@@ -132,7 +116,6 @@ public record ComposedFeedbackUnit(
         }
     }
 
-    /** Whether the unit says enough to be feedback at all: something to read, and something to do. */
     public boolean isComplete() {
         if (action == Action.WITHHOLD) {
             return withholdReason != null;

@@ -11,7 +11,6 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 public class TaskEnvelopeWriter {
 
-    // Deterministic byte output for fixture snapshots.
     private final ObjectWriter writer;
 
     public TaskEnvelopeWriter(JsonMapper baseObjectMapper) {

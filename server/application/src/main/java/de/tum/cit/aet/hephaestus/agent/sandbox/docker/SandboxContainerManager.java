@@ -28,6 +28,7 @@ public class SandboxContainerManager {
     private final DockerContainerOperations containerOps;
     private final SandboxImageGuard imageGuard;
     private final SandboxProperties properties;
+    private final String owner;
 
     /**
      * Dedicated platform thread pool for {@code docker wait} calls.
@@ -44,19 +45,22 @@ public class SandboxContainerManager {
             DockerContainerOperations containerOps,
             SandboxImageGuard imageGuard,
             SandboxProperties properties,
+            String owner,
             ExecutorService dockerWaitExecutor) {
-        this(containerOps, imageGuard, properties, dockerWaitExecutor, POST_STOP_WAIT_TIMEOUT);
+        this(containerOps, imageGuard, properties, owner, dockerWaitExecutor, POST_STOP_WAIT_TIMEOUT);
     }
 
     SandboxContainerManager(
             DockerContainerOperations containerOps,
             SandboxImageGuard imageGuard,
             SandboxProperties properties,
+            String owner,
             ExecutorService dockerWaitExecutor,
             Duration postStopWaitTimeout) {
         this.containerOps = containerOps;
         this.imageGuard = imageGuard;
         this.properties = properties;
+        this.owner = owner;
         this.dockerWaitExecutor = dockerWaitExecutor;
         this.postStopWaitTimeout = postStopWaitTimeout;
     }
@@ -149,9 +153,9 @@ public class SandboxContainerManager {
         containerOps.removeContainer(containerId, true);
     }
 
-    /** List all containers managed by Hephaestus. */
+    /** List containers owned by this installation. */
     public List<DockerOperations.ContainerInfo> listManagedContainers() {
-        return containerOps.listContainersByLabel(SandboxLabels.MANAGED, "true");
+        return containerOps.listContainersByLabel(SandboxLabels.OWNER, owner);
     }
 
     /**

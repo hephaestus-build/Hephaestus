@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { http, HttpResponse } from "msw";
 import { type ReactNode, useState } from "react";
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,6 +32,7 @@ import type { ChatInit } from "ai";
 import { getThreadQueryKey, listThreadsQueryKey } from "@/api/@tanstack/react-query.gen";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import type { ChatMessage } from "@/lib/types";
+import { server } from "@/mocks/server";
 
 import { useMentorChat } from "./use-mentor-chat";
 
@@ -46,6 +48,7 @@ function activeWorkspace(
 	return {
 		workspaceSlug: "test-workspace",
 		chromeWorkspaceSlug: "test-workspace",
+		chromeWorkspace: undefined,
 		workspaces: [],
 		providerType: "GITHUB",
 		isLoading: false,
@@ -180,7 +183,17 @@ describe("useMentorChat", () => {
 
 		chat = installFakeChat();
 
-		global.fetch = vi.fn();
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/mentor/threads", () => HttpResponse.json([])),
+			http.get(
+				"*/workspaces/:workspaceSlug/mentor/threads/:threadId",
+				() => new HttpResponse(null, { status: 404 }),
+			),
+			http.post(
+				"*/workspaces/:workspaceSlug/mentor/threads/:threadId/messages/:messageId/vote",
+				() => HttpResponse.json({}),
+			),
+		);
 	});
 
 	afterEach(() => {
@@ -317,9 +330,13 @@ describe("useMentorChat", () => {
 					isUpvoted: true,
 				}),
 			);
+			await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+			expect(result.current.votes).toContainEqual(
+				expect.objectContaining({ messageId: "msg-123", isUpvoted: true }),
+			);
 		});
 
-		it("records a downvote the same way", () => {
+		it("records a downvote the same way", async () => {
 			const { result } = renderHook(() => useMentorChat({}), {
 				wrapper: createWrapper(queryClient),
 			});
@@ -334,9 +351,13 @@ describe("useMentorChat", () => {
 					isUpvoted: false,
 				}),
 			);
+			await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+			expect(result.current.votes).toContainEqual(
+				expect.objectContaining({ messageId: "msg-456", isUpvoted: false }),
+			);
 		});
 
-		it("keeps one entry per voted message", () => {
+		it("keeps one entry per voted message", async () => {
 			const { result } = renderHook(() => useMentorChat({}), {
 				wrapper: createWrapper(queryClient),
 			});
@@ -348,6 +369,30 @@ describe("useMentorChat", () => {
 			});
 
 			expect(result.current.votes).toHaveLength(3);
+			await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+			expect(result.current.votes).toHaveLength(3);
+		});
+
+		it("rolls back an optimistic vote when the server rejects it", async () => {
+			let respond = (_response: Response) => {};
+			const response = new Promise<Response>((resolve) => {
+				respond = resolve;
+			});
+			server.use(
+				http.post(
+					"*/workspaces/:workspaceSlug/mentor/threads/:threadId/messages/:messageId/vote",
+					() => response,
+				),
+			);
+			const { result } = renderHook(() => useMentorChat({}), {
+				wrapper: createWrapper(queryClient),
+			});
+			act(() => result.current.voteMessage("msg-rejected", true));
+			expect(result.current.votes).toContainEqual(
+				expect.objectContaining({ messageId: "msg-rejected", isUpvoted: true }),
+			);
+			await act(async () => respond(new HttpResponse(null, { status: 500 })));
+			await waitFor(() => expect(result.current.votes).toHaveLength(0));
 		});
 
 		it("should not vote when workspace is not available", () => {
@@ -447,11 +492,15 @@ describe("useMentorChat", () => {
 			const { transport } = chat.lastOptions;
 			assert(transport, "The hook must configure a transport");
 
-			// A fresh Response per call: the transport consumes the body stream, so a shared one
-			// would already be locked by the queries the render kicked off.
-			const fetchMock = vi.mocked(globalThis.fetch);
-			fetchMock.mockImplementation(async () => new Response("data: [DONE]\n\n", { status: 200 }));
-			fetchMock.mockClear();
+			let posted: Request | undefined;
+			server.use(
+				http.post("*/workspaces/:workspaceSlug/mentor/chat", ({ request }) => {
+					posted = request;
+					return new HttpResponse("data: [DONE]\n\n", {
+						headers: { "Content-Type": "text/event-stream" },
+					});
+				}),
+			);
 
 			const latest = createMockMessage("user", "second", "m2");
 			await transport.sendMessages({
@@ -462,15 +511,12 @@ describe("useMentorChat", () => {
 				abortSignal: undefined,
 			});
 
-			// The render also issues the thread GETs, so pick the one write out of the traffic.
-			const posted = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
 			assert(posted, "The hook sent no message");
-			const [url, init] = posted;
-			expect(url).toBe("http://localhost:8080/workspaces/test-workspace/mentor/chat");
+			expect(posted.url).toBe("http://localhost:8080/workspaces/test-workspace/mentor/chat");
 			// Only the newest message travels; the server rebuilds context from the thread id.
-			expect(init?.body).toBe(JSON.stringify({ id: "thread-1", message: latest }));
-			expect(init?.credentials).toBe("include");
-			expect(new Headers(init?.headers).get("X-XSRF-TOKEN")).toBe("mock-csrf");
+			expect(await posted.text()).toBe(JSON.stringify({ id: "thread-1", message: latest }));
+			expect(posted.credentials).toBe("include");
+			expect(posted.headers.get("X-XSRF-TOKEN")).toBe("mock-csrf");
 		});
 	});
 });

@@ -68,18 +68,6 @@ const oxlintTargets = "server docker scripts .changeset .github commitlint.confi
 const oxlintFormat = process.env.GITHUB_ACTIONS === "true" ? "-f github " : "";
 const repoRoot = import.meta.dirname;
 
-// What Maven reads for a format or PMD verdict. `server/.env` is per developer, so it is not an input.
-const mavenInputs = [
-	"server/**",
-	"!server/**/target/**",
-	"!server/postgres-data/**",
-	"!server/.env",
-	"scripts/run-mvnw.ts",
-	".java-version",
-];
-// `server/mvnw` picks the JDK from JAVA_HOME and takes extra goals and JVM flags from these, so all
-// three decide the verdict.
-const mavenEnv = ["JAVA_HOME", "MAVEN_ARGS", "MAVEN_OPTS"];
 // The docs lint's file set, plus the trees markdownlint reaches outside `docs/`, read from its own
 // config so the fingerprint cannot miss a scope change.
 const markdownScope = (
@@ -101,12 +89,7 @@ const docsLintInputs = [
 	"pnpm-lock.yaml",
 ];
 
-const mvnw = "node scripts/run-mvnw.ts";
-const integrationTests = process.env.HEPHAESTUS_INTEGRATION_TESTS ?? "";
-const integrationShard = integrationTests
-	? ` -Dtest=${integrationTests} -Dsurefire.failIfNoSpecifiedTests=false`
-	: "";
-
+const gradlew = "node scripts/run-gradlew.ts";
 // The gates, by the tree they judge. `quality` runs all of them; each CI job runs one tree's set.
 const policyGates = [
 	"gate:toolchain",
@@ -138,7 +121,7 @@ const checkTasks = [
 	...docsGates,
 	...loadGates,
 ];
-// What the Windows runner cannot run: Maven against a JDK it does not provision, Docker, and the
+// What the Windows runner cannot run: Gradle against a JDK it does not provision, Docker, and the
 // agent specs, which run the Linux sandbox runtime. Everything else is expected to pass there; a
 // gate that fails on Windows is a portability defect, not a reason to add it here.
 const linuxOnly = ["gate:server", "gate:agent-tests", "gate:preview-stack"];
@@ -175,15 +158,15 @@ export default defineConfig({
 				"format:config",
 			]),
 			"format:check": group([
-				"gate:server-format",
+				"format:java:check",
 				"gate:webapp-format",
 				"gate:agents-format",
 				"gate:load-format",
 				"gate:docs-format",
 				"gate:config-format",
 			]),
-			"format:java": run(`${mvnw} -pl application spotless:apply -q`),
-			"format:java:check": group(["gate:server-format"]),
+			"format:java": run(`${gradlew} :spotlessApply :application:spotlessApply --quiet`),
+			"format:java:check": run(`${gradlew} :spotlessCheck :application:spotlessCheck --quiet`),
 			"format:webapp": run(`vp fmt --write ${webappSources}`),
 			"format:webapp:check": group(["gate:webapp-format"]),
 			"format:agents": run(`vp fmt --write ${agentSources}`),
@@ -194,15 +177,13 @@ export default defineConfig({
 			"format:docs:check": group(["gate:docs-format"]),
 			"format:config": run(configFormatCommand("--write")),
 			"format:config:check": group(["gate:config-format"]),
-			"format:achievements": run("node scripts/format-achievements.ts"),
 
 			// Lint and typecheck
-			lint: group(["gate:server-lint", "lint:webapp", "gate:agents-lint", "gate:docs-lint"]),
+			lint: group(["lint:java", "lint:webapp", "gate:agents-lint", "gate:docs-lint"]),
 			typecheck: group(["typecheck:webapp", "gate:scripts-typecheck", "gate:agents-typecheck"]),
-			"lint:java": group(["gate:server-lint"]),
+			"lint:java": run(`${gradlew} :application:pmdMain --quiet`),
 			"lint:java:report": run(
-				`${mvnw} -f application/pom.xml compile pmd:pmd && echo 'Report: server/application/target/site/pmd.html'`,
-				{ dependsOn: ["prepare:server:generated"] },
+				`${gradlew} :application:pmdMain && echo 'Report: server/application/build/reports/pmd/main.html'`,
 			),
 			"lint:webapp": run("vp -C webapp lint ."),
 			"lint:webapp:fix": run("vp -C webapp lint --fix ."),
@@ -238,43 +219,24 @@ export default defineConfig({
 				"node --test scripts/verify-changesets.test.ts scripts/sync-release-version.test.ts",
 			),
 
-			// Application server. One Maven process per checkout: the lint waits for the format check.
+			// Gradle owns Java task inputs and cached outputs; Vite starts it once per quality run.
 			"gate:java-nullness": run(
 				"node scripts/check-java-nullness.ts && node --test scripts/check-java-nullness.test.ts",
 			),
-			"gate:server-format": cachedOn(`${mvnw} -pl application spotless:check -q`, mavenInputs, {
-				env: mavenEnv,
-			}),
-			// PMD reads the generated clients, which the install puts in the local repository. That
-			// install is a side effect no cache replays, so it is its own uncached dependency.
-			"gate:server-lint": cachedOn(
-				`${mvnw} -f application/pom.xml compile pmd:check -q`,
-				mavenInputs,
-				{ env: mavenEnv, dependsOn: ["prepare:server:generated"] },
+			"gate:server": run(
+				`${gradlew} :spotlessCheck :application:spotlessCheck :application:pmdMain --quiet`,
 			),
-			"gate:server": run(["vp run gate:server-format", "vp run gate:server-lint"]),
 			"gate:pmd-canary": run("node scripts/check-pmd-canary.ts"),
-			"prepare:server:generated": run(
-				`${mvnw} -pl generated-clients -am install -DskipTests --batch-mode`,
-			),
+			"test:server:selection": run("node scripts/verify-server-test-selection.ts"),
 			"test:server:unit": run(
-				`${mvnw} -pl application -am package -Dspring-boot.repackage.skip=true -Dsurefire.includedGroups=unit -DskipCoverage=false --batch-mode`,
+				`${gradlew} :application:test :application:jacocoTestCoverageVerification`,
 			),
-			"test:server:architecture": run(
-				`${mvnw} -pl application -am package -Dspring-boot.repackage.skip=true -Parchitecture-tests --batch-mode`,
-			),
-			"test:server:verification": run(
-				`${mvnw} -pl application -am package -Dspring-boot.repackage.skip=true -Parchitecture-tests -Dsurefire.includedGroups=unit,architecture -DskipCoverage=false --batch-mode`,
-			),
-			// CI runs the tier as shards. The selector is decided here, at config load, so the workflow
-			// passes a matrix value through the environment rather than into a command; locally the
-			// whole tier runs. failIfNoSpecifiedTests=false is for the generated-clients module, which
-			// has no tests for any selector.
-			"test:server:integration": run(
-				`${mvnw} -pl application -am package -Dspring-boot.repackage.skip=true -Dsurefire.includedGroups=integration${integrationShard} -Dparallel=none --batch-mode`,
-			),
+			"test:server:architecture": run(`${gradlew} :application:architectureTest`),
+			"test:server:verification": run(`${gradlew} :application:verification`),
+			// Gradle reads the CI shard from the environment; locally the whole tier runs.
+			"test:server:integration": run(`${gradlew} :application:integrationTest`),
 			"test:server:mutation": run("node scripts/run-security-mutations.ts"),
-			"test:postgres-upgrade": run("node scripts/postgres-major-upgrade-test.ts"),
+			"test:postgres-restore": run("node scripts/postgres-backup-restore-test.ts"),
 
 			// Webapp
 			// `vp check` is format plus lint; the format half is `gate:webapp-format`, so one failure
@@ -339,17 +301,22 @@ export default defineConfig({
 
 			// What each CI job runs.
 			"ci:server": group(serverGates.concat("gate:contracts", "gate:env")),
-			"ci:tooling": group([
-				// Excluded here because another job or workflow runs them; the Windows leg re-runs what it can.
-				...policyGates.filter(
-					(gate) =>
-						!["gate:contracts", "gate:env", "gate:changesets", "gate:preview-stack"].includes(gate),
-				),
-				...agentGates,
-				...docsGates,
-				...loadGates,
-				"gate:load-syntax",
-			]),
+			// Render docs after the checks: lint cannot detect broken theme contexts during static rendering.
+			"ci:tooling": run("vp run verification:docs-build", {
+				dependsOn: [
+					// Excluded here because another job or workflow runs them; the Windows leg re-runs what it can.
+					...policyGates.filter(
+						(gate) =>
+							!["gate:contracts", "gate:env", "gate:changesets", "gate:preview-stack"].includes(
+								gate,
+							),
+					),
+					...agentGates,
+					...docsGates,
+					...loadGates,
+					"gate:load-syntax",
+				],
+			}),
 			"ci:webapp:static": group([...webappGates, "gate:docs-tokens", "verification:webapp-tests"]),
 			// The build regenerates the route tree, so it never runs beside a gate that reads it. A
 			// second name after `vp run` is an argument, not a second task, so the two are separate.
@@ -367,7 +334,10 @@ export default defineConfig({
 			"verification:webapp-build": run("node scripts/verify-webapp-build.ts"),
 			"verification:storybook-build": run("vp run --filter webapp build-storybook"),
 			"verification:docs-build": group(["docs:build"]),
-			"verification:server-tests": group(["test:server:verification"]),
+			"verification:server-tests": run([
+				"vp run test:server:selection",
+				"vp run test:server:verification",
+			]),
 
 			// Generated artefacts, schema and integration schemas
 			"generate:api": run(["vp run generate:api:specs", "vp run generate:api:client"]),
@@ -382,6 +352,8 @@ export default defineConfig({
 			"schema:gitlab": run("node scripts/update-gitlab-schema.ts"),
 			"schema:outline": run("node scripts/update-outline-spec.ts"),
 			"schema:nats": run("node scripts/nats-extract-examples.ts"),
+			"report:ci-latency": run("node scripts/report-ci-latency.ts"),
+			"report:ci-timings": run("node scripts/report-ci-timings.ts"),
 			"report:test-results": run("node scripts/summarize-test-results.ts"),
 			"release:version": run("changeset version && node scripts/sync-release-version.ts"),
 
@@ -394,11 +366,11 @@ export default defineConfig({
 				"docker compose down -v && node ../scripts/rm.ts postgres-data && docker compose up -d --wait",
 				{ cwd: "server" },
 			),
-			"dev:server": run(`${mvnw} -f application/pom.xml spring-boot:run`, {
-				dependsOn: ["dev:compose", "prepare:server:generated"],
+			"dev:server": run(`${gradlew} :application:bootRun`, {
+				dependsOn: ["dev:compose"],
 			}),
-			"dev:server:e2e": run(`${mvnw} -f application/pom.xml spring-boot:run -Dapp.profiles=e2e`, {
-				dependsOn: ["dev:compose:e2e", "prepare:server:generated"],
+			"dev:server:e2e": run(`${gradlew} :application:bootRun -Pprofiles=e2e`, {
+				dependsOn: ["dev:compose:e2e"],
 			}),
 			"check:ports": run("node scripts/check-ports.ts"),
 			"dev:e2e:setup": run("node scripts/e2e-setup.ts"),

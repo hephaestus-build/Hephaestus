@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { readdir, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { posix, resolve } from "node:path";
 
 import { asRecord, asString, isRecord, readJsonFile } from "./lib/json.ts";
+import { compareLinks, renderPreviewComments, type PreviewLink } from "./lib/preview-comment.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 function argument(index: number): string {
@@ -20,7 +21,6 @@ const artifactDirectory = argument(3);
 const previewUrl = argument(4);
 const baseSha = argument(5);
 const output = argument(6);
-const MAX_LINKS = 25;
 
 const changedFiles = new Set(
 	execFileSync("git", ["diff", "--name-only", "--diff-filter=ACMRT", "-z", `${baseSha}...HEAD`], {
@@ -33,19 +33,8 @@ const changedFiles = new Set(
 
 const baseUrl = new URL(previewUrl);
 
-function markdown(value: string): string {
-	return value
-		.replaceAll("\r", " ")
-		.replaceAll("\n", " ")
-		.replaceAll("\\", "\\\\")
-		.replaceAll("[", "\\[")
-		.replaceAll("]", "\\]")
-		.replaceAll("<", "&lt;")
-		.replaceAll(">", "&gt;");
-}
-
-async function renderDocs(): Promise<string> {
-	const links = new Map<string, string>();
+async function renderDocs(): Promise<string[]> {
+	const links = new Map<string, PreviewLink>();
 	for (const file of await readdir(artifactDirectory, { recursive: true })) {
 		if (!file.endsWith(".json")) continue;
 		const metadata = await readJsonFile(resolve(artifactDirectory, file));
@@ -61,27 +50,31 @@ async function renderDocs(): Promise<string> {
 		if (changedFiles.has(source)) {
 			const url = new URL(permalink, baseUrl);
 			const existing = links.get(url.href);
-			if (url.origin === baseUrl.origin && (existing === undefined || title < existing)) {
-				links.set(url.href, title);
+			const link = { group: posix.dirname(source), title, url: url.href };
+			if (
+				url.origin === baseUrl.origin &&
+				(existing === undefined || compareLinks(link, existing) < 0)
+			) {
+				links.set(url.href, link);
 			}
 		}
 	}
 	return comment(
 		"📚 Documentation preview",
 		"Open full documentation preview",
-		[...links].map(([url, title]) => ({ title, url })).toSorted(compareLinks),
+		[...links.values()],
 		"Changed pages",
 		"No published pages found in changed files.",
 	);
 }
 
-async function renderStorybook(): Promise<string> {
+async function renderStorybook(): Promise<string[]> {
 	const index = asRecord(
 		await readJsonFile(resolve(artifactDirectory, "index.json")),
 		"Storybook index",
 	);
-	const links = Object.entries(asRecord(index.entries, "Storybook index.entries"))
-		.flatMap(([id, value]) => {
+	const links = Object.entries(asRecord(index.entries, "Storybook index.entries")).flatMap(
+		([id, value]) => {
 			const entry = asRecord(value, `Storybook entry ${id}`);
 			if (entry.type !== "story") return [];
 			const importPath = asString(entry.importPath, `Storybook entry ${id}.importPath`);
@@ -90,12 +83,13 @@ async function renderStorybook(): Promise<string> {
 			if (!changedFiles.has(`webapp/${importPath.replace(/^\.\//, "")}`)) return [];
 			return [
 				{
-					title: `${title} — ${name}`,
+					group: title,
+					title: name,
 					url: new URL(`?path=/story/${encodeURIComponent(id)}`, baseUrl).href,
 				},
 			];
-		})
-		.toSorted(compareLinks);
+		},
+	);
 	return comment(
 		"🧩 Storybook preview",
 		"Open full Storybook preview",
@@ -105,30 +99,16 @@ async function renderStorybook(): Promise<string> {
 	);
 }
 
-function compareLinks(left: { title: string; url: string }, right: { title: string; url: string }) {
-	return left.title.localeCompare(right.title) || left.url.localeCompare(right.url);
-}
-
 function comment(
 	heading: string,
 	previewLabel: string,
-	links: readonly { title: string; url: string }[],
+	links: readonly PreviewLink[],
 	linksHeading: string,
 	emptyMessage: string,
-): string {
-	const sections = [`## ${heading}`, `[${previewLabel}](<${baseUrl.href}>)`];
-	if (links.length === 0) {
-		sections.push(`### ${linksHeading}\n\n${emptyMessage}`);
-	} else {
-		const count = links.length > MAX_LINKS ? ` (${MAX_LINKS} of ${links.length})` : "";
-		const list = links
-			.slice(0, MAX_LINKS)
-			.map(({ title, url }) => `- [${markdown(title)}](<${url}>)`);
-		if (links.length > MAX_LINKS) {
-			list.push("", `${links.length - MAX_LINKS} more are available in the full preview.`);
-		}
-		sections.push(`### ${linksHeading}${count}\n\n${list.join("\n")}`);
-	}
+): string[] {
+	const count = links.length ? ` (${links.length})` : "";
+	const introduction = `## ${heading}\n\n[${previewLabel}](<${baseUrl.href}>)\n\n### ${linksHeading}${count}`;
+	let footer = "";
 	const { GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_RUN_ID } = process.env;
 	if (GITHUB_SERVER_URL && GITHUB_REPOSITORY && GITHUB_RUN_ID) {
 		const sha = execFileSync("git", ["rev-parse", "HEAD"], {
@@ -136,14 +116,12 @@ function comment(
 			maxBuffer: CAPTURE_LIMIT_BYTES,
 		}).trim();
 		const repositoryUrl = `${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}`;
-		sections.push(
-			`Built from [\`${sha.slice(0, 7)}\`](<${repositoryUrl}/commit/${sha}>) · [Build logs](<${repositoryUrl}/actions/runs/${GITHUB_RUN_ID}>). Updates after successful preview builds.`,
-		);
+		footer = `Built from [\`${sha.slice(0, 7)}\`](<${repositoryUrl}/commit/${sha}>) · [Build logs](<${repositoryUrl}/actions/runs/${GITHUB_RUN_ID}>). Updates after successful preview builds.`;
 	}
-	return `${sections.join("\n\n")}\n`;
+	return renderPreviewComments(introduction, links, emptyMessage, footer);
 }
 
 const rendered =
 	kind === "docs" ? await renderDocs() : kind === "storybook" ? await renderStorybook() : undefined;
 if (!rendered) throw new Error(`Unknown preview kind: ${kind}`);
-await writeFile(output, rendered);
+await writeFile(output, `${JSON.stringify(rendered)}\n`);

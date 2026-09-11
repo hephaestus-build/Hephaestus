@@ -2,8 +2,9 @@
 # rate-limits a review asked for by hand, while the worker composes and delivers what a review found.
 # Anchored rather than repeated because forwarding a key to only one of them is silent — the role that
 # does not receive it falls back to the built-in default and the operator's setting does nothing.
-x-practice-review-env: &practice-review-env
-  # Auto-trigger is a per-workspace setting; this is the instance gate above it.
+x-practice-review-env:
+  &practice-review-env # Auto-trigger is a per-workspace setting; this is the instance gate above it.
+  PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED: ${PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED:-false}
   PRACTICE_REVIEW_DELIVER_TO_MERGED: ${PRACTICE_REVIEW_DELIVER_TO_MERGED:-false}
   PRACTICE_REVIEW_COOLDOWN_MINUTES: ${PRACTICE_REVIEW_COOLDOWN_MINUTES:-15}
   # Feature visibility, separate from the review gate above.
@@ -31,6 +32,11 @@ x-scm-access-env: &scm-access-env
   GH_APP_PRIVATE_KEY_LOCATION: ${GH_APP_PRIVATE_KEY_LOCATION:-}
   GH_AUTH_TOKEN: ${GH_AUTH_TOKEN}
   GIT_CHECKOUT_ENABLED: ${GIT_CHECKOUT_ENABLED:-false}
+
+x-observability-env: &observability-env
+  TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-0.0}
+  TRACING_OTLP_ENABLED: ${TRACING_OTLP_ENABLED:-false}
+  TRACING_OTLP_ENDPOINT: ${TRACING_OTLP_ENDPOINT:-http://localhost:4318/v1/traces}
 
 services:
   webapp:
@@ -131,7 +137,6 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
-
 
   application-server:
     image: "${HEPHAESTUS_IMAGE_APPLICATION_SERVER:?verified release lock required}"
@@ -253,6 +258,7 @@ services:
       SANDBOX_DOCKER_CERT_PATH: ${SANDBOX_DOCKER_CERT_PATH:-}
       SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID: ${SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID:-}
       SANDBOX_DOCKER_CLI: ${SANDBOX_DOCKER_CLI:-docker}
+      SANDBOX_DOCKER_OWNER: ${SANDBOX_DOCKER_OWNER:-default}
       SANDBOX_API_PORT: ${SANDBOX_API_PORT:-8081}
       SANDBOX_API_MAX_REQUEST_BYTES: ${SANDBOX_API_MAX_REQUEST_BYTES:-4194304}
       SANDBOX_API_REQUESTS_PER_MINUTE: ${SANDBOX_API_REQUESTS_PER_MINUTE:-120}
@@ -282,7 +288,7 @@ services:
       # a loopback provider URL may be SAVED, the worker's proxy decides whether it may be DIALLED.
       # Leave false in production.
       HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK: ${HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK:-false}
-      <<: [*practice-review-env, *scm-access-env]
+      <<: [*practice-review-env, *scm-access-env, *observability-env]
       GITLAB_WORKSPACE_CREATION: ${GITLAB_WORKSPACE_CREATION:-false}
       # LLM providers are registered at runtime (Instance admin → AI models), not via env vars —
       # the proxy reads each connection's base URL/auth from the catalog per request.
@@ -344,7 +350,7 @@ services:
       - "traefik.http.services.https-application-server.loadbalancer.healthcheck.interval=10s"
       - "traefik.http.services.https-application-server.loadbalancer.healthcheck.timeout=3s"
     # The distroless image has no shell for a wget probe; the probe is the static thc binary the
-    # health-checker buildpack adds at /workspace/health-check (server/application/pom.xml).
+    # health-checker buildpack adds at /workspace/health-check (server/application/project.toml).
     healthcheck:
       test: ["CMD", "/workspace/health-check"]
       interval: 15s
@@ -373,7 +379,7 @@ services:
       JAVA_TOOL_OPTIONS: "-XX:MaxDirectMemorySize=${APP_MAX_DIRECT_MEMORY:-128M}"
       APP_VERSION: ${IMAGE_TAG}
       SPRING_PROFILES_ACTIVE: prod,worker
-      <<: [*practice-review-env, *scm-access-env]
+      <<: [*practice-review-env, *scm-access-env, *observability-env]
       HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES:-}
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: ${HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST:-true}
       # Valueless, as on application-server above; this is the pod that actually opens sandboxes.
@@ -390,6 +396,7 @@ services:
       SANDBOX_DOCKER_CERT_PATH: ${SANDBOX_DOCKER_CERT_PATH:-}
       SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID: ${SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID:-}
       SANDBOX_DOCKER_CLI: ${SANDBOX_DOCKER_CLI:-docker}
+      SANDBOX_DOCKER_OWNER: ${SANDBOX_DOCKER_OWNER:-default}
       SANDBOX_API_PORT: ${SANDBOX_API_PORT:-8081}
       SANDBOX_API_MAX_REQUEST_BYTES: ${SANDBOX_API_MAX_REQUEST_BYTES:-4194304}
       SANDBOX_API_REQUESTS_PER_MINUTE: ${SANDBOX_API_REQUESTS_PER_MINUTE:-120}

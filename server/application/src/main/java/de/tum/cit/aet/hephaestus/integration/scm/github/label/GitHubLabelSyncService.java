@@ -112,7 +112,7 @@ public class GitHubLabelSyncService {
                     .connectionFieldPath("repository.labels")
                     .connectionType(GHLabelConnection.class)
                     .pageInfoExtractor(GHLabelConnection::getPageInfo)
-                    .pageProcessor(connection -> {
+                    .pageProcessorWhile(connection -> {
                         if (connection.getNodes() == null) {
                             return false; // Stop pagination
                         }

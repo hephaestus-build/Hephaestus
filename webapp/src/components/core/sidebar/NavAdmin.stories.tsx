@@ -13,7 +13,6 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		workspaceSlug: "aet",
-		achievementsEnabled: true,
 		integrationKinds: ["GITHUB", "SLACK", "OUTLINE"],
 	},
 	decorators: [
@@ -29,12 +28,6 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
-
-export const AchievementsDisabled: Story = {
-	args: {
-		achievementsEnabled: false,
-	},
-};
 
 export const GitLabWorkspace: Story = {
 	args: {

@@ -4,7 +4,7 @@
 
 @import "tailwindcss";
 
-@source "../node_modules/streamdown/dist/index.js";
+@source "../node_modules/streamdown/dist";
 
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
@@ -76,26 +76,6 @@ code {
 	--brand-accent: oklch(0.546 0.245 262.881);
 	--mentor: oklch(0.546 0.245 262.881);
 	--mentor-foreground: oklch(0.97 0.014 254.604);
-
-	/* Achievement skill tree node states (Light Mode) */
-	--node-locked: oklch(0.92 0.005 250);
-	--node-available: oklch(0.65 0.01 250);
-	--node-unlocked: oklch(0.25 0.01 250);
-	--edge-inactive: oklch(0.8 0.005 250);
-	--edge-active: oklch(0.45 0.01 250);
-	--edge-glow: oklch(0.2 0.02 250 / 0.1);
-	--shadow-rgb: 0 0 0;
-
-	/* Rarity border colors (Light Mode) — monochromatic low tiers, chromatic high tiers */
-	--rarity-common: oklch(0.8 0.015 250);
-	--rarity-uncommon: oklch(0.6 0.14 150);
-	--rarity-rare: oklch(0.6 0.12 260);
-	--rarity-epic: oklch(0.55 0.18 300);
-	--rarity-legendary: oklch(0.7 0.2 85);
-	--rarity-legendary-from: var(--rarity-legendary);
-	--rarity-legendary-to: oklch(0.92 0.1 95);
-	--rarity-mythic-from: oklch(0.55 0.22 290);
-	--rarity-mythic-to: oklch(0.55 0.18 250);
 }
 
 .dark {
@@ -149,26 +129,6 @@ code {
 	--brand-accent: oklch(0.707 0.165 254.624);
 	--mentor: oklch(0.707 0.165 254.624);
 	--mentor-foreground: oklch(0.21 0.006 285.885);
-
-	/* Achievement skill tree node states (Dark Mode) */
-	--node-locked: oklch(0.25 0.01 250);
-	--node-available: oklch(0.42 0.02 250);
-	--node-unlocked: oklch(0.95 0.01 250);
-	--edge-inactive: oklch(0.3 0.015 250);
-	--edge-active: oklch(0.85 0.02 250);
-	--edge-glow: oklch(1 0.02 250 / 0.3);
-	--shadow-rgb: 255 255 255;
-
-	/* Rarity border colors (Dark Mode) — brighter to pop on dark backgrounds */
-	--rarity-common: oklch(0.55 0.02 250);
-	--rarity-uncommon: oklch(0.7 0.16 150);
-	--rarity-rare: oklch(0.75 0.14 260);
-	--rarity-epic: oklch(0.75 0.18 300);
-	--rarity-legendary: oklch(0.85 0.2 85);
-	--rarity-legendary-from: var(--rarity-legendary);
-	--rarity-legendary-to: oklch(0.95 0.08 95);
-	--rarity-mythic-from: oklch(0.75 0.22 290);
-	--rarity-mythic-to: oklch(0.7 0.18 250);
 }
 
 @theme inline {
@@ -275,31 +235,6 @@ code {
 
 	--color-mentor: var(--mentor);
 	--color-mentor-foreground: var(--mentor-foreground);
-
-	/* Achievement skill tree colors */
-	--color-node-locked: var(--node-locked);
-	--color-node-available: var(--node-available);
-	--color-node-unlocked: var(--node-unlocked);
-	--color-edge-inactive: var(--edge-inactive);
-	--color-edge-active: var(--edge-active);
-
-	/* Rarity border colors */
-	--color-rarity-common: var(--rarity-common);
-	--color-rarity-uncommon: var(--rarity-uncommon);
-	--color-rarity-rare: var(--rarity-rare);
-	--color-rarity-epic: var(--rarity-epic);
-	--color-rarity-legendary: var(--rarity-legendary);
-	--color-rarity-legendary-from: var(--rarity-legendary-from);
-	--color-rarity-legendary-to: var(--rarity-legendary-to);
-	--color-rarity-mythic-from: var(--rarity-mythic-from);
-	--color-rarity-mythic-to: var(--rarity-mythic-to);
-}
-
-@utility text-rarity-mythic {
-	background: linear-gradient(to right, var(--rarity-mythic-from), var(--rarity-mythic-to));
-	-webkit-background-clip: text;
-	background-clip: text;
-	color: transparent;
 }
 
 /*
@@ -505,68 +440,4 @@ code {
 	.shimmer-overlay::after {
 		animation: none !important;
 	}
-}
-
-/* ===== Achievement Rarity Animations ===== */
-
-/* Legendary: color pulse (glow-free and flat) */
-@keyframes legendary-color-pulse {
-	0%,
-	100% {
-		outline-color: var(--rarity-legendary-to);
-	}
-	50% {
-		outline-color: var(--rarity-legendary-from);
-	}
-}
-
-.legendary-pulse-anim {
-	animation: legendary-color-pulse 3s ease-in-out infinite;
-}
-
-/* Mythic: shadow-free rotating conic-gradient via clip-path for Hexagon shape */
-@property --mythic-angle {
-	syntax: "<angle>";
-	initial-value: 0deg;
-	inherits: false;
-}
-
-@keyframes mythic-rotate {
-	to {
-		--mythic-angle: 360deg;
-	}
-}
-
-.achievement-mythic-hexagon {
-	position: relative;
-	/* Clip the entire outer button into a perfect mathematical hexagon */
-	clip-path: polygon(50% 0%, 93.301% 25%, 93.301% 75%, 50% 100%, 6.699% 75%, 6.699% 25%);
-	background-color: transparent !important; /* handled by inner pseudo-element */
-	border: none !important;
-}
-
-/* The spinning border (full size) */
-.achievement-mythic-hexagon::before {
-	content: "";
-	position: absolute;
-	inset: 0;
-	background-image: conic-gradient(
-		from var(--mythic-angle),
-		var(--rarity-mythic-from),
-		var(--rarity-mythic-to),
-		var(--rarity-mythic-from)
-	);
-	animation: mythic-rotate 3s linear infinite;
-	z-index: -2;
-}
-
-/* The inner solid fill (smaller size, inset 6px creates the border track) */
-.achievement-mythic-hexagon::after {
-	content: "";
-	position: absolute;
-	inset: 6px;
-	background-color: var(--mythic-bg);
-	/* Clip the inner background to perfectly match the outer geometry */
-	clip-path: polygon(50% 0%, 93.301% 25%, 93.301% 75%, 50% 100%, 6.699% 75%, 6.699% 25%);
-	z-index: -1;
 }

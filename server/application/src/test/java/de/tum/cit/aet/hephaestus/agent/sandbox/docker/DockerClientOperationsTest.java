@@ -297,7 +297,7 @@ class DockerClientOperationsTest extends BaseUnitTest {
 
             when(cmd.exec()).thenReturn(List.of(container));
 
-            var results = ops.listContainersByLabel("hephaestus.managed", "true");
+            var results = ops.listContainersByLabel("hephaestus.sandbox-owner", "default");
 
             assertThat(results).hasSize(1);
             assertThat(results.get(0).id()).isEqualTo("ctr-1");
@@ -321,7 +321,7 @@ class DockerClientOperationsTest extends BaseUnitTest {
 
             when(cmd.exec()).thenReturn(List.of(container));
 
-            var results = ops.listContainersByLabel("hephaestus.managed", "true");
+            var results = ops.listContainersByLabel("hephaestus.sandbox-owner", "default");
 
             assertThat(results).hasSize(1);
             assertThat(results.get(0).name()).isEmpty();
@@ -341,15 +341,15 @@ class DockerClientOperationsTest extends BaseUnitTest {
 
             Network network = mock(Network.class);
             when(network.getId()).thenReturn("net-1");
-            when(network.getName()).thenReturn("agent-net-abc");
+            when(network.getName()).thenReturn("hephaestus-sandbox-default--abc");
 
             when(cmd.exec()).thenReturn(List.of(network));
 
-            var results = ops.listNetworksByName("agent-net-");
+            var results = ops.listNetworksByName("hephaestus-sandbox-default--");
 
             assertThat(results).hasSize(1);
             assertThat(results.get(0).id()).isEqualTo("net-1");
-            assertThat(results.get(0).name()).isEqualTo("agent-net-abc");
+            assertThat(results.get(0).name()).isEqualTo("hephaestus-sandbox-default--abc");
         }
     }
 
@@ -416,7 +416,6 @@ class DockerClientOperationsTest extends BaseUnitTest {
             CreateContainerResponse response = mock(CreateContainerResponse.class);
             when(dockerClient.createContainerCmd("alpine:latest")).thenReturn(cmd);
             when(cmd.withHostConfig(any())).thenReturn(cmd);
-            when(cmd.withNetworkMode(anyString())).thenReturn(cmd);
             when(cmd.withLabels(any())).thenReturn(cmd);
             when(cmd.withCmd(anyList())).thenReturn(cmd);
             when(cmd.withEnv(anyList())).thenReturn(cmd);
@@ -453,6 +452,9 @@ class DockerClientOperationsTest extends BaseUnitTest {
             String id = ops.createContainer(spec);
 
             assertThat(id).isEqualTo("new-ctr");
+            var hostConfig = org.mockito.ArgumentCaptor.forClass(com.github.dockerjava.api.model.HostConfig.class);
+            verify(cmd).withHostConfig(hostConfig.capture());
+            assertThat(hostConfig.getValue().getNetworkMode()).isEqualTo("net-123");
             verify(cmd).withCmd(List.of("echo", "hello"));
             verify(cmd).withHostName("agent");
             verify(cmd).withUser("1000:1000");
@@ -464,7 +466,6 @@ class DockerClientOperationsTest extends BaseUnitTest {
             CreateContainerResponse response = mock(CreateContainerResponse.class);
             when(dockerClient.createContainerCmd("alpine:latest")).thenReturn(cmd);
             when(cmd.withHostConfig(any())).thenReturn(cmd);
-            when(cmd.withNetworkMode(anyString())).thenReturn(cmd);
             when(cmd.withLabels(any())).thenReturn(cmd);
             when(cmd.exec()).thenReturn(response);
             when(response.getId()).thenReturn("new-ctr");

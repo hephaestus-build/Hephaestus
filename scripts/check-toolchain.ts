@@ -12,6 +12,7 @@ import packageArgument from "npm-package-arg";
 import { parse } from "yaml";
 
 import { asRecord, isRecord } from "./lib/json.ts";
+import { maskOptionalRuntimePeerMetadata } from "./lib/optional-runtime-peer.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 import { BUNDLED_PINS, bundledVersions, CATALOG_FILE } from "./lib/toolchain-pins.ts";
@@ -186,15 +187,18 @@ for (const name of Object.keys(overrides).filter((entry) => entry in BUNDLED_PIN
 		throw new Error(`pnpm-workspace.yaml overrides.${name} must pin through the catalog`);
 }
 
-// The JDK line is stated once, in `.java-version`; every workflow provisions from it and the pom
-// compiles for it.
+// CI and Gradle read `.java-version`; Renovate cannot parse the indirect toolchain expression.
 const javaVersion = readFileSync(".java-version", "utf8").trim();
-const pomJava = /<java\.version>(\d+)<\/java\.version>/.exec(
-	readFileSync("server/pom.xml", "utf8"),
-)?.[1];
-if (!/^\d+$/.test(javaVersion) || javaVersion !== pomJava)
+const gradleBuild = readFileSync("server/build.gradle.kts", "utf8");
+if (
+	!/^\d+$/.test(javaVersion) ||
+	!gradleBuild.includes('file("../.java-version").readText().trim().toInt()')
+)
+	throw new Error("Gradle must compile with the JDK line from .java-version");
+const renovate = readJson("renovate.json");
+if (asRecord(renovate.constraints, "Renovate constraints").java !== javaVersion)
 	throw new Error(
-		`.java-version must state the JDK line server/pom.xml compiles for (${pomJava ?? "unset"})`,
+		"Renovate constraints.java must restate .java-version for Gradle artifact updates",
 	);
 for (const file of execFileSync("git", ["ls-files", ".github"], { encoding: "utf8" }).split("\n")) {
 	if (!/\.ya?ml$/.test(file)) continue;
@@ -447,7 +451,11 @@ for (const file of tracked) {
 	const content = readFileSync(file);
 	if (content.includes(0)) continue;
 	const text = content.toString("utf8");
-	if (forbiddenWord.test(text)) {
+	const runtimeText =
+		file === "pnpm-lock.yaml"
+			? maskOptionalRuntimePeerMetadata(text, (name) => forbiddenWord.test(name))
+			: text;
+	if (forbiddenWord.test(runtimeText)) {
 		throw new Error(`${file} still references the retired package manager or runtime`);
 	}
 	if (!isImageBuild(file) && forbiddenCommand.test(text)) {

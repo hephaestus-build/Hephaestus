@@ -1,4 +1,5 @@
 import { type InventoryItem, readProjectInventory } from "../lib/context.ts";
+import { classifyIssue, type IssueMetadata } from "../lib/issue-classification.ts";
 import type { Hint } from "../lib/types.ts";
 
 /** Title-token overlap (Jaccard) — a coarse near-duplicate signal across the project inventory. */
@@ -20,26 +21,16 @@ function titleOverlap(a: string, b: string): number {
 	return inter / (x.size + y.size - inter);
 }
 
-interface IssueMeta {
-	title?: string;
-	body?: string;
-	issue_type?: string | null;
-	labels?: string[];
-	state?: string;
-}
-
 const has = (re: RegExp, s: string) => re.test(s);
 
 export default async function issueStatesAnActionableProblem(
 	_repo: string,
 	_diff: Map<string, unknown>,
-	m: IssueMeta,
+	m: IssueMetadata,
 	contextDir?: string,
 ) {
-	const body = (m.body ?? "").trim();
-	const title = (m.title ?? "").trim();
-	const issueType = (m.issue_type ?? "").toLowerCase();
-	const labels = (m.labels ?? []).map((l) => l.toLowerCase());
+	const { body, title, issueType, labels, emptyOrTitleEcho, hasDeliverableType, looksUmbrella } =
+		classifyIssue(m);
 
 	const bodyLen = body.length;
 	const isStub = bodyLen < 40 || /^_?no response_?$/i.test(body);
@@ -49,21 +40,6 @@ export default async function issueStatesAnActionableProblem(
 			.replace(/<!--[\s\S]*?-->/g, "")
 			.replace(/^#{1,3}.*$/gm, "")
 			.trim().length < 60;
-
-	const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-	const titleNorm = norm(title);
-	const bodyNorm = norm(body);
-	const titleEcho =
-		bodyNorm.length > 0 &&
-		(bodyNorm === titleNorm || titleNorm.includes(bodyNorm) || bodyNorm.includes(titleNorm));
-	const emptyOrTitleEcho = body.length < 25 || titleEcho;
-	const deliverableType =
-		/\b(user ?story|story|bug|defect|feature|enhancement|task|chore|requirement|artifact|epic|spike)\b/;
-	const hasDeliverableType =
-		deliverableType.test(issueType) || labels.some((l) => deliverableType.test(l));
-	const looksUmbrella =
-		labels.some((l) => /\b(epic|umbrella|meta|initiative|requirement)\b/.test(l)) ||
-		/\b(epic|umbrella|initiative)\b/i.test(title);
 
 	const typeBug = /bug|defect/.test(issueType) || labels.some((l) => /bug|defect|fix/.test(l));
 	const typeStory =

@@ -5,21 +5,72 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties.LoginProviderSeed;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider.ProviderType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.bind.PropertySourcesPlaceholdersResolver;
+import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
+import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
+import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.core.env.MutablePropertySources;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
+import org.springframework.core.io.ClassPathResource;
 
-/**
- * {@code apiBasePath} feeds string-concatenated OAuth URLs ({@code {baseUrl}} + path + callback), so a
- * stray missing/duplicated slash silently breaks login. Pin the constructor normalization that makes
- * {@code api}, {@code /api} and {@code /api/} equivalent and collapses blank/{@code /} to root.
- *
- * <p>Also pins the seed-gate contract: a provider slot is only "configured" with BOTH credential halves.
- */
 class AuthPropertiesTest extends BaseUnitTest {
+
+    @Test
+    void shouldBindBoundedLowRiskSessionDefaultsWhenNoOverridesAreConfigured() {
+        AuthProperties properties = new Binder(new MapConfigurationPropertySource())
+                .bindOrCreate("hephaestus.auth", Bindable.of(AuthProperties.class));
+        assertThat(properties.accessTtl()).isEqualTo(Duration.ofHours(24));
+        assertThat(properties.sessionMaxLifetime()).isEqualTo(Duration.ofDays(7));
+        assertThat(properties.stepUpMaxAge()).isEqualTo(Duration.ofMinutes(5));
+        assertThat(properties.impersonationMaxLifetime()).isEqualTo(Duration.ofHours(1));
+        assertThat(properties.cookieSecure()).isTrue();
+    }
+
+    @Test
+    void shouldKeepApplicationConfigurationAlignedWithSessionDefaults() throws IOException {
+        var sources = new MutablePropertySources();
+        new YamlPropertySourceLoader()
+                .load("application", new ClassPathResource("application.yml"))
+                .forEach(sources::addLast);
+        var binder = new Binder(
+                ConfigurationPropertySources.from(sources), new PropertySourcesPlaceholdersResolver(sources));
+        AuthProperties configured = binder.bindOrCreate("hephaestus.auth", Bindable.of(AuthProperties.class));
+        AuthProperties defaults = new Binder(new MapConfigurationPropertySource())
+                .bindOrCreate("hephaestus.auth", Bindable.of(AuthProperties.class));
+        assertThat(configured.accessTtl()).isEqualTo(defaults.accessTtl());
+        assertThat(configured.sessionMaxLifetime()).isEqualTo(defaults.sessionMaxLifetime());
+    }
+
+    @Test
+    void shouldApplyDocumentedSessionEnvironmentOverrides() throws IOException {
+        var sources = new MutablePropertySources();
+        sources.addFirst(new SystemEnvironmentPropertySource(
+                "environment",
+                Map.of(
+                        "HEPHAESTUS_AUTH_ACCESS_TTL", "2h",
+                        "HEPHAESTUS_AUTH_SESSION_MAX_LIFETIME", "3d",
+                        "HEPHAESTUS_AUTH_STEP_UP_MAX_AGE", "2m")));
+        new YamlPropertySourceLoader()
+                .load("application", new ClassPathResource("application.yml"))
+                .forEach(sources::addLast);
+        var binder = new Binder(
+                ConfigurationPropertySources.from(sources), new PropertySourcesPlaceholdersResolver(sources));
+        AuthProperties configured = binder.bindOrCreate("hephaestus.auth", Bindable.of(AuthProperties.class));
+        assertThat(configured.accessTtl()).isEqualTo(Duration.ofHours(2));
+        assertThat(configured.sessionMaxLifetime()).isEqualTo(Duration.ofDays(3));
+        assertThat(configured.stepUpMaxAge()).isEqualTo(Duration.ofMinutes(2));
+    }
 
     @ParameterizedTest
     @CsvSource(
@@ -39,11 +90,6 @@ class AuthPropertiesTest extends BaseUnitTest {
         assertThat(AuthPropertiesFixture.withApiBasePath(raw).apiBasePath()).isEqualTo(expected);
     }
 
-    /**
-     * The seed gate. A half-filled slot (client id set, secret forgotten — or the reverse) used to pass
-     * {@code configured()}, seeding an ENABLED provider whose every OAuth exchange dies at the token
-     * endpoint. Both halves or nothing. Holds for every provider slot, not just Outline.
-     */
     @Nested
     class SeedConfiguredGate {
 

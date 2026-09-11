@@ -4,6 +4,7 @@ import { ShieldCheck, ShieldOff, UserCog, Users } from "lucide-react";
 import { useDeferredValue, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
+import { withSessionMutationLock } from "@/integrations/auth/session-mutation";
 
 import {
 	adminListUsersInfiniteOptions,
@@ -94,11 +95,7 @@ function AdminUsersPage() {
 	const [challenge, setChallenge] = useState<StepUpChallenge | undefined>(undefined);
 	const confirmAccess = useConfirmAccess(challenge !== undefined);
 
-	/**
-	 * A refusal that asks for a fresh sign-in replaces the dialog the action was started from, so the
-	 * ask never lands on top of a second modal focus trap. It reports `true` when it took the error,
-	 * leaving the caller to handle the refusals an operator can actually read.
-	 */
+	// Close the initiating dialog before step-up to avoid stacking modal focus traps.
 	const openConfirmAccess = (error: unknown): boolean => {
 		const stepUp = stepUpChallengeOf(error);
 		if (!stepUp) return false;
@@ -120,7 +117,7 @@ function AdminUsersPage() {
 	});
 
 	const impersonate = useMutation({
-		...impersonateMutation(),
+		...withSessionMutationLock(impersonateMutation()),
 		onError: openConfirmAccess,
 	});
 

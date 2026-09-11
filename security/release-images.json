@@ -22,14 +22,14 @@
 		{
 			"name": "nginx",
 			"repository": "docker.io/library/nginx",
-			"tag": "1.31.4-alpine",
-			"digest": "sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913"
+			"tag": "1.31.5-alpine",
+			"digest": "sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3"
 		},
 		{
 			"name": "traefik",
 			"repository": "docker.io/library/traefik",
-			"tag": "v3.7.11",
-			"digest": "sha256:5203c3f39ca70de6790d964624e042463ffbd57715bc82be155cf224c0dd5144"
+			"tag": "v3.7.13",
+			"digest": "sha256:f86a2cab1b5c649070c49f883c743dd32d8485a56e3368c5f93b9e91f1e91259"
 		}
 	]
 }

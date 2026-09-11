@@ -19,8 +19,7 @@ export type Stack = "proxy" | "core" | "app";
 
 /**
  * The application server runs the Liquibase migration the webhook runtime in `core` reads, and the
- * edge comes last so it never routes to a stack that is still starting. The push deploy declares the
- * same order in `.github/workflows/deploy-locked-compose.yml`, and one test holds the two together.
+ * edge comes last so it never routes to a stack that is still starting.
  */
 const STACK_ORDER: readonly Stack[] = ["app", "core", "proxy"];
 
@@ -42,6 +41,19 @@ const FETCH_TIMEOUT_MS = 5 * 60_000;
 /** The units this host runs, kept at the applied release by `syncUnits`. */
 const UNIT_FILES = ["hephaestus-reconcile.service", "hephaestus-reconcile.timer"] as const;
 const SYSTEMD_UNITS = "/etc/systemd/system";
+
+/**
+ * A condition an operator resolves rather than a defect to diagnose — a host waiting for its first
+ * promotion is the one that reaches production. The entry point prints the message and exits
+ * non-zero; a stack trace would say a failure happened here, when what happened is that nothing has
+ * been promoted yet.
+ */
+export class OperatorActionRequired extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "OperatorActionRequired";
+	}
+}
 
 export interface Channel {
 	/** What this channel asks the host to run: a release tag, or the commit a build came from. */
@@ -414,7 +426,7 @@ function fetchOptions(config: HostConfig): { cwd: string; signal: AbortSignal } 
 	return { cwd: config.checkout, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) };
 }
 
-async function main(): Promise<void> {
+export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	const config = hostConfig(process.env);
 	const appliedFile = join(config.stateDirectory, "applied.json");
 	const applied = await readApplied(appliedFile);
@@ -443,7 +455,7 @@ async function main(): Promise<void> {
 				applied.release,
 				commit,
 			);
-			if (await followTooling(config, tree)) {
+			if (await followTooling(config, tree, unitsDirectory)) {
 				console.log(`Adopted the tooling of ${applied.release}; the next run uses it`);
 				return;
 			}
@@ -463,6 +475,18 @@ async function main(): Promise<void> {
 		})
 	).trim();
 	const channelPath = `channels/${config.channel}.json`;
+	// An environment nobody has promoted yet has no channel file. That is the first thing a new
+	// host meets, so say which channel is missing and what publishes it rather than letting git's
+	// "path does not exist" surface as an unhandled exec failure.
+	if (
+		!(await succeeds("git", ["cat-file", "-e", `${channelCommit}:${channelPath}`], {
+			cwd: config.checkout,
+		}))
+	)
+		throw new OperatorActionRequired(
+			`no ${channelPath} on deploy-state: the "${config.channel}" environment has not been ` +
+				"promoted yet. Run the Promote workflow for it and this host applies it on the next tick.",
+		);
 	const channelJson = await output("git", ["show", `${channelCommit}:${channelPath}`], {
 		cwd: config.checkout,
 	});
@@ -687,7 +711,7 @@ async function main(): Promise<void> {
 		);
 	console.log(`Applied ${decision.release} to ${config.stacks.join(", ")}`);
 	// Only now, with the release verified and running, does the host run that release's tooling.
-	await followTooling(config, releaseTree);
+	await followTooling(config, releaseTree, unitsDirectory);
 }
 
 const DAY_SECONDS = 24 * 60 * 60;
@@ -764,13 +788,17 @@ export async function commitImages(
  * and its reconciler could not read a current channel — so a rollback to one keeps the tooling the
  * host has. Every step is idempotent, because a tick can stop between any two of them.
  */
-async function followTooling(config: HostConfig, tree: string): Promise<boolean> {
+async function followTooling(
+	config: HostConfig,
+	tree: string,
+	unitsDirectory: string,
+): Promise<boolean> {
 	if (!(await carriesToolingLink(tree))) {
 		console.log(`Keeping the current tooling: ${tree} predates the tooling link`);
 		return false;
 	}
 	const moved = await adoptTooling(config.tooling, tree);
-	const changed = await syncUnits(tree, SYSTEMD_UNITS);
+	const changed = await syncUnits(tree, unitsDirectory);
 	if (changed.length > 0) console.log(`Updated ${changed.join(", ")}`);
 	// systemd itself knows whether the units it loaded match the files, so a tick that stopped
 	// between writing a unit and reloading is finished by the next one.
@@ -915,6 +943,14 @@ if (import.meta.main) {
 	} catch (error) {
 		// An unwritable metric must not replace the error that caused the failure.
 		await reportFailure().catch(() => {});
-		throw error;
+		// A host waiting to be promoted is a state an operator resolves, not a defect: the journal
+		// gets the sentence that says what to do. Everything else keeps its stack, because a stack is
+		// what a defect is diagnosed from.
+		if (error instanceof OperatorActionRequired) {
+			console.error(error.message);
+			process.exitCode = 1;
+		} else {
+			throw error;
+		}
 	}
 }

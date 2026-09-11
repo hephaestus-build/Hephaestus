@@ -220,3 +220,18 @@ export const MobileReflow: Story = {
 	},
 	play: expectNoPageOverflow,
 };
+
+export const ActivityUnavailable: Story = {
+	args: {
+		...Default.args,
+		activityMonitorError: { status: 503 },
+		onRetryActivityMonitor: fn(),
+	},
+};
+
+export const LoadingActivity: Story = {
+	args: {
+		...Default.args,
+		isActivityLoading: true,
+	},
+};

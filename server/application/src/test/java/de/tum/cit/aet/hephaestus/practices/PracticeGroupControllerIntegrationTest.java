@@ -140,7 +140,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .uri(BASE_URI, workspace.getWorkspaceSlug())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
     }
 
@@ -177,7 +178,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .uri(BASE_URI + "/{groupSlug}", workspace.getWorkspaceSlug(), "any-slug")
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
     }
 
@@ -201,7 +203,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .bodyValue(validCreateRequest("forbidden-group"))
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
 
             assertThat(groupRepository.existsByWorkspaceIdAndSlug(workspace.getId(), "forbidden-group"))
                     .isFalse();
@@ -219,7 +222,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .bodyValue(validCreateRequest("anon-group"))
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
     }
 
@@ -246,7 +250,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
 
             PracticeGroup persisted = groupRepository
                     .findByWorkspaceIdAndSlug(workspace.getId(), "forbidden-update")
@@ -269,7 +274,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
     }
 
@@ -334,7 +340,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -352,7 +359,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
     }
 
@@ -377,7 +385,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .bodyValue(validCreateRequest("dup"))
                     .exchange()
                     .expectStatus()
-                    .isEqualTo(409);
+                    .isEqualTo(409)
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -392,7 +401,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -410,7 +420,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -425,7 +436,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -445,7 +457,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -465,7 +478,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -490,7 +504,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
     }
 
@@ -513,7 +528,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
 
             assertThat(groupRepository.existsByWorkspaceIdAndSlug(workspace.getId(), "forbidden-delete"))
                     .isTrue();
@@ -530,7 +546,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .headers(TestAuthUtils.withCsrf(csrf))
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
     }
 
@@ -732,7 +749,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .bodyValue(new UpdatePracticeAutonomyRequestDTO(PracticeAutonomy.OFF))
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             assertThat(auditedChangesTo(group)).isEqualTo(auditedBefore + 1);
         }
@@ -751,7 +769,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .bodyValue(new UpdatePracticeAutonomyRequestDTO(PracticeAutonomy.OFF))
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -769,7 +788,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .bodyValue(new UpdatePracticeAutonomyRequestDTO(PracticeAutonomy.OFF))
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
 
             assertThat(storedTierOf("forbidden-autonomy")).isEqualTo(PracticeAutonomy.AUTOMATIC);
         }
@@ -786,7 +806,8 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .bodyValue(new UpdatePracticeAutonomyRequestDTO(PracticeAutonomy.OFF))
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
     }
 }

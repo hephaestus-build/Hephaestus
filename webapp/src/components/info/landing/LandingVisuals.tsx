@@ -1,6 +1,7 @@
 import { CircleDot, GitMerge, GitPullRequest, type LucideIcon, Sparkle } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import type { CSSProperties, ReactNode } from "react";
+import { useMediaQuery } from "usehooks-ts";
 import { getGroupVisual } from "@/components/admin/practice-catalog/group-visuals";
 import { HephIcon } from "@/components/brand/HephIcon";
 import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
@@ -38,7 +39,7 @@ interface LandingClusterProps {
 }
 
 export function LandingCluster({ children, placement, delay }: LandingClusterProps) {
-	const reduceMotion = useReducedMotion();
+	const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 	const style: StyleWithCustomProperties = {
 		"--col": placement.column === "full" ? "1 / -1" : String(placement.column),
 		"--row": String(placement.row),

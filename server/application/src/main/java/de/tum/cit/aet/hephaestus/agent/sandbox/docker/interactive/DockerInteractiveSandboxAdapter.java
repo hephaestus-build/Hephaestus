@@ -67,6 +67,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
     private final InteractiveSandboxMetrics metrics;
     private final ObjectMapper mapper;
     private final DockerCli dockerCli;
+    private final String owner;
     private final int gatewayPort;
     private final Executor closeExecutor;
     private final MentorProxyCredentialRegistry mentorProxyCredentialRegistry;
@@ -95,6 +96,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
         this.mapper = mapper;
         this.closeExecutor = closeExecutor;
         this.dockerCli = new DockerCli(dockerProperties);
+        this.owner = dockerProperties.owner();
         this.gatewayPort = gatewayPort;
         this.mentorProxyCredentialRegistry = mentorProxyCredentialRegistry;
         java.util.Arrays.setAll(attachLocks, ignored -> new Object());
@@ -152,8 +154,8 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             DockerOperations.HostConfigSpec hostConfig =
                     securityPolicy.buildHostConfig(secProfile, spec.resourceLimits(), spec.networkPolicy());
             Map<String, String> labels = Map.of(
-                    SandboxLabels.MANAGED,
-                    "true",
+                    SandboxLabels.OWNER,
+                    owner,
                     SandboxLabels.KIND,
                     SandboxLabels.KIND_INTERACTIVE,
                     SandboxLabels.SESSION_ID,
@@ -284,18 +286,14 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             env.put("TRACE_ID", traceId);
             env.put("TRACEPARENT", "00-" + traceId + "-" + spanId + "-00");
         }
-        String gatewayUrl = appServerIp != null ? "http://" + appServerIp + ":" + gatewayPort : null;
-        if (spec.networkPolicy() != null && gatewayUrl != null) {
-            env.put("GATEWAY_URL", gatewayUrl);
-        }
         if (spec.networkPolicy() != null && spec.networkPolicy().llmProxyUrl() != null) {
             String url = spec.networkPolicy().llmProxyUrl();
             if (url.contains(PROXY_URL_PLACEHOLDER)) {
                 url = url.replace(PROXY_URL_PLACEHOLDER, appServerIp);
             }
             env.put("LLM_PROXY_URL", url);
-        } else if (spec.networkPolicy() != null && gatewayUrl != null) {
-            env.put("LLM_PROXY_URL", gatewayUrl + "/internal/llm");
+        } else if (spec.networkPolicy() != null) {
+            env.put("LLM_PROXY_URL", "http://" + appServerIp + ":" + gatewayPort + "/internal/llm");
         }
         if (spec.networkPolicy() != null && spec.networkPolicy().llmProxyToken() != null) {
             env.put("LLM_PROXY_TOKEN", spec.networkPolicy().llmProxyToken());

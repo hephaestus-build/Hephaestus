@@ -11,34 +11,21 @@ spring:
     jpa:
         hibernate:
             ddl-auto: none
-        # Without metadata-access Hibernate can't introspect the dialect from a JDBC connection;
-        # pin it explicitly so EntityManagerFactory builds and context refresh completes.
-        database-platform: org.hibernate.dialect.PostgreSQLDialect
         properties:
+            # Identify the database without opening a JDBC connection during image builds.
+            jakarta.persistence.database-product-name: PostgreSQL
             hibernate:
                 boot:
                     allow_jdbc_metadata_access: false
-                temp:
-                    use_jdbc_metadata_defaults: false
     docker:
         compose:
             enabled: false
 
-# Quiet the property validators that would otherwise fail under empty env vars during the build.
-# All knobs here gate features that the runtime profile (Coolify SPRING_PROFILES_ACTIVE=prod)
-# overrides; the placeholders only exist to let context refresh reach spring.context.exit=onRefresh.
+# Artifact generation loads the runtime contract, not deployment bootstrap or integrations.
 hephaestus:
     sync:
         nats:
             enabled: false
-            server: nats://cds-training-placeholder:4222
     workspace:
         init-default: false
         init-gitlab-default: false
-    # OAuth-state HMAC + webhook secret — required at boot by HmacOAuthStateService.
-    # Placeholders only; runtime SPRING_PROFILES_ACTIVE=prod provides the real values.
-    integration:
-        oauth-state:
-            secret: cds-training-placeholder-not-secret
-    webhook:
-        secret: cds-training-placeholder-not-secret

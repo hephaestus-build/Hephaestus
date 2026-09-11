@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception;
 
+import java.io.Serial;
+
 /**
  * Exception thrown when parsing a webhook payload fails.
  * <p>
@@ -11,6 +13,9 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception;
  * </ul>
  */
 public class PayloadParsingException extends RuntimeException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     public PayloadParsingException(String message, Throwable cause) {
         super(message, cause);

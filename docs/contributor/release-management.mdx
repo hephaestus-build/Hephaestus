@@ -45,15 +45,18 @@ sequenceDiagram
 
 1. **Every PR that changes shipped code carries a changeset.** `Verify changesets` fails the PR
    otherwise; [Writing changesets](#writing-changesets) has the rules.
-2. **The Version PR accumulates, and is checked.** On every push to `main`, `version-pr.yml`
-   maintains a PR titled `chore(release): version packages` that previews the version bump, the
+2. **The Version PR accumulates, and is checked.** After CI/CD succeeds for a push that is still the
+   tip of `main`, `version-pr.yml` maintains a PR titled `chore(release): version packages` that previews the version bump, the
    `CHANGELOG.md` section, and the `MIGRATION.md` section assembled from `.migration/` fragments at
    the `### Next release` anchor. Its updates are pushed with `GITHUB_TOKEN`, and a push made with
    that token starts no workflow run — so the same workflow dispatches CI/CD onto the Version PR's
    branch, `workflow_dispatch` being one of the two events that token may start. Every Version PR
    head commit gets one such run; `scripts/dispatch-version-pr-ci.ts` decides by asking whether the
-   head already has one, so a missed dispatch heals on the next push and an unchanged head costs
-   nothing. Every CI/CD run on that branch also carries the **release evidence preflight** below,
+   head already has one, so a missed dispatch heals on the next successful current-main CI completion
+   and an unchanged head costs nothing. Failed main runs do not update the Version PR; a successful
+   rerun or later successful tip resumes maintenance. Overtaken completions are skipped before
+   versioning, so release validation does not start alongside the same commit’s main validation.
+   Every CI/CD run on that branch also carries the **release evidence preflight** below,
    whichever event started it, and `CI Status Gate` fails there unless the preflight succeeded in the
    same run. More than one run can report that gate for a Version PR head — a dispatch and an
    approved `pull_request` run both did for v0.75.1 — and the ruleset is satisfied by either, so a
@@ -120,28 +123,41 @@ select it are in [CI/CD § Path filters](./ci-cd.mdx#path-filters).
 No release exists until every image in `security/release-images.json` passes the evidence gate, and
 it stays a draft until the later gates pass. For each image the gate resolves the index and its
 `linux/amd64` and `linux/arm64` manifests to digests, reads each platform manifest from the registry,
-and generates a Syft inventory plus SPDX and CycloneDX SBOMs, a Trivy vulnerability scan and a Trivy
-license report. `scripts/verify-release-evidence.ts` checks that every document is bound to that
+and generates a Syft inventory plus SPDX and CycloneDX SBOMs. One native Trivy `vuln,license` scan
+supplies both the vulnerability and license report paths, avoiding duplicate image analysis while
+keeping both evidence consumers bound to the same subject. `scripts/verify-release-evidence.ts` checks that every document is bound to that
 platform's repository, digest and architecture and that every package survives both format
 conversions; then the SPDX predicate is attached as a Cosign attestation and the image signature and
 build provenance are verified. SBOMs, reports, the policy, checksums and `manifest.json` are release
 assets.
 
+Evidence capture processes two subjects at a time and waits for both before starting the next pair.
+A failed capture blocks the bundle after its in-flight peer finishes. Trivy uses its
+[memory scan cache](https://trivy.dev/latest/docs/configuration/cache/) because the filesystem cache
+locks out concurrent processes; the vulnerability database and Java index remain shared and are
+prepared before capture. Both workflow callers request `java-db: "true"` from `download-trivy-db`; direct generator
+invocations also need both databases prepared because capture disables their updates. Each subject
+still receives the same SBOM formats and combined vulnerability/license scan.
+
+Each subject also has a `.timings.json` diagnostic with its digest, platform and elapsed Syft and
+Trivy time, including failed invocations. Timings use a monotonic clock around the existing scans;
+they add no scanner work or latency threshold. They are advisory, not security evidence: failure to
+save them warns without changing the scan result. The same durations appear in the job log.
+
 Upstream NATS, Traefik, nginx, and Alpine images are versioned and digest-pinned in the production
 Compose topology. They receive the same per-platform SBOM, license, vulnerability, and index-membership
 evidence as first-party images. Hephaestus requires its own signatures and build provenance only for
-images it builds.
+images it builds. Image publishing uses GitHub's native attestation action to record provenance and
+registry storage metadata. Only publishing jobs and their reusable-workflow callers receive
+`artifact-metadata: write`, alongside the signing and attestation permissions.
 
 [Vulnerability remediation](./vulnerability-remediation.mdx) is the normative policy for blocking
 findings, scheduled rescans, and exceptions.
 
 ### Nothing may fail for the first time at a release
 
-For a long time a release was the only thing that ever produced an evidence bundle, so it was also
-the only thing that could evaluate a check over one. v0.75.0 failed twice on findings no earlier
-gate had ever looked at. The fix for the *subjects* was to scan the pinned upstream images before the
-release; the fix for the *checks* is that the same bundle is now produced and judged before a release
-exists. `scripts/generate-release-evidence.ts` is the one generator and
+Pre-merge validation covers the same image subjects and shared evidence checks as release publication.
+`scripts/generate-release-evidence.ts` is the one generator and
 `scripts/verify-release-evidence.ts` the one verifier; `release.yml` and the `Release evidence
 preflight` job in `cicd.yml` both run them, and the preflight runs the verifier in its default mode,
 which performs every check except signature verification.
@@ -197,6 +213,15 @@ verifies the lock signer and release identity before Compose consumes any digest
 release assets provide the per-platform SBOM, vulnerability, license, and index-membership evidence;
 `SHA256SUMS` covers that evidence set.
 
+## Current migration-guide instructions
+
+Edit `scripts/templates/migration-guide.md` for current operator instructions, not `MIGRATION.md`.
+`vp run release:version` renders the template in the Version PR; keep its single
+`<!-- VERSION_HISTORY -->` marker. Released entries retain their original text, image namespaces
+and signing identities. Add new version-specific actions through [migration fragments](#writing-changesets).
+
+Run `vp run gate:changesets` to verify generation and history preservation.
+
 ## Writing changesets
 
 A changeset summary becomes the `CHANGELOG.md` entry **verbatim** — write it in the operator/user's voice:
@@ -235,14 +260,17 @@ The whole app is versioned as one product: changesets target the root `hephaestu
 
 ## Deploys
 
-`release.yml` calls `deploy-staging.yml` on publication and `deploy-prod.yml` after the Production
-environment's required reviewer approves; both also run by `workflow_dispatch` with a release tag.
-The environments are listed in [CI/CD](./ci-cd.mdx#environments). Verify staging before approving
-production. Hotfixes have no separate process: PR → changeset → merge → merge the Version PR.
+Publishing a release does not deploy it. Hosts follow a signed channel and apply it themselves, so
+moving an environment is a separate, deliberate step: run the **Promote** workflow for that
+environment and release, which the Production environment's required reviewer gates. The host picks
+it up on its next reconcile — [Pull-Based Deployment](../admin/pull-based-deployment) has the
+mechanics, and the environments are listed in [CI/CD](./ci-cd.mdx#environments). Verify staging
+before promoting production. Hotfixes have no separate process: PR → changeset → merge → merge the
+Version PR.
 
 ## Version management
 
-Version numbers in source manifests stay at their placeholders (`webapp/package.json` and `server/pom.xml`
+Version numbers in source manifests stay at their placeholders (`webapp/package.json` and `server/build.gradle.kts`
 are `0.0.0-development`) — the **release version**
 lives in the root `package.json` and is bumped only by the Version PR. At deploy time the release
 lock sets `IMAGE_TAG`, which `docker/compose.app.yaml` passes as `APP_VERSION`; `application.yml`

@@ -518,14 +518,14 @@ export function validateEvidenceSources(
 		if (!availableSourceKinds.has(sourceKind)) {
 			throw new Error(
 				`evidence source '${sourceKind}' was not available; copy one of these source kinds from ` +
-					`inputs/manifest.json: ${describeAvailableSources(availableSourceKinds)}`,
+					`the task-declared manifest: ${describeAvailableSources(availableSourceKinds)}`,
 			);
 		}
 		const artifactSource = artifactSources.get(citation.artifactPath);
 		if (artifactSource !== sourceKind) {
 			throw new Error(
 				artifactSource === undefined
-					? `artifact '${citation.artifactPath}' was not staged; copy an artifact path from inputs/manifest.json`
+					? `artifact '${citation.artifactPath}' was not staged; copy an artifact path from the task-declared manifest`
 					: `artifact '${citation.artifactPath}' belongs to evidence source '${artifactSource}', not '${sourceKind}'`,
 			);
 		}
@@ -576,7 +576,7 @@ export function validateSearchScope(
 		if (!availableSourceKinds.has(sourceKind)) {
 			throw new Error(
 				`searched source '${sourceKind}' was not available; copy one of these source kinds from ` +
-					`inputs/manifest.json: ${describeAvailableSources(availableSourceKinds)}`,
+					`the task-declared manifest: ${describeAvailableSources(availableSourceKinds)}`,
 			);
 		}
 	}
@@ -610,7 +610,7 @@ export function validateInapplicabilityScope(
 		if (!availableSourceKinds.has(sourceKind)) {
 			throw new Error(
 				`consulted source '${sourceKind}' was not available; copy one of these source kinds from ` +
-					`inputs/manifest.json: ${describeAvailableSources(availableSourceKinds)}`,
+					`the task-declared manifest: ${describeAvailableSources(availableSourceKinds)}`,
 			);
 		}
 	}
@@ -647,12 +647,29 @@ function foldConfusables(text: string): string {
 	return out;
 }
 
+/** How much of a diff line a refusal quotes back; enough to see the difference, not the whole line. */
+const MISMATCH_EXCERPT_CHARS = 160;
+
+/** Whether an observation's citation is really in the artifact it names. */
 export function citationMatchesArtifact(citation: NormalizedCitation, content: string): boolean {
+	return describeCitationMismatch(citation, content) === null;
+}
+
+/**
+ * Why a citation does not match, in one phrase, or null when it does. A refusal that only says "does
+ * not match" leaves the session guessing at which of the coordinate, the side and the text was wrong,
+ * and leaves a reader of the transcript guessing at the same thing. The rule itself is unchanged:
+ * every quote is still read out of the artifact it names.
+ */
+export function describeCitationMismatch(
+	citation: NormalizedCitation,
+	content: string,
+): string | null {
 	if (citation.sourceKind !== "scm.pull-request.diff") {
-		return (
+		const found =
 			content.includes(citation.quote) ||
-			foldConfusables(content).includes(foldConfusables(citation.quote))
-		);
+			foldConfusables(content).includes(foldConfusables(citation.quote));
+		return found ? null : "that text is not in the artifact";
 	}
 	let oldPath: string | null = null;
 	let newPath: string | null = null;
@@ -678,11 +695,67 @@ export function citationMatchesArtifact(citation: NormalizedCitation, content: s
 		}
 	}
 	const quoteLines = citation.quote.split("\n");
-	if (quoteLines.length !== citation.endLine - citation.startLine + 1) return false;
-	return quoteLines.every((quoteLine, index) => {
-		const diffLine = citedLines.get(citation.startLine + index);
-		return diffLine === quoteLine || diffLine?.slice(1) === quoteLine;
-	});
+	const citedLineCount = citation.endLine - citation.startLine + 1;
+	if (quoteLines.length !== citedLineCount) {
+		return `the quote is ${quoteLines.length} line(s) and the citation covers ${citedLineCount}`;
+	}
+	for (const [index, quoteLine] of quoteLines.entries()) {
+		const lineNumber = citation.startLine + index;
+		const diffLine = citedLines.get(lineNumber);
+		if (diffLine === undefined) {
+			return `the diff has no [L${lineNumber}] on the ${citation.side ?? "NEW"} side of ${citation.path}`;
+		}
+		if (!quotesDiffLine(diffLine, withoutOwnCoordinate(quoteLine, lineNumber))) {
+			return `[L${lineNumber}] reads ${excerpt(diffLine)}, not ${excerpt(quoteLine)}`;
+		}
+	}
+	return null;
+}
+
+/**
+ * Whether a quote is the diff line it claims — as displayed, without the +/- marker, or without the
+ * indentation the diff shows in front of the code. What a citation proves is that the observer read
+ * the line at that coordinate on that side, and the coordinate has already pinned which line is being
+ * compared: two lines cannot be confused by trimming, because only one is ever a candidate. A quote
+ * whose text differs, or that belongs to the other side of the change, still fails.
+ */
+function quotesDiffLine(diffLine: string, quoted: string): boolean {
+	if (diffLine === quoted || diffLine.slice(1) === quoted) {
+		return true;
+	}
+	const shown = diffLine.slice(1).trimStart();
+	if (shown.length === 0) {
+		return false;
+	}
+	// As written first, so a line of code that begins with a `-` or a `+` keeps it; only then as a
+	// quote that dropped the diff's own marker along with the indentation.
+	const trimmed = quoted.trimStart();
+	return shown === trimmed || shown === withoutMarker(trimmed).trimStart();
+}
+
+/** A quote that dropped the diff's own +/- or context marker along with the indentation. */
+function withoutMarker(quoted: string): string {
+	return quoted.startsWith("+") || quoted.startsWith("-") || quoted.startsWith(" ")
+		? quoted.slice(1)
+		: quoted;
+}
+
+/**
+ * The line as the artifact shows it, when the quote copied the coordinate the artifact prints in
+ * front of it. Reading a diff line as `[L39] +public class Foo {` and quoting it back whole is the
+ * commonest refusal there is, and it proves the same thing an unprefixed quote proves: the coordinate
+ * has to be the one being matched, so a quote cannot claim a line it did not read.
+ */
+function withoutOwnCoordinate(quoteLine: string, lineNumber: number): string {
+	const [, quotedNumber, quotedText] = quoteLine.match(/^\[L(\d+)] (.*)$/) ?? [];
+	return quotedText !== undefined && quotedNumber === String(lineNumber) ? quotedText : quoteLine;
+}
+
+/** One line as evidence in a refusal: quoted, and cut where a reader has already seen the difference. */
+function excerpt(line: string): string {
+	const cut =
+		line.length > MISMATCH_EXCERPT_CHARS ? `${line.slice(0, MISMATCH_EXCERPT_CHARS)}…` : line;
+	return JSON.stringify(cut);
 }
 
 function diffPath(rawPath: string): string | null {

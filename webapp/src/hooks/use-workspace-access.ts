@@ -10,6 +10,7 @@ import { useActiveWorkspaceSlug } from "./use-active-workspace";
 export function useWorkspaceAccess() {
 	const {
 		chromeWorkspaceSlug,
+		chromeWorkspace,
 		workspaces,
 		isLoading: workspacesLoading,
 	} = useActiveWorkspaceSlug();
@@ -24,6 +25,7 @@ export function useWorkspaceAccess() {
 
 	return {
 		chromeWorkspaceSlug,
+		chromeWorkspace,
 		workspaces,
 		role,
 		isAdmin: hasMinimumWorkspaceRole(role, "ADMIN"),

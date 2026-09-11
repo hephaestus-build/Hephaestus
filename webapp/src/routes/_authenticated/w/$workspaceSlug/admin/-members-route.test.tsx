@@ -17,7 +17,6 @@ const WORKSPACE = {
 	leaderboardEnabled: false,
 	practicesEnabled: true,
 	mentorEnabled: false,
-	achievementsEnabled: false,
 	progressionEnabled: false,
 };
 

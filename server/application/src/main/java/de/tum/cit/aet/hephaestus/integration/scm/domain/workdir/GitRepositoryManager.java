@@ -6,6 +6,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.Serial;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -245,6 +246,8 @@ public class GitRepositoryManager {
     /**
      * Clone a repository as a full clone.
      */
+    // Closing the scope is the operation; its binding is intentionally unread.
+    @SuppressWarnings("try")
     private void cloneRepository(Path repoPath, String cloneUrl, @Nullable String token)
             throws GitAPIException, IOException {
         log.info("Cloning repository: url={}, path={}", sanitizeUrl(cloneUrl), repoPath);
@@ -649,10 +652,10 @@ public class GitRepositoryManager {
                 messageBody,
                 authorIdent.getName(),
                 authorIdent.getEmailAddress(),
-                authorIdent.getWhen().toInstant(),
+                authorIdent.getWhenAsInstant(),
                 committerIdent.getName(),
                 committerIdent.getEmailAddress(),
-                committerIdent.getWhen().toInstant(),
+                committerIdent.getWhenAsInstant(),
                 totalAdditions,
                 totalDeletions,
                 fileChanges.size(),
@@ -1142,6 +1145,9 @@ public class GitRepositoryManager {
      * Exception for git operation failures.
      */
     public static class GitOperationException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         public GitOperationException(String message, Throwable cause) {
             super(message, cause);

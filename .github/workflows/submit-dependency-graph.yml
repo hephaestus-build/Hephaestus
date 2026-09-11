@@ -1,0 +1,25 @@
+name: Submit Gradle dependency graph
+
+on:
+  workflow_run: # zizmor: ignore[dangerous-triggers] Only snapshot data is submitted; no originating code is checked out or executed.
+    workflows: [Gradle dependency graph]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  submit:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      # This trusted workflow consumes data from that run; it never checks out or executes its code.
+      - uses: gradle/actions/dependency-submission@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          dependency-graph: download-and-submit
+          cache-disabled: true
+      - name: Require the submitted snapshot
+        run: test -s dependency-graph-reports/server.json

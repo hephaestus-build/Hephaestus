@@ -125,7 +125,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
         when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
         when(securityPolicy.buildLabels(JOB_ID))
-                .thenReturn(Map.of("hephaestus.managed", "true", "hephaestus.job-id", JOB_ID.toString()));
+                .thenReturn(Map.of("hephaestus.sandbox-owner", "default", "hephaestus.job-id", JOB_ID.toString()));
         when(containerManager.createContainer(any())).thenReturn(CONTAINER_ID);
         when(containerManager.waitForCompletion(eq(CONTAINER_ID), any()))
                 .thenReturn(new SandboxContainerManager.WaitOutcome(exitCode, timedOut));
@@ -188,7 +188,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             Map<String, String> env = captor.getValue().environment();
             // No per-provider path segment — the connection is identified from the authenticated token, not the URL.
             assertThat(env).containsEntry("LLM_PROXY_URL", "http://172.18.0.2:8081/internal/llm");
-            assertThat(env).containsEntry("GATEWAY_URL", "http://172.18.0.2:8081");
+            assertThat(env).doesNotContainKey("GATEWAY_URL");
             assertThat(env).containsEntry("LLM_PROXY_TOKEN", "token-123");
         }
 
@@ -332,7 +332,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             when(networkManager.createJobNetwork(eq(JOB_ID), eq(true))).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
-            when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of("hephaestus.managed", "true"));
+            when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of("hephaestus.sandbox-owner", "default"));
             when(containerManager.createContainer(any())).thenReturn(CONTAINER_ID);
             when(containerManager.waitForCompletion(eq(CONTAINER_ID), any()))
                     .thenReturn(new SandboxContainerManager.WaitOutcome(0, false));
@@ -431,7 +431,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID))
-                    .thenReturn(Map.of("hephaestus.managed", "true", "hephaestus.job-id", JOB_ID.toString()));
+                    .thenReturn(Map.of("hephaestus.sandbox-owner", "default", "hephaestus.job-id", JOB_ID.toString()));
             when(containerManager.createContainer(any())).thenReturn(CONTAINER_ID);
             when(containerManager.waitForCompletion(eq(CONTAINER_ID), any()))
                     .thenReturn(new SandboxContainerManager.WaitOutcome(137, true));
@@ -612,7 +612,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
-            when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of("hephaestus.managed", "true"));
+            when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of("hephaestus.sandbox-owner", "default"));
             when(containerManager.createContainer(any())).thenReturn(CONTAINER_ID);
 
             when(containerManager.waitForCompletion(eq(CONTAINER_ID), any())).thenAnswer(inv -> {
@@ -779,7 +779,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
-            when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of("hephaestus.managed", "true"));
+            when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of("hephaestus.sandbox-owner", "default"));
             when(containerManager.createContainer(any())).thenReturn(CONTAINER_ID);
             when(containerManager.waitForCompletion(eq(CONTAINER_ID), any())).thenAnswer(inv -> {
                 inExecution.countDown();

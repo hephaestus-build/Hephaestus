@@ -41,7 +41,7 @@ class SandboxLayoutPathsTest extends HephaestusArchitectureTest {
         }
     }
 
-    /** Surefire may invoke us from either the module root or the repo root — try both. */
+    /** IDE launches may use the repo root rather than Gradle's module root — try both. */
     private static Path resolveDir(String moduleRelative, String repoRelative) {
         Path candidate = Path.of(moduleRelative);
         return Files.isDirectory(candidate) ? candidate : Path.of(repoRelative);

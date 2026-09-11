@@ -3,6 +3,8 @@ import { dirname, join } from "node:path";
 
 import type { StorybookConfig } from "@storybook/react-vite";
 
+import { storybookChunkBudgets } from "./chunk-budgets.ts";
+
 const require = createRequire(import.meta.url);
 
 function getAbsolutePath(value: string): string {
@@ -10,7 +12,7 @@ function getAbsolutePath(value: string): string {
 }
 
 const config: StorybookConfig = {
-	stories: ["../src/**/*.mdx", "../src/**/*.stories.@(js|jsx|mjs|ts|tsx)"],
+	stories: ["../src/**/*.stories.@(js|jsx|mjs|ts|tsx)"],
 	addons: [
 		getAbsolutePath("@storybook/addon-docs"),
 		getAbsolutePath("@storybook/addon-onboarding"),
@@ -25,6 +27,20 @@ const config: StorybookConfig = {
 	},
 	// Pre-bundling prevents Vite from reloading the page while browser-mode tests are running.
 	viteFinal: (viteConfig) => {
+		viteConfig.build ??= {};
+		viteConfig.build.rolldownOptions ??= {};
+		// The budget plugin checks every chunk, failing unknown oversize or growth in the two
+		// monolithic tool assets. Replace only Vite's redundant aggregate warning, not other logs.
+		viteConfig.build.rolldownOptions.onLog = (level, log, handler) => {
+			if (
+				log.plugin === "builtin:vite-reporter" &&
+				log.message.startsWith("\n(!) Some chunks are larger than 500 kB after minification.")
+			)
+				return;
+			handler(level, log);
+		};
+		viteConfig.plugins ??= [];
+		viteConfig.plugins.push(storybookChunkBudgets());
 		viteConfig.optimizeDeps ??= {};
 		viteConfig.optimizeDeps.include = [
 			...(viteConfig.optimizeDeps.include ?? []),

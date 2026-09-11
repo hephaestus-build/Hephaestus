@@ -18,6 +18,7 @@ const sidebars: SidebarsConfig = {
 				"accessibility-audit-plan",
 				"security-mutation-testing",
 				"coding-guidelines",
+				"structured-logging",
 				"brand-assets",
 				"api-error-handling",
 				"workspace-context",
@@ -34,7 +35,6 @@ const sidebars: SidebarsConfig = {
 				"migration-unified-integration",
 				"database-schema",
 				"database-migration",
-				"achievements",
 			],
 		},
 		{

@@ -7,7 +7,6 @@ import { useAuth } from "@/integrations/auth/AuthContext";
 export interface WorkspaceFeatures {
 	practicesEnabled: boolean;
 	mentorEnabled: boolean;
-	achievementsEnabled: boolean;
 	leaderboardEnabled: boolean;
 	progressionEnabled: boolean;
 	leaguesEnabled: boolean;
@@ -27,7 +26,6 @@ export function useWorkspaceFeatures(workspaceSlug: string | undefined): Workspa
 	const query = useQuery({
 		...listWorkspacesOptions(),
 		enabled: isAuthenticated && !authLoading,
-		staleTime: 30_000,
 	});
 
 	const workspaces = Array.isArray(query.data) ? query.data : [];
@@ -48,7 +46,6 @@ function workspaceFeaturesOf(workspace: WorkspaceListItem): WorkspaceFeatures {
 	return {
 		practicesEnabled: workspace.practicesEnabled,
 		mentorEnabled: workspace.mentorEnabled,
-		achievementsEnabled: workspace.achievementsEnabled,
 		leaderboardEnabled: workspace.leaderboardEnabled,
 		progressionEnabled: workspace.progressionEnabled,
 		leaguesEnabled: workspace.leaguesEnabled,

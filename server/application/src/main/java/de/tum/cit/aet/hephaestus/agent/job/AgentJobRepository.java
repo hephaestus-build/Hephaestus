@@ -27,9 +27,29 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     @Query("DELETE FROM AgentJob j WHERE j.workspace.id = :workspaceId")
     int deleteAllByWorkspaceId(@Param("workspaceId") Long workspaceId);
 
-    Page<AgentJob> findByWorkspaceId(Long workspaceId, Pageable pageable);
-
-    Page<AgentJob> findByWorkspaceIdAndStatus(Long workspaceId, AgentJobStatus status, Pageable pageable);
+    /**
+     * One page of a workspace's jobs, with an optional status filter, selecting only what the listing
+     * renders. An entity page would carry {@code container_logs} — a whole review transcript per row,
+     * which no listing reads — into heap and throw it away. {@code output} stays: the listing renders
+     * it and derives each run's outcome from it, and it is bounded by the agent's result contract
+     * rather than by how much a review had to say.
+     */
+    @Query("SELECT j.id AS id, j.jobType AS jobType, j.status AS status, j.integrationKind AS integrationKind, "
+            + "j.metadata AS metadata, j.output AS output, j.configSnapshot AS configSnapshot, "
+            + "j.exitCode AS exitCode, j.errorMessage AS errorMessage, j.deliveryStatus AS deliveryStatus, "
+            + "j.deliveryCommentId AS deliveryCommentId, j.retryCount AS retryCount, "
+            + "j.availableAt AS availableAt, j.holdReason AS holdReason, j.createdAt AS createdAt, "
+            + "j.startedAt AS startedAt, j.completedAt AS completedAt, j.llmModel AS llmModel, "
+            + "j.llmModelVersion AS llmModelVersion, j.llmTotalCalls AS llmTotalCalls, "
+            + "j.llmTotalInputTokens AS llmTotalInputTokens, j.llmTotalOutputTokens AS llmTotalOutputTokens, "
+            + "j.llmTotalReasoningTokens AS llmTotalReasoningTokens, j.llmCacheReadTokens AS llmCacheReadTokens, "
+            + "j.llmCacheWriteTokens AS llmCacheWriteTokens "
+            + "FROM AgentJob j WHERE j.workspace.id = :workspaceId "
+            + "AND (:status IS NULL OR j.status = :status)")
+    Page<AgentJobListRow> findListRows(
+            @Param("workspaceId") Long workspaceId,
+            @Param("status") @Nullable AgentJobStatus status,
+            Pageable pageable);
 
     @Query("SELECT j.id AS id, j.jobType AS jobType, j.integrationKind AS integrationKind, j.metadata AS metadata "
             + "FROM AgentJob j WHERE j.workspace.id = :workspaceId AND j.id IN :ids")
@@ -303,18 +323,8 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     Optional<AgentJobLlmUsage> findLlmUsageById(@Param("id") UUID id);
 
     /**
-     * Finished jobs at least one feedback lane has no record of having run — the work
-     * {@code FeedbackLanePreparationSweeper} recovers after a rejected async submission dropped the
-     * event.
-     *
-     * <p>Bounded on both sides of the window on purpose. The upper bound leaves the listener its own
-     * chance first, so the sweeper is a backstop rather than a competitor; the lower bound stops the
-     * sweep from walking all of history, which also means a lane left unprepared for longer than the
-     * window is never recovered — it is a recovery path, not a reconciliation of the whole ledger.
-     *
-     * <p>Both marks are set even when a lane prepares nothing, so a job the sweeper handles is
-     * off this list on the next pass whatever the lanes decided. That is what keeps an hourly sweep
-     * from re-routing every recent job forever.
+     * Completed pull-request and issue reviews with unfinished preparation in {@code [from, until)}.
+     * A successful empty result has a completion mark and is excluded.
      */
     @WorkspaceAgnostic("Cross-tenant recovery sweep over jobs whose feedback lanes have no completion mark")
     @Query("SELECT new de.tum.cit.aet.hephaestus.agent.job.UnpreparedFeedbackLanes("
@@ -329,14 +339,9 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
             @Param("from") Instant from, @Param("until") Instant until, Pageable pageable);
 
     /**
-     * Records that the conversational lane ran for this job. Written by the lane itself and by the
-     * sweeper that recovered it, so they cannot disagree about which one it was: the mark says the lane
-     * ran, not who drove it.
+     * Records successful preparation, including an empty result, without overwriting its first completion time.
      *
-     * <p>{@code IS NULL}-fenced so a sweeper racing a slow listener leaves the first completion's
-     * instant standing rather than backdating or advancing it.
-     *
-     * @return 1 when this call is the one that recorded the lane, 0 when it was already recorded
+     * @return 1 if recorded, 0 if already recorded or the job no longer exists
      */
     @WorkspaceAgnostic("ID-based lane completion mark; job ID from the lane's own event or the recovery sweep")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
@@ -543,11 +548,25 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
             @Param("newStatus") DeliveryStatus newStatus,
             @Param("fromStatuses") Collection<DeliveryStatus> fromStatuses);
 
-    /** Bounded by {@code pageable} so one sweep pass never loads an unbounded backlog. */
+    /**
+     * Bounded by {@code pageable} so one sweep pass never loads an unbounded backlog, and narrowed to
+     * what the sweep decides on: most candidates are skipped or exhausted, and only the one that wins
+     * its attempt is worth reading whole.
+     */
     @WorkspaceAgnostic("Cross-workspace delivery-recovery sweep; caller is @WorkspaceAgnostic sweeper")
-    @Query("SELECT j FROM AgentJob j WHERE j.status = 'COMPLETED' AND j.deliveryStatus = 'PENDING' "
+    @Query("SELECT j.id AS id, j.deliveryAttempts AS deliveryAttempts, j.deliveryCommentId AS deliveryCommentId "
+            + "FROM AgentJob j WHERE j.status = 'COMPLETED' AND j.deliveryStatus = 'PENDING' "
             + "AND j.completedAt < :cutoff ORDER BY j.completedAt ASC")
-    List<AgentJob> findStuckPendingDeliveries(@Param("cutoff") Instant cutoff, Pageable pageable);
+    List<StuckDeliveryRow> findStuckPendingDeliveries(@Param("cutoff") Instant cutoff, Pageable pageable);
+
+    /**
+     * The one candidate a sweep pass won its attempt on, read whole because the delivery needs the
+     * output the review produced. The status and delivery predicates repeat the sweep's own, so a row
+     * that finished or failed in between is simply not there.
+     */
+    @WorkspaceAgnostic("ID-based read of a delivery-recovery candidate; job ID from the @WorkspaceAgnostic sweep")
+    @Query("SELECT j FROM AgentJob j WHERE j.id = :id AND j.status = 'COMPLETED' " + "AND j.deliveryStatus = 'PENDING'")
+    Optional<AgentJob> findDeliveryRecoveryCandidate(@Param("id") UUID id);
 
     /**
      * Increments {@code delivery_attempts} only if it still matches {@code expectedAttempts}, so two
@@ -718,6 +737,81 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
 
         /** A JSON array of blockers, aggregated by the query so one row is one practice. */
         String getBlockersObserved();
+    }
+
+    /**
+     * One row of the workspace job listing: every column {@code AgentJobDTO} renders, and no other.
+     * Each getter carries the nullness {@link AgentJob} declares for the same field, so a row and an
+     * entity say the same thing about what may be absent.
+     */
+    interface AgentJobListRow extends ReviewRunTargetRow {
+        AgentJobStatus getStatus();
+
+        @Nullable
+        JsonNode getOutput();
+
+        JsonNode getConfigSnapshot();
+
+        @Nullable
+        Integer getExitCode();
+
+        @Nullable
+        String getErrorMessage();
+
+        @Nullable
+        DeliveryStatus getDeliveryStatus();
+
+        @Nullable
+        String getDeliveryCommentId();
+
+        int getRetryCount();
+
+        Instant getAvailableAt();
+
+        @Nullable
+        String getHoldReason();
+
+        Instant getCreatedAt();
+
+        @Nullable
+        Instant getStartedAt();
+
+        @Nullable
+        Instant getCompletedAt();
+
+        @Nullable
+        String getLlmModel();
+
+        @Nullable
+        String getLlmModelVersion();
+
+        @Nullable
+        Integer getLlmTotalCalls();
+
+        @Nullable
+        Integer getLlmTotalInputTokens();
+
+        @Nullable
+        Integer getLlmTotalOutputTokens();
+
+        @Nullable
+        Integer getLlmTotalReasoningTokens();
+
+        @Nullable
+        Integer getLlmCacheReadTokens();
+
+        @Nullable
+        Integer getLlmCacheWriteTokens();
+    }
+
+    /** What one delivery-recovery pass decides on before it reads a job whole. */
+    interface StuckDeliveryRow {
+        UUID getId();
+
+        short getDeliveryAttempts();
+
+        @Nullable
+        String getDeliveryCommentId();
     }
 
     interface ReviewRunTargetRow {

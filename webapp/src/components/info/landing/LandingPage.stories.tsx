@@ -11,31 +11,18 @@ const meta = {
 	},
 	args: {
 		onSignIn: fn(),
-		onGoToDashboard: fn(),
 	},
 } satisfies Meta<typeof LandingPage>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {
-	args: {
-		isSignedIn: false,
-	},
-};
-
-export const SignedIn: Story = {
-	args: {
-		isSignedIn: true,
-	},
-};
+export const Default: Story = {};
 
 export const Mobile: Story = {
-	args: { isSignedIn: false },
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 };
 
 export const DarkMode: Story = {
-	args: { isSignedIn: false },
 	globals: { theme: "dark" },
 };

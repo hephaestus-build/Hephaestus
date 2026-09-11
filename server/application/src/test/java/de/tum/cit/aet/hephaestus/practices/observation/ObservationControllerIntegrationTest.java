@@ -528,7 +528,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -541,7 +542,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -597,7 +599,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .uri(BASE_URI, workspace.getWorkspaceSlug())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -802,7 +805,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .uri(BASE_URI + "/summary", workspace.getWorkspaceSlug())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -896,7 +900,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -906,7 +911,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .uri(BASE_URI + "/{findingId}", workspace.getWorkspaceSlug(), UUID.randomUUID())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -918,7 +924,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -1034,7 +1041,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
     }
 
@@ -1125,7 +1133,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .uri(BASE_URI + "/pull-request/{prId}", workspace.getWorkspaceSlug(), 999L)
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -1332,7 +1341,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .uri("/workspaces/{workspaceSlug}/practices/standings", workspace.getWorkspaceSlug())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
     }
 }

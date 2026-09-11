@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 import {
 	type AgentSession,
@@ -20,7 +21,7 @@ import {
 import { errorText } from "./pi-error-text.ts";
 import { buildGrepTool } from "./pi-grep-tool.ts";
 import {
-	citationMatchesArtifact,
+	describeCitationMismatch,
 	dedupeKeyForObservation,
 	isRecord,
 	type NormalizedObservation,
@@ -31,6 +32,7 @@ import {
 } from "./pi-observation-normalize.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { loadProviderConfig, registerHephaestusProvider } from "./pi-provider.ts";
+import { ReviewTrace } from "./pi-review-trace.ts";
 import {
 	buildReviewTree,
 	mapConcurrent,
@@ -56,6 +58,7 @@ import {
 import { isRetryableStatus, retrying } from "./pi-runner-retry.ts";
 import {
 	armRetryWindow,
+	deriveCompositionWindow,
 	deriveReconBudget,
 	deriveTimeouts,
 	deriveTurnTiming,
@@ -67,49 +70,29 @@ import {
 	newUsageLedger,
 	type UsageReport,
 } from "./pi-runner-usage.ts";
+import { stopSession } from "./pi-session-lifecycle.ts";
 import { forkSessions, reconnaissanceSeed } from "./pi-session-tree.ts";
+import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
 
-// ── Reading what other processes wrote ───────────────────────────────────────
-// Everything this runner is handed — the task envelope, the manifest, the practice index, the
-// composition request, the staged history, the admission response — is JSON written by another process.
-// None of it is typed by having been parsed, so each reader below states the shape it needs and checks
-// for it, and the checks are the only reason the shapes are true.
-
-/** JSON.parse with the return type it actually has. */
 function parseJson(text: string): unknown {
 	return JSON.parse(text);
 }
 
-/** The elements of a value the writer was supposed to send as an array, and none for anything else. */
 function jsonArray(value: unknown): unknown[] {
 	return Array.isArray(value) ? value : [];
 }
 
-/**
- * A value nobody has checked, as log text. A string reads as itself; anything else is rendered as the
- * JSON it arrived as, because an object coerced to a string is "[object Object]" — and a line that
- * reports a rejected envelope that way has said nothing about the envelope.
- */
 function logValue(value: unknown): string {
 	if (typeof value === "string") return value;
 	if (value === undefined) return "undefined";
 	return JSON.stringify(value);
 }
 
-/**
- * An array field the SDK declares required, read as the empty list when it is not there.
- *
- * <p>These reads run over whatever a session has left behind — before a first turn, after an abort,
- * after a provider error — which is the state in which pi-runner-usage.ts records a message arriving
- * without the usage block its declaration promises. Neither a session with no transcript nor a
- * message with no parts is a reason to throw inside an event subscription, or to end a review that
- * has already measured something.
- */
+/** SDK event arrays may be absent before completion or after abort. */
 function listOrEmpty<T>(items: T[] | undefined): T[] {
 	return items ?? [];
 }
 
-/** One practice this run may report on, as inputs/practices/index.json describes it. */
 interface PracticeIndexEntry {
 	slug: string;
 	group?: string;
@@ -122,6 +105,7 @@ interface TaskEnvelope {
 	schemaVersion: number;
 	jobId: unknown;
 	workspaceId: unknown;
+	paths: ReturnType<typeof taskPaths>;
 	task: {
 		kind: string;
 		prompt: string;
@@ -140,33 +124,19 @@ interface ChannelBounds {
 /** Where an IN_CONTEXT note may be placed on this artifact. */
 type PlacementKind = "DIFF" | "ARTIFACT";
 
-/** inputs/feedback-composition.json, once its bounds have been clamped to what this run may do. */
+/** The task-declared composition request, once its bounds have been clamped to what this run may do. */
 interface CompositionRequest {
 	channels: Record<Channel, ChannelBounds>;
 	inContextPlacementKinds: PlacementKind[];
 	minDistinctArtifacts: number;
 }
 
-/**
- * One citation of an observation Java has admitted.
- *
- * <p>Only `index` is named, because only `index` is checked. Everything else the server sends rides the
- * index signature: the runner copies those fields onward without reading them, and naming a type it
- * never verifies would be a claim about the server's payload that nothing here establishes.
- */
 interface AdmittedCitation {
 	index: number;
 	[key: string]: unknown;
 }
 
-/**
- * An observation after Java has admitted it.
- *
- * <p>The server owns this shape and the runner re-emits it whole — work/composition/observations.json is
- * this object verbatim, because the composer's prompt reads fields the runner never looks at. So the
- * three fields the runner itself depends on are named and checked, and the index signature is what
- * carries the rest of the server's payload across untouched.
- */
+/** Validate consumed fields; preserve other server fields for the composer. */
 interface AdmittedObservation {
 	id: string;
 	practiceSlug: string;
@@ -188,14 +158,20 @@ function isAdmittedObservation(value: unknown): value is AdmittedObservation {
 	);
 }
 
-// Overridable so a harness with no /workspace can drive the runner. Production never sets it.
 const WORKSPACE_ROOT = "/workspace";
 // The SDK's grep spawns ripgrep, which the sandbox forbids; the runner's own search tool takes its
 // place in every session under the same name. "grep" stays listed: the SDK filters custom tools
 // through this list too, and a listed custom definition replaces the built-in of that name.
 const EVIDENCE_TOOLS = ["read", "grep"] as const;
 const CWD = process.env.PI_RUNNER_CWD ?? WORKSPACE_ROOT;
+const ENVELOPE_MISMATCH_EXIT = 42;
+const SUPPORTED_KIND = "practice_review";
+const TASK_PATH = `${CWD}/task.json`;
+const taskEnvelope = readTaskEnvelope();
+const INPUT_PATHS = resolveTaskPaths(CWD, taskEnvelope.paths);
 const OUTPUT = `${CWD}/out`;
+const reviewTrace = process.env.PI_REVIEW_CAPTURE === "true" ? new ReviewTrace(OUTPUT) : undefined;
+process.on("exit", (code) => reviewTrace?.finish(code));
 const RESULT_PATH = outputPath(OUTPUT, "result.json");
 const REVIEW_STATE_PATH = outputPath(OUTPUT, "review-state.json");
 const WATCHDOG_PATH = outputPath(OUTPUT, "watchdog-killed.json");
@@ -212,10 +188,7 @@ const AGENT_DIR = process.env.PI_CODING_AGENT_DIR;
 if (!AGENT_DIR) {
 	throw new Error("PI_CODING_AGENT_DIR env var is required");
 }
-const TIMEOUTS = deriveTimeouts(
-	AGENT_BUDGET_MS,
-	existsSync(`${CWD}/inputs/feedback-composition.json`),
-);
+const TIMEOUTS = deriveTimeouts(AGENT_BUDGET_MS, existsSync(INPUT_PATHS.compositionRequest));
 const {
 	initialMs: INITIAL_TIMEOUT_MS,
 	retryMs: RETRY_TIMEOUT_MS,
@@ -254,15 +227,15 @@ function readManifest(): {
 	availableSourceKinds: Set<string>;
 	artifactSources: Map<string, string>;
 } {
-	const manifest = parseJson(readFileSync(`${CWD}/inputs/manifest.json`, "utf8"));
+	const manifest = parseJson(readFileSync(INPUT_PATHS.manifest, "utf8"));
 	if (!isRecord(manifest) || !Array.isArray(manifest.sources)) {
-		throw new Error("inputs/manifest.json: expected a sources array");
+		throw new Error("Task manifest: expected a sources array");
 	}
 	const availableSourceKinds = new Set<string>();
 	const artifactSources = new Map<string, string>();
 	for (const source of jsonArray(manifest.sources)) {
 		if (!isRecord(source) || typeof source.kind !== "string" || !isRecord(source.state)) {
-			throw new Error("inputs/manifest.json: every source needs a string kind and a state");
+			throw new Error("Task manifest: every source needs a string kind and a state");
 		}
 		if (source.state.availability === "AVAILABLE") availableSourceKinds.add(source.kind);
 		for (const artifact of jsonArray(source.artifacts)) {
@@ -280,11 +253,11 @@ function readManifest(): {
  * waiting to happen.
  */
 function readPracticeIndex(): PracticeIndexEntry[] {
-	const index = parseJson(readFileSync(`${CWD}/inputs/practices/index.json`, "utf8"));
-	if (!Array.isArray(index)) throw new Error("inputs/practices/index.json: expected an array");
+	const index = parseJson(readFileSync(INPUT_PATHS.practiceIndex, "utf8"));
+	if (!Array.isArray(index)) throw new Error("the task-declared practice index: expected an array");
 	return jsonArray(index).map((practice): PracticeIndexEntry => {
 		if (!isRecord(practice) || typeof practice.slug !== "string") {
-			throw new Error("inputs/practices/index.json: every practice needs a string slug");
+			throw new Error("the task-declared practice index: every practice needs a string slug");
 		}
 		return {
 			slug: practice.slug,
@@ -572,11 +545,12 @@ function normalizeAndValidateObservation(rawObservation: unknown): NormalizedObs
 	validateInapplicabilityScope(observation, availableSourceKinds);
 	for (const citation of observation.evidence.citations) {
 		const content = readFileSync(`${CWD}/${citation.artifactPath}`, "utf8");
-		if (!citationMatchesArtifact(citation, content)) {
+		const mismatch = describeCitationMismatch(citation, content);
+		if (mismatch !== null) {
 			throw new Error(
 				`citation does not match ${citation.path}:${citation.startLine}-${citation.endLine} ` +
-					`(${citation.side ?? "text"}) in '${citation.artifactPath}'; copy the exact artifact text ` +
-					`and, for a diff, use its [L<n>] coordinates and OLD/NEW side`,
+					`(${citation.side ?? "text"}) in '${citation.artifactPath}': ${mismatch}. Copy the exact ` +
+					`artifact text and, for a diff, use its [L<n>] coordinates and OLD/NEW side`,
 			);
 		}
 	}
@@ -735,10 +709,25 @@ const PERSIST_DISCIPLINE =
 	`Do not add derivative low-signal observations when a stronger observation already covers the problem. ` +
 	`Use tools only from this point onward. Do not write planning prose or plain-text commentary.`;
 
-const ENVELOPE_MISMATCH_EXIT = 42;
-const SUPPORTED_SCHEMA_VERSION = 1;
-const SUPPORTED_KIND = "practice_review";
-const TASK_PATH = `${CWD}/task.json`;
+/**
+ * The review is finished and only the call carrying it home did not arrive. The server keeps the
+ * work queued for another attempt when it sees this, so the measurement is repeated against a
+ * server the next sandbox can reach rather than recorded as a review that produced nothing.
+ */
+const SERVER_UNREACHABLE_EXIT = 75;
+/**
+ * No practice was reached, and every model call this run made failed. That is the same kind of fact
+ * as an unreachable server — nothing about the reviewed work was measured, and nothing was learned
+ * that a second attempt would repeat — so the server queues the review again rather than recording it
+ * as one that found nothing.
+ */
+const PROVIDER_UNREACHABLE_EXIT = 76;
+
+/**
+ * The session labels whose turns are the ones that record observations — the per-practice observers
+ * and their retry lane. A practice is reached from one of these or not at all.
+ */
+const RECORDING_LANE = /^(observer|retry):/;
 
 function readTaskEnvelope(): TaskEnvelope {
 	let raw: string;
@@ -759,7 +748,7 @@ function readTaskEnvelope(): TaskEnvelope {
 	if (envelope.schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
 		console.error(
 			`[pi-runner] Unsupported schemaVersion: got ${logValue(envelope.schemaVersion)}, expected ${SUPPORTED_SCHEMA_VERSION}. ` +
-				`Server/image version drift — rebuild the agent-pi image or roll back the server.`,
+				`Task envelope and staged runner disagree.`,
 		);
 		process.exit(ENVELOPE_MISMATCH_EXIT);
 	}
@@ -775,7 +764,15 @@ function readTaskEnvelope(): TaskEnvelope {
 		console.error(`[pi-runner] task.prompt is missing or blank in ${TASK_PATH}`);
 		process.exit(ENVELOPE_MISMATCH_EXIT);
 	}
+	let paths: ReturnType<typeof taskPaths>;
+	try {
+		paths = taskPaths(envelope.paths);
+	} catch (error) {
+		console.error(`[pi-runner] ${errorText(error)}`);
+		process.exit(ENVELOPE_MISMATCH_EXIT);
+	}
 	return {
+		paths,
 		schemaVersion: SUPPORTED_SCHEMA_VERSION,
 		jobId: envelope.jobId,
 		workspaceId: envelope.workspaceId,
@@ -788,7 +785,6 @@ function readTaskEnvelope(): TaskEnvelope {
 	};
 }
 
-const taskEnvelope = readTaskEnvelope();
 const prompt = taskEnvelope.task.prompt.trim();
 console.error(
 	`[pi-runner] Task envelope loaded: kind=${taskEnvelope.task.kind}, ` +
@@ -797,10 +793,10 @@ console.error(
 		`prNumber=${logValue(taskEnvelope.task.pullRequestNumber ?? "?")}`,
 );
 
-const COMPOSITION_REQUEST_PATH = `${CWD}/inputs/feedback-composition.json`;
+const COMPOSITION_REQUEST_PATH = INPUT_PATHS.compositionRequest;
 const FEEDBACK_PATH = outputPath(OUTPUT, "feedback.json");
 const COMPOSER_PROMPT_PATH = `${CWD}/feedback-composer.md`;
-const PREPARED_FEEDBACK_PATH = `${CWD}/inputs/history/prepared.json`;
+const PREPARED_FEEDBACK_PATH = INPUT_PATHS.preparedFeedback;
 const COMPOSITION_OBSERVATIONS_PATH = `${CWD}/work/composition/observations.json`;
 let compositionAdmitted = false;
 let admissionDigest: string | null = null;
@@ -1139,7 +1135,7 @@ function buildFeedbackTool(
 							type: "string",
 							maxLength: 64,
 							description:
-								"Required for SUPERSEDE: the threadKey of an entry in inputs/history/prepared.json. " +
+								"Required for SUPERSEDE: the threadKey of an entry in the task-declared prepared-feedback file. " +
 								"You may not name a key that is not in that file.",
 						},
 						withholdReason: { type: "string", enum: WITHHOLD_REASONS },
@@ -1369,7 +1365,7 @@ function validateUnit(
 					target.practiceSlug === unit.practiceSlug,
 			)
 		) {
-			return `No queued message has threadKey '${unit.supersedesThreadKey}'; it must come from inputs/history/prepared.json. Skipped.`;
+			return `No queued message has threadKey '${unit.supersedesThreadKey}'; it must come from the task-declared prepared-feedback file. Skipped.`;
 		}
 	}
 	if (unit.channel === "IN_CHAT") {
@@ -1504,6 +1500,21 @@ const ADMISSION_ATTEMPTS = 4;
  */
 const ADMISSION_ATTEMPT_TIMEOUT_MS = 5_000;
 
+/**
+ * What the server said about an answer it refused, as text a reader can act on. A body that cannot be
+ * read is not worth failing over twice: the status alone still says a refusal happened.
+ */
+async function answerText(response: Response): Promise<string> {
+	try {
+		const body = await response.text();
+		const problem: unknown = body.trim().startsWith("{") ? parseJson(body) : null;
+		const detail = isRecord(problem) ? problem.detail : null;
+		return typeof detail === "string" && detail.length > 0 ? detail : body.slice(0, 500);
+	} catch {
+		return "the server gave no readable reason";
+	}
+}
+
 /** One admission attempt: the answer it returns is the parsed body, unvalidated. */
 async function postAdmission(): Promise<unknown> {
 	let response: Response;
@@ -1528,7 +1539,13 @@ async function postAdmission(): Promise<unknown> {
 	if (isRetryableStatus(response.status)) {
 		throw new AdmissionUnreachable(`observation admission failed: HTTP ${response.status}`);
 	}
-	if (!response.ok) throw new Error(`observation admission failed: HTTP ${response.status}`);
+	if (!response.ok) {
+		// The server has decided, and it said why. Asking again puts the same question, so the run ends
+		// here — with the reason in the transcript, which is the only place a reader can find it.
+		throw new Error(
+			`observation admission was refused: HTTP ${response.status} — ${await answerText(response)}`,
+		);
+	}
 	try {
 		return await response.json();
 	} catch (error) {
@@ -1596,15 +1613,12 @@ function scheduleDeadline(timeoutMs: number, onTimeout: () => void) {
 	return { elapsed, timer, state };
 }
 
-/**
- * Ends a session for good. A steer still queued when a session is disposed is not dropped: the SDK
- * keeps it on the agent and starts a fresh run to deliver it, so a nudge that arrived just as a
- * deadline did would spend the budget that deadline just took away. Clearing the queue first is what
- * the SDK's own interactive mode does before it aborts.
- */
-function stopSession(session: AgentSession) {
+/** Timers request cancellation; the owning finally block drains events before disposal. */
+function abortSession(session: AgentSession) {
 	session.clearQueue();
-	session.dispose();
+	void session.abort().catch((error) => {
+		console.error(`[pi-runner] session abort failed: ${errorText(error)}`);
+	});
 }
 
 function scheduleTurnTimers(
@@ -1633,7 +1647,7 @@ function scheduleTurnTimers(
 		console.error(
 			`[pi-runner] turn ${turnNumber}/${turnCount} exhausted its fair share — aborting this turn`,
 		);
-		stopSession(session);
+		abortSession(session);
 	});
 	return { softTimer, hardTimer: hard.timer, hardDeadline: hard.elapsed, state };
 }
@@ -1663,6 +1677,7 @@ async function main() {
 			agentDir: AGENT_DIR ?? getAgentDir(),
 			settingsManager,
 			...SANDBOX_RESOURCE_LOADER_OPTIONS,
+			extensionFactories: reviewTrace ? [reviewTrace.extension] : [],
 			agentsFilesOverride: () => ({
 				agentsFiles: [{ path: orchestratorPath, content: orchestrator }],
 			}),
@@ -1708,12 +1723,16 @@ async function main() {
 		: null;
 	const events: { type: string; timestamp: number }[] = [];
 	const streamUsage = newUsageLedger();
+	let providerFailures = 0;
 	const subscribeSession = (
 		trackedSession: AgentSession,
 		label: string,
 		pace: RecordingPace | null = null,
-	) =>
-		trackedSession.subscribe((event: AgentSessionEvent) => {
+	) => {
+		const sessionId = trackedSession.sessionManager.getSessionId();
+		reviewTrace?.session(sessionId, label, trackedSession.sessionManager.getSessionFile());
+		return trackedSession.subscribe((event: AgentSessionEvent) => {
+			reviewTrace?.event(sessionId, event);
 			if (event.type === "tool_execution_start") {
 				console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
 			}
@@ -1727,6 +1746,11 @@ async function main() {
 			}
 			if (event.type === "auto_retry_end" && !event.success) {
 				const finalError = event.finalError ?? "no error given";
+				// A call the provider never answered, after the SDK spent its whole budget on it. Only the
+				// lanes that record observations are counted: reconnaissance and composition can fail
+				// without costing a practice, and what this number decides is whether a review that
+				// recorded nothing was cut off or simply had nothing to record.
+				if (RECORDING_LANE.test(label)) providerFailures++;
 				console.error(
 					`[pi-runner] ${label} provider call failed for good after ${event.attempt} retries: ${finalError}`,
 				);
@@ -1760,11 +1784,7 @@ async function main() {
 					console.error(
 						`[pi-runner] ${label}: ${Math.round(reached * 100)}% of its context spent — asking it to record`,
 					);
-					// Neither an order to stop reading nor a licence to keep reading, because this can
-					// arrive alongside the fair-share nudge above. The orchestrator's READ-BEFORE-NA gate
-					// makes reading the whole diff a precondition of half the answers, so a session pushed
-					// to settle a practice early settles it on evidence it cannot quote — which is the
-					// failure this whole pipeline exists to prevent.
+					// Checkpoint nudges must not relax the evidence requirements.
 					trackedSession
 						.steer(
 							`You have spent ${Math.round(reached * 100)}% of your context. Record now every practice your ` +
@@ -1776,6 +1796,7 @@ async function main() {
 			}
 			events.push({ type: `${label}:${event.type}`, timestamp: Date.now() });
 		});
+	};
 
 	/**
 	 * @param notReached the practices this review never settled, named for the composer so nothing it
@@ -1784,6 +1805,7 @@ async function main() {
 	async function completeWithAdmittedComposition(notReached: readonly string[]) {
 		measurementClosed = true;
 		await admitObservations();
+		persistComposedFeedback();
 		const parsed = parseJson(readFileSync(RESULT_PATH, "utf8"));
 		const result: Record<string, unknown> = isRecord(parsed) ? parsed : {};
 		result.admissionDigest = admissionDigest;
@@ -1795,7 +1817,9 @@ async function main() {
 				agentDir: AGENT_DIR,
 				tools: ["read", "grep", "report_feedback", "report_summary"],
 				customTools: [grepTool, feedbackTool, buildSummaryTool()],
-				sessionManager: SessionManager.inMemory(),
+				sessionManager: reviewTrace
+					? SessionManager.create(CWD, reviewTrace.sessionDir)
+					: SessionManager.inMemory(),
 				settingsManager,
 				resourceLoader: await loadResources(),
 				modelRuntime,
@@ -1806,11 +1830,22 @@ async function main() {
 		}
 		const unsubscribeComposer = subscribeSession(composerSession, "composer");
 		const instructions = readFileSync(COMPOSER_PROMPT_PATH, "utf8");
-		const compositionDeadline = scheduleDeadline(COMPOSITION_TIMEOUT_MS, () => {
+		const compositionMs = deriveCompositionWindow(
+			COMPOSITION_TIMEOUT_MS,
+			AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS),
+		);
+		if (compositionMs === 0) {
+			console.error("[pi-runner] Composition budget exhausted — preserving admitted observations");
+			await stopSession(composerSession);
+			unsubscribeComposer();
+			persistComposedFeedback();
+			return;
+		}
+		const compositionDeadline = scheduleDeadline(compositionMs, () => {
 			console.error(
 				`[pi-runner] Composition timeout — preserving observations and composed units so far`,
 			);
-			stopSession(composerSession);
+			abortSession(composerSession);
 		});
 		try {
 			await Promise.race([
@@ -1821,11 +1856,11 @@ async function main() {
 			]);
 		} finally {
 			clearTimeout(compositionDeadline.timer);
+			await stopSession(composerSession);
 			unsubscribeComposer();
+			persistComposedFeedback();
 		}
-		persistComposedFeedback();
 		const combinedUsage = extractUsageFromSession(composerSession.state, streamUsage);
-		stopSession(composerSession);
 		accumulateUsage(prevUsage, combinedUsage);
 		prevUsage = combinedUsage;
 		persistUsage();
@@ -1835,14 +1870,18 @@ async function main() {
 	const activeSessions = new Set<AgentSession>();
 	const hardAbort = new AbortController();
 
-	const hardTimer = setTimeout(() => {
+	const reviewDeadline = PROCESS_START_MS + INITIAL_TIMEOUT_MS;
+	const abortInitial = () => {
 		hardAborted = true;
 		hardAbort.abort();
 		console.error(`[pi-runner] Hard timeout — aborting ${activeSessions.size} active session(s)`);
 		for (const activeSession of activeSessions) {
-			stopSession(activeSession);
+			abortSession(activeSession);
 		}
-	}, INITIAL_TIMEOUT_MS);
+	};
+	const initialWindowMs = Math.max(0, reviewDeadline - Date.now());
+	const hardTimer = initialWindowMs > 0 ? setTimeout(abortInitial, initialWindowMs) : undefined;
+	if (initialWindowMs === 0) abortInitial();
 
 	console.error(`[pi-runner] Starting initial analysis`);
 	const startMs = Date.now();
@@ -1857,8 +1896,7 @@ async function main() {
 		process.env.PI_REVIEW_CONCURRENCY,
 		tree.practiceCount,
 	);
-	const sessionDir = `${CWD}/.sessions`;
-	const reviewDeadline = startMs + INITIAL_TIMEOUT_MS;
+	const sessionDir = reviewTrace?.sessionDir ?? `${CWD}/.sessions`;
 	console.error(
 		`[pi-runner] Review tree: ${tree.practiceCount} practices, ${tree.groups.length} evidence group(s), concurrency=${concurrency}`,
 	);
@@ -1866,52 +1904,63 @@ async function main() {
 	const groupSessionFiles = new Map<string, string>();
 	const groupSeedFiles = new Map<string, string>();
 	if (!hardAborted) {
-		const manager = SessionManager.create(CWD, sessionDir);
-		const { session: reconSession } = await createAgentSession({
-			cwd: CWD,
-			agentDir: AGENT_DIR,
-			tools: [...EVIDENCE_TOOLS],
-			customTools: [grepTool],
-			sessionManager: manager,
-			settingsManager,
-			resourceLoader: await loadResources(),
-			modelRuntime,
-			model,
-		});
-		const unsubscribeRecon = subscribeSession(reconSession, "recon:shared");
-		activeSessions.add(reconSession);
-		const reconBudgetMs = deriveReconBudget(INITIAL_TIMEOUT_MS);
-		const reconDeadline = scheduleDeadline(reconBudgetMs, () => stopSession(reconSession));
 		try {
-			const groupScope = tree.groups
-				.map((group) => `${group.id} [${group.practiceSlugs.join(", ")}]`)
-				.join("; ");
-			await Promise.race([
-				reconSession.prompt(
-					`Build one factual reconnaissance map for this review. Read the manifest and the artifact summary first, then inspect only enough shared evidence to identify changed surfaces, review activity, linked work, tests, and likely code paths. Record exact artifact paths and diff coordinates. Do not evaluate a practice or claim GOOD/BAD. The following group sessions will continue from this checkpoint: ${groupScope}`,
-				),
-				reconDeadline.elapsed,
-			]);
-			const { seedSessionFile, checkpointEntryId } = reconnaissanceSeed(
-				reconSession.sessionManager,
-				reconDeadline.state,
-				reconBudgetMs,
-			);
-			for (const fork of forkSessions({
-				seedSessionFile,
-				checkpointEntryId,
-				keys: tree.groups.map((group) => group.id),
-				sessionDir,
-			})) {
-				groupSeedFiles.set(fork.key, fork.sessionFile);
+			const manager = SessionManager.create(CWD, sessionDir);
+			const { session: reconSession } = await createAgentSession({
+				cwd: CWD,
+				agentDir: AGENT_DIR,
+				tools: [...EVIDENCE_TOOLS],
+				customTools: [grepTool],
+				sessionManager: manager,
+				settingsManager,
+				resourceLoader: await loadResources(),
+				modelRuntime,
+				model,
+			});
+			if (hardAbort.signal.aborted || Date.now() >= reviewDeadline) {
+				hardAborted = true;
+				hardAbort.abort();
+				await stopSession(reconSession);
+			} else {
+				const unsubscribeRecon = subscribeSession(reconSession, "recon:shared");
+				activeSessions.add(reconSession);
+				const reconBudgetMs = Math.min(
+					deriveReconBudget(INITIAL_TIMEOUT_MS),
+					reviewDeadline - Date.now(),
+				);
+				const reconDeadline = scheduleDeadline(reconBudgetMs, () => abortSession(reconSession));
+				try {
+					const groupScope = tree.groups
+						.map((group) => `${group.id} [${group.practiceSlugs.join(", ")}]`)
+						.join("; ");
+					await Promise.race([
+						reconSession.prompt(
+							`Build one factual reconnaissance map for this review. Read the manifest and the artifact summary first, then inspect only enough shared evidence to identify changed surfaces, review activity, linked work, tests, and likely code paths. Record exact artifact paths and diff coordinates. Do not evaluate a practice or claim GOOD/BAD. The following group sessions will continue from this checkpoint: ${groupScope}`,
+						),
+						reconDeadline.elapsed,
+					]);
+					const { seedSessionFile, checkpointEntryId } = reconnaissanceSeed(
+						reconSession.sessionManager,
+						reconDeadline.state,
+						reconBudgetMs,
+					);
+					for (const fork of forkSessions({
+						seedSessionFile,
+						checkpointEntryId,
+						keys: tree.groups.map((group) => group.id),
+						sessionDir,
+					})) {
+						groupSeedFiles.set(fork.key, fork.sessionFile);
+					}
+				} finally {
+					clearTimeout(reconDeadline.timer);
+					activeSessions.delete(reconSession);
+					await stopSession(reconSession);
+					unsubscribeRecon();
+				}
 			}
 		} catch (error) {
 			console.error(`[pi-runner] shared reconnaissance failed: ${errorText(error)}`);
-		} finally {
-			clearTimeout(reconDeadline.timer);
-			activeSessions.delete(reconSession);
-			unsubscribeRecon();
-			stopSession(reconSession);
 		}
 	}
 
@@ -1921,64 +1970,73 @@ async function main() {
 			tree.groups,
 			concurrency,
 			async (group, index) => {
-				const seedFile = groupSeedFiles.get(group.id);
-				const manager = seedFile
-					? SessionManager.open(seedFile, sessionDir)
-					: SessionManager.create(CWD, sessionDir);
-				const scopedTool = buildReportObservationTool(group.practiceSlugs);
-				const { session: observerSession } = await createAgentSession({
-					cwd: CWD,
-					agentDir: AGENT_DIR,
-					tools: [...EVIDENCE_TOOLS, "report_observation"],
-					customTools: [grepTool, scopedTool],
-					sessionManager: manager,
-					settingsManager,
-					resourceLoader: await loadResources(),
-					modelRuntime,
-					model,
-				});
-				const unsubscribeObserver = subscribeSession(
-					observerSession,
-					`observer:${group.id}`,
-					createRecordingPace(contextWindow, seedFile !== undefined),
-				);
-				activeSessions.add(observerSession);
-				const remainingMs = Math.max(1, reviewDeadline - Date.now());
-				const activeSlots = Math.min(concurrency, remainingGroups);
-				const groupBudgetMs = deriveWorkstreamBudget(remainingMs, activeSlots, remainingGroups);
-				const timing = deriveTurnTiming(groupBudgetMs, 1);
-				const timers = scheduleTurnTimers(
-					observerSession,
-					index + 1,
-					tree.groups.length,
-					timing.softNudgeMs,
-					timing.fairShareMs,
-				);
 				try {
-					await Promise.race([
-						observerSession.prompt(
-							`${prompt}\n\n## Practice group: ${group.id}\nEvaluate exactly these practices: ${group.practiceSlugs.join(", ")}. ` +
-								`Read their files under inputs/practices/, then start with the cheapest decisive practice. Persist each ` +
-								`observation as soon as it is supported; do not finish a group-wide evidence map first. Reuse evidence ` +
-								`already gathered when investigating the remaining practices. Persist at least one disposition for ` +
-								`every listed practice, plus any distinct material problems a practice exposes. Use ` +
-								`NO_REVIEW_OCCASION only after complete evidence proves the practice's explicit prerequisite did not ` +
-								`occur; missing evidence is not an occasion that failed to happen. Do not skip a practice because its ` +
-								`behavior is absent.`,
-						),
-						timers.hardDeadline,
-					]);
+					const seedFile = groupSeedFiles.get(group.id);
+					const manager = seedFile
+						? SessionManager.open(seedFile, sessionDir)
+						: SessionManager.create(CWD, sessionDir);
+					const scopedTool = buildReportObservationTool(group.practiceSlugs);
+					const { session: observerSession } = await createAgentSession({
+						cwd: CWD,
+						agentDir: AGENT_DIR,
+						tools: [...EVIDENCE_TOOLS, "report_observation"],
+						customTools: [grepTool, scopedTool],
+						sessionManager: manager,
+						settingsManager,
+						resourceLoader: await loadResources(),
+						modelRuntime,
+						model,
+					});
+					if (hardAbort.signal.aborted || Date.now() >= reviewDeadline) {
+						hardAborted = true;
+						hardAbort.abort();
+						await stopSession(observerSession);
+						return;
+					}
+					const unsubscribeObserver = subscribeSession(
+						observerSession,
+						`observer:${group.id}`,
+						createRecordingPace(contextWindow, seedFile !== undefined),
+					);
+					activeSessions.add(observerSession);
+					const remainingMs = Math.max(1, reviewDeadline - Date.now());
+					const activeSlots = Math.min(concurrency, remainingGroups);
+					const groupBudgetMs = deriveWorkstreamBudget(remainingMs, activeSlots, remainingGroups);
+					const timing = deriveTurnTiming(groupBudgetMs, 1);
+					const timers = scheduleTurnTimers(
+						observerSession,
+						index + 1,
+						tree.groups.length,
+						timing.softNudgeMs,
+						timing.fairShareMs,
+					);
+					try {
+						await Promise.race([
+							observerSession.prompt(
+								`${prompt}\n\n## Practice group: ${group.id}\nEvaluate exactly these practices: ${group.practiceSlugs.join(", ")}. ` +
+									`Read their files under ${dirname(taskEnvelope.paths.practiceIndex)}/, then start with the cheapest decisive practice. Persist each ` +
+									`observation as soon as it is supported; do not finish a group-wide evidence map first. Reuse evidence ` +
+									`already gathered when investigating the remaining practices. Persist at least one disposition for ` +
+									`every listed practice, plus any distinct material problems a practice exposes. Use ` +
+									`NO_REVIEW_OCCASION only after complete evidence proves the practice's explicit prerequisite did not ` +
+									`occur; missing evidence is not an occasion that failed to happen. Do not skip a practice because its ` +
+									`behavior is absent.`,
+							),
+							timers.hardDeadline,
+						]);
+					} finally {
+						const sessionFile = observerSession.sessionManager.getSessionFile();
+						if (sessionFile) groupSessionFiles.set(group.id, sessionFile);
+						softTimeoutFired ||= timers.state.softTimedOut;
+						clearTimeout(timers.softTimer);
+						clearTimeout(timers.hardTimer);
+						activeSessions.delete(observerSession);
+						await stopSession(observerSession);
+						unsubscribeObserver();
+					}
 				} catch (error) {
 					console.error(`[pi-runner] observer ${group.id} failed: ${errorText(error)}`);
 				} finally {
-					const sessionFile = observerSession.sessionManager.getSessionFile();
-					if (sessionFile) groupSessionFiles.set(group.id, sessionFile);
-					softTimeoutFired ||= timers.state.softTimedOut;
-					clearTimeout(timers.softTimer);
-					clearTimeout(timers.hardTimer);
-					activeSessions.delete(observerSession);
-					unsubscribeObserver();
-					stopSession(observerSession);
 					remainingGroups--;
 				}
 			},
@@ -2039,7 +2097,7 @@ async function main() {
 			retryAbort.abort();
 			console.error(`[pi-runner] Retry hard timeout — aborting`);
 			for (const activeSession of activeSessions) {
-				stopSession(activeSession);
+				abortSession(activeSession);
 			}
 		},
 	);
@@ -2060,49 +2118,79 @@ async function main() {
 			retryGroups,
 			concurrency,
 			async (group) => {
-				const retryTool = buildReportObservationTool(group.practiceSlugs);
-				const priorSessionFile = groupSessionFiles.get(group.id);
-				const { session: retrySession } = await createAgentSession({
-					cwd: CWD,
-					agentDir: AGENT_DIR,
-					tools: [...EVIDENCE_TOOLS, "report_observation"],
-					customTools: [grepTool, retryTool],
-					sessionManager: priorSessionFile
-						? SessionManager.open(priorSessionFile, sessionDir)
-						: SessionManager.inMemory(),
-					settingsManager,
-					resourceLoader: await loadResources(),
-					modelRuntime,
-					model,
-				});
-				const unsubscribeRetry = subscribeSession(
-					retrySession,
-					`retry:${group.id}`,
-					createRecordingPace(contextWindow, priorSessionFile !== undefined),
-				);
-				activeSessions.add(retrySession);
-				const activeSlots = Math.min(concurrency, retriesRemaining);
-				const retryBudgetMs = deriveWorkstreamBudget(retry.windowMs, activeSlots, retriesRemaining);
-				const retryDeadline = scheduleDeadline(retryBudgetMs, () => {
-					stopSession(retrySession);
-				});
 				try {
-					await Promise.race([
-						retrySession.prompt(
-							`${prompt}\n\n## Recovery practice group\nThe earlier group did not persist: ${group.practiceSlugs.join(", ")}. ` +
-								`Continue from its evidence and tool feedback. Persist one best-justified outcome for each missing ` +
-								`practice now; read more only to resolve a specific validation failure or genuinely open evidence ` +
-								`question. Evaluate no other practice. ${PERSIST_DISCIPLINE}`,
-						),
-						retryDeadline.elapsed,
-					]);
+					const retryTool = buildReportObservationTool(group.practiceSlugs);
+					const priorSessionFile = groupSessionFiles.get(group.id);
+					// Read through a call rather than inline: testing `signal.aborted` directly narrows it
+					// to false for the rest of the branch, which would make the identical check after
+					// the await dead to the type system while the signal can still abort during it.
+					const retryIsOver = () =>
+						retryAbort.signal.aborted || retryStartMs + retry.windowMs - Date.now() <= 0;
+					// Before building anything: a session costs the budget composition is about to need,
+					// and a window that is already gone would only have it stopped again.
+					if (retryIsOver()) {
+						retryAborted = true;
+						retryAbort.abort();
+						return;
+					}
+					const { session: retrySession } = await createAgentSession({
+						cwd: CWD,
+						agentDir: AGENT_DIR,
+						tools: [...EVIDENCE_TOOLS, "report_observation"],
+						customTools: [grepTool, retryTool],
+						sessionManager: priorSessionFile
+							? SessionManager.open(priorSessionFile, sessionDir)
+							: reviewTrace
+								? SessionManager.create(CWD, reviewTrace.sessionDir)
+								: SessionManager.inMemory(),
+						settingsManager,
+						resourceLoader: await loadResources(),
+						modelRuntime,
+						model,
+					});
+					// Again after: building the session takes time of its own, and the window may have
+					// closed or the abort fired while it was being built.
+					if (retryIsOver()) {
+						retryAborted = true;
+						retryAbort.abort();
+						await stopSession(retrySession);
+						return;
+					}
+					const remainingRetryMs = Math.max(0, retryStartMs + retry.windowMs - Date.now());
+					const unsubscribeRetry = subscribeSession(
+						retrySession,
+						`retry:${group.id}`,
+						createRecordingPace(contextWindow, priorSessionFile !== undefined),
+					);
+					activeSessions.add(retrySession);
+					const activeSlots = Math.min(concurrency, retriesRemaining);
+					const retryBudgetMs = deriveWorkstreamBudget(
+						remainingRetryMs,
+						activeSlots,
+						retriesRemaining,
+					);
+					const retryDeadline = scheduleDeadline(retryBudgetMs, () => {
+						abortSession(retrySession);
+					});
+					try {
+						await Promise.race([
+							retrySession.prompt(
+								`${prompt}\n\n## Recovery practice group\nThe earlier group did not persist: ${group.practiceSlugs.join(", ")}. ` +
+									`Continue from its evidence and tool feedback. Persist one best-justified outcome for each missing ` +
+									`practice now; read more only to resolve a specific validation failure or genuinely open evidence ` +
+									`question. Evaluate no other practice. ${PERSIST_DISCIPLINE}`,
+							),
+							retryDeadline.elapsed,
+						]);
+					} finally {
+						clearTimeout(retryDeadline.timer);
+						activeSessions.delete(retrySession);
+						await stopSession(retrySession);
+						unsubscribeRetry();
+					}
 				} catch (error) {
 					console.error(`[pi-runner] retry ${group.id} failed: ${errorText(error)}`);
 				} finally {
-					clearTimeout(retryDeadline.timer);
-					activeSessions.delete(retrySession);
-					unsubscribeRetry();
-					stopSession(retrySession);
 					retriesRemaining--;
 				}
 			},
@@ -2158,6 +2246,13 @@ async function main() {
 		process.exit(0);
 	}
 
+	if (providerFailures > 0) {
+		console.error(
+			`[pi-runner] UNREACHABLE: this review reached no practice, and ${providerFailures} model call(s) ` +
+				`went unanswered — the provider, not the work, is what this run could not read`,
+		);
+		process.exit(PROVIDER_UNREACHABLE_EXIT);
+	}
 	console.error(`[pi-runner] FAILED: this review reached no practice at all`);
 	process.exit(1);
 }
@@ -2180,5 +2275,8 @@ main().catch((err: unknown) => {
 	console.error(`[pi-runner] FATAL: ${errorText(err)}\n${err instanceof Error ? err.stack : ""}`);
 	persistRunnerDebug();
 	persistUsage();
-	process.exit(2);
+	// A server this container never reached is not a defect in the review, and the attempts above have
+	// already ridden out the failures that clear in place. Saying so distinctly is what lets the server
+	// try the same work again instead of ending it.
+	process.exit(err instanceof AdmissionUnreachable ? SERVER_UNREACHABLE_EXIT : 2);
 });

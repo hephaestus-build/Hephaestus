@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
@@ -267,6 +268,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
 
     @Override
     public void deliver(AgentJob job) {
+        if (ObservationAdmissionService.observationsWereRefused(job)) return;
         if (feedbackService.recoverAutomaticPackageIfPresent(job)) return;
         ObservationAdmissionService.requireMatchingCompositionDigest(job);
         deliverAdmitted(job);
@@ -351,9 +353,11 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                     parsed.discarded());
         }
         if (parsed.validObservations().isEmpty()) {
-            throw new JobDeliveryException("No valid observations in agent output: jobId=" + job.getId()
-                    + ", discarded="
-                    + parsed.discarded().size());
+            throw new ObservationsRefusedException(
+                    "no_valid_observations",
+                    "No valid observations in agent output: jobId=" + job.getId()
+                            + ", discarded="
+                            + parsed.discarded().size());
         }
 
         String unifiedDiff = capturedDiff(job);
@@ -380,11 +384,13 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 && secretObservations.isEmpty()
                 && !diffFiles.isEmpty()
                 && !readTheDiff(parsed.validObservations())) {
-            throw new JobDeliveryException("No observation decided anything or quoted the diff, and the diff contains "
-                    + diffFiles.size()
-                    + " files — the review answered without reading the change. "
-                    + "Refusing to deliver. jobId="
-                    + job.getId());
+            throw new ObservationsRefusedException(
+                    "did_not_read_the_diff",
+                    "No observation decided anything or quoted the diff, and the diff contains "
+                            + diffFiles.size()
+                            + " files — the review answered without reading the change. "
+                            + "Refusing to deliver. jobId="
+                            + job.getId());
         }
 
         var scopedObservations = new ArrayList<>(filterByDiffScope(parsed.validObservations(), diffFiles));
@@ -426,17 +432,17 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                     job.getId());
         }
         if (scopedObservations.isEmpty()) {
-            throw new JobDeliveryException("All observations were filtered by diff scope: jobId=" + job.getId()
-                    + ", before="
-                    + parsed.validObservations().size()
-                    + ", diffFiles="
-                    + diffFiles.size());
+            throw new ObservationsRefusedException(
+                    "out_of_diff_scope",
+                    "All observations were filtered by diff scope: jobId=" + job.getId()
+                            + ", before="
+                            + parsed.validObservations().size()
+                            + ", diffFiles="
+                            + diffFiles.size());
         }
 
-        // Coherence coercion: a defect-detector practice's GOOD assessment becomes NOT_APPLICABLE (no false
-        // strength ships to the student), and severity is pinned to the INFO sentinel except on a BAD
-        // observation. Applied BEFORE deliver() so it reaches the DB, and before compose() so it reaches the
-        // posted comment.
+        // Refuse inconsistent assessments without inventing an applicability claim, and normalize severity
+        // before observations are persisted or used to compose feedback.
         scopedObservations =
                 new ArrayList<>(PracticeDetectionResultParser.coerceCoherence(scopedObservations, defectDetectorSlugs));
 

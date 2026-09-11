@@ -11,8 +11,10 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.aop.Advisor;
 import org.springframework.aop.support.annotation.AnnotationMatchingPointcut;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Role;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
@@ -38,6 +40,7 @@ public class RecentSignInAuthorizationConfig {
      * beans up with it.
      */
     @Bean
+    @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
     static Advisor recentSignInAuthorizationAdvisor(ObjectProvider<RecentSignInPolicy> policy) {
         AuthorizationManager<MethodInvocation> manager = (authentication, invocation) -> {
             Authentication current = authentication.get();

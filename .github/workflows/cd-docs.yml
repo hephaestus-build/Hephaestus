@@ -11,6 +11,8 @@ on:
     paths:
       - "docs/**"
       - "scripts/render-preview-comment.ts"
+      - "scripts/publish-preview-comments.ts"
+      - "scripts/lib/preview-comment.ts"
       - "scripts/lib/json.ts"
       - "scripts/lib/process.ts"
       - ".github/workflows/cd-docs.yml"
@@ -55,7 +57,7 @@ jobs:
         run: >-
           node scripts/render-preview-comment.ts docs docs/.docusaurus
           "https://$PREVIEW_URL"
-          ${{ github.event.pull_request.base.sha }} docs-preview-comment.md
+          ${{ github.event.pull_request.base.sha }} docs-preview-comment.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: docs-build-preview
@@ -64,7 +66,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: docs-preview-comment
-          path: docs-preview-comment.md
+          path: docs-preview-comment.json
           retention-days: 1
 
   build-production:
@@ -126,10 +128,13 @@ jobs:
         env:
           SURGE_TOKEN: ${{ secrets.SURGE_TOKEN }}
         run: ./node_modules/.bin/surge ./docs-build "$PREVIEW_URL" --token "$SURGE_TOKEN"
-      - uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PREVIEW_COMMENT_PATH: preview-comment/docs-preview-comment.json
         with:
-          header: docs-preview
-          path: preview-comment/docs-preview-comment.md
+          script: |
+            const { publishPreviewComments } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/publish-preview-comments.ts`);
+            await publishPreviewComments({ github, context, kind: "docs", path: process.env.PREVIEW_COMMENT_PATH });
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           TARGET_URL: https://${{ env.PREVIEW_URL }}
@@ -167,4 +172,4 @@ jobs:
         with:
           path: docs-build
       - id: deployment
-        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

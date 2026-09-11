@@ -91,6 +91,9 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private PracticeRepository practices;
 
+    @Autowired
+    private de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository scmConnections;
+
     private Workspace workspace;
     private IssueUpdateCoalescer coalescer;
     private SignalKey current;
@@ -99,7 +102,11 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void setUp() {
         String slug = "coalescer-" + UUID.randomUUID();
-        workspace = WorkspaceTestFixtures.activeWorkspace(slug);
+        workspace = WorkspaceTestFixtures.persistInstallationWorkspace(
+                workspaces,
+                scmConnections,
+                WorkspaceTestFixtures.installationWorkspace(42L, slug).withSlug(slug),
+                42L);
         workspace.getFeatures().setPracticesEnabled(true);
         workspace = workspaces.save(workspace);
 
@@ -185,9 +192,9 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
 
         transactions.executeWithoutResult(status -> coalescer.drain(workspace.getId(), current.artifactId(), NOW));
 
-        assertThat(jobs.findByWorkspaceId(workspace.getId(), Pageable.unpaged()))
+        assertThat(jobs.findListRows(workspace.getId(), null, Pageable.unpaged()))
                 .isEmpty();
-        assertThat(jobs.findByWorkspaceId(other.getId(), Pageable.unpaged())).isEmpty();
+        assertThat(jobs.findListRows(other.getId(), null, Pageable.unpaged())).isEmpty();
         assertThat(signals.findForArtifact(workspace.getId(), ScmSignals.ISSUE.value(), current.artifactId()))
                 .hasSize(2)
                 .allSatisfy(signal -> {
@@ -203,7 +210,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
 
         transactions.executeWithoutResult(status -> coalescer.drain(workspace.getId(), current.artifactId(), NOW));
 
-        assertThat(jobs.findByWorkspaceId(workspace.getId(), Pageable.unpaged()))
+        assertThat(jobs.findListRows(workspace.getId(), null, Pageable.unpaged()))
                 .isEmpty();
         assertThat(signals.findForArtifact(workspace.getId(), ScmSignals.ISSUE.value(), current.artifactId()))
                 .hasSize(2)
@@ -217,14 +224,14 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
     void shouldRollBackTheWholeBurstWhenSettlementFailsAfterSubmissionReturns(CapturedOutput output) {
         assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
                     coalescer.drain(workspace.getId(), current.artifactId(), NOW);
-                    assertThat(jobs.findByWorkspaceId(workspace.getId(), Pageable.unpaged()))
+                    assertThat(jobs.findListRows(workspace.getId(), null, Pageable.unpaged()))
                             .hasSize(1);
                     throw new IllegalStateException("Settlement failed after admission");
                 }))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Settlement failed after admission");
         assertThat(output).doesNotContain("agent.job.queued");
-        assertThat(jobs.findByWorkspaceId(workspace.getId(), Pageable.unpaged()))
+        assertThat(jobs.findListRows(workspace.getId(), null, Pageable.unpaged()))
                 .isEmpty();
 
         assertThat(signals.findForArtifact(workspace.getId(), ScmSignals.ISSUE.value(), current.artifactId()))
@@ -238,7 +245,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
         transactions.executeWithoutResult(status -> coalescer.drain(workspace.getId(), current.artifactId(), NOW));
         transactions.executeWithoutResult(status -> coalescer.drain(workspace.getId(), current.artifactId(), NOW));
         assertThat(output).containsOnlyOnce("agent.job.queued");
-        assertThat(jobs.findByWorkspaceId(workspace.getId(), Pageable.unpaged()))
+        assertThat(jobs.findListRows(workspace.getId(), null, Pageable.unpaged()))
                 .singleElement()
                 .satisfies(job -> assertThat(signals.findForArtifact(
                                 workspace.getId(), ScmSignals.ISSUE.value(), current.artifactId()))

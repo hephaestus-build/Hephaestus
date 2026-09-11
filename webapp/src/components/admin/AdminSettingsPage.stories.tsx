@@ -9,7 +9,6 @@ import { AdminSettingsPage } from "./AdminSettingsPage";
 
 const allOff: FeatureValues = {
 	mentorEnabled: false,
-	achievementsEnabled: false,
 	leaderboardEnabled: false,
 	progressionEnabled: false,
 	leaguesEnabled: false,

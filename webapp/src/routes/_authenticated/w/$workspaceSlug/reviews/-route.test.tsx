@@ -1,4 +1,5 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,8 +8,9 @@ import {
 	tracedArtifactPage,
 	tracedArtifacts,
 } from "@/components/practice-trace/story-mock-data";
+import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole app shell and its lazy modules.
 vi.setConfig({ testTimeout: 15_000 });
@@ -18,6 +20,11 @@ beforeEach(() => {
 		// A plain MEMBER: this surface is deliberately not behind the admin layout's role guard.
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json({ role: "MEMBER", userId: 1, userLogin: "ada", userName: "Ada" }),
+		),
+		// The surface exists only where practices review the work, and the shared fixture has them
+		// off, so every case below has to say that this workspace reviews.
+		http.get("*/workspaces", () =>
+			HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })]),
 		),
 		http.get("*/workspaces/:workspaceSlug/practices/trace", () =>
 			HttpResponse.json(tracedArtifactPage()),
@@ -29,6 +36,19 @@ beforeEach(() => {
 });
 
 describe("review activity routes", () => {
+	it("sends a reader away when this workspace does not review practices", async () => {
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([workspaceListItem("acme", { practicesEnabled: false })]),
+			),
+		);
+		const { router } = renderRouteAtWithRouter("/w/acme/reviews");
+
+		// With practices off the surface does not exist here, so the reader ends up on the workspace
+		// home rather than on a page whose only content could be an explanation of its own emptiness.
+		await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme"), ROUTE_RENDER_WAIT);
+	});
+
 	it("lists recorded work for a member", async () => {
 		renderRouteAt("/w/acme/reviews");
 
@@ -70,4 +90,15 @@ describe("review activity routes", () => {
 
 		await screen.findByRole("heading", { name: "Page Not Found" }, ROUTE_RENDER_WAIT);
 	});
+});
+
+it("changes the work filter without resetting scroll", async () => {
+	const { router } = renderRouteAtWithRouter("/w/acme/reviews");
+	const control = await screen.findByRole("combobox", { name: "Show" }, ROUTE_RENDER_WAIT);
+	const scroll = vi.spyOn(window, "scrollTo").mockReturnValue(undefined);
+	await userEvent.click(control);
+	await userEvent.click(await screen.findByRole("option", { name: "Issues" }));
+	await waitFor(() => expect(router.state.location.search).toMatchObject({ kind: "scm.issue" }));
+	expect(scroll).not.toHaveBeenCalled();
+	scroll.mockRestore();
 });

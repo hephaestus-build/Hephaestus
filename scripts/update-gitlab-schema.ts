@@ -1,6 +1,6 @@
 /**
  * Refreshes the vendored GitLab GraphQL schema. GitLab publishes no schema file, so it is asked for
- * one by introspection and the JSON that comes back is printed as SDL — which is the form the Maven
+ * one by introspection and the JSON that comes back is printed as SDL — which is the form the Gradle
  * codegen reads, and the only form a person can review as a diff.
  *
  * The default instance answers introspection without a token; `--token` exists for one that does not.
@@ -219,9 +219,7 @@ async function main(): Promise<void> {
 		console.log(`Downloaded ${Math.round(stats.size / 1_048_576)}MB`);
 		renameSync(tempFile, SCHEMA_FILE);
 		console.log(`Schema updated successfully: ${SCHEMA_FILE}`);
-		console.log(
-			"\nTo regenerate types: cd server && ./mvnw -pl generated-clients -am compile -DskipTests",
-		);
+		console.log("\nTo regenerate types: cd server && ./gradlew :generated-clients:classes");
 	} catch (error) {
 		try {
 			unlinkSync(tempFile);

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createContext, type ReactNode, useContext } from "react";
+import { toast } from "sonner";
 
 import { authClient, toUserProfile, type UserProfile } from "./auth-client";
 import { isAppAdmin as computeIsAppAdmin, currentUserQueryOptions } from "./guard";
@@ -9,11 +10,9 @@ export type { UserProfile } from "./auth-client";
 export interface AuthContextType {
 	isAuthenticated: boolean;
 	isLoading: boolean;
-	/** True when the `/user` probe settled in an error state (e.g. 401/403) rather than returning a user. */
 	isError: boolean;
 	username: string | undefined;
 	userRoles: string[];
-	/** True when the current account is an application super-admin (appRole === "APP_ADMIN"). */
 	isAppAdmin: boolean;
 	userProfile: UserProfile | undefined;
 	login: (idpHint?: string, returnTo?: string) => void;
@@ -24,13 +23,9 @@ export interface AuthContextType {
 	getUserId: () => string | undefined;
 	getGitProviderId: () => string | undefined;
 	getUserProfilePictureUrl: () => string;
-	/** Whether the user has a linked GitLab identity (logged in via GitLab or account linked) */
 	hasGitLabIdentity: boolean;
-	/** SCM instances the account has an active identity on — for instance-scoped gating. */
 	linkedProviders: Array<{ type: string; serverUrl?: string }>;
-	/** True when the current session is impersonating another account. */
 	isImpersonating: boolean;
-	/** Display name of the impersonated account (the current user) while impersonating. */
 	impersonatedDisplayName: string | undefined;
 }
 
@@ -48,26 +43,11 @@ interface AuthProviderProps {
 	children: ReactNode;
 }
 
-/**
- * Cookie-session auth provider (ADR 0017).
- *
- * Backed by the SAME TanStack Query (`getCurrentUserOptions()`, key `getCurrentUser`) that the
- * route guards read via `resolveCurrentUser`, so there is ONE shared cache — no duplicate
- * `/user` fetch on load and no drift (e.g. an admin changing their own role invalidates this
- * query and the in-app surface updates with it). A 401/403 makes the query error with no data,
- * which we treat as unauthenticated. The `useAuth()` API is unchanged from the former
- * keycloak-js implementation so existing consumers keep working.
- */
 export function AuthProvider({ children }: AuthProviderProps) {
 	const userQuery = useQuery(currentUserQueryOptions());
 
 	const user = userQuery.data ?? null;
-	// `isPending` is true only while the very first fetch is in flight (no cached data yet),
-	// matching the previous mount-time loading window.
 	const isLoading = userQuery.isPending;
-	// Distinguish "probe failed" (401/403/network) from "probe settled with no user". Callers that
-	// must not optimistically route into a protected area on a failed probe (e.g. /auth/callback)
-	// branch on this instead of relying on a downstream guard to bounce them back.
 	const isError = userQuery.isError;
 
 	const userProfile = user ? toUserProfile(user) : undefined;
@@ -79,15 +59,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
 	};
 
 	const linkAccount = (providerAlias: string, returnTo?: string) => {
-		// Thread `returnTo` so a link initiated from settings returns to settings (defaulting to
-		// the current page), rather than dumping the user back on `/` after the OAuth dance.
 		const destination =
 			returnTo ?? (typeof window !== "undefined" ? window.location.pathname : undefined);
 		authClient.linkAccount(providerAlias, destination);
 	};
 
 	const logout = async () => {
-		await authClient.logout();
+		try {
+			await authClient.logout();
+		} catch {
+			toast.error("Could not confirm sign-out. Please try again.");
+		}
 	};
 
 	const hasRole = (role: string) => (user?.roles ?? []).includes(role);
@@ -96,10 +78,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		!!candidateLogin &&
 		!!user?.username &&
 		user.username.toLowerCase() === candidateLogin.toLowerCase();
-
-	// Return undefined (never the string "undefined" / a value that coerces to NaN) until the
-	// user is loaded, so callers like `Number(getUserId())` get `NaN` only when there genuinely
-	// is no id — and can guard on `undefined` instead.
 	const getUserId = () => (user?.id != null ? String(user.id) : undefined);
 
 	const getGitProviderId = () => user?.gitProviderId ?? undefined;

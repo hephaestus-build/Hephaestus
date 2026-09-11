@@ -32,7 +32,7 @@ public class OutlineCollectionControllerAdvice {
 
     @ExceptionHandler(UnknownOutlineCollectionException.class)
     ProblemDetail handleUnknownCollection(UnknownOutlineCollectionException exception) {
-        ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_ENTITY);
+        ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         problem.setType(URI.create("/problems/unknown-outline-collection"));
         problem.setTitle("Collection not found in Outline");
         problem.setDetail(LoggingUtils.sanitizeForLog(exception.getMessage()));

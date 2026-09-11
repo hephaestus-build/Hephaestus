@@ -59,6 +59,7 @@ const DELIBERATELY_OMITTED = new Set([
 	"SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID",
 	"SANDBOX_DOCKER_CERT_PATH",
 	"SANDBOX_DOCKER_CLI",
+	"SANDBOX_DOCKER_OWNER",
 	"SANDBOX_DOCKER_CONTAINER_RUNTIME",
 	"SANDBOX_DOCKER_HOST",
 	"SANDBOX_DOCKER_TLS_VERIFY",
@@ -80,6 +81,10 @@ const DELIBERATELY_OMITTED = new Set([
 	"PRACTICE_REVIEW_BACKFILL_MAX_ARTIFACTS",
 	"PRACTICE_REVIEW_BACKFILL_MAX_WINDOW",
 	"PRACTICE_REVIEW_COOLDOWN_MINUTES",
+	"TRACING_SAMPLING_PROBABILITY",
+	"TRACING_OTLP_ENABLED",
+	"TRACING_OTLP_ENDPOINT",
+	"PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED",
 	"PRACTICE_REVIEW_DELIVER_TO_MERGED",
 	"PRACTICE_REVIEW_MAX_REQUESTS_PER_REQUESTER_PER_HOUR",
 	"PRACTICE_REVIEW_PROGRESS_FOOTER",
@@ -166,7 +171,6 @@ const RENDER_ENV: Record<string, string> = {
 	NATS_PASSWORD: "ci-not-a-real-nats-password",
 	HEPHAESTUS_TRUSTED_PROXIES: "172.(1[6-9]|2[0-9]|3[01]).[0-9]{1,3}.[0-9]{1,3}",
 	SERVICE_FQDN_WEBAPP: "pr1.example.com",
-	SERVICE_FQDN_APPSERVER: "pr1.api.example.com",
 };
 
 /**
@@ -207,6 +211,34 @@ function records(value: unknown): [string, Record<string, unknown>][] {
 	return Object.entries(value).filter((entry): entry is [string, Record<string, unknown>] =>
 		isRecord(entry[1]),
 	);
+}
+
+/**
+ * Mirrors `AuthProperties.normalizeApiBasePath`, so a spelling the server accepts — `api`, `/api/`,
+ * `//api`, or one padded with spaces — is not reported as a mismatch.
+ */
+function normalizeApiBasePath(value: string): string {
+	const trimmed = value.trim().replace(/\/+$/, "");
+	if (trimmed === "") return "";
+	const rooted = trimmed.replace(/^\/+/, "/");
+	return rooted.startsWith("/") ? rooted : `/${rooted}`;
+}
+
+/**
+ * The OAuth prefix production re-adds to browser-facing URLs, read from the profile that owns it
+ * rather than repeated here. The proxy strips the path before the request reaches the server, and
+ * native forward-headers cannot restore it.
+ */
+function productionAuthApiBasePath(): string {
+	const profile = readFileSync(
+		"server/application/src/main/resources/application-prod.yml",
+		"utf8",
+	);
+	const declared = /^\s*api-base-path:\s*(\S+)\s*$/m.exec(profile)?.[1];
+	if (declared === undefined) {
+		throw new Error("application-prod.yml no longer declares api-base-path");
+	}
+	return declared;
 }
 
 export function findViolations(stack: unknown): string[] {
@@ -285,6 +317,32 @@ export function findViolations(stack: unknown): string[] {
 
 	if (!services.some(([name]) => name === "appserver")) {
 		violations.push("the rendered stack has no appserver service, so no switch was checked");
+	}
+
+	// The browser reaches the API under a path, and the server re-adds that path to the OAuth URLs it
+	// sends the browser to. Disagree, and sign-in alone breaks: it redirects to a path nothing serves
+	// while every other request keeps working, so a healthy stack and a reachable page report success.
+	const serviceEnv = (wanted: string): Record<string, unknown> => {
+		const found = services.find(([name]) => name === wanted)?.[1];
+		return found && isRecord(found.environment) ? found.environment : {};
+	};
+	const serverUrl = serviceEnv("webapp").APPLICATION_SERVER_URL;
+	if (typeof serverUrl === "string" && serverUrl !== "") {
+		let apiPath = "";
+		try {
+			apiPath = new URL(serverUrl).pathname.replace(/\/$/, "");
+		} catch {
+			violations.push(`webapp sets APPLICATION_SERVER_URL=${serverUrl}, which is not a URL`);
+		}
+		const override = serviceEnv("appserver").HEPHAESTUS_AUTH_API_BASE_PATH;
+		const effective = normalizeApiBasePath(
+			typeof override === "string" ? override : productionAuthApiBasePath(),
+		);
+		if (effective !== normalizeApiBasePath(apiPath)) {
+			violations.push(
+				`the API is served at "${apiPath}" but OAuth URLs are built with "${effective}", so sign-in would leave the API`,
+			);
+		}
 	}
 	// Coolify runs every preview of this application under one Compose project, named after the
 	// application UUID with no pull request in it. A network defined here is therefore `<uuid>_<name>`

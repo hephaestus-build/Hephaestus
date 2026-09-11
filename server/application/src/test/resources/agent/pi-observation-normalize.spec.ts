@@ -6,6 +6,7 @@ import {
 	ASSESSMENT_VALUES,
 	carriesValence,
 	citationMatchesArtifact,
+	describeCitationMismatch,
 	dedupeKeyForObservation,
 	describeVocabulary,
 	type NormalizedCitation,
@@ -276,7 +277,7 @@ void test("a citation must name a source this run staged, and the artifact that 
 	);
 	assert.throws(
 		() => validateEvidenceSources(observation, new Set(["scm.pull-request.diff"]), new Map()),
-		/was not staged.*inputs\/manifest\.json/,
+		/was not staged.*task-declared manifest/,
 	);
 });
 
@@ -288,6 +289,86 @@ void test("diff citations bind the quote to the claimed file and line", () => {
 	assert.equal(citationMatchesArtifact({ ...citation, path: "src/Other.java" }, diff), false);
 	assert.equal(citationMatchesArtifact({ ...citation, startLine: 11 }, diff), false);
 	assert.equal(citationMatchesArtifact({ ...citation, endLine: 12 }, diff), false);
+});
+
+void test("a quote may drop the diff's marker and the indentation in front of the code", () => {
+	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
+	const diff =
+		"diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] +    insecure();\n";
+
+	// The code as a reader would write it down, without the marker or the diff's indentation.
+	assert.equal(describeCitationMismatch({ ...citation, quote: "insecure();" }, diff), null);
+	assert.equal(describeCitationMismatch({ ...citation, quote: "+    insecure();" }, diff), null);
+	// Different text at that coordinate is still refused, trimmed or not.
+	assert.match(
+		describeCitationMismatch({ ...citation, quote: "secure();" }, diff) ?? "",
+		/\[L10] reads/,
+	);
+
+	// Code that begins with the same character the diff uses as a marker keeps it.
+	const flagDiff =
+		"diff --git a/run.sh b/run.sh\n+++ b/run.sh\n@@ -10 +10 @@\n[L10] +    -flag --now\n";
+	assert.equal(
+		describeCitationMismatch({ ...citation, path: "run.sh", quote: "-flag --now" }, flagDiff),
+		null,
+	);
+	assert.equal(
+		describeCitationMismatch({ ...citation, path: "run.sh", quote: "+    -flag --now" }, flagDiff),
+		null,
+	);
+});
+
+void test("a quote from the other side of the change is refused, however it is written", () => {
+	const citation: NormalizedCitation = {
+		...onlyCitation(normalizeObservation(baseObservation()).evidence.citations),
+		side: "NEW",
+		startLine: 47,
+		endLine: 47,
+		quote: '-@RequestMapping({ "api/legacy/" })',
+	};
+	const diff =
+		"--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -47 +47 @@\n" +
+		'[L47] -@RequestMapping({ "api/legacy/" })\n[L47] +@RequestMapping("api/passkeys/")\n';
+
+	assert.match(describeCitationMismatch(citation, diff) ?? "", /\[L47] reads/);
+});
+
+void test("a quote may carry the coordinate the diff printed in front of it", () => {
+	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
+	const diff =
+		"diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] + insecure();\n";
+
+	// What the observer actually read, copied back whole. The commonest refusal on staging.
+	assert.equal(describeCitationMismatch({ ...citation, quote: "[L10] + insecure();" }, diff), null);
+	// The coordinate still has to be the one being matched, so a quote cannot claim a line it did
+	// not read — even when that line's text is in the diff somewhere else.
+	assert.match(
+		describeCitationMismatch({ ...citation, quote: "[L11] + insecure();" }, diff) ?? "",
+		/\[L10] reads/,
+	);
+});
+
+void test("a refused citation says which of the coordinate, the side and the text was wrong", () => {
+	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
+	const diff =
+		"diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] + insecure();\n";
+
+	assert.equal(describeCitationMismatch(citation, diff), null);
+	// The coordinate is not in the diff at all.
+	assert.match(
+		describeCitationMismatch({ ...citation, startLine: 11, endLine: 11 }, diff) ?? "",
+		/no \[L11] on the NEW side of src\/Auth\.java/,
+	);
+	// The coordinate is there and says something else, so the refusal shows both.
+	assert.match(
+		describeCitationMismatch({ ...citation, quote: "+ secure();" }, diff) ?? "",
+		/\[L10] reads "\+ insecure\(\);", not "\+ secure\(\);"/,
+	);
+	// The quote and the line span disagree.
+	assert.match(
+		describeCitationMismatch({ ...citation, endLine: 12 }, diff) ?? "",
+		/quote is 1 line\(s\) and the citation covers 3/,
+	);
 });
 
 void test("removed-line citations use old-side coordinates", () => {

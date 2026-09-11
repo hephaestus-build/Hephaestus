@@ -1,5 +1,6 @@
 import { Trophy } from "lucide-react";
 import type { ReactNode } from "react";
+import type { LeaderboardSchedule } from "@/lib/timeframe";
 
 import type { LeaderboardEntry, UserInfo } from "@/api/types.gen";
 import { PageHeader } from "@/components/core/PageHeader";
@@ -30,14 +31,10 @@ interface LeaderboardPageProps {
 	renderUserLink?: (username: string, children: ReactNode) => ReactNode;
 	selectedTeam?: string;
 	selectedSort?: LeaderboardSortType;
-	initialAfterDate?: string;
-	initialBeforeDate?: string;
+	afterDate?: string;
+	beforeDate?: string;
 	leaderboardEnd?: string;
-	leaderboardSchedule?: {
-		day: number;
-		hour: number;
-		minute: number;
-	};
+	leaderboardSchedule?: LeaderboardSchedule;
 	selectedMode: LeaderboardVariant;
 	onModeChange?: (mode: LeaderboardVariant) => void;
 	renderTeamLink?: (teamId: number, children: ReactNode) => ReactNode;
@@ -60,8 +57,8 @@ export function LeaderboardPage({
 	renderUserLink,
 	selectedTeam,
 	selectedSort,
-	initialAfterDate,
-	initialBeforeDate,
+	afterDate,
+	beforeDate,
 	leaderboardEnd,
 	leaderboardSchedule,
 	selectedMode,
@@ -69,13 +66,6 @@ export function LeaderboardPage({
 	renderTeamLink,
 	leaguesEnabled = true,
 }: LeaderboardPageProps) {
-	const formattedSchedule = leaderboardSchedule
-		? {
-				...leaderboardSchedule,
-				formatted: `${String(leaderboardSchedule.hour).padStart(2, "0")}:${String(leaderboardSchedule.minute).padStart(2, "0")} on day ${leaderboardSchedule.day}`,
-			}
-		: undefined;
-
 	return (
 		<PageLayout>
 			<PageHeader
@@ -96,9 +86,9 @@ export function LeaderboardPage({
 								onTimeframeChange={onTimeframeChange}
 								selectedTeam={selectedTeam}
 								selectedSort={selectedSort}
-								initialAfterDate={initialAfterDate}
-								initialBeforeDate={initialBeforeDate}
-								leaderboardSchedule={formattedSchedule}
+								afterDate={afterDate}
+								beforeDate={beforeDate}
+								leaderboardSchedule={leaderboardSchedule}
 								leaguesEnabled={leaguesEnabled}
 							/>
 						</div>

@@ -8,7 +8,7 @@ allowed-tools:
   - Bash(gh *)
   - Bash(git *)
   - Bash(vp *)
-  - Bash(./mvnw *)
+  - Bash(./gradlew *)
   - Read
   - Grep
   - Glob

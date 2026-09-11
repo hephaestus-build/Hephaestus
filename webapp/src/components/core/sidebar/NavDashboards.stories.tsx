@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { expect } from "storybook/test";
 
 import { SidebarProvider } from "@/components/ui/sidebar";
 
@@ -13,8 +14,8 @@ const meta = {
 	args: {
 		username: "johnDoe",
 		workspaceSlug: "aet",
-		achievementsEnabled: true,
 		leaderboardEnabled: true,
+		practicesEnabled: true,
 	},
 	decorators: [
 		(Story) => (
@@ -39,7 +40,24 @@ export const DifferentUser: Story = {
 
 export const AllFeaturesDisabled: Story = {
 	args: {
-		achievementsEnabled: false,
 		leaderboardEnabled: false,
+		practicesEnabled: false,
+	},
+	play: async ({ canvas }) => {
+		// Profile and Teams are not workspace capabilities, so they stay whatever else is off.
+		await expect(await canvas.findByRole("link", { name: "Profile" })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: "Teams" })).toBeVisible();
+		for (const gated of ["Leaderboard", "Review activity"])
+			await expect(canvas.queryByRole("link", { name: gated })).toBeNull();
+	},
+};
+
+export const PracticeReviewsOff: Story = {
+	args: { practicesEnabled: false },
+	play: async ({ canvas }) => {
+		// A workspace that does not review practices has no review activity to show, so the entry is
+		// gone rather than leading to a page that could only explain itself.
+		await expect(await canvas.findByRole("link", { name: "Leaderboard" })).toBeVisible();
+		await expect(canvas.queryByRole("link", { name: "Review activity" })).toBeNull();
 	},
 };

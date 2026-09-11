@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
+import java.text.BreakIterator;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -20,10 +21,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -314,11 +315,12 @@ class DeliveryComposer {
         String opening = openingOf(rendering);
         // Already ranked most-certain first by the caller. A strength earns a bullet when there is
         // something to say about it — the composed message where the stage wrote one, and the
-        // measurement's own reasoning where it did not.
+        // observation's own summary where it did not. Never the evidence rationale: that is written
+        // for whoever audits the review, in the first person and about the search ("I walked all six
+        // sink classes"), and a developer reading their own pull request is owed what was found about
+        // their work rather than how the instrument looked for it.
         List<ValidatedObservation> withSomethingToSay = observed.stream()
-                .filter(f -> rendering.noteFor(f) != null
-                        || (f.evidenceRationale() != null
-                                && !f.evidenceRationale().isBlank()))
+                .filter(f -> rendering.noteFor(f) != null || !f.summary().isBlank())
                 .toList();
 
         if (withSomethingToSay.isEmpty()) {
@@ -331,7 +333,7 @@ class DeliveryComposer {
             if (shown >= MAX_STRENGTH_REINFORCEMENTS) break;
             ComposedNote note = rendering.noteFor(f);
             String summary = clampToSentenceBudget(
-                    note == null ? sanitizeStudentText(f.evidenceRationale()).strip() : note.title(), STRENGTH_BUDGET);
+                    note == null ? sanitizeStudentText(f.summary()).strip() : note.title(), STRENGTH_BUDGET);
             if (summary.isBlank()) {
                 // Reasoning was entirely grading-meta and scrubbed to nothing — skip rather than emit a
                 // bare bullet with no observation behind it.
@@ -357,45 +359,21 @@ class DeliveryComposer {
         return opening + header + bullets + "\n";
     }
 
-    /**
-     * The opening sentence of a principle, whole. The rest of a catalogue paragraph is the same words on
-     * every review that touches the practice, and a block that never changes teaches the reader to skip the
-     * place it sits rather than the sentence itself.
-     */
-    static String firstSentence(String text) {
-        Matcher sentence = SENTENCE_SEPARATOR.matcher(text);
-        return sentence.find() ? text.substring(0, sentence.end()).strip() : text;
-    }
-
     static String clampToSentenceBudget(String text, int maxLen) {
         if (text == null || text.isBlank() || text.length() <= maxLen) {
             return text == null ? "" : text;
         }
-        StringBuilder out = new StringBuilder(maxLen);
-        Matcher sep = SENTENCE_SEPARATOR.matcher(text);
-        int pos = 0;
-        while (sep.find()) {
-            String sentence = text.substring(pos, sep.end());
-            if (out.length() + sentence.length() > maxLen) {
-                break;
-            }
-            out.append(sentence);
-            pos = sep.end();
+        BreakIterator sentences = BreakIterator.getSentenceInstance(Locale.ROOT);
+        sentences.setText(text);
+        int end = 0;
+        for (int boundary = sentences.next(); boundary != BreakIterator.DONE; boundary = sentences.next()) {
+            if (boundary > maxLen) break;
+            end = boundary;
         }
-        if (pos < text.length()) {
-            String tail = text.substring(pos);
-            if (out.length() + tail.length() <= maxLen) {
-                out.append(tail);
-            }
-        }
-        if (out.length() == 0) {
-            // Even the first sentence overruns \u2014 fall back to the word-boundary cut.
-            return truncateToFirstSentence(text, maxLen);
-        }
-        return out.toString().strip();
+        return end == 0
+                ? truncateAtWordBoundary(text, maxLen)
+                : text.substring(0, end).strip();
     }
-
-    private static final Pattern SENTENCE_SEPARATOR = Pattern.compile("(?<=[.!?])\\s+");
 
     static String sanitizeStudentText(@Nullable String text) {
         return DeveloperTextSanitizer.sanitize(text);
@@ -405,21 +383,7 @@ class DeliveryComposer {
         return DeveloperTextSanitizer.stripEnvelopeCorruption(text);
     }
 
-    private static String truncateToFirstSentence(String text, int maxLen) {
-        int end = -1;
-        for (int i = 0; i < Math.min(text.length(), maxLen); i++) {
-            char c = text.charAt(i);
-            if ((c == '.' || c == '!' || c == '?') && (i + 1 >= text.length() || text.charAt(i + 1) == ' ')) {
-                end = i + 1;
-                break;
-            }
-        }
-        if (end > 0 && end <= maxLen) {
-            return text.substring(0, end);
-        }
-        if (text.length() <= maxLen) {
-            return text;
-        }
+    private static String truncateAtWordBoundary(String text, int maxLen) {
         int space = text.lastIndexOf(' ', maxLen);
         if (space > maxLen / 2) {
             return text.substring(0, space) + "...";
@@ -546,9 +510,7 @@ class DeliveryComposer {
         ComposedNote note = rendering.noteFor(f);
         String claim = sanitizeStudentText(note == null || note.title() == null ? f.summary() : note.title())
                 .strip();
-        String step = note == null
-                ? sanitizeStudentText(f.evidenceRationale()).strip()
-                : sanitizeStudentText(note.nextStep()).strip();
+        String step = note == null ? "" : sanitizeStudentText(note.nextStep()).strip();
         if (claim.isBlank()) {
             claim = step;
             step = "";
@@ -568,10 +530,10 @@ class DeliveryComposer {
 
     private static void appendBody(StringBuilder sb, ValidatedObservation f, Rendering rendering) {
         ComposedNote note = rendering.noteFor(f);
-        // What to do comes before why it matters. The principle is the same words on every review that
-        // touches the practice, and a reader who has learned to skip that block would skip past the one
-        // sentence written for this change with it.
-        appendStudentText(sb, note == null ? f.evidenceRationale() : note.nextStep());
+        // Evidence rationale is an audit explanation, not developer-facing advice.
+        if (note != null) {
+            appendStudentText(sb, note.nextStep());
+        }
     }
 
     private static boolean containsGraderMechanics(@Nullable String text) {
@@ -748,10 +710,6 @@ class DeliveryComposer {
     private static @Nullable String composeDiffNoteBody(ValidatedObservation f, Rendering rendering) {
         var words = new StringBuilder();
         appendBody(words, f, rendering);
-        if (words.toString().isBlank()) {
-            return null;
-        }
-
         var sb = new StringBuilder();
         appendObservationHeader(sb, f, false, rendering);
         sb.append("\n\n").append(words);
