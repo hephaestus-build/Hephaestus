@@ -96,3 +96,17 @@ export async function settledDrawerPanel(): Promise<HTMLElement> {
 	await expectSettledVisible(panel);
 	return panel;
 }
+
+/**
+ * The mirror of `expectSettledVisible`: Base UI keeps a popup mounted through its exit animation, so
+ * `open={false}` is not "gone" and an assertion taken on the next frame passes on a dialog that
+ * never leaves.
+ */
+export async function expectDismissed(role: "dialog" | "alertdialog" = "dialog"): Promise<void> {
+	await waitFor(() => {
+		void expect(
+			document.querySelector(`[role='${role}']`),
+			"The overlay is still mounted; a dismissal that only flips `open` is not a dismissal.",
+		).toBeNull();
+	});
+}

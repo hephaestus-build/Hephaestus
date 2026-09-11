@@ -143,7 +143,8 @@ describe("practice-group routes", () => {
 	it("keeps a feature failure recoverable instead of redirecting", async () => {
 		server.use(http.get("*/workspaces", () => new HttpResponse(null, { status: 500 })));
 		const { router } = renderRouteAtWithRouter(path);
-		await screen.findByText("Couldn't load workspace features", undefined, ROUTE_RENDER_WAIT);
+		await vi.waitFor(() => expect(router.state.isLoading).toBe(false), ROUTE_RENDER_WAIT);
+		await screen.findByRole("button", { name: "Retry" }, ROUTE_RENDER_WAIT);
 		expect(router.state.location.pathname).toBe(path);
 		expect(practiceReads).toBe(0);
 		server.use(
