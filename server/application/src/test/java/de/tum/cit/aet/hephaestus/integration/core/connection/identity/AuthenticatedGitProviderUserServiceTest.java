@@ -78,7 +78,8 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
 
         User provisioned = user(555L, "gitlabuser", 18024L, provider);
         when(userRepository.findByNativeIdAndProviderId(18024L, GITLAB_PROVIDER_ID))
-                .thenReturn(Optional.empty(), Optional.of(provisioned));
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(provisioned));
         when(userRepository.findById(555L)).thenReturn(Optional.of(provisioned));
 
         Optional<User> result = service.resolveOrProvisionCurrentUser();
@@ -126,7 +127,8 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
         when(gitProviderRepository.findById(GITLAB_PROVIDER_ID)).thenReturn(Optional.of(gl));
         User provisioned = user(555L, "gitlabuser", 18024L, gl);
         when(userRepository.findByNativeIdAndProviderId(18024L, GITLAB_PROVIDER_ID))
-                .thenReturn(Optional.empty(), Optional.of(provisioned));
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(provisioned));
         lenient().when(userRepository.findById(555L)).thenReturn(Optional.of(provisioned));
 
         service.ensureCurrentGitLabUserExists();
