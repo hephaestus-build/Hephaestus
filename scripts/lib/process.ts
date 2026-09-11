@@ -1,4 +1,5 @@
 import { execFile, spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -68,4 +69,16 @@ export async function output(
 		maxBuffer: CAPTURE_LIMIT_BYTES,
 	});
 	return stdout;
+}
+
+/**
+ * This repository's CLI, as an argument for `process.execPath`.
+ *
+ * Resolved as a module rather than looked up on PATH: it is a dependency of this repository, so it
+ * is on PATH only for what the package manager starts, and process creation without a shell finds
+ * neither the extensionless script nor the `.cmd` shim a bin directory holds on Windows. Throws
+ * when the dependency is absent, which is the one case a caller can act on.
+ */
+export function repositoryCli(): string {
+	return fileURLToPath(import.meta.resolve("vite-plus/bin"));
 }

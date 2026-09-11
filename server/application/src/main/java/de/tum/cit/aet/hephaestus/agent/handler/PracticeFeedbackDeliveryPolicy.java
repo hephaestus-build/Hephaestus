@@ -8,11 +8,11 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
+import de.tum.cit.aet.hephaestus.integration.scm.ReviewTargetQuery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluationCommand;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluationRecorder;
@@ -53,7 +53,7 @@ public class PracticeFeedbackDeliveryPolicy {
     private final DocumentProjection documentProjection;
     private final IssueRepository issueRepository;
     private final PullRequestRepository pullRequestRepository;
-    private final PullRequestReviewRepository pullRequestReviewRepository;
+    private final ReviewTargetQuery reviewTargets;
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final WorkspaceRepository workspaceRepository;
     private final AccountPreferencesQuery accountPreferencesQuery;
@@ -67,7 +67,7 @@ public class PracticeFeedbackDeliveryPolicy {
     PracticeFeedbackDeliveryPolicy(
             IssueRepository issueRepository,
             PullRequestRepository pullRequestRepository,
-            PullRequestReviewRepository pullRequestReviewRepository,
+            ReviewTargetQuery reviewTargets,
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             WorkspaceRepository workspaceRepository,
             AccountPreferencesQuery accountPreferencesQuery,
@@ -83,7 +83,7 @@ public class PracticeFeedbackDeliveryPolicy {
         this.documentProjection = documentProjection;
         this.issueRepository = issueRepository;
         this.pullRequestRepository = pullRequestRepository;
-        this.pullRequestReviewRepository = pullRequestReviewRepository;
+        this.reviewTargets = reviewTargets;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.workspaceRepository = workspaceRepository;
         this.accountPreferencesQuery = accountPreferencesQuery;
@@ -124,7 +124,7 @@ public class PracticeFeedbackDeliveryPolicy {
         long workspaceId = requireWorkspaceId(job);
         Workspace workspace = activePracticeWorkspace(workspaceId);
         boolean instanceMayDeliver = !silentModeQuery.isSilentModeEngaged();
-        if (!instanceMayDeliver) {
+        if (!instanceMayDeliver && isExternalSurface(surface)) {
             Resolution resolution = resolve(
                     job,
                     surface,
@@ -241,7 +241,7 @@ public class PracticeFeedbackDeliveryPolicy {
         long workspaceId = requireWorkspaceId(job);
         Workspace workspace = activePracticeWorkspace(workspaceId);
         boolean instanceMayDeliver = !silentModeQuery.isSilentModeEngaged();
-        if (!instanceMayDeliver) {
+        if (!instanceMayDeliver && isExternalSurface(surface)) {
             Resolution resolution = resolve(
                     job,
                     surface,
@@ -465,19 +465,29 @@ public class PracticeFeedbackDeliveryPolicy {
     }
 
     static boolean matchesArtifact(Issue artifact, @Nullable JsonNode metadata, String numberKey) {
-        return (artifact.getDeletedAt() == null
-                && artifact.getRepository() != null
-                && artifact.getRepository().getId() != null
-                && metadata != null
+        var repository = artifact.getRepository();
+        return artifact.getDeletedAt() == null
+                && repository != null
+                && repository.getId() != null
+                && matchesArtifactIdentity(
+                        repository.getId(), repository.getNameWithOwner(), artifact.getNumber(), metadata, numberKey);
+    }
+
+    static boolean matchesArtifact(ReviewTargetQuery.Target artifact, @Nullable JsonNode metadata, String numberKey) {
+        return !artifact.deleted()
+                && matchesArtifactIdentity(
+                        artifact.repositoryId(), artifact.repositoryFullName(), artifact.number(), metadata, numberKey);
+    }
+
+    private static boolean matchesArtifactIdentity(
+            long repositoryId, String repositoryFullName, int number, @Nullable JsonNode metadata, String numberKey) {
+        return metadata != null
                 && metadata.path("repository_id").isIntegralNumber()
-                && metadata.path("repository_id").asLong()
-                        == artifact.getRepository().getId()
+                && metadata.path("repository_id").asLong() == repositoryId
                 && metadata.path("repository_full_name").isString()
-                && metadata.path("repository_full_name")
-                        .asString()
-                        .equals(artifact.getRepository().getNameWithOwner())
+                && metadata.path("repository_full_name").asString().equals(repositoryFullName)
                 && metadata.path(numberKey).isIntegralNumber()
-                && metadata.path(numberKey).asInt() == artifact.getNumber());
+                && metadata.path(numberKey).asInt() == number;
     }
 
     private boolean isEligibleTarget(
@@ -503,13 +513,7 @@ public class PracticeFeedbackDeliveryPolicy {
         long aboutUserId = metadata.path("about_user_id").asLong(-1);
         boolean matches = reviewId >= 0
                 && aboutUserId >= 0
-                && pullRequestReviewRepository
-                        .findById(reviewId)
-                        .filter(review -> review.getPullRequest() != null
-                                && review.getPullRequest().getId().equals(pullRequest.getId()))
-                        .filter(review -> review.getAuthor() != null
-                                && review.getAuthor().getId().equals(aboutUserId))
-                        .isPresent();
+                && reviewTargets.reviewMatchesTarget(reviewId, pullRequest.getId(), aboutUserId);
         return matches ? new ReviewSubject(aboutUserId, true) : null;
     }
 

@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Building2 } from "lucide-react";
 import { useDeferredValue, useState } from "react";
 import { z } from "zod";
+import { withSessionMutationLock } from "@/integrations/auth/session-mutation";
 
 import { adminListWorkspacesOptions, impersonateMutation } from "@/api/@tanstack/react-query.gen";
 import type { AdminWorkspaceView } from "@/api/types.gen";
@@ -28,7 +29,7 @@ function AdminWorkspacesPage() {
 	const [impersonateTarget, setImpersonateTarget] = useState<AdminWorkspaceView | null>(null);
 
 	const listQuery = useQuery(adminListWorkspacesOptions());
-	const impersonate = useMutation(impersonateMutation());
+	const impersonate = useMutation(withSessionMutationLock(impersonateMutation()));
 	const all: AdminWorkspaceView[] = listQuery.data ?? [];
 
 	const term = deferredSearch.trim().toLowerCase();

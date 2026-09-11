@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "no
 import { join } from "node:path";
 
 import { asRecord, asString, parseJson } from "./lib/json.ts";
+import { migrationGuideSections, renderMigrationGuide } from "./lib/migration-guide.ts";
 
 const version = asString(
 	asRecord(parseJson(readFileSync("package.json", "utf8")), "package.json").version,
@@ -30,14 +31,13 @@ for (const { file, re, line } of edits) {
 }
 
 const migrationFile = "MIGRATION.md";
-const migration = readFileSync(migrationFile, "utf8");
-const pendingSections = [
-	...migration.matchAll(/^### Next release\n([\s\S]*?)(?=^### |(?![\s\S]))/gm),
-];
-if (pendingSections.length !== 1) {
+const migration = renderMigrationGuide(readFileSync(migrationFile, "utf8"));
+const sections = migrationGuideSections(migration);
+const pendingSection = sections.find((section) => section.heading === "### Next release");
+if (!pendingSection) {
 	throw new Error("sync-release-version: MIGRATION.md must contain exactly one ### Next release");
 }
-const pending = pendingSections[0]?.[1]?.trim() ?? "";
+const pending = pendingSection.content;
 const fragmentDirectory = ".migration";
 const fragmentFiles = existsSync(fragmentDirectory)
 	? readdirSync(fragmentDirectory)
@@ -45,11 +45,6 @@ const fragmentFiles = existsSync(fragmentDirectory)
 			.toSorted()
 	: [];
 
-// A version can only gain a history section by being released, and `changeset version` computes
-// the lowest unreleased version — so any section for this version or a later one is unreleased
-// content that ships now. Sections directly below the pending anchor whose headings say otherwise
-// (hand-written before fragments existed, or this script's own output when a regeneration re-reads
-// it) are absorbed into the section being stamped instead of failing the release.
 const semverAtLeast = (candidate: string, reference: string): boolean => {
 	const left = candidate.split(".").map(Number);
 	const right = reference.split(".").map(Number);
@@ -58,20 +53,25 @@ const semverAtLeast = (candidate: string, reference: string): boolean => {
 	}
 	return true;
 };
-const regionStart = pendingSections[0]?.index ?? 0;
-let regionLength = pendingSections[0]?.[0]?.length ?? 0;
+const regionStart = pendingSection.start;
+let regionEnd = pendingSection.end;
 const unreleased: string[] = [];
-for (;;) {
-	const tail = migration.slice(regionStart + regionLength);
-	const next = /^### v(\d+\.\d+\.\d+)\n([\s\S]*?)(?=^### |(?![\s\S]))/m.exec(tail);
-	if (!next || next.index !== 0 || !semverAtLeast(next[1] ?? "", version)) break;
-	unreleased.push(next[2]?.trim() ?? "");
-	regionLength += next[0].length;
+// Changesets selects the next release version; sections at or above it have not shipped.
+for (const section of sections.slice(sections.indexOf(pendingSection) + 1)) {
+	const next = /^### v(\d+\.\d+\.\d+)$/.exec(section.heading);
+	if (!next || !semverAtLeast(next[1] ?? "", version)) break;
+	unreleased.push(section.content);
+	regionEnd = section.end;
 }
 
 if (pending !== "" || unreleased.length > 0 || fragmentFiles.length > 0) {
-	const remainder = migration.slice(0, regionStart) + migration.slice(regionStart + regionLength);
-	if (remainder.split("\n").includes(`### v${version}`)) {
+	if (
+		sections.some(
+			(section) =>
+				section.heading === `### v${version}` &&
+				(section.start < regionStart || section.start >= regionEnd),
+		)
+	) {
 		throw new Error(`sync-release-version: MIGRATION.md already contains ### v${version}`);
 	}
 	const fragments = fragmentFiles.map((file) =>
@@ -80,12 +80,13 @@ if (pending !== "" || unreleased.length > 0 || fragmentFiles.length > 0) {
 	const section = ["### Next release", `### v${version}`, pending, ...unreleased, ...fragments]
 		.filter(Boolean)
 		.join("\n\n");
-	// Splicing by offset keeps `$&`/`$$` in migration notes literal.
 	writeFileSync(
 		migrationFile,
-		`${migration.slice(0, regionStart)}${section}\n\n${migration.slice(regionStart + regionLength)}`,
+		`${migration.slice(0, regionStart)}${section}\n\n${migration.slice(regionEnd)}`,
 	);
 	for (const file of fragmentFiles) rmSync(join(fragmentDirectory, file));
+} else {
+	writeFileSync(migrationFile, migration);
 }
 
 console.log(`Synced release version references to ${version}`);

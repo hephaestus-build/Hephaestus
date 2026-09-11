@@ -104,6 +104,12 @@ void describe("selectPlatformDigest", () => {
 });
 
 void describe("isImageIndex", () => {
+	void test("malformed index declarations never become a single-manifest fallback", () => {
+		for (const manifests of [null, {}, "invalid", 42]) {
+			assert.throws(() => isImageIndex({ manifests }), /must be an array/);
+		}
+	});
+
 	// The two ways selectPlatformDigest returns undefined mean opposite things, and only this tells
 	// them apart: a single manifest is asked for its own digest, while an index missing the platform
 	// must fail. Falling back to the index digest there would hand Trivy a multi-platform reference,

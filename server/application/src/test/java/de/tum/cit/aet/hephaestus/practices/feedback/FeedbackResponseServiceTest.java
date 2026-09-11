@@ -81,7 +81,7 @@ class FeedbackResponseServiceTest extends BaseUnitTest {
         when(projection.getRespondedAt()).thenReturn(Instant.now());
         var response = when(reactionRepository.findCurrentResponse(FEEDBACK_ID, CONTRIBUTOR_ID));
         if (absentBeforeReplacement) {
-            response.thenReturn(Optional.empty(), Optional.of(projection));
+            response.thenReturn(Optional.empty()).thenReturn(Optional.of(projection));
         } else {
             response.thenReturn(Optional.of(projection));
         }

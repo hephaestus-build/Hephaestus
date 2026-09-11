@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.stepup;
 
+import java.io.Serial;
 import java.time.Duration;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -15,6 +16,10 @@ import org.springframework.web.ErrorResponseException;
  * {@code code} and {@code maxAgeSeconds} carry what the header would have.
  */
 public class StepUpRequiredException extends ErrorResponseException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
     public static final String CODE = "step_up_required";
 
     public StepUpRequiredException(Duration maxAge) {

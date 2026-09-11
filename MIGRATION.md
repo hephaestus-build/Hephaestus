@@ -2,7 +2,7 @@
 
 This document helps you upgrade between versions of Hephaestus. For what a version number promises
 (public contract, upgrade guarantee, support statement), see the
-[Compatibility Policy](https://ls1intum.github.io/Hephaestus/admin/compatibility-policy).
+[Compatibility Policy](https://docs.hephaestus.build/admin/compatibility-policy).
 
 > ⚠️ **Pre-1.0 Notice**: We are in active development. Minor versions (0.x.0) may contain breaking changes. Always test in staging before production.
 
@@ -25,7 +25,7 @@ repository root points at a different Compose project and reports nothing.
 docker compose images application-server
 
 # Latest release
-curl -fsSL https://api.github.com/repos/ls1intum/Hephaestus/releases/latest \
+curl -fsSL https://api.github.com/repos/hephaestus-build/Hephaestus/releases/latest \
   | grep -m1 '"tag_name"'
 ```
 
@@ -51,7 +51,7 @@ During pre-1.0, we follow [Semantic Versioning 0.x conventions](https://semver.o
 
 Before upgrading to any new `0.x.0` version:
 
-1. ✅ Read the [release notes](https://github.com/ls1intum/Hephaestus/releases)
+1. ✅ Read the [release notes](https://github.com/hephaestus-build/Hephaestus/releases)
 2. ✅ Check this migration guide for breaking changes
 3. ✅ Verify in staging first (auto-deployed on every release)
 4. ✅ Approve production deployment after staging verification
@@ -61,9 +61,36 @@ Before upgrading to any new `0.x.0` version:
 ## Version History
 
 Entries exist only for releases that need operator action. Everything else is in the
-[release notes](https://github.com/ls1intum/Hephaestus/releases).
+[release notes](https://github.com/hephaestus-build/Hephaestus/releases).
 
 ### Next release
+
+### v0.79.0
+
+#### 🔴 Achievements retired
+
+Achievement pages, unlock notifications, the skill-tree designer, and achievement administration are no longer available. Remove bookmarks and external links to these routes:
+
+- `/w/{workspaceSlug}/achievements`
+- `/w/{workspaceSlug}/user/{username}/achievements`
+- `/w/{workspaceSlug}/admin/achievements`
+- `/w/{workspaceSlug}/admin/achievement-designer`
+
+Remove clients of `/workspaces/{workspaceSlug}/users/{login}/achievements` and its `/definitions`, `/recalculate`, and `/reload` endpoints. Workspace responses no longer include `achievementsEnabled`; stop sending that property to the workspace feature-update endpoint. There are no replacement achievement endpoints or redirects.
+
+The upgrade permanently drops `user_achievement` and `workspace.achievements_enabled`. There is no data export, retained achievement storage, or replacement feature in the application. Activity history, practice feedback, leaderboards, leagues, and XP progression remain available.
+
+Before upgrading, back up the database and stop every application runtime role (`server`, `worker`, and `webhook`). Start only the upgraded version after migration; a rolling deployment with older versions is not supported for this removal. Returning to an older version requires restoring the pre-upgrade database backup; Liquibase cannot recover deleted progress.
+
+### v0.78.0
+
+#### 🔴 PostgreSQL 18 and baseline synchronization required
+
+PostgreSQL 18 is the only supported database major version. The bundled image no longer accepts a PostgreSQL 17 build target.
+
+If your database is still on PostgreSQL 17, first complete the [v0.77.4 PostgreSQL 17-to-18 upgrade procedure](https://github.com/hephaestus-build/Hephaestus/blob/v0.77.4/docs/admin/backup-restore.mdx#postgresql-17-to-18). Verify a successful restore into PostgreSQL 18 and keep an off-host backup before removing the old database. Then install this release. Do not attach a PostgreSQL 17 data directory to the PostgreSQL 18 image.
+
+All existing databases, including PostgreSQL 18 installations, must complete the [baseline synchronization runbook](https://docs.hephaestus.build/admin/liquibase-baseline-runbook) before the candidate application starts. Take and test-restore a full backup, verify the v0.77.4 cut-point, stop writers, and run `changeLogSyncToTag baseline_v0_77_4` using the candidate image. Unsynchronized existing schemas fail startup. Fresh databases apply the baseline automatically.
 
 ### v0.77.0
 
@@ -1256,7 +1283,7 @@ HEPHAESTUS_MENTOR_AGENT_PULL_POLICY=IF_NOT_PRESENT
 
 ### v1.0.0 (Future)
 
-At v1.0.0 the [Compatibility Policy](https://ls1intum.github.io/Hephaestus/admin/compatibility-policy)
+At v1.0.0 the [Compatibility Policy](https://docs.hephaestus.build/admin/compatibility-policy)
 takes effect — the public contract, the "any 1.x → any later 1.y" upgrade guarantee,
 deprecation-ahead-of-removal, and latest-release-only support. Until then, expect rapid iteration and
 occasional breaking changes in minor releases.
@@ -1272,7 +1299,7 @@ and review the release notes for endpoint changes.
 
 ### New Required Environment Variable
 
-1. Check the release notes and the [Production Setup](https://ls1intum.github.io/Hephaestus/admin/production-setup) guide for new variables
+1. Check the release notes and the [Production Setup](https://docs.hephaestus.build/admin/production-setup) guide for new variables
 2. Add them to your deployment's environment (see the `docker/compose.app.yaml` env block)
 3. Restart services
 
@@ -1306,7 +1333,7 @@ in CI and are not a supported recovery path. The supported recoveries, in order 
    changesets succeeded before deciding.
 2. **Restore from backup** if the instance must come back now and forward-fixing will take longer than
    the outage budget. Follow
-   [Backup & restore](https://ls1intum.github.io/Hephaestus/admin/backup-restore); restore the
+   [Backup & restore](https://docs.hephaestus.build/admin/backup-restore); restore the
    database dump *and* the `.env` holding `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`, or every encrypted
    credential in the restored database is unreadable. Then pin `IMAGE_TAG` to the version the dump
    was taken under so it is not immediately re-migrated by the release that failed.
@@ -1318,7 +1345,7 @@ do.
 
 ## Getting Help
 
-1. 📖 [GitHub Discussions](https://github.com/ls1intum/Hephaestus/discussions) - Ask the community
-2. 🐛 [Issues](https://github.com/ls1intum/Hephaestus/issues) - Report problems
+1. 📖 [GitHub Discussions](https://github.com/hephaestus-build/Hephaestus/discussions) - Ask the community
+2. 🐛 [Issues](https://github.com/hephaestus-build/Hephaestus/issues) - Report problems
 3. 📝 [CHANGELOG.md](./CHANGELOG.md) - Detailed change history
-4. 🔄 [Release Notes](https://github.com/ls1intum/Hephaestus/releases) - Per-version details
+4. 🔄 [Release Notes](https://github.com/hephaestus-build/Hephaestus/releases) - Per-version details

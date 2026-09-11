@@ -5,7 +5,6 @@ import { AdminFeaturesSettings, type FeatureValues } from "./AdminFeaturesSettin
 
 const allOff: FeatureValues = {
 	mentorEnabled: false,
-	achievementsEnabled: false,
 	leaderboardEnabled: false,
 	progressionEnabled: false,
 	leaguesEnabled: false,
@@ -32,7 +31,6 @@ export const AllEnabled: Story = {
 		values: {
 			...allOff,
 			mentorEnabled: true,
-			achievementsEnabled: true,
 			leaderboardEnabled: true,
 			progressionEnabled: true,
 			leaguesEnabled: true,

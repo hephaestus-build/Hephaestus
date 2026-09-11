@@ -193,8 +193,9 @@ public class DockerSandboxConfiguration {
             DockerClientOperations ops,
             SandboxImageGuard imageGuard,
             SandboxProperties properties,
+            DockerSandboxProperties dockerProperties,
             ExecutorService dockerWaitExecutor) {
-        return new SandboxContainerManager(ops, imageGuard, properties, dockerWaitExecutor);
+        return new SandboxContainerManager(ops, imageGuard, properties, dockerProperties.owner(), dockerWaitExecutor);
     }
 
     @Bean

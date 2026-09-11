@@ -3,17 +3,9 @@ import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { __resetSessionRecoveryForTests, handlePossibleSessionExpiry } from "./session-expiry";
 import { refreshAccessToken } from "./session-refresh";
-
-// The recovery path calls the shared single-flight refresh; mock it to drive both outcomes.
 vi.mock("./session-refresh", () => ({ refreshAccessToken: vi.fn() }));
 const refreshMock = vi.mocked(refreshAccessToken);
-
-// Prod serves the API under /api (Traefik strips it); pin a base path so the exemptions are exercised
-// the way they run in prod — the GET /api/user probe must be exempt exactly like /user is locally.
 vi.mock("@/environment", () => ({ default: { serverUrl: "http://localhost/api" } }));
-
-// jsdom's window.location is not directly assignable; replace it with a stub exposing `assign` plus
-// the pathname/search/origin the handler reads.
 function stubLocation(pathname: string, search = ""): { assigned: string[] } {
 	const assigned: string[] = [];
 	const stub = {
@@ -45,8 +37,6 @@ function res(status: number, url: string): Response {
 	Object.defineProperty(r, "url", { value: url, configurable: true });
 	return r;
 }
-
-// The 401 recovery is async (a silent refresh attempt); let its microtasks/timer settle.
 const flush = () =>
 	new Promise((resolve) => {
 		setTimeout(resolve, 0);
@@ -54,7 +44,7 @@ const flush = () =>
 
 describe("handlePossibleSessionExpiry", () => {
 	it("recovers a mid-session 401 via a silent refresh — no redirect", async () => {
-		refreshMock.mockResolvedValue(true);
+		refreshMock.mockResolvedValue("refreshed");
 		const { assigned } = stubLocation("/w/acme/overview", "?tab=prs");
 		const qc = makeQueryClient();
 		const invalidate = vi.spyOn(qc, "invalidateQueries");
@@ -67,13 +57,12 @@ describe("handlePossibleSessionExpiry", () => {
 		expect(handled).toBe(true);
 		await flush();
 		expect(refreshMock).toHaveBeenCalledOnce();
-		// Refresh succeeded → session restored, queries refetched, and the user is NOT bounced to /login.
 		expect(assigned).toHaveLength(0);
 		expect(invalidate).toHaveBeenCalled();
 	});
 
 	it("logs out to /login with sanitised returnTo when the 401 cannot be refreshed", async () => {
-		refreshMock.mockResolvedValue(false);
+		refreshMock.mockResolvedValue("expired");
 		const { assigned } = stubLocation("/w/acme/overview", "?tab=prs");
 		const qc = makeQueryClient();
 
@@ -93,36 +82,35 @@ describe("handlePossibleSessionExpiry", () => {
 		expect(url.searchParams.get("returnTo")).toBe("/w/acme/overview?tab=prs");
 	});
 
-	it("logs out instead of refresh-looping when a 401 persists after a successful refresh", async () => {
-		// Refresh always "succeeds" (cookie is valid), but the endpoint keeps 401ing — so the refresh is
-		// not the cure. The loop-breaker must give up and log out rather than refresh+invalidate forever.
-		refreshMock.mockResolvedValue(true);
+	it("does not log out or loop on a delayed 401 after successful recovery", async () => {
+		refreshMock.mockResolvedValue("refreshed");
 		const { assigned } = stubLocation("/w/acme/overview");
 		const qc = makeQueryClient();
 		const url = "http://localhost:8080/workspaces/acme/practices";
-
+		handlePossibleSessionExpiry(res(401, url), qc);
+		await flush();
 		handlePossibleSessionExpiry(res(401, url), qc);
 		await flush();
 		expect(refreshMock).toHaveBeenCalledOnce();
-		expect(assigned).toHaveLength(0); // first 401: refreshed, recovered in place
+		expect(assigned).toHaveLength(0);
+	});
 
-		// The same endpoint 401s again right after the "successful" refresh.
-		handlePossibleSessionExpiry(res(401, url), qc);
+	it("preserves the page and cache when refresh is temporarily unavailable", async () => {
+		refreshMock.mockResolvedValue("unavailable");
+		const { assigned } = stubLocation("/w/acme/overview");
+		const qc = makeQueryClient();
+		const invalidate = vi.spyOn(qc, "invalidateQueries");
+		handlePossibleSessionExpiry(res(401, "http://localhost:8080/workspaces/acme"), qc);
 		await flush();
-		expect(refreshMock).toHaveBeenCalledOnce(); // NO second refresh — no storm
-		expect(assigned).toHaveLength(1);
-		const [target] = assigned;
-		assert(target);
-		expect(new URL(target).pathname).toBe("/login");
+		expect(assigned).toHaveLength(0);
+		expect(invalidate).not.toHaveBeenCalled();
 	});
 
 	it("collapses concurrent 401s into a single refresh and handles all of them in place", async () => {
-		refreshMock.mockResolvedValue(true);
+		refreshMock.mockResolvedValue("refreshed");
 		const { assigned } = stubLocation("/w/acme/overview");
 		const qc = makeQueryClient();
 		const url = "http://localhost:8080/workspaces/acme/practices";
-
-		// Three requests 401 at once during a cookie rotation.
 		const handled = [
 			handlePossibleSessionExpiry(res(401, url), qc),
 			handlePossibleSessionExpiry(res(401, url), qc),
@@ -147,8 +135,6 @@ describe("handlePossibleSessionExpiry", () => {
 	});
 
 	it("does NOT handle a 401 from the GET /api/user probe (prod /api base path)", () => {
-		// A logged-out visitor on the public landing (pathname "/") probes the session; the /api-prefixed
-		// probe must be exempt, not drive the login redirect.
 		const { assigned } = stubLocation("/");
 		const handled = handlePossibleSessionExpiry(
 			res(401, "http://localhost/api/user"),
@@ -192,7 +178,7 @@ describe("handlePossibleSessionExpiry", () => {
 	});
 
 	it("drops an open-redirect returnTo down to '/' when logging out", async () => {
-		refreshMock.mockResolvedValue(false);
+		refreshMock.mockResolvedValue("expired");
 		const { assigned } = stubLocation("//evil.example.com");
 		handlePossibleSessionExpiry(
 			res(401, "http://localhost:8080/workspaces/acme"),

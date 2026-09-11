@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { after, test } from "node:test";
 
 import { environmentForGitFixture } from "./lib/git-environment.ts";
-import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
+import { CAPTURE_LIMIT_BYTES, repositoryCli } from "./lib/process.ts";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..");
 const SCRIPT = join(REPO_ROOT, "scripts", "enable-hooks.ts");
@@ -66,7 +66,11 @@ void test("an install enables the dispatcher and is idempotent", () => {
 void test("an install preserves disabled hooks until explicitly re-enabled", () => {
 	const { repository, git } = clone();
 	const run = (...args: string[]) => {
-		const result = spawnSync("vp", args, { cwd: repository, encoding: "utf8", env: hookFreeEnv() });
+		const result = spawnSync(process.execPath, [repositoryCli(), ...args], {
+			cwd: repository,
+			encoding: "utf8",
+			env: hookFreeEnv(),
+		});
 		assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
 	};
 	run("hooks", "enable");

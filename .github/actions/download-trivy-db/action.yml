@@ -1,8 +1,16 @@
 name: Download the Trivy database
 description: >-
-  Fetches the Trivy vulnerability database once, with the retries and registry fallback a gate
-  needs, and optionally asserts its freshness and records its metadata.
+  Downloads a new advisory database with retries and registry fallback, or restores this run's
+  immutable snapshot; validates freshness when requested and can prepare the separate Java index.
 inputs:
+  database-artifact:
+    description: Immutable artifact ID for this run, or registry to download a new database.
+    required: false
+    default: "registry"
+  java-db:
+    description: Prepare the Java index before concurrent Java image scans.
+    required: false
+    default: "false"
   max-age-hours:
     description: >-
       Fail when the downloaded database is older than this many whole hours. Empty skips the
@@ -14,12 +22,39 @@ inputs:
       Copy the database metadata to this path, creating parent directories. Empty skips the copy.
     required: false
     default: ""
+outputs:
+  database-directory:
+    description: Directory containing the advisory database and its metadata.
+    value: ${{ steps.cache.outputs.directory }}
 runs:
   using: composite
   steps:
+    - name: Locate the advisory database
+      id: cache
+      shell: bash
+      env:
+        DATABASE_ARTIFACT: ${{ inputs.database-artifact }}
+      run: |
+        set -euo pipefail
+        if [ "$DATABASE_ARTIFACT" != registry ] && ! [[ "$DATABASE_ARTIFACT" =~ ^[1-9][0-9]*$ ]]; then
+          echo "::error::database-artifact must be registry or a positive artifact ID"
+          exit 1
+        fi
+        echo "directory=${TRIVY_CACHE_DIR:-$HOME/.cache/trivy}/db" >> "$GITHUB_OUTPUT"
+
+    - name: Restore this run's advisory database
+      if: inputs.database-artifact != 'registry'
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      with:
+        artifact-ids: ${{ inputs.database-artifact }}
+        path: ${{ steps.cache.outputs.directory }}
+        merge-multiple: true
+
     - name: Download the Trivy database
       shell: bash
       env:
+        DATABASE_ARTIFACT: ${{ inputs.database-artifact }}
+        JAVA_DB: ${{ inputs.java-db }}
         MAX_AGE_HOURS: ${{ inputs.max-age-hours }}
         METADATA_PATH: ${{ inputs.metadata-path }}
         # GHCR answers TOOMANYREQUESTS often enough that Harbor, Rancher and New Relic all
@@ -29,18 +64,38 @@ runs:
         TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2,public.ecr.aws/aquasecurity/trivy-db:2
       run: |
         set -euo pipefail
+        case "$JAVA_DB" in
+          true|false) ;;
+          *) echo "::error::java-db must be true or false"; exit 1 ;;
+        esac
         if [ -n "$MAX_AGE_HOURS" ] && ! [[ "$MAX_AGE_HOURS" =~ ^[0-9]+$ ]]; then
           echo "::error::max-age-hours must be a whole number of hours"
           exit 1
         fi
-        for attempt in 1 2 3; do
-          trivy image --timeout 90s --download-db-only && break
-          if [ "$attempt" -eq 3 ]; then
-            echo "::error::Trivy database download failed after $attempt attempts"
-            exit 1
-          fi
-          sleep $((attempt * 5))
-        done
+        if [ "$DATABASE_ARTIFACT" = registry ]; then
+          for attempt in 1 2 3; do
+            trivy image --timeout 90s --download-db-only && break
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Trivy database download failed after $attempt attempts"
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+        else
+          # A missing or incomplete snapshot must never fall back to a different advisory set.
+          test -s "${TRIVY_CACHE_DIR:-$HOME/.cache/trivy}/db/trivy.db"
+          test -s "${TRIVY_CACHE_DIR:-$HOME/.cache/trivy}/db/metadata.json"
+        fi
+        if [ "$JAVA_DB" = true ]; then
+          for attempt in 1 2 3; do
+            trivy image --timeout 5m --download-java-db-only && break
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Trivy Java database download failed after $attempt attempts"
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+        fi
         db_metadata="${TRIVY_CACHE_DIR:-$HOME/.cache/trivy}/db/metadata.json"
         if [ -n "$MAX_AGE_HOURS" ]; then
           jq -e --argjson max "$((MAX_AGE_HOURS * 3600))" \

@@ -18,6 +18,10 @@ vi.mock("@/integrations/sentry", () => ({ captureException }));
 
 it("reports a thrown route error once and renders recovery controls", async () => {
 	const error = new Error("failed route");
+	const onCaughtError = vi.fn();
+	using routeWarning = vi.spyOn(console, "warn").mockImplementation((...args: unknown[]) => {
+		expect(args).toStrictEqual(["Warning: Error in route match: //"]);
+	});
 	const rootRoute = createRootRoute();
 	const route = createRoute({
 		getParentRoute: () => rootRoute,
@@ -36,6 +40,7 @@ it("reports a thrown route error once and renders recovery controls", async () =
 		<StrictMode>
 			<RouterProvider router={router} />
 		</StrictMode>,
+		{ onCaughtError },
 	);
 
 	expect((await screen.findByRole("alert")).textContent).toContain("Something went wrong");
@@ -43,4 +48,9 @@ it("reports a thrown route error once and renders recovery controls", async () =
 
 	await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 	await vi.waitFor(() => expect(captureException).toHaveBeenCalledTimes(2));
+	expect(onCaughtError).toHaveBeenCalledTimes(2);
+	expect(routeWarning).toHaveBeenCalledTimes(2);
+	for (const [caught] of onCaughtError.mock.calls) {
+		expect(caught).toBe(error);
+	}
 });

@@ -21,7 +21,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 public class DatabaseTestUtils {
 
-    private static final Set<String> IGNORED_TABLES = Set.of("databasechangelog", "databasechangeloglock");
+    // ShedLock caches known lock rows; truncating them can strand acquisition until the context restarts.
+    private static final Set<String> IGNORED_TABLES = Set.of("databasechangelog", "databasechangeloglock", "shedlock");
     private static final Set<String> RETRYABLE_SQL_STATES = Set.of("40P01", "40001", "55P03");
     private static final int MAX_ATTEMPTS = 5;
     private static final long RETRY_DELAY_MS = 100;
@@ -102,13 +103,13 @@ public class DatabaseTestUtils {
 
     private synchronized String getTruncateStatement() {
         if (truncateStatement == null) {
+            // Singleton caches outlive database cleanup. Never reuse ids for different rows in one context.
             truncateStatement = fetchApplicationTables().stream()
                     .sorted()
                     .map(this::quoteIdentifier)
                     .collect(Collectors.collectingAndThen(
                             Collectors.joining(", "),
-                            tables ->
-                                    tables.isEmpty() ? "" : "TRUNCATE TABLE " + tables + " RESTART IDENTITY CASCADE"));
+                            tables -> tables.isEmpty() ? "" : "TRUNCATE TABLE " + tables + " CASCADE"));
         }
         return Objects.requireNonNull(truncateStatement);
     }

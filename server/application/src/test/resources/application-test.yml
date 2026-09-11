@@ -15,20 +15,24 @@ spring:
         hikari:
             maximum-pool-size: 10
             minimum-idle: 2
-            max-lifetime: 120000 # 2 minutes (shorter for faster cleanup)
             connection-timeout: 5000 # 5 seconds (fail fast)
             idle-timeout: 30000 # 30 seconds (faster cleanup)
             validation-timeout: 3000 # 3 seconds
             leak-detection-threshold: 5000 # 5 seconds for leak detection
             connection-test-query: SELECT 1
 
+    sql:
+        init:
+            mode: always
+            schema-locations: classpath:db/auth-event-sequence.sql
+
     # JPA configuration for tests
     # Use 'create' instead of 'create-drop': the Testcontainer is ephemeral so
     # DROP TABLE on shutdown is unnecessary.  With ~6 cached Spring contexts each
     # trying to DROP against the same container during JVM shutdown, the cumulative
-    # connection-timeout delays exceed surefire's forkedProcessExitTimeoutInSeconds
-    # (60 s), causing a "timeout in the fork" build failure.
+    # connection-timeout delays can hold the test JVM open after execution has finished.
     jpa:
+        defer-datasource-initialization: true
         hibernate:
             ddl-auto: create
         show-sql: false
@@ -117,7 +121,7 @@ hephaestus:
 # One flat key, not a nested tree: the package this raises above `root: WARN` was spelled out branch by
 # branch and kept pointing at the pre-rename `de.tum.in.www1` long after it stopped existing, matching
 # nothing. Because Spring's LoggingSystem reconfigures Logback for the whole JVM, the first
-# context-booting test in a Surefire fork left every later test in that fork at WARN — which is how a
+# context-booting test in a test JVM left every later test in that fork at WARN — which is how a
 # unit test asserting on an INFO line passed alone and failed in the tier.
 logging:
     level:

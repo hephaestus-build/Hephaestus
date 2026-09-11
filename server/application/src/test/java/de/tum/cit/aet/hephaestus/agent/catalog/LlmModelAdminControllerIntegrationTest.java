@@ -107,7 +107,8 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -115,7 +116,8 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -133,7 +135,8 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .bodyValue(firstPrice)
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         var secondPrice = new UpdateLlmModelPriceRequestDTO(
                 PricingMode.PRICED, new BigDecimal("3.00"), new BigDecimal("4.00"), null, null, null);
@@ -253,7 +256,8 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isEqualTo(409);
+                .isEqualTo(409)
+                .expectBody(Void.class);
     }
 
     @Test
@@ -298,7 +302,8 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     private LlmModel llmModelFromRepository(Long id) {

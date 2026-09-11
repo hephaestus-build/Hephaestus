@@ -17,7 +17,6 @@ const mockWorkspace = {
 	createdAt: new Date("2025-01-15T00:00:00Z"),
 	practicesEnabled: true,
 	mentorEnabled: true,
-	achievementsEnabled: true,
 	leaderboardEnabled: true,
 	progressionEnabled: false,
 	leaguesEnabled: false,
@@ -164,13 +163,11 @@ export const AllFeaturesDisabled: Story = {
 	args: {
 		activeWorkspace: {
 			...mockWorkspace,
-			achievementsEnabled: false,
 			leaderboardEnabled: false,
 		},
 		workspaces: [
 			{
 				...mockWorkspace,
-				achievementsEnabled: false,
 				leaderboardEnabled: false,
 			},
 		],

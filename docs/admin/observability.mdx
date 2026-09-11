@@ -4,28 +4,63 @@ title: Observability
 
 # Observability contract
 
-Production logs are JSON records. `job.id` and `workspace.id` are fields, not metric labels.
+Production logs are newline-delimited JSON records. `job.id` and `workspace.id` are fields, not
+metric labels. The console uses a Logstash-compatible application schema, not an OTLP log export.
+
+## Reading log records
+
+| Field                        | Meaning                                                                                            |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| `timestamp`                  | UTC event time, in ISO-8601 format                                                                 |
+| `level`, `logger`, `message` | Severity, originating logger, and human-readable event description                                 |
+| `event.name`                 | Stable name on structured application events; do not parse the message to identify these events    |
+| `mdc`                        | Thread-scoped context, including `traceId`, `spanId`, and workspace/job identifiers when available |
+| `stacktrace`                 | Exception details when deliberately included; not present on every failure                         |
+
+Event-specific numbers and booleans remain JSON numbers and booleans. Context stays under `mdc` so
+it cannot overwrite the record's severity or message. A JSON string can contain escaped newlines;
+read logs as JSON rather than treating their rendered text as additional records.
+
+The startup event `runtime.roles.configured` records `runtime.server.enabled`,
+`runtime.worker.enabled`, and `runtime.webhook.enabled` as booleans. It is informational when any
+role is enabled and warns when all are disabled; a role configuration log is not a readiness probe.
+
+At the shared HTTP boundary, `integration.request.failed` identifies the request method, upstream
+host, and exception class without recording the full URL, headers, or exception message.
+`database.constraint.conflict` identifies the exception class and a valid five-character SQLSTATE
+(`db.response.status_code`) without recording SQL or rejected row values. Both remain warnings;
+the response still reports service unavailability or a conflict.
+
+GitLab webhook registration failures expose the workspace and HTTP status in
+`integration.webhook.registration.failed`, never the provider's response body. Outline request
+diagnostics use `integration.request.failed` with the API operation, host, exception type, and HTTP
+status when available; they stay at debug level and do not include raw transport/decoding messages.
+
+Credential-field masking and known-token masking are defense in depth, not a guarantee that arbitrary
+private text is safe to log. Keep raw requests, provider responses, signed URLs, and private execution
+archives out of logs. Restrict log access and retention as part of the instance's data-protection
+policy. Do not publish raw diagnostic archives merely because common token patterns are masked.
 
 ## Agent-job lifecycle
 
 Lifecycle records contain `event.name`, `job.id`, `workspace.id`, `job.type`, `job.phase`,
 `job.outcome`, and `duration.ms`.
 
-| `event.name` | Emitted when | `job.phase` | `job.outcome` | `duration.ms` |
-| --- | --- | --- | --- | --- |
-| `agent.job.queued` | A new job transaction commits | `queue` | `queued` | `0` |
-| `agent.job.started` | A worker starts a claimed job | `queue` | `started` | Creation to start |
-| `agent.job.delivery` | A delivery attempt finishes | `delivery` | `delivered`, `failed` | Delivery attempt |
-| `agent.job.terminal` | A terminal transition commits | `total` | `completed`, `failed`, `timed_out`, `cancelled` | Creation to terminal emission |
+| `event.name`         | Emitted when                  | `job.phase` | `job.outcome`                                   | `duration.ms`                 |
+| -------------------- | ----------------------------- | ----------- | ----------------------------------------------- | ----------------------------- |
+| `agent.job.queued`   | A new job transaction commits | `queue`     | `queued`                                        | `0`                           |
+| `agent.job.started`  | A worker starts a claimed job | `queue`     | `started`                                       | Creation to start             |
+| `agent.job.delivery` | A delivery attempt finishes   | `delivery`  | `delivered`, `failed`                           | Delivery attempt              |
+| `agent.job.terminal` | A terminal transition commits | `total`     | `completed`, `failed`, `timed_out`, `cancelled` | Creation to terminal emission |
 
 Delivery is optional. Jobs that do not complete successfully may have no delivery event.
 
 ## Agent-job metrics
 
-| Prometheus name | Type | Labels | Meaning |
-| --- | --- | --- | --- |
-| `agent_job_total` | Counter | `outcome` | Committed terminal transitions |
-| `agent_job_duration_seconds` | Histogram | `phase` | Queue, execution-attempt, delivery-attempt, and total durations |
+| Prometheus name              | Type      | Labels    | Meaning                                                         |
+| ---------------------------- | --------- | --------- | --------------------------------------------------------------- |
+| `agent_job_total`            | Counter   | `outcome` | Committed terminal transitions                                  |
+| `agent_job_duration_seconds` | Histogram | `phase`   | Queue, execution-attempt, delivery-attempt, and total durations |
 
 `outcome` is one of `completed`, `failed`, `timed_out`, or `cancelled`. `phase` is one of `queue`,
 `execution`, `delivery`, or `total`. Identifiers, model and provider names, worker IDs, and exception text are not
@@ -37,10 +72,10 @@ existing execution metric.
 Account erasure, export generation, export expiry and LLM usage retention each report one terminal
 outcome per run, published by the server role.
 
-| Prometheus name | Type | Labels | Meaning |
-| --- | --- | --- | --- |
-| `privacy_job_completed_total` | Counter | `job`, `outcome` | Terminal privacy-job executions |
-| `privacy_job_affected_total` | Counter | `job` | Rows or subjects the run removed or produced |
+| Prometheus name               | Type    | Labels           | Meaning                                      |
+| ----------------------------- | ------- | ---------------- | -------------------------------------------- |
+| `privacy_job_completed_total` | Counter | `job`, `outcome` | Terminal privacy-job executions              |
+| `privacy_job_affected_total`  | Counter | `job`            | Rows or subjects the run removed or produced |
 
 `job` is one of `account_erasure`, `export_generation`, `export_retention`, or
 `llm_usage_retention`. `outcome` is `success`, `incomplete` or `failure`. An empty backlog is a
@@ -57,12 +92,16 @@ status; consult the server log when an export remains queued or processing after
 
 ## Correlating a request
 
-Every HTTP response carries an `X-Request-Id` header whose value is the request's W3C trace ID — a
-random 32-character hex string that is never derived from user attributes. The same value appears as
-the `traceId` field in every JSON log line written while handling that request, and it follows the
-work the request caused: a queued review job restores it when it executes, the sandbox and its LLM
-proxy calls carry it, and Sentry events are tagged with it. Access logs stay off at every layer, so
-this is the join key for "what happened to this request".
+When tracing is enabled, HTTP responses carry an `X-Request-Id` header containing the request's W3C
+trace ID. It is generated by tracing or extracted from valid incoming trace context, not derived
+from user attributes. While a trace scope is active, JSON logs carry its IDs under `mdc.traceId` and
+`mdc.spanId`. With tracing disabled, the correlation filter passes through without inventing an ID.
+Access logs stay off at every layer.
+
+A queued review records its submission correlation, but an execution attempt starts its own trace.
+Join the request and subsequent lifecycle by `job.id`; do not assume every log for a job shares the
+request's trace ID. Sandbox proxy calls propagate the execution trace. The
+[trace export contract](#exporting-opentelemetry-traces) describes the separate submission attribute.
 
 No collector or log aggregator is required. From a reference deployment, take the ID a user reports
 (or the `X-Request-Id` of a failing response) and search the container logs:
@@ -71,7 +110,94 @@ No collector or log aggregator is required. From a reference deployment, take th
 docker compose logs --no-color | grep '"traceId":"<the-id>"'
 ```
 
-That returns the request's own log lines, the lifecycle events of any job it enqueued (the
-`agent.job.*` events above), and the proxy calls made on its behalf. A job triggered by the scheduler
-rather than a request mints its own trace ID, so its lifecycle is still joinable even though no HTTP
-response ever carried it.
+That finds records written in the matching trace scope. To follow a queued job into later execution
+attempts, take its `job.id` from the queued event and search that identifier as well. Scheduler work
+can have execution traces without any originating HTTP response. A trace ID in a log proves
+correlation context was present, not that a collector received the trace.
+
+## HTTP route metrics
+
+`http.server.requests` uses route templates, not individual workspace slugs, message IDs, or query
+strings. Its URI-tag budget is 256: enough for the supported route inventory and the framework's
+bounded unmatched-request and management tags. A new URI beyond the budget is refused rather than
+creating unbounded time series. A limit warning therefore means metrics are incomplete and needs
+investigation, not a logging-level change.
+
+When the limit is reached, inspect the actual `uri` tag values first. Concrete IDs or URLs indicate
+a tagging defect; fix that before considering a larger budget. Do not turn off the bound.
+
+## Private execution archives
+
+Execution archives are **off by default**. On a dedicated evaluation instance, set
+`PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED=true` to retain the staged review inputs, collected
+outputs, final provider request bodies and native Pi session transcripts for subsequent attempts.
+This does not retroactively capture earlier reviews and does not enable OpenTelemetry export.
+
+Treat these archives as sensitive source material: they can contain private repository content,
+prompts, conversations and tool results. Transport headers and environment variables are not
+archived, but source material itself can contain secrets. Restrict operator filesystem access,
+protect the Context Fabric storage volume and apply its existing retention policy. Do not publish
+raw archives as benchmark results or put their contents in telemetry attributes.
+
+Execution evidence has no product REST download interface, even when capture is enabled. Workspace
+administration is not permission to retrieve raw transcripts. An authorized operator collects the
+manifests under `jobs/<job-id>/execution/<workspace-id>/<attempt>/` and their referenced CAS files
+through read-only Context Fabric access on a dedicated evaluation instance. Database observations use
+a separate, column-restricted read-only role; normal product APIs still drive reviews. The benchmark
+adapter owns that version-coupled observation boundary, not a new production service.
+
+Verify byte length and SHA-256 when exporting files. Captures share Context Fabric retention; they
+are not permanent backups. Missing attempts or expired files must be reported as unavailable.
+A database transaction and a filesystem read are not a cross-store atomic snapshot: collect terminal,
+settled jobs and preserve the recorded provenance and capture limitations.
+
+An output archive means files were collected, not that every event was recorded. Inspect the native
+`capture.json` and the authoritative job state as well. The capture status reports its byte budget
+and dropped-record count; reaching the budget leaves the capture explicitly incomplete. Requests,
+the event journal and whole native session copies share a 32 MiB capture budget with an 8 MiB
+per-file ceiling. Native sessions are staged outside the collected output and copied only at exit,
+so an oversized session cannot invalidate the review result. Omitted sessions make capture incomplete;
+abrupt termination can leave the journal without native sessions, or only the input archive. Disabling the setting stops new capture, but does not erase retained
+archives; retention continues to govern existing files.
+
+## Exporting OpenTelemetry traces
+
+Hephaestus uses Spring Boot's OpenTelemetry starter and the OTLP HTTP exporter. Export is disabled
+by default, independently of private execution capture. Configure these settings on the runtime
+roles whose spans you want to collect:
+
+| Variable                       | Default                           | Purpose                                                                        |
+| ------------------------------ | --------------------------------- | ------------------------------------------------------------------------------ |
+| `TRACING_OTLP_ENABLED`         | `false`                           | Enable the OTLP trace exporter.                                                |
+| `TRACING_OTLP_ENDPOINT`        | `http://localhost:4318/v1/traces` | Full OTLP HTTP receiver URL, reachable from the application container.         |
+| `TRACING_SAMPLING_PROBABILITY` | `0.0`                             | Fraction of new traces sampled; use `1.0` for a dedicated evaluation instance. |
+
+The supported Compose stack forwards these settings to server, worker and webhook containers.
+For authenticated collectors, configure Spring Boot's
+`management.opentelemetry.tracing.export.otlp.headers` through protected deployment configuration.
+Do not put collector credentials in a URL. OTLP log and metric export stay disabled: enabling traces does not
+start exporting application logs, private transcripts or a second metrics stream. Prometheus metrics
+remain available through the existing endpoint.
+
+Each practice-review attempt starts a real `practice_review.execute` span. Its trace ID is retained
+in the execution archive; it can differ from the job's submission correlation ID. The submission
+ID is a separate span attribute, not an invented parent span. Sandbox proxy requests propagate the
+execution trace's sampling decision. A `gen_ai.chat` span covers each authenticated model request,
+including streaming, and records the model, HTTP outcome and observed streaming token usage when
+available. Framework HTTP spans describe the transport. Prompts, tool results, headers and tokens
+used for authentication are not span attributes.
+
+For streaming requests, `hephaestus.stream.outcome` records transport completion separately from
+the HTTP status. A client disconnect or stream failure marks the span as an error with a bounded
+`error.type`, even if HTTP 200 headers were already sent. No replacement response body is sent
+after the stream has been committed.
+
+For private capture, the actual outbound proxy request body is retained separately from the Pi
+request: the proxy may replace a model identifier or add usage-reporting options. The private
+request context links its Pi-request hash to the exported trace and span IDs. Both bodies are
+content-addressed; neither body is copied into telemetry.
+
+A trace ID is not proof of export. Verify that your collector received the execution root and model
+request spans, then compare request hashes with the native event journal. Sampling, exporter errors,
+collector retention and abrupt process termination can all leave partial coverage. Do not equate
+successful feedback delivery or a nonempty trace file with complete execution evidence.

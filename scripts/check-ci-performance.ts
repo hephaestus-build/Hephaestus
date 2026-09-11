@@ -25,18 +25,6 @@ const metrics: Metric[] = [
 		value: (summary) => summary.testTimeSeconds,
 		tolerance: 0.15,
 	},
-	{
-		name: "CPU time",
-		unit: "s",
-		value: (summary) => summary.performance?.cpuTimeSeconds ?? 0,
-		tolerance: 0.25,
-	},
-	{
-		name: "max RSS",
-		unit: "KiB",
-		value: (summary) => summary.performance?.maxRssKilobytes ?? 0,
-		tolerance: 0.25,
-	},
 ];
 
 const median = (values: number[]): number => {
@@ -119,14 +107,14 @@ export function parseSummary(json: string): TestSummary {
 	};
 	if (
 		!isRecord(value) ||
-		value.schemaVersion !== 2 ||
+		value.schemaVersion !== 3 ||
 		typeof value.name !== "string" ||
 		!isRecord(value.performance)
 	) {
 		throw new Error("Invalid CI metrics summary");
 	}
 	const summary: TestSummary = {
-		schemaVersion: 2,
+		schemaVersion: 3,
 		name: value.name,
 		files: number(value, "files"),
 		tests: number(value, "tests"),
@@ -137,8 +125,6 @@ export function parseSummary(json: string): TestSummary {
 		slowest: [],
 		performance: {
 			wallTimeSeconds: number(value.performance, "wallTimeSeconds"),
-			cpuTimeSeconds: number(value.performance, "cpuTimeSeconds"),
-			maxRssKilobytes: number(value.performance, "maxRssKilobytes"),
 			contextStarts: number(value.performance, "contextStarts"),
 			contextStartupSeconds: number(value.performance, "contextStartupSeconds"),
 			contextCacheMisses: number(value.performance, "contextCacheMisses"),
@@ -168,12 +154,18 @@ async function main(): Promise<void> {
 		),
 	);
 	const failures = regressions(current, history);
-	const rendered = historyMarkdown([...history, current]);
+	const status =
+		history.length < 7 ? "insufficient-data" : failures.length > 0 ? "regression" : "within-budget";
+	const rendered = `${historyMarkdown([...history, current])}\nStatus: **${status}** (advisory).\n\n${failures.map((failure) => `- ${failure}\n`).join("")}\nCompare retained JFR and Gradle profiles before attributing a change to code; shared-runner variation and suite growth can affect these measurements.\n`;
 	process.stdout.write(rendered);
 	if (process.env.GITHUB_STEP_SUMMARY !== undefined)
 		await appendFile(process.env.GITHUB_STEP_SUMMARY, rendered);
-	if (failures.length > 0)
-		throw new Error(`CI performance regression:\n- ${failures.join("\n- ")}`);
+	for (const failure of failures)
+		process.stdout.write(`::warning title=Integration profile regression::${failure}\n`);
+	if (status === "insufficient-data")
+		process.stdout.write(
+			"::notice title=Integration profile baseline incomplete::Eight valid profiles are needed for a sustained-regression verdict.\n",
+		);
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href)

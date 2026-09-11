@@ -745,6 +745,29 @@ await main(${JSON.stringify(units)});\n`,
 }
 
 await test(
+	"a host waiting for its first promotion says so, without a stack trace",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(join(tmpdir(), "reconcile-unpromoted-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			// `cli: true` runs the real entry point, which is where the two failure classes part.
+			const result = fixture.run({ cli: true, channel: "production" });
+
+			assert.notEqual(result.status, 0, "an unpromoted host must not report success");
+			assert.match(result.stderr, /channels\/production\.json/);
+			assert.match(result.stderr, /has not been promoted yet/);
+			assert.match(result.stderr, /Run the Promote workflow/);
+			// The whole point: the journal gets the sentence, not a Node stack.
+			assert.doesNotMatch(result.stderr, /^\s+at /mu);
+			assert.doesNotMatch(result.stderr, /OperatorActionRequired:/u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
 	"startup adopts the recorded release before attempting to read the channel",
 	reconcilerSubprocess,
 	async () => {

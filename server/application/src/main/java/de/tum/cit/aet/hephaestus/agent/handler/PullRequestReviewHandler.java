@@ -268,6 +268,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
 
     @Override
     public void deliver(AgentJob job) {
+        if (ObservationAdmissionService.observationsWereRefused(job)) return;
         if (feedbackService.recoverAutomaticPackageIfPresent(job)) return;
         ObservationAdmissionService.requireMatchingCompositionDigest(job);
         deliverAdmitted(job);
@@ -440,10 +441,8 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                             + diffFiles.size());
         }
 
-        // Coherence coercion: a defect-detector practice's GOOD assessment becomes NOT_APPLICABLE (no false
-        // strength ships to the student), and severity is pinned to the INFO sentinel except on a BAD
-        // observation. Applied BEFORE deliver() so it reaches the DB, and before compose() so it reaches the
-        // posted comment.
+        // Refuse inconsistent assessments without inventing an applicability claim, and normalize severity
+        // before observations are persisted or used to compose feedback.
         scopedObservations =
                 new ArrayList<>(PracticeDetectionResultParser.coerceCoherence(scopedObservations, defectDetectorSlugs));
 

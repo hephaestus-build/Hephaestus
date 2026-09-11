@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.EvidenceQuoteUnverifiedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
@@ -15,11 +16,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.ReviewTargetQuery;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
@@ -60,9 +57,7 @@ public class PracticeDetectionDeliveryService {
 
     private final PracticeRevisionRepository practiceRevisionRepository;
     private final ObservationRepository observationRepository;
-    private final PullRequestRepository pullRequestRepository;
-    private final PullRequestReviewRepository pullRequestReviewRepository;
-    private final IssueRepository issueRepository;
+    private final ReviewTargetQuery reviewTargets;
     private final ConversationSourceLiveness conversationSourceLiveness;
     private final DocumentProjection documentProjection;
     private final ApplicationEventPublisher eventPublisher;
@@ -73,9 +68,7 @@ public class PracticeDetectionDeliveryService {
     public PracticeDetectionDeliveryService(
             PracticeRevisionRepository practiceRevisionRepository,
             ObservationRepository observationRepository,
-            PullRequestRepository pullRequestRepository,
-            PullRequestReviewRepository pullRequestReviewRepository,
-            IssueRepository issueRepository,
+            ReviewTargetQuery reviewTargets,
             ConversationSourceLiveness conversationSourceLiveness,
             DocumentProjection documentProjection,
             ApplicationEventPublisher eventPublisher,
@@ -84,9 +77,7 @@ public class PracticeDetectionDeliveryService {
             ArtifactSourceCatalogRegistry sourceCatalogs) {
         this.practiceRevisionRepository = practiceRevisionRepository;
         this.observationRepository = observationRepository;
-        this.pullRequestRepository = pullRequestRepository;
-        this.pullRequestReviewRepository = pullRequestReviewRepository;
-        this.issueRepository = issueRepository;
+        this.reviewTargets = reviewTargets;
         this.conversationSourceLiveness = conversationSourceLiveness;
         this.documentProjection = documentProjection;
         this.eventPublisher = eventPublisher;
@@ -182,7 +173,8 @@ public class PracticeDetectionDeliveryService {
         }
         // Only when there was something to admit: a review that found nothing still publishes its zero.
         if (admittedObservations.isEmpty() && !validObservations.isEmpty()) {
-            throw new JobDeliveryException(
+            throw new ObservationsRefusedException(
+                    "no_valid_observations",
                     "No observation survived the evidence check, so there is nothing to deliver: jobId=" + job.getId()
                             + ", withheld="
                             + withheldObservations);
@@ -362,20 +354,20 @@ public class PracticeDetectionDeliveryService {
             boolean redactedSecretCitation =
                     "secret-diff-scanner".equals(evidence.path("detector").asString())
                             && quote.isMissingNode()
-                            && quoteSha256.isTextual()
+                            && quoteSha256.isString()
                             && quoteSha256.asString().matches("[0-9a-f]{64}");
             if (!citation.isObject()
-                    || !sourceKind.isTextual()
-                    || !artifactPath.isTextual()
-                    || !path.isTextual()
-                    || ("scm.pull-request.diff".equals(sourceKind.asText())
-                            && (!side.isTextual() || !("OLD".equals(side.asText()) || "NEW".equals(side.asText()))))
-                    || (!"scm.pull-request.diff".equals(sourceKind.asText()) && !side.isMissingNode())
+                    || !sourceKind.isString()
+                    || !artifactPath.isString()
+                    || !path.isString()
+                    || ("scm.pull-request.diff".equals(sourceKind.asString())
+                            && (!side.isString() || !("OLD".equals(side.asString()) || "NEW".equals(side.asString()))))
+                    || (!"scm.pull-request.diff".equals(sourceKind.asString()) && !side.isMissingNode())
                     || !startLine.isIntegralNumber()
                     || startLine.asInt() < 1
                     || (!endLine.isMissingNode()
                             && (!endLine.isIntegralNumber() || endLine.asInt() < startLine.asInt()))
-                    || (!quote.isTextual() && !redactedSecretCitation)) {
+                    || (!quote.isString() && !redactedSecretCitation)) {
                 throw new JobDeliveryException(
                         "Observation has an invalid evidence citation: slug=" + observation.practiceSlug()
                                 + ", jobId="
@@ -383,7 +375,7 @@ public class PracticeDetectionDeliveryService {
             }
             SourceKind kind;
             try {
-                kind = new SourceKind(sourceKind.asText());
+                kind = new SourceKind(sourceKind.asString());
             } catch (IllegalArgumentException e) {
                 throw new JobDeliveryException(
                         "Observation has invalid evidence-source attribution: slug=" + observation.practiceSlug()
@@ -391,7 +383,7 @@ public class PracticeDetectionDeliveryService {
                                 + job.getId(),
                         e);
             }
-            SourceArtifactRef artifact = boundary.artifacts().get(artifactPath.asText());
+            SourceArtifactRef artifact = boundary.artifacts().get(artifactPath.asString());
             if (!boundary.allowedSources().contains(kind)
                     || artifact == null
                     || !artifact.kind().equals(kind)) {
@@ -401,7 +393,7 @@ public class PracticeDetectionDeliveryService {
                         + ", jobId="
                         + job.getId());
             }
-            String exactQuote = quote.asText("");
+            String exactQuote = quote.asString("");
             if (!redactedSecretCitation && exactQuote.isBlank()) {
                 throw new JobDeliveryException(
                         "Observation has an empty evidence quote: slug=" + observation.practiceSlug()
@@ -410,13 +402,13 @@ public class PracticeDetectionDeliveryService {
             }
             byte[] content = cas.get(artifact.sha256())
                     .orElseThrow(() -> new JobDeliveryException(
-                            "Cited evidence artifact is no longer available: path=" + artifactPath.asText()
+                            "Cited evidence artifact is no longer available: path=" + artifactPath.asString()
                                     + ", jobId="
                                     + job.getId()));
             String artifactContent = new String(content, StandardCharsets.UTF_8);
             if (!"scm.pull-request.diff".equals(kind.value()) && !artifactContent.contains(exactQuote)) {
                 throw new EvidenceQuoteUnverifiedException(
-                        "Evidence quote does not occur in the cited artifact: path=" + artifactPath.asText()
+                        "Evidence quote does not occur in the cited artifact: path=" + artifactPath.asString()
                                 + ", jobId="
                                 + job.getId());
             }
@@ -424,19 +416,19 @@ public class PracticeDetectionDeliveryService {
                     && !(redactedSecretCitation
                             ? diffContainsRedactedCitation(
                                     artifactContent,
-                                    path.asText(),
-                                    side.asText(),
+                                    path.asString(),
+                                    side.asString(),
                                     startLine.asInt(),
-                                    quoteSha256.asText())
+                                    quoteSha256.asString())
                             : diffContainsCitation(
                                     artifactContent,
-                                    path.asText(),
-                                    side.asText(),
+                                    path.asString(),
+                                    side.asString(),
                                     startLine.asInt(),
                                     endLine.isMissingNode() ? startLine.asInt() : endLine.asInt(),
                                     exactQuote))) {
                 throw new EvidenceQuoteUnverifiedException(
-                        "Evidence quote does not match the cited diff location: path=" + path.asText()
+                        "Evidence quote does not match the cited diff location: path=" + path.asString()
                                 + ", line="
                                 + startLine.asInt()
                                 + ", jobId="
@@ -489,9 +481,9 @@ public class PracticeDetectionDeliveryService {
                 || consulted == null
                 || !consulted.isArray()
                 || consulted.isEmpty()
-                || !inapplicability.path("subject").isTextual()
+                || !inapplicability.path("subject").isString()
                 || inapplicability.path("subject").asString().isBlank()
-                || !inapplicability.path("ruledOutBy").isTextual()
+                || !inapplicability.path("ruledOutBy").isString()
                 || inapplicability.path("ruledOutBy").asString().isBlank()) {
             throw new JobDeliveryException(
                     "A NOT_APPLICABLE observation must name what the practice looks for and what rules it out "
@@ -501,7 +493,7 @@ public class PracticeDetectionDeliveryService {
                             + job.getId());
         }
         for (JsonNode kind : consulted) {
-            if (!kind.isTextual()) {
+            if (!kind.isString()) {
                 throw new JobDeliveryException(
                         "Stated inapplicability names a non-textual source: slug=" + observation.practiceSlug()
                                 + ", jobId="
@@ -549,9 +541,9 @@ public class PracticeDetectionDeliveryService {
                 || consulted == null
                 || !consulted.isArray()
                 || consulted.isEmpty()
-                || !search.path("lookedFor").isTextual()
+                || !search.path("lookedFor").isString()
                 || search.path("lookedFor").asString().isBlank()
-                || !search.path("boundary").isTextual()
+                || !search.path("boundary").isString()
                 || search.path("boundary").asString().isBlank()) {
             throw new JobDeliveryException(
                     "An ABSENT observation must record where it searched: slug=" + observation.practiceSlug()
@@ -560,7 +552,7 @@ public class PracticeDetectionDeliveryService {
         }
         Set<SourceKind> searched = new HashSet<>();
         for (JsonNode kind : consulted) {
-            if (!kind.isTextual()) {
+            if (!kind.isString()) {
                 throw new JobDeliveryException(
                         "Recorded search names a non-textual source: slug=" + observation.practiceSlug()
                                 + ", jobId="
@@ -756,32 +748,18 @@ public class PracticeDetectionDeliveryService {
             Set<SourceKind> allowedSources,
             Map<String, SourceArtifactRef> artifacts) {}
 
-    /**
-     * The artifact kinds {@link #resolveTarget} knows how to address. Held against the handlers that can
-     * actually run a review by {@link JobTypeReviewExecutionCatalog} at startup, so a kind gains a runner
-     * and a delivery route in the same commit rather than failing delivery after its review was paid for.
-     */
+    /** Checked against executable review kinds by {@link JobTypeReviewExecutionCatalog} at startup. */
     static final Set<ArtifactKind> ROUTABLE_KINDS = Set.of(
             ArtifactKinds.PULL_REQUEST, ArtifactKinds.ISSUE, ArtifactKinds.CONVERSATION_THREAD, ArtifactKinds.DOCUMENT);
 
-    /**
-     * Route the delivery target on the job's artifact. A kind no branch below recognises is refused rather
-     * than defaulted: falling through to pull-request handling would turn "this build cannot deliver that
-     * kind" into "Missing pull_request_id in job metadata", sending whoever reads it looking for the wrong
-     * bug. The pull-request default applies only where it is a fact: a job that names no kind at all.
-     */
     private Target resolveTarget(AgentJob job, JsonNode metadata) {
         String artifactKind = job.getArtifactKind() != null
                 ? job.getArtifactKind().value()
                 : metadata.has("artifact_kind") ? metadata.get("artifact_kind").asString() : null;
         if (artifactKind == null) {
-            // A job with no kind at all came from the event-driven PR path, the only producer that ever
-            // omitted it.
             artifactKind = ArtifactKinds.PULL_REQUEST.value();
         }
         if (ArtifactKinds.CONVERSATION_THREAD.value().equals(artifactKind)) {
-            // Repo-less: the subject user is carried explicitly (about_user_id), not resolved from an SCM
-            // artifact author.
             JsonNode threadIdNode = metadata.get("slack_thread_id");
             if (threadIdNode == null || threadIdNode.isNull() || !threadIdNode.isNumber()) {
                 throw new JobDeliveryException("Missing slack_thread_id in job metadata: jobId=" + job.getId());
@@ -802,8 +780,7 @@ public class PracticeDetectionDeliveryService {
             return new Target(ArtifactKinds.CONVERSATION_THREAD, threadId, aboutUserId);
         }
         if (ArtifactKinds.DOCUMENT.value().equals(artifactKind)) {
-            // Repo-less, like a conversation. Re-read only to confirm the document still exists: one erased
-            // or tombstoned while its review ran must not gain observations nothing on any surface explains.
+            // Erasure during execution must prevent admission even when the captured evidence still exists.
             JsonNode documentIdNode = metadata.get(DocumentContentSource.DOCUMENT_ID_METADATA_KEY);
             if (documentIdNode == null || documentIdNode.isNull() || !documentIdNode.isNumber()) {
                 throw new JobDeliveryException("Missing " + DocumentContentSource.DOCUMENT_ID_METADATA_KEY
@@ -831,15 +808,15 @@ public class PracticeDetectionDeliveryService {
                 throw new JobDeliveryException("Missing issue_id in job metadata: jobId=" + job.getId());
             }
             Long issueId = issueIdNode.asLong();
-            Issue issue = issueRepository
-                    .findByIdWithAuthorAndRepository(issueId)
+            ReviewTargetQuery.Target issue = reviewTargets
+                    .findIssue(issueId)
                     .orElseThrow(() ->
                             new JobDeliveryException("Issue not found: issueId=" + issueId + ", jobId=" + job.getId()));
-            if (issue.getAuthor() == null) {
+            if (issue.authorId() == null) {
                 throw new JobDeliveryException("Issue has no author: issueId=" + issueId + ", jobId=" + job.getId());
             }
             requireMatchingArtifact(issue, metadata, "issue_number", job);
-            return new Target(ArtifactKinds.ISSUE, issueId, issue.getAuthor().getId());
+            return new Target(ArtifactKinds.ISSUE, issueId, issue.authorId());
         }
         if (!ArtifactKinds.PULL_REQUEST.value().equals(artifactKind)) {
             throw new JobDeliveryException(
@@ -850,11 +827,11 @@ public class PracticeDetectionDeliveryService {
             throw new JobDeliveryException("Missing pull_request_id in job metadata: jobId=" + job.getId());
         }
         Long pullRequestId = pullRequestIdNode.asLong();
-        PullRequest pullRequest = pullRequestRepository
-                .findByIdWithAuthorAndRepository(pullRequestId)
+        ReviewTargetQuery.Target pullRequest = reviewTargets
+                .findPullRequest(pullRequestId)
                 .orElseThrow(() -> new JobDeliveryException(
                         "Pull request not found: pullRequestId=" + pullRequestId + ", jobId=" + job.getId()));
-        if (pullRequest.getAuthor() == null) {
+        if (pullRequest.authorId() == null) {
             throw new JobDeliveryException(
                     "Pull request has no author: pullRequestId=" + pullRequestId + ", jobId=" + job.getId());
         }
@@ -862,13 +839,7 @@ public class PracticeDetectionDeliveryService {
         if ("REVIEWER".equals(metadata.path("subject_role").asString())) {
             long reviewId = metadata.path("review_id").asLong(-1);
             long aboutUserId = metadata.path("about_user_id").asLong(-1);
-            boolean matches = pullRequestReviewRepository
-                    .findById(reviewId)
-                    .filter(review -> review.getPullRequest() != null
-                            && review.getPullRequest().getId().equals(pullRequestId))
-                    .filter(review -> review.getAuthor() != null
-                            && review.getAuthor().getId().equals(aboutUserId))
-                    .isPresent();
+            boolean matches = reviewTargets.reviewMatchesTarget(reviewId, pullRequestId, aboutUserId);
             if (!matches) {
                 throw new JobDeliveryException(
                         "Submitted review no longer matches its PR and reviewer: reviewId=" + reviewId
@@ -877,10 +848,7 @@ public class PracticeDetectionDeliveryService {
             }
             return new Target(ArtifactKinds.PULL_REQUEST, pullRequestId, aboutUserId);
         }
-        return new Target(
-                ArtifactKinds.PULL_REQUEST,
-                pullRequestId,
-                pullRequest.getAuthor().getId());
+        return new Target(ArtifactKinds.PULL_REQUEST, pullRequestId, pullRequest.authorId());
     }
 
     private static String requiredMetadataText(JsonNode metadata, String field, AgentJob job) {
@@ -891,7 +859,8 @@ public class PracticeDetectionDeliveryService {
         return value;
     }
 
-    private static void requireMatchingArtifact(Issue artifact, JsonNode metadata, String numberKey, AgentJob job) {
+    private static void requireMatchingArtifact(
+            ReviewTargetQuery.Target artifact, JsonNode metadata, String numberKey, AgentJob job) {
         if (!PracticeFeedbackDeliveryPolicy.matchesArtifact(artifact, metadata, numberKey)) {
             throw new JobDeliveryException("Artifact metadata does not match the live target: jobId=" + job.getId());
         }

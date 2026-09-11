@@ -80,7 +80,7 @@ Check out the newest version from the
 [releases page](https://github.com/hephaestus-build/Hephaestus/releases):
 
 ```bash
-VERSION=0.77.4   # the release you are installing, without the leading "v"
+VERSION=0.79.0   # the release you are installing, without the leading "v"
 sudo git clone --depth 1 --branch "v$VERSION" \
   https://github.com/hephaestus-build/Hephaestus.git /opt/hephaestus
 sudo chown -R "$USER" /opt/hephaestus
@@ -265,100 +265,38 @@ instance to users. See [Legal Pages](./legal-pages).
 
 ## Upgrades
 
-### Running release and update checks
+Read the target release's migration instructions before starting its images. Pre-1.0 upgrades may
+require an intermediate release or manual preparation; the [Compatibility Policy](./compatibility-policy)
+defines the guarantee and support window. Existing databases crossing the PostgreSQL 18/Liquibase
+baseline transition must complete the [baseline synchronization runbook](./liquibase-baseline-runbook.md)
+first. The commands below do not perform that preparation.
 
-Open **Instance administration → Overview** to see the running identity and update-check result.
-The [release image lock](./release-image-lock#runtime-identity-handoff) explains which identity is
-reported and what a mismatch means. Unknown, failed and stale checks do not mean up to date.
-
-Update checks are enabled by default in the server role when the build matches a stable release
-identity supplied by the deployment lock. Successful results are cached for 24 hours; manual checks
-respect the same cache and retry window. Failures retain the last successful result and retry with
-exponential backoff, starting at 15 minutes and capped at 24 hours,
-unless GitHub requests a longer wait. Restarting clears this history. Prereleases and builds
-without matching deployment identity are not checked. An older published version is not a
-downgrade recommendation.
-
-The migration flag applies only to the named release; read every intervening entry in
-[`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) before upgrading.
-A missing flag means unknown, not “no migrations.” Security relevance and backup/restore status are
-not assessed by the checker. Release discovery neither verifies artifacts nor executes an upgrade;
-use the signed-lock procedure below.
-
-### Privacy and offline operation
-
-Checks send an unauthenticated HTTPS GET to
-`https://api.github.com/repos/hephaestus-build/Hephaestus/releases/latest`, with the static
-`Hephaestus-release-check` user agent, GitHub API version/content-negotiation headers and the previous
-response's ETag when available. No running version, digest, credentials, workspace data, configuration
-or usage information is sent. GitHub sees the source IP and request time. The client does not use
-workspace integration credentials or follow redirects.
-
-For an air-gapped installation, set `HEPHAESTUS_RELEASE_CHECK_ENABLED=false` in `.env` **before
-starting the application server**. To change an existing deployment, update the variable and recreate
-`application-server` using the same Compose files and environment files as for installation. This
-disables scheduled and manual checks without disabling local identity information. Set the variable
-to `true` and recreate the service to resume checks.
-
-Check failures appear only in instance administration. They do not affect application health or
-readiness and do not notify workspace users.
-
-### Upgrade procedure
-
-Any release upgrades directly to any later one — no intermediate steps. Support window and
-what a version number promises: [Compatibility Policy](./compatibility-policy).
-
-[Back up the instance](./backup-restore), then check out the target release:
+Complete the [runbook silent deployment checklist](./production-operations-runbook#silent-deployment-checklist)
+through backup and staging validation, then acquire the tested release:
 
 ```bash
-VERSION=<new version>
-cd /opt/hephaestus &&
-sudo git fetch --depth 1 origin tag "v$VERSION" &&
+(
+set -eu
+VERSION='<new-version>'
+cd /opt/hephaestus
+sudo git fetch --depth 1 origin tag "v$VERSION"
 sudo git checkout "v$VERSION"
-```
-
-Compare your `.env` against the new release's `.env.example` for added variables. Complete the
-intervening migration instructions linked above, including any PostgreSQL major-version upgrade,
-before starting the new stack.
-
-Verify the release lock, then deploy its images:
-
-```bash
-node scripts/prepare-release-lock.ts "v$VERSION" && (
-  cd docker/self-host &&
-  docker compose --env-file .env --env-file release-lock.env pull &&
-  docker compose --env-file .env --env-file release-lock.env up -d
+node scripts/prepare-release-lock.ts "v$VERSION"
+cd docker/self-host
+docker compose --env-file .env --env-file release-lock.env pull
 )
 ```
 
-After deployment, compare `/actuator/info` with the selected lock on **each runtime role**, then
-check `/actuator/health/readiness` on that role's management listener. Use internal access appropriate
-to your [runtime topology](./runtime-roles); do not publish a management port for browser access.
-The administration overview reports its server's identity, not a live inventory of the other roles.
-A successful Compose command alone does not confirm that every role runs the intended release and
-is ready.
+Before startup, compare `.env` with the release's `.env.example` and complete any manual steps in
+[`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md), especially PostgreSQL
+major-version changes. Return to **Validate then deploy** in the runbook for guarded startup.
+The [compatibility policy](./compatibility-policy#upgrade-guarantee) defines skip-version support.
 
 ## Rollback
 
-Restore a backup compatible with the target release, then deploy that release's published lock:
-
-```bash
-VERSION=<previous version>
-cd /opt/hephaestus &&
-sudo git fetch --depth 1 origin tag "v$VERSION" &&
-sudo git checkout "v$VERSION" &&
-node scripts/prepare-release-lock.ts "v$VERSION" && (
-  cd docker/self-host &&
-  docker compose --env-file .env --env-file release-lock.env up -d --remove-orphans --wait
-)
-```
-
-Never reconstruct an old lock or resolve its image tags.
-
-:::warning In-place downgrades are not supported
-Never run an older release against a database a newer release has already migrated — restore a
-compatible backup instead. Set up [Backup & Restore](./backup-restore) **before** you have data worth losing.
-:::
+Follow [failed-migration recovery](./production-operations-runbook#if-migration-fails) to restore the
+previous release's database, secrets and signed lock. Reverting images alone is not a rollback:
+never run an older release against a newer schema, reconstruct an old lock, or resolve mutable image tags.
 
 ## Troubleshooting
 

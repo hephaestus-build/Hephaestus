@@ -22,7 +22,8 @@ class ConfigurationReadinessControllerIntegrationTest extends BaseIntegrationTes
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test

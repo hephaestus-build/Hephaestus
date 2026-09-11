@@ -68,7 +68,6 @@ function UserProfile() {
 	const { username, workspaceSlug } = Route.useParams();
 	const { isCurrentUser } = useAuth();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
-	const achievementsEnabled = featureState.features?.achievementsEnabled;
 	const progressionEnabled = featureState.features?.progressionEnabled;
 	const leaguesEnabled = featureState.features?.leaguesEnabled;
 	const practicesEnabled = featureState.features?.practicesEnabled;
@@ -223,7 +222,6 @@ function UserProfile() {
 			before={effectiveDates.before}
 			onTimeframeChange={handleTimeframeChange}
 			schedule={schedule}
-			achievementsEnabled={achievementsEnabled === true}
 			progressionEnabled={progressionEnabled === true}
 			leaguesEnabled={leaguesEnabled === true}
 			practiceGroupStandings={

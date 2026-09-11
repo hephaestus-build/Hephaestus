@@ -1,13 +1,5 @@
-// Precompute HINTS for ready-and-traceable-handoff: (1) traceability references to a motivating issue
-// (closing OR non-closing — traceability does not require a closing keyword), and (2) the repo-wide
-// test-absence negative (expensive for a model to prove). FACTS only — the LLM judges readiness.
-import { findFiles } from "../lib/grep.ts";
+// Precompute traceability hints; the model judges readiness from the captured handoff.
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
-
-const isTest = (p: string) =>
-	/(^|\/)(tests?|specs?|__tests__)(\/)|[._-](test|tests|spec|specs)\.[a-z]+$|Tests?\.[a-z0-9]+$|Spec\.[a-z0-9]+$/i.test(
-		p,
-	);
 
 /** Bare `#N` mention (group 1 = number), rejecting `#1a2b` colours / `#1.2` versions / `#42px` units. */
 const BARE_REF = /#(\d+)(?![\w.])/g;
@@ -15,7 +7,7 @@ const BARE_REF = /#(\d+)(?![\w.])/g;
 const BRANCH_REF = /(?:^|\/)(\d{1,7})-/g;
 
 export default function readyAndTraceableHandoff(
-	repoPath: string,
+	_repoPath: string,
 	_d: Map<string, DiffFile>,
 	m: PullRequestMetadata,
 ) {
@@ -39,47 +31,10 @@ export default function readyAndTraceableHandoff(
 		);
 	}
 
-	// --- Test-absence negative (worktree-reliability guarded) ---
-	let repoTestFileCount = 0;
-	let repoCodeFileCount = 0;
-	for (const ext of [
-		"swift",
-		"ts",
-		"tsx",
-		"js",
-		"jsx",
-		"py",
-		"java",
-		"kt",
-		"go",
-		"rb",
-		"cs",
-		"cpp",
-		"cc",
-		"cxx",
-		"c",
-		"m",
-		"mm",
-		"h",
-		"hpp",
-	]) {
-		const all = findFiles(repoPath, ext);
-		repoCodeFileCount += all.length;
-		repoTestFileCount += all.filter(isTest).length;
-	}
-	const worktreeVisible = repoCodeFileCount > 0;
-	if (worktreeVisible && repoTestFileCount === 0) {
-		directions.push(
-			"The repository contains NO test files anywhere (worktree was readable). If the PR's Definition-of-Done checklist ticks an item asserting tests pass / are added, that tick is a vacuous done-claim — there is nothing to verify it against.",
-		);
-	}
-
 	return {
 		hints: [],
 		metrics: {
 			traceabilityRefCount: allRefs.size,
-			repoTestFileCount,
-			worktreeVisible: worktreeVisible ? 1 : 0,
 		},
 		directions,
 	};

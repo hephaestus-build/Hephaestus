@@ -42,6 +42,19 @@ const FETCH_TIMEOUT_MS = 5 * 60_000;
 const UNIT_FILES = ["hephaestus-reconcile.service", "hephaestus-reconcile.timer"] as const;
 const SYSTEMD_UNITS = "/etc/systemd/system";
 
+/**
+ * A condition an operator resolves rather than a defect to diagnose — a host waiting for its first
+ * promotion is the one that reaches production. The entry point prints the message and exits
+ * non-zero; a stack trace would say a failure happened here, when what happened is that nothing has
+ * been promoted yet.
+ */
+export class OperatorActionRequired extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "OperatorActionRequired";
+	}
+}
+
 export interface Channel {
 	/** What this channel asks the host to run: a release tag, or the commit a build came from. */
 	release: string;
@@ -470,7 +483,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 			cwd: config.checkout,
 		}))
 	)
-		throw new Error(
+		throw new OperatorActionRequired(
 			`no ${channelPath} on deploy-state: the "${config.channel}" environment has not been ` +
 				"promoted yet. Run the Promote workflow for it and this host applies it on the next tick.",
 		);
@@ -930,6 +943,14 @@ if (import.meta.main) {
 	} catch (error) {
 		// An unwritable metric must not replace the error that caused the failure.
 		await reportFailure().catch(() => {});
-		throw error;
+		// A host waiting to be promoted is a state an operator resolves, not a defect: the journal
+		// gets the sentence that says what to do. Everything else keeps its stack, because a stack is
+		// what a defect is diagnosed from.
+		if (error instanceof OperatorActionRequired) {
+			console.error(error.message);
+			process.exitCode = 1;
+		} else {
+			throw error;
+		}
 	}
 }

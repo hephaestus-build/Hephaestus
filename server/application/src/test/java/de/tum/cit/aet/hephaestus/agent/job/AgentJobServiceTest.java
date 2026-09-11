@@ -488,7 +488,7 @@ class AgentJobServiceTest extends BaseUnitTest {
 
             assertThat(java.util.Objects.requireNonNull(job.getMetadata())
                             .path(AgentJob.SIGNAL_REVISION_METADATA_KEY)
-                            .asText())
+                            .asString())
                     .isEqualTo(key.revision().value());
             assertThat(submission.metadata().has(AgentJob.SIGNAL_REVISION_METADATA_KEY))
                     .isFalse();

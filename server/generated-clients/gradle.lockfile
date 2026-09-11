@@ -1,0 +1,8 @@
+# This is a Gradle generated file for dependency locking.
+# Manual edits can break the build and are not advised.
+# This file is expected to be part of source control.
+# To regenerate this file, run: ./gradlew :generated-clients:dependencies --write-locks
+com.fasterxml.jackson.core:jackson-annotations:2.21=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+io.github.kobylynskyi:graphql-java-codegen:5.10.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+jakarta.annotation:jakarta.annotation-api:3.0.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+empty=annotationProcessor,openApiGeneratorExtra,testAnnotationProcessor

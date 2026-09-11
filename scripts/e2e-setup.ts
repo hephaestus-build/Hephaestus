@@ -194,7 +194,12 @@ async function main(): Promise<void> {
 	if (!models.some((model) => model.id === config.model))
 		throw new Error("the configured model is not listed by the LLM provider");
 	let jwt = await login(config);
-	const api = (method: string, path: string, body?: unknown): Promise<unknown> =>
+	const api = (
+		method: string,
+		path: string,
+		body?: unknown,
+		headers?: Record<string, string>,
+	): Promise<unknown> =>
 		jsonRequest(
 			`${config.appUrl}${path}`,
 			{
@@ -202,6 +207,7 @@ async function main(): Promise<void> {
 				headers: {
 					authorization: `Bearer ${jwt}`,
 					...(body === undefined ? {} : { "content-type": "application/json" }),
+					...headers,
 				},
 				body: body === undefined ? undefined : JSON.stringify(body),
 			},
@@ -340,9 +346,16 @@ async function main(): Promise<void> {
 			practiceReviewAutoTriggerEnabled: true,
 			practiceReviewManualTriggerEnabled: true,
 		});
-		await api("PATCH", `/workspaces/${config.workspaceSlug}/practices/review-settings`, {
-			cooldownMinutes: 0,
-		});
+		const reviewSettingsPath = `/workspaces/${config.workspaceSlug}/practices/review-settings`;
+		const reviewSettings = object(await api("GET", reviewSettingsPath), "practice-review settings");
+		await api(
+			"PATCH",
+			reviewSettingsPath,
+			{ cooldownMinutes: 0 },
+			{
+				"if-match": textField(reviewSettings, "etag", "practice-review settings"),
+			},
+		);
 		const settings = object(await api("GET", "/admin/llm/settings"), "LLM settings");
 		if (settings.allowWorkspaceConnections !== true)
 			await api("PUT", "/admin/llm/settings", { allowWorkspaceConnections: true });
@@ -448,7 +461,7 @@ async function main(): Promise<void> {
 				previewBody.slug !== slug ||
 				previewBody.availability !== "AVAILABLE" ||
 				previewBody.initialAutonomy !== "HUMAN_APPROVAL" ||
-				asArray(definition.criteria, "practice adoption preview.definition.criteria").length ===
+				textField(definition, "criteria", "practice adoption preview.definition").trim().length ===
 					0 ||
 				typeof previewBody.sourceReviewRuleFingerprint !== "string" ||
 				previewBody.sourceReviewRuleFingerprint.length === 0 ||

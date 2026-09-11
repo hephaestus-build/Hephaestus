@@ -111,13 +111,43 @@ confirmed — review it and submit it again.
 
 ### Session and impersonation deadlines
 
-A session ends at `hephaestus.auth.session-max-lifetime` (default `12h`) no matter how active it is;
+The access cookie lasts `24h` by default (`HEPHAESTUS_AUTH_ACCESS_TTL`). The browser renews it
+approximately hourly while active, before expiry, or when returning to a tab whose renewal is due.
+Hidden or inactive tabs do not continuously renew it. This is a renewable credential lifetime, not a precise
+last-request idle timeout: after the cookie expires, signing in is required. Tokens stay in HttpOnly,
+Secure, host-only, SameSite=Lax cookies in production; they are never stored in browser local storage.
+
+A session ends at `hephaestus.auth.session-max-lifetime` (default `7d`, configurable with
+`HEPHAESTUS_AUTH_SESSION_MAX_LIFETIME`) no matter how active it is;
 renewing an access token rolls within that deadline and never past it. An impersonation ends at
 `hephaestus.auth.impersonation-max-lifetime` (default `1h`), or sooner — when its time-box is reached
 or when the account being impersonated is promoted to instance admin, both of which return the
 operator to their own session and record an `IMPERSONATION_END` entry in the audit viewer; neither
 requires anyone to sign in again. The operator's own session ending, or the operator no longer being
 an instance admin, ends the impersonation outright instead — there is no session left to return to.
+
+### Choosing session limits
+
+Longer sessions reduce interruptions but increase exposure to stolen cookies and unattended devices.
+The defaults suit individual devices used for routine team work. Shorten both limits for shared
+computers or sensitive deployments; require MFA at the identity provider. The recent-sign-in gate
+above does not establish a second factor.
+
+[NIST SP 800-63B-4 §2.1.3](https://pages.nist.gov/800-63-4/sp800-63b.html#aal1reauth) recommends an
+overall timeout of no more than 30 days at AAL1 and does not require an inactivity timeout there.
+[OWASP's session guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#automatic-session-expiration)
+gives more conservative examples: 15–30 minutes idle and a 4–8 hour overall timeout. These are
+risk-based reference points, not an assurance-level certification for Hephaestus.
+
+Explicit overrides take precedence over defaults. Renewal applies the configured access lifetime but
+preserves the session's original absolute deadline and sign-in time. Revocation and account
+suspension still deny access before either deadline.
+
+Temporary renewal failures leave the page open; they do not bypass server authentication. A failed
+sign-out reports an error and can be retried. If the server rotates a token but its response is lost,
+signing in again may be necessary. Cross-tab coordination requires
+[Web Locks support](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API) and a secure
+context (HTTPS in production).
 
 ## LLM proxy
 
@@ -142,17 +172,31 @@ For the single-host deployment, keep the local Unix socket default. Docker-speci
 The gateway keeps its independent `hephaestus.sandbox.gateway.*` settings; resource limits, capacity
 and workspace transfer limits remain under `hephaestus.sandbox.*`.
 
-| Property under `hephaestus.sandbox.docker` | Environment variable | Default |
-| --- | --- | --- |
-| `host` | `SANDBOX_DOCKER_HOST` | `unix:///var/run/docker.sock` |
-| `tls-verify` | `SANDBOX_DOCKER_TLS_VERIFY` | `false` |
-| `cert-path` | `SANDBOX_DOCKER_CERT_PATH` | unset |
-| `container-runtime` | `SANDBOX_DOCKER_CONTAINER_RUNTIME` | Docker daemon default |
-| `app-server-container-id` | `SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID` | container `HOSTNAME` |
-| `cli` | `SANDBOX_DOCKER_CLI` | `docker` |
+| Property under `hephaestus.sandbox.docker` | Environment variable                     | Default                       |
+| ------------------------------------------ | ---------------------------------------- | ----------------------------- |
+| `host`                                     | `SANDBOX_DOCKER_HOST`                    | `unix:///var/run/docker.sock` |
+| `tls-verify`                               | `SANDBOX_DOCKER_TLS_VERIFY`              | `false`                       |
+| `cert-path`                                | `SANDBOX_DOCKER_CERT_PATH`               | unset                         |
+| `container-runtime`                        | `SANDBOX_DOCKER_CONTAINER_RUNTIME`       | Docker daemon default         |
+| `app-server-container-id`                  | `SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID` | container `HOSTNAME`          |
+| `cli`                                      | `SANDBOX_DOCKER_CLI`                     | `docker`                      |
+| `owner`                                    | `SANDBOX_DOCKER_OWNER`                   | `default`                     |
 
 Compose forwards these variables to `application-server` and `application-worker`. Leave the
 container-ID override empty so each container uses its own `HOSTNAME` when joining job networks.
+
+Use a distinct `owner` for each installation that shares a Docker daemon but uses a different
+database. All worker-capable roles of the same installation must use the same stable value.
+It accepts 1–63 lowercase letters, digits and hyphens, starting with a letter or digit.
+Container inventory, capacity accounting and cleanup select the `hephaestus.sandbox-owner` label;
+job and interactive-session networks use `hephaestus-sandbox-<owner>--<UUID>`.
+This prevents accidental cross-installation cleanup; it is not an authorization boundary against
+a process with Docker daemon access.
+
+Before upgrading from unscoped sandbox ownership or changing `owner`, drain reviews and interactive
+sessions and stop that installation's workers. Remove its remaining containers and networks only
+after verifying ownership. The new cleanup does not adopt legacy `hephaestus.managed=true`
+containers or `agent-net-` networks, or resources belonging to a previous owner.
 
 Java operations and interactive Docker CLI commands use the same host, TLS and certificate settings.
 Inherited `DOCKER_CONTEXT`, `DOCKER_HOST` and Docker TLS environment variables do not override

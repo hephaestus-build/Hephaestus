@@ -328,8 +328,8 @@ workspace-readable page at `/w/{workspaceSlug}/user/{username}`, not `IN_APP`; a
 A **thread** is a chain of feedback about one thing to one person on one channel, identified by a hash
 (`FeedbackThreadKey`) rather than by prose. The longitudinal channels key on the *practice*, because a
 habit claim is about the practice and not about one merge request; the in-context channel keys on the
-artifact. `thread_key` is deliberately not unique: a thread is a chain of rows over time, and the
-invariant that matters — at most one live `PREPARED` per thread — is held by a compare-and-swap.
+artifact. `thread_key` groups related feedback; it does not enforce a unique `PREPARED` item.
+Supersession atomically retires a selected `PREPARED` item, but new feedback can coexist on the thread.
 
 Supersession only ever claims `PREPARED` feedback. Say **superseded** for feedback that was prepared but
 replaced before anybody read it, and **continued** for newer feedback written beside feedback that was

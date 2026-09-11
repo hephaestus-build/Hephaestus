@@ -15,9 +15,14 @@ export interface WorkflowRun {
 	readonly conclusion: string | null;
 }
 
-// Failed validation requires an explicit rerun; cancellation does not.
+// Cancelled and approval-blocked runs provide no verdict; actual failures require an explicit rerun.
 export function needsDispatch(headSha: string, runs: readonly WorkflowRun[]): boolean {
-	return !runs.some((run) => run.headSha === headSha && run.conclusion !== "cancelled");
+	return !runs.some(
+		(run) =>
+			run.headSha === headSha &&
+			run.conclusion !== "cancelled" &&
+			run.conclusion !== "action_required",
+	);
 }
 
 export function parseRuns(value: unknown): WorkflowRun[] {

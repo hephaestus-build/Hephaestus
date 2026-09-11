@@ -14,7 +14,7 @@ class DockerCliTest {
     @Test
     void shouldUseConfiguredSocketWithoutInheritingDockerConnectionSettings() {
         var cli = new DockerCli(new DockerSandboxProperties(
-                "unix:///run/user/1000/docker.sock", false, null, null, null, "/usr/bin/docker"));
+                "unix:///run/user/1000/docker.sock", false, null, null, null, "/usr/bin/docker", "default"));
 
         var process = new ProcessBuilder("exec", "-i", "container-id", "node", "runner.js");
         process.environment()
@@ -46,8 +46,8 @@ class DockerCliTest {
     @Test
     void shouldUseConfiguredMutualTlsCertificatesForTcpDaemon() {
         var directory = Path.of("docker client certificates");
-        var cli = new DockerCli(
-                new DockerSandboxProperties("tcp://docker:2376", true, directory.toString(), null, null, "docker"));
+        var cli = new DockerCli(new DockerSandboxProperties(
+                "tcp://docker:2376", true, directory.toString(), null, null, "docker", "default"));
 
         var process = cli.configure(new ProcessBuilder("exec", "container-id", "sh", "-c", "mkdir -p /workspace"));
 

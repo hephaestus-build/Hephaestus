@@ -146,6 +146,7 @@ jobs:
       - uses: ./.github/actions/download-trivy-db
         with:
           max-age-hours: "24"
+          java-db: "true"
           metadata-path: evidence/trivy-db.json
 
       - name: Generate and enforce release evidence
@@ -341,6 +342,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Smoke-test the blessed install
+        shell: bash
         env:
           ARCHITECTURE: ${{ matrix.architecture }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -26,19 +26,22 @@ beforeEach(() => {
 	vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
 	vi.setSystemTime(new Date("2026-09-07T12:00:00Z"));
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+	vi.useRealTimers();
+	vi.restoreAllMocks();
+});
 
 async function advance(ms: number) {
 	await act(() => vi.advanceTimersByTimeAsync(ms));
 }
 
-function mountSession() {
+function mountSession(expiresInSec = 61) {
 	let refreshCalls = 0;
 	let userCalls = 0;
 	server.use(
 		http.get("*/user", () => {
 			userCalls++;
-			return HttpResponse.json(userPayload(refreshCalls < 2 ? 61 : 3600));
+			return HttpResponse.json(userPayload(refreshCalls < 2 ? expiresInSec : 3600));
 		}),
 		http.post("*/auth/refresh", () => {
 			refreshCalls++;
@@ -46,7 +49,7 @@ function mountSession() {
 		}),
 	);
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-	queryClient.setQueryData(getCurrentUserQueryKey(), userPayload(61));
+	queryClient.setQueryData(getCurrentUserQueryKey(), userPayload(expiresInSec));
 	const { unmount } = renderHook(() => useSessionKeepAlive(), {
 		wrapper: ({ children }: { children: ReactNode }) => (
 			<StrictMode>
@@ -86,16 +89,93 @@ describe("useSessionKeepAlive", () => {
 			http.post("*/auth/refresh", () => new HttpResponse(null, { status: 503 }), { once: true }),
 		);
 		await advance(1_000);
-		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
 		await advance(5_000);
+		expect(session.userCalls()).toBe(0);
 		expect(session.refreshCalls()).toBe(0);
 		act(() => {
 			window.dispatchEvent(new Event("keydown"));
 		});
-		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(2)));
+		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
 		expect(session.refreshCalls()).toBe(1);
 		await advance(5_000);
 		expect(session.refreshCalls()).toBe(1);
+	});
+
+	it("renews a full-day cookie hourly while active but not indefinitely while idle", async () => {
+		const session = mountSession(24 * 60 * 60);
+		await advance(60 * 60_000);
+		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
+		await advance(2 * 60 * 60_000);
+		expect(session.refreshCalls()).toBe(1);
+		act(() => {
+			window.dispatchEvent(new Event("keydown"));
+		});
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
+	});
+
+	it("does not rotate on every activity event when the absolute expiry stays unchanged", async () => {
+		const session = mountSession(24 * 60 * 60);
+		const fixedIdentity = userPayload(24 * 60 * 60);
+		server.use(http.get("*/user", () => HttpResponse.json(fixedIdentity)));
+		await advance(60 * 60_000);
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
+		await advance(11_000);
+		act(() => {
+			window.dispatchEvent(new Event("keydown"));
+		});
+		await advance(11_000);
+		act(() => {
+			window.dispatchEvent(new Event("keydown"));
+		});
+		expect(session.refreshCalls()).toBe(1);
+		await advance(60 * 60_000);
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
+	});
+
+	it("checks the unchanged absolute deadline instead of postponing it for an hour", async () => {
+		const session = mountSession();
+		const fixedIdentity = userPayload(61);
+		server.use(http.get("*/user", () => HttpResponse.json(fixedIdentity)));
+		await advance(1_000);
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
+		await advance(11_000);
+		act(() => {
+			window.dispatchEvent(new Event("keydown"));
+		});
+		await advance(30_000);
+		expect(session.refreshCalls()).toBe(1);
+		await advance(19_000);
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
+	});
+
+	it("bounds renewal after a successful rotation even when identity revalidation fails", async () => {
+		const session = mountSession(24 * 60 * 60);
+		server.use(http.get("*/user", () => new HttpResponse(null, { status: 503 })));
+		await advance(60 * 60_000);
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
+		await advance(11_000);
+		act(() => {
+			window.dispatchEvent(new Event("keydown"));
+		});
+		await advance(11_000);
+		act(() => {
+			window.dispatchEvent(new Event("keydown"));
+		});
+		expect(session.refreshCalls()).toBe(1);
+		await advance(60 * 60_000);
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
+	});
+
+	it("does not renew a hidden tab until it becomes visible", async () => {
+		const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+		const session = mountSession();
+		await advance(2_000);
+		expect(session.refreshCalls()).toBe(0);
+		visibility.mockReturnValue("visible");
+		act(() => {
+			document.dispatchEvent(new Event("visibilitychange"));
+		});
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
 	});
 
 	it("removes the timer and activity listeners when unmounted", async () => {

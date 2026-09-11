@@ -14,12 +14,11 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
+import de.tum.cit.aet.hephaestus.integration.scm.ReviewTargetQuery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
@@ -84,7 +83,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
     private PullRequestRepository pullRequestRepository;
 
     @Mock
-    private PullRequestReviewRepository pullRequestReviewRepository;
+    private ReviewTargetQuery reviewTargets;
 
     @Mock
     private RepositoryToMonitorRepository repositoryToMonitorRepository;
@@ -140,6 +139,42 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                 .isFalse();
         assertThat(policy().allowsComposition(job, DeliveryPolicySurface.IN_APP))
                 .isTrue();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"scm.issue,true", "scm.issue,false", "scm.pull_request,true", "scm.pull_request,false"})
+    void shouldEvaluateScmInAppCompositionWithoutExternalSilentModeDenial(String kind, boolean consent) {
+        var job = pullRequestJob();
+        job.setArtifactKind(ArtifactKind.of(kind));
+        var work = openPullRequest();
+        if ("scm.issue".equals(kind)) {
+            var metadata =
+                    tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
+            metadata.put("issue_id", PULL_REQUEST_ID);
+            metadata.put("issue_number", 17);
+            metadata.put("repository_id", REPOSITORY_ID);
+            metadata.put("repository_full_name", "owner/repo");
+            job.setMetadata(metadata);
+            Issue issue = new Issue();
+            issue.setId(work.getId());
+            issue.setNumber(work.getNumber());
+            issue.setAuthor(work.getAuthor());
+            issue.setRepository(work.getRepository());
+            issue.setState(work.getState());
+            when(issueRepository.findByIdWithAuthorAndRepository(PULL_REQUEST_ID))
+                    .thenReturn(Optional.of(issue));
+            when(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(WORKSPACE_ID, "owner/repo"))
+                    .thenReturn(true);
+            when(coverageService.assess(any(), eq("owner/repo"), eq(null), any(), eq(false)))
+                    .thenReturn(coverage(true));
+        } else {
+            stubPullRequestEvaluation(work, coverage(true));
+        }
+        when(silentModeQuery.isSilentModeEngaged()).thenReturn(true);
+        when(accountPreferencesQuery.practiceFeedbackDeliveryEnabled(AUTHOR_ID)).thenReturn(consent);
+        assertThat(policy().allowsComposition(job, DeliveryPolicySurface.IN_APP))
+                .isEqualTo(consent);
+        if (!consent) assertThat(recordedRefusal()).isEqualTo(FeedbackSuppressionReason.RECIPIENT_OPTED_OUT);
     }
 
     @Test
@@ -293,14 +328,8 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         metadata.put("review_id", REVIEW_ID);
         metadata.put("about_user_id", REVIEWER_ID);
         PullRequest pullRequest = openPullRequest();
-        PullRequestReview review = new PullRequestReview();
-        review.setId(REVIEW_ID);
-        review.setPullRequest(pullRequest);
-        User reviewer = new User();
-        reviewer.setId(REVIEWER_ID);
-        reviewer.setType(User.Type.USER);
-        review.setAuthor(reviewer);
-        when(pullRequestReviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
+        when(reviewTargets.reviewMatchesTarget(REVIEW_ID, pullRequest.getId(), REVIEWER_ID))
+                .thenReturn(true);
         stubPullRequestEvaluation(pullRequest, coverage(true));
         when(accountPreferencesQuery.practiceFeedbackDeliveryEnabled(REVIEWER_ID))
                 .thenReturn(false);
@@ -432,7 +461,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         return new PracticeFeedbackDeliveryPolicy(
                 issueRepository,
                 pullRequestRepository,
-                pullRequestReviewRepository,
+                reviewTargets,
                 repositoryToMonitorRepository,
                 workspaceRepository,
                 accountPreferencesQuery,
