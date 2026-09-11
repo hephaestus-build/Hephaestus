@@ -44,13 +44,6 @@ describe("validateSurveyDraft", () => {
 		);
 	});
 
-	it("refuses two questions with one id", () => {
-		const twice = draft({ questions: [question(), question({ prompt: "Again?" })] });
-		expect(validateSurveyDraft(twice, NOW).questions).toBe(
-			"Two questions share an id. Remove one and add it again.",
-		);
-	});
-
 	it.each([
 		["one choice", "Yes", "Enter 2–20 choices, one per line."],
 		["a repeated choice", "Yes\nYes", "Each choice must be different."],

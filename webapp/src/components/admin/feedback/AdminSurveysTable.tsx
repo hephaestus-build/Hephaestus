@@ -45,9 +45,7 @@ export type AdminSurveysTableState =
 
 export interface AdminSurveysTableProps {
 	state: AdminSurveysTableState;
-	/** The page clock; availability is derived from it at render time. */
 	now: number;
-	/** Surveys with a change in flight, whose menus wait. */
 	pendingIds: ReadonlySet<string>;
 	onToggleActive: (survey: Survey, active: boolean) => void;
 	onEnd: (survey: Survey) => void;
@@ -150,7 +148,7 @@ export function AdminSurveysTable({
 										<TableCell className="text-sm tabular-nums">
 											{responded} of {invited}
 											{completion !== undefined && (
-												<span className="text-muted-foreground"> · {completion}%</span>
+												<span className="text-muted-foreground"> · {completion}</span>
 											)}
 										</TableCell>
 										<TableCell className="text-right">

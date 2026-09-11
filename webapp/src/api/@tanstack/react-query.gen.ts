@@ -1051,7 +1051,7 @@ export const adminGetProductSurveyOptions = (options: Options<AdminGetProductSur
 });
 
 /**
- * Edit a survey's title, purpose, schedule or pause state; its questions are frozen
+ * Edit a survey's title, purpose, schedule or pause state
  */
 export const adminUpdateProductSurveyMutation = (options?: Partial<Options<AdminUpdateProductSurveyData>>): UseMutationOptions<AdminUpdateProductSurveyResponse, DefaultError, Options<AdminUpdateProductSurveyData>> => {
   const mutationOptions: UseMutationOptions<AdminUpdateProductSurveyResponse, DefaultError, Options<AdminUpdateProductSurveyData>> = {

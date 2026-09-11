@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, userEvent } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 
 import type { FeedbackItem } from "@/api/types.gen";
 import { withStandardPage } from "@/stories/decorators";
@@ -40,10 +40,12 @@ export const Open: Story = {
 		// An erased account and a submission from outside any workspace still read as sentences.
 		await expect(canvas.getByText("Deleted account")).toBeVisible();
 		await expect(canvas.getAllByText("No workspace")).toHaveLength(1);
-		const buttons = canvas.getAllByRole("button", { name: "Mark resolved" });
-		await expect(buttons).toHaveLength(3);
+		await expect(canvas.getAllByRole("button", { name: "Mark resolved" })).toHaveLength(3);
 		// The first card is the bug report, so the item handed back is the one the reader pressed on.
-		for (const button of buttons.slice(0, 1)) await userEvent.click(button);
+		const [firstCard] = canvas.getAllByRole("listitem");
+		if (firstCard) {
+			await userEvent.click(within(firstCard).getByRole("button", { name: "Mark resolved" }));
+		}
 		await expect(args.onTriage).toHaveBeenCalledWith(bugReport, true);
 	},
 };

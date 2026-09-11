@@ -17,7 +17,6 @@ import org.springframework.data.web.PagedModel;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-/** The instance feedback inbox. */
 @RestController
 @RequestMapping("/admin/product-feedback")
 @RecentSignInExempt(reason = "reads and triages product feedback; grants no access and stores no credential")

@@ -21,6 +21,7 @@ import { useDetailStack } from "@/components/core/detail-drawer/use-detail-stack
 import { PageHeader } from "@/components/core/PageHeader";
 import { PageLayout } from "@/components/core/PageLayout";
 import { buttonVariants } from "@/components/ui/button";
+import { useClampedPage } from "@/hooks/use-clamped-page";
 import { instanceAdminHead } from "@/lib/page-title";
 import { pageParam, useSearchState } from "@/lib/search-params";
 
@@ -48,6 +49,9 @@ function AdminSurveysPage() {
 		...adminListProductSurveysOptions({ query: { page, size: PAGE_SIZE } }),
 		placeholderData: keepPreviousData,
 	});
+	const onPageChange = (next: number) =>
+		void setSearch((previous) => ({ ...previous, page: pageParam(next) }));
+	useClampedPage(page, surveysQuery.data?.page?.totalPages, onPageChange);
 
 	const state: AdminSurveysTableState = surveysQuery.isPending
 		? { status: "loading" }
@@ -58,8 +62,7 @@ function AdminSurveysPage() {
 					surveys: surveysQuery.data.content ?? [],
 					page,
 					totalPages: surveysQuery.data.page?.totalPages ?? 0,
-					onPageChange: (next) =>
-						void setSearch((previous) => ({ ...previous, page: pageParam(next) })),
+					onPageChange,
 				};
 
 	return (
@@ -116,7 +119,9 @@ function AdminSurveysPage() {
 							surveyId={entry.id}
 							now={now}
 							nested={level.nested}
-							lifecycle={lifecycle}
+							pending={lifecycle.pendingIds.has(entry.id)}
+							onToggleActive={lifecycle.toggleActive}
+							onEnd={lifecycle.end}
 							onDelete={(survey) => {
 								done();
 								lifecycle.remove(survey);

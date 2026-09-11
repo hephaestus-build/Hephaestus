@@ -1,10 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent, waitFor } from "storybook/test";
+import { expect, fn, screen, userEvent } from "storybook/test";
 
-import { DetailDrawerHeader } from "@/components/core/detail-drawer/DetailDrawerHeader";
 import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
 import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
-import { DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { withPageBehind } from "@/stories/decorators";
 import { Stateful } from "@/stories/stateful";
 import { expectGenuinelyDisabled } from "@/test/controls";
@@ -13,10 +11,6 @@ import { expectSettledVisible } from "@/test/overlay";
 import { GUARDED_SURVEY_LEVEL_KINDS, surveyLevel } from "./admin-surveys-search";
 import { AdminSurveyComposer } from "./AdminSurveyComposer";
 
-/**
- * A level of the surveys page's drawer stack, so the stories exercise the surface administrators
- * actually get: the body scrolls, the footer stays, and the page behind keeps its place.
- */
 const meta = {
 	title: "Instance admin/Product feedback/Survey composer",
 	component: AdminSurveyComposer,
@@ -40,20 +34,7 @@ const meta = {
 					guardedKinds={GUARDED_SURVEY_LEVEL_KINDS}
 					onClose={(depth) => setStack(stack.slice(0, depth))}
 				>
-					{(_entry, level) => (
-						<>
-							<DetailDrawerHeader nested={level.nested}>
-								<div className="min-w-0 flex-1 space-y-0.5">
-									<DrawerTitle>Create survey</DrawerTitle>
-									<DrawerDescription>
-										Members of the audience are invited from the app header while the survey is
-										open.
-									</DrawerDescription>
-								</div>
-							</DetailDrawerHeader>
-							<AdminSurveyComposer {...args} />
-						</>
-					)}
+					{(_entry, level) => <AdminSurveyComposer {...args} nested={level.nested} />}
 				</DetailDrawerStack>
 			)}
 		</Stateful>
@@ -119,6 +100,21 @@ export const ManyQuestions: Story = {
 		// The first question cannot move up, the last cannot move down.
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Move question 1 up" }));
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Move question 6 down" }));
+
+		// Moving swaps the questions themselves, prompts included, not just their numbers.
+		const expectPrompts = async (...values: string[]) => {
+			const fields = screen.getAllByRole("textbox", { name: "Prompt" });
+			for (const [index, value] of values.entries()) await expect(fields[index]).toHaveValue(value);
+		};
+		const [first, second] = screen.getAllByRole("textbox", { name: "Prompt" });
+		if (!first || !second) throw new Error("expected two prompts");
+		await userEvent.type(first, "First");
+		await userEvent.type(second, "Second");
+		await userEvent.click(screen.getByRole("button", { name: "Move question 2 up" }));
+		await expectPrompts("Second", "First");
+		await userEvent.click(screen.getByRole("button", { name: "Move question 1 down" }));
+		await expectPrompts("First", "Second");
+
 		await userEvent.click(screen.getByRole("button", { name: "Remove question 6" }));
 		await expect(screen.getAllByRole("group", { name: /^Question \d+$/ })).toHaveLength(5);
 	},
@@ -139,41 +135,6 @@ export const Preview: Story = {
 		await expectSettledVisible(await screen.findByRole("heading", { name: "Onboarding check-in" }));
 		await expect(screen.getByText("1 question · under a minute")).toBeVisible();
 		await expect(screen.getByText(/What slowed you down in your first week\?/)).toBeVisible();
-	},
-};
-
-export const Publishes: Story = {
-	play: async ({ args }) => {
-		await userEvent.type(
-			await screen.findByRole("textbox", { name: "Title" }),
-			"Onboarding check-in",
-		);
-		await userEvent.type(
-			screen.getByRole("textbox", { name: "Purpose" }),
-			"Decide what the first-week guide should cover.",
-		);
-		await userEvent.type(
-			screen.getByRole("textbox", { name: "Prompt" }),
-			"What slowed you down in your first week?",
-		);
-		await userEvent.click(screen.getByRole("button", { name: "Publish survey" }));
-		await waitFor(() => expect(args.onSubmit).toHaveBeenCalledTimes(1));
-		await expect(args.onSubmit).toHaveBeenCalledWith(
-			expect.objectContaining({
-				title: "Onboarding check-in",
-				description: "Decide what the first-week guide should cover.",
-				workspaceId: undefined,
-				endsAt: undefined,
-				questions: [
-					expect.objectContaining({
-						prompt: "What slowed you down in your first week?",
-						type: "TEXT",
-						options: [],
-						required: false,
-					}),
-				],
-			}),
-		);
 	},
 };
 

@@ -6,10 +6,10 @@ import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackFilter;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackItemDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -67,7 +67,7 @@ class FeedbackService {
                     case RESOLVED -> feedback.findAllByResolvedAtIsNotNullOrderByResolvedAtDesc(pageable);
                     case ALL -> feedback.findAllByOrderByCreatedAtDesc(pageable);
                 };
-        return dtos(page);
+        return new PageImpl<>(dtos(page.getContent()), pageable, page.getTotalElements());
     }
 
     @Transactional
@@ -76,24 +76,30 @@ class FeedbackService {
                 feedback.findById(id).orElseThrow(() -> new EntityNotFoundException("Product feedback", id.toString()));
         if (resolved) item.resolve(accountId, clock.instant());
         else item.reopen();
-        return dtos(new PageImpl<>(List.of(item))).getContent().getFirst();
+        return dtos(List.of(item)).getFirst();
     }
 
-    private Page<FeedbackItemDTO> dtos(Page<ProductFeedback> page) {
+    private List<FeedbackItemDTO> dtos(List<ProductFeedback> list) {
+        List<@Nullable Long> accountIds = new ArrayList<>();
+        for (ProductFeedback f : list) {
+            accountIds.add(f.getAccountId());
+            accountIds.add(f.getResolvedByAccountId());
+        }
         FeedbackRefs.Resolved resolved = refs.resolve(
-                page.stream().flatMap(f -> Stream.of(f.getAccountId(), f.getResolvedByAccountId())),
-                page.stream().map(ProductFeedback::getWorkspaceId));
-        return page.map(f -> new FeedbackItemDTO(
-                f.getId(),
-                resolved.account(f.getAccountId()),
-                resolved.workspace(f.getWorkspaceId()),
-                f.getKind(),
-                f.getMessage(),
-                f.getPagePath(),
-                f.getUserAgent(),
-                f.getAppVersion(),
-                Objects.requireNonNull(f.getCreatedAt()),
-                f.getResolvedAt(),
-                resolved.account(f.getResolvedByAccountId())));
+                accountIds, list.stream().map(ProductFeedback::getWorkspaceId).toList());
+        return list.stream()
+                .map(f -> new FeedbackItemDTO(
+                        f.getId(),
+                        resolved.account(f.getAccountId()),
+                        resolved.workspace(f.getWorkspaceId()),
+                        f.getKind(),
+                        f.getMessage(),
+                        f.getPagePath(),
+                        f.getUserAgent(),
+                        f.getAppVersion(),
+                        Objects.requireNonNull(f.getCreatedAt()),
+                        f.getResolvedAt(),
+                        resolved.account(f.getResolvedByAccountId())))
+                .toList();
     }
 }

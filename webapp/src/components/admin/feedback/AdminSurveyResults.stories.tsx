@@ -28,23 +28,24 @@ function ready(survey: Survey, overrides: Partial<ReadyState> = {}): ReadyState 
 		page: 0,
 		totalPages: 1,
 		onPageChange: fn(),
+		...overrides,
+	};
+}
+
+const meta = {
+	title: "Instance admin/Product feedback/Survey results",
+	component: AdminSurveyResults,
+	parameters: { layout: "fullscreen", chromatic: { viewports: [1440] } },
+	decorators: [withPageBehind],
+	args: {
+		now: STORY_NOW,
 		exporting: false,
 		onExport: fn(),
 		pending: false,
 		onToggleActive: fn(),
 		onEnd: fn(),
 		onDelete: fn(),
-		...overrides,
-	};
-}
-
-/** A level of the surveys page's drawer stack, so the header, body and scroll are the real ones. */
-const meta = {
-	title: "Instance admin/Product feedback/Survey results",
-	component: AdminSurveyResults,
-	parameters: { layout: "fullscreen", chromatic: { viewports: [1440] } },
-	decorators: [withPageBehind],
-	args: { now: STORY_NOW },
+	},
 	render: (args) => (
 		<Stateful initial={[surveyLevel(adminSurvey.id)]}>
 			{(stack, setStack) => (
@@ -70,7 +71,7 @@ export const Default: Story = {
 		await expect(screen.getByText("17 answered · Average 3.6")).toBeVisible();
 		await expect(screen.getByText("14 answered · Average 7.9 · NPS 21")).toBeVisible();
 		await expect(
-			screen.getByText(/5 promoters \(9–10\) · 5 passives \(7–8\) · 4 detractors/),
+			screen.getByText(/5 promoters \(9–10\) · 5 passives \(7–8\) · 4 detractors \(0–6\)/),
 		).toBeVisible();
 		// A free-text question has no distribution to draw.
 		await expect(screen.getByText("9 answers — read them in the responses below.")).toBeVisible();
@@ -105,23 +106,28 @@ export const NoResponses: Story = {
 	},
 };
 
+export const PublishedByDeletedAccount: Story = {
+	args: { state: ready({ ...adminSurvey, createdBy: undefined }) },
+	play: async () => {
+		await expectSettledVisible(await screen.findByText(/Published by a deleted account/));
+	},
+};
+
 export const Exporting: Story = {
-	args: { state: ready(adminSurvey, { exporting: true }) },
+	args: { state: ready(adminSurvey), exporting: true },
 	play: async () => {
 		await expect(await screen.findByRole("button", { name: "Exporting…" })).toBeDisabled();
 	},
 };
 
-const onToggleActive = fn();
-
 export const Actions: Story = {
-	args: { state: ready(adminSurvey, { onToggleActive }) },
-	play: async () => {
+	args: { state: ready(adminSurvey) },
+	play: async ({ args }) => {
 		await userEvent.click(
 			await screen.findByRole("button", { name: `Actions for ${adminSurvey.title}` }),
 		);
 		await userEvent.click(await screen.findByRole("menuitem", { name: "Pause" }));
-		await expect(onToggleActive).toHaveBeenCalledWith(adminSurvey, false);
+		await expect(args.onToggleActive).toHaveBeenCalledWith(adminSurvey, false);
 	},
 };
 

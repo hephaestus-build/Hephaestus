@@ -53,7 +53,10 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -216,8 +219,20 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                 connectionService,
                 userRepository,
                 new SlackHephaestusUiLinks(
-                        workspaceId -> Optional.of(
-                                new WorkspaceSummaryQuery.WorkspaceSummary(workspaceId, "hephaestus", "Hephaestus")),
+                        new WorkspaceSummaryQuery() {
+                            @Override
+                            public Optional<WorkspaceSummary> findById(long workspaceId) {
+                                return Optional.of(new WorkspaceSummary(workspaceId, "hephaestus", "Hephaestus"));
+                            }
+
+                            @Override
+                            public Map<Long, WorkspaceSummary> findAllByIds(Collection<Long> workspaceIds) {
+                                Map<Long, WorkspaceSummary> found = new HashMap<>();
+                                workspaceIds.forEach(
+                                        id -> found.put(id, findById(id).orElseThrow()));
+                                return found;
+                            }
+                        },
                         "https://hephaestus.test"),
                 new TransactionTemplate(transactionManager),
                 event -> {} // activation kick intentionally not asserted here

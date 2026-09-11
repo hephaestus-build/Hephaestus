@@ -1,14 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
     <!--
-        A survey row per account now starts when the invitation is shown and later becomes a response
-        or a decline, which is what lets an administrator read a completion rate. That is a different
-        table from product_survey_submission, which only ever held decisions. This is the
-        compatibility half of the rename (docs/contributor/database-migration.mdx § Changelog
-        immutability policy): the new table is created and filled from the old one, and the old
-        table stays so the previous release still boots against this schema. The next release drops
-        product_survey_submission; until it does, the object exclusion in
-        application/build.gradle.kts keeps the drift gate quiet.
+        product_survey_submission is copied into product_survey_participation, not renamed: the
+        immutability policy in docs/contributor/database-migration.mdx requires the previous release
+        to boot against this schema, and it still reads the old table. The drop is listed there under
+        pending contractions.
     -->
     <changeSet id="1789117764980-1" author="hephaestus">
         <createTable tableName="product_survey_participation">
@@ -33,54 +29,88 @@
             </column>
             <column name="decided_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
         </createTable>
-        <addUniqueConstraint columnNames="survey_id, account_id" constraintName="uk_survey_participation_account" tableName="product_survey_participation"/>
-        <createIndex indexName="idx_survey_participation_account" tableName="product_survey_participation">
-            <column name="account_id"/>
-        </createIndex>
         <rollback>
             <dropTable tableName="product_survey_participation"/>
         </rollback>
     </changeSet>
-    <!--
-        Every submission was a decision, so it becomes a participation whose invitation and decision
-        share the submission's timestamp. "Dismissed" is now called "declined" because the row's
-        undo exists for exactly that word.
-    -->
     <changeSet id="1789117764980-2" author="hephaestus">
+        <addUniqueConstraint columnNames="survey_id, account_id" constraintName="uk_survey_participation_account" tableName="product_survey_participation"/>
+        <rollback>
+            <dropUniqueConstraint constraintName="uk_survey_participation_account" tableName="product_survey_participation"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1789117764980-3" author="hephaestus">
+        <createIndex indexName="idx_survey_participation_account" tableName="product_survey_participation">
+            <column name="account_id"/>
+        </createIndex>
+        <rollback>
+            <dropIndex indexName="idx_survey_participation_account" tableName="product_survey_participation"/>
+        </rollback>
+    </changeSet>
+    <!--
+        A submission stored its answers as one object keyed by question id, every value a string; a
+        participation stores a list of {questionId, text | choices | rating}. The copy reshapes each
+        answer by the type of the question it answers, so the application reads copied rows through
+        the same code as new ones. A blank answer is dropped as the application drops it; a
+        submission without answers stays without answers.
+    -->
+    <changeSet id="1789117764980-4" author="hephaestus">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="product_survey_submission"/>
         </preConditions>
         <sql><![CDATA[
 INSERT INTO product_survey_participation (id, survey_id, account_id, workspace_id, status, answers_json, invited_at, decided_at)
-SELECT id, survey_id, account_id, workspace_id,
-       CASE disposition WHEN 'DISMISSED' THEN 'DECLINED' ELSE disposition END,
-       answers_json, created_at, created_at
-FROM product_survey_submission
+SELECT s.id, s.survey_id, s.account_id, s.workspace_id,
+       CASE s.disposition WHEN 'DISMISSED' THEN 'DECLINED' ELSE s.disposition END,
+       CASE WHEN s.answers_json IS NULL THEN NULL ELSE COALESCE((
+           SELECT jsonb_agg(
+               CASE question.node ->> 'type'
+                   WHEN 'RATING' THEN jsonb_build_object('questionId', question.node ->> 'id', 'rating', btrim(answer.value)::int)
+                   WHEN 'SINGLE_CHOICE' THEN jsonb_build_object('questionId', question.node ->> 'id', 'choices', jsonb_build_array(answer.value))
+                   ELSE jsonb_build_object('questionId', question.node ->> 'id', 'text', btrim(answer.value))
+               END
+               ORDER BY question.position)
+           FROM jsonb_array_elements(v.questions_json) WITH ORDINALITY AS question(node, position)
+           JOIN jsonb_each_text(s.answers_json) AS answer(key, value) ON answer.key = question.node ->> 'id'
+           WHERE btrim(answer.value) <> ''
+       ), '[]'::jsonb) END,
+       s.created_at, s.created_at
+FROM product_survey_submission s
+JOIN product_survey v ON v.id = s.survey_id
 ON CONFLICT (survey_id, account_id) DO NOTHING;
 ]]></sql>
         <rollback/>
     </changeSet>
     <!--
-        Feedback now records the release that received it, whether the sender chose to share browser
-        details, and inbox triage. Rows from before this release predate the version stamp, which is
-        the only honest value for them; the default exists for the backfill alone.
+        app_version is NOT NULL and the rows already in the table have no release to record. The
+        default exists only so this statement satisfies the constraint; the next changeset drops it.
     -->
-    <changeSet id="1789117764980-3" author="hephaestus">
+    <changeSet id="1789117764980-5" author="hephaestus">
         <addColumn tableName="product_feedback">
-            <column name="app_version" type="VARCHAR(64)" defaultValue="before 0.80">
+            <column name="app_version" type="VARCHAR(64)" defaultValue="unknown">
                 <constraints nullable="false"/>
             </column>
             <column name="user_agent" type="VARCHAR(500)"/>
             <column name="resolved_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
             <column name="resolved_by_account_id" type="BIGINT"/>
         </addColumn>
-        <dropDefaultValue tableName="product_feedback" columnName="app_version" columnDataType="VARCHAR(64)"/>
-        <addForeignKeyConstraint baseTableName="product_feedback" baseColumnNames="resolved_by_account_id" constraintName="sfk_product_feedback_resolver" referencedTableName="account" referencedColumnNames="id" onDelete="SET NULL"/>
         <rollback>
             <dropColumn tableName="product_feedback" columnName="resolved_by_account_id"/>
             <dropColumn tableName="product_feedback" columnName="resolved_at"/>
             <dropColumn tableName="product_feedback" columnName="user_agent"/>
             <dropColumn tableName="product_feedback" columnName="app_version"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1789117764980-6" author="hephaestus">
+        <dropDefaultValue tableName="product_feedback" columnName="app_version" columnDataType="VARCHAR(64)"/>
+        <rollback>
+            <addDefaultValue tableName="product_feedback" columnName="app_version" columnDataType="VARCHAR(64)" defaultValue="unknown"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1789117764980-7" author="hephaestus">
+        <addForeignKeyConstraint baseTableName="product_feedback" baseColumnNames="resolved_by_account_id" constraintName="sfk_product_feedback_resolver" referencedTableName="account" referencedColumnNames="id" onDelete="SET NULL"/>
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="product_feedback" constraintName="sfk_product_feedback_resolver"/>
         </rollback>
     </changeSet>
 </databaseChangeLog>

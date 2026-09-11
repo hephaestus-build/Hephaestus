@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
-import de.tum.cit.aet.hephaestus.core.exception.DataIntegrityViolationConstraints;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.web.Csv;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.AnswerDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.CreateSurveyDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.ParticipationCountsDTO;
@@ -18,8 +18,9 @@ import java.time.Instant;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -32,17 +33,16 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 @RequiredArgsConstructor
 class SurveyService {
+    static final int EXPORT_MAX_ROWS = 10_000;
+
     private final SurveyRepository surveys;
     private final SurveyParticipationRepository participations;
     private final FeedbackRefs refs;
     private final ObjectMapper mapper;
     private final Clock clock;
 
-    // --- authoring -------------------------------------------------------------------------------
-
     @Transactional
     public SurveyDTO create(CreateSurveyDTO request, Long accountId) {
-        requireSchedule(request.startsAt(), request.endsAt());
         SurveyQuestions.validateDefinition(request.questions());
         Survey survey = surveys.saveAndFlush(new Survey(
                 request.title(),
@@ -57,7 +57,6 @@ class SurveyService {
 
     @Transactional
     public SurveyDTO edit(UUID id, SurveyEditDTO request) {
-        requireSchedule(request.startsAt(), request.endsAt());
         Survey survey = require(id);
         survey.edit(request.title(), request.description(), request.startsAt(), request.endsAt(), request.active());
         return dtos(List.of(survey)).getFirst();
@@ -73,9 +72,7 @@ class SurveyService {
     @Transactional(readOnly = true)
     public Page<SurveyDTO> all(Pageable pageable) {
         Page<Survey> page = surveys.findAll(pageable);
-        Map<UUID, SurveyDTO> content = new HashMap<>();
-        dtos(page.getContent()).forEach(dto -> content.put(dto.id(), dto));
-        return page.map(survey -> Objects.requireNonNull(content.get(survey.getId())));
+        return new PageImpl<>(dtos(page.getContent()), pageable, page.getTotalElements());
     }
 
     @Transactional(readOnly = true)
@@ -99,9 +96,7 @@ class SurveyService {
         require(id);
         Page<SurveyParticipation> page =
                 participations.findAllBySurveyIdAndStatusNotOrderByDecidedAtDesc(id, Status.INVITED, pageable);
-        FeedbackRefs.Resolved resolved = refs.resolve(
-                page.stream().map(SurveyParticipation::getAccountId),
-                page.stream().map(SurveyParticipation::getWorkspaceId));
+        FeedbackRefs.Resolved resolved = resolve(page.getContent());
         return page.map(p -> new SurveyResponseDTO(
                 p.getId(),
                 resolved.account(p.getAccountId()),
@@ -111,26 +106,24 @@ class SurveyService {
                 Objects.requireNonNull(p.getDecidedAt())));
     }
 
-    /** Every response and decline as RFC 4180 CSV, one column per question, newest first. */
     @Transactional(readOnly = true)
     public String exportCsv(UUID id) {
         Survey survey = require(id);
         List<QuestionDTO> questions = readQuestions(survey.getQuestions());
         List<SurveyParticipation> rows = participations
-                .findAllBySurveyIdAndStatusNotOrderByDecidedAtDesc(id, Status.INVITED, Pageable.unpaged())
+                .findAllBySurveyIdAndStatusNotOrderByDecidedAtDesc(
+                        id, Status.INVITED, PageRequest.of(0, EXPORT_MAX_ROWS))
                 .getContent();
-        FeedbackRefs.Resolved resolved = refs.resolve(
-                rows.stream().map(SurveyParticipation::getAccountId),
-                rows.stream().map(SurveyParticipation::getWorkspaceId));
+        FeedbackRefs.Resolved resolved = resolve(rows);
         StringBuilder csv = new StringBuilder();
-        List<String> header =
+        List<@Nullable String> header =
                 new ArrayList<>(List.of("decided_at_utc", "status", "account_name", "account_email", "workspace"));
         questions.forEach(question -> header.add(question.prompt()));
-        appendCsvRow(csv, header);
+        Csv.appendRow(csv, header);
         for (SurveyParticipation row : rows) {
             var account = resolved.account(row.getAccountId());
             var workspace = resolved.workspace(row.getWorkspaceId());
-            List<String> cells = new ArrayList<>(List.of(
+            List<@Nullable String> cells = new ArrayList<>(List.of(
                     String.valueOf(row.getDecidedAt()),
                     row.getStatus().name(),
                     account == null ? "" : account.displayName(),
@@ -150,38 +143,38 @@ class SurveyService {
                                                 : String.join(
                                                         "; ", Objects.requireNonNullElse(answer.choices(), List.of())));
             }
-            appendCsvRow(csv, cells);
+            Csv.appendRow(csv, cells);
         }
         return csv.toString();
     }
 
-    // --- participation --------------------------------------------------------------------------
-
     @Transactional(readOnly = true)
     public List<SurveyInvitationDTO> invitations(Long workspaceId, Long accountId) {
-        List<Survey> open = surveys.findOpenFor(workspaceId, accountId, clock.instant());
-        Set<UUID> seen = new HashSet<>();
+        Instant now = clock.instant();
+        List<Survey> open = surveys.findAllByActiveTrueOrderByStartsAtAscCreatedAtAsc().stream()
+                .filter(survey -> survey.isOpenFor(workspaceId, now))
+                .toList();
+        Map<UUID, Status> handled = new HashMap<>();
         participations
                 .findAllBySurveyIdInAndAccountId(
                         open.stream().map(Survey::getId).toList(), accountId)
-                .forEach(participation -> seen.add(participation.getSurveyId()));
+                .forEach(participation -> handled.put(participation.getSurveyId(), participation.getStatus()));
         return open.stream()
+                .filter(survey -> handled.getOrDefault(survey.getId(), Status.INVITED) == Status.INVITED)
                 .map(survey -> new SurveyInvitationDTO(
                         survey.getId(),
                         survey.getTitle(),
                         survey.getDescription(),
                         readQuestions(survey.getQuestions()),
                         survey.getEndsAt(),
-                        seen.contains(survey.getId())))
+                        handled.containsKey(survey.getId())))
                 .toList();
     }
 
-    /** Records that the invitation reached the account; idempotent, so every tab may report it. */
     @Transactional
     public void markInvited(UUID id, Long workspaceId, Long accountId) {
         open(id, workspaceId);
-        if (participations.findBySurveyIdAndAccountId(id, accountId).isEmpty())
-            saveNew(new SurveyParticipation(id, accountId, workspaceId), true);
+        participations.insertIfAbsent(UUID.randomUUID(), id, accountId, workspaceId);
     }
 
     @Transactional
@@ -189,24 +182,15 @@ class SurveyService {
         Survey survey = open(id, workspaceId);
         List<AnswerDTO> answers =
                 SurveyQuestions.validateAnswers(readQuestions(survey.getQuestions()), request.answers());
-        SurveyParticipation participation = participations
-                .findBySurveyIdAndAccountId(id, accountId)
-                .orElseGet(() -> saveNew(new SurveyParticipation(id, accountId, workspaceId), false));
-        if (participation.getStatus() != Status.INVITED) throw handled();
-        participation.respond(mapper.valueToTree(answers), workspaceId, clock.instant());
+        invitation(id, workspaceId, accountId).respond(mapper.valueToTree(answers), workspaceId, clock.instant());
     }
 
     @Transactional
     public void decline(UUID id, Long workspaceId, Long accountId) {
         open(id, workspaceId);
-        SurveyParticipation participation = participations
-                .findBySurveyIdAndAccountId(id, accountId)
-                .orElseGet(() -> saveNew(new SurveyParticipation(id, accountId, workspaceId), false));
-        if (participation.getStatus() != Status.INVITED) throw handled();
-        participation.decline(workspaceId, clock.instant());
+        invitation(id, workspaceId, accountId).decline(workspaceId, clock.instant());
     }
 
-    /** Undoes a decline. A response is never touched: the undo exists for the accidental "No thanks". */
     @Transactional
     public void restore(UUID id, Long workspaceId, Long accountId) {
         open(id, workspaceId);
@@ -217,47 +201,32 @@ class SurveyService {
                 .reinvite();
     }
 
-    // --- helpers --------------------------------------------------------------------------------
-
     private Survey require(UUID id) {
         return surveys.findById(id).orElseThrow(() -> new EntityNotFoundException("Survey", id.toString()));
     }
 
-    /** The survey as the workspace member may see it: a paused, unscheduled or foreign survey does not exist for them. */
+    /** A paused, unscheduled or foreign survey does not exist for a member: 404, never 403. */
     private Survey open(UUID id, Long workspaceId) {
         Survey survey = require(id);
         if (!survey.isOpenFor(workspaceId, clock.instant())) throw new EntityNotFoundException("Survey", id.toString());
         return survey;
     }
 
-    private static void requireSchedule(Instant startsAt, @Nullable Instant endsAt) {
-        if (endsAt != null && !endsAt.isAfter(startsAt))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "endsAt must be after startsAt");
-    }
-
-    private static ResponseStatusException handled() {
-        return new ResponseStatusException(HttpStatus.CONFLICT, "survey already answered or declined");
-    }
-
-    /**
-     * Two tabs can race to create the same participation row; the unique constraint decides. The loser
-     * either reports the row as already invited (harmless) or as already handled (a conflict).
-     */
-    private SurveyParticipation saveNew(SurveyParticipation participation, boolean tolerateExisting) {
-        try {
-            return participations.saveAndFlush(participation);
-        } catch (DataIntegrityViolationException e) {
-            if (!DataIntegrityViolationConstraints.hasName(e, "uk_survey_participation_account")) throw e;
-            if (tolerateExisting) return participation;
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "survey already handled", e);
-        }
+    private SurveyParticipation invitation(UUID surveyId, Long workspaceId, Long accountId) {
+        participations.insertIfAbsent(UUID.randomUUID(), surveyId, accountId, workspaceId);
+        SurveyParticipation participation =
+                participations.findBySurveyIdAndAccountId(surveyId, accountId).orElseThrow();
+        if (participation.getStatus() != Status.INVITED)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "survey already answered or declined");
+        return participation;
     }
 
     private List<SurveyDTO> dtos(List<Survey> list) {
         Map<UUID, ParticipationCountsDTO> counts =
                 counts(list.stream().map(Survey::getId).toList());
         FeedbackRefs.Resolved resolved = refs.resolve(
-                list.stream().map(Survey::getCreatedByAccountId), list.stream().map(Survey::getWorkspaceId));
+                list.stream().map(Survey::getCreatedByAccountId).toList(),
+                list.stream().map(Survey::getWorkspaceId).toList());
         return list.stream()
                 .map(s -> new SurveyDTO(
                         s.getId(),
@@ -274,25 +243,30 @@ class SurveyService {
                 .toList();
     }
 
+    private FeedbackRefs.Resolved resolve(List<SurveyParticipation> rows) {
+        return refs.resolve(
+                rows.stream().map(SurveyParticipation::getAccountId).toList(),
+                rows.stream().map(SurveyParticipation::getWorkspaceId).toList());
+    }
+
     private Map<UUID, ParticipationCountsDTO> counts(List<UUID> ids) {
-        Map<UUID, long[]> tallies = new HashMap<>();
-        ids.forEach(id -> tallies.put(id, new long[3]));
+        Map<UUID, Map<Status, Long>> tallies = new HashMap<>();
         if (!ids.isEmpty())
             participations
                     .countBySurvey(ids)
-                    .forEach(count -> Objects.requireNonNull(tallies.get(count.getSurveyId()))[
-                                    count.getStatus().ordinal()] =
-                            count.getCount());
+                    .forEach(count -> tallies.computeIfAbsent(count.getSurveyId(), id -> new EnumMap<>(Status.class))
+                            .put(count.getStatus(), count.getCount()));
         Map<UUID, ParticipationCountsDTO> result = new HashMap<>();
-        tallies.forEach((id, tally) -> {
-            long responded = tally[Status.RESPONDED.ordinal()];
-            long declined = tally[Status.DECLINED.ordinal()];
+        for (UUID id : ids) {
+            Map<Status, Long> tally = tallies.getOrDefault(id, Map.of());
+            long responded = tally.getOrDefault(Status.RESPONDED, 0L);
+            long declined = tally.getOrDefault(Status.DECLINED, 0L);
             // Every row was an invitation once, whatever it became.
             result.put(
                     id,
                     new ParticipationCountsDTO(
-                            tally[Status.INVITED.ordinal()] + responded + declined, responded, declined));
-        });
+                            tally.getOrDefault(Status.INVITED, 0L) + responded + declined, responded, declined));
+        }
         return result;
     }
 
@@ -302,15 +276,5 @@ class SurveyService {
 
     private List<AnswerDTO> readAnswers(@Nullable JsonNode json) {
         return json == null ? List.of() : mapper.convertValue(json, new TypeReference<>() {});
-    }
-
-    private static void appendCsvRow(StringBuilder csv, List<String> cells) {
-        csv.append(String.join(",", cells.stream().map(SurveyService::csvCell).toList()))
-                .append('\n');
-    }
-
-    /** Quote every cell, double embedded quotes and normalise newlines, so any spreadsheet reads it back. */
-    private static String csvCell(String value) {
-        return '"' + value.replace("\"", "\"\"").replace("\r\n", "\n").replace('\r', '\n') + '"';
     }
 }

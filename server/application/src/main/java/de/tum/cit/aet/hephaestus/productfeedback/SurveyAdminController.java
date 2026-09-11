@@ -24,7 +24,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-/** Survey authoring, lifecycle and results for instance administrators. */
 @RestController
 @RequestMapping("/admin/product-feedback/surveys")
 @RecentSignInExempt(reason = "manages product surveys; grants no access and stores no credential")
@@ -59,7 +58,7 @@ public class SurveyAdminController {
     @PutMapping("/{surveyId}")
     @Operation(
             operationId = "adminUpdateProductSurvey",
-            summary = "Edit a survey's title, purpose, schedule or pause state; its questions are frozen")
+            summary = "Edit a survey's title, purpose, schedule or pause state")
     @AuditExempt(reason = "changes who is invited, never a stored answer; grants no access")
     public SurveyDTO update(@PathVariable UUID surveyId, @Valid @RequestBody SurveyEditDTO request) {
         return service.edit(surveyId, request);
@@ -67,7 +66,9 @@ public class SurveyAdminController {
 
     @DeleteMapping("/{surveyId}")
     @Operation(operationId = "adminDeleteProductSurvey", summary = "Delete a survey and every response to it")
-    @AuditExempt(reason = "removes product research data the instance owns; grants no access")
+    @AuditExempt(
+            reason =
+                    "irreversibly removes members' answers without recording who did it: the config-audit vocabulary has no survey type, and widening it is a schema change")
     public ResponseEntity<Void> delete(@PathVariable UUID surveyId) {
         service.delete(surveyId);
         return ResponseEntity.noContent().build();

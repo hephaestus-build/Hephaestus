@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
@@ -112,6 +112,95 @@ describe("instance surveys route", () => {
 			startsAt: survey.startsAt,
 			active: false,
 		});
+	});
+
+	it("ends an open survey by sending its current fields with the end stamped now", async () => {
+		mockSurveys([survey]);
+		const edits: Record<string, unknown>[] = [];
+		server.use(
+			http.put("*/admin/product-feedback/surveys/:surveyId", async ({ request }) => {
+				edits.push(await recordOf(request));
+				return HttpResponse.json({ ...survey, endsAt: "2026-09-11T10:00:00.000Z" });
+			}),
+		);
+		renderRouteAt("/admin/surveys");
+		const user = userEvent.setup();
+
+		await user.click(
+			await screen.findByRole(
+				"button",
+				{ name: "Actions for Help improve practice feedback" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		await user.click(await screen.findByRole("menuitem", { name: "End now" }));
+		await user.click(await screen.findByRole("button", { name: "End survey" }));
+
+		await waitFor(() => expect(edits).toHaveLength(1));
+		const [edit] = edits;
+		expect(typeof edit?.endsAt).toBe("string");
+		expect(edit).toStrictEqual({
+			title: survey.title,
+			description: survey.description,
+			startsAt: survey.startsAt,
+			active: true,
+			endsAt: edit?.endsAt,
+		});
+	});
+
+	it("deletes a survey from its results and closes the level", async () => {
+		mockSurveys([survey]);
+		const deleted: string[] = [];
+		server.use(
+			http.delete("*/admin/product-feedback/surveys/:surveyId", ({ params }) => {
+				deleted.push(String(params.surveyId));
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		renderRouteAt("/admin/surveys");
+		const user = userEvent.setup();
+
+		await user.click(
+			await screen.findByRole(
+				"link",
+				{ name: "Help improve practice feedback" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		const drawer = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
+		await user.click(
+			await within(drawer).findByRole("button", {
+				name: "Actions for Help improve practice feedback",
+			}),
+		);
+		await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
+		await user.click(await screen.findByRole("button", { name: "Delete survey" }));
+
+		await waitFor(() => expect(deleted).toStrictEqual([survey.id]));
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+	});
+
+	it("says so when the export cannot be saved", async () => {
+		mockSurveys([survey]);
+		server.use(
+			http.get("*/admin/product-feedback/surveys/:surveyId/responses/export", () =>
+				HttpResponse.json({ status: 500 }, { status: 500 }),
+			),
+		);
+		renderRouteAt("/admin/surveys");
+		const user = userEvent.setup();
+
+		await user.click(
+			await screen.findByRole(
+				"link",
+				{ name: "Help improve practice feedback" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		const drawer = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
+		await user.click(await within(drawer).findByRole("button", { name: "Export CSV" }));
+
+		await screen.findByText("Couldn't export the responses. Please try again.");
 	});
 
 	it("publishes a survey from the composer and opens its results", async () => {

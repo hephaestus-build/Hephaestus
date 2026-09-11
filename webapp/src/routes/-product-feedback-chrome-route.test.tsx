@@ -19,10 +19,6 @@ const unseen: Wire<SurveyInvitation> = {
 	seen: false,
 };
 
-/**
- * The header is where a survey invitation lives. A member is told about a new one exactly once —
- * with a quiet toast the server remembers — and everything else waits for them to open the menu.
- */
 describe("survey invitations in the app chrome", () => {
 	let acknowledgements: string[];
 
@@ -50,14 +46,11 @@ describe("survey invitations in the app chrome", () => {
 		renderRouteAt("/settings");
 
 		await screen.findByRole("button", { name: "Feedback, 1 open survey" }, ROUTE_RENDER_WAIT);
-		const nudge = await screen.findByText(`New survey: ${surveyInvitation.title}`);
-		expect(nudge.textContent).toContain(surveyInvitation.title);
+		await screen.findByText(`New survey: ${surveyInvitation.title}`);
 		await waitFor(() => expect(acknowledgements).toStrictEqual([surveyInvitation.id]));
 		expect(screen.queryByRole("dialog")).toBeNull();
 
-		// jsdom has no pointer capture, which the toast's swipe handling asks for on pointerdown.
-		screen.getByRole("button", { name: "Take survey" }).focus();
-		await user.keyboard("{Enter}");
+		await user.click(screen.getByRole("button", { name: "Take survey" }));
 
 		const dialog = await screen.findByRole("dialog");
 		expect(dialog.textContent).toContain(surveyInvitation.title);

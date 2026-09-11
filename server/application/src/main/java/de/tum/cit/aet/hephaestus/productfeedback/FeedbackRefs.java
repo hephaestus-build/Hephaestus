@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackAccountRef
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackWorkspaceRefDTO;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.*;
-import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -17,7 +16,8 @@ class FeedbackRefs {
     private final AccountSummaryQuery accounts;
     private final WorkspaceSummaryQuery workspaces;
 
-    Resolved resolve(Stream<@Nullable Long> accountIds, Stream<@Nullable Long> workspaceIds) {
+    Resolved resolve(
+            Collection<? extends @Nullable Long> accountIds, Collection<? extends @Nullable Long> workspaceIds) {
         Map<Long, FeedbackAccountRefDTO> accountRefs = new HashMap<>();
         accounts.findAllByIds(present(accountIds))
                 .values()
@@ -31,9 +31,9 @@ class FeedbackRefs {
         return new Resolved(accountRefs, workspaceRefs);
     }
 
-    private static Set<Long> present(Stream<@Nullable Long> ids) {
+    private static Set<Long> present(Collection<? extends @Nullable Long> ids) {
         Set<Long> set = new HashSet<>();
-        ids.filter(Objects::nonNull).forEach(set::add);
+        for (Long id : ids) if (id != null) set.add(id);
         return set;
     }
 

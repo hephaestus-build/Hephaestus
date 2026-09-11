@@ -1,10 +1,10 @@
 import deepEqual from "fast-deep-equal";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, useId, useRef, useState } from "react";
 
 import type { CreateSurvey, Question } from "@/api/types.gen";
 import { type FormError, FormErrorSummary } from "@/components/common/FormErrorSummary";
-import { useNow } from "@/components/common/use-now";
+import { DetailDrawerHeader } from "@/components/core/detail-drawer/DetailDrawerHeader";
 import { ProductSurveyForm } from "@/components/feedback/ProductSurveyForm";
 import {
 	type AnswerDraft,
@@ -14,7 +14,7 @@ import {
 } from "@/components/feedback/survey-questions";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
+import { DrawerBody, DrawerDescription, DrawerFooter, DrawerTitle } from "@/components/ui/drawer";
 import {
 	Field,
 	FieldContent,
@@ -40,7 +40,7 @@ import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 
 import {
 	ALL_WORKSPACES,
-	CHOICE_MAX_LENGTH,
+	CHOICES_TEXT_MAX_LENGTH,
 	DESCRIPTION_MAX_LENGTH,
 	emptySurveyDraft,
 	hasDraftErrors,
@@ -60,6 +60,7 @@ import {
 } from "./admin-survey-draft";
 
 export interface AdminSurveyComposerProps {
+	nested?: boolean;
 	/** The audiences on offer besides every workspace. */
 	workspaces: readonly { id: number; displayName: string }[];
 	isPending: boolean;
@@ -70,6 +71,29 @@ export interface AdminSurveyComposerProps {
 	 * settles, so a successful publish closes the level without asking about the draft.
 	 */
 	onSubmit: (survey: CreateSurvey) => unknown;
+}
+
+/** The level's header, which the host also renders while the composer's audiences load or fail. */
+export function AdminSurveyComposerHeader({
+	nested,
+	children,
+}: {
+	nested?: boolean;
+	children?: ReactNode;
+}) {
+	return (
+		<DetailDrawerHeader nested={nested}>
+			<div className="min-w-0 flex-1 space-y-3">
+				<div className="space-y-0.5">
+					<DrawerTitle>Create survey</DrawerTitle>
+					<DrawerDescription>
+						Members of the audience are invited from the app header while the survey is open.
+					</DrawerDescription>
+				</div>
+				{children}
+			</div>
+		</DetailDrawerHeader>
+	);
 }
 
 const isQuestionType = (value: string): value is Question["type"] =>
@@ -91,16 +115,21 @@ function describedBy(...ids: (string | false | undefined)[]): string | undefined
  * before the one decision this level offers.
  */
 export function AdminSurveyComposer({
+	nested,
 	workspaces,
 	isPending,
 	cancel,
 	onSubmit,
 }: AdminSurveyComposerProps) {
 	const id = useId();
-	const now = useNow();
-	const [initial] = useState(() => emptySurveyDraft(crypto.randomUUID()));
+	// The server accepts `[A-Za-z0-9_-]` in a question id; `useId` wraps its token in punctuation.
+	const questionIdPrefix = `q-${id.replace(/[^A-Za-z0-9_-]/g, "")}`;
+	const issuedQuestionIds = useRef(1);
+	const [initial] = useState(() => emptySurveyDraft(`${questionIdPrefix}-0`));
 	const [draft, setDraft] = useState(initial);
-	const [refusals, setRefusals] = useState(0);
+	// The instant of the last refused submit. Errors are read against it, not a ticking clock, so a
+	// draft that was fine when refused cannot turn wrong while the reader is still fixing it.
+	const [refusedAt, setRefusedAt] = useState<number>();
 	const [view, setView] = useState<"edit" | "preview">("edit");
 	const [previewDraft, setPreviewDraft] = useState<AnswerDraft>({});
 	const unsavedChanges = useUnsavedChanges({
@@ -108,7 +137,7 @@ export function AdminSurveyComposer({
 		disabled: isPending,
 	});
 
-	const errors = refusals > 0 ? validateSurveyDraft(draft, now) : NO_ERRORS;
+	const errors = refusedAt === undefined ? NO_ERRORS : validateSurveyDraft(draft, refusedAt);
 	const prepared = prepareQuestions(draft.questions);
 	const audiences = [
 		{ value: ALL_WORKSPACES, label: "All workspaces" },
@@ -139,15 +168,15 @@ export function AdminSurveyComposer({
 			...previous,
 			questions: previous.questions.filter((_, at) => at !== index),
 		}));
-	const addQuestion = () =>
+	const addQuestion = () => {
+		const questionId = `${questionIdPrefix}-${issuedQuestionIds.current}`;
+		issuedQuestionIds.current += 1;
 		setDraft((previous) =>
 			previous.questions.length >= MAX_QUESTIONS
 				? previous
-				: {
-						...previous,
-						questions: [...previous.questions, newQuestionDraft(crypto.randomUUID())],
-					},
+				: { ...previous, questions: [...previous.questions, newQuestionDraft(questionId)] },
 		);
+	};
 
 	const fieldId = (name: string) => `${id}-${name}`;
 	const questionFieldId = (index: number, name: string) => `${id}-q${index}-${name}`;
@@ -185,11 +214,9 @@ export function AdminSurveyComposer({
 	const submit = (event: React.SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		if (isPending) return;
-		// Validated against the submit instant, which is what a blank start becomes.
 		const publishedAt = new Date();
-		const refused = validateSurveyDraft(draft, publishedAt.getTime());
-		if (hasDraftErrors(refused)) {
-			setRefusals((count) => count + 1);
+		if (hasDraftErrors(validateSurveyDraft(draft, publishedAt.getTime()))) {
+			setRefusedAt(publishedAt.getTime());
 			setView("edit");
 			return;
 		}
@@ -200,20 +227,21 @@ export function AdminSurveyComposer({
 	return (
 		<>
 			{unsavedChanges.dialog}
-			<form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
-				<Tabs
-					value={view}
-					onValueChange={(next) => setView(next === "preview" ? "preview" : "edit")}
-					className="flex min-h-0 flex-1 flex-col gap-0"
-				>
+			<Tabs
+				value={view}
+				onValueChange={(next) => setView(next === "preview" ? "preview" : "edit")}
+				className="flex min-h-0 flex-1 flex-col gap-0"
+			>
+				<AdminSurveyComposerHeader nested={nested}>
+					<TabsList aria-label="Composer view">
+						<TabsTrigger value="edit">Edit</TabsTrigger>
+						<TabsTrigger value="preview">Preview</TabsTrigger>
+					</TabsList>
+				</AdminSurveyComposerHeader>
+				<form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
 					<DrawerBody className="flex flex-col gap-6">
-						<TabsList aria-label="Composer view" className="self-start">
-							<TabsTrigger value="edit">Edit</TabsTrigger>
-							<TabsTrigger value="preview">Preview</TabsTrigger>
-						</TabsList>
-
 						<TabsContent value="edit" className="flex flex-col gap-8">
-							<FormErrorSummary key={refusals} errors={summary} />
+							<FormErrorSummary key={refusedAt} errors={summary} />
 							<fieldset disabled={isPending} className="contents">
 								<FieldGroup className="gap-5">
 									<Field data-invalid={errors.title ? "true" : undefined}>
@@ -285,42 +313,51 @@ export function AdminSurveyComposer({
 										</Select>
 									</Field>
 
-									<div className="grid gap-5 sm:grid-cols-2">
-										<Field>
-											<FieldLabel htmlFor={fieldId("start")}>Start</FieldLabel>
-											<Input
-												id={fieldId("start")}
-												type="datetime-local"
-												value={draft.startsAt}
-												aria-describedby={fieldId("start-help")}
-												onChange={(event) => patch({ startsAt: event.target.value })}
-											/>
-											<FieldDescription id={fieldId("start-help")}>
-												Leave blank to open when published.
-											</FieldDescription>
-										</Field>
-										<Field data-invalid={errors.endsAt ? "true" : undefined}>
-											<FieldLabel htmlFor={fieldId("end")}>End</FieldLabel>
-											<Input
-												id={fieldId("end")}
-												type="datetime-local"
-												value={draft.endsAt}
-												aria-invalid={Boolean(errors.endsAt)}
-												aria-describedby={describedBy(
-													fieldId("end-help"),
-													errors.endsAt && fieldId("end-error"),
+									<FieldSet>
+										<FieldLegend variant="label">Schedule</FieldLegend>
+										<FieldDescription id={fieldId("schedule-help")}>
+											Times are in your device's timezone.
+										</FieldDescription>
+										<div className="grid gap-5 sm:grid-cols-2">
+											<Field>
+												<FieldLabel htmlFor={fieldId("start")}>Start</FieldLabel>
+												<Input
+													id={fieldId("start")}
+													type="datetime-local"
+													value={draft.startsAt}
+													aria-describedby={describedBy(
+														fieldId("schedule-help"),
+														fieldId("start-help"),
+													)}
+													onChange={(event) => patch({ startsAt: event.target.value })}
+												/>
+												<FieldDescription id={fieldId("start-help")}>
+													Leave blank to open when published.
+												</FieldDescription>
+											</Field>
+											<Field data-invalid={errors.endsAt ? "true" : undefined}>
+												<FieldLabel htmlFor={fieldId("end")}>End</FieldLabel>
+												<Input
+													id={fieldId("end")}
+													type="datetime-local"
+													value={draft.endsAt}
+													aria-invalid={Boolean(errors.endsAt)}
+													aria-describedby={describedBy(
+														fieldId("schedule-help"),
+														fieldId("end-help"),
+														errors.endsAt && fieldId("end-error"),
+													)}
+													onChange={(event) => patch({ endsAt: event.target.value })}
+												/>
+												<FieldDescription id={fieldId("end-help")}>
+													Set an end so invitations do not go stale.
+												</FieldDescription>
+												{errors.endsAt && (
+													<FieldError id={fieldId("end-error")}>{errors.endsAt}</FieldError>
 												)}
-												onChange={(event) => patch({ endsAt: event.target.value })}
-											/>
-											<FieldDescription id={fieldId("end-help")}>
-												Times are in your device's timezone. Set an end so invitations do not go
-												stale.
-											</FieldDescription>
-											{errors.endsAt && (
-												<FieldError id={fieldId("end-error")}>{errors.endsAt}</FieldError>
-											)}
-										</Field>
-									</div>
+											</Field>
+										</div>
+									</FieldSet>
 								</FieldGroup>
 
 								<section className="flex flex-col gap-4" aria-labelledby={fieldId("questions")}>
@@ -385,20 +422,19 @@ export function AdminSurveyComposer({
 								questions={prepared}
 								draft={previewDraft}
 								onDraftChange={setPreviewDraft}
-								idPrefix={fieldId("preview")}
 							/>
 						</TabsContent>
 					</DrawerBody>
-				</Tabs>
 
-				<DrawerFooter>
-					{cancel}
-					<Button type="submit" disabled={isPending}>
-						{isPending && <Spinner className="size-4" />}
-						{isPending ? "Publishing…" : "Publish survey"}
-					</Button>
-				</DrawerFooter>
-			</form>
+					<DrawerFooter>
+						{cancel}
+						<Button type="submit" disabled={isPending}>
+							{isPending && <Spinner className="size-4" />}
+							{isPending ? "Publishing…" : "Publish survey"}
+						</Button>
+					</DrawerFooter>
+				</form>
+			</Tabs>
 		</>
 	);
 }
@@ -478,7 +514,7 @@ function QuestionCard({
 							id={fieldId("choices")}
 							value={question.choices}
 							rows={4}
-							maxLength={(CHOICE_MAX_LENGTH + 1) * 20}
+							maxLength={CHOICES_TEXT_MAX_LENGTH}
 							required
 							aria-invalid={Boolean(errors.choices)}
 							aria-describedby={describedBy(errors.choices && fieldId("choices-error"))}

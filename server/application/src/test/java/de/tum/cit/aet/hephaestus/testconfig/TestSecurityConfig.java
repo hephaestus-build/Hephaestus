@@ -90,19 +90,12 @@ public class TestSecurityConfig {
             // native-auth migration keys currentAccountId() on a numeric JWT sub (ADR 0017). Carries the
             // common roles so it works for both authenticated and mentor-gated endpoints.
             if (token.startsWith("mock-jwt-sub-")) {
-                String sub = token.substring("mock-jwt-sub-".length());
-                return Jwt.withTokenValue(token)
-                        .header("alg", "HS256")
-                        .header("typ", "JWT")
-                        .claim("sub", sub)
-                        .claim("preferred_username", "account-" + sub)
-                        .claim("iss", "https://test-issuer")
-                        .claim("aud", "test-audience")
-                        .claim("roles", Arrays.asList("mentor_access", "app_admin"))
-                        .claim("auth_time", Instant.now().getEpochSecond())
-                        .issuedAt(Instant.now())
-                        .expiresAt(Instant.now().plusSeconds(3600))
-                        .build();
+                return numericSubject(token, token.substring("mock-jwt-sub-".length()), "mentor_access", "app_admin");
+            }
+            // "mock-jwt-member-<accountId>": the same numeric subject without app_admin, for a test that
+            // proves what a plain member can and cannot reach.
+            if (token.startsWith("mock-jwt-member-")) {
+                return numericSubject(token, token.substring("mock-jwt-member-".length()), "mentor_access");
             }
 
             // Determine user based on token pattern
@@ -151,5 +144,20 @@ public class TestSecurityConfig {
                     .expiresAt(Instant.now().plusSeconds(3600))
                     .build();
         };
+    }
+
+    private static Jwt numericSubject(String token, String sub, String... roles) {
+        return Jwt.withTokenValue(token)
+                .header("alg", "HS256")
+                .header("typ", "JWT")
+                .claim("sub", sub)
+                .claim("preferred_username", "account-" + sub)
+                .claim("iss", "https://test-issuer")
+                .claim("aud", "test-audience")
+                .claim("roles", Arrays.asList(roles))
+                .claim("auth_time", Instant.now().getEpochSecond())
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .build();
     }
 }

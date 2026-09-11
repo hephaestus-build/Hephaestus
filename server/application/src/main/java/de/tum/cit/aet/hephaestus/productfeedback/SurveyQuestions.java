@@ -11,10 +11,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
-/**
- * The rules a survey definition and its answers must satisfy, independent of storage. Everything here
- * is a 400: the request is well-formed JSON that describes a survey or a response which cannot exist.
- */
+/** Every rejection here is a 400: well-formed JSON describing a survey or a response that cannot exist. */
 final class SurveyQuestions {
     static final int RATING_MIN = 1;
     static final int RATING_MAX = 5;
@@ -44,10 +41,7 @@ final class SurveyQuestions {
         }
     }
 
-    /**
-     * Rejects answers that do not fit the questions and returns them in question order with blank text
-     * dropped, so what is stored is exactly what the summary and the inbox can read back.
-     */
+    /** Returns the answers in question order with blank text dropped: what is stored is what the summary reads back. */
     static List<AnswerDTO> validateAnswers(List<QuestionDTO> questions, List<AnswerDTO> answers) {
         Map<String, AnswerDTO> byQuestion = new HashMap<>();
         for (AnswerDTO answer : answers) {

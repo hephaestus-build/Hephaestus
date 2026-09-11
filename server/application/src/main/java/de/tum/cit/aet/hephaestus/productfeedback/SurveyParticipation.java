@@ -12,11 +12,8 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
 /**
- * One account's relationship with one survey. The row is created when the invitation is first shown
- * and then moves to {@link Status#RESPONDED} or {@link Status#DECLINED}; undoing a decline moves it
- * back to {@link Status#INVITED}. Keeping the invitation on the same row is what lets administrators
- * read a completion rate, and the unique constraint is what makes "one response per account" a
- * database fact rather than a race.
+ * One account's relationship with one survey. The invitation and the eventual response or decline
+ * share a row so a completion rate can be read from the table.
  */
 @Entity
 @Table(
@@ -55,7 +52,6 @@ public class SurveyParticipation {
     @Column(name = "invited_at", nullable = false, updatable = false)
     private @Nullable Instant invitedAt;
 
-    /** When the account responded or declined; cleared again when a decline is undone. */
     @Column(name = "decided_at")
     private @Nullable Instant decidedAt;
 

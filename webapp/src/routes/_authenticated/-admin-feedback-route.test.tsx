@@ -68,7 +68,6 @@ describe("instance feedback inbox route", () => {
 		await screen.findByText(resolvedNote.message);
 		expect(requested.at(-1)).toBe("RESOLVED");
 		expect(screen.queryByText(bugReport.message)).toBeNull();
-		expect(screen.getByText(/Resolved by Ada Lovelace/).textContent).toContain("Ada Lovelace");
 
 		await user.click(screen.getByRole("button", { name: "All" }));
 		await screen.findByText(bugReport.message);

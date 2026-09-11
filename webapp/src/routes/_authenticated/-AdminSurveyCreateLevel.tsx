@@ -7,11 +7,13 @@ import {
 	adminListProductSurveysQueryKey,
 	adminListWorkspacesOptions,
 } from "@/api/@tanstack/react-query.gen";
-import { AdminSurveyComposer } from "@/components/admin/feedback/AdminSurveyComposer";
+import {
+	AdminSurveyComposer,
+	AdminSurveyComposerHeader,
+} from "@/components/admin/feedback/AdminSurveyComposer";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { DetailDrawerHeader } from "@/components/core/detail-drawer/DetailDrawerHeader";
 import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
-import { DrawerBody, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
+import { DrawerBody } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { productSurveyQueryScope } from "@/hooks/use-product-feedback";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -44,25 +46,22 @@ export function AdminSurveyCreateLevel({ nested, onPublished }: AdminSurveyCreat
 			}),
 	});
 
+	// Data first: a refetch that fails keeps the audiences it had, and the draft with them.
+	if (workspacesQuery.data) {
+		return (
+			<AdminSurveyComposer
+				nested={nested}
+				workspaces={workspacesQuery.data}
+				isPending={create.isPending}
+				cancel={<LevelCancel />}
+				onSubmit={(body) => create.mutateAsync({ body })}
+			/>
+		);
+	}
 	return (
 		<>
-			<DetailDrawerHeader nested={nested}>
-				<div className="min-w-0 flex-1 space-y-0.5">
-					<DrawerTitle>Create survey</DrawerTitle>
-					<DrawerDescription>
-						Members of the audience are invited from the app header while the survey is open.
-					</DrawerDescription>
-				</div>
-			</DetailDrawerHeader>
-			{/* Data first: a refetch that fails keeps the audiences it had, and the draft with them. */}
-			{workspacesQuery.data ? (
-				<AdminSurveyComposer
-					workspaces={workspacesQuery.data}
-					isPending={create.isPending}
-					cancel={<LevelCancel />}
-					onSubmit={(body) => create.mutateAsync({ body })}
-				/>
-			) : workspacesQuery.isError ? (
+			<AdminSurveyComposerHeader nested={nested} />
+			{workspacesQuery.isError ? (
 				<DrawerBody>
 					<QueryErrorAlert
 						error={workspacesQuery.error}

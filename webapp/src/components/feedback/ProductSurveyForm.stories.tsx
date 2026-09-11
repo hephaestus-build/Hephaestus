@@ -30,7 +30,6 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Rating, single choice, recommendation and free text, in the order a short survey should ask them. */
 export const Default: Story = {};
 
 export const Answered: Story = {
@@ -46,12 +45,20 @@ export const Answered: Story = {
 
 export const Disabled: Story = { args: { disabled: true, draft: { useful: 4 } } };
 
-export const MultipleChoice: Story = {
+/** An optional closed question can be taken back, whether it is one choice or several. */
+export const ClearsOptionalChoices: Story = {
 	args: {
 		questions: [
 			{
+				id: "channel",
+				prompt: "Where do you read feedback most often?",
+				type: "SINGLE_CHOICE",
+				options: ["On the pull request", "On my practice page"],
+				required: false,
+			},
+			{
 				id: "channels",
-				prompt: "Where do you read feedback?",
+				prompt: "Where else do you read it?",
 				type: "MULTIPLE_CHOICE",
 				options: ["On the pull request", "On my practice page", "In conversation with Heph"],
 				required: false,
@@ -59,29 +66,35 @@ export const MultipleChoice: Story = {
 		],
 	},
 	play: async ({ canvas, args }) => {
+		await userEvent.click(canvas.getByRole("radio", { name: "On my practice page" }));
+		await expect(canvas.getByRole("radio", { name: "On my practice page" })).toBeChecked();
 		await userEvent.click(canvas.getByRole("checkbox", { name: "On the pull request" }));
 		await userEvent.click(canvas.getByRole("checkbox", { name: "In conversation with Heph" }));
 		await expect(args.onDraftChange).toHaveBeenLastCalledWith({
+			channel: "On my practice page",
 			channels: ["On the pull request", "In conversation with Heph"],
 		});
-		await userEvent.click(canvas.getByRole("button", { name: "Clear answer" }));
-		await expect(args.onDraftChange).toHaveBeenLastCalledWith({});
+		const [clearChoice, clearChoices] = canvas.getAllByRole("button", { name: "Clear answer" });
+		if (!clearChoice || !clearChoices) throw new Error("both optional questions offer a clear");
+		await userEvent.click(clearChoices);
+		await expect(canvas.getByRole("checkbox", { name: "On the pull request" })).not.toBeChecked();
+		await userEvent.click(clearChoice);
+		await expect(canvas.getByRole("radio", { name: "On my practice page" })).not.toBeChecked();
+		await expect(canvas.queryByRole("button", { name: "Clear answer" })).toBeNull();
 	},
 };
 
-/** Every scale point is a radio the keyboard reaches, and an optional answer can be taken back. */
-export const AnswersAScale: Story = {
+/** A scale is a radio group: arrow keys move the choice, and the end labels describe it. */
+export const AnswersAScaleByKeyboard: Story = {
 	play: async ({ canvas, args }) => {
 		const scale = canvas.getByRole("radiogroup", {
 			name: /How useful is the practice feedback/,
 		});
-		await userEvent.click(within(scale).getByRole("radio", { name: "4" }));
-		await expect(args.onDraftChange).toHaveBeenLastCalledWith({ useful: 4 });
 		await expect(scale).toHaveAttribute("aria-required", "true");
-		const recommend = canvas.getByRole("radiogroup", { name: /How likely are you to recommend/ });
-		await userEvent.click(within(recommend).getByRole("radio", { name: "9" }));
-		await expect(args.onDraftChange).toHaveBeenLastCalledWith({ useful: 4, recommend: 9 });
-		await userEvent.click(canvas.getByRole("button", { name: "Clear answer" }));
+		await expect(scale).toHaveAccessibleDescription(/1 = Not useful.*5 = Very useful/);
+		await userEvent.click(within(scale).getByRole("radio", { name: "3" }));
+		await userEvent.keyboard("{ArrowRight}");
+		await expect(within(scale).getByRole("radio", { name: "4" })).toBeChecked();
 		await expect(args.onDraftChange).toHaveBeenLastCalledWith({ useful: 4 });
 	},
 };

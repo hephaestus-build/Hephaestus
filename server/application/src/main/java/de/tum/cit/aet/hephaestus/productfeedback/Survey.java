@@ -79,7 +79,6 @@ public class Survey {
         this.active = active;
     }
 
-    /** Whether the survey accepts responses from {@code workspaceId} at {@code now}. */
     public boolean isOpenFor(Long workspaceId, Instant now) {
         return active
                 && !startsAt.isAfter(now)

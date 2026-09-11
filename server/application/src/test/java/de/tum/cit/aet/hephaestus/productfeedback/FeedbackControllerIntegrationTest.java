@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -55,9 +56,10 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     private IdentityLinkRepository identityLinks;
 
     /** A member account signed in the way production does: a numeric JWT subject wired to a workspace member. */
-    private record Member(long accountId, Workspace workspace) {
+    private record Member(long accountId, Account.AppRole role, Workspace workspace) {
         Consumer<HttpHeaders> headers() {
-            return headers -> headers.setBearerAuth("mock-jwt-sub-" + accountId);
+            String prefix = role == Account.AppRole.APP_ADMIN ? "mock-jwt-sub-" : "mock-jwt-member-";
+            return headers -> headers.setBearerAuth(prefix + accountId);
         }
 
         String path(String suffix) {
@@ -88,14 +90,16 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .isEqualTo(survey.id().toString())
                 .jsonPath("$[0].seen")
                 .isEqualTo(false);
-        webTestClient
-                .put()
-                .uri(member.path("/surveys/" + survey.id() + "/invitation"))
-                .headers(member.headers())
-                .exchange()
-                .expectStatus()
-                .isNoContent()
-                .expectBody(Void.class);
+        for (int tab = 0; tab < 2; tab++) {
+            webTestClient
+                    .put()
+                    .uri(member.path("/surveys/" + survey.id() + "/invitation"))
+                    .headers(member.headers())
+                    .exchange()
+                    .expectStatus()
+                    .isNoContent()
+                    .expectBody(Void.class);
+        }
         webTestClient
                 .get()
                 .uri(member.path("/surveys"))
@@ -242,6 +246,121 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                         .path("text")
                         .asString())
                 .isEqualTo("Keep my answer");
+    }
+
+    @Test
+    void shouldRefuseAResponseAfterADeclineWithAProblemDetail() {
+        Member member = member("survey-conflict");
+        SurveyDTO survey = publish(member, member.workspace().getId(), textQuestion());
+        webTestClient
+                .put()
+                .uri(member.path("/surveys/" + survey.id() + "/dismissal"))
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+
+        webTestClient
+                .post()
+                .uri(member.path("/surveys/" + survey.id() + "/responses"))
+                .headers(member.headers())
+                .bodyValue(Map.of("answers", List.of(Map.of("questionId", "q", "text", "Too late"))))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(HttpStatus.CONFLICT)
+                .expectBody()
+                .jsonPath("$.status")
+                .isEqualTo(409);
+
+        SurveyParticipation stored = participations
+                .findBySurveyIdAndAccountId(survey.id(), member.accountId())
+                .orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(Status.DECLINED);
+        assertThat(stored.getAnswers()).isNull();
+    }
+
+    @Test
+    void shouldExportTextAnswersThatCarryQuotesCommasAndLineBreaks() {
+        Member member = member("survey-csv");
+        SurveyDTO survey = publish(member, member.workspace().getId(), textQuestion());
+        webTestClient
+                .post()
+                .uri(member.path("/surveys/" + survey.id() + "/responses"))
+                .headers(member.headers())
+                .bodyValue(Map.of(
+                        "answers", List.of(Map.of("questionId", "q", "text", "He said \"ship it\", then\nleft"))))
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+
+        String csv = webTestClient
+                .get()
+                .uri("/admin/product-feedback/surveys/" + survey.id() + "/responses/export")
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(csv).contains("\"Member survey-csv\",\"\",\"survey-csv\",\"He said \"\"ship it\"\", then\nleft\"\n");
+    }
+
+    @Test
+    void shouldLetAPlainMemberListAndAnswerButNotAdminister() {
+        Member admin = member("survey-member-admin");
+        Member member = plainMember("survey-member", admin.workspace());
+        SurveyDTO survey = publish(admin, null, textQuestion());
+
+        webTestClient
+                .get()
+                .uri(member.path("/surveys"))
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$[?(@.id == '" + survey.id() + "')].seen")
+                .isEqualTo(false);
+        webTestClient
+                .post()
+                .uri(member.path("/surveys/" + survey.id() + "/responses"))
+                .headers(member.headers())
+                .bodyValue(Map.of("answers", List.of(Map.of("questionId", "q", "text", "As a member"))))
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+        assertThat(participations.findBySurveyIdAndAccountId(survey.id(), member.accountId()))
+                .get()
+                .extracting(SurveyParticipation::getStatus)
+                .isEqualTo(Status.RESPONDED);
+
+        for (String uri : List.of(
+                "/admin/product-feedback",
+                "/admin/product-feedback/surveys",
+                "/admin/product-feedback/surveys/" + survey.id() + "/responses/export")) {
+            webTestClient
+                    .get()
+                    .uri(uri)
+                    .headers(member.headers())
+                    .exchange()
+                    .expectStatus()
+                    .isForbidden()
+                    .expectBody(Void.class);
+        }
+        webTestClient
+                .delete()
+                .uri("/admin/product-feedback/surveys/" + survey.id())
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+        assertThat(surveys.findById(survey.id())).isPresent();
     }
 
     @Test
@@ -522,8 +641,18 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         User actor = persistUser(slug + "-member");
         Workspace workspace = createWorkspace(slug, "Workspace " + slug, slug, AccountType.ORG, actor);
         ensureWorkspaceMembership(workspace, actor, WorkspaceMembership.WorkspaceRole.ADMIN);
+        return member(slug, Account.AppRole.APP_ADMIN, workspace, actor);
+    }
+
+    private Member plainMember(String slug, Workspace workspace) {
+        User actor = persistUser(slug + "-member");
+        ensureWorkspaceMembership(workspace, actor, WorkspaceMembership.WorkspaceRole.MEMBER);
+        return member(slug, Account.AppRole.USER, workspace, actor);
+    }
+
+    private Member member(String slug, Account.AppRole role, Workspace workspace, User actor) {
         Account account = new Account("Member " + slug);
-        account.setAppRole(Account.AppRole.APP_ADMIN);
+        account.setAppRole(role);
         account.setStatus(Account.Status.ACTIVE);
         account = accounts.save(account);
         IdentityLink link = new IdentityLink();
@@ -533,6 +662,6 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         link.setUsernameAtSignup(actor.getLogin());
         link.setExternalActorId(actor.getId());
         identityLinks.save(link);
-        return new Member(Objects.requireNonNull(account.getId()), workspace);
+        return new Member(Objects.requireNonNull(account.getId()), role, workspace);
     }
 }

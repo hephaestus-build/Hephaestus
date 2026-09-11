@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.time.Instant;
@@ -17,7 +18,7 @@ final class FeedbackDTOs {
             @NonNull String displayName,
             @Nullable String email) {}
 
-    /** The workspace a record was submitted from; absent for instance-level submissions or a purged workspace. */
+    /** The workspace a record was submitted from; absent for instance-level submissions. */
     record FeedbackWorkspaceRefDTO(
             @NonNull Long id, @NonNull String slug, @NonNull String displayName) {}
 
@@ -25,9 +26,7 @@ final class FeedbackDTOs {
         TEXT,
         SINGLE_CHOICE,
         MULTIPLE_CHOICE,
-        /** A 1–5 scale whose endpoints the author labels. */
         RATING,
-        /** The standard 0–10 "How likely are you to recommend…" scale with fixed labels. */
         NPS
     }
 
@@ -55,15 +54,28 @@ final class FeedbackDTOs {
             @NotEmpty @Size(max = 20) @NonNull List<@NotNull @Valid QuestionDTO> questions,
             @Nullable Long workspaceId,
             @NotNull @NonNull Instant startsAt,
-            @Nullable Instant endsAt) {}
+            @Nullable Instant endsAt) {
+        @AssertTrue(message = "endsAt must be after startsAt")
+        @Schema(hidden = true)
+        @SuppressWarnings("PMD.UnusedPrivateMethod")
+        private boolean isEndAfterStart() {
+            return endsAt == null || endsAt.isAfter(startsAt);
+        }
+    }
 
-    /** The fields that stay editable after publication; the questions are frozen. */
     record SurveyEditDTO(
             @NotBlank @Size(max = 160) @NonNull String title,
             @NotBlank @Size(max = 500) @NonNull String description,
             @NotNull @NonNull Instant startsAt,
             @Nullable Instant endsAt,
-            @NonNull boolean active) {}
+            @NonNull boolean active) {
+        @AssertTrue(message = "endsAt must be after startsAt")
+        @Schema(hidden = true)
+        @SuppressWarnings("PMD.UnusedPrivateMethod")
+        private boolean isEndAfterStart() {
+            return endsAt == null || endsAt.isAfter(startsAt);
+        }
+    }
 
     record SurveyDTO(
             @NonNull UUID id,
@@ -83,7 +95,6 @@ final class FeedbackDTOs {
             @NonNull long responded,
             @NonNull long declined) {}
 
-    /** What a member sees: the questions and whether this account has been shown the invitation before. */
     record SurveyInvitationDTO(
             @NonNull UUID id,
             @NonNull String title,
@@ -96,7 +107,6 @@ final class FeedbackDTOs {
 
     record OptionCountDTO(@NonNull String value, @NonNull long count) {}
 
-    /** Per-question aggregate; the fields a type cannot produce are absent. */
     record QuestionSummaryDTO(
             @NonNull String questionId,
             @NonNull long answered,

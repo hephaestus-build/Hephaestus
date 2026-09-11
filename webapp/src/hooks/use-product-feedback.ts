@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef } from "react";
 import { toast } from "sonner";
 
 import {
@@ -13,7 +12,7 @@ import {
 	submitWorkspaceProductFeedbackMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { Answer, FeedbackRequest } from "@/api/types.gen";
-import { problemStatusOf } from "@/lib/problem-detail";
+import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 
 /**
  * The invitation cache across every workspace. An instance-wide survey is handled once per
@@ -26,20 +25,29 @@ export function productSurveyQueryScope() {
 	return [scope];
 }
 
+/**
+ * One key per decision kind, so a second submit can be refused while the first is still in flight:
+ * `isPending` reaches React on a later macrotask, `queryClient.isMutating` answers at once.
+ */
+const SURVEY_DECISION = ["product-survey-decision"];
+const FEEDBACK_SEND = ["product-feedback-send"];
+
+const DRAFT_KEPT = "Your draft is still here.";
+
 function submissionError(error: unknown): string {
 	const status = problemStatusOf(error);
-	if (status === 429)
-		return "Please wait a minute before sending more feedback. Your draft is still here.";
+	if (status === undefined)
+		return `Couldn't send. ${DRAFT_KEPT} Check your connection and try again.`;
+	if (status === 429) return `Please wait a minute before sending more feedback. ${DRAFT_KEPT}`;
 	if (status === 401) return "Your session has expired. Sign in again before sending.";
 	if (status === 409)
 		return "This survey was already answered or declined, possibly in another tab.";
 	if (status === 404) return "This survey is no longer available. Your answers have not been sent.";
-	return "Couldn't send. Your draft is still here. Check your connection and try again.";
+	return `Couldn't send (${problemDetailOf(error, "the server refused the request")}). ${DRAFT_KEPT}`;
 }
 
 export function useProductSurveys(workspaceSlug: string | undefined) {
 	const queryClient = useQueryClient();
-	const sending = useRef(false);
 	const slug = workspaceSlug ?? "";
 	const query = useQuery({
 		...listProductSurveyInvitationsOptions({ path: { workspaceSlug: slug } }),
@@ -67,10 +75,8 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 	});
 	const submit = useMutation({
 		...submitProductSurveyResponseMutation(),
+		mutationKey: SURVEY_DECISION,
 		retry: false,
-		onSettled: () => {
-			sending.current = false;
-		},
 		onSuccess: (_, variables) => {
 			removeFromCaches(variables.path.surveyId);
 			toast.success("Thank you — your response was sent to this instance's administrators.");
@@ -78,6 +84,7 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 	});
 	const restore = useMutation({
 		...restoreProductSurveyMutation(),
+		mutationKey: SURVEY_DECISION,
 		retry: false,
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
@@ -90,10 +97,8 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 	});
 	const decline = useMutation({
 		...dismissProductSurveyMutation(),
+		mutationKey: SURVEY_DECISION,
 		retry: false,
-		onSettled: () => {
-			sending.current = false;
-		},
 		onSuccess: (_, variables) => {
 			removeFromCaches(variables.path.surveyId);
 			toast.success("Survey declined.", {
@@ -102,6 +107,8 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 			});
 		},
 	});
+	const deciding = () =>
+		!workspaceSlug || queryClient.isMutating({ mutationKey: SURVEY_DECISION }) > 0;
 	return {
 		query,
 		isPending: submit.isPending || decline.isPending || restore.isPending,
@@ -118,10 +125,9 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 			if (workspaceSlug) acknowledge.mutate({ path: { workspaceSlug: slug, surveyId } });
 		},
 		submit: async (surveyId: string, answers: Answer[]) => {
-			if (!workspaceSlug || sending.current || restore.isPending) return false;
-			sending.current = true;
+			if (deciding()) return false;
+			decline.reset();
 			try {
-				decline.reset();
 				await submit.mutateAsync({ path: { workspaceSlug: slug, surveyId }, body: { answers } });
 				return true;
 			} catch {
@@ -129,10 +135,9 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 			}
 		},
 		decline: async (surveyId: string) => {
-			if (!workspaceSlug || sending.current || restore.isPending) return false;
-			sending.current = true;
+			if (deciding()) return false;
+			submit.reset();
 			try {
-				submit.reset();
 				await decline.mutateAsync({ path: { workspaceSlug: slug, surveyId } });
 				return true;
 			} catch {
@@ -143,30 +148,22 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 }
 
 export function useSubmitProductFeedback(workspaceSlug: string | undefined) {
-	const sending = useRef(false);
-	const callbacks = {
+	const queryClient = useQueryClient();
+	const shared = {
+		mutationKey: FEEDBACK_SEND,
 		retry: false,
-		onSettled: () => {
-			sending.current = false;
-		},
 		onSuccess: () =>
 			toast.success("Thanks — your feedback was sent to this instance's administrators."),
 	};
-	const workspaceMutation = useMutation({
-		...submitWorkspaceProductFeedbackMutation(),
-		...callbacks,
-	});
-	const instanceMutation = useMutation({
-		...submitInstanceProductFeedbackMutation(),
-		...callbacks,
-	});
+	const workspaceMutation = useMutation({ ...submitWorkspaceProductFeedbackMutation(), ...shared });
+	const instanceMutation = useMutation({ ...submitInstanceProductFeedbackMutation(), ...shared });
 	const mutation = workspaceSlug ? workspaceMutation : instanceMutation;
 	return {
-		isPending: workspaceMutation.isPending || instanceMutation.isPending,
+		isPending: mutation.isPending,
 		error: mutation.isError ? submissionError(mutation.error) : undefined,
+		reset: mutation.reset,
 		submit: async (body: FeedbackRequest) => {
-			if (sending.current) return false;
-			sending.current = true;
+			if (queryClient.isMutating({ mutationKey: FEEDBACK_SEND }) > 0) return false;
 			try {
 				if (workspaceSlug) await workspaceMutation.mutateAsync({ path: { workspaceSlug }, body });
 				else await instanceMutation.mutateAsync({ body });

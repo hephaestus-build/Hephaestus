@@ -42,19 +42,15 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The words inside the status badge, as distinct from the same word in the schedule column. */
-const badge = (canvas: { getByText: typeof screen.getByText }, label: string) =>
-	canvas.getByText(label, { selector: "[data-slot='badge'] > span" });
-
-/** One row per availability, so the badge, the schedule wording and the menu can be compared. */
 export const Default: Story = {
 	args: { state: ready(surveys) },
 	play: async ({ canvas, args }) => {
-		// Availability is derived from the schedule, not stored.
-		await expect(badge(canvas, "Open")).toBeVisible();
-		await expect(badge(canvas, "Scheduled")).toBeVisible();
-		await expect(badge(canvas, "Paused")).toBeVisible();
-		await expect(badge(canvas, "Ended")).toBeVisible();
+		// Availability is derived from the schedule, not stored. The status cell's whole name is the
+		// badge; the schedule cell's names carry the same words inside a longer phrase.
+		await expect(canvas.getByRole("cell", { name: "Open" })).toBeVisible();
+		await expect(canvas.getByRole("cell", { name: "Scheduled" })).toBeVisible();
+		await expect(canvas.getByRole("cell", { name: "Paused" })).toBeVisible();
+		await expect(canvas.getByRole("cell", { name: "Ended" })).toBeVisible();
 		// 17 of 42 rounds to 40%; a survey nobody was invited to shows no rate at all.
 		await expect(canvas.getByText("· 40%")).toBeVisible();
 		await expect(canvas.getByText("0 of 0")).toBeVisible();
@@ -70,6 +66,17 @@ export const Default: Story = {
 		await expect(await screen.findByRole("menuitem", { name: "Delete" })).toBeVisible();
 		await expect(screen.queryByRole("menuitem", { name: "End now" })).not.toBeInTheDocument();
 		await expect(screen.queryByRole("menuitem", { name: "Pause" })).not.toBeInTheDocument();
+		await userEvent.keyboard("{Escape}");
+	},
+};
+
+export const ScheduledActions: Story = {
+	args: { state: ready([scheduledSurvey]) },
+	play: async ({ canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Actions for Onboarding check-in" }));
+		await expect(await screen.findByRole("menuitem", { name: "Pause" })).toBeEnabled();
+		await expect(screen.queryByRole("menuitem", { name: "End now" })).not.toBeInTheDocument();
+		await expect(screen.getByRole("menuitem", { name: "Delete" })).toBeEnabled();
 		await userEvent.keyboard("{Escape}");
 	},
 };
@@ -96,8 +103,9 @@ export const ConfirmsBeforeDeleting: Story = {
 			canvas.getByRole("button", { name: "Actions for Help improve practice feedback" }),
 		);
 		await userEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
-		// 17 responded and 4 declined: both are rows the deletion takes with it.
-		await screen.findByRole("alertdialog", { name: "Delete this survey and its 21 responses?" });
+		await screen.findByRole("alertdialog", {
+			name: "Delete this survey and its 17 responses and 4 declines?",
+		});
 		await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
 		await expect(args.onDelete).not.toHaveBeenCalled();
 	},

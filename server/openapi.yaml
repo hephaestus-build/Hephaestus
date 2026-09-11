@@ -63,14 +63,10 @@ tags:
 - description: "Workspace-admin access to review runs, observations, and feedback\
     \ delivery history"
   name: Practice reviews
-- description: "Survey authoring, lifecycle and results for instance administrators."
-  name: survey-admin-controller
 - description: GDPR Art. 20 self-service data export
   name: Account
 - description: Workspace-scoped history of admin configuration changes
   name: Config Audit
-- description: The instance feedback inbox.
-  name: feedback-admin-controller
 - description: |-
     Vendor OAuth redirect ingress at <code>/oauth/callback/{kind</code>}. Unauthenticated —
      identity comes from the HMAC-signed <code>state</code> param. Browsers get 302 redirects
@@ -111,9 +107,6 @@ tags:
   name: Practice review requests
 - description: Current account transparency and research consent
   name: Consent
-- description: "What a workspace member can do: read their survey invitations, act\
-    \ on one, and send feedback."
-  name: feedback-controller
 - description: Read-only access to practice evaluation observations
   name: Practice Observations
 - description: Adopt instance catalog practices into a workspace
@@ -1614,8 +1607,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Survey"
           description: OK
-      summary: "Edit a survey's title, purpose, schedule or pause state; its questions\
-        \ are frozen"
+      summary: "Edit a survey's title, purpose, schedule or pause state"
       tags:
       - survey-admin
   /admin/product-feedback/surveys/{surveyId}/responses:
@@ -10425,7 +10417,7 @@ components:
     FeedbackWorkspaceRef:
       type: object
       description: The workspace a record was submitted from; absent for instance-level
-        submissions or a purged workspace.
+        submissions.
       properties:
         displayName:
           type: string
@@ -13539,7 +13531,6 @@ components:
       - type
     QuestionSummary:
       type: object
-      description: Per-question aggregate; the fields a type cannot produce are absent.
       properties:
         answered:
           type: integer
@@ -15051,8 +15042,6 @@ components:
       - title
     SurveyEdit:
       type: object
-      description: The fields that stay editable after publication; the questions
-        are frozen.
       properties:
         active:
           type: boolean
@@ -15077,8 +15066,6 @@ components:
       - title
     SurveyInvitation:
       type: object
-      description: "What a member sees: the questions and whether this account has\
-        \ been shown the invitation before."
       properties:
         description:
           type: string

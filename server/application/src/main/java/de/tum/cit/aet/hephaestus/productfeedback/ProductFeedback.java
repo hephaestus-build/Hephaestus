@@ -35,11 +35,9 @@ public class ProductFeedback {
     @Column(nullable = false, length = 5000)
     private String message;
 
-    /** The in-app path the sender chose to share, never a query string or fragment. */
     @Column(name = "page_path", length = 500)
     private @Nullable String pagePath;
 
-    /** The browser's user agent, present only when the sender chose to share page and browser details. */
     @Column(name = "user_agent", length = 500)
     private @Nullable String userAgent;
 

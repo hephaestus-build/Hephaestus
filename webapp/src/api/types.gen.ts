@@ -1538,7 +1538,7 @@ export type FeedbackTriage = {
 };
 
 /**
- * The workspace a record was submitted from; absent for instance-level submissions or a purged workspace.
+ * The workspace a record was submitted from; absent for instance-level submissions.
  */
 export type FeedbackWorkspaceRef = {
   displayName: string;
@@ -3756,9 +3756,6 @@ export type Question = {
   type: 'TEXT' | 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'RATING' | 'NPS';
 };
 
-/**
- * Per-question aggregate; the fields a type cannot produce are absent.
- */
 export type QuestionSummary = {
   answered: number;
   average?: number;
@@ -4681,9 +4678,6 @@ export type Survey = {
   workspace?: FeedbackWorkspaceRef;
 };
 
-/**
- * The fields that stay editable after publication; the questions are frozen.
- */
 export type SurveyEdit = {
   active: boolean;
   description: string;
@@ -4692,9 +4686,6 @@ export type SurveyEdit = {
   title: string;
 };
 
-/**
- * What a member sees: the questions and whether this account has been shown the invitation before.
- */
 export type SurveyInvitation = {
   description: string;
   endsAt?: Date;

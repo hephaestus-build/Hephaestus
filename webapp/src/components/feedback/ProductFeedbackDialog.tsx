@@ -28,12 +28,16 @@ import { Textarea } from "@/components/ui/textarea";
 
 export type FeedbackKind = FeedbackRequest["kind"];
 
+/** The server's `FeedbackRequest` limits; a longer value is refused, so the sender never sees a cut. */
+export const MESSAGE_MAX_LENGTH = 5000;
+export const PAGE_PATH_MAX_LENGTH = 500;
+export const USER_AGENT_MAX_LENGTH = 500;
+
 const KINDS: { value: FeedbackKind; title: string; detail: string }[] = [
 	{ value: "FEEDBACK", title: "Feedback", detail: "An idea, or what works and what does not." },
 	{ value: "BUG", title: "Bug report", detail: "Something broke or behaved unexpectedly." },
 ];
 
-/** What "page and browser details" attaches, shown to the sender before they choose. */
 export interface FeedbackContext {
 	pagePath: string;
 	userAgent: string;
@@ -52,10 +56,9 @@ export interface ProductFeedbackDialogProps {
 }
 
 /**
- * Free-text feedback to the instance administrators. The message draft survives closing the dialog
- * (the component stays mounted in the header) and is cleared only by a successful send. Page and
- * browser details are attached only when the sender ticks the box; the box starts ticked for bug
- * reports, where the details are what makes the report reproducible, and unticked otherwise.
+ * The message draft lives in this component and survives closing because the header keeps it
+ * mounted; only an accepted send clears it. The details box starts ticked for a bug report, where
+ * the page and browser are what make it reproducible, and unticked for feedback.
  */
 export function ProductFeedbackDialog({
 	open,
@@ -114,10 +117,17 @@ export function ProductFeedbackDialog({
 								{KINDS.map((option) => (
 									<FieldLabel key={option.value} htmlFor={`${id}-${option.value}`}>
 										<Field orientation="horizontal" className="rounded-md border px-3 py-2">
-											<RadioGroupItem id={`${id}-${option.value}`} value={option.value} />
+											<RadioGroupItem
+												id={`${id}-${option.value}`}
+												value={option.value}
+												aria-labelledby={`${id}-${option.value}-title`}
+												aria-describedby={`${id}-${option.value}-detail`}
+											/>
 											<FieldContent>
-												<FieldTitle>{option.title}</FieldTitle>
-												<FieldDescription>{option.detail}</FieldDescription>
+												<FieldTitle id={`${id}-${option.value}-title`}>{option.title}</FieldTitle>
+												<FieldDescription id={`${id}-${option.value}-detail`}>
+													{option.detail}
+												</FieldDescription>
 											</FieldContent>
 										</Field>
 									</FieldLabel>
@@ -130,7 +140,7 @@ export function ProductFeedbackDialog({
 									name="message"
 									required
 									value={message}
-									maxLength={5000}
+									maxLength={MESSAGE_MAX_LENGTH}
 									rows={5}
 									aria-describedby={`${id}-hint`}
 									placeholder={
@@ -141,8 +151,9 @@ export function ProductFeedbackDialog({
 									onChange={(event) => setMessage(event.target.value)}
 								/>
 								<FieldDescription id={`${id}-hint`}>
-									{message.length.toLocaleString()} / 5,000 · Leave out secrets and personal data
-									about others. Closing keeps this draft until you reload or sign out.
+									{message.length.toLocaleString()} / {MESSAGE_MAX_LENGTH.toLocaleString()} · Leave
+									out secrets and personal data about others. Closing keeps this draft until you
+									reload, switch workspace, or sign out.
 								</FieldDescription>
 							</Field>
 							{context && (

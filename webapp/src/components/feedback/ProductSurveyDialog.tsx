@@ -21,7 +21,6 @@ export interface ProductSurveyDialogProps {
 	survey: SurveyInvitation;
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	/** The in-progress answers, owned by the caller so closing the dialog keeps them. */
 	draft: AnswerDraft;
 	onDraftChange: (draft: AnswerDraft) => void;
 	isSubmitting: boolean;
@@ -30,10 +29,7 @@ export interface ProductSurveyDialogProps {
 	onDecline: () => void | Promise<void>;
 }
 
-/**
- * One survey, opened on purpose from the header. Closing keeps the draft; declining is a separate,
- * undoable decision, kept visually quiet so it never competes with the answers.
- */
+/** The draft belongs to the host so closing keeps it; declining is kept visually quiet on purpose. */
 export function ProductSurveyDialog({
 	survey,
 	open,
@@ -74,7 +70,6 @@ export function ProductSurveyDialog({
 							draft={draft}
 							onDraftChange={onDraftChange}
 							disabled={isSubmitting}
-							idPrefix={`survey-${survey.id}`}
 						/>
 						<p className="text-xs text-muted-foreground">
 							Your answers are linked to your account and visible only to this instance's

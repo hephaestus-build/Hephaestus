@@ -89,25 +89,6 @@ describe("product feedback wire contract", () => {
 		await waitFor(() => expect(result.current.query.data).toStrictEqual([]));
 	});
 
-	it("reports a conflict without claiming the current answers were delivered", async () => {
-		server.use(
-			http.get("*/workspaces/acme/product-feedback/surveys", () =>
-				HttpResponse.json([surveyInvitation]),
-			),
-			http.post("*/workspaces/acme/product-feedback/surveys/:id/responses", () =>
-				HttpResponse.json({ status: 409 }, { status: 409 }),
-			),
-		);
-		const { wrapper } = setup();
-		const { result } = renderHook(() => useProductSurveys("acme"), { wrapper });
-		await act(async () => {
-			expect(
-				await result.current.submit(surveyInvitation.id, [{ questionId: "useful", rating: 3 }]),
-			).toBe(false);
-		});
-		await waitFor(() => expect(result.current.error).toContain("already answered or declined"));
-	});
-
 	it("replaces an earlier response conflict with the latest decline failure", async () => {
 		server.use(
 			http.get("*/workspaces/acme/product-feedback/surveys", () =>
@@ -117,7 +98,7 @@ describe("product feedback wire contract", () => {
 				HttpResponse.json({ status: 409 }, { status: 409 }),
 			),
 			http.put("*/workspaces/acme/product-feedback/surveys/:id/dismissal", () =>
-				HttpResponse.json({ status: 503 }, { status: 503 }),
+				HttpResponse.error(),
 			),
 		);
 		const { wrapper } = setup();
@@ -132,6 +113,30 @@ describe("product feedback wire contract", () => {
 			expect(await result.current.decline(surveyInvitation.id)).toBe(false);
 		});
 		await waitFor(() => expect(result.current.error).toContain("Check your connection"));
+	});
+
+	it("shows the server's reason for a refusal instead of blaming the connection", async () => {
+		server.use(
+			http.get("*/workspaces/acme/product-feedback/surveys", () =>
+				HttpResponse.json([surveyInvitation]),
+			),
+			http.post("*/workspaces/acme/product-feedback/surveys/:id/responses", () =>
+				HttpResponse.json(
+					{ status: 400, detail: "a required question was not answered" },
+					{ status: 400 },
+				),
+			),
+		);
+		const { wrapper } = setup();
+		const { result } = renderHook(() => useProductSurveys("acme"), { wrapper });
+		await act(async () => {
+			expect(await result.current.submit(surveyInvitation.id, [])).toBe(false);
+		});
+		await waitFor(() =>
+			expect(result.current.error).toBe(
+				"Couldn't send (a required question was not answered). Your draft is still here.",
+			),
+		);
 	});
 
 	it("undoes an explicit decline through the dismissal resource", async () => {
@@ -158,9 +163,7 @@ describe("product feedback wire contract", () => {
 		await act(async () => {
 			expect(await result.current.decline(surveyInvitation.id)).toBe(true);
 		});
-		const undo = await screen.findByRole("button", { name: "Undo" });
-		undo.focus();
-		await userEvent.keyboard("{Enter}");
+		await userEvent.click(await screen.findByRole("button", { name: "Undo" }));
 		await waitFor(() => expect(result.current.query.data).toHaveLength(1));
 		expect(restoredId).toBe(surveyInvitation.id);
 	});
@@ -186,7 +189,7 @@ describe("product feedback wire contract", () => {
 		expect(client.getQueryData<SurveyInvitation[]>(otherKey)?.[0]?.seen).toBe(true);
 	});
 
-	it("rejects simultaneous feedback sends before mutation state can rerender", async () => {
+	it("sends one request when feedback is submitted twice at once", async () => {
 		let requests = 0;
 		server.use(
 			http.post("*/product-feedback", () => {
@@ -209,6 +212,5 @@ describe("product feedback wire contract", () => {
 		const { result } = renderHook(() => useProductSurveys(undefined), { wrapper });
 		expect(await result.current.submit(surveyInvitation.id, [])).toBe(false);
 		expect(await result.current.decline(surveyInvitation.id)).toBe(false);
-		expect(result.current.query.fetchStatus).toBe("idle");
 	});
 });

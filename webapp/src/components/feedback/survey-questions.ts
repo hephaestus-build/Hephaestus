@@ -1,9 +1,10 @@
 import type { Answer, Question } from "@/api/types.gen";
 
-/** Rating scales are fixed by the server; the client only knows how to draw them. */
+/** The server's scales and text limit; a value outside them is refused, not clipped. */
 export const RATING_SCALE = [1, 2, 3, 4, 5] as const;
 export const NPS_SCALE = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 export const NPS_LABELS = { low: "Not at all likely", high: "Extremely likely" } as const;
+export const ANSWER_TEXT_MAX_LENGTH = 4000;
 
 export const QUESTION_TYPE_LABELS: Record<Question["type"], string> = {
 	TEXT: "Free text",
@@ -13,12 +14,11 @@ export const QUESTION_TYPE_LABELS: Record<Question["type"], string> = {
 	NPS: "Recommendation (0–10)",
 };
 
-/** One respondent's in-progress answers, keyed by question; the shape follows the question type. */
 export type AnswerDraft = Record<string, string | string[] | number | undefined>;
 
 /**
- * Roughly how long the survey takes, so an invitation can say so: about 15 seconds per closed
- * question and 45 for free text, rounded up to whole minutes ("under a minute" below one).
+ * "3 questions · about 1 minute": 15 seconds per closed question and 45 for free text, rounded up
+ * to whole minutes. Stated up front because an invitation that hides its cost is not an invitation.
  */
 export function surveyEstimate(questions: readonly Pick<Question, "type">[]): string {
 	const seconds = questions.reduce((sum, q) => sum + (q.type === "TEXT" ? 45 : 15), 0);
@@ -38,7 +38,6 @@ export function isDraftComplete(questions: readonly Question[], draft: AnswerDra
 	return questions.every((q) => !q.required || isAnswered(draft[q.id]));
 }
 
-/** The wire shape of a draft: one answer per answered question, in the question's own field. */
 export function toAnswers(questions: readonly Question[], draft: AnswerDraft): Answer[] {
 	const answers: Answer[] = [];
 	for (const question of questions) {
@@ -55,7 +54,6 @@ export function toAnswers(questions: readonly Question[], draft: AnswerDraft): A
 	return answers;
 }
 
-/** How a stored answer reads back, for an inbox or an export preview. */
 export function formatAnswer(answer: Answer): string {
 	if (answer.text !== undefined) return answer.text;
 	if (answer.rating !== undefined) return String(answer.rating);

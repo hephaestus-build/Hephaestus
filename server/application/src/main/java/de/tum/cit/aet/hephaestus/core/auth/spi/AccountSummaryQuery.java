@@ -10,7 +10,7 @@ import org.jspecify.annotations.Nullable;
  * batches one lookup per page instead of importing the {@code Account} entity.
  */
 public interface AccountSummaryQuery {
-    /** The accounts that still exist, keyed by id; an erased or unknown id is simply absent. */
+    /** Keyed by id; an unknown id and the tombstone of an erased account are absent. */
     Map<Long, AccountSummary> findAllByIds(Collection<Long> accountIds);
 
     record AccountSummary(

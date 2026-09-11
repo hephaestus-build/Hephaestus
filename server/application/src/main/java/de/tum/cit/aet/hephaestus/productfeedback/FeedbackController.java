@@ -15,7 +15,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-/** What a workspace member can do: read their survey invitations, act on one, and send feedback. */
 @WorkspaceScopedController
 @RequestMapping("/product-feedback")
 @PreAuthorize("@workspaceSecure.isMember()")

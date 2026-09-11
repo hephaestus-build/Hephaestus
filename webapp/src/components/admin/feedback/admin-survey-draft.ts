@@ -21,7 +21,7 @@ export interface SurveyDraft {
 	description: string;
 	/** `ALL_WORKSPACES` or a workspace id as the select holds it. */
 	audience: string;
-	/** `datetime-local` values; blank start means "when published". */
+	/** `datetime-local` values. */
 	startsAt: string;
 	endsAt: string;
 	questions: QuestionDraft[];
@@ -40,6 +40,8 @@ export const CHOICE_MAX_LENGTH = 200;
 export const SCALE_LABEL_MAX_LENGTH = 60;
 const MIN_CHOICES = 2;
 const MAX_CHOICES = 20;
+/** Room in the choices textarea for the most choices at their longest, each on its own line. */
+export const CHOICES_TEXT_MAX_LENGTH = (CHOICE_MAX_LENGTH + 1) * MAX_CHOICES;
 
 export function isChoiceType(type: Question["type"]): boolean {
 	return type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE";
@@ -135,7 +137,7 @@ function validateQuestion(draft: QuestionDraft): QuestionDraftErrors {
 /**
  * Mirrors the server's rules (`SurveyQuestions.validateDefinition` and the DTO constraints) so a
  * refused draft is explained beside the field rather than by a 400. `now` stands in for a blank
- * start, which becomes the publish time.
+ * start.
  */
 export function validateSurveyDraft(draft: SurveyDraft, now: number): SurveyDraftErrors {
 	const errors: SurveyDraftErrors = { questionErrors: draft.questions.map(validateQuestion) };
@@ -148,13 +150,6 @@ export function validateSurveyDraft(draft: SurveyDraft, now: number): SurveyDraf
 		}
 	}
 	if (draft.questions.length === 0) errors.questions = "Add at least one question.";
-	else if (draft.questions.length > MAX_QUESTIONS) {
-		errors.questions = `A survey can ask at most ${MAX_QUESTIONS} questions.`;
-	} else if (
-		new Set(draft.questions.map((question) => question.id)).size !== draft.questions.length
-	) {
-		errors.questions = "Two questions share an id. Remove one and add it again.";
-	}
 	return errors;
 }
 

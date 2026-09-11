@@ -18,6 +18,7 @@ import { FilterToggle } from "@/components/common/FilterToggle";
 import { ResultCount } from "@/components/common/ResultCount";
 import { PageHeader } from "@/components/core/PageHeader";
 import { PageLayout } from "@/components/core/PageLayout";
+import { useClampedPage } from "@/hooks/use-clamped-page";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { instanceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -60,6 +61,9 @@ function AdminFeedbackInboxPage() {
 	const pendingIds = usePendingMutationIds(TRIAGE_KEY, (variables) =>
 		pathString(variables, "feedbackId"),
 	);
+	const onPageChange = (next: number) =>
+		void setSearch((previous) => ({ ...previous, page: pageParam(next) }));
+	useClampedPage(page, feedbackQuery.data?.page?.totalPages, onPageChange);
 
 	const state: AdminFeedbackListState = feedbackQuery.isPending
 		? { status: "loading" }
@@ -75,8 +79,7 @@ function AdminFeedbackInboxPage() {
 					filter: status,
 					page,
 					totalPages: feedbackQuery.data.page?.totalPages ?? 0,
-					onPageChange: (next) =>
-						void setSearch((previous) => ({ ...previous, page: pageParam(next) })),
+					onPageChange,
 				};
 
 	return (

@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 import type { Question } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 import {
+	ANSWER_TEXT_MAX_LENGTH,
 	type AnswerDraft,
 	isAnswered,
 	NPS_LABELS,
@@ -27,44 +30,43 @@ export interface ProductSurveyFormProps {
 	draft: AnswerDraft;
 	onDraftChange: (draft: AnswerDraft) => void;
 	disabled?: boolean;
-	/** Keeps the field ids unique when two copies of the form are on one page. */
-	idPrefix?: string;
 }
 
 /**
- * The question fields of one survey, and nothing else: the surrounding title, purpose and buttons
- * belong to whoever hosts the form — the invitation dialog, or the composer's preview.
- *
- * Every closed question is a `fieldset` whose legend is the prompt, so a screen reader announces
- * the question with each option; "(required)" is in the legend because an asterisk alone is not
- * read. An optional closed question can be cleared, because a radio group cannot un-select itself.
+ * The question fields of one survey and nothing else; the title, purpose and buttons belong to the
+ * host. "(required)" is text in the prompt because an asterisk alone is not read out, and an optional
+ * closed question gets a "Clear answer" button because a radio group cannot un-select itself.
  */
 export function ProductSurveyForm({
 	questions,
 	draft,
 	onDraftChange,
 	disabled = false,
-	idPrefix = "survey",
 }: ProductSurveyFormProps) {
+	const formId = useId();
 	const set = (questionId: string, value: AnswerDraft[string]) =>
 		onDraftChange({ ...draft, [questionId]: value });
 	const clear = (questionId: string) => {
-		const next = { ...draft };
-		delete next[questionId];
-		onDraftChange(next);
+		const { [questionId]: _cleared, ...rest } = draft;
+		onDraftChange(rest);
 	};
 	return (
 		<FieldSet disabled={disabled} className="gap-6">
 			<FieldLegend className="sr-only">Survey questions</FieldLegend>
 			{questions.map((question, index) => {
-				const id = `${idPrefix}-${question.id}`;
+				const id = `${formId}-${question.id}`;
 				const value = draft[question.id];
-				const legend = (
-					<FieldLegend id={`${id}-legend`} className="break-words text-sm font-medium">
+				const prompt = (
+					<>
 						{index + 1}. {question.prompt}{" "}
 						<span className="font-normal text-muted-foreground">
 							{question.required ? "(required)" : "(optional)"}
 						</span>
+					</>
+				);
+				const legend = (
+					<FieldLegend id={`${id}-legend`} className="break-words text-sm font-medium">
+						{prompt}
 					</FieldLegend>
 				);
 				const clearButton = !question.required && isAnswered(value) && (
@@ -82,15 +84,12 @@ export function ProductSurveyForm({
 					return (
 						<Field key={question.id}>
 							<FieldLabel htmlFor={id} className="break-words">
-								{index + 1}. {question.prompt}{" "}
-								<span className="font-normal text-muted-foreground">
-									{question.required ? "(required)" : "(optional)"}
-								</span>
+								{prompt}
 							</FieldLabel>
 							<Textarea
 								id={id}
 								rows={3}
-								maxLength={4000}
+								maxLength={ANSWER_TEXT_MAX_LENGTH}
 								required={question.required}
 								aria-required={question.required}
 								value={typeof value === "string" ? value : ""}
@@ -165,6 +164,7 @@ export function ProductSurveyForm({
 						{legend}
 						<RadioGroup
 							aria-labelledby={`${id}-legend`}
+							aria-describedby={`${id}-scale`}
 							aria-required={question.required}
 							value={typeof value === "number" ? String(value) : null}
 							onValueChange={(next) => next !== null && set(question.id, Number(next))}
@@ -176,8 +176,8 @@ export function ProductSurveyForm({
 									htmlFor={`${id}-${point}`}
 									className={cn(
 										"flex h-10 min-w-10 cursor-pointer items-center justify-center gap-0 rounded-md border px-2 text-sm tabular-nums transition-colors",
-										"has-[[data-checked]]:border-primary has-[[data-checked]]:bg-primary has-[[data-checked]]:text-primary-foreground",
-										"has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50",
+										"has-data-checked:border-primary has-data-checked:bg-primary has-data-checked:text-primary-foreground",
+										"has-focus-visible:ring-[3px] has-focus-visible:ring-ring/50",
 									)}
 								>
 									<RadioGroupItem id={`${id}-${point}`} value={String(point)} className="sr-only" />
@@ -185,7 +185,7 @@ export function ProductSurveyForm({
 								</FieldLabel>
 							))}
 						</RadioGroup>
-						<FieldDescription className="flex justify-between gap-4">
+						<FieldDescription id={`${id}-scale`} className="flex justify-between gap-4">
 							<span>
 								{scale[0]} = {low}
 							</span>

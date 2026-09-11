@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -13,35 +13,17 @@ import {
 	AdminSurveyResults,
 	type AdminSurveyResultsState,
 } from "@/components/admin/feedback/AdminSurveyResults";
-
-import type { useSurveyLifecycle } from "./-admin-survey-lifecycle";
+import { saveTextFile } from "@/lib/download";
 
 const RESPONSES_PAGE_SIZE = 20;
-
-/** Fetches the CSV and hands it to the browser as a download; false when nothing was saved. */
-async function downloadResponses(surveyId: string): Promise<boolean> {
-	try {
-		const { data, error } = await adminExportProductSurveyResponses({ path: { surveyId } });
-		if (error || typeof data !== "string") return false;
-		const url = URL.createObjectURL(new Blob([data], { type: "text/csv;charset=utf-8;" }));
-		const anchor = document.createElement("a");
-		anchor.href = url;
-		anchor.download = `survey-${surveyId}-responses.csv`;
-		document.body.appendChild(anchor);
-		anchor.click();
-		anchor.remove();
-		URL.revokeObjectURL(url);
-		return true;
-	} catch {
-		return false;
-	}
-}
 
 export interface AdminSurveyResultsLevelProps {
 	surveyId: string;
 	now: number;
 	nested?: boolean;
-	lifecycle: ReturnType<typeof useSurveyLifecycle>;
+	pending: boolean;
+	onToggleActive: (survey: Survey, active: boolean) => void;
+	onEnd: (survey: Survey) => void;
 	/** Deleting from inside the drawer closes it first, so the level never renders a survey that is gone. */
 	onDelete: (survey: Survey) => void;
 }
@@ -50,11 +32,12 @@ export function AdminSurveyResultsLevel({
 	surveyId,
 	now,
 	nested,
-	lifecycle,
+	pending,
+	onToggleActive,
+	onEnd,
 	onDelete,
 }: AdminSurveyResultsLevelProps) {
 	const [page, setPage] = useState(0);
-	const [exporting, setExporting] = useState(false);
 	const path = { surveyId };
 	const surveyQuery = useQuery(adminGetProductSurveyOptions({ path }));
 	const summaryQuery = useQuery(adminGetProductSurveySummaryOptions({ path }));
@@ -65,13 +48,14 @@ export function AdminSurveyResultsLevel({
 		}),
 		placeholderData: keepPreviousData,
 	});
-
-	const handleExport = async () => {
-		setExporting(true);
-		const saved = await downloadResponses(surveyId);
-		if (!saved) toast.error("Couldn't export the responses. Please try again.");
-		setExporting(false);
-	};
+	const exportResponses = useMutation({
+		mutationFn: async () => {
+			const { data, error } = await adminExportProductSurveyResponses({ path });
+			if (error || typeof data !== "string") throw new Error("Export failed");
+			saveTextFile(data, `survey-${surveyId}-responses.csv`, "text/csv;charset=utf-8;");
+		},
+		onError: () => toast.error("Couldn't export the responses. Please try again."),
+	});
 
 	const state: AdminSurveyResultsState =
 		surveyQuery.isPending || summaryQuery.isPending || responsesQuery.isPending
@@ -94,13 +78,19 @@ export function AdminSurveyResultsLevel({
 						page,
 						totalPages: responsesQuery.data.page?.totalPages ?? 0,
 						onPageChange: setPage,
-						exporting,
-						onExport: () => void handleExport(),
-						pending: lifecycle.pendingIds.has(surveyId),
-						onToggleActive: lifecycle.toggleActive,
-						onEnd: lifecycle.end,
-						onDelete,
 					};
 
-	return <AdminSurveyResults state={state} now={now} nested={nested} />;
+	return (
+		<AdminSurveyResults
+			state={state}
+			now={now}
+			nested={nested}
+			exporting={exportResponses.isPending}
+			onExport={() => exportResponses.mutate()}
+			pending={pending}
+			onToggleActive={onToggleActive}
+			onEnd={onEnd}
+			onDelete={onDelete}
+		/>
+	);
 }

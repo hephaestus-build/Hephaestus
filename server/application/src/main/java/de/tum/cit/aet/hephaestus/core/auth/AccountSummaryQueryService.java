@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountSummaryQuery;
 import java.util.Collection;
@@ -23,7 +24,7 @@ class AccountSummaryQueryService implements AccountSummaryQuery {
     @Transactional(readOnly = true)
     public Map<Long, AccountSummary> findAllByIds(Collection<Long> accountIds) {
         if (accountIds.isEmpty()) return Map.of();
-        return accounts.findAllById(accountIds).stream()
+        return accounts.findAllByIdInAndStatusNot(accountIds, Account.Status.DELETED).stream()
                 .map(a ->
                         new AccountSummary(Objects.requireNonNull(a.getId()), a.getDisplayName(), a.getPrimaryEmail()))
                 .collect(Collectors.toMap(AccountSummary::id, s -> s));

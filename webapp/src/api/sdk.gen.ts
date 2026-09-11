@@ -571,7 +571,7 @@ export const adminGetProductSurvey = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * Edit a survey's title, purpose, schedule or pause state; its questions are frozen
+ * Edit a survey's title, purpose, schedule or pause state
  */
 export const adminUpdateProductSurvey = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateProductSurveyData, ThrowOnError>): RequestResult<AdminUpdateProductSurveyResponses, unknown, ThrowOnError> => (options.client ?? client).put<AdminUpdateProductSurveyResponses, unknown, ThrowOnError>({
   responseTransformer: adminUpdateProductSurveyResponseTransformer,

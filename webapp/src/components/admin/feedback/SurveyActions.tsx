@@ -25,20 +25,24 @@ import {
 
 export interface SurveyActionsProps {
 	survey: Survey;
-	/** The page clock, so "End now" is offered exactly while the survey can still end. */
+	/** The page clock; availability is derived from it at render time. */
 	now: number;
 	/** A change to this survey is in flight; the menu waits for it rather than queueing a second. */
 	pending: boolean;
 	onToggleActive: (survey: Survey, active: boolean) => void;
-	/** Confirmed by the reader. The host stamps the end time when it sends the request. */
+	/**
+	 * Only an open survey is offered this: the host stamps the current time as the end, and the
+	 * server refuses an end at or before the start, which a scheduled survey's would be.
+	 */
 	onEnd: (survey: Survey) => void;
-	/** Confirmed by the reader. */
 	onDelete: (survey: Survey) => void;
 	/** Menu items placed before the lifecycle ones — the table's "View results" link. */
 	children?: ReactNode;
 }
 
 type Confirmation = "end" | "delete";
+
+const counted = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
 /**
  * One menu for what an administrator can do to a published survey, shared by the table row and
@@ -56,8 +60,11 @@ export function SurveyActions({
 }: SurveyActionsProps) {
 	const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
 	const availability = surveyAvailability(survey, now);
-	const canEnd = availability === "OPEN" || availability === "SCHEDULED";
-	const responses = survey.participation.responded + survey.participation.declined;
+	const { responded, declined } = survey.participation;
+	const deleteTitle =
+		responded + declined === 0
+			? "Delete this survey?"
+			: `Delete this survey and its ${counted(responded, "response")} and ${counted(declined, "decline")}?`;
 
 	return (
 		<>
@@ -79,7 +86,7 @@ export function SurveyActions({
 								{survey.active ? "Pause" : "Resume"}
 							</DropdownMenuItem>
 						)}
-						{canEnd && (
+						{availability === "OPEN" && (
 							<DropdownMenuItem onClick={() => setConfirmation("end")}>
 								<Square className="size-4" />
 								End now
@@ -129,9 +136,7 @@ export function SurveyActions({
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>
-							Delete this survey and its {responses} {responses === 1 ? "response" : "responses"}?
-						</AlertDialogTitle>
+						<AlertDialogTitle>{deleteTitle}</AlertDialogTitle>
 						<AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

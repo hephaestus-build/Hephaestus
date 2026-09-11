@@ -16,12 +16,7 @@ import {
 	SURVEY_AVAILABILITY_DEFS,
 	surveyAvailability,
 } from "@/components/feedback/survey-availability-defs";
-import {
-	formatAnswer,
-	NPS_LABELS,
-	NPS_SCALE,
-	RATING_SCALE,
-} from "@/components/feedback/survey-questions";
+import { formatAnswer, NPS_LABELS } from "@/components/feedback/survey-questions";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { DrawerBody, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
@@ -29,7 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 
 import { surveyAudience } from "./AdminSurveysTable";
-import { completionRate, distributionRows, npsBuckets } from "./survey-summary";
+import { completionRate, distributionRows, NPS_BUCKETS, npsBuckets } from "./survey-summary";
 import { SurveyActions } from "./SurveyActions";
 
 export type AdminSurveyResultsState =
@@ -43,21 +38,18 @@ export type AdminSurveyResultsState =
 			page: number;
 			totalPages: number;
 			onPageChange: (page: number) => void;
-			exporting: boolean;
-			onExport: () => void;
-			/** A change to the survey is in flight; the actions wait for it. */
-			pending: boolean;
-			onToggleActive: (survey: Survey, active: boolean) => void;
-			onEnd: (survey: Survey) => void;
-			onDelete: (survey: Survey) => void;
 	  };
 
 export interface AdminSurveyResultsProps {
 	state: AdminSurveyResultsState;
-	/** The page clock; availability is derived from it at render time. */
 	now: number;
-	/** True below the top level of the drawer stack. */
 	nested?: boolean;
+	exporting: boolean;
+	onExport: () => void;
+	pending: boolean;
+	onToggleActive: (survey: Survey, active: boolean) => void;
+	onEnd: (survey: Survey) => void;
+	onDelete: (survey: Survey) => void;
 }
 
 /**
@@ -65,7 +57,17 @@ export interface AdminSurveyResultsProps {
  * response in full. The distributions are lists of text first and bars second, so a reader without
  * the bars still gets the numbers.
  */
-export function AdminSurveyResults({ state, now, nested }: AdminSurveyResultsProps) {
+export function AdminSurveyResults({
+	state,
+	now,
+	nested,
+	exporting,
+	onExport,
+	pending,
+	onToggleActive,
+	onEnd,
+	onDelete,
+}: AdminSurveyResultsProps) {
 	const id = useId();
 	if (state.status !== "ready") {
 		return (
@@ -135,19 +137,19 @@ export function AdminSurveyResults({ state, now, nested }: AdminSurveyResultsPro
 							type="button"
 							variant="outline"
 							size="sm"
-							disabled={!hasExport || state.exporting}
-							onClick={state.onExport}
+							disabled={!hasExport || exporting}
+							onClick={onExport}
 						>
-							{state.exporting ? <Spinner className="size-4" /> : <Download aria-hidden />}
-							{state.exporting ? "Exporting…" : "Export CSV"}
+							{exporting ? <Spinner className="size-4" /> : <Download aria-hidden />}
+							{exporting ? "Exporting…" : "Export CSV"}
 						</Button>
 						<SurveyActions
 							survey={survey}
 							now={now}
-							pending={state.pending}
-							onToggleActive={state.onToggleActive}
-							onEnd={state.onEnd}
-							onDelete={state.onDelete}
+							pending={pending}
+							onToggleActive={onToggleActive}
+							onEnd={onEnd}
+							onDelete={onDelete}
 						/>
 					</div>
 				</div>
@@ -227,16 +229,7 @@ function QuestionResults({ headingId, number, question, summary }: QuestionResul
 				</p>
 			) : (
 				<>
-					<Distribution
-						rows={
-							question.type === "RATING"
-								? withScale(counts, RATING_SCALE)
-								: question.type === "NPS"
-									? withScale(counts, NPS_SCALE)
-									: counts
-						}
-						label={`Answers to question ${number}`}
-					/>
+					<Distribution rows={counts} label={`Answers to question ${number}`} />
 					{question.type === "RATING" && (
 						<p className="flex justify-between gap-4 text-xs text-muted-foreground">
 							<span>1 · {question.lowLabel}</span>
@@ -250,12 +243,6 @@ function QuestionResults({ headingId, number, question, summary }: QuestionResul
 	);
 }
 
-/** Every scale point, in order, whether or not the server sent a count for it. */
-function withScale(counts: QuestionSummary["counts"], scale: readonly number[]) {
-	const byValue = new Map(counts.map((count) => [count.value, count.count]));
-	return scale.map((point) => ({ value: String(point), count: byValue.get(String(point)) ?? 0 }));
-}
-
 function Distribution({ rows, label }: { rows: QuestionSummary["counts"]; label: string }) {
 	return (
 		<ul className="flex flex-col gap-1.5" aria-label={label}>
@@ -264,7 +251,7 @@ function Distribution({ rows, label }: { rows: QuestionSummary["counts"]; label:
 					<span className="flex items-baseline justify-between gap-3">
 						<span className="min-w-0 break-words">{row.value}</span>
 						<span className="shrink-0 text-muted-foreground tabular-nums">
-							{row.count} · {row.percent}%
+							{row.count} · {row.percent}
 						</span>
 					</span>
 					<span aria-hidden className="block h-1.5 w-full rounded bg-muted">
@@ -277,13 +264,14 @@ function Distribution({ rows, label }: { rows: QuestionSummary["counts"]; label:
 }
 
 function NpsBreakdown({ counts }: { counts: QuestionSummary["counts"] }) {
-	const buckets = npsBuckets(counts);
+	const totals = npsBuckets(counts);
+	const parts = NPS_BUCKETS.map(({ bucket, noun, low, high }) => {
+		const count = totals[bucket];
+		return `${count} ${count === 1 ? noun[0] : noun[1]} (${low}–${high})`;
+	});
 	return (
 		<p className="text-xs text-muted-foreground">
-			{buckets.promoters} {buckets.promoters === 1 ? "promoter" : "promoters"} (9–10) ·{" "}
-			{buckets.passives} {buckets.passives === 1 ? "passive" : "passives"} (7–8) ·{" "}
-			{buckets.detractors} {buckets.detractors === 1 ? "detractor" : "detractors"} (0–6) · scale
-			labelled {NPS_LABELS.low} → {NPS_LABELS.high}
+			{parts.join(" · ")} · scale labelled {NPS_LABELS.low} → {NPS_LABELS.high}
 		</p>
 	);
 }

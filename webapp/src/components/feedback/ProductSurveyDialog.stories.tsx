@@ -43,7 +43,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await expect(dialog.getByText(/4 questions · about 2 minutes/)).toBeVisible();
+		await expectSettledVisible(dialog.getByText(/4 questions · about 2 minutes/));
 		await expect(dialog.getByRole("button", { name: "Send answers" })).toBeDisabled();
 	},
 };
