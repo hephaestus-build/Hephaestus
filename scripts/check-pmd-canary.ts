@@ -51,8 +51,15 @@ gradle.projectsEvaluated {
         check(mainSources.isNotEmpty() && source.files.containsAll(mainSources)) {
             "PMD must select every production Java source."
         }
+        val analysisClasspath = classpath?.files.orEmpty()
+        check(analysisClasspath.contains(application.layout.buildDirectory.dir("classes/java/main").get().asFile)) {
+            "PMD must retain compiled application types on its analysis classpath."
+        }
+        check(analysisClasspath.contains(javaLauncher.get().metadata.installationPath.file("lib/jrt-fs.jar").asFile)) {
+            "PMD must resolve platform types against its analysis toolchain."
+        }
         setSource(application.files(File(directory, "Canary.java")))
-        classpath = application.files()
+        classpath = application.files(javaLauncher.map { it.metadata.installationPath.file("lib/jrt-fs.jar") })
         reports.xml.outputLocation.set(File(directory, "report.xml"))
         reports.html.required.set(false)
     }
@@ -72,6 +79,13 @@ gradle.projectsEvaluated {
 				source:
 					"@org.springframework.boot.autoconfigure.SpringBootApplication public class Canary { private int deliberatelyUnused; }",
 				violations: ["UnusedPrivateField"],
+				errors: 0,
+			},
+			{
+				name: "ignored stream skip result",
+				source:
+					"public class Canary { public void skip(java.io.InputStream stream) throws java.io.IOException { stream.skip(1); } }",
+				violations: ["UnusedReturnValue"],
 				errors: 0,
 			},
 			{

@@ -8,7 +8,7 @@ import {
 	adminListConfigAuditEventsInfiniteOptions,
 	listWorkspaceConfigAuditEventsInfiniteOptions,
 } from "@/api/@tanstack/react-query.gen";
-import type { ConfigAuditEntryView, PageConfigAuditEntryView } from "@/api/types.gen";
+import type { ConfigAuditEntryView, PageResponseDtoConfigAuditEntryView } from "@/api/types.gen";
 import {
 	type ConfigAuditSearch,
 	dayAfterInstant,
@@ -93,7 +93,9 @@ export function WorkspaceConfigAuditPanel({
 	return <ConfigAuditView search={search} onSearchChange={onSearchChange} listQuery={listQuery} />;
 }
 
-type ConfigAuditListQuery = UseInfiniteQueryResult<InfiniteData<PageConfigAuditEntryView>>;
+type ConfigAuditListQuery = UseInfiniteQueryResult<
+	InfiniteData<PageResponseDtoConfigAuditEntryView>
+>;
 
 function ConfigAuditView({
 	search,

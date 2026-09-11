@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { getWorkspaceOptions } from "@/api/@tanstack/react-query.gen";
-import { LoginCard } from "@/components/auth/LoginCard";
+import { LoginPage } from "@/components/auth/LoginPage";
+import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { resolveCurrentUser } from "@/integrations/auth/guard";
 
@@ -15,9 +16,6 @@ export const Route = createFileRoute("/w/$workspaceSlug/login")({
 	validateSearch: (search): WorkspaceLoginSearch => ({
 		error: typeof search.error === "string" ? search.error : undefined,
 	}),
-	// Already-authenticated users go straight into the workspace. Resolving through the
-	// query client keeps the first paint correct (no login-card flash). When the server
-	// lands an authenticated user back here after login, this closes the loop too.
 	beforeLoad: async ({ context, params }) => {
 		const user = await resolveCurrentUser(context.queryClient);
 		if (user) {
@@ -27,16 +25,15 @@ export const Route = createFileRoute("/w/$workspaceSlug/login")({
 			});
 		}
 	},
-	component: WorkspaceLoginPage,
+	component: WorkspaceLoginRoute,
 });
 
-function WorkspaceLoginPage() {
+function WorkspaceLoginRoute() {
+	const providers = useSignInProviders();
 	const { workspaceSlug } = Route.useParams();
 	const { error } = Route.useSearch();
 	const { login } = useAuth();
 
-	// No workspace-scoped identity-provider endpoint exists; LoginCard falls back to the
-	// global listIdentityProviders. We still surface the workspace name when it's public.
 	const { data: workspace } = useQuery({
 		...getWorkspaceOptions({ path: { workspaceSlug } }),
 		staleTime: 5 * 60 * 1000,
@@ -48,9 +45,9 @@ function WorkspaceLoginPage() {
 		: "Sign in to your workspace";
 
 	return (
-		<LoginCard
+		<LoginPage
+			options={providers}
 			title={heading}
-			description="Sign in to continue to this workspace."
 			error={error}
 			onSignIn={(registrationId) => login(registrationId, `/w/${workspaceSlug}`)}
 			devReturnTo={`/w/${workspaceSlug}`}

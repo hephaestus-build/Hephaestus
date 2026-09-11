@@ -7,7 +7,7 @@ const authEventViewSchemaResponseTransformer = (data: any) => {
   return data;
 };
 
-const pageAuthEventViewSchemaResponseTransformer = (data: any) => {
+const pageResponseDtoAuthEventViewSchemaResponseTransformer = (data: any) => {
   if (data.content) {
     data.content = data.content.map((item: any) => authEventViewSchemaResponseTransformer(item));
   }
@@ -15,7 +15,7 @@ const pageAuthEventViewSchemaResponseTransformer = (data: any) => {
 };
 
 export const adminListAuthEventsResponseTransformer = async (data: any): Promise<AdminListAuthEventsResponse> => {
-  data = pageAuthEventViewSchemaResponseTransformer(data);
+  data = pageResponseDtoAuthEventViewSchemaResponseTransformer(data);
   return data;
 };
 
@@ -26,7 +26,7 @@ const configAuditEntryViewSchemaResponseTransformer = (data: any) => {
   return data;
 };
 
-const pageConfigAuditEntryViewSchemaResponseTransformer = (data: any) => {
+const pageResponseDtoConfigAuditEntryViewSchemaResponseTransformer = (data: any) => {
   if (data.content) {
     data.content = data.content.map((item: any) => configAuditEntryViewSchemaResponseTransformer(item));
   }
@@ -34,7 +34,7 @@ const pageConfigAuditEntryViewSchemaResponseTransformer = (data: any) => {
 };
 
 export const adminListConfigAuditEventsResponseTransformer = async (data: any): Promise<AdminListConfigAuditEventsResponse> => {
-  data = pageConfigAuditEntryViewSchemaResponseTransformer(data);
+  data = pageResponseDtoConfigAuditEntryViewSchemaResponseTransformer(data);
   return data;
 };
 
@@ -332,7 +332,7 @@ const agentJobSchemaResponseTransformer = (data: any) => {
   return data;
 };
 
-const pageAgentJobSchemaResponseTransformer = (data: any) => {
+const pageResponseDtoAgentJobSchemaResponseTransformer = (data: any) => {
   if (data.content) {
     data.content = data.content.map((item: any) => agentJobSchemaResponseTransformer(item));
   }
@@ -340,7 +340,7 @@ const pageAgentJobSchemaResponseTransformer = (data: any) => {
 };
 
 export const listAgentJobsResponseTransformer = async (data: any): Promise<ListAgentJobsResponse> => {
-  data = pageAgentJobSchemaResponseTransformer(data);
+  data = pageResponseDtoAgentJobSchemaResponseTransformer(data);
   return data;
 };
 
@@ -360,7 +360,7 @@ export const retryAgentJobDeliveryResponseTransformer = async (data: any): Promi
 };
 
 export const listWorkspaceConfigAuditEventsResponseTransformer = async (data: any): Promise<ListWorkspaceConfigAuditEventsResponse> => {
-  data = pageConfigAuditEntryViewSchemaResponseTransformer(data);
+  data = pageResponseDtoConfigAuditEntryViewSchemaResponseTransformer(data);
   return data;
 };
 
@@ -458,7 +458,7 @@ export const getConnectionSyncStatusResponseTransformer = async (data: any): Pro
   return data;
 };
 
-const pageSyncJobSchemaResponseTransformer = (data: any) => {
+const pageResponseDtoSyncJobSchemaResponseTransformer = (data: any) => {
   if (data.content) {
     data.content = data.content.map((item: any) => syncJobSchemaResponseTransformer(item));
   }
@@ -466,7 +466,7 @@ const pageSyncJobSchemaResponseTransformer = (data: any) => {
 };
 
 export const listConnectionSyncJobsResponseTransformer = async (data: any): Promise<ListConnectionSyncJobsResponse> => {
-  data = pageSyncJobSchemaResponseTransformer(data);
+  data = pageResponseDtoSyncJobSchemaResponseTransformer(data);
   return data;
 };
 
@@ -996,7 +996,7 @@ const observationListSchemaResponseTransformer = (data: any) => {
   return data;
 };
 
-const pageObservationListSchemaResponseTransformer = (data: any) => {
+const pageResponseDtoObservationListSchemaResponseTransformer = (data: any) => {
   if (data.content) {
     data.content = data.content.map((item: any) => observationListSchemaResponseTransformer(item));
   }
@@ -1004,7 +1004,7 @@ const pageObservationListSchemaResponseTransformer = (data: any) => {
 };
 
 export const listObservationsResponseTransformer = async (data: any): Promise<ListObservationsResponse> => {
-  data = pageObservationListSchemaResponseTransformer(data);
+  data = pageResponseDtoObservationListSchemaResponseTransformer(data);
   return data;
 };
 

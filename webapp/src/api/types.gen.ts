@@ -767,9 +767,15 @@ export type ConnectionSyncStatus = {
 
 export type ConsentStatus = {
   completed: boolean;
-  noticeText: string;
+  /**
+   * Version of the first-login wording the client must be rendering
+   */
   noticeVersion: string;
   participateInResearch: boolean;
+  /**
+   * Organisation running the optional research programme, or null when this instance runs none
+   */
+  researchOrganization?: string;
 };
 
 /**
@@ -1505,7 +1511,14 @@ export type FeedbackSourceCount = {
 
 export type FirstLoginConsent = {
   noticeVersion: string;
-  participateInResearch: boolean;
+  /**
+   * Required when the instance names a research organisation, omitted otherwise
+   */
+  participateInResearch?: boolean;
+  /**
+   * The organisation the research question named on screen; omitted when it asked none
+   */
+  researchOrganization?: string;
   termsAccepted: boolean;
 };
 
@@ -2471,48 +2484,6 @@ export type OutlineTokenStatus = {
   name?: string;
 };
 
-export type PageAgentJob = {
-  content?: Array<AgentJob>;
-  empty?: boolean;
-  first?: boolean;
-  last?: boolean;
-  number?: number;
-  numberOfElements?: number;
-  pageable?: PageableObject;
-  size?: number;
-  sort?: SortObject;
-  totalElements?: number;
-  totalPages?: number;
-};
-
-export type PageAuthEventView = {
-  content?: Array<AuthEventView>;
-  empty?: boolean;
-  first?: boolean;
-  last?: boolean;
-  number?: number;
-  numberOfElements?: number;
-  pageable?: PageableObject;
-  size?: number;
-  sort?: SortObject;
-  totalElements?: number;
-  totalPages?: number;
-};
-
-export type PageConfigAuditEntryView = {
-  content?: Array<ConfigAuditEntryView>;
-  empty?: boolean;
-  first?: boolean;
-  last?: boolean;
-  number?: number;
-  numberOfElements?: number;
-  pageable?: PageableObject;
-  size?: number;
-  sort?: SortObject;
-  totalElements?: number;
-  totalPages?: number;
-};
-
 export type PageMetadata = {
   number?: number;
   size?: number;
@@ -2520,40 +2491,107 @@ export type PageMetadata = {
   totalPages?: number;
 };
 
-export type PageObservationList = {
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoAgentJob = {
+  content?: Array<AgentJob>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoAuthEventView = {
+  content?: Array<AuthEventView>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoConfigAuditEntryView = {
+  content?: Array<ConfigAuditEntryView>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoObservationList = {
   content?: Array<ObservationList>;
   empty?: boolean;
   first?: boolean;
   last?: boolean;
   number?: number;
   numberOfElements?: number;
-  pageable?: PageableObject;
+  pageable?: Pageable;
   size?: number;
-  sort?: SortObject;
+  sort?: Sort;
   totalElements?: number;
   totalPages?: number;
 };
 
-export type PageSyncJob = {
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoSyncJob = {
   content?: Array<SyncJob>;
   empty?: boolean;
   first?: boolean;
   last?: boolean;
   number?: number;
   numberOfElements?: number;
-  pageable?: PageableObject;
+  pageable?: Pageable;
   size?: number;
-  sort?: SortObject;
+  sort?: Sort;
   totalElements?: number;
   totalPages?: number;
 };
 
-export type PageableObject = {
+export type Pageable = {
   offset?: number;
   pageNumber?: number;
   pageSize?: number;
   paged?: boolean;
-  sort?: SortObject;
+  sort?: Sort;
   unpaged?: boolean;
 };
 
@@ -3788,6 +3826,11 @@ export type RepositoryInfo = {
 
 export type ResearchConsent = {
   granted: boolean;
+  noticeVersion: string;
+  /**
+   * The organisation this control named on screen
+   */
+  researchOrganization?: string;
 };
 
 /**
@@ -4553,7 +4596,7 @@ export type SlackUserWorkspacePreferences = {
   workspaceSlug: string;
 };
 
-export type SortObject = {
+export type Sort = {
   empty?: boolean;
   sorted?: boolean;
   unsorted?: boolean;
@@ -6071,7 +6114,7 @@ export type AdminListAuthEventsResponses = {
   /**
    * OK
    */
-  200: PageAuthEventView;
+  200: PageResponseDtoAuthEventView;
 };
 
 export type AdminListAuthEventsResponse = AdminListAuthEventsResponses[keyof AdminListAuthEventsResponses];
@@ -6121,7 +6164,7 @@ export type AdminListConfigAuditEventsResponses = {
   /**
    * OK
    */
-  200: PageConfigAuditEntryView;
+  200: PageResponseDtoConfigAuditEntryView;
 };
 
 export type AdminListConfigAuditEventsResponse = AdminListConfigAuditEventsResponses[keyof AdminListConfigAuditEventsResponses];
@@ -7926,7 +7969,7 @@ export type ListAgentJobsResponses = {
   /**
    * Paginated job list
    */
-  200: PageAgentJob;
+  200: PageResponseDtoAgentJob;
 };
 
 export type ListAgentJobsResponse = ListAgentJobsResponses[keyof ListAgentJobsResponses];
@@ -8103,7 +8146,7 @@ export type ListWorkspaceConfigAuditEventsResponses = {
   /**
    * OK
    */
-  200: PageConfigAuditEntryView;
+  200: PageResponseDtoConfigAuditEntryView;
 };
 
 export type ListWorkspaceConfigAuditEventsResponse = ListWorkspaceConfigAuditEventsResponses[keyof ListWorkspaceConfigAuditEventsResponses];
@@ -8265,7 +8308,7 @@ export type ListConnectionSyncJobsResponses = {
   /**
    * OK
    */
-  200: PageSyncJob;
+  200: PageResponseDtoSyncJob;
 };
 
 export type ListConnectionSyncJobsResponse = ListConnectionSyncJobsResponses[keyof ListConnectionSyncJobsResponses];
@@ -10380,7 +10423,7 @@ export type ListObservationsResponses = {
   /**
    * Paginated observations returned
    */
-  200: PageObservationList;
+  200: PageResponseDtoObservationList;
 };
 
 export type ListObservationsResponse = ListObservationsResponses[keyof ListObservationsResponses];

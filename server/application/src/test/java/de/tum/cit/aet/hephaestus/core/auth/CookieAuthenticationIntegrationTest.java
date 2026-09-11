@@ -94,7 +94,13 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
 
     @Test
     void noCredentialsIsUnauthorized() {
-        webTestClient.get().uri("/user").exchange().expectStatus().isUnauthorized();
+        webTestClient
+                .get()
+                .uri("/user")
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -110,7 +116,8 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
                 .header(HttpHeaders.COOKIE, cookieName + "=" + issued.token())
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         // Revoke every session for the account (the issuer persisted the issued_jwt row). The
         // @Modifying query needs an active, COMMITTED tx so the server thread's next read sees it.
@@ -125,7 +132,8 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
                 .header(HttpHeaders.COOKIE, cookieName + "=" + issued.token())
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -142,7 +150,8 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
                 .headers(headers -> headers.setBearerAuth(issued.token()))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -154,7 +163,8 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
                 .header(HttpHeaders.COOKIE, cookieName + "=" + issued.token())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -167,7 +177,8 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
                 .headers(headers -> headers.setBearerAuth(issued.token()))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -178,7 +189,8 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
                 .headers(headers -> headers.setBearerAuth("invalid-token"))
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -223,7 +235,8 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
                 .header(HttpHeaders.COOKIE, cookieName + "=" + issued.token())
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     private record IssuedAccount(String token, long accountId) {}

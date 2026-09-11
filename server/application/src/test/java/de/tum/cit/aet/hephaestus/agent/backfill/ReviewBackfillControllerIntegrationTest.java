@@ -119,9 +119,9 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
     void aCancelledCampaignCannotBeRestarted() {
         Workspace workspace = setupWorkspace("backfill-restart");
         String runId = preflight(workspace);
-        patchStatus(workspace, runId, "CANCELLED").expectStatus().isOk();
+        patchStatus(workspace, runId, "CANCELLED").expectStatus().isOk().expectBody(Void.class);
 
-        patchStatus(workspace, runId, "RUNNING").expectStatus().isEqualTo(409);
+        patchStatus(workspace, runId, "RUNNING").expectStatus().isEqualTo(409).expectBody(Void.class);
     }
 
     /**
@@ -133,7 +133,7 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
     void aSecondCampaignIsRefusedWhileOneIsUnderWay() {
         Workspace workspace = setupWorkspace("backfill-second");
         String runId = preflight(workspace);
-        patchStatus(workspace, runId, "RUNNING").expectStatus().isOk();
+        patchStatus(workspace, runId, "RUNNING").expectStatus().isOk().expectBody(Void.class);
 
         webTestClient
                 .post()
@@ -145,7 +145,8 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
                 .expectStatus()
                 .isEqualTo(409)
                 .expectHeader()
-                .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON);
+                .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody(Void.class);
     }
 
     /** Told at preflight, so the admin narrows the window instead of discovering the limit later. */
@@ -164,7 +165,8 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
                 .expectStatus()
                 .isBadRequest()
                 .expectHeader()
-                .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON);
+                .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody(Void.class);
     }
 
     @Test
@@ -181,7 +183,8 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
                         "artifactKind", "chat.conversation_thread", "fromAt", FROM.toString(), "toAt", TO.toString()))
                 .exchange()
                 .expectStatus()
-                .isBadRequest();
+                .isBadRequest()
+                .expectBody(Void.class);
     }
 
     /** A campaign can spend a workspace's whole monthly AI budget, so a plain member cannot start one. */
@@ -199,7 +202,8 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         webTestClient
                 .post()
@@ -209,7 +213,8 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
                 .bodyValue(window())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -225,7 +230,8 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
                 .headers(asAdminAccount())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     private String preflight(Workspace workspace) {

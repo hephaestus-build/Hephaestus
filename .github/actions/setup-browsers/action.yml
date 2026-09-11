@@ -11,6 +11,9 @@ runs:
       with:
         path: ~/.cache/ms-playwright
         key: ${{ runner.os }}-playwright-${{ steps.playwright.outputs.version }}
+    - name: Install Chromium system dependencies
+      shell: bash
+      run: node scripts/install-browser-deps.ts
     - name: Install Chromium
       shell: bash
-      run: vp -C webapp exec playwright install chromium --with-deps
+      run: vp -C webapp exec playwright install chromium

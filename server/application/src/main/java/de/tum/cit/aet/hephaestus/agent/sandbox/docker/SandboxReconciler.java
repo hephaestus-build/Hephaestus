@@ -15,15 +15,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Scheduled;
 
 /**
  * Detects and cleans up orphaned sandbox resources.
@@ -33,7 +30,7 @@ import org.springframework.scheduling.annotation.Scheduled;
  * <ol>
  *   <li><b>Startup</b> ({@link ApplicationReadyEvent}): resources left by a previous worker process
  *       are cleaned immediately.
- *   <li><b>Periodic</b> ({@link Scheduled}): orphaned containers and networks are cleaned up on a
+ *   <li><b>Periodic</b> (worker maintenance scheduler): orphaned containers and networks are cleaned up on a
  *       configurable interval.
  * </ol>
  *
@@ -91,7 +88,6 @@ public class SandboxReconciler {
     }
 
     /** On startup, clean only resources on this worker's Docker daemon. */
-    @EventListener(ApplicationReadyEvent.class)
     public void onStartup() {
         MDC.put(MDC_RECONCILER_TYPE, "startup");
         try {
@@ -137,10 +133,6 @@ public class SandboxReconciler {
     }
 
     /** Periodic sweep: clean up orphaned Docker resources. */
-    @Scheduled(
-            initialDelayString = "${hephaestus.sandbox.reconciliation-initial-delay-seconds:10}",
-            fixedDelayString = "${hephaestus.sandbox.reconciliation-interval-seconds:60}",
-            timeUnit = TimeUnit.SECONDS)
     public void periodicReconciliation() {
         MDC.put(MDC_RECONCILER_TYPE, "periodic");
         try {

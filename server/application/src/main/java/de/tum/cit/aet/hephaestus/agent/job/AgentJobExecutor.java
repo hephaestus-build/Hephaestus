@@ -44,6 +44,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
+import java.io.Serial;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -1406,6 +1407,9 @@ public class AgentJobExecutor {
     }
 
     private static final class TerminalPersistenceException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         private TerminalPersistenceException(Throwable cause) {
             super("Could not durably persist terminal job result and usage", cause);

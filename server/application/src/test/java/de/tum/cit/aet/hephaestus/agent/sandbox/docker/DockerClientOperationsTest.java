@@ -416,7 +416,6 @@ class DockerClientOperationsTest extends BaseUnitTest {
             CreateContainerResponse response = mock(CreateContainerResponse.class);
             when(dockerClient.createContainerCmd("alpine:latest")).thenReturn(cmd);
             when(cmd.withHostConfig(any())).thenReturn(cmd);
-            when(cmd.withNetworkMode(anyString())).thenReturn(cmd);
             when(cmd.withLabels(any())).thenReturn(cmd);
             when(cmd.withCmd(anyList())).thenReturn(cmd);
             when(cmd.withEnv(anyList())).thenReturn(cmd);
@@ -453,6 +452,9 @@ class DockerClientOperationsTest extends BaseUnitTest {
             String id = ops.createContainer(spec);
 
             assertThat(id).isEqualTo("new-ctr");
+            var hostConfig = org.mockito.ArgumentCaptor.forClass(com.github.dockerjava.api.model.HostConfig.class);
+            verify(cmd).withHostConfig(hostConfig.capture());
+            assertThat(hostConfig.getValue().getNetworkMode()).isEqualTo("net-123");
             verify(cmd).withCmd(List.of("echo", "hello"));
             verify(cmd).withHostName("agent");
             verify(cmd).withUser("1000:1000");
@@ -464,7 +466,6 @@ class DockerClientOperationsTest extends BaseUnitTest {
             CreateContainerResponse response = mock(CreateContainerResponse.class);
             when(dockerClient.createContainerCmd("alpine:latest")).thenReturn(cmd);
             when(cmd.withHostConfig(any())).thenReturn(cmd);
-            when(cmd.withNetworkMode(anyString())).thenReturn(cmd);
             when(cmd.withLabels(any())).thenReturn(cmd);
             when(cmd.exec()).thenReturn(response);
             when(response.getId()).thenReturn("new-ctr");

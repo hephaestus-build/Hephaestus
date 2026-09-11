@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdtempSync,
+	realpathSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -47,7 +55,10 @@ void test("production precompute limits", { skip: process.platform !== "linux" }
 		},
 	]) {
 		await t.test(scenario.name, async () => {
-			const root = mkdtempSync(join(tmpdir(), "precompute-limits-"));
+			// Resolved for the same reason as in `pi-precompute.spec.ts`: the runner is loaded as a
+			// module under a path granted to `--allow-fs-read`, and a `TMPDIR` reached through a symlink
+			// satisfies no such grant.
+			const root = realpathSync(mkdtempSync(join(tmpdir(), "precompute-limits-")));
 			try {
 				writeFileSync(
 					join(root, "pi-precompute.ts"),

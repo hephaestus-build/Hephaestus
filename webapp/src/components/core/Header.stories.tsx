@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "storybook/test";
+import { expect, fn } from "storybook/test";
 
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { expectNoPageOverflow } from "@/test/reflow";
@@ -60,6 +60,26 @@ export const Preview: Story = {
 		isLoading: false,
 		environmentName: "Preview",
 		isProduction: false,
+	},
+};
+
+export const PreviewOfAPullRequest: Story = {
+	args: {
+		isAuthenticated: true,
+		isLoading: false,
+		environmentName: "Preview",
+		isProduction: false,
+		pullRequest: 2042,
+	},
+	play: async ({ canvas }) => {
+		// Every preview is called "Preview", so the pill has to say which pull request it is of and
+		// take the reader there. Queried by the visible text, which is what names the link: an
+		// accessible name that omits it is one a speech-input user cannot say.
+		const link = await canvas.findByRole("link", { name: "Preview · PR #2042" });
+		await expect(link).toHaveAttribute(
+			"href",
+			"https://github.com/hephaestus-build/Hephaestus/pull/2042",
+		);
 	},
 };
 

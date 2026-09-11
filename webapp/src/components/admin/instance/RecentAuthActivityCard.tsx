@@ -11,7 +11,7 @@ import {
 } from "@/components/admin/audit/audit-format";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
 	Card,
 	CardAction,
@@ -49,14 +49,14 @@ export function RecentAuthActivityCard({
 				<CardTitle>Recent activity</CardTitle>
 				<CardDescription>Latest authentication and admin events</CardDescription>
 				<CardAction>
-					<Button
-						variant="ghost"
-						size="sm"
-						render={<Link to="/admin/audit" search={{ tab: "signins" }} />}
+					<Link
+						to="/admin/audit"
+						search={{ tab: "signins" }}
+						className={buttonVariants({ variant: "ghost", size: "sm" })}
 					>
 						View audit log
 						<ArrowRight aria-hidden />
-					</Button>
+					</Link>
 				</CardAction>
 			</CardHeader>
 			<CardContent>

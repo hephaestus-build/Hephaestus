@@ -250,7 +250,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageAuthEventView"
+                $ref: "#/components/schemas/PageResponseDTOAuthEventView"
           description: OK
       summary: "List auth audit events (paged, newest first)"
       tags:
@@ -437,7 +437,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageConfigAuditEntryView"
+                $ref: "#/components/schemas/PageResponseDTOConfigAuditEntryView"
           description: OK
       summary: "List admin configuration changes across workspaces (paged, newest\
         \ first)"
@@ -2369,7 +2369,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageAgentJob"
+                $ref: "#/components/schemas/PageResponseDTOAgentJob"
           description: Paginated job list
       summary: List agent jobs for a workspace
       tags:
@@ -2626,7 +2626,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageConfigAuditEntryView"
+                $ref: "#/components/schemas/PageResponseDTOConfigAuditEntryView"
           description: OK
       summary: "List this workspace's admin configuration changes (paged, newest first)"
       tags:
@@ -2826,7 +2826,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageSyncJob"
+                $ref: "#/components/schemas/PageResponseDTOSyncJob"
           description: OK
       summary: Paginated sync job history for one connection
       tags:
@@ -5320,7 +5320,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageObservationList"
+                $ref: "#/components/schemas/PageResponseDTOObservationList"
           description: Paginated observations returned
       summary: List observations for current user
       tags:
@@ -8890,15 +8890,17 @@ components:
       properties:
         completed:
           type: boolean
-        noticeText:
-          type: string
         noticeVersion:
           type: string
+          description: Version of the first-login wording the client must be rendering
         participateInResearch:
           type: boolean
+        researchOrganization:
+          type: string
+          description: "Organisation running the optional research programme, or null\
+            \ when this instance runs none"
       required:
       - completed
-      - noticeText
       - noticeVersion
       - participateInResearch
     Contributor:
@@ -10168,11 +10170,16 @@ components:
           type: string
         participateInResearch:
           type: boolean
+          description: "Required when the instance names a research organisation,\
+            \ omitted otherwise"
+        researchOrganization:
+          type: string
+          description: The organisation the research question named on screen; omitted
+            when it asked none
         termsAccepted:
           type: boolean
       required:
       - noticeVersion
-      - participateInResearch
       - termsAccepted
     FxRateInfo:
       type: object
@@ -11388,8 +11395,26 @@ components:
             \ it) — sync is unaffected."
       required:
       - accepted
-    PageAgentJob:
+    PageMetadata:
+      properties:
+        number:
+          type: integer
+          format: int64
+        size:
+          type: integer
+          format: int64
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int64
+    PageResponseDTOAgentJob:
       type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
       properties:
         content:
           type: array
@@ -11408,20 +11433,24 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: "#/components/schemas/Pageable"
         size:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
-    PageAuthEventView:
+    PageResponseDTOAuthEventView:
       type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
       properties:
         content:
           type: array
@@ -11440,20 +11469,24 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: "#/components/schemas/Pageable"
         size:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
-    PageConfigAuditEntryView:
+    PageResponseDTOConfigAuditEntryView:
       type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
       properties:
         content:
           type: array
@@ -11472,34 +11505,24 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: "#/components/schemas/Pageable"
         size:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
-    PageMetadata:
-      properties:
-        number:
-          type: integer
-          format: int64
-        size:
-          type: integer
-          format: int64
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int64
-    PageObservationList:
+    PageResponseDTOObservationList:
       type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
       properties:
         content:
           type: array
@@ -11518,20 +11541,24 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: "#/components/schemas/Pageable"
         size:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
-    PageSyncJob:
+    PageResponseDTOSyncJob:
       type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
       properties:
         content:
           type: array
@@ -11550,19 +11577,19 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: "#/components/schemas/Pageable"
         size:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
-    PageableObject:
+    Pageable:
       type: object
       properties:
         offset:
@@ -11577,7 +11604,7 @@ components:
         paged:
           type: boolean
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         unpaged:
           type: boolean
     PagedModelFeedbackItem:
@@ -13348,8 +13375,14 @@ components:
       properties:
         granted:
           type: boolean
+        noticeVersion:
+          type: string
+        researchOrganization:
+          type: string
+          description: The organisation this control named on screen
       required:
       - granted
+      - noticeVersion
     ResourceCounts:
       type: object
       description: Resource-level rollup for the connection overview badge
@@ -14620,7 +14653,7 @@ components:
       - slackUserId
       - workspaceName
       - workspaceSlug
-    SortObject:
+    Sort:
       type: object
       properties:
         empty:

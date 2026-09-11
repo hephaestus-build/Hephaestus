@@ -45,6 +45,8 @@ dependencies {
     runtimeOnly(libs.postgresql)
     runtimeOnly(libs.h2)
     compileOnly(libs.lombok)
+    // docker-java exposes Immutables metadata; consumers need annotations, not its processor.
+    compileOnly(libs.immutables.value.annotations)
     implementation(libs.spring.modulith.starter.core)
     testImplementation(libs.spring.modulith.starter.test)
     testImplementation(libs.spring.boot.starter.test) {
@@ -85,6 +87,9 @@ dependencies {
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
     annotationProcessor(libs.therapi.scribe)
     testCompileOnly(libs.lombok)
+    testCompileOnly(libs.immutables.value.annotations)
+    // PostgreSQL test types carry Checker Framework annotations that javac must resolve.
+    testCompileOnly(libs.checker.qual)
     testAnnotationProcessor(libs.lombok)
     testAnnotationProcessor(libs.therapi.scribe)
     errorprone(libs.errorprone.core)
@@ -106,7 +111,9 @@ tasks.processTestResources {
 
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(
-        listOf("-Xlint:all,-deprecation", "-XDaddTypeAnnotationsToSymbol=true")
+        // Spring, JPA and JUnit annotations are runtime metadata, not processor inputs. Javac's
+        // processing lint reports every unclaimed runtime annotation despite successful processing.
+        listOf("-Werror", "-Xlint:all,-processing", "-XDaddTypeAnnotationsToSymbol=true")
     )
     options.errorprone {
         disableAllChecks.set(true)
@@ -134,6 +141,9 @@ pmd {
 }
 
 tasks.withType<Pmd>().configureEach {
+    // Resolve platform types against the same JDK as the analysis task, not an implicit host JDK.
+    classpath =
+        files(classpath, javaLauncher.map { it.metadata.installationPath.file("lib/jrt-fs.jar") })
     reports.xml.required.set(true)
     val reportFile = reports.xml.outputLocation
     // Gradle counts rule violations, but PMD's recoverable analysis errors do not fail its task.
@@ -410,7 +420,9 @@ for ((taskName, command) in
                 "--changelog-file=${layout.buildDirectory.file("changelog_new.xml").get().asFile}",
                 "--reference-url=hibernate:spring:de.tum.cit.aet.hephaestus?dialect=org.hibernate.dialect.PostgreSQLDialect&hibernate.physical_naming_strategy=org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy&hibernate.implicit_naming_strategy=org.springframework.boot.hibernate.SpringImplicitNamingStrategy",
                 // Hibernate cannot emit unmapped tables, partitions, or scalar-id foreign keys.
-                "--exclude-objects=table:shedlock,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,foreignkey:sfk_.*",
+                // consent_notice and consent_decision.notice_sha256 are the archive this release
+                // stopped writing and the next release drops; remove both entries with that drop.
+                "--exclude-objects=table:shedlock,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,table:consent_notice,column:notice_sha256,foreignkey:sfk_.*",
             )
         }
     }

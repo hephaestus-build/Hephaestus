@@ -78,6 +78,10 @@ jobs:
           HEAD_SHA: ${{ steps.context.outputs.head_sha }}
           ENVIRONMENT: ${{ steps.context.outputs.environment }}
           PREVIEW_URL: ${{ steps.context.outputs.preview_url }}
+          # `create` puts both in the deployment: the title in the description that tells one
+          # environment from another, the URL in the payload that rides on every status event.
+          PR_TITLE: ${{ steps.context.outputs.pr_title }}
+          PR_URL: ${{ steps.context.outputs.pr_url }}
           SOURCE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
@@ -217,11 +221,12 @@ jobs:
             <sub>Every push redeploys this preview. Remove the `preview` label to tear it down.</sub>
 
       # An opted-in pull request must not learn about a red preview only from the Actions tab.
+      # Finalization rechecks opt-out after deployment; an inactive preview belongs to cleanup.
       - name: Report a failed preview
         if: >-
           always() &&
           steps.context.outputs.eligible == 'true' &&
-          steps.recheck.outputs.opted_out != 'true' &&
+          steps.finalize.outputs.final_state != 'inactive' &&
           steps.wait.outputs.state != 'success'
         uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
@@ -237,7 +242,10 @@ jobs:
             <sub>The next commit retries automatically.</sub>
 
       - name: Fail when the preview failed
-        if: steps.queue.outputs.deployment_uuid != '' && steps.wait.outputs.state != 'success'
+        if: >-
+          steps.queue.outputs.deployment_uuid != '' &&
+          steps.finalize.outputs.final_state != 'inactive' &&
+          steps.wait.outputs.state != 'success'
         env:
           FINAL_STATE: ${{ steps.wait.outputs.state || 'error' }}
         run: |

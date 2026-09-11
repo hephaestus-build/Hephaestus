@@ -66,14 +66,22 @@ const viteConfig = {
 	],
 	build: {
 		sourcemap: "hidden" as const,
-	},
-	optimizeDeps: {
-		exclude: ["storybook-static"],
+		rolldownOptions: {
+			output: {
+				codeSplitting: {
+					// Keep the shared renderer cacheable across application releases. Do not collect all
+					// dependencies: feature libraries belong to the routes that actually use them.
+					groups: [
+						{ name: "react-runtime", test: /[/]node_modules[/](react|react-dom|scheduler)[/]/ },
+					],
+				},
+			},
+		},
 	},
 	test: {
 		globals: true,
 		environment: "jsdom",
-		exclude: [...configDefaults.exclude, "e2e/**"],
+		exclude: [...configDefaults.exclude, "e2e/**/*.spec.ts"],
 		setupFiles: ["./src/test/setup-msw.ts"],
 		reporters: ["default", "junit"],
 		outputFile: {
@@ -88,6 +96,8 @@ const viteConfig = {
 	server: {
 		port: Number.parseInt(process.env.WEBAPP_PORT ?? "", 10) || 4200,
 		strictPort: true,
+		// Storybook writes a separate site inside this root; rebuilding it must not reload the app.
+		watch: { ignored: ["**/storybook-static/**"] },
 		fs: {
 			allow: [resolve(import.meta.dirname, "..")],
 		},

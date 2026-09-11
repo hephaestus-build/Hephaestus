@@ -79,9 +79,6 @@ export function ConfirmAccessDialog({
 								key={provider.registrationId ?? provider.displayName}
 								provider={provider}
 								onSignIn={onSignIn}
-								// The dialog is the full viewport at 320px, where a long provider name has nowhere
-								// to go; the sign-in page sizes its own buttons and keeps the single-line label.
-								className="h-auto min-h-9 whitespace-normal"
 							/>
 						))
 					)}

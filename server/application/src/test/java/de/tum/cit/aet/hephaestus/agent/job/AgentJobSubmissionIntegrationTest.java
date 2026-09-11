@@ -77,6 +77,9 @@ class AgentJobSubmissionIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository scmConnections;
+
     private Workspace workspace;
     private WorkspaceAgentBinding agentBinding;
     private Long prId;
@@ -86,7 +89,11 @@ class AgentJobSubmissionIntegrationTest extends BaseIntegrationTest {
     void setUp() {
         databaseTestUtils.cleanDatabase();
 
-        workspace = WorkspaceTestFixtures.activeWorkspace("submit-test");
+        workspace = WorkspaceTestFixtures.persistInstallationWorkspace(
+                workspaceRepository,
+                scmConnections,
+                WorkspaceTestFixtures.installationWorkspace(42L, "submit-test").withSlug("submit-test"),
+                42L);
         workspace.getFeatures().setPracticesEnabled(true);
         workspace = workspaceRepository.save(workspace);
 

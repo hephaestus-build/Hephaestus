@@ -58,6 +58,18 @@ Each role ships with a Spring profile YAML that flips the other two flags off an
 
 To deploy a worker pod set `SPRING_PROFILES_ACTIVE=prod,worker` and point `HEPHAESTUS_HUB_URL` at the app pod's WSS endpoint. See `docker/compose.app.yaml` for a working compose template.
 
+## Build-only profiles
+
+`specs` and `cds-training` generate artifacts; they are not deployment modes. They load the
+application contract without runtime bootstrap, container-image validation or image pulls. They
+supply no shared placeholder secrets. If an authentication component needs a key to initialize,
+the build uses the existing non-production ephemeral-key behavior, without a runtime warning.
+
+Never combine either profile with `prod`, including through the `worker-node` or `webhook-server`
+profile groups. Startup rejects that combination even when production secrets are configured.
+Production encryption requirements apply to Spring's expanded profiles, so selecting a production
+profile group requires the same keys as selecting `prod` directly.
+
 ## Configuration cheatsheet
 
 Each cell is the value a pod boots with when the operator sets **no** env var for it — the profile
@@ -107,6 +119,12 @@ worker row down the **Server** column: a server pod carries the worker role too,
 sandbox gateway on the same port and needs the same firewall treatment as a split-out worker. The
 webhook role turns the worker role off, so it opens no gateway — the three `sandbox.gateway` rows
 read `—` in that column.
+
+Sandbox maintenance follows the worker role in both split-out and single-container deployments.
+Idle mentor sessions and orphaned resources are cleaned periodically without enabling server-wide
+scheduled jobs on the worker. Stalled writes are checked on a separate thread so a slow Docker cleanup
+cannot delay their timeout. API-contract generation and CDS training do not run sandbox maintenance, server scheduled jobs or
+startup sync-job recovery.
 
 Only worker containers bind their HTTP and management endpoints to loopback: that is the `worker`
 overlay's doing, and a single-container install running all three roles still serves `/api/**` and

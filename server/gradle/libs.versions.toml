@@ -1,4 +1,6 @@
 [versions]
+immutables = "2.10.1"
+checker-qual = "3.55.1"
 pmd = "7.27.0"
 jacoco = "0.8.15"
 pitest = "1.30.0"
@@ -36,6 +38,8 @@ bcutil = "1.85"
 bcpkix = "1.85"
 
 [libraries]
+immutables-value-annotations = { module = "org.immutables:value-annotations", version.ref = "immutables" }
+checker-qual = { module = "org.checkerframework:checker-qual", version.ref = "checker-qual" }
 # Tool/BOM coordinates let Renovate identify versions consumed through plugin DSLs and BOM properties.
 netty-bom = { module = "io.netty:netty-bom", version.ref = "netty" }
 tomcat-embed-core = { module = "org.apache.tomcat.embed:tomcat-embed-core", version.ref = "tomcat" }

@@ -5,7 +5,7 @@ import { LandingGlow, LandingHephFigure, LandingSpark } from "./LandingVisuals";
 import styles from "./LandingVisuals.module.css";
 
 interface LandingCtaSectionProps {
-	onSignIn: (idpHint: string) => void;
+	onSignIn: () => void;
 }
 
 export function LandingCtaSection({ onSignIn }: LandingCtaSectionProps) {

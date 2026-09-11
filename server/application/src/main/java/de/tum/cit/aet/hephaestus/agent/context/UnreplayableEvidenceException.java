@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import java.io.Serial;
+
 /**
  * Review readiness cannot be re-evaluated for a recorded manifest because the source contract it was
  * captured under is no longer shipped.
@@ -10,6 +12,9 @@ package de.tum.cit.aet.hephaestus.agent.context;
  * evidence were malformed.
  */
 public class UnreplayableEvidenceException extends RuntimeException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     public UnreplayableEvidenceException(String message) {
         super(message);

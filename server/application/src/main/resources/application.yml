@@ -124,6 +124,12 @@ server:
 
 # Actuator on the management port; health probes for Kubernetes liveness/readiness.
 management:
+    metrics:
+        web:
+            server:
+                # The API has more route templates than Boot's default 100. The integration test
+                # checks this bounded budget against registered mappings and rejects raw URI tags.
+                max-uri-tags: 256
     tracing:
         # Opt in separately from private execution archives; raw prompts never enter span attributes.
         sampling:
@@ -205,6 +211,10 @@ springdoc:
 hephaestus:
     database:
         allow-insecure-remote: ${HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE:false}
+    consent:
+        # Names the organisation running the optional research programme. Unset means this deployment
+        # runs none, and first-login setup and account settings then omit the question entirely.
+        research-organization: ${HEPHAESTUS_RESEARCH_ORGANIZATION:}
     auth:
         issuer: ${HEPHAESTUS_AUTH_ISSUER:http://localhost:8080}
         audience: ${HEPHAESTUS_AUTH_AUDIENCE:hephaestus-spa}

@@ -63,6 +63,41 @@ function mutated(change: (stack: Stack) => void): Stack {
 	return copy;
 }
 
+void describe("the API path and the OAuth prefix", () => {
+	/** A stack whose webapp is served the API at `path` and whose appserver overrides the prefix. */
+	function addressed(path: string, override?: string): Stack {
+		return mutated((stack) => {
+			stack.services.webapp = {
+				environment: { APPLICATION_SERVER_URL: `https://pr1.example.com${path}` },
+				security_opt: ["no-new-privileges:true"],
+				cap_drop: ["ALL"],
+				deploy: { resources: { limits: { memory: "1" } } },
+			};
+			if (override !== undefined) {
+				stack.services.appserver.environment.HEPHAESTUS_AUTH_API_BASE_PATH = override;
+			}
+		});
+	}
+
+	// The server normalizes the prefix before it builds a URL with it, so these all mean `/api` and
+	// none of them is a mismatch.
+	for (const override of ["/api", "api", "/api/", "//api", "  /api  "]) {
+		void test(`accepts ${JSON.stringify(override)}, which the server reads as /api`, () => {
+			assert.deepEqual(findViolations(addressed("/api", override)), []);
+		});
+	}
+
+	void test("accepts the profile's own prefix when the stack overrides nothing", () => {
+		assert.deepEqual(findViolations(addressed("/api")), []);
+	});
+
+	void test("rejects a prefix the API is not served under, which breaks only sign-in", () => {
+		const violations = findViolations(addressed("/api", ""));
+		assert.equal(violations.length, 1);
+		assert.match(violations[0] ?? "", /sign-in would leave the API/);
+	});
+});
+
 void describe("preview stack sandbox", () => {
 	void test("accepts the stack as this repository ships it", () => {
 		assert.deepEqual(findViolations(sandboxed), []);

@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, it } from "node:test";
+
+import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
+import { isMap, isSeq, parseDocument } from "yaml";
 
 import {
 	assess,
@@ -364,10 +368,14 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 		ENVIRONMENT: "preview/pr-7",
 		PR_NUMBER: "7",
 		PREVIEW_URL: "https://pr7.example",
+		PR_TITLE: "feat(webapp): a readable title",
+		PR_URL: "https://github.example/pull/7",
 		SOURCE_RUN_URL: "https://github.example/runs/50",
 	});
 	let deploymentRef = "";
 	let initialState = "";
+	let description = "";
+	let payload: unknown;
 	const baseGitHub = makeGitHub();
 	const github: GitHubApi = {
 		...baseGitHub,
@@ -381,6 +389,8 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 				},
 				createDeployment: (params: Record<string, unknown>) => {
 					deploymentRef = String(params.ref);
+					description = String(params.description);
+					payload = params.payload;
 					assert.equal(params.task, "deploy:preview");
 					assert.equal(params.transient_environment, true);
 					return Promise.resolve({
@@ -397,6 +407,34 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 	assert.equal(deploymentRef, "head-sha");
 	assert.equal(initialState, "queued");
 	assert.equal(core.outputs.get("deployment_id"), "2");
+	// GitHub renders the environment name on the pull request and the description where every
+	// environment is listed together, so the description is what tells one preview from another.
+	assert.equal(description, "PR #7 · feat(webapp): a readable title");
+	assert.ok(typeof payload === "object" && payload !== null);
+	assert.equal(Reflect.get(payload, "pull_request_url"), "https://github.example/pull/7");
+	assert.equal(Reflect.get(payload, "title"), "feat(webapp): a readable title");
+});
+
+void it("refuses to open a deployment that would carry no title or pull request link", async () => {
+	// A deployment that describes itself as a bare number, or carries an empty link in the payload
+	// that rides on every status event, is worse than one that never opened: it reports success and
+	// identifies nothing.
+	for (const missing of ["PR_TITLE", "PR_URL"]) {
+		Object.assign(process.env, {
+			HEAD_SHA: "head-sha",
+			ENVIRONMENT: "preview/pr-7",
+			PR_NUMBER: "7",
+			PREVIEW_URL: "https://pr7.example",
+			PR_TITLE: "feat(webapp): a readable title",
+			PR_URL: "https://github.example/pull/7",
+			SOURCE_RUN_URL: "https://github.example/runs/50",
+		});
+		delete process.env[missing];
+		await assert.rejects(
+			() => create({ github: makeGitHub(), context: makeContext(), core: makeCore() }),
+			new RegExp(missing),
+		);
+	}
 });
 
 void it("stands down without failing when the head moved during preflight", async () => {
@@ -741,13 +779,17 @@ void describe("preview schema drift", () => {
 		const reason = core.outputs.get("reason") ?? "";
 		// The three things the author needs: which file, what goes wrong, and what to do about it.
 		assert.match(reason, /0001_drop\.xml/);
-		assert.match(reason, /cannot be checked/);
-		assert.match(reason, /have failed to start/);
+		assert.match(reason, /have failed to start against it/);
 		assert.match(reason, /Merge main in/);
-		// The refusal reports an observation. Claiming a cause is what it got wrong twice: first
-		// Hibernate validation, which `prod` disables, then a schema mismatch a differing blob does
-		// not prove. Neither phrasing may come back.
-		assert.doesNotMatch(reason, /would fail|never produced|no longer match/);
+		// Both mechanisms were reproduced against a restored database, so the reason names them, and
+		// names the step each one stops at: neither branch reaches a started application.
+		assert.match(reason, /Liquibase re-runs migrations/);
+		assert.match(reason, /startup then fails on a column/);
+		// It reports what has gone wrong, never what this branch is guaranteed to hit: a migration
+		// that only adds a table this branch never queries breaks nothing. Two causes it may not
+		// claim are Hibernate validation, which `prod` disables, and a schema mismatch that a
+		// differing blob does not prove.
+		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot|Hibernate/);
 		assert.equal(core.outputs.get("announce"), "true");
 	});
 
@@ -797,13 +839,16 @@ void describe("preview schema drift", () => {
 
 		assert.equal(core.outputs.get("eligible"), "false");
 		const reason = core.outputs.get("reason") ?? "";
-		// Every branch that has reached this was genuinely incompatible, so the reason says what will
-		// happen and how to fix it rather than reporting the comparison's own limit.
+		// At the comparison's limit, whether this branch carries every one of the default branch's
+		// migrations cannot be established — a saturated response does not even prove truncation. So
+		// the reason names the check that could not run, what branches behind on schema have run
+		// into, and how to clear it.
 		assert.match(reason, /behind main/);
+		assert.match(reason, /carries main's migrations/);
 		assert.match(reason, /cannot be checked/);
-		assert.match(reason, /have failed to start/);
+		assert.match(reason, /have failed to start against it/);
 		assert.match(reason, /Merge main in/);
-		assert.doesNotMatch(reason, /would fail|never produced|no longer match/);
+		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot/);
 	});
 
 	void it("ignores prose under the schema directory", async () => {
@@ -855,5 +900,121 @@ void describe("preview schema drift", () => {
 		});
 
 		assert.equal(core.outputs.get("eligible"), "true");
+	});
+});
+
+void describe("preview workflow reporting follows the finalized deployment", () => {
+	const workflow = parseDocument(readFileSync(".github/workflows/deploy-preview.yml", "utf8"));
+	function runs(name: string, outputs: Record<string, Record<string, string>>) {
+		const steps = workflow.getIn(["jobs", "deploy", "steps"]);
+		assert.ok(isSeq(steps));
+		const step = steps.items.find((item) => isMap(item) && item.get("name") === name);
+		assert.ok(isMap(step));
+		const condition = step.get("if");
+		assert.ok(typeof condition === "string");
+		const functions = new Map([
+			[
+				"always",
+				{ name: "always", minArgs: 0, maxArgs: 0, call: () => new data.BooleanData(true) },
+			],
+		]);
+		const expression = new Parser(
+			new Lexer(condition).lex().tokens,
+			["steps"],
+			[...functions.values()],
+		).parse();
+		const context: unknown = JSON.parse(
+			JSON.stringify({
+				steps: Object.fromEntries(
+					Object.entries(outputs).map(([id, values]) => [id, { outputs: values }]),
+				),
+			}),
+			data.reviver,
+		);
+		assert.ok(context instanceof data.Dictionary);
+		return new Evaluator(expression, context, functions).evaluate().coerceString() === "true";
+	}
+
+	for (const scenario of [
+		{ name: "ready preview", state: "success", pull, comment: false, fail: false, link: true },
+		{ name: "failed deployment", state: "failure", pull, comment: true, fail: true, link: false },
+		{ name: "deployment error", state: "error", pull, comment: true, fail: true, link: false },
+		{
+			name: "superseded preflight",
+			state: "inactive",
+			pull,
+			comment: false,
+			fail: false,
+			link: false,
+		},
+		{
+			name: "label removed before a failure",
+			state: "failure",
+			pull: unlabelled,
+			comment: false,
+			fail: false,
+			link: false,
+		},
+		{
+			name: "pull request closed before an error",
+			state: "error",
+			pull: { ...pull, state: "closed" },
+			comment: false,
+			fail: false,
+			link: false,
+		},
+	]) {
+		void it(scenario.name, async () => {
+			Object.assign(process.env, {
+				DEPLOYMENT_ID: "2",
+				DESCRIPTION: "Deployment finished",
+				ENVIRONMENT: "preview/pr-7",
+				FINAL_STATE: scenario.state,
+				LOG_URL: "https://coolify.example/logs/2",
+				PREVIEW_URL: "https://pr7.example",
+				PR_NUMBER: "7",
+				SOURCE_RUN_URL: "https://github.example/runs/50",
+			});
+			const core = makeCore();
+			await finalize({
+				github: makeGitHub({ resolvedPull: scenario.pull }),
+				context: makeContext(),
+				core,
+			});
+			const outputs = {
+				context: { eligible: "true" },
+				recheck: { proceed: scenario.state === "inactive" ? "false" : "true" },
+				queue: { deployment_uuid: scenario.state === "inactive" ? "" : "deployment" },
+				wait: { state: scenario.state === "inactive" ? "" : scenario.state },
+				finalize: Object.fromEntries(core.outputs),
+			};
+			assert.equal(runs("Report a failed preview", outputs), scenario.comment);
+			assert.equal(runs("Fail when the preview failed", outputs), scenario.fail);
+			assert.equal(runs("Publish the preview link", outputs), scenario.link);
+		});
+	}
+
+	void it("still reports a real failure before finalization or queueing completes", () => {
+		const outputs = {
+			context: { eligible: "true" },
+			recheck: {},
+			queue: {},
+			wait: {},
+			finalize: {},
+		};
+		assert.equal(runs("Report a failed preview", outputs), true);
+		assert.equal(runs("Publish the preview link", outputs), false);
+		assert.equal(runs("Fail when the preview failed", outputs), false);
+		assert.equal(
+			runs("Fail when the preview failed", {
+				...outputs,
+				queue: { deployment_uuid: "deployment" },
+			}),
+			true,
+		);
+		assert.equal(
+			runs("Report a failed preview", { ...outputs, context: { eligible: "false" } }),
+			false,
+		);
 	});
 });

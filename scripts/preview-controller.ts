@@ -248,11 +248,11 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		}
 	}
 
-	// A preview restores the default branch's schema into an application built from this branch, and
-	// the application boots with `ddl-auto: validate`. A branch missing one of the default branch's
-	// migrations may therefore map entities the restored database no longer has. Saying so here
-	// costs one comparison; discovering it costs a deployment, ten minutes, and a container that
-	// exits its healthcheck with nothing on the pull request to explain it.
+	// A preview restores the default branch's database into an application built from this branch, so
+	// a branch missing one of the default branch's migrations runs against a database built from a
+	// changelog other than its own. Checking that here costs one comparison and can name the reason
+	// on the pull request. Leaving it to the deployment costs the deployment, and the failure it
+	// reports says only that the preview did not come up.
 	//
 	// It sits after the checks above on purpose: a head that already has a live preview needs no
 	// deployment, and refusing here would replace a working preview's comment with a refusal.
@@ -262,23 +262,31 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		basehead: `${pull.head.sha}...${defaultBranch}`,
 	});
 	const behindFiles = behind.data.files ?? [];
-	// The comparison reports at most COMPARE_FILE_LIMIT files and flags no truncation, so a saturated
-	// response cannot be read as "no migration is missing".
+	// The comparison reports at most COMPARE_FILE_LIMIT files and flags no truncation. A response at
+	// that count may be complete or cut off, and nothing distinguishes them, so it cannot be read as
+	// "no migration is missing".
 	//
-	// What these messages may claim is bounded by what is actually known. Previews of branches behind
-	// on schema have failed — the container never became healthy — but the mechanism is not
-	// established: `prod` sets `ddl-auto: none`, so Hibernate does not validate, and the earlier
-	// claim that it did was wrong. Liquibase runs the branch's own changelog over the restored dump,
-	// and the preview's PostgreSQL image is built from the branch's commit while the dump comes from
-	// the default branch's server, so a version skew is possible too. Until one is demonstrated the
-	// reason states the observation and the remedy, not a cause.
+	// What these messages may claim is bounded by what is actually known. Two mechanisms are, each
+	// reproduced by booting a released branch image against a database restored from the default
+	// branch. A branch from before a changelog was rewritten does not find its changeset ids
+	// recorded, so Liquibase re-runs those migrations and PostgreSQL refuses the relation that
+	// already exists. A branch missing a migration that dropped a column its entities still map
+	// passes Liquibase untouched and gets as far as a started web server, then fails a startup query
+	// for that column — `prod` sets `ddl-auto: none`, so nothing validates the mapping ahead of it.
+	// Both end in a container that never finished starting, at different steps, and the reason keeps
+	// the steps apart.
+	//
+	// Neither makes every missing migration fatal: one that only adds a table this branch never
+	// queries is harmless, and two changelogs can reach one schema by different text. So the reason
+	// names the mechanisms as what branches in this state have run into, never as what this branch
+	// is guaranteed to hit.
 	if (behindFiles.length >= COMPARE_FILE_LIMIT) {
 		return skip(
-			`PR #${number} is ${behindFiles.length}+ files behind ${defaultBranch} — too many for GitHub ` +
-				`to compare in full, so whether this branch still matches ${defaultBranch}'s schema ` +
-				`cannot be checked. A preview restores ${defaultBranch}'s database, and previews of ` +
-				`branches behind on schema have failed to start. Merge ${defaultBranch} in; the next ` +
-				`push previews automatically.`,
+			`PR #${number} is ${behindFiles.length} files behind ${defaultBranch}, the most one GitHub ` +
+				`comparison reports, so whether this branch still carries ${defaultBranch}'s ` +
+				`migrations cannot be checked. A preview restores ${defaultBranch}'s database, and ` +
+				`branches behind on schema have failed to start against it. Merge ${defaultBranch} ` +
+				`in; the next push previews automatically.`,
 		);
 	}
 	for (const file of behindFiles) {
@@ -288,14 +296,16 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		// present here under a different commit, so the blob decides, not the ancestry.
 		//
 		// A differing blob is still only unverifiable, never proof: two changelogs can reach the same
-		// schema by different text. The reason says so rather than asserting a mismatch it cannot
-		// demonstrate — the same overreach that claimed Hibernate validation, one sentence along.
+		// schema by different text. So the reason reports what branches in this state have run into
+		// and stops short of asserting a mismatch this comparison cannot demonstrate.
 		if (await branchHasBlob(github, owner, repo, pull.head.sha, file)) continue;
 		return skip(
 			`PR #${number} does not have ${defaultBranch}'s \`${file.filename}\`. A preview restores ` +
-				`${defaultBranch}'s database, so whether this branch matches that schema cannot be ` +
-				`checked, and previews in that state have failed to start. Merge ${defaultBranch} in; ` +
-				`the next push previews automatically.`,
+				`${defaultBranch}'s database, and branches in that state have failed to start against ` +
+				`it: Liquibase re-runs migrations that database has no record of and stops on a ` +
+				`relation that already exists, or Liquibase passes and startup then fails on a column ` +
+				`one of those migrations dropped. Merge ${defaultBranch} in; the next push previews ` +
+				`automatically.`,
 		);
 	}
 
@@ -370,12 +380,15 @@ const create = async ({ github, context, core }: ControllerInput): Promise<void>
 	const headSha = requiredEnv(process.env, "HEAD_SHA");
 	const environment = requiredEnv(process.env, "ENVIRONMENT");
 	const number = requiredPositiveInteger(process.env, "PR_NUMBER");
-	const title = process.env.PR_TITLE ?? "";
+	// Required, not defaulted. Every pull request has both, so a caller without them is a caller
+	// with a bug, and a deployment that opens anyway identifies nothing while looking correct.
+	const title = requiredEnv(process.env, "PR_TITLE");
+	const pullRequestUrl = requiredEnv(process.env, "PR_URL");
 	const previewUrl = requiredEnv(process.env, "PREVIEW_URL");
 	// The deployments page lists every environment together, where `preview/pr-2042` alone says
 	// nothing about what is in it. The title is what tells one preview from another at a glance;
 	// GitHub renders this as plain text, so the link lives in the payload rather than here.
-	const described = title ? `PR #${number} · ${title}` : `PR #${number}`;
+	const described = `PR #${number} · ${title}`;
 	const response = await github.rest.repos.createDeployment({
 		owner,
 		repo,
@@ -389,7 +402,7 @@ const create = async ({ github, context, core }: ControllerInput): Promise<void>
 		// a future notifier — can reach the pull request and the preview without another API call.
 		payload: {
 			pull_request: number,
-			pull_request_url: process.env.PR_URL ?? "",
+			pull_request_url: pullRequestUrl,
 			title,
 			preview_url: previewUrl,
 			head_sha: headSha,

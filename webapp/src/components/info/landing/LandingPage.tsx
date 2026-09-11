@@ -5,7 +5,7 @@ import { LandingHeroSection } from "./LandingHeroSection";
 import { LandingProjectOriginsSection } from "./LandingProjectOriginsSection";
 
 interface LandingPageProps {
-	onSignIn: (idpHint: string) => void;
+	onSignIn: () => void;
 }
 
 export function LandingPage({ onSignIn }: LandingPageProps) {

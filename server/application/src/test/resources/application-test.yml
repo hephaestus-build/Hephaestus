@@ -15,12 +15,16 @@ spring:
         hikari:
             maximum-pool-size: 10
             minimum-idle: 2
-            max-lifetime: 120000 # 2 minutes (shorter for faster cleanup)
             connection-timeout: 5000 # 5 seconds (fail fast)
             idle-timeout: 30000 # 30 seconds (faster cleanup)
             validation-timeout: 3000 # 3 seconds
             leak-detection-threshold: 5000 # 5 seconds for leak detection
             connection-test-query: SELECT 1
+
+    sql:
+        init:
+            mode: always
+            schema-locations: classpath:db/auth-event-sequence.sql
 
     # JPA configuration for tests
     # Use 'create' instead of 'create-drop': the Testcontainer is ephemeral so
@@ -28,6 +32,7 @@ spring:
     # trying to DROP against the same container during JVM shutdown, the cumulative
     # connection-timeout delays can hold the test JVM open after execution has finished.
     jpa:
+        defer-datasource-initialization: true
         hibernate:
             ddl-auto: create
         show-sql: false

@@ -499,7 +499,8 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         Workspace purged = workspaceRepository.findById(workspace.getId()).orElseThrow();
         assertThat(purged.getStatus()).isEqualTo(Workspace.WorkspaceStatus.PURGED);
@@ -528,7 +529,8 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         Workspace unchanged = workspaceRepository.findById(workspace.getId()).orElseThrow();
         assertThat(unchanged.getStatus()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);

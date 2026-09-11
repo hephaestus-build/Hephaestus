@@ -776,18 +776,17 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
         return resp;
     }
 
-    @SafeVarargs
     private void mockSequentialExecute(
             HttpGraphQlClient client, ClientGraphQlResponse first, ClientGraphQlResponse... rest) {
         HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
         when(client.documentName(anyString())).thenReturn(requestSpec);
         when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
 
-        @SuppressWarnings("unchecked")
-        Mono<ClientGraphQlResponse>[] restMonos = new Mono[rest.length];
-        for (int i = 0; i < rest.length; i++) {
-            restMonos[i] = Mono.just(rest[i]);
+        var responses = when(requestSpec.execute()).thenReturn(Mono.just(first));
+
+        for (ClientGraphQlResponse response : rest) {
+
+            responses = responses.thenReturn(Mono.just(response));
         }
-        when(requestSpec.execute()).thenReturn(Mono.just(first), restMonos);
     }
 }

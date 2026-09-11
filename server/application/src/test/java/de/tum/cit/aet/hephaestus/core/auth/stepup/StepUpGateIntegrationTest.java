@@ -18,7 +18,6 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -29,7 +28,6 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * <p>The bearer path is deliberate: an API client that never loads the SPA must be refused identically,
  * so the gate cannot be a property of the dialog.
  */
-@Sql(scripts = "/db/auth-event-sequence.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
@@ -89,7 +87,8 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .bodyValue(Map.of("appRole", "APP_ADMIN"))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         assertThat(authEventRepository.findByAccountSince(adminId, Instant.now().minus(Duration.ofMinutes(5))))
                 .singleElement()
@@ -133,7 +132,8 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .bodyValue(Map.of("appRole", "APP_ADMIN"))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         assertThat(accountRepository.findById(victimId))
                 .get()
@@ -152,7 +152,8 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .headers(h -> h.setBearerAuth(tokenFor(admin, staleSignIn())))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
     }
 
     private Instant staleSignIn() {

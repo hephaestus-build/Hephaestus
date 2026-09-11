@@ -115,6 +115,8 @@ jobs:
       statuses: write
     env:
       PREVIEW_URL: hephaestus-build-storybook-pr-${{ github.event.number }}.surge.sh
+      # Temporary maintainer-approved budget pause; UTC expiry restores enforcement automatically.
+      CHROMATIC_PAUSED_UNTIL: "2026-09-30"
       CHROMATIC_POLICY_SKIP: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || startsWith(github.head_ref || github.ref_name, 'dependabot/') || startsWith(github.head_ref || github.ref_name, 'renovate/') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -141,11 +143,14 @@ jobs:
         run: |
           vp run --filter webapp build-storybook
           test -s webapp/storybook-static/preview-stats.json
+      - name: Clear previous Chromatic evidence
+        id: visual_policy
+        run: node scripts/report-chromatic.ts --clear
       - name: Chromatic visual testing
         id: chromatic
         continue-on-error: true
         if: >-
-          success() && env.CHROMATIC_POLICY_SKIP != 'true'
+          success() && env.CHROMATIC_POLICY_SKIP != 'true' && steps.visual_policy.outputs.paused != 'true'
         uses: chromaui/action@2a0b63f30233c48591844a46d451b9cf68128186 # v18.7.2
         with:
           projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
@@ -157,8 +162,9 @@ jobs:
           autoAcceptChanges: false
           exitZeroOnChanges: false
           exitOnceUploaded: false
-          logLevel: info
-          junitReport: true
+          # Debug log files contain signed URLs; retain structured test evidence instead.
+          logLevel: warn
+          junitReport: chromatic-report.xml
         env:
           CHROMATIC_BRANCH: ${{ github.head_ref || github.ref_name }}
           CHROMATIC_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -180,8 +186,7 @@ jobs:
       - name: Deploy public Storybook preview
         id: storybook_preview
         if: >-
-          github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
-          startsWith(steps.chromatic.outputs.storybookUrl, 'http')
+          success() && github.event_name == 'pull_request' && env.CHROMATIC_POLICY_SKIP != 'true'
         env:
           SURGE_TOKEN: ${{ secrets.SURGE_TOKEN }}
         run: ./node_modules/.bin/surge ./webapp/storybook-static "$PREVIEW_URL" --token "$SURGE_TOKEN"
@@ -190,17 +195,20 @@ jobs:
         run: >-
           node scripts/render-preview-comment.ts storybook webapp/storybook-static
           "https://$PREVIEW_URL"
-          ${{ github.event.pull_request.base.sha }} "$RUNNER_TEMP/storybook-preview.md"
+          ${{ github.event.pull_request.base.sha }} "$RUNNER_TEMP/storybook-preview.json"
       - name: Publish Storybook preview links
         if: steps.storybook_preview.outcome == 'success'
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PREVIEW_COMMENT_PATH: ${{ runner.temp }}/storybook-preview.json
         with:
-          header: storybook-preview
-          path: ${{ runner.temp }}/storybook-preview.md
+          script: |
+            const { publishPreviewComments } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/publish-preview-comments.ts`);
+            await publishPreviewComments({ github, context, kind: "storybook", path: process.env.PREVIEW_COMMENT_PATH });
       - name: Create Storybook status check
         if: >-
-          success() && startsWith(steps.chromatic.outputs.storybookUrl, 'http') &&
-          (github.event_name != 'pull_request' || steps.storybook_preview.outcome == 'success')
+          success() && ((github.event_name == 'pull_request' && steps.storybook_preview.outcome == 'success') ||
+          (github.event_name != 'pull_request' && startsWith(steps.chromatic.outputs.storybookUrl, 'http')))
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           TARGET_URL: https://${{ env.PREVIEW_URL }}
@@ -226,15 +234,33 @@ jobs:
           name: "Test Results - Webapp Stories"
           path: "webapp/test-results/junit-storybook.xml"
           reporter: java-junit
+          list-suites: failed
+          list-tests: failed
+          # Source lookup is needed only for failure annotations, not successful summaries.
+          max-annotations: ${{ (job.status == 'failure' || steps.tests.outcome == 'failure') && 50 || 0 }}
           fail-on-error: false
       - name: Upload Chromatic test results
         if: always() && startsWith(steps.chromatic.outputs.storybookUrl, 'http')
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
           name: "Test Results - Chromatic"
-          path: "webapp/chromatic-build-*.xml"
+          path: "webapp/chromatic-report.xml"
           reporter: java-junit
+          list-suites: failed
+          list-tests: failed
+          # Source lookup is needed only for failure annotations, not successful summaries.
+          max-annotations: ${{ (job.status == 'failure' || steps.chromatic.outcome == 'failure') && 50 || 0 }}
           fail-on-error: false
+      - name: Retain full Storybook and visual test diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: storybook-reports-${{ github.run_attempt }}
+          path: |
+            webapp/test-results
+            webapp/chromatic-report.xml
+          retention-days: 14
+          if-no-files-found: warn
       - name: Evaluate stories checks
         if: always()
         env:

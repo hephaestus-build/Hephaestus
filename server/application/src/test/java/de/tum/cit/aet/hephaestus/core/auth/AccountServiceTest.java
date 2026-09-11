@@ -193,7 +193,7 @@ class AccountServiceTest extends BaseUnitTest {
         assertThatThrownBy(() -> service.adminSetRole(2L, "BOGUS", 1L))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
-                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY));
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT));
 
         verify(accountRepository, never()).save(any());
         verifyNoInteractions(auditWriter);

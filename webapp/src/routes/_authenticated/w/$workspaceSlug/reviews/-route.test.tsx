@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -46,10 +46,7 @@ describe("review activity routes", () => {
 
 		// With practices off the surface does not exist here, so the reader ends up on the workspace
 		// home rather than on a page whose only content could be an explanation of its own emptiness.
-		await vi.waitFor(
-			() => expect(router.state.location.pathname).toBe("/w/acme"),
-			ROUTE_RENDER_WAIT,
-		);
+		await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme"), ROUTE_RENDER_WAIT);
 	});
 
 	it("lists recorded work for a member", async () => {
@@ -101,7 +98,7 @@ it("changes the work filter without resetting scroll", async () => {
 	const scroll = vi.spyOn(window, "scrollTo").mockReturnValue(undefined);
 	await userEvent.click(control);
 	await userEvent.click(await screen.findByRole("option", { name: "Issues" }));
-	await vi.waitFor(() => expect(router.state.location.search).toMatchObject({ kind: "scm.issue" }));
+	await waitFor(() => expect(router.state.location.search).toMatchObject({ kind: "scm.issue" }));
 	expect(scroll).not.toHaveBeenCalled();
 	scroll.mockRestore();
 });

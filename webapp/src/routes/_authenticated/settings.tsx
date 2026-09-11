@@ -1,5 +1,6 @@
 import { type DefaultError, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { toast } from "sonner";
 
 import {
@@ -42,6 +43,15 @@ function RouteComponent() {
 	const userSettingsQueryKey = getUserSettingsQueryKey();
 	const consentQuery = useQuery(getConsentStatusOptions({}));
 	const accountConsent = consentQuery.data;
+	const navigate = useNavigate();
+
+	// Setup can fall due again while this page is open — a renamed research organisation asks its
+	// question afresh. The parent guard only runs on navigation, so without this the reader is left on
+	// a page whose controls have quietly gone and whose writes the server has started refusing.
+	useEffect(() => {
+		if (accountConsent?.completed === false)
+			void navigate({ to: "/consent", search: { returnTo: "/settings" }, replace: true });
+	}, [accountConsent?.completed, navigate]);
 
 	const {
 		data: settings,
@@ -109,11 +119,24 @@ function RouteComponent() {
 		onSuccess: (status) => {
 			queryClient.setQueryData(getConsentStatusQueryKey({}), status);
 		},
-		onError: () => toast.error("Failed to update research participation. Please try again."),
+		onError: () => {
+			// The refusal may be the notice moving on — a renamed research organisation, or setup owed
+			// again. Re-read it so the control reflects what this instance is now asking.
+			void queryClient.invalidateQueries({ queryKey: getConsentStatusQueryKey({}) });
+			toast.error("Failed to update research participation. Please try again.");
+		},
 	});
 
+	// Echo the notice and organisation this page rendered: a settings tab left open across a change of
+	// research organisation would otherwise record a decision about one the reader never saw.
 	const handleResearchToggle = (checked: boolean) =>
-		researchConsentMutation.mutate({ body: { granted: checked } });
+		researchConsentMutation.mutate({
+			body: {
+				granted: checked,
+				noticeVersion: accountConsent?.noticeVersion ?? "",
+				researchOrganization: accountConsent?.researchOrganization,
+			},
+		});
 
 	// After deletion: end the session. `logout()` performs a full reload to "/",
 	// so no further navigation is needed here.
@@ -240,8 +263,17 @@ function RouteComponent() {
 				onTogglePracticeFeedback: handlePracticeFeedbackToggle,
 				isLoading: updateSettingsMutation.isPending,
 			}}
-			showResearchSection
+			// No configured organisation means no study on this deployment, and a switch for a study
+			// nobody runs is a promise the instance cannot keep.
+			// Setup owns the question until it is answered for the organisation currently named; a switch
+			// before that would stand in for a consent this account has not given. A failed read still
+			// shows the section, because its Retry is the only way to find out whether there is one.
+			showResearchSection={
+				consentQuery.isError ||
+				(accountConsent?.researchOrganization !== undefined && accountConsent.completed)
+			}
 			researchProps={{
+				organization: accountConsent?.researchOrganization ?? "",
 				participateInResearch: accountConsent?.participateInResearch ?? false,
 				onToggleResearch: handleResearchToggle,
 				isLoading: consentQuery.isLoading || researchConsentMutation.isPending,

@@ -3,6 +3,10 @@ name: Security
 on:
   workflow_call:
     inputs:
+      database-artifact:
+        description: "Immutable advisory database artifact ID selected by this CI run"
+        type: string
+        required: true
       should_skip:
         description: "Whether to skip the workflow"
         required: false
@@ -45,6 +49,8 @@ jobs:
       # A blocking gate inherits Trivy's database availability as a hard dependency, so the
       # retries and the mirror fallback live in one action rather than in each caller.
       - uses: ./.github/actions/download-trivy-db
+        with:
+          database-artifact: ${{ inputs.database-artifact }}
 
       - name: Enforce the release vulnerability policy on the pinned digests
         run: node scripts/scan-upstream-images.ts reports
@@ -138,6 +144,9 @@ jobs:
         continue-on-error: true
         uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c # v3.97.4
         with:
+          # The action pins the wrapper, not its scanner: the version input otherwise uses latest.
+          image: ghcr.io/trufflesecurity/trufflehog
+          version: 3.97.4@sha256:562bc231afa9de3d04de44cfe624252b08207de1fc3cebc5e7ed92bed7f279e4
           path: ./
           base: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || '' }}
           head: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}

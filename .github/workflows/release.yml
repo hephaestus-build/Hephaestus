@@ -341,6 +341,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Smoke-test the blessed install
+        shell: bash
         env:
           ARCHITECTURE: ${{ matrix.architecture }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -15,8 +15,10 @@ export function currentUserQueryOptions() {
 		...getCurrentUserOptions(),
 		retry: false,
 		staleTime: QUERY_STALE_TIME_MS,
-		queryFn: async ({ signal }) => {
-			const { data, error, response } = await getCurrentUser({ signal });
+		// Route guards await this shared request even when AuthProvider has no mounted observer, so
+		// its lifetime is deliberately independent of observer unmounts — hence no `signal`.
+		queryFn: async () => {
+			const { data, error, response } = await getCurrentUser();
 			if (data !== undefined && response?.ok) return data;
 			// The generated client's error body need not contain the actual HTTP status.
 			throw new Error("Could not verify your session.", { cause: response ?? error });
@@ -82,7 +84,6 @@ function fullyDecode(value: string): string {
 		try {
 			decoded = decodeURIComponent(current);
 		} catch {
-			// Stop decoding malformed percent escapes.
 			return current;
 		}
 		if (decoded === current) {
@@ -113,7 +114,7 @@ export async function consentIsPending(queryClient: QueryClient): Promise<boolea
 		const status = await queryClient.query(getConsentStatusOptions({}));
 		return !status.completed;
 	} catch {
-		// An outage must not invent a consent obligation; the server still enforces the gate.
-		return false;
+		// Fail closed: `/consent` offers retry and sign-out, so holding the loader back is recoverable.
+		return true;
 	}
 }

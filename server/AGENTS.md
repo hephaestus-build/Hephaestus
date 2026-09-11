@@ -27,6 +27,9 @@ are not here: write code that reads like the file you are editing.
   `databaseTest` and `liveTest` each own their JUnit tag filter. Every non-live tier excludes `live`.
 - **`clean` is not cache-disabled.** Use `--no-build-cache` as well for a cold measurement.
   Configuration cache reuses task configuration; build cache reuses declared task outputs.
+- **Handwritten javac warnings fail compilation.** Application and test sources use `-Werror`;
+  generated clients stay in their separate module. Missing dependency annotation metadata belongs
+  on the needed compile-only classpath, not in lint suppressions or annotation processors.
 - **One build invocation per checkout at a time.** Gradle owns the module `build/` directories.
 - **Tests always execute when requested.** Test result caching and up-to-date skipping are disabled;
   PostgreSQL, containers and provider state are not content-addressed inputs. Compilation remains
@@ -81,11 +84,21 @@ Name tests `should[ExpectedBehavior]When[Condition]`. Controller-level integrati
 `WebTestClient` + `TestAuthUtils` — the identity comes from the mock JWT **token string**, not from an
 annotation.
 
+**Consume every HTTP response.** A `WebTestClient` status or header assertion does not consume its
+body. If the body is irrelevant to the assertion, finish with `.expectBody(Void.class)` so a large
+response cannot hold a pooled connection indefinitely. Body assertions already consume it; streaming
+tests own their subscription and cancellation explicitly. Use `.returnResult(Void.class)` when only
+response headers or cookies are needed; a non-void `returnResult` leaves the body subscription to you.
+
 **Rows written by earlier tests are already there.** Assert on the row you created, never on a count
 or on "the only" result, and never write cleanup that another test depends on having run.
 
 ## Things that bite
 
+- **Keep proxied methods overridable.** Spring's class-based proxies and Hibernate entity proxies
+  cannot intercept a `final` method. To avoid an overridable constructor call, use constructor-local
+  values or a private calculation helper instead; making the public method `final` can read
+  uninitialized proxy fields rather than the target's state.
 - **`Issue` is SINGLE_TABLE with `PullRequest` as a subclass.** A JPQL query over `Issue` therefore
   returns pull requests too. Any query that means "issues only" must say `WHERE TYPE(i) = Issue`
   explicitly — see `MentorContextQueryRepository` and `ReviewableArtifactOwnershipRepository`. A test
@@ -166,5 +179,5 @@ envelope to JetStream, all gated on `RuntimeRole.WEBHOOK_PROPERTY`. Configuratio
 
 Paketo Cloud Native Buildpacks with Application CDS; no `Dockerfile`. From `server/`:
 `./gradlew :application:bootJar`, then
-`pack build hephaestus/application-server --path application/build/libs/hephaestus-application-*.jar --descriptor application/project.toml --run-image <the run image pinned in .github/workflows/ci-build.yml>`.
+`pack build hephaestus/application-server --path application/build/libs/hephaestus-application-*.jar --descriptor application/project.toml --run-image <the run image pinned in .github/workflows/cicd.yml>`.
 Pinning and rationale: `docs/admin/buildpacks-cds-decision.md`.

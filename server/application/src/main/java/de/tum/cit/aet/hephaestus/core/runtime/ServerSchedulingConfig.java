@@ -16,15 +16,14 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  *
  * <p>{@code matchIfMissing=true} preserves ADR 0005's DX invariant: zero env vars → full monolith
  * boots with scheduling enabled.
- * The {@code specs} profile only introspects the HTTP contract and must not start background work.
+ * Build-only profiles introspect the HTTP contract or train the class archive and must not start background work.
  *
- * <p>Worker-side scheduled tasks (sandbox reconciler tick, interactive sandbox reaper, stdin
- * watchdog) are owned by the worker role: their hosting beans are wired only when
- * {@code DockerSandboxConfiguration} loads, which is itself gated by
- * {@code RuntimeRole.WORKER_PROPERTY}. No additional gating is needed there.
+ * <p>Worker-side sandbox maintenance is registered independently by
+ * {@code SandboxMaintenanceConfiguration}. Worker-only deployments do not enable this server-wide
+ * scheduler; the stalled-write watchdog has its own thread so Docker cleanup cannot delay it.
  */
 @Configuration(proxyBeanMethods = false)
-@Profile("!specs")
+@Profile("!specs & !cds-training")
 @ConditionalOnProperty(name = RuntimeRole.SERVER_PROPERTY, havingValue = "true", matchIfMissing = true)
 @EnableScheduling
 public class ServerSchedulingConfig {}

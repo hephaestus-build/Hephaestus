@@ -328,7 +328,8 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     private Practice persistPractice(Workspace targetWorkspace) {

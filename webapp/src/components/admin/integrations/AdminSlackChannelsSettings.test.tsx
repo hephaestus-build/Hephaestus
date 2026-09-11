@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -77,9 +77,11 @@ describe("AdminSlackChannelsSettings — reversible row actions swallow rejectio
 			fireEvent.click(await screen.findByRole("menuitem", { name: /^pause$/i }));
 
 			await waitFor(() => expect(onUpdateConsent).toHaveBeenCalledTimes(1));
-			// Flush the microtask queue — a genuinely unhandled rejection would have surfaced by now.
-			await new Promise((resolve) => {
-				setTimeout(resolve, 0);
+			// Let unhandled rejections surface on the next event-loop turn while React finishes closing the menu.
+			await act(async () => {
+				await new Promise((resolve) => {
+					setTimeout(resolve, 0);
+				});
 			});
 			expect(onRejection).not.toHaveBeenCalled();
 		} finally {
@@ -97,8 +99,10 @@ describe("AdminSlackChannelsSettings — reversible row actions swallow rejectio
 			fireEvent.click(await screen.findByRole("menuitem", { name: /set up again/i }));
 
 			await waitFor(() => expect(onRegisterChannel).toHaveBeenCalledTimes(1));
-			await new Promise((resolve) => {
-				setTimeout(resolve, 0);
+			await act(async () => {
+				await new Promise((resolve) => {
+					setTimeout(resolve, 0);
+				});
 			});
 			expect(onRejection).not.toHaveBeenCalled();
 		} finally {

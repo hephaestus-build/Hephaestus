@@ -13,6 +13,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.MapsId;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.io.Serial;
 import java.io.Serializable;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
@@ -109,6 +110,9 @@ public class TeamMembership implements Persistable<TeamMembership.Id> {
     @AllArgsConstructor
     @EqualsAndHashCode
     public static class Id implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         @Nullable
         private Long teamId;

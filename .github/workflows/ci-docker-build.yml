@@ -10,6 +10,14 @@ on:
       SENTRY_PROJECT:
         required: false
     inputs:
+      database-artifact:
+        description: "Immutable advisory database artifact ID selected by this CI run"
+        type: string
+        required: true
+      scan-images:
+        description: "Scan published images here unless the caller requires complete release evidence instead."
+        type: boolean
+        default: true
       should_skip:
         description: "Whether to skip the workflow"
         required: false
@@ -68,6 +76,7 @@ jobs:
       SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
       SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
     with:
+      database-artifact: ${{ inputs.database-artifact }}
       image-name: "hephaestus-build/webapp"
       docker-file: "./webapp/Dockerfile"
       docker-context: "."
@@ -78,6 +87,7 @@ jobs:
         COOLIFY_BRANCH=${{ github.head_ref || github.ref_name }}
       publish: ${{ inputs.publish }}
       single-arch: ${{ inputs.single_arch == 'true' }}
+      scan-images: ${{ inputs.scan-images }}
       labels: |
         org.opencontainers.image.title=Hephaestus Webapp
         org.opencontainers.image.description=Web client for Hephaestus
@@ -96,6 +106,7 @@ jobs:
       attestations: write
       artifact-metadata: write
     with:
+      database-artifact: ${{ inputs.database-artifact }}
       image-name: "hephaestus-build/agent-pi"
       docker-file: "./docker/agents/pi/Dockerfile"
       docker-context: "./docker/agents"
@@ -105,6 +116,7 @@ jobs:
         SOURCE_COMMIT=${{ github.sha }}
       publish: ${{ inputs.publish }}
       single-arch: ${{ inputs.single_arch == 'true' }}
+      scan-images: ${{ inputs.scan-images }}
       labels: |
         org.opencontainers.image.title=Hephaestus Agent - Pi
         org.opencontainers.image.description=Sandboxed Pi coding agent for AI-powered code review
@@ -123,6 +135,7 @@ jobs:
       attestations: write
       artifact-metadata: write
     with:
+      database-artifact: ${{ inputs.database-artifact }}
       image-name: "hephaestus-build/postgres"
       docker-file: "./docker/postgres/Dockerfile"
       docker-context: "./docker/postgres"
@@ -132,6 +145,7 @@ jobs:
         SOURCE_COMMIT=${{ github.sha }}
       publish: ${{ inputs.publish }}
       single-arch: ${{ inputs.single_arch == 'true' }}
+      scan-images: ${{ inputs.scan-images }}
       labels: |
         org.opencontainers.image.title=Hephaestus Postgres
         org.opencontainers.image.description=PostgreSQL + pg_partman for all environments (dev/preview/prod)
@@ -167,6 +181,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Verify each immutable subject before moving tags; see ci-cd.mdx § Shared setup actions.
       - name: Verify and tag unchanged images
         id: tag
         env:
