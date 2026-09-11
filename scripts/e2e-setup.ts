@@ -220,7 +220,9 @@ async function main(): Promise<void> {
 		await api("PUT", "/user/consent", {
 			noticeVersion: textField(consent, "noticeVersion", "consent status"),
 			termsAccepted: true,
-			participateInResearch: false,
+			// Only an instance that names a research organisation asks, and it rejects an answer to a
+			// question it never put.
+			...(typeof consent.researchOrganization === "string" && { participateInResearch: false }),
 		});
 	const accountId = idField(object(await api("GET", "/user"), "user"), "user");
 	const scmOrigin = config.provider === "github" ? "https://github.com" : config.serverUrl;

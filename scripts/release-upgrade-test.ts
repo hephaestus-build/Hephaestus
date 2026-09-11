@@ -175,7 +175,10 @@ async function completeTransparencyNotice(port: number, session: Session): Promi
 		body: JSON.stringify({
 			noticeVersion: statusBody.noticeVersion,
 			termsAccepted: true,
-			participateInResearch: false,
+			// Only an instance that names a research organisation asks, and it rejects an answer to a
+			// question it never put.
+			...("researchOrganization" in statusBody &&
+				typeof statusBody.researchOrganization === "string" && { participateInResearch: false }),
 		}),
 	});
 	if (!completed.ok)

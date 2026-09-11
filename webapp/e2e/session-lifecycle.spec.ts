@@ -240,18 +240,17 @@ test("exiting impersonation waits for a delayed renewal and restores the operato
 			.object({ id: z.number() })
 			.parse(await (await target.request.get(`${serverUrl}/user`)).json()).id;
 		const notice = z
-			.object({ noticeVersion: z.string() })
+			.object({ noticeVersion: z.string(), researchOrganization: z.string().optional() })
 			.parse(await (await target.request.get(`${serverUrl}/user/consent`)).json());
+		// This instance names no research organisation, so setup is the terms alone and a research
+		// answer would be an answer to a question it never put.
+		expect(notice.researchOrganization).toBeUndefined();
 		const targetCsrf = await accessCookie(target, "XSRF-TOKEN");
 		expect(
 			(
 				await target.request.put(`${serverUrl}/user/consent`, {
 					headers: { "X-XSRF-TOKEN": decodeURIComponent(targetCsrf.value) },
-					data: {
-						noticeVersion: notice.noticeVersion,
-						termsAccepted: true,
-						participateInResearch: false,
-					},
+					data: { noticeVersion: notice.noticeVersion, termsAccepted: true },
 				})
 			).status(),
 		).toBe(200);

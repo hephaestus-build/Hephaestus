@@ -767,9 +767,15 @@ export type ConnectionSyncStatus = {
 
 export type ConsentStatus = {
   completed: boolean;
-  noticeText: string;
+  /**
+   * Version of the first-login wording the client must be rendering
+   */
   noticeVersion: string;
   participateInResearch: boolean;
+  /**
+   * Organisation running the optional research programme, or null when this instance runs none
+   */
+  researchOrganization?: string;
 };
 
 /**
@@ -1505,7 +1511,14 @@ export type FeedbackSourceCount = {
 
 export type FirstLoginConsent = {
   noticeVersion: string;
-  participateInResearch: boolean;
+  /**
+   * Required when the instance names a research organisation, omitted otherwise
+   */
+  participateInResearch?: boolean;
+  /**
+   * The organisation the research question named on screen; omitted when it asked none
+   */
+  researchOrganization?: string;
   termsAccepted: boolean;
 };
 
@@ -3813,6 +3826,11 @@ export type RepositoryInfo = {
 
 export type ResearchConsent = {
   granted: boolean;
+  noticeVersion: string;
+  /**
+   * The organisation this control named on screen
+   */
+  researchOrganization?: string;
 };
 
 /**

@@ -8,4 +8,5 @@
     </preConditions>
     <include file="./changelog/0000000000000_baseline_v0_77_4.xml" relativeToChangelogFile="true"/>
     <include file="./changelog/1788884380638_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1789067582535_changelog.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

@@ -1,11 +1,12 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { toast } from "sonner";
 
-import { LoginCard } from "@/components/auth/LoginCard";
+import { LoginPage } from "@/components/auth/LoginPage";
+import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { ACCOUNT_DELETED_NOTICE_KEY } from "@/integrations/auth/account-deleted-notice";
 import { useAuth } from "@/integrations/auth/AuthContext";
-import { resolveCurrentUser, safeReturnTo } from "@/integrations/auth/guard";
+import { safeReturnTo } from "@/integrations/auth/guard";
 
 interface LoginSearch {
 	returnTo?: string;
@@ -18,29 +19,20 @@ export const Route = createFileRoute("/login")({
 		returnTo: typeof search.returnTo === "string" ? search.returnTo : undefined,
 		error: typeof search.error === "string" ? search.error : undefined,
 	}),
-	// Bounce already-authenticated users away from the login page to their intended
-	// destination (the validated ?returnTo, default "/"). Resolving through the query
-	// client means the first paint is correct (no login-card flash for signed-in users).
-	// This also closes the loop when the server lands an authenticated user back on /login.
-	beforeLoad: async ({ context, search }) => {
-		const user = await resolveCurrentUser(context.queryClient);
-		if (user) {
-			// `href` (not `to`) is the typed escape hatch for a runtime-validated internal path:
-			// it keeps type-checking on the target and, because safeReturnTo only ever returns a
-			// relative path, the router treats it as an SPA navigation (no full reload).
-			throw redirect({ href: safeReturnTo(search.returnTo) });
-		}
-	},
-	component: LoginPage,
+	component: LoginRoute,
 });
 
-function LoginPage() {
+function LoginRoute() {
+	const providers = useSignInProviders();
 	const { error, returnTo } = Route.useSearch();
-	const { login } = useAuth();
+	const { login, isAuthenticated } = useAuth();
+	const navigate = useNavigate();
 
-	// One-shot confirmation after self-deletion: the delete flow signs out + reloads here, so a toast
-	// fired before the reload would be lost. We stash a flag through the reload instead and announce
-	// the real outcome (scheduled deletion, signed out everywhere) once on arrival.
+	useEffect(() => {
+		if (isAuthenticated) void navigate({ href: safeReturnTo(returnTo), replace: true });
+	}, [isAuthenticated, navigate, returnTo]);
+
+	// Account deletion reloads this route; the confirmation must survive that reload.
 	useEffect(() => {
 		try {
 			if (sessionStorage.getItem(ACCOUNT_DELETED_NOTICE_KEY) === "1") {
@@ -50,27 +42,13 @@ function LoginPage() {
 				);
 			}
 		} catch {
-			// sessionStorage unavailable (private mode) — the notice is best-effort.
+			// Storage can be unavailable; confirmation must not block sign-in.
 		}
 	}, []);
 
-	// Pass the validated ?returnTo destination through to the kickoff so the server echoes it
-	// back into the SPA callback — without this the user would be returned to /login itself.
 	return (
-		<LoginCard
-			title="Welcome to Hephaestus"
-			// Two sentences, not five: the detail belongs in the transparency notice. But the fact that
-			// signing in shares a provider identity has to be here, because it is the decision being
-			// made on this page — a notice shown afterwards cannot inform it.
-			description={
-				<span className="space-y-2">
-					<span className="block">Your AI mentor for growing as a software engineer.</span>
-					<span className="block">
-						Signing in shares your provider identity with TUM. What happens with it is explained
-						next, before anything is analysed.
-					</span>
-				</span>
-			}
+		<LoginPage
+			options={providers}
 			error={error}
 			onSignIn={(registrationId) => login(registrationId, returnTo)}
 			devReturnTo={returnTo}
