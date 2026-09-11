@@ -685,8 +685,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         @Test
         @DisplayName("a screenshot neither spends the budget nor ends the walk the source is waiting in")
         void shouldStageSourceRatherThanBinaries() throws Exception {
-            // A budget two thirds the size of the image: staging the image would leave nothing for the
-            // text that follows it, so what survives here is exactly what the exclusion buys.
+            // The image fits the per-file bound but image and filler together exceed the total: had the
+            // image been staged, the walk would have ended at the filler and never reached the source.
             manager = createManager(true, 20_000, DataSize.ofKilobytes(70), DataSize.ofKilobytes(70));
             try (Git sourceGit = createSourceRepo()) {
                 // Sorted before the text, as a documentation image is in a real repository.
@@ -698,7 +698,11 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                 png[8] = 0; // the NUL that makes it binary
                 Files.write(sourceRepoPath.resolve("a-screenshot.png"), png);
                 Files.writeString(sourceRepoPath.resolve("b-filler.txt"), "x".repeat(40 * 1024));
-                Files.writeString(sourceRepoPath.resolve("c-service.java"), "class Service {}\n");
+                // Longer than the opening bytes the rule inspects, so the staged copy proves the head
+                // that was read for the decision and the tail that was not both reach the disk.
+                Files.writeString(sourceRepoPath.resolve("c-service.java"), "class Service {}\n".repeat(1024));
+                // A lone carriage return is binary to JGit's diff, so it is binary to the tree as well.
+                Files.writeString(sourceRepoPath.resolve("d-classic-mac.txt"), "line one\rline two\r");
                 sourceGit.add().addFilepattern(".").call();
                 String sha = commit(sourceGit, "Add a documentation image ahead of the source");
 
@@ -707,7 +711,9 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                 try (var snapshot = manager.readTreeSnapshot(1L, sha)) {
                     assertThat(snapshot.files())
                             .containsKeys("b-filler.txt", "c-service.java")
-                            .doesNotContainKey("a-screenshot.png");
+                            .doesNotContainKeys("a-screenshot.png", "d-classic-mac.txt");
+                    assertThat(Files.size(snapshot.files().get("c-service.java")))
+                            .isEqualTo("class Service {}\n".length() * 1024L);
                     // The manifest still says what the review could not have been shown, and the walk
                     // reached the end of the tree rather than stopping at a file it never staged.
                     assertThat(snapshot.limitations())

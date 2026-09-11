@@ -15,9 +15,10 @@ import org.springframework.validation.annotation.Validated;
  * reviews affordable is not the ceiling another wants, and a bound nobody can raise is one operators route
  * around by turning the source off entirely.
  *
- * <p>Raising them costs money and context window; lowering them costs completeness, never correctness — a
- * truncated tree is reported {@code PARTIAL} with the limitation that truncated it, and any practice
- * asserting an absence is refused rather than answered from a fragment.
+ * <p>Raising them costs staging disk, the copy into the sandbox, a digest per file and the size of the
+ * evidence manifest; not model context, which the review reads on demand. Lowering them costs
+ * completeness, never correctness — a truncated tree is reported {@code PARTIAL} with the limitation that
+ * truncated it, and any practice asserting an absence is refused rather than answered from a fragment.
  *
  * @param treeMaxFiles     files a single tree snapshot may stage before the walk stops
  * @param treeMaxTotalSize bytes a single tree snapshot may stage before the walk stops
