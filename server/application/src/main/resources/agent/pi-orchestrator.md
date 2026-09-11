@@ -10,6 +10,12 @@ containing `practiceIndex`; `<historyRoot>` is the directory containing `prepare
 
 ## The one question `outcome` answers (read this first — every observation carries it)
 
+Keep the target fixed while choosing presence and assessment. If the target is "verification guidance",
+partial guidance is PRESENT and may be BAD; if the target is a "recorded rationale", no rationale is
+ABSENT and may be BAD. Do not silently switch from "guidance" to "complete guidance" between cases.
+A supplied preview or focused test may provide a verification route without a prose testing section;
+judge only the behavior it actually exercises, not a full build or untested callbacks.
+
 Every practice in the catalogue names a **behaviour to look for**. Read its criteria, say in one clause what
 that behaviour is, and then `outcome` answers exactly one question about it:
 
@@ -40,7 +46,7 @@ unreachable: if a missing X is `PRESENT, BAD`, then an X that IS there can never
 
 ### Five canonical cases
 
-Five presences on five different practices. Match the _shape_ of your case to one of them; never look for your
+Five example decisions. Match the _shape_ of your case to one of them; never look for your
 own practice by name in this list.
 
 1. **`handles-errors-instead-of-swallowing-them` → `PRESENT, GOOD`.** The behaviour: surfacing a failure
@@ -59,11 +65,12 @@ own practice by name in this list.
    names. Nothing in it reads a value that crosses a trust boundary, so the occasion for the behaviour never
    arose at all. You can state the ruling-out fact — "the change touches only workflow metadata; no request,
    file or environment value reaches a sink" — and being able to state it is exactly what licenses this value.
-5. **`changes-dependencies-deliberately` → `INSUFFICIENT_EVIDENCE`.** The change adds a new library to the manifest,
-   so the occasion is unmistakably here and `NO_REVIEW_OCCASION` would be false. You read the description, the
-   commits and the linked issue: they name the library and never say what it was weighed against. That is not
-   enough to call the choice undeliberate, and not enough to call it deliberate. You looked and cannot tell —
-   which is a complete, correct answer.
+5. **A genuinely unresolved assessment → `INSUFFICIENT_EVIDENCE`.** The practice applies, and the
+   available evidence supports competing interpretations that its criteria do not resolve. State the
+   specific open question and what would settle it in `evidence.missingEvidence`. This is not the same
+   as an absent documented reason: when the practice asks whether a reason is recorded, a complete
+   search that finds none supports `ABSENT, BAD`. Do not substitute an unobservable question about
+   the author's intent for an observable question about their writing.
 
 **What the five encode.** `NO_REVIEW_OCCASION` and `INSUFFICIENT_EVIDENCE` are both silence and they mean opposite things
 about the developer. `NO_REVIEW_OCCASION` is a claim **about the change** — the thing this practice is about is not
@@ -72,9 +79,9 @@ is a claim **about your own reading** — the thing IS here and the evidence doe
 `NO_REVIEW_OCCASION` where the truth is `INSUFFICIENT_EVIDENCE` writes a statement about the developer that you never
 actually made. One question separates them: _can you name the fact about this work that rules the subject out?_
 If yes, it is `NO_REVIEW_OCCASION` and that fact goes in `evidence.exclusion.ruledOutBy`. If the honest answer
-is "I could not tell", it is `INSUFFICIENT_EVIDENCE` — which needs no assessment and no extra block, and costs you
-nothing to say. That is deliberate: the two answers are meant to cost the same, so choosing between them is a
-real choice and not a path of least resistance.
+is "I could not tell", it is `INSUFFICIENT_EVIDENCE` — which needs no assessment but does require
+`evidence.missingEvidence` with the open question and what would settle it. Neither answer is a shortcut
+around examining the evidence.
 
 Two guard-rails on `INSUFFICIENT_EVIDENCE`:
 

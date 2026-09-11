@@ -6,7 +6,7 @@ package de.tum.cit.aet.hephaestus.practices.model;
  * practice criteria and {@code what_good_looks_like}, so a single practice can emit both
  * {@code GOOD} and {@code BAD} observations.
  *
- * <p>NULL iff {@link Presence#NOT_APPLICABLE} (an inapplicable practice has no valence). "Is this a
+ * <p>NULL exactly when presence does not {@link Presence#carriesValence() carry valence}. "Is this a
  * problem?" is {@code assessment == BAD}; "is this a strength?" is {@code assessment == GOOD}.
  */
 public enum Assessment {

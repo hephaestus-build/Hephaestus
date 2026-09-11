@@ -7,25 +7,26 @@ import type { StatusDefs } from "./status-def";
 export type Presence = ReviewObservation["presence"];
 
 /**
- * Whether the practice was found in the work at all — the question *before* "was it done well",
+ * Whether the target behavior was found in the work — independently of whether that is good or bad,
  * which is `assessment-defs`. No value here is good or bad on its own, so none of them is coloured:
- * an absent practice is not a failure, it is a practice the work gave no occasion to show.
+ * absence can be a missing good behavior or the avoidance of a harmful behavior.
  *
  * <p>`NOT_APPLICABLE` and `INCONCLUSIVE` are not interchangeable: the first says the practice did
  * not apply, the second that it did and the evidence did not settle it.
  */
 export const PRESENCE_DEFS: StatusDefs<Presence> = {
 	PRESENT: {
-		label: "Observed",
+		label: "Present",
 		icon: EyeIcon,
 		badgeVariant: "secondary",
-		description: "The work shows this practice being followed.",
+		description: "The target behavior is present. Its assessment says whether that is good or bad.",
 	},
 	ABSENT: {
-		label: "Expected but not observed",
+		label: "Absent",
 		icon: CircleSlashIcon,
 		badgeVariant: "outline",
-		description: "The work gave an occasion for this practice and did not take it.",
+		description:
+			"The target behavior could have occurred but is absent. Its absence may be good or bad.",
 	},
 	NOT_APPLICABLE: {
 		label: "Not applicable",

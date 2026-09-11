@@ -9,8 +9,8 @@ export type ObservationResultFacts = Pick<ReviewObservation, "presence" | "asses
 /**
  * What one observation concluded, as a single registry entry.
  *
- * <p>Two enums answer two questions — was the practice in play (`presence`), and if so was it
- * followed (`assessment`) — while a row has one icon and one badge. This is the single rule for
+ * <p>Two enums answer two questions — was the target behavior present (`presence`), and was that
+ * good or bad (`assessment`) — while a row has one icon and one badge. This is the single rule for
  * collapsing them, so the icon, the badge and any future filter cannot disagree. `NOT_APPLICABLE`
  * and `INCONCLUSIVE` end the question and carry no assessment; the other presences may lack one,
  * and then the presence entry is the honest answer.
