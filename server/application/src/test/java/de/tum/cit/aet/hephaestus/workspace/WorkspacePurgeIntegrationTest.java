@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -57,7 +59,9 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -144,6 +148,9 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private AccountRepository accountRepository;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -249,6 +256,59 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Nested
     class DataCleanup {
+
+        @Test
+        void purgeRemovesTheProductRowsTheWorkspaceOwnsAndKeepsInstanceWideSurveys() {
+            Workspace workspace = createGitLabWorkspaceWithData("product-rows");
+            Long workspaceId = workspace.getId();
+            long accountId = Objects.requireNonNull(
+                    accountRepository.save(new Account("Product purge")).getId());
+            UUID targeted = seedSurvey(workspaceId);
+            UUID instanceWide = seedSurvey(null);
+            UUID targetedParticipation = seedParticipation(targeted, accountId, workspaceId);
+            UUID feedback = UUID.randomUUID();
+            jdbcTemplate.update(
+                    "INSERT INTO product_feedback (id, account_id, workspace_id, kind, message, app_version, created_at, submission_minute) "
+                            + "VALUES (?, ?, ?, 'FEEDBACK', 'From the purged workspace', 'test', now(), now())",
+                    feedback,
+                    accountId,
+                    workspaceId);
+
+            workspaceLifecycleService.purgeWorkspace(workspace.getWorkspaceSlug());
+
+            assertThat(jdbcTemplate.queryForList(
+                            "SELECT id FROM product_survey WHERE id IN (?, ?)", UUID.class, targeted, instanceWide))
+                    .containsExactly(instanceWide);
+            assertThat(jdbcTemplate.queryForList(
+                            "SELECT id FROM product_survey_participation WHERE id = ?",
+                            UUID.class,
+                            targetedParticipation))
+                    .isEmpty();
+            assertThat(jdbcTemplate.queryForList("SELECT id FROM product_feedback WHERE id = ?", UUID.class, feedback))
+                    .isEmpty();
+        }
+
+        private UUID seedSurvey(@Nullable Long workspaceId) {
+            UUID id = UUID.randomUUID();
+            jdbcTemplate.update(
+                    "INSERT INTO product_survey (id, title, description, questions_json, workspace_id, starts_at, active, created_at) "
+                            + "VALUES (?, 'Survey', 'Description', CAST('[]' AS jsonb), ?, now(), true, now())",
+                    id,
+                    workspaceId);
+            return id;
+        }
+
+        private UUID seedParticipation(UUID surveyId, long accountId, Long workspaceId) {
+            UUID id = UUID.randomUUID();
+            jdbcTemplate.update(
+                    "INSERT INTO product_survey_participation (id, survey_id, account_id, workspace_id, status, invited_at) "
+                            + "VALUES (?, ?, ?, ?, 'INVITED', now())",
+                    id,
+                    surveyId,
+                    accountId,
+                    workspaceId);
+            return id;
+        }
 
         @Test
         void purgeDeletesAllWorkspaceScopedData() {

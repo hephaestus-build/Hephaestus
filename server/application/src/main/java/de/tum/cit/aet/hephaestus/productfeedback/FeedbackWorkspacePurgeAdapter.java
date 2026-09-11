@@ -8,13 +8,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 class FeedbackWorkspacePurgeAdapter implements WorkspacePurgeContributor {
-    private final SurveySubmissionRepository submissions;
+    private final SurveyRepository surveys;
+    private final SurveyParticipationRepository participations;
     private final ProductFeedbackRepository feedback;
 
     @Override
     @Transactional
     public void deleteWorkspaceData(Long workspaceId) {
-        submissions.deleteAllByWorkspaceId(workspaceId);
+        participations.deleteAllByWorkspaceId(workspaceId);
+        surveys.deleteAllByWorkspaceId(workspaceId);
         feedback.deleteAllByWorkspaceId(workspaceId);
     }
 }
