@@ -173,7 +173,14 @@ async function pickFacet(
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("12 observations.");
-		for (const name of ["Group", "Practice", "Result", "Severity", "Practice status"]) {
+		for (const name of [
+			"Group",
+			"Practice",
+			"Result",
+			"Severity",
+			"Assessment status",
+			"Presence",
+		]) {
 			canvas.getByRole("combobox", { name });
 		}
 		canvas.getByRole("combobox", { name: "Developer" });
@@ -246,9 +253,13 @@ export const SortByActionability: Story = {
 		await expect(rows[0]).toHaveTextContent("Critical");
 		const titles = rows.map((row) => row.textContent);
 		const problems = titles.flatMap((text, index) =>
-			text.includes("Needs improvement") ? [index] : [],
+			text.includes("Negative outcome") ? [index] : [],
 		);
-		const strengths = titles.flatMap((text, index) => (text.includes("Strength") ? [index] : []));
+		const strengths = titles.flatMap((text, index) =>
+			text.includes("Positive outcome") ? [index] : [],
+		);
+		await expect(problems.length).toBeGreaterThan(0);
+		await expect(strengths.length).toBeGreaterThan(0);
 		await expect(Math.min(...strengths)).toBeGreaterThan(Math.max(...problems));
 	},
 };
