@@ -101,10 +101,11 @@ it("starts a separate floating conversation with the new workspace's transport",
 it("keeps setup free of the floating composer even when AI is available", async () => {
 	mockCopilot({
 		...workspaceOnboarding(),
+		needsWelcome: true,
 		aiChoice: "ON_PREMISES",
 		aiOptions: [{ choice: "ON_PREMISES", mentorReady: true, practiceReviewsReady: true }],
 	});
 	renderRouteAtWithRouter("/w/acme/onboarding");
-	await screen.findByRole("heading", { name: /Welcome to/ }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("heading", { name: "Welcome to Acme" }, ROUTE_RENDER_WAIT);
 	expect(screen.queryByRole("button", { name: "Open Heph, AI mentor" })).toBeNull();
 });

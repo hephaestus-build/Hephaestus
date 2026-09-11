@@ -1,43 +1,55 @@
 import { Link } from "@tanstack/react-router";
-import { ShieldCheck } from "lucide-react";
-import { useId } from "react";
 
-import { Button } from "@/components/ui/button";
+import { HephIcon } from "@/components/brand/HephIcon";
+import { buttonVariants } from "@/components/ui/button";
+import {
+	Empty,
+	EmptyContent,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+} from "@/components/ui/empty";
+import { mentorNoticeCopy, type MentorNotice } from "@/lib/mentor-preference";
 
+export interface WorkspaceMentorPreferenceNoticeProps {
+	workspaceSlug: string;
+	/** The page to come back to after changing the choice; the route reads `useLocation().href`. */
+	returnTo: string;
+	/** Produced by `mentorPreferenceReason`, so `unavailable` always arrives with its location. */
+	notice: MentorNotice;
+}
+
+/**
+ * Why Heph is not answering, in Heph's own place. The title is a real `h1` rather than
+ * `EmptyTitle` (a `div`): this is the only heading on the fullscreen mentor route.
+ */
 export function WorkspaceMentorPreferenceNotice({
 	workspaceSlug,
-	reason,
-}: {
-	workspaceSlug: string;
-	reason: "no-ai" | "choice-required" | "unavailable";
-}) {
-	const titleId = useId();
+	returnTo,
+	notice,
+}: WorkspaceMentorPreferenceNoticeProps) {
+	const copy = mentorNoticeCopy(notice);
 	return (
-		<section
-			className="mx-auto flex max-w-xl flex-col items-start gap-4 p-6"
-			aria-labelledby={titleId}
-		>
-			<ShieldCheck className="size-8 text-muted-foreground" aria-hidden />
-			<h1 id={titleId} className="text-xl font-semibold">
-				{reason === "no-ai"
-					? "Heph is off for you in this workspace"
-					: reason === "choice-required"
-						? "Choose how you want to use AI"
-						: "Your chosen AI location is unavailable"}
-			</h1>
-			<p className="text-sm leading-relaxed text-muted-foreground">
-				{reason === "no-ai"
-					? "Your No AI preference stops new conversations with Heph and practice reviews about you. Your workspace membership is unchanged."
-					: reason === "choice-required"
-						? "Choose On-premises, Private cloud, or No AI in Workspace preferences. Nothing is selected for you."
-						: "We won’t switch processing locations for you. You can change your preference or ask a workspace owner to check the model assignment."}
-			</p>
-			<Button
-				nativeButton={false}
-				render={<Link to="/w/$workspaceSlug/onboarding" params={{ workspaceSlug }} />}
-			>
-				Workspace preferences
-			</Button>
-		</section>
+		<Empty>
+			<EmptyHeader>
+				<EmptyMedia>
+					<HephIcon size={64} pad={2} />
+				</EmptyMedia>
+				<h1 className="text-sm font-medium tracking-tight">{copy.title}</h1>
+				<EmptyDescription>{copy.description}</EmptyDescription>
+			</EmptyHeader>
+			<EmptyContent>
+				{/* A styled Link rather than a Button slot: Base UI's non-native button announces as a
+				    button, and this one only navigates. */}
+				<Link
+					to="/w/$workspaceSlug/onboarding"
+					params={{ workspaceSlug }}
+					search={{ returnTo }}
+					className={buttonVariants()}
+				>
+					{copy.cta}
+				</Link>
+			</EmptyContent>
+		</Empty>
 	);
 }

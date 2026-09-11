@@ -1,5 +1,5 @@
-import { Link } from "@tanstack/react-router";
-import { Bug, ShieldCheck, Sparkles, UserRoundCog } from "lucide-react";
+import { Link, useLocation } from "@tanstack/react-router";
+import { Bug, ShieldCheck, SlidersHorizontal, Sparkles, UserRoundCog } from "lucide-react";
 
 import {
 	SidebarMenu,
@@ -14,6 +14,8 @@ interface NavFooterProps {
 }
 
 export function NavFooter({ isAppAdmin = false, workspaceSlug }: NavFooterProps) {
+	// Changing the AI choice ends on the page the reader left, never on the setup page itself.
+	const returnTo = useLocation().href;
 	return (
 		<>
 			{isAppAdmin && (
@@ -22,7 +24,7 @@ export function NavFooter({ isAppAdmin = false, workspaceSlug }: NavFooterProps)
 						<SidebarMenuItem>
 							<SidebarMenuButton tooltip="Instance admin" render={<Link to="/admin" />}>
 								<ShieldCheck />
-								<span>Instance&nbsp;admin</span>
+								<span>Instance admin</span>
 							</SidebarMenuButton>
 						</SidebarMenuItem>
 					</SidebarMenu>
@@ -33,18 +35,24 @@ export function NavFooter({ isAppAdmin = false, workspaceSlug }: NavFooterProps)
 				{workspaceSlug && (
 					<SidebarMenuItem>
 						<SidebarMenuButton
-							tooltip="Workspace preferences"
-							render={<Link to="/w/$workspaceSlug/onboarding" params={{ workspaceSlug }} />}
+							tooltip="Your AI choice"
+							render={
+								<Link
+									to="/w/$workspaceSlug/onboarding"
+									params={{ workspaceSlug }}
+									search={{ returnTo }}
+								/>
+							}
 						>
-							<ShieldCheck />
-							<span>Workspace preferences</span>
+							<SlidersHorizontal />
+							<span>Your AI choice</span>
 						</SidebarMenuButton>
 					</SidebarMenuItem>
 				)}
 				<SidebarMenuItem>
 					<SidebarMenuButton tooltip="User settings" render={<Link to="/settings" />}>
 						<UserRoundCog />
-						<span>User&nbsp;settings</span>
+						<span>User settings</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
 			</SidebarMenu>
@@ -56,7 +64,7 @@ export function NavFooter({ isAppAdmin = false, workspaceSlug }: NavFooterProps)
 						render={<a href="https://github.com/hephaestus-build/Hephaestus/issues/new/choose" />}
 					>
 						<Bug />
-						<span>Report&nbsp;issue</span>
+						<span>Report issue</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
 				<SidebarMenuItem>
@@ -68,7 +76,7 @@ export function NavFooter({ isAppAdmin = false, workspaceSlug }: NavFooterProps)
 						}
 					>
 						<Sparkles />
-						<span>Request&nbsp;a&nbsp;feature</span>
+						<span>Request a feature</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
 			</SidebarMenu>

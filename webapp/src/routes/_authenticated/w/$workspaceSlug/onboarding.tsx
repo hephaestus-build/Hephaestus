@@ -9,9 +9,15 @@ import {
 	updateMemberAiChoiceMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { WorkspaceOnboarding } from "@/api/types.gen";
-import { WorkspaceOnboardingPage } from "@/components/onboarding/WorkspaceOnboardingPage";
+import {
+	type OnboardingAction,
+	type OnboardingSubmission,
+	WorkspaceOnboardingPage,
+} from "@/components/onboarding/WorkspaceOnboardingPage";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { safeReturnTo } from "@/integrations/auth/guard";
+import type { MemberAiChoice } from "@/lib/llm-processing-location";
+import { openRequiredLinks } from "@/lib/onboarding-links";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/onboarding")({
@@ -36,6 +42,8 @@ function workspaceReturnTo(value: string | undefined, workspaceSlug: string) {
 	}
 	const workspacePath = `/w/${workspaceSlug}`;
 	if (
+		// A second layer of encoding survives the one decode above, so `%252e%252e` is still a dot
+		// segment in waiting; `safeReturnTo` only checks the fully decoded prefix, not the segments.
 		pathname.includes("\\") ||
 		pathname.includes("%") ||
 		pathname.split("/").some((segment) => segment === "." || segment === "..") ||
@@ -45,6 +53,26 @@ function workspaceReturnTo(value: string | undefined, workspaceSlug: string) {
 	)
 		return base;
 	return `${url.pathname}${url.search}${url.hash}`;
+}
+
+interface Tracked {
+	action: OnboardingAction;
+	mutation: { isPending: boolean; isError: boolean; error: unknown; submittedAt: number };
+}
+
+/** The page shows one submission at a time: whichever mutation was fired last. */
+function submissionOf(tracked: readonly [Tracked, ...Tracked[]]): OnboardingSubmission {
+	const latest = tracked.reduce((current, candidate) =>
+		candidate.mutation.submittedAt >= current.mutation.submittedAt ? candidate : current,
+	);
+	if (latest.mutation.isPending) return { status: "saving", action: latest.action };
+	if (latest.mutation.isError)
+		return {
+			status: "error",
+			action: latest.action,
+			message: problemDetailOf(latest.mutation.error),
+		};
+	return { status: "idle" };
 }
 
 function OnboardingRoute() {
@@ -60,6 +88,9 @@ function OnboardingRoute() {
 		queryClient.setQueryData(getMemberOnboardingQueryKey({ path: variables.path }), data);
 	const leave = () => {
 		void navigate({ href: destination, replace: true });
+	};
+	const retry = () => {
+		void query.refetch();
 	};
 	const refreshOnConflict = async (
 		error: unknown,
@@ -81,67 +112,61 @@ function OnboardingRoute() {
 		onError: refreshOnConflict,
 	});
 	const dismissal = useMutation({ ...dismissMemberOnboardingMutation(), onSuccess: updateCache });
-	const error = choice.error ?? completion.error ?? dismissal.error;
+	const submission = submissionOf([
+		{ action: "save", mutation: choice },
+		{ action: "save", mutation: completion },
+		{ action: "continue", mutation: dismissal },
+	]);
+	const data = query.data;
+
+	// Every step after a write is a `mutate` callback rather than an awaited promise: those callbacks
+	// are dropped once this route unmounts, so a save that finishes after the reader has moved to
+	// another workspace cannot navigate them or redirect them from there. A failure stays in the
+	// mutation's own state, which is what the page reads.
+	const finish = (current: WorkspaceOnboarding) => {
+		if (!current.needsWelcome) return;
+		if (openRequiredLinks(current.links).length > 0) return;
+		completion.mutate({ path, body: { revision: current.revision } }, { onSuccess: leave });
+	};
+	const submit = (current: WorkspaceOnboarding, value: MemberAiChoice) => {
+		if (value === current.aiChoice) finish(current);
+		else choice.mutate({ path, body: { choice: value } }, { onSuccess: finish });
+	};
+	const link = (
+		current: WorkspaceOnboarding,
+		registrationId: string,
+		draft: MemberAiChoice | undefined,
+	) => {
+		const redirect = () =>
+			linkAccount(
+				registrationId,
+				`/w/${encodeURIComponent(workspaceSlug)}/onboarding?${new URLSearchParams({ returnTo: destination, step: "accounts" })}`,
+			);
+		if (draft && draft !== current.aiChoice)
+			choice.mutate({ path, body: { choice: draft } }, { onSuccess: redirect });
+		else redirect();
+	};
+
 	return (
 		<WorkspaceOnboardingPage
-			initialStep={step === "accounts" ? "accounts" : "choice"}
+			focus={step === "accounts" ? "accounts" : undefined}
 			state={
-				query.data
+				data
 					? {
 							status: "ready",
-							data: query.data,
-							refresh: query.isFetching
-								? { status: "pending" }
-								: query.isError
-									? { status: "error", error: query.error, onRetry: () => void query.refetch() }
-									: undefined,
+							data,
+							submission,
+							refresh: query.isError
+								? { status: "error", error: query.error, onRetry: retry }
+								: undefined,
+							onSubmit: (value) => submit(data, value),
+							onLink: (registrationId, draft) => link(data, registrationId, draft),
+							onLeave: () =>
+								data.needsWelcome ? dismissal.mutate({ path }, { onSuccess: leave }) : leave(),
 						}
 					: query.isError
-						? { status: "error", error: query.error, onRetry: () => void query.refetch() }
+						? { status: "error", error: query.error, onRetry: retry, onLeave: leave }
 						: { status: "loading" }
-			}
-			pending={
-				choice.isPending
-					? "choice"
-					: completion.isPending
-						? "completion"
-						: dismissal.isPending
-							? "dismissal"
-							: undefined
-			}
-			saveError={error ? problemDetailOf(error) : undefined}
-			onChoose={async (value) => {
-				completion.reset();
-				dismissal.reset();
-				try {
-					await choice.mutateAsync({ path, body: { choice: value } });
-					return true;
-				} catch {
-					return false;
-				}
-			}}
-			onComplete={() => {
-				choice.reset();
-				dismissal.reset();
-				if (query.data)
-					completion.mutate(
-						{ path, body: { revision: query.data.revision } },
-						{ onSuccess: leave },
-					);
-			}}
-			onDismiss={() => {
-				choice.reset();
-				completion.reset();
-				dismissal.mutate({ path }, { onSuccess: leave });
-			}}
-			onRefresh={() => {
-				void query.refetch();
-			}}
-			onLink={(registrationId) =>
-				linkAccount(
-					registrationId,
-					`/w/${encodeURIComponent(workspaceSlug)}/onboarding?${new URLSearchParams({ returnTo: destination, step: "accounts" })}`,
-				)
 			}
 		/>
 	);

@@ -42,6 +42,9 @@ it("keeps an existing conversation readable under No AI and restores its compose
 	const { queryClient } = renderRouteAtWithRouter(`/w/acme/mentor/${threadId}`);
 	await screen.findByText("Earlier guidance remains readable.", {}, ROUTE_RENDER_WAIT);
 	await screen.findByRole("heading", { name: "Heph is off for you in this workspace" });
+	expect(screen.getByRole("link", { name: "Change your AI choice" }).getAttribute("href")).toBe(
+		"/w/acme/onboarding?returnTo=%2Fw%2Facme%2Fmentor%2F65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed",
+	);
 	expect(screen.queryByRole("textbox")).toBeNull();
 	expect(screen.queryByRole("button", { name: /edit|try again/i })).toBeNull();
 
@@ -59,4 +62,34 @@ it("keeps an existing conversation readable under No AI and restores its compose
 	expect(
 		screen.queryByRole("heading", { name: "Heph is off for you in this workspace" }),
 	).toBeNull();
+});
+
+it("names the saved location when no Heph model is assigned to it", async () => {
+	server.use(
+		http.get("*/workspaces", () =>
+			HttpResponse.json([workspaceListItem("acme", { mentorEnabled: true })]),
+		),
+		http.get("*/user/features", () => HttpResponse.json({ MENTOR_ACCESS: true })),
+		http.get("*/workspaces/acme/members/me", () =>
+			HttpResponse.json({ role: "MEMBER", userId: 20, userLogin: "ada" }),
+		),
+		http.get("*/workspaces/acme/onboarding/me", () =>
+			HttpResponse.json({
+				...workspaceOnboarding(),
+				aiChoice: "PRIVATE_CLOUD",
+				aiOptions: [{ choice: "PRIVATE_CLOUD", mentorReady: false, practiceReviewsReady: true }],
+			}),
+		),
+		http.get("*/workspaces/acme/mentor/threads", () => HttpResponse.json([])),
+	);
+	renderRouteAtWithRouter("/w/acme/mentor");
+	await screen.findByRole(
+		"heading",
+		{ name: "Heph isn't set up for your AI choice yet" },
+		ROUTE_RENDER_WAIT,
+	);
+	screen.getByText(/No Heph model is assigned to Private cloud\./);
+	expect(screen.getByRole("link", { name: "Change your AI choice" }).getAttribute("href")).toBe(
+		"/w/acme/onboarding?returnTo=%2Fw%2Facme%2Fmentor",
+	);
 });

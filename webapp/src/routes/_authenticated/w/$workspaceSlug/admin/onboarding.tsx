@@ -8,7 +8,10 @@ import {
 	getMemberOnboardingSettingsQueryKey,
 	updateMemberOnboardingSettingsMutation,
 } from "@/api/@tanstack/react-query.gen";
-import { WorkspaceOnboardingSettingsPage } from "@/components/admin/onboarding/WorkspaceOnboardingSettingsPage";
+import {
+	type SettingsSubmission,
+	WorkspaceOnboardingSettingsPage,
+} from "@/components/admin/onboarding/WorkspaceOnboardingSettingsPage";
 import { resolveWorkspaceMembership } from "@/integrations/auth/guard";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -42,6 +45,11 @@ function OnboardingSettingsRoute() {
 			);
 		},
 	});
+	const submission: SettingsSubmission = save.isPending
+		? { status: "saving" }
+		: save.isError
+			? { status: "error", message: problemDetailOf(save.error) }
+			: { status: "idle" };
 	return (
 		<WorkspaceOnboardingSettingsPage
 			workspaceSlug={workspaceSlug}
@@ -57,11 +65,14 @@ function OnboardingSettingsRoute() {
 						}
 					: settings.isPending || links.isPending
 						? { status: "loading" }
-						: { status: "ready", settings: settings.data, links: links.data }
+						: {
+								status: "ready",
+								settings: settings.data,
+								links: links.data,
+								submission,
+								onSave: (body) => save.mutateAsync({ path, body }),
+							}
 			}
-			saving={save.isPending}
-			saveError={save.error ? problemDetailOf(save.error) : undefined}
-			onSave={(body) => save.mutate({ path, body })}
 		/>
 	);
 }

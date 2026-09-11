@@ -5,6 +5,7 @@ import {
 	ChevronRight,
 	CircleDollarSign,
 	ClipboardCheck,
+	Handshake,
 	LayoutGridIcon,
 	ListChecks,
 	PlugZapIcon,
@@ -109,18 +110,6 @@ export function NavAdmin({
 		<SidebarGroup>
 			<SidebarGroupLabel>Administration</SidebarGroupLabel>
 			<SidebarMenu>
-				{isOwner && (
-					<SidebarMenuItem>
-						<SidebarMenuButton
-							tooltip="Member onboarding"
-							isActive={Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/onboarding" }))}
-							render={<Link to="/w/$workspaceSlug/admin/onboarding" params={{ workspaceSlug }} />}
-						>
-							<BookUser />
-							<span>Member onboarding</span>
-						</SidebarMenuButton>
-					</SidebarMenuItem>
-				)}
 				<SidebarMenuItem>
 					<SidebarMenuButton
 						tooltip="Workspace settings"
@@ -141,6 +130,18 @@ export function NavAdmin({
 						<span>Members</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
+				{isOwner && (
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							tooltip="Member onboarding"
+							isActive={Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/onboarding" }))}
+							render={<Link to="/w/$workspaceSlug/admin/onboarding" params={{ workspaceSlug }} />}
+						>
+							<Handshake />
+							<span>Member onboarding</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
+				)}
 				<SidebarMenuItem>
 					<SidebarMenuButton
 						tooltip="Teams"
