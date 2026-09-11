@@ -50,6 +50,12 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
+/**
+ * The pull request under review, as three sources: the record ({@code metadata.json} from the mirror and
+ * {@code commits.json} from the clone), the change ({@code diff.patch} and its index) and the inline review
+ * comments. The commits and the diff are read over the same {@code merge-base..head} range, so the commit
+ * list is exactly the history the diff sums up.
+ */
 @Component
 @Order(100)
 public class PullRequestContentSource implements EvidenceSource, ReviewContextBuilder {
@@ -80,6 +86,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
     private static final Logger log = LoggerFactory.getLogger(PullRequestContentSource.class);
 
     static final int MAX_COMMENTS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
+    static final int MAX_COMMITS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
 
     private final ObjectMapper objectMapper;
     private final GitRepositoryManager gitRepositoryManager;
@@ -125,7 +132,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
     @Override
     public void prepareCapture(ContextRequest request, Set<SourceKind> selectedKinds) {
         if (!(request instanceof ContextRequest.PracticeReviewRequest practiceReview)) return;
-        if (!selectedKinds.contains(DIFF)) return;
+        if (!readsClone(selectedKinds)) return;
         JsonNode metadata = practiceReview.job().getMetadata();
         if (metadata == null || metadata.isNull() || metadata.isMissingNode()) return;
         if (!pullRequestRepository.existsByIdAndDeletedAtIsNull(requireLong(metadata, "pull_request_id"))) return;
@@ -169,21 +176,6 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         Map<SourceKind, java.time.Instant> observedAt = new HashMap<>();
         Map<SourceKind, SourceContentState> contentStates = new HashMap<>();
 
-        boolean headVerified = false;
-        if (selectedKinds.contains(DIFF)) {
-            ensureRepositoryAvailable(repositoryId);
-            String headSha =
-                    metadata.has("commit_sha") ? metadata.get("commit_sha").asString() : null;
-            headVerified =
-                    headSha != null && !headSha.isBlank() && gitRepositoryManager.commitExists(repositoryId, headSha);
-        }
-        if (selectedKinds.contains(CORE)) {
-            storeMetadata(files, pullRequest, metadata);
-            completeness.put(CORE, SourceCompleteness.COMPLETE);
-            if (pullRequest.getLastSyncAt() != null) {
-                observedAt.put(CORE, pullRequest.getLastSyncAt());
-            }
-        }
         if (selectedKinds.contains(COMMENTS)) {
             CommentCapture comments = loadComments(pullRequestId);
             storeComments(files, comments.comments());
@@ -191,14 +183,27 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             contentStates.put(
                     COMMENTS, comments.comments().isEmpty() ? SourceContentState.EMPTY : SourceContentState.NON_EMPTY);
         }
-        if (selectedKinds.contains(DIFF)) {
-            computeAndStoreDiff(files, repositoryId, metadata, headVerified);
-            completeness.put(DIFF, SourceCompleteness.COMPLETE);
-            String headSha = metadata.path("commit_sha").asString();
-            if (!headSha.isBlank()) identities.put(DIFF, headSha);
-            byte[] diff = files.get(OUTPUT_PREFIX + "diff.patch");
-            contentStates.put(
-                    DIFF, diff == null || diff.length == 0 ? SourceContentState.EMPTY : SourceContentState.NON_EMPTY);
+        if (readsClone(selectedKinds)) {
+            // The record's commits and the diff are both read off the clone over the same range, so a clone
+            // or a range the diff cannot be computed from fails the record the same way.
+            ChangeRange range = resolveChangeRange(repositoryId, metadata);
+            if (selectedKinds.contains(CORE)) {
+                storeMetadata(files, pullRequest, metadata);
+                boolean commitsTruncated = storeCommits(files, range, repositoryId);
+                completeness.put(CORE, commitsTruncated ? SourceCompleteness.PARTIAL : SourceCompleteness.COMPLETE);
+                if (pullRequest.getLastSyncAt() != null) {
+                    observedAt.put(CORE, pullRequest.getLastSyncAt());
+                }
+            }
+            if (selectedKinds.contains(DIFF)) {
+                computeAndStoreDiff(files, range, repositoryId);
+                completeness.put(DIFF, SourceCompleteness.COMPLETE);
+                identities.put(DIFF, range.head());
+                byte[] diff = files.get(OUTPUT_PREFIX + "diff.patch");
+                contentStates.put(
+                        DIFF,
+                        diff == null || diff.length == 0 ? SourceContentState.EMPTY : SourceContentState.NON_EMPTY);
+            }
         }
         return new EvidenceContribution(files, completeness, identities, observedAt, Map.of(), contentStates);
     }
@@ -365,43 +370,104 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
 
     private record CommentCapture(List<PullRequestReviewComment> comments, boolean complete) {}
 
-    private void computeAndStoreDiff(
-            Map<String, byte[]> files, long repositoryId, JsonNode metadata, boolean headVerified) {
-        String headSha = metadata.has("commit_sha") ? metadata.get("commit_sha").asString() : null;
-        if (headSha == null || headSha.isBlank()) {
-            throw new JobPreparationException("Cannot compute diff because commit_sha is missing");
+    private static boolean readsClone(Set<SourceKind> selectedKinds) {
+        return selectedKinds.contains(CORE) || selectedKinds.contains(DIFF);
+    }
+
+    /** The clone and the {@code base..head} range one pull request's change is read from. */
+    private record ChangeRange(Path repoPath, String base, String head) {}
+
+    private ChangeRange resolveChangeRange(long repositoryId, JsonNode metadata) {
+        ensureRepositoryAvailable(repositoryId);
+        String headSha = metadata.path("commit_sha").asString("");
+        if (headSha.isBlank()) {
+            throw new JobPreparationException("Cannot resolve the change range because commit_sha is missing");
         }
         String targetBranch = requireText(metadata, "target_branch");
         String sourceBranch = requireText(metadata, "source_branch");
         Path repoPath = gitRepositoryManager.getRepositoryPath(repositoryId);
+        String[] range = gitDiffOperations.resolveDiffRange(repoPath, targetBranch, sourceBranch, headSha);
+        if (range == null) {
+            String reason = gitRepositoryManager.commitExists(repositoryId, headSha)
+                    ? "all resolution strategies failed"
+                    : "the pinned head commit is unavailable after repository refresh";
+            throw new JobPreparationException("Cannot resolve the change range because " + reason
+                    + ". headSha="
+                    + headSha
+                    + ", targetBranch="
+                    + targetBranch
+                    + ", sourceBranch="
+                    + sourceBranch
+                    + ", repoId="
+                    + repositoryId);
+        }
+        return new ChangeRange(repoPath, range[0], range[1]);
+    }
 
-        try {
-            String[] range = gitDiffOperations.resolveDiffRange(repoPath, targetBranch, sourceBranch, headSha);
-            if (range == null) {
-                String reason = headVerified
-                        ? "all resolution strategies failed"
-                        : "the pinned head commit is unavailable after repository refresh";
-                throw new JobPreparationException("Cannot compute diff because " + reason
-                        + ". headSha="
-                        + headSha
-                        + ", targetBranch="
-                        + targetBranch
-                        + ", sourceBranch="
-                        + sourceBranch
-                        + ", repoId="
-                        + repositoryId);
+    /**
+     * The commits the pull request carries, as {@code git log base..head} lists them. Returns whether the
+     * list was cut at {@link #MAX_COMMITS}.
+     */
+    private boolean storeCommits(Map<String, byte[]> files, ChangeRange range, long repositoryId) {
+        GitDiffOperations.CommitLog commitLog =
+                gitDiffOperations.commitLog(range.repoPath(), range.base(), range.head(), MAX_COMMITS);
+        // A null log is a failed read, never a pull request without commits: the range resolved, so at
+        // least one commit separates its base from its head.
+        if (commitLog == null) {
+            throw new JobPreparationException("Commit log could not be read for range=" + range.base()
+                    + ".."
+                    + range.head()
+                    + ", repoId="
+                    + repositoryId);
+        }
+        var commits = objectMapper.createArrayNode();
+        for (var commit : commitLog.commits()) {
+            var node = commits.addObject();
+            node.put("sha", commit.sha());
+            node.put("subject", commit.subject());
+            // A commit without a body has no body key, so an absent message reads as absent, not as "".
+            if (commit.body() != null) {
+                node.put("body", commit.body());
             }
-            String diffStat = gitDiffOperations.diffStat(repoPath, range[0], range[1]);
-            String diff = gitDiffOperations.diff(repoPath, range[0], range[1]);
+            node.put("authored_at", commit.authoredAt().toString());
+            node.put("committed_at", commit.committedAt().toString());
+            node.put("parent_count", commit.parentCount());
+            if (commit.stat() != null) {
+                node.put("changed_files", commit.stat().changedFiles());
+                node.put("additions", commit.stat().additions());
+                node.put("deletions", commit.stat().deletions());
+            }
+        }
+        ObjectNode root = objectMapper.createObjectNode();
+        root.set("commits", commits);
+        root.put("truncated", commitLog.truncated());
+        try {
+            files.put(
+                    OUTPUT_PREFIX + "commits.json",
+                    objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
+        } catch (JacksonException e) {
+            throw new JobPreparationException("Failed to serialize pull request commits", e);
+        }
+        log.info(
+                "Pre-computed commit log: range={}..{}, commits={}, truncated={}",
+                range.base(),
+                range.head(),
+                commits.size(),
+                commitLog.truncated());
+        return commitLog.truncated();
+    }
+
+    private void computeAndStoreDiff(Map<String, byte[]> files, ChangeRange range, long repositoryId) {
+        try {
+            String diffStat = gitDiffOperations.diffStat(range.repoPath(), range.base(), range.head());
+            String diff = gitDiffOperations.diff(range.repoPath(), range.base(), range.head());
             // A null diff denotes a failed read (unresolved object, I/O error, or the size cap), never an
             // empty diff: storing zero bytes would report a change that was never read as AVAILABLE,
             // EMPTY and COMPLETE.
             if (diff == null) {
-                throw new JobPreparationException("Diff could not be read for range=" + range[0]
+                throw new JobPreparationException("Diff could not be read for range=" + range.base()
                         + ".."
-                        + range[1]
-                        + ", headSha="
-                        + headSha
+                        + range.head()
                         + ", repoId="
                         + repositoryId);
             }
@@ -419,21 +485,18 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
                     if (line.startsWith("+") && !line.startsWith("+++")) addedLines++;
                     else if (line.startsWith("-") && !line.startsWith("---")) removedLines++;
                 }
-                String strategyUsed = range[1].equals(headSha) ? "SHA-based" : "branch-based";
                 log.info(
-                        "Pre-computed diff: strategy={}, range={}..{}, +{}/-{} lines, {} bytes (annotated: {} bytes), headSha={}",
-                        strategyUsed,
-                        range[0],
-                        range[1],
+                        "Pre-computed diff: range={}..{}, +{}/-{} lines, {} bytes (annotated: {} bytes)",
+                        range.base(),
+                        range.head(),
                         addedLines,
                         removedLines,
                         diff.length(),
-                        annotatedDiff.length(),
-                        headSha);
+                        annotatedDiff.length());
             } else {
                 files.put(OUTPUT_PREFIX + "diff.patch", new byte[0]);
                 files.put(OUTPUT_PREFIX + "diff_stat.txt", new byte[0]);
-                log.info("Pre-computed empty diff: range={}..{}, headSha={}", range[0], range[1], headSha);
+                log.info("Pre-computed empty diff: range={}..{}", range.base(), range.head());
             }
         } catch (JobPreparationException e) {
             throw e;

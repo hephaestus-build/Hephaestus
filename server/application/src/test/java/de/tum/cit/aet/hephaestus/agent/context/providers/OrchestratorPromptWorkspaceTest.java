@@ -22,6 +22,7 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
     private static final Set<String> STAGED_INPUT_PATHS = new LinkedHashSet<>(java.util.List.of(
             // Pull request
             SandboxLayout.CONTEXT_PREFIX + "metadata.json",
+            SandboxLayout.CONTEXT_PREFIX + "commits.json",
             SandboxLayout.CONTEXT_PREFIX + "comments.json",
             SandboxLayout.CONTEXT_PREFIX + "diff.patch",
             SandboxLayout.CONTEXT_PREFIX + "diff_stat.txt",
@@ -29,7 +30,6 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
             SandboxLayout.CONTEXT_PREFIX + "context-map.md",
             SandboxLayout.CONTEXT_PREFIX + ReviewThreadContentSource.FILE_NAME,
             SandboxLayout.CONTEXT_PREFIX + GeneralReviewCommentContentSource.FILE_NAME,
-            SandboxLayout.CONTEXT_PREFIX + PullRequestCommitContentSource.FILE_NAME,
             LinkedWorkItemContentSource.OUTPUT_FILE,
             // Issue
             SandboxLayout.CONTEXT_PREFIX + "issue_summary.md",

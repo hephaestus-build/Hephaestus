@@ -4,7 +4,6 @@ import {
 	FileQuestionIcon,
 	FileTextIcon,
 	FolderTreeIcon,
-	GitCommitHorizontalIcon,
 	GitPullRequestIcon,
 	HistoryIcon,
 	Layers2Icon,
@@ -121,13 +120,6 @@ const EVIDENCE_SOURCE_DEFS: Record<string, EvidenceSourceDef> = {
 		icon: MessagesSquareIcon,
 		badgeVariant: "outline",
 		description: "Reviewers' remarks about the change overall.",
-		locator: "object",
-	},
-	"scm.pull-request.commits": {
-		label: "The commits",
-		icon: GitCommitHorizontalIcon,
-		badgeVariant: "outline",
-		description: "The commits the pull request carries, with their messages.",
 		locator: "object",
 	},
 	"workspace.project-inventory": {

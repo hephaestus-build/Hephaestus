@@ -8,11 +8,14 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.MergeCommand;
 import org.eclipse.jgit.api.MergeResult;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevWalk;
@@ -124,17 +127,117 @@ class GitDiffOperationsJGitTest extends BaseUnitTest {
     }
 
     @Test
-    void shortLogEmitsAbbreviatedShaAndSubject() throws GitAPIException, IOException {
+    void commitLogListsTheRangeOldestFirstWithSubjectBodyAndStat() throws GitAPIException, IOException {
+        write("c.txt", "c\n");
+        String laterSha = commit("add c\n\nNeeded before the shadow pass lands.\n");
+
+        GitDiffOperations.CommitLog log = ops.commitLog(repoDir, baseSha, laterSha, 10);
+
+        assertThat(log).isNotNull();
+        assertThat(log.truncated()).isFalse();
+        assertThat(log.commits())
+                .extracting(GitDiffOperations.CommitLogEntry::sha)
+                .containsExactly(headSha, laterSha);
+        GitDiffOperations.CommitLogEntry first = log.commits().get(0);
+        assertThat(first.subject()).isEqualTo("change a, add b");
+        assertThat(first.body()).isNull();
+        assertThat(first.parentCount()).isEqualTo(1);
+        // a.txt: one line replaced and one added; b.txt: one line added.
+        assertThat(first.stat()).isEqualTo(new GitDiffOperations.ChangeStat(2, 3, 1));
+        assertThat(first.authoredAt()).isNotNull();
+        assertThat(first.committedAt()).isNotNull();
+        GitDiffOperations.CommitLogEntry second = log.commits().get(1);
+        assertThat(second.subject()).isEqualTo("add c");
+        assertThat(second.body()).isEqualTo("Needed before the shadow pass lands.");
+        assertThat(second.stat()).isEqualTo(new GitDiffOperations.ChangeStat(1, 1, 0));
+    }
+
+    @Test
+    void commitLogFoldsAWrappedSubjectAndSplitsTheBodyAtTheFirstBlankLine() throws GitAPIException, IOException {
+        write("c.txt", "c\n");
+        String sha = commit(
+                "Cache detection results\nacross files\n\nAvoids re-running the detector.\n\nCo-authored-by: Ada <ada@example.com>");
+
+        GitDiffOperations.CommitLog log = ops.commitLog(repoDir, headSha, sha, 10);
+
+        assertThat(log).isNotNull();
+        GitDiffOperations.CommitLogEntry entry = log.commits().get(0);
+        assertThat(entry.subject()).isEqualTo("Cache detection results across files");
+        assertThat(entry.body()).isEqualTo("Avoids re-running the detector.\n\nCo-authored-by: Ada <ada@example.com>");
+    }
+
+    @Test
+    void commitLogOrdersTopologicallyWhenARebaseLeftAuthorTimesOutOfOrder() throws GitAPIException, IOException {
+        // The child is authored an hour BEFORE its parent, as a rebase that reorders commits leaves it.
+        write("c.txt", "c\n");
+        git.add().addFilepattern(".").call();
+        PersonIdent earlier = new PersonIdent("t", "t@e", Instant.parse("2026-06-01T09:00:00Z"), ZoneOffset.UTC);
+        String childSha = git.commit()
+                .setMessage("authored earlier, committed later")
+                .setAuthor(earlier)
+                .setCommitter(earlier)
+                .call()
+                .getName();
+
+        GitDiffOperations.CommitLog log = ops.commitLog(repoDir, baseSha, childSha, 10);
+
+        assertThat(log).isNotNull();
+        assertThat(log.commits())
+                .extracting(GitDiffOperations.CommitLogEntry::sha)
+                .containsExactly(headSha, childSha);
+        assertThat(log.commits().get(1).authoredAt()).isEqualTo(Instant.parse("2026-06-01T09:00:00Z"));
+    }
+
+    @Test
+    void commitLogCarriesNoStatForAMergeCommit() throws GitAPIException, IOException {
+        git.checkout().setName("main").call();
+        write("main-only.txt", "main\n");
+        commit("main only");
+        git.checkout().setName("feature").call();
+        MergeResult merge = git.merge()
+                .include(repo.resolve("main"))
+                .setFastForward(MergeCommand.FastForwardMode.NO_FF)
+                .setCommit(true)
+                .setMessage("Merge branch 'main' into feature")
+                .call();
+        assertThat(merge.getMergeStatus().isSuccessful()).isTrue();
+        String mergeSha = merge.getNewHead().getName();
+
+        GitDiffOperations.CommitLog log = ops.commitLog(repoDir, baseSha, mergeSha, 10);
+
+        assertThat(log).isNotNull();
+        // Parents before children: the merge commit comes last, and only the merge is parentless of a stat.
+        assertThat(log.commits())
+                .extracting(GitDiffOperations.CommitLogEntry::sha)
+                .endsWith(mergeSha);
+        GitDiffOperations.CommitLogEntry mergeEntry =
+                log.commits().get(log.commits().size() - 1);
+        assertThat(mergeEntry.subject()).isEqualTo("Merge branch 'main' into feature");
+        assertThat(mergeEntry.parentCount()).isEqualTo(2);
+        assertThat(mergeEntry.stat()).isNull();
+        assertThat(log.commits())
+                .filteredOn(entry -> entry.parentCount() == 1)
+                .allSatisfy(entry -> assertThat(entry.stat()).isNotNull());
+    }
+
+    @Test
+    void commitLogKeepsTheOldestCommitsAndReportsTruncationPastTheLimit() throws GitAPIException, IOException {
         write("c.txt", "c\n");
         String laterSha = commit("add c");
 
-        String log = ops.shortLog(repoDir, baseSha, laterSha);
+        GitDiffOperations.CommitLog log = ops.commitLog(repoDir, baseSha, laterSha, 1);
+
         assertThat(log).isNotNull();
-        String[] lines = log.trim().split("\n");
-        assertThat(lines).hasSize(2);
-        assertThat(lines[0]).matches("[0-9a-f]{7}\tadd c");
-        assertThat(lines[1]).matches("[0-9a-f]{7}\tchange a, add b");
-        assertThat(laterSha).startsWith(lines[0].split("\t")[0]);
+        assertThat(log.truncated()).isTrue();
+        assertThat(log.commits())
+                .extracting(GitDiffOperations.CommitLogEntry::sha)
+                .containsExactly(headSha);
+    }
+
+    @Test
+    void commitLogNullForUnknownRef() {
+        ObjectId zero = ObjectId.fromString("0000000000000000000000000000000000000000");
+        assertThat(ops.commitLog(repoDir, zero.getName(), headSha, 10)).isNull();
     }
 
     @Test
