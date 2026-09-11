@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import type { PracticeSignalOption, PracticeWorkTypeDefinitionOptions } from "@/api/types.gen";
 import {
 	hasDrafts,
@@ -20,7 +21,6 @@ import {
 	FieldSet,
 } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
 
 export interface OccasionLifecycleProps {
 	/** The whole work type, not its `signals`: the artifact kind decides whether drafts can occur. */

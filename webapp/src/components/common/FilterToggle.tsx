@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import {
 	Select,
 	SelectContent,
@@ -6,7 +7,6 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { cn } from "@/lib/utils";
 
 export interface FilterOption<TValue extends string> {
 	value: TValue;

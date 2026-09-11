@@ -2,10 +2,10 @@ import { Link, useMatchRoute, useParams, useSearch } from "@tanstack/react-route
 import { MessageSquareText, ScanSearch, Workflow } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { cn } from "cn";
 import { PageHeader } from "@/components/core/PageHeader";
 import { PageLayout } from "@/components/core/PageLayout";
 import { tabsListVariants } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
 
 import type { ReviewScopeSearch } from "./review-search";
 import { reviewArtifactTypeFromSlug } from "./ReviewArtifact";

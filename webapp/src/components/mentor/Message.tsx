@@ -3,16 +3,17 @@ import { AnimatePresence, motion } from "motion/react";
 import { type InputHTMLAttributes, useState } from "react";
 import { Streamdown } from "streamdown";
 
+import { cn } from "cn";
 import type { ChatMessageVote } from "@/api/types.gen";
 import { MarkdownCode } from "@/components/common/MarkdownCode";
 import type { ChatMessage, ChatTools } from "@/lib/types";
-import { cn, sanitizeText } from "@/lib/utils";
 
 import { MentorAvatar } from "./MentorAvatar";
 import { MessageActions } from "./MessageActions";
 import { MessageEditor } from "./MessageEditor";
 import { PreviewAttachment } from "./PreviewAttachment";
 import type { PartRendererMap } from "./renderers/types";
+import { sanitizeMessageText } from "./sanitize-message-text";
 
 export interface MessageProps {
 	message: ChatMessage;
@@ -112,7 +113,7 @@ export function PreviewMessage({
 											})}
 										>
 											<Streamdown components={MESSAGE_MARKDOWN_COMPONENTS}>
-												{sanitizeText(part.text)}
+												{sanitizeMessageText(part.text)}
 											</Streamdown>
 										</div>
 									);

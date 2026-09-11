@@ -2,6 +2,7 @@ import { NoEntryIcon } from "@primer/octicons-react";
 import { AwardIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { cn } from "cn";
 import type { LeaderboardEntry, UserInfo } from "@/api/types.gen";
 import { ActivityBadges } from "@/components/leaderboard/ActivityBadges";
 import type { LeaderboardVariant } from "@/components/leaderboard/LeaderboardPage";
@@ -17,7 +18,6 @@ import {
 } from "@/components/ui/table";
 import { getInitials } from "@/lib/avatar";
 import { getTeamAvatarUrl, type ProviderType } from "@/lib/provider";
-import { cn } from "@/lib/utils";
 
 import { LeagueIcon } from "./LeagueIcon";
 

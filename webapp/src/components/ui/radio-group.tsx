@@ -2,7 +2,7 @@ import { Radio as RadioPrimitive } from "@base-ui/react/radio";
 import { RadioGroup as RadioGroupPrimitive } from "@base-ui/react/radio-group";
 import { CircleIcon } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 function RadioGroup<Value>({ className, ...props }: RadioGroupPrimitive.Props<Value>) {
 	return (

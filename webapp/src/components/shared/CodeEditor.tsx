@@ -1,7 +1,7 @@
 import MonacoEditor, { type EditorProps } from "@monaco-editor/react";
 
+import { cn } from "cn";
 import { Spinner } from "@/components/ui/spinner";
-import { cn } from "@/lib/utils";
 
 export interface CodeEditorProps {
 	value: string;

@@ -3,9 +3,9 @@
 import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
 import { CheckIcon, SearchIcon } from "lucide-react";
 
+import { cn } from "cn";
 import type { AccessibleNameProps } from "@/components/ui/accessible-name";
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
-import { cn } from "@/lib/utils";
 
 const Combobox = ComboboxPrimitive.Root;
 const ComboboxCollection = ComboboxPrimitive.Collection;

@@ -1,6 +1,7 @@
 import { Plus, RotateCcw, Search, Shapes } from "lucide-react";
 import { useState } from "react";
 
+import { cn } from "cn";
 import type {
 	CuratedGroup,
 	CuratedPracticeSummary,
@@ -40,7 +41,6 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { isKnownArtifactKind } from "@/lib/artifact-kinds";
-import { cn } from "@/lib/utils";
 
 import { type CuratedCatalogSearch, curatedPracticeLevel } from "./curated-catalog-search";
 import { CuratedCatalogSummary } from "./CuratedCatalogSummary";

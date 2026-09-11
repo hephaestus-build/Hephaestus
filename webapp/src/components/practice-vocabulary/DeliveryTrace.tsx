@@ -2,9 +2,9 @@ import { type LucideIcon, PencilLineIcon } from "lucide-react";
 import type * as React from "react";
 import type { ReactNode } from "react";
 
+import { cn } from "cn";
 import type { ReviewFeedback, ReviewPlacement } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
-import { cn } from "@/lib/utils";
 
 import { type DeliveryFacts, deliveryOutcome, isWithheld } from "./delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "./delivery-place-defs";

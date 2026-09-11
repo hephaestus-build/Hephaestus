@@ -1,7 +1,7 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { type ComponentProps, type ReactNode, useId } from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 const sectionTitleVariants = cva("text-foreground", {
 	variants: {

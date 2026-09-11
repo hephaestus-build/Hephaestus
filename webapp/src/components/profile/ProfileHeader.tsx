@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 
+import { cn } from "cn";
 import type { ProfileXpRecord, RepositoryInfo, UserInfo } from "@/api/types.gen";
 import { LeagueIcon } from "@/components/leaderboard/LeagueIcon";
 import {
@@ -11,7 +12,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getInitials } from "@/lib/avatar";
-import { cn } from "@/lib/utils.ts";
 
 import { XpProgress } from "./XpProgress";
 

@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import { withSessionMutationLock } from "@/integrations/auth/session-mutation";
 
+import { cn } from "cn";
 import { exitImpersonationMutation } from "@/api/@tanstack/react-query.gen";
 import {
 	AlertDialog,
@@ -18,7 +19,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/integrations/auth/AuthContext";
-import { cn } from "@/lib/utils";
 import { useImpersonationStore } from "@/stores/impersonation-store";
 
 export function ImpersonationBanner() {

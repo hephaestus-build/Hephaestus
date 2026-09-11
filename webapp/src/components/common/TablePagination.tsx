@@ -1,6 +1,7 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type { ComponentProps, ReactElement, ReactNode } from "react";
 
+import { cn } from "cn";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
 	Pagination,
@@ -8,7 +9,6 @@ import {
 	PaginationEllipsis,
 	PaginationItem,
 } from "@/components/ui/pagination";
-import { cn } from "@/lib/utils";
 
 interface TablePaginationCommonProps {
 	page: number;

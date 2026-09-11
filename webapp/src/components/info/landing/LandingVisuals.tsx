@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { CircleDot, GitMerge, GitPullRequest, type LucideIcon, Sparkle } from "lucide-react";
 import { motion } from "motion/react";
 import type { CSSProperties, ReactNode } from "react";
@@ -6,7 +7,6 @@ import { getGroupVisual } from "@/components/admin/practice-catalog/group-visual
 import { HephIcon } from "@/components/brand/HephIcon";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 import styles from "./LandingVisuals.module.css";
 
 type StyleWithCustomProperties = CSSProperties & Record<`--${string}`, string>;

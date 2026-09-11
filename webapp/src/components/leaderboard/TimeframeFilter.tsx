@@ -3,6 +3,7 @@ import { CalendarDays, CalendarIcon, CalendarRange, Clock } from "lucide-react";
 import { useState } from "react";
 import type { DateRange } from "react-day-picker";
 
+import { cn } from "cn";
 import { useNow } from "@/components/common/use-now";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -25,7 +26,6 @@ import {
 	type TimeframePreset,
 	type LeaderboardSchedule,
 } from "@/lib/timeframe";
-import { cn } from "@/lib/utils";
 
 export interface TimeframeFilterProps {
 	onTimeframeChange?: (afterDate: string, beforeDate?: string, timeframe?: string) => void;

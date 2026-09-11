@@ -4,8 +4,8 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { XIcon } from "lucide-react";
 import type * as React from "react";
 
+import { cn } from "cn";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 /**
  * ⚠️ Diverges from the shadcn registry — `shadcn add dialog` drops the following; re-apply them.

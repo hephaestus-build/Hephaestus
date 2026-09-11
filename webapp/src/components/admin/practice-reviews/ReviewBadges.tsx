@@ -1,5 +1,6 @@
 import { CircleHelp, ClockAlert } from "lucide-react";
 
+import { cn } from "cn";
 import type {
 	ReviewFeedbackCounts,
 	ReviewFeedbackDisposition,
@@ -18,7 +19,6 @@ import type { StatusDef } from "@/components/practice-vocabulary/status-def";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
 type NonCurrentClaimCurrentness = Exclude<ReviewObservation["claimCurrentness"], "CURRENT">;
 
