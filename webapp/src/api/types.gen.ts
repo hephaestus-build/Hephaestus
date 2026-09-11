@@ -1881,6 +1881,18 @@ export type LabelInfo = {
 };
 
 /**
+ * A published release. <code>schemaMigrations</code> is the flag the release workflow publishes for
+ *  that one release and is absent when the notes carry none; it says nothing about releases
+ *  between the running one and this one.
+ */
+export type LatestRelease = {
+  notesUrl: string;
+  publishedAt: Date;
+  schemaMigrations?: boolean;
+  version: string;
+};
+
+/**
  * A ranked entry in the leaderboard (individual or team)
  */
 export type LeaderboardEntry = {
@@ -3777,6 +3789,45 @@ export type RegisterSlackChannelRequest = {
 };
 
 /**
+ * The running release and what the last update check found. Discovery is advisory: nothing here
+ *  verifies an artifact or performs an upgrade.
+ */
+export type ReleaseStatus = {
+  /**
+   * why the last attempt did not complete, when <code>status</code> is <code>FAILED</code>
+   */
+  failure?: 'RATE_LIMITED' | 'UNAVAILABLE' | 'MALFORMED';
+  /**
+   * when a check was last started, on any outcome
+   */
+  lastAttempt?: Date;
+  /**
+   * when a check last completed, which is when <code>latest</code> was observed
+   */
+  lastSuccess?: Date;
+  /**
+   * the newest published release as of <code>lastSuccess</code>
+   */
+  latest?: LatestRelease;
+  /**
+   * when the next automatic check is due
+   */
+  nextCheck?: Date;
+  /**
+   * the wait GitHub named on a rate limit; a manual check before it is refused
+   */
+  retryUntil?: Date;
+  /**
+   * the identity this process reports
+   */
+  running: RunningRelease;
+  /**
+   * the verdict an administrator reads first
+   */
+  status: 'DISABLED' | 'NOT_APPLICABLE' | 'NEVER_CHECKED' | 'CURRENT' | 'UPDATE_AVAILABLE' | 'FAILED';
+};
+
+/**
  * Request to rename a workspace's URL slug
  */
 export type RenameWorkspaceSlugRequest = {
@@ -4485,6 +4536,34 @@ export type ReviewedPractice = {
 
 export type RevokeSessionsResult = {
   revoked?: number;
+};
+
+/**
+ * Deployment-reported identity: the values the verified lock env handed this process, not an
+ *  observation of the container. <code>commit</code> and <code>image</code> are absent outside a lock-driven
+ *  deployment.
+ */
+export type RunningRelease = {
+  /**
+   * what kind of build that version names
+   */
+  channel: 'RELEASE' | 'COMMIT' | 'DEVELOPMENT';
+  /**
+   * the source commit the lock names
+   */
+  commit?: string;
+  /**
+   * the digest reference this container was started from
+   */
+  image?: string;
+  /**
+   * the runtime roles this process booted with
+   */
+  roles: Array<'SERVER' | 'WORKER' | 'WEBHOOK'>;
+  /**
+   * the version the deployment passed as <code>APP_VERSION</code>
+   */
+  version: string;
 };
 
 export type SessionView = {
@@ -7775,6 +7854,38 @@ export type AdminCreateProductSurveyResponses = {
 };
 
 export type AdminCreateProductSurveyResponse = AdminCreateProductSurveyResponses[keyof AdminCreateProductSurveyResponses];
+
+export type AdminGetReleaseData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/admin/release';
+};
+
+export type AdminGetReleaseResponses = {
+  /**
+   * OK
+   */
+  200: ReleaseStatus;
+};
+
+export type AdminGetReleaseResponse = AdminGetReleaseResponses[keyof AdminGetReleaseResponses];
+
+export type AdminCheckReleaseData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/admin/release/checks';
+};
+
+export type AdminCheckReleaseResponses = {
+  /**
+   * OK
+   */
+  200: ReleaseStatus;
+};
+
+export type AdminCheckReleaseResponse = AdminCheckReleaseResponses[keyof AdminCheckReleaseResponses];
 
 export type AdminGetInstanceSettingsData = {
   body?: never;

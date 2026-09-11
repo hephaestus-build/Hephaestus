@@ -50,7 +50,7 @@ Independent of this reporting channel, the project runs:
 
 - **Dependency updates**: [Renovate](https://docs.renovatebot.com/) proposes vulnerability fixes without dashboard approval or a minimum release age ([`renovate.json`](renovate.json))
 - **Dependency & secret scanning in CI**: Trivy filesystem scan and TruffleHog ([`ci-security-scan.yml`](.github/workflows/ci-security-scan.yml))
-- **Static analysis**: GitHub CodeQL
+- **Static analysis**: compiler checks and repository-specific Semgrep rules; these do not provide comprehensive interprocedural security analysis
 - **Native alerts**: GitHub secret scanning and Dependabot dependency alerts
 
 A machine-readable [`security.txt`](https://hephaestus.build/.well-known/security.txt) ([RFC 9116](https://www.rfc-editor.org/info/rfc9116/)) points to this policy.

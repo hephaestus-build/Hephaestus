@@ -104,7 +104,7 @@ both it and the tooling leg prove the hook dispatcher on a rejected and an accep
 Pull requests targeting `main` merge through GitHub's merge queue after these GitHub
 Actions contexts pass: `CI Status Gate`, `Actionlint`, and `Zizmor`. Required
 workflows run again for the merge group, which includes the current base and queued changes ahead of
-the pull request. `CI Status Gate` also waits for CodeQL analysis and publication. Each required context is bound to the GitHub Actions integration rather than
+the pull request. Each required context is bound to the GitHub Actions integration rather than
 accepting a same-named external status.
 
 A merge group is a diff, so it selects its jobs from the paths it touches —
@@ -168,7 +168,6 @@ changesets rather than adding one. [Release management](./release-management.mdx
 | --- | --- | --- | --- |
 | Dependency vulnerability gate | Security workflow | owns the dependency verdict; blocks fixable high or critical findings in every dependency the checkout resolves | required Security workflow |
 | GitHub dependency review | pull requests | reports the advisories a pull request introduces, with their patched versions; holds no verdict | Security workflow summary |
-| CodeQL advanced setup | pull requests, merge groups, `main` pushes, and weekly | repository SAST policy | code scanning |
 | TruffleHog and GitHub push protection | pull requests and pushes | block verified secrets | Security workflow and repository protection |
 | Trivy filesystem scan | Security workflow | a scanner error blocks; findings of every severity are report-only | code scanning |
 | Semgrep TLS policy | pull requests, merge groups, and `main` pushes | fails on a rule violation or a scanner error | code scanning and a run artifact |
@@ -248,8 +247,7 @@ SBOM, and release-verification guarantees.
 
 `security/semgrep/` holds this repository's own rule pack: syntax checks for disabled Node
 certificate verification and unconditional Java hostname verifiers, not comprehensive TLS analysis.
-CodeQL keeps the deep dataflow analysis, and the image-reference, `security.txt` and Liquibase guards
-in `ci-security-scan.yml` stay independent. Inline `nosemgrep` suppression is disabled, so an
+The image-reference, `security.txt` and Liquibase guards in `ci-security-scan.yml` stay independent. Inline `nosemgrep` suppression is disabled, so an
 exception is a reviewed rule change, and every rule carries a positive and a negative fixture beside
 it.
 
@@ -258,38 +256,16 @@ credentials over a read-only checkout, and `.github/workflows/semgrep.yml` owns 
 reproduce a run locally. A pull request from a fork gets the scan verdict but no code-scanning row,
 because GitHub caps a fork token's `security-events` access at read.
 
-### CodeQL configuration
+### Static analysis coverage
 
-PR and merge-group diffs select analysis languages, not individual files: each selected language
-scans its configured source tree. Main and scheduled runs select all languages, as do changes to
-the CodeQL workflow or configuration. The language filters live in `.github/workflows/codeql.yml`.
+CodeQL analysis is disabled: CI has no extraction, query-analysis or scheduled CodeQL job, and
+GitHub's CodeQL default setup must remain disabled. This removes CodeQL's interprocedural security
+analysis; the remaining checks are not an equivalent replacement. GitHub Code Quality is a separate
+maintainability service and remains enabled.
 
-CI calls that reusable workflow, and `CI Status Gate` waits for its successful completion, including
-SARIF upload. A merge group therefore cannot pass the gate and lose its temporary ref while CodeQL
-is still publishing results. The weekly scan also runs directly from the same workflow.
-
-Java uses manual extraction with the JDK pinned in `.java-version` and a clean
-`:application:testClasses` compilation with build and configuration caches disabled. The shared
-`setup-caches` action restores Gradle dependencies read-only from the default-branch package
-producer through the Gradle action's OS-wide fallback; analysis never publishes a cache. The
-package job is the only writer, and a missing or expired entry falls back to a cold build.
-This gives CodeQL the real dependencies, generated clients and annotation-processed source instead
-of no-build dependency and JDK guesses. The single-use Gradle process runs inside the extractor;
-neither cached classes nor a pre-existing daemon can bypass project compilation. Gradle's own
-generated version-catalog helpers, outside the project source tree, need not be recompiled or
-extracted on a cache hit. This compilation produces analysis inputs only: the packaged server
-remains owned by the build-once job. Its explicit `codeqlExtraction=true` Gradle property skips
-the duplicate ErrorProne/NullAway pass only for analysis compilation. Normal builds and tests keep
-NullAway enabled by default; javac warnings, annotation processing and CodeQL queries are unchanged.
-Actions and JavaScript/TypeScript retain no-build analysis.
-
-`.github/workflows/codeql.yml` runs CodeQL under advanced setup: only advanced setup reads a
-committed config file, and `.github/codeql/codeql-config.yml` excludes `security/semgrep/**`,
-whose fixtures deliberately carry the patterns the Semgrep rules exist to flag — unused parameters
-among them — which CodeQL's own queries otherwise report in code that is never shipped. Advanced
-setup replaces GitHub's managed default setup; switching a repository between the two is a one-time
-manual step under **Settings → Advanced Security → Code scanning → CodeQL analysis → Switch to
-advanced → Disable CodeQL**, not something a workflow file can do.
+The pinned `github/codeql-action/upload-sarif` steps publish results from other scanners; they do
+not run CodeQL analysis. Keep those uploads so Semgrep, Trivy and Scorecard retain their reporting.
+Normal Java builds retain NullAway and fatal compiler warnings without an extraction-only bypass.
 
 ### Scorecard baseline
 
@@ -634,8 +610,8 @@ diff: a pull request against its base, and a merge group against `merge_group.ba
 push to `main` and a dispatch publish `unfiltered` selection flags rather than filtering a diff.
 Selection does not override the outer event guards: ordinary main pushes omit Quality, Test,
 Security, Actionlint, Zizmor and Compose, and skip the API/schema/database/browser jobs inside
-`Build`; release-version pushes repeat those checks. Main still packages and publishes images and
-runs CodeQL. Same-repository pull requests also run `Build` and `Docker` regardless of paths, because
+`Build`; release-version pushes repeat those checks. Main still packages and publishes images.
+Same-repository pull requests also run `Build` and `Docker` regardless of paths, because
 previews need every image at the head SHA; no other event has a preview.
 
 | Selects | Paths |
@@ -713,9 +689,12 @@ The application image and `Build` artifact gates depend on packaging independent
 and release preflight wait for the image producers, not the API, database or browser checks. The
 final CI gate still requires all of them; an early image verdict cannot approve a failed artifact gate.
 
-A default-branch push reuses the packaged server when a successful release-candidate merge group
+A default-branch push reuses the packaged server when a successful merge group
 validated the exact same commit. The source must be this repository's `cicd.yml` run, with successful
-artifact gates, tests, security checks, dual-platform server builds, release preflight and final gate.
+artifact gates, tests, security checks, the AMD64 server build and final gate. ARM64 image builds
+and release preflight do not change the packaged Java artifact, so their absence in ordinary merge
+groups does not force a rebuild. Main still validates both image platforms; release candidates
+still require release preflight.
 The immutable artifact ID and its SHA-256 digest bind the download to that run. Missing, expired or
 unavailable source evidence falls back to packaging; a corrupt download fails rather than being used.
 Main still runs its own validation and publishes its images, including main-only tags and source maps.
@@ -751,7 +730,7 @@ reaches no such commit builds every image itself. `detect-changes` resolves that
   Version PR shares a concurrency lane with its dispatch, so a racing trigger replaces redundant
   validation. Either survivor must pass release preflight; the merge queue separately validates
   the final merge tree. Ordinary PRs, forks, main pushes and merge groups retain separate lanes.
-- A run on `main` that leaves a per-commit record — `codeql.yml`, `semgrep.yml`, `scorecard.yml`,
+- A run on `main` that leaves a per-commit record — `semgrep.yml`, `scorecard.yml`,
   `scorecard-ratchet.yml` — does not cancel an in-progress predecessor when another commit arrives;
   a missing record can become a gap in a later score. Those workflows write
   `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}`, and `scripts/ci-contract.test.ts`

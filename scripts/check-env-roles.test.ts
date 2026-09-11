@@ -31,6 +31,8 @@ function failureAt(failures: readonly string[], index: number): string {
  */
 const APPLICATION = `
 hephaestus:
+    release:
+        check-enabled: true
     sandbox:
         docker:
             host: unix:///var/run/docker.sock

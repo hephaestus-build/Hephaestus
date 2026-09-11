@@ -9,7 +9,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # As in `codeql.yml`: the assessment this publishes is the one the ratchet then reads, and on the
+  # the assessment this publishes is the one the ratchet then reads, and on the
   # default branch it is the only one that commit will ever get.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
