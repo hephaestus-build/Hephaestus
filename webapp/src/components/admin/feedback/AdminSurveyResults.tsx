@@ -300,7 +300,7 @@ function Distribution({
 			))}
 			{other !== undefined && other > 0 && (
 				<li className="flex items-baseline justify-between gap-3 text-sm text-muted-foreground">
-					<span className="min-w-0 italic">Another answer</span>
+					<span className="min-w-0 italic">Something else</span>
 					<span className="shrink-0 tabular-nums">
 						{other} · {shareOf(other, answered)}
 					</span>

@@ -6,6 +6,8 @@ import { STORY_NOW } from "@/components/common/story-clock";
 import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
 import {
 	adminSurvey,
+	researchResponses,
+	researchSummary,
 	researchSurvey,
 	scheduledSurvey,
 	surveyResponses,
@@ -84,7 +86,9 @@ export const Default: Story = {
 
 /** Research answers are labelled as such and come with a reminder of whose data they are. */
 export const Research: Story = {
-	args: { state: ready(researchSurvey) },
+	args: {
+		state: ready(researchSurvey, { summary: researchSummary, responses: researchResponses }),
+	},
 	play: async () => {
 		await expectSettledVisible(await screen.findByText("Research"));
 		await expect(
@@ -102,7 +106,7 @@ export const OtherAnswers: Story = {
 		const items = within(rows).getAllByRole("listitem");
 		await expect(items).toHaveLength(4);
 		await expect(items[0]).toHaveTextContent("On the pull request9 · 53%");
-		await expect(items[3]).toHaveTextContent("Another answer3 · 18%");
+		await expect(items[3]).toHaveTextContent("Something else3 · 18%");
 	},
 };
 

@@ -189,6 +189,51 @@ export const surveySummary = {
 	],
 } satisfies SurveySummary;
 
+export const researchSummary = {
+	participation: researchSurvey.participation,
+	questions: [
+		{
+			questionId: "acted",
+			answered: 4,
+			counts: [
+				{ value: "Changed the pull request", count: 3 },
+				{ value: "Discussed it with a teammate", count: 1 },
+				{ value: "Asked Heph about it", count: 1 },
+				{ value: "Nothing yet", count: 0 },
+			],
+			other: 1,
+		},
+		{
+			questionId: "trust",
+			answered: 4,
+			counts: [
+				{ value: "1", count: 0 },
+				{ value: "2", count: 0 },
+				{ value: "3", count: 1 },
+				{ value: "4", count: 2 },
+				{ value: "5", count: 1 },
+			],
+			average: 4,
+		},
+		{ questionId: "why", answered: 3, counts: [] },
+	],
+} satisfies SurveySummary;
+
+export const researchResponses = [
+	{
+		id: "bbbbbbbb-0000-0000-0000-000000000001",
+		account: { id: 2, displayName: "Grace Hopper", email: "grace@example.org" },
+		workspace: { id: 7, slug: "acme", displayName: "Acme" },
+		status: "RESPONDED",
+		answers: [
+			{ questionId: "acted", choices: ["Changed the pull request", "Told my lead"] },
+			{ questionId: "trust", rating: 4 },
+			{ questionId: "why", text: "It quoted the exact lines it meant." },
+		],
+		decidedAt: hoursBefore(5),
+	},
+] satisfies SurveyResponse[];
+
 export const surveyResponses = [
 	{
 		id: "aaaaaaaa-0000-0000-0000-000000000001",
