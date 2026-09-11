@@ -26,7 +26,7 @@ import { FEEDBACK_KIND_COPY, type FeedbackKind, READERS } from "./feedback-copy"
 import { SURVEY_PURPOSE_DEFS } from "./survey-purpose-defs";
 import { surveyEstimate } from "./survey-questions";
 
-/** Where the Hephaestus project itself takes bug reports and feature ideas from anyone. */
+/** The public issue tracker, for anyone who would rather talk in the open. */
 export const HEPHAESTUS_GITHUB_ISSUES_URL =
 	"https://github.com/hephaestus-build/Hephaestus/issues/new/choose";
 
@@ -43,9 +43,9 @@ const KINDS: { kind: FeedbackKind; icon: typeof Bug }[] = [
 ];
 
 /**
- * The one place to talk to the people behind this instance — and, one step further, to the
- * project. The trigger is a labelled pill rather than a bare icon so the door is visible; survey
- * invitations wait behind it, counted on the trigger, and nothing opens until the member chooses.
+ * The one place to talk to the Hephaestus team. The trigger is a labelled pill rather than a bare
+ * icon so the door is visible; survey invitations wait behind it, counted on the trigger, and
+ * nothing opens until the member chooses.
  */
 export function ProductFeedbackMenu({
 	invitations,
@@ -90,7 +90,9 @@ export function ProductFeedbackMenu({
 			<DropdownMenuContent className="w-80" align="end">
 				<div className="px-2 pt-1.5 pb-2">
 					<p className="text-sm font-medium">Help make Hephaestus better</p>
-					<p className="text-xs text-muted-foreground">Ideas, bugs and feedback go to {READERS}.</p>
+					<p className="text-xs text-muted-foreground">
+						Ideas, bugs and feedback go straight to {READERS}.
+					</p>
 				</div>
 				<DropdownMenuGroup>
 					{KINDS.map(({ kind, icon: Icon }) => (
@@ -152,7 +154,7 @@ export function ProductFeedbackMenu({
 								<ExternalLink aria-hidden className="size-3" />
 							</span>
 							<span id={`${id}-github`} className="text-xs text-muted-foreground">
-								Public, for bugs and ideas about Hephaestus itself.
+								If you'd rather discuss it in the open.
 							</span>
 						</span>
 					</DropdownMenuItem>

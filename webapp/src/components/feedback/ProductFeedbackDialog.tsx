@@ -102,8 +102,7 @@ export function ProductFeedbackDialog({
 					<DialogHeader>
 						<DialogTitle>{copy.heading}</DialogTitle>
 						<DialogDescription>
-							Goes to {READERS}, with your name so they can follow up. Nothing is sent to the
-							Hephaestus project.
+							Goes straight to {READERS}, with your name so they can follow up.
 						</DialogDescription>
 					</DialogHeader>
 					<DialogBody className="flex flex-col gap-5 py-1">

@@ -2,8 +2,8 @@ import type { FeedbackRequest } from "@/api/types.gen";
 
 export type FeedbackKind = FeedbackRequest["kind"];
 
-/** How the product names the people a submission reaches; the same words wherever it says so. */
-export const READERS = "the people who run Hephaestus here";
+/** Who a submission reaches, in the product's words; one home so every screen says the same. */
+export const READERS = "the Hephaestus team";
 
 interface KindCopy {
 	title: string;

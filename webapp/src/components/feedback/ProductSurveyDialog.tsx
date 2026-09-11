@@ -92,8 +92,8 @@ export function ProductSurveyDialog({
 							{research ? (
 								<>
 									Part of {studyOf(survey)}, which you agreed to join. Your answers go to that
-									study, linked to your account; {READERS} see them as study data, not as product
-									feedback. Skip anything you'd rather not answer. You can leave the study in{" "}
+									study, linked to your account, and are kept apart from product feedback. Skip
+									anything you'd rather not answer. You can leave the study in{" "}
 									<Link
 										to="/settings"
 										className="underline underline-offset-2"
@@ -104,10 +104,7 @@ export function ProductSurveyDialog({
 									— answers already sent stay with the study.
 								</>
 							) : (
-								<>
-									Read by {READERS}, with your name attached. Not research, and nothing goes to the
-									Hephaestus project.
-								</>
+								<>Read by {READERS}, with your name attached. Not research.</>
 							)}
 						</p>
 					</DialogHeader>
