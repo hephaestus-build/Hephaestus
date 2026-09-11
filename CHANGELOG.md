@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.81.0
+
+### Minor Changes
+
+- Practice observations now distinguish whether a practice was assessed from whether its target behaviour was present and whether that fixed target is desirable or undesirable. Not applicable and undetermined observations no longer masquerade as presence values. Invalid combinations are rejected instead of silently rewritten, and positive and negative outcomes are derived from presence and assessment. Severity belongs only to negative outcomes.
+
+  **Operators:** This changes the observation API and runtime output contract. Upgrade the server, sandbox runtime and webapp together; update custom consumers to read `assessmentStatus` and nullable `presence`, `assessment` and `severity`, plus the read-only `outcome`. Standing observations expose their descriptive `kind` separately. Back up the database before upgrading. The migration preserves existing outcomes by translating historical absence assessments and stops rather than inventing a severity for an inconsistent historical bad observation. See the migration guide before upgrading.
+
+- Practice reviews of a pull request now read its commits — each commit's subject, body, timestamps and file count, in history order — so feedback about commit messages and commit scope no longer comes back inconclusive because no commit list reached the review. **Operators:** a pull request review now needs the repository checkout for every practice, not only the code practices; an installation that enables `GIT_CHECKOUT_ENABLED` together with `AGENT_ENABLED`, as the install guide requires, needs no change.
+- A **Feedback** button in the header is now the one place to reach the Hephaestus team: **Share an idea**, **Report a bug** or **Send feedback**, with a dialog that asks for what that kind needs, and a link to the public issue tracker for those who prefer the open. Surveys wait in the same menu with their length; each new one is announced once and never opens by itself. A survey asks one question at a time, marks optional questions, takes **Something else** where its author allows it, keeps your draft when you close it, and lets you undo an accidental decline. Page and browser details go with a report only when you tick the box — ticked by default for a bug.
+
+  Instance administrators can publish a survey for research as well as for product improvement. A **product** survey is read by the Hephaestus team and is never research. Where the instance names a research organisation, a **research** survey is offered only to members who currently take part in that study, is labelled as research with a link to leave the study, and its answers are that study's data. Results pages show invited, responded and declined counts, a summary per question with averages and a Net Promoter Score, every response, and a CSV export. The inbox badges ideas, bugs and feedback and lets you resolve or reopen them.
+
+- Instance administrators see which release, commit and image digest the server reports from its verified release lock, and whether a newer release is published. To learn that, the server asks `api.github.com` once a day, unauthenticated and without any instance data; set `HEPHAESTUS_RELEASE_CHECK_ENABLED=false` on an air-gapped host to switch it off. The overview keeps a newer release apart from a failed, rate-limited, disabled or never-completed check, says whether the newer release carries schema migrations, and links its notes and the upgrade guide. Every runtime role reports the same identity under `release` in `/actuator/info`.
+
+### Patch Changes
+
+- Replace the web application's styling utility dependencies with shadcn's maintained class-merging library, preserving component style overrides without requiring upgrade steps.
+- Remove an unused documentation dependency and simplify internal styling and mentor text handling without changing displayed content or requiring upgrade steps.
+- Simplify internal styling dependencies without changing component appearance or requiring upgrade steps.
+- Observation severity now appears for missing desirable behaviour as well as present undesirable behaviour, and never for positive outcomes.
+
 ## 0.80.0
 
 ### Minor Changes
