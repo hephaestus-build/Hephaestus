@@ -2,7 +2,6 @@ import { fireEvent, screen } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { adminGetReleaseOptions } from "@/api/@tanstack/react-query.gen";
 import type { ReleaseStatus } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
@@ -13,96 +12,53 @@ vi.setConfig({ testTimeout: 20_000 });
 const status = {
 	running: {
 		version: "1.2.3",
+		channel: "RELEASE",
 		commit: "a".repeat(40),
-		channel: "stable",
-		identityStatus: "UNKNOWN",
+		image: `ghcr.io/hephaestus-build/application-server@sha256:${"b".repeat(64)}`,
 		roles: ["server"],
-		images: {},
 	},
 	status: "NEVER_CHECKED",
-	enabled: true,
-	backupRestoreStatus: "UNKNOWN",
-	upgradeGuideUrl: "https://docs.hephaestus.build/admin/install#upgrades",
 } satisfies Wire<ReleaseStatus>;
 
-describe("instance overview release information", () => {
-	it("uses the generated check response and retains failure instead of claiming current", async () => {
+describe("instance overview release card", () => {
+	it("shows the check endpoint's answer and never folds a failure into up to date", async () => {
+		let checks = 0;
 		server.use(
 			http.get("*/admin/release", () => HttpResponse.json(status)),
-			http.post("*/admin/release/checks", () =>
-				HttpResponse.json({
+			http.post("*/admin/release/checks", () => {
+				checks += 1;
+				return HttpResponse.json({
 					...status,
-					status: "CHECK_FAILED",
-					failureReason: "RATE_LIMITED",
+					status: "FAILED",
+					failure: "RATE_LIMITED",
 					lastAttempt: "2026-09-08T00:00:00Z",
-				}),
-			),
-		);
-		renderRouteAt("/admin");
-		await screen.findByText("Never checked", {}, ROUTE_RENDER_WAIT);
-		fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
-		await screen.findByText("Update check failed", {}, ROUTE_RENDER_WAIT);
-		expect(screen.queryByText("Current release")).toBeNull();
-		expect(screen.getByRole("status").textContent).toBe(
-			"Update check completed: Update check failed.",
-		);
-	});
-	it("does not offer a manual bypass when update checks are disabled", async () => {
-		server.use(
-			http.get("*/admin/release", () =>
-				HttpResponse.json({ ...status, status: "DISABLED", enabled: false }),
-			),
-		);
-		renderRouteAt("/admin");
-		await screen.findByText("Update checks disabled", {}, ROUTE_RENDER_WAIT);
-		expect(screen.queryByRole("button", { name: "Check for updates" })).toBeNull();
-	});
-	it("retains running identity when a background refresh fails", async () => {
-		server.use(http.get("*/admin/release", () => HttpResponse.json(status)));
-		const queryClient = renderRouteAt("/admin");
-		await screen.findByText("Never checked", {}, ROUTE_RENDER_WAIT);
-		server.use(
-			http.get("*/admin/release", () => HttpResponse.json({ status: 503 }, { status: 503 })),
-		);
-		await queryClient.invalidateQueries({ queryKey: adminGetReleaseOptions().queryKey });
-		await screen.findByText("Could not refresh release information", {}, ROUTE_RENDER_WAIT);
-		expect(screen.getByText("1.2.3 · stable")).not.toBeNull();
-		expect(screen.getByText("Never checked")).not.toBeNull();
-	});
-	it("does not let an older background response overwrite a completed manual check", async () => {
-		server.use(
-			http.get("*/admin/release", () => HttpResponse.json(status)),
-			http.post("*/admin/release/checks", () =>
-				HttpResponse.json({ ...status, status: "CHECK_FAILED", failureReason: "RATE_LIMITED" }),
-			),
-		);
-		const queryClient = renderRouteAt("/admin");
-		await screen.findByText("Never checked", {}, ROUTE_RENDER_WAIT);
-		let markStarted = () => {};
-		const started = new Promise<void>((resolve) => {
-			markStarted = resolve;
-		});
-		let releaseResponse = () => {};
-		const response = new Promise<void>((resolve) => {
-			releaseResponse = resolve;
-		});
-		server.use(
-			http.get("*/admin/release", async () => {
-				markStarted();
-				await response;
-				return HttpResponse.json(status);
+					nextCheck: "2999-01-01T00:00:00Z",
+				});
 			}),
 		);
-		const refresh = queryClient.invalidateQueries({ queryKey: adminGetReleaseOptions().queryKey });
-		await started;
-		try {
-			fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
-			await screen.findByText("Update check failed", {}, ROUTE_RENDER_WAIT);
-		} finally {
-			releaseResponse();
-		}
-		await refresh;
-		expect(screen.queryByText("Never checked")).toBeNull();
-		expect(screen.getByText("Update check failed")).not.toBeNull();
+		renderRouteAt("/admin");
+		await screen.findByText("Not checked yet", {}, ROUTE_RENDER_WAIT);
+		fireEvent.click(screen.getByRole("button", { name: "Check now" }));
+		await screen.findByText("Check failed", {}, ROUTE_RENDER_WAIT);
+		expect(checks).toBe(1);
+		expect(screen.queryByText("Up to date")).toBeNull();
+		expect(screen.getByRole("status").textContent).toBe("Check completed: Check failed.");
+		expect(screen.getByRole("button", { name: "Check now" }).hasAttribute("disabled")).toBe(true);
+	});
+
+	it("offers no manual check when the operator switched checks off", async () => {
+		server.use(
+			http.get("*/admin/release", () => HttpResponse.json({ ...status, status: "DISABLED" })),
+		);
+		renderRouteAt("/admin");
+		await screen.findByText("Checks off", {}, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("button", { name: "Check now" })).toBeNull();
+	});
+
+	it("keeps the rest of the overview when release information is unavailable", async () => {
+		server.use(http.get("*/admin/release", () => HttpResponse.json({}, { status: 503 })));
+		renderRouteAt("/admin");
+		await screen.findByText("Release information is unavailable", {}, ROUTE_RENDER_WAIT);
+		expect(screen.getByText("Delivery")).not.toBeNull();
 	});
 });

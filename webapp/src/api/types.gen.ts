@@ -417,14 +417,6 @@ export type AvailableLlmModel = {
   supportsReasoning: boolean;
 };
 
-export type AvailableRelease = {
-  notesUrl: string;
-  operatorActions: string;
-  schemaMigrations: 'REQUIRED' | 'NONE' | 'UNKNOWN';
-  securityRelevance: string;
-  version: string;
-};
-
 /**
  * Connection-level backfill rollup
  */
@@ -1886,6 +1878,18 @@ export type LabelInfo = {
    * Repository the label belongs to
    */
   repository?: RepositoryInfo;
+};
+
+/**
+ * A published release. <code>schemaMigrations</code> is the flag the release workflow publishes for
+ *  that one release and is absent when the notes carry none; it says nothing about releases
+ *  between the running one and this one.
+ */
+export type LatestRelease = {
+  notesUrl: string;
+  publishedAt: Date;
+  schemaMigrations?: boolean;
+  version: string;
 };
 
 /**
@@ -3765,19 +3769,38 @@ export type RegisterSlackChannelRequest = {
 };
 
 /**
- * The shared instance release read model. Discovery is advisory, not installation verification.
+ * The running release and what the last update check found. Discovery is advisory: nothing here
+ *  verifies an artifact or performs an upgrade.
  */
 export type ReleaseStatus = {
-  available?: AvailableRelease;
-  backupRestoreStatus: string;
-  enabled: boolean;
-  failureReason?: string;
+  /**
+   * why the last attempt did not complete, when <code>status</code> is <code>FAILED</code>
+   */
+  failure?: 'RATE_LIMITED' | 'UNAVAILABLE' | 'MALFORMED';
+  /**
+   * when a check was last started, on any outcome
+   */
   lastAttempt?: Date;
+  /**
+   * when a check last completed, which is when <code>latest</code> was observed
+   */
   lastSuccess?: Date;
+  /**
+   * the newest published release as of <code>lastSuccess</code>
+   */
+  latest?: LatestRelease;
+  /**
+   * when the scheduler will try again; a rate-limit window also blocks manual checks
+   */
   nextCheck?: Date;
+  /**
+   * the identity this process reports
+   */
   running: RunningRelease;
-  status: 'CURRENT' | 'UPDATE_AVAILABLE' | 'CHECK_FAILED' | 'NEVER_CHECKED' | 'UNSUPPORTED' | 'DISABLED' | 'STALE';
-  upgradeGuideUrl: string;
+  /**
+   * the verdict an administrator reads first
+   */
+  status: 'DISABLED' | 'NOT_APPLICABLE' | 'NEVER_CHECKED' | 'CURRENT' | 'UPDATE_AVAILABLE' | 'FAILED';
 };
 
 /**
@@ -4476,14 +4499,31 @@ export type RevokeSessionsResult = {
   revoked?: number;
 };
 
+/**
+ * Deployment-reported identity: the values the verified lock env handed this process, not an
+ *  observation of the container. <code>commit</code> and <code>image</code> are absent outside a lock-driven
+ *  deployment.
+ */
 export type RunningRelease = {
-  channel: 'stable' | 'prerelease' | 'unknown';
-  commit: string;
-  identityStatus: 'DEPLOYMENT_REPORTED' | 'MISMATCH' | 'INVALID' | 'UNKNOWN';
-  images: {
-    [key: string]: string;
-  };
+  /**
+   * what kind of build that version names
+   */
+  channel: 'RELEASE' | 'COMMIT' | 'DEVELOPMENT';
+  /**
+   * the source commit the lock names
+   */
+  commit?: string;
+  /**
+   * the digest reference this container was started from
+   */
+  image?: string;
+  /**
+   * the runtime roles this process booted with
+   */
   roles: Array<string>;
+  /**
+   * the version the deployment passed as <code>APP_VERSION</code>
+   */
   version: string;
 };
 

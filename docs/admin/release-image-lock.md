@@ -46,18 +46,14 @@ non-digest `agent-pi` reference.
 
 ## Runtime identity handoff
 
-`release-lock.env` includes `HEPHAESTUS_DEPLOYMENT_IDENTITY`: the release, source commit and image
-index-digest references from the verified lock. Compose passes this projection to the server, worker
-and webhook processes. It is operator-supplied deployment metadata, not a live observation of the
-containers or a second signature verification.
+Compose hands each server, worker and webhook container three lines of `release-lock.env`:
+`IMAGE_TAG` (as `APP_VERSION`), `HEPHAESTUS_RELEASE_COMMIT` and `HEPHAESTUS_IMAGE_APPLICATION_SERVER`.
+Every process reports them, with its enabled runtime roles, under `release` in `/actuator/info`. This
+is operator-supplied deployment metadata from the verified lock, not an observation of the container
+and not a second signature verification; a process without a lock reports the version it was given
+and no commit or image. A value that is present but malformed refuses startup.
 
-Each process exposes its enabled roles and embedded build commit under `release` in `/actuator/info`.
-When that commit matches the projection, it reports the lock's release version; a disagreement is
-reported as a mismatch. Missing or invalid metadata is reported explicitly, not resolved from image
-tags. The reported digest map describes the selected lock, not proof that every container has
-restarted with those images.
-
-The instance-admin API adds update-check state to this identity: `GET /admin/release` reads it and
-`POST /admin/release/checks` requests a refresh. See [Running release and update checks](./install#running-release-and-update-checks)
-for caching, offline operation and privacy, and [Upgrade procedure](./install#upgrade-procedure) for
-post-deployment verification.
+Compare `release` on **each** role's management listener after an upgrade — the administration
+overview shows only the server it talks to. The instance-admin API adds update-check state to the
+same identity: `GET /admin/release` reads it and `POST /admin/release/checks` asks GitHub now. See
+[Update checks](./install#update-checks) for caching, privacy and offline operation.

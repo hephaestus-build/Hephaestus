@@ -17,8 +17,6 @@ spring:
             # Spec generation introspects controllers and must not access the database during startup.
             ddl-auto: none
 hephaestus:
-    release:
-        check-enabled: false
     auth:
         login-providers:
             github:

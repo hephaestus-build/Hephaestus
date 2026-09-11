@@ -1,215 +1,218 @@
 package de.tum.cit.aet.hephaestus.core.release;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.release.ReleaseCheckClient.Failed;
+import de.tum.cit.aet.hephaestus.core.release.ReleaseCheckClient.Found;
+import de.tum.cit.aet.hephaestus.core.release.ReleaseCheckClient.NotModified;
+import de.tum.cit.aet.hephaestus.core.release.ReleaseStatusDTO.LatestReleaseDTO;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.env.MockEnvironment;
 
 @Tag("unit")
 class ReleaseCheckServiceTest {
     private static final Instant NOW = Instant.parse("2026-09-08T00:00:00Z");
+    private static final Instant PUBLISHED = Instant.parse("2026-09-01T00:00:00Z");
+
+    /** Advances only when told, so cache and backoff windows are exercised without sleeping. */
+    private static final class SteppingClock extends Clock {
+        private Instant instant = NOW;
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneId.of("UTC");
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return instant;
+        }
+
+        void advance(Duration duration) {
+            instant = instant.plus(duration);
+        }
+    }
+
     private final ReleaseCheckClient client = mock(ReleaseCheckClient.class);
-    private final Clock clock = mock(Clock.class);
+    private final SteppingClock clock = new SteppingClock();
 
     private ReleaseCheckService service(String version, boolean enabled) {
-        when(clock.instant()).thenReturn(NOW);
-        return new ReleaseCheckService(
-                RunningReleaseTest.identity(
-                        version,
-                        RunningReleaseTest.COMMIT,
-                        new MockEnvironment()
-                                .withProperty(
-                                        "HEPHAESTUS_DEPLOYMENT_IDENTITY",
-                                        RunningReleaseTest.projection(version, RunningReleaseTest.COMMIT))),
-                client,
-                clock,
-                enabled);
+        var properties = new ReleaseProperties(RunningReleaseTest.COMMIT, RunningReleaseTest.IMAGE, enabled);
+        return new ReleaseCheckService(RunningReleaseTest.running(version), client, clock, properties);
     }
 
-    private static ReleaseCheckClient.Result release(String version) {
-        return new ReleaseCheckClient.Result(
-                200,
-                "\"etag\"",
-                null,
-                null,
-                new ReleaseStatusDTO.AvailableReleaseDTO(
+    private static Found found(String version) {
+        return new Found(
+                new LatestReleaseDTO(
                         version,
+                        PUBLISHED,
                         "https://github.com/hephaestus-build/Hephaestus/releases/tag/v" + version,
-                        "UNKNOWN",
-                        "UNKNOWN",
-                        "Review migration notes"));
+                        null),
+                "\"etag\"");
     }
 
     @Test
-    void shouldDistinguishNeverCheckedFromCurrentAndReuseCache() {
+    void shouldDistinguishNeverCheckedFromCurrentAndReuseTheAnswerForADay() {
         var service = service("1.2.3", true);
-        assertThat(service.status().status()).isEqualTo("NEVER_CHECKED");
-        when(client.check(null)).thenReturn(release("1.2.3"));
-        assertThat(service.refresh().status()).isEqualTo("CURRENT");
-        service.refresh();
-        verify(client, times(1)).check(null);
-        assertThat(service.status().lastSuccess()).isEqualTo(NOW);
+        assertThat(service.status().status()).isEqualTo(ReleaseCheckStatus.NEVER_CHECKED);
+        when(client.fetchLatest(null)).thenReturn(found("1.2.3"));
+        service.poll();
+        var checked = service.status();
+        assertThat(checked.status()).isEqualTo(ReleaseCheckStatus.CURRENT);
+        assertThat(checked.lastAttempt()).isEqualTo(NOW);
+        assertThat(checked.lastSuccess()).isEqualTo(NOW);
+        assertThat(checked.nextCheck()).isEqualTo(NOW.plus(Duration.ofHours(24)));
+        clock.advance(Duration.ofHours(23));
+        service.poll();
+        verify(client, times(1)).fetchLatest(null);
     }
 
     @Test
-    void shouldRetainLastSuccessAndRedactFailureWhenSourceFails() {
+    void shouldLetAnAdministratorBypassTheCacheButNotARateLimitWindow() {
         var service = service("1.2.3", true);
-        when(client.check(null)).thenReturn(release("1.3.0"));
-        assertThat(service.refresh().status()).isEqualTo("UPDATE_AVAILABLE");
-        when(clock.instant()).thenReturn(NOW.plusSeconds(86400));
-        assertThat(service.status().status()).isEqualTo("STALE");
-        when(client.check("\"etag\"")).thenThrow(new IllegalStateException("secret tenant proxy response"));
-        var failed = service.refresh();
-        assertThat(failed.status()).isEqualTo("CHECK_FAILED");
+        when(client.fetchLatest(null)).thenReturn(found("1.2.3"));
+        service.poll();
+        when(client.fetchLatest("\"etag\"")).thenReturn(found("1.3.0"));
+        assertThat(service.check().status()).isEqualTo(ReleaseCheckStatus.UPDATE_AVAILABLE);
+        when(client.fetchLatest("\"etag\""))
+                .thenReturn(new Failed(ReleaseCheckFailure.RATE_LIMITED, NOW.plusSeconds(7200)));
+        var limited = service.check();
+        assertThat(limited.status()).isEqualTo(ReleaseCheckStatus.FAILED);
+        assertThat(limited.failure()).isEqualTo(ReleaseCheckFailure.RATE_LIMITED);
+        assertThat(limited.nextCheck()).isEqualTo(NOW.plusSeconds(7200));
+        clock.advance(Duration.ofSeconds(3600));
+        assertThat(service.check()).isEqualTo(limited);
+        verify(client, times(2)).fetchLatest("\"etag\"");
+    }
+
+    @Test
+    void shouldRetainTheLastAnswerAndBackOffWhenGitHubIsUnavailable() {
+        var service = service("1.2.3", true);
+        when(client.fetchLatest(null)).thenReturn(found("1.3.0"));
+        service.poll();
+        clock.advance(Duration.ofHours(24));
+        when(client.fetchLatest("\"etag\"")).thenReturn(new Failed(ReleaseCheckFailure.UNAVAILABLE, null));
+        service.poll();
+        var failed = service.status();
+        assertThat(failed.status()).isEqualTo(ReleaseCheckStatus.FAILED);
+        assertThat(failed.failure()).isEqualTo(ReleaseCheckFailure.UNAVAILABLE);
         assertThat(failed.lastSuccess()).isEqualTo(NOW);
-        assertThat(failed.available()).isNotNull();
-        assertThat(failed.toString()).doesNotContain("secret tenant");
-        service.refresh();
-        verify(client, times(1)).check("\"etag\"");
+        assertThat(failed.lastAttempt()).isEqualTo(clock.instant());
+        assertThat(failed.latest()).isNotNull();
+        assertThat(failed.nextCheck()).isEqualTo(clock.instant().plus(Duration.ofMinutes(15)));
+        clock.advance(Duration.ofMinutes(15));
+        service.poll();
+        assertThat(service.status().nextCheck()).isEqualTo(clock.instant().plus(Duration.ofMinutes(30)));
+        verify(client, times(2)).fetchLatest("\"etag\"");
     }
 
     @Test
-    void shouldRevalidateConditionalResponse() {
+    void shouldCapTheBackoffAtTheCachePeriod() {
         var service = service("1.2.3", true);
-        when(client.check(null)).thenReturn(release("1.3.0"));
-        service.refresh();
-        when(clock.instant()).thenReturn(NOW.plusSeconds(86400));
-        when(client.check("\"etag\"")).thenReturn(new ReleaseCheckClient.Result(304, null, null, null, null));
-        assertThat(service.refresh().status()).isEqualTo("UPDATE_AVAILABLE");
-        assertThat(service.status().lastSuccess()).isEqualTo(NOW.plusSeconds(86400));
-    }
-
-    @Test
-    void shouldHonorRateLimitForManualRefresh() {
-        var service = service("1.2.3", true);
-        when(client.check(null)).thenReturn(new ReleaseCheckClient.Result(429, null, "7200", null, null));
-        var result = service.refresh();
-        assertThat(result.failureReason()).isEqualTo("RATE_LIMITED");
-        assertThat(result.nextCheck()).isEqualTo(NOW.plusSeconds(7200));
-        when(clock.instant()).thenReturn(NOW.plusSeconds(3600));
-        service.refresh();
-        verify(client, times(1)).check(null);
-    }
-
-    @Test
-    void shouldNotContactGitHubWhenDisabledOrPrereleaseOrLocal() {
-        for (String version : new String[] {"0.0.0-development", "1.0.0-rc.1", "unknown"}) {
-            assertThat(service(version, true).refresh().status()).isEqualTo("UNSUPPORTED");
+        when(client.fetchLatest(null)).thenReturn(new Failed(ReleaseCheckFailure.UNAVAILABLE, null));
+        for (int attempt = 0; attempt < 10; attempt++) {
+            service.check();
         }
-        assertThat(service("1.2.3", false).refresh().status()).isEqualTo("DISABLED");
+        assertThat(service.status().nextCheck()).isEqualTo(NOW.plus(Duration.ofHours(24)));
+    }
+
+    @Test
+    void shouldRecoverAfterAFailureAndResetTheBackoff() {
+        var service = service("1.2.3", true);
+        when(client.fetchLatest(null)).thenReturn(new Failed(ReleaseCheckFailure.UNAVAILABLE, null));
+        service.poll();
+        clock.advance(Duration.ofMinutes(15));
+        when(client.fetchLatest(null)).thenReturn(found("1.2.4"));
+        service.poll();
+        var recovered = service.status();
+        assertThat(recovered.status()).isEqualTo(ReleaseCheckStatus.UPDATE_AVAILABLE);
+        assertThat(recovered.failure()).isNull();
+        assertThat(recovered.lastSuccess()).isEqualTo(clock.instant());
+        assertThat(recovered.nextCheck()).isEqualTo(clock.instant().plus(Duration.ofHours(24)));
+    }
+
+    @Test
+    void shouldRevalidateWithTheEtagAndFailWhenNothingIsCachedBehindIt() {
+        var service = service("1.2.3", true);
+        when(client.fetchLatest(null)).thenReturn(new NotModified());
+        service.poll();
+        assertThat(service.status().status()).isEqualTo(ReleaseCheckStatus.FAILED);
+        assertThat(service.status().failure()).isEqualTo(ReleaseCheckFailure.MALFORMED);
+        when(client.fetchLatest(null)).thenReturn(found("1.3.0"));
+        service.check();
+        clock.advance(Duration.ofHours(24));
+        when(client.fetchLatest("\"etag\"")).thenReturn(new NotModified());
+        service.poll();
+        var revalidated = service.status();
+        assertThat(revalidated.status()).isEqualTo(ReleaseCheckStatus.UPDATE_AVAILABLE);
+        assertThat(revalidated.lastSuccess()).isEqualTo(clock.instant());
+    }
+
+    @Test
+    void shouldNeverContactGitHubWhenDisabledOrNotRunningARelease() {
+        for (String version : new String[] {"0.0.0-development", RunningReleaseTest.COMMIT}) {
+            var service = service(version, true);
+            assertThat(service.check().status()).isEqualTo(ReleaseCheckStatus.NOT_APPLICABLE);
+            service.poll();
+        }
+        var disabled = service("1.2.3", false);
+        assertThat(disabled.check().status()).isEqualTo(ReleaseCheckStatus.DISABLED);
+        disabled.poll();
+        assertThat(disabled.status().lastAttempt()).isNull();
         verifyNoInteractions(client);
     }
 
     @Test
-    void shouldNotCheckPackagedArtifactVersionWithoutDeploymentIdentity() {
-        when(clock.instant()).thenReturn(NOW);
-        for (String commit : new String[] {"unknown", RunningReleaseTest.COMMIT}) {
-            var service = new ReleaseCheckService(
-                    RunningReleaseTest.identity("0.77.4", commit, new MockEnvironment()), client, clock, true);
-            assertThat(service.refresh().status()).isEqualTo("UNSUPPORTED");
-            assertThat(service.status().lastAttempt()).isNull();
-        }
-        verifyNoInteractions(client);
-    }
-
-    @Test
-    void shouldNotRecommendDowngradingWhenPublishedReleaseIsOlder() {
+    void shouldReportCurrentRatherThanADowngradeWhenThePublishedReleaseIsOlder() {
         var service = service("2.0.0", true);
-        when(client.check(null)).thenReturn(release("1.3.0"));
-        assertThat(service.refresh().status()).isEqualTo("UNSUPPORTED");
+        when(client.fetchLatest(null)).thenReturn(found("1.3.0"));
+        var status = service.check();
+        assertThat(status.status()).isEqualTo(ReleaseCheckStatus.CURRENT);
+        assertThat(status.latest()).isNotNull();
+        assertThat(status.latest().version()).isEqualTo("1.3.0");
     }
 
     @Test
-    void shouldFailWhenNotModifiedHasNoCachedBody() {
+    void shouldServeCachedReadsWhileACheckIsInFlightAndSerialiseManualChecks() throws Exception {
         var service = service("1.2.3", true);
-        when(client.check(null)).thenReturn(new ReleaseCheckClient.Result(304, null, null, null, null));
-        assertThat(service.refresh().status()).isEqualTo("CHECK_FAILED");
-    }
-
-    @Test
-    void shouldHonorHttpDatesAndResetAndHandleMalformedHeaders() {
-        assertThat(ReleaseCheckService.retryAt("Tue, 8 Sep 2026 02:00:00 GMT", null, NOW))
-                .isEqualTo(NOW.plusSeconds(7200));
-        assertThat(ReleaseCheckService.retryAt(
-                        "60", Long.toString(NOW.plusSeconds(7200).getEpochSecond()), NOW))
-                .isEqualTo(NOW.plusSeconds(7200));
-        assertThat(ReleaseCheckService.retryAt("not a date", null, NOW)).isEqualTo(NOW.plusSeconds(86400));
-    }
-
-    @Test
-    void shouldHonorValidRateLimitWhenOtherHeaderIsMalformed() {
-        assertThat(ReleaseCheckService.retryAt(
-                        "invalid", Long.toString(NOW.plusSeconds(172800).getEpochSecond()), NOW))
-                .isEqualTo(NOW.plusSeconds(172800));
-        assertThat(ReleaseCheckService.retryAt("172800", "invalid", NOW)).isEqualTo(NOW.plusSeconds(172800));
-    }
-
-    @Test
-    void shouldNotMislabelForbiddenResponsesAsRateLimits() {
-        var service = service("1.2.3", true);
-        when(client.check(null)).thenReturn(new ReleaseCheckClient.Result(403, null, null, null, null));
-        assertThat(service.refresh().failureReason()).isEqualTo("RELEASE_SOURCE_UNAVAILABLE");
-    }
-
-    @Test
-    void shouldRecoverAfterBackoffWithoutLosingLastAttempt() {
-        var service = service("1.2.3", true);
-        when(client.check(null)).thenReturn(new ReleaseCheckClient.Result(503, null, null, null, null));
-        assertThat(service.refresh().status()).isEqualTo("CHECK_FAILED");
-        when(clock.instant()).thenReturn(NOW.plusSeconds(900));
-        when(client.check(null)).thenReturn(release("1.2.4"));
-        var recovered = service.refresh();
-        assertThat(recovered.status()).isEqualTo("UPDATE_AVAILABLE");
-        assertThat(recovered.failureReason()).isNull();
-        assertThat(recovered.lastAttempt()).isEqualTo(NOW.plusSeconds(900));
-        assertThat(recovered.lastSuccess()).isEqualTo(NOW.plusSeconds(900));
-    }
-
-    @Test
-    void shouldCoalesceConcurrentManualChecks() throws Exception {
-        var service = service("1.2.3", true);
-        var entered = new java.util.concurrent.CountDownLatch(1);
-        var release = new java.util.concurrent.CountDownLatch(1);
-        when(client.check(null)).thenAnswer(invocation -> {
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        when(client.fetchLatest(null)).thenAnswer(invocation -> {
             entered.countDown();
-            if (!release.await(5, java.util.concurrent.TimeUnit.SECONDS))
-                throw new IllegalStateException("test deadline");
-            return release("1.2.4");
+            if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("test deadline");
+            return found("1.2.4");
         });
-        try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
-            var first = executor.submit(service::refresh);
-            assertThat(entered.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
-            assertThat(executor.submit(service::status)
-                            .get(1, java.util.concurrent.TimeUnit.SECONDS)
-                            .status())
-                    .isEqualTo("NEVER_CHECKED");
-            var second = executor.submit(service::refresh);
+        when(client.fetchLatest("\"etag\"")).thenReturn(found("1.2.4"));
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var first = executor.submit(service::check);
+            assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(executor.submit(service::status).get(1, TimeUnit.SECONDS).status())
+                    .isEqualTo(ReleaseCheckStatus.NEVER_CHECKED);
+            var second = executor.submit(service::check);
             release.countDown();
-            assertThat(first.get(5, java.util.concurrent.TimeUnit.SECONDS).status())
-                    .isEqualTo("UPDATE_AVAILABLE");
-            assertThat(second.get(5, java.util.concurrent.TimeUnit.SECONDS).status())
-                    .isEqualTo("UPDATE_AVAILABLE");
+            assertThat(first.get(5, TimeUnit.SECONDS).status()).isEqualTo(ReleaseCheckStatus.UPDATE_AVAILABLE);
+            assertThat(second.get(5, TimeUnit.SECONDS).status()).isEqualTo(ReleaseCheckStatus.UPDATE_AVAILABLE);
         } finally {
             release.countDown();
         }
-        verify(client, times(1)).check(null);
-    }
-
-    @Test
-    void shouldNotEraseKnownUpdateWhenSourceRegresses() {
-        var service = service("1.2.3", true);
-        when(client.check(null)).thenReturn(release("1.3.0"));
-        service.refresh();
-        when(clock.instant()).thenReturn(NOW.plusSeconds(86400));
-        when(client.check("\"etag\"")).thenReturn(release("1.2.3"));
-        var result = service.refresh();
-        assertThat(result.status()).isEqualTo("CHECK_FAILED");
-        var available = result.available();
-        assertThat(available).isNotNull();
-        assertThat(available.version()).isEqualTo("1.3.0");
+        verify(client, times(1)).fetchLatest(null);
+        verify(client, times(1)).fetchLatest("\"etag\"");
     }
 }

@@ -2,102 +2,62 @@ package de.tum.cit.aet.hephaestus.core.release;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.Properties;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.support.DefaultListableBeanFactory;
-import org.springframework.boot.info.BuildProperties;
+import org.springframework.boot.actuate.info.Info;
 import org.springframework.mock.env.MockEnvironment;
-import tools.jackson.databind.json.JsonMapper;
 
 @Tag("unit")
 class RunningReleaseTest {
     static final String COMMIT = "a".repeat(40);
+    static final String IMAGE = "ghcr.io/hephaestus-build/application-server@sha256:" + "b".repeat(64);
 
-    static RunningRelease identity(String version, String commit, MockEnvironment environment) {
-        var properties = new Properties();
-        properties.setProperty("version", version);
-        properties.setProperty("commit", commit);
-        var factory = new DefaultListableBeanFactory();
-        factory.registerSingleton("buildProperties", new BuildProperties(properties));
-        return new RunningRelease(
-                factory.getBeanProvider(BuildProperties.class),
-                environment,
-                JsonMapper.builder().build());
+    static RunningRelease running(String version, ReleaseProperties properties, MockEnvironment environment) {
+        return new RunningRelease(version, properties, environment);
     }
 
-    static String projection(String version, String commit) {
-        return "{\"release\":\"v" + version + "\",\"commit\":\"" + commit
-                + "\",\"images\":{\"application-server\":\"ghcr.io/hephaestus-build/application-server@sha256:"
-                + "b".repeat(64) + "\"}}";
+    static RunningRelease running(String version) {
+        return running(version, new ReleaseProperties(COMMIT, IMAGE, true), new MockEnvironment());
     }
 
     @Test
-    void shouldReportUnknownWhenNoBuildMetadataExists() {
-        var factory = new DefaultListableBeanFactory();
-        var running = new RunningRelease(
-                        factory.getBeanProvider(BuildProperties.class),
-                        new MockEnvironment(),
-                        JsonMapper.builder().build())
+    void shouldReportReleaseChannelWithLockIdentityWhenVersionIsReleaseTag() {
+        var identity = running("1.2.3").get();
+        assertThat(identity.version()).isEqualTo("1.2.3");
+        assertThat(identity.channel()).isEqualTo(ReleaseChannel.RELEASE);
+        assertThat(identity.commit()).isEqualTo(COMMIT);
+        assertThat(identity.image()).isEqualTo(IMAGE);
+    }
+
+    @Test
+    void shouldReportCommitChannelWhenDeploymentFollowsDefaultBranch() {
+        assertThat(running(COMMIT).get().channel()).isEqualTo(ReleaseChannel.COMMIT);
+    }
+
+    @Test
+    void shouldReportDevelopmentChannelWhenVersionIsPlaceholderOrUnbounded() {
+        for (String version : new String[] {"0.0.0-development", "DEV", "v1.2.3", "1.2.3-rc.1", "01.2.3", "1.0"}) {
+            assertThat(running(version).get().channel()).as(version).isEqualTo(ReleaseChannel.DEVELOPMENT);
+        }
+    }
+
+    @Test
+    void shouldOmitIdentityWhenDeploymentSuppliesNone() {
+        var identity = running("0.0.0-development", new ReleaseProperties("", "", true), new MockEnvironment())
                 .get();
-        assertThat(running.version()).isEqualTo("unknown");
-        assertThat(running.identityStatus()).isEqualTo("UNKNOWN");
-        assertThat(running.images()).isEmpty();
+        assertThat(identity.commit()).isNull();
+        assertThat(identity.image()).isNull();
     }
 
     @Test
-    void shouldKeepArtifactVersionDiagnosticWhenBuildCommitIsUnknown() {
-        var running = identity("0.77.4", "unknown", new MockEnvironment()).get();
-        assertThat(running.version()).isEqualTo("0.77.4");
-        assertThat(running.commit()).isEqualTo("unknown");
-        assertThat(running.channel()).isEqualTo("unknown");
-        assertThat(running.identityStatus()).isEqualTo("UNKNOWN");
-    }
-
-    @Test
-    void shouldNotTreatArtifactVersionAsReleaseWhenOnlyCommitIsKnown() {
-        var running = identity("0.77.4", COMMIT, new MockEnvironment()).get();
-        assertThat(running.version()).isEqualTo("0.77.4");
-        assertThat(running.commit()).isEqualTo(COMMIT);
-        assertThat(running.channel()).isEqualTo("unknown");
-    }
-
-    @Test
-    void shouldUseDeploymentProjectionWhenBuildCommitAgrees() {
-        var running = identity(
-                        "0.0.0-development",
-                        COMMIT,
-                        new MockEnvironment()
-                                .withProperty("HEPHAESTUS_DEPLOYMENT_IDENTITY", projection("1.2.3", COMMIT))
-                                .withProperty("hephaestus.runtime.worker.enabled", "false")
-                                .withProperty("hephaestus.runtime.webhook.enabled", "false"))
-                .get();
-        assertThat(running.version()).isEqualTo("1.2.3");
-        assertThat(running.roles()).containsExactly("server");
-        assertThat(running.identityStatus()).isEqualTo("DEPLOYMENT_REPORTED");
-        assertThat(running.images()).hasSize(1);
-    }
-
-    @Test
-    void shouldNotAdoptDeploymentVersionWhenBuildDisagrees() {
-        var running = identity(
-                        "1.0.0",
-                        COMMIT,
-                        new MockEnvironment()
-                                .withProperty("HEPHAESTUS_DEPLOYMENT_IDENTITY", projection("1.2.3", "c".repeat(40))))
-                .get();
-        assertThat(running.identityStatus()).isEqualTo("MISMATCH");
-        assertThat(running.version()).isEqualTo("1.0.0");
-    }
-
-    @Test
-    void shouldRejectMalformedProjectionWithoutLeakingItsContent() {
-        var running = identity(
-                        "1.0.0",
-                        COMMIT,
-                        new MockEnvironment().withProperty("HEPHAESTUS_DEPLOYMENT_IDENTITY", "secret-tenant-token"))
-                .get();
-        assertThat(running.identityStatus()).isEqualTo("INVALID");
-        assertThat(running.toString()).doesNotContain("secret-tenant-token");
+    void shouldListOnlyEnabledRolesAndContributeIdentityToActuatorInfo() {
+        var environment = new MockEnvironment()
+                .withProperty("hephaestus.runtime.worker.enabled", "false")
+                .withProperty("hephaestus.runtime.webhook.enabled", "false");
+        var running = running("1.2.3", new ReleaseProperties(COMMIT, IMAGE, true), environment);
+        assertThat(running.get().roles()).containsExactly("server");
+        var info = new Info.Builder();
+        running.contribute(info);
+        assertThat(info.build().getDetails()).containsEntry("release", running.get());
     }
 }

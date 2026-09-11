@@ -143,13 +143,6 @@ export function lockEnvironment(lock: ReleaseImageLock): string {
 		`IMAGE_TAG=${lock.release.slice(1)}`,
 		`HEPHAESTUS_RELEASE=${lock.release}`,
 		`HEPHAESTUS_RELEASE_COMMIT=${lock.commit}`,
-		`HEPHAESTUS_DEPLOYMENT_IDENTITY='${JSON.stringify({
-			release: lock.release,
-			commit: lock.commit,
-			images: Object.fromEntries(
-				lock.images.map((image) => [image.image, `${image.repository}@${image.indexDigest}`]),
-			),
-		})}'`,
 	];
 	for (const image of lock.images.toSorted((left, right) =>
 		left.image.localeCompare(right.image),

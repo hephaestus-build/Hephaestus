@@ -32,6 +32,8 @@ tags:
   name: Practice Group Detail
 - description: Workspace-scoped mentor chat threads
   name: Mentor Threads
+- description: Running release identity and update checks
+  name: Instance Release
 - description: The current developer's standing in each practice
   name: Practice Standings
 - description: Recipient responses to delivered practice feedback
@@ -1589,9 +1591,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReleaseStatus"
           description: OK
-      summary: Get running identity and cached update state
+      summary: Get the running release and the last update check
       tags:
-      - release-admin
+      - Instance Release
   /admin/release/checks:
     post:
       operationId: adminCheckRelease
@@ -1602,9 +1604,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReleaseStatus"
           description: OK
-      summary: "Check releases, respecting cache and rate-limit backoff"
+      summary: Check GitHub for a newer release now
       tags:
-      - release-admin
+      - Instance Release
   /admin/settings:
     get:
       operationId: adminGetInstanceSettings
@@ -8235,29 +8237,6 @@ components:
       - pricingMode
       - scope
       - supportsReasoning
-    AvailableRelease:
-      type: object
-      properties:
-        notesUrl:
-          type: string
-        operatorActions:
-          type: string
-        schemaMigrations:
-          type: string
-          enum:
-          - REQUIRED
-          - NONE
-          - UNKNOWN
-        securityRelevance:
-          type: string
-        version:
-          type: string
-      required:
-      - notesUrl
-      - operatorActions
-      - schemaMigrations
-      - securityRelevance
-      - version
     BackfillSummary:
       type: object
       description: Connection-level backfill rollup
@@ -10655,6 +10634,26 @@ components:
       - color
       - id
       - name
+    LatestRelease:
+      type: object
+      description: |-
+        A published release. <code>schemaMigrations</code> is the flag the release workflow publishes for
+         that one release and is absent when the notes carry none; it says nothing about releases
+         between the running one and this one.
+      properties:
+        notesUrl:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+        schemaMigrations:
+          type: boolean
+        version:
+          type: string
+      required:
+      - notesUrl
+      - publishedAt
+      - version
     LeaderboardEntry:
       type: object
       description: A ranked entry in the leaderboard (individual or team)
@@ -13336,46 +13335,51 @@ components:
       - slackChannelId
     ReleaseStatus:
       type: object
-      description: "The shared instance release read model. Discovery is advisory,\
-        \ not installation verification."
+      description: |-
+        The running release and what the last update check found. Discovery is advisory: nothing here
+         verifies an artifact or performs an upgrade.
       properties:
-        available:
-          $ref: "#/components/schemas/AvailableRelease"
-        backupRestoreStatus:
+        failure:
           type: string
-        enabled:
-          type: boolean
-        failureReason:
-          type: string
+          description: "why the last attempt did not complete, when <code>status</code>\
+            \ is <code>FAILED</code>"
+          enum:
+          - RATE_LIMITED
+          - UNAVAILABLE
+          - MALFORMED
         lastAttempt:
           type: string
           format: date-time
+          description: "when a check was last started, on any outcome"
         lastSuccess:
           type: string
           format: date-time
+          description: "when a check last completed, which is when <code>latest</code>\
+            \ was observed"
+        latest:
+          $ref: "#/components/schemas/LatestRelease"
+          description: the newest published release as of <code>lastSuccess</code>
         nextCheck:
           type: string
           format: date-time
+          description: when the scheduler will try again; a rate-limit window also
+            blocks manual checks
         running:
           $ref: "#/components/schemas/RunningRelease"
+          description: the identity this process reports
         status:
           type: string
+          description: the verdict an administrator reads first
           enum:
+          - DISABLED
+          - NOT_APPLICABLE
+          - NEVER_CHECKED
           - CURRENT
           - UPDATE_AVAILABLE
-          - CHECK_FAILED
-          - NEVER_CHECKED
-          - UNSUPPORTED
-          - DISABLED
-          - STALE
-        upgradeGuideUrl:
-          type: string
+          - FAILED
       required:
-      - backupRestoreStatus
-      - enabled
       - running
       - status
-      - upgradeGuideUrl
     RenameWorkspaceSlugRequest:
       type: object
       description: Request to rename a workspace's URL slug
@@ -14554,37 +14558,34 @@ components:
           format: int32
     RunningRelease:
       type: object
+      description: |-
+        Deployment-reported identity: the values the verified lock env handed this process, not an
+         observation of the container. <code>commit</code> and <code>image</code> are absent outside a lock-driven
+         deployment.
       properties:
         channel:
           type: string
+          description: what kind of build that version names
           enum:
-          - stable
-          - prerelease
-          - unknown
+          - RELEASE
+          - COMMIT
+          - DEVELOPMENT
         commit:
           type: string
-        identityStatus:
+          description: the source commit the lock names
+        image:
           type: string
-          enum:
-          - DEPLOYMENT_REPORTED
-          - MISMATCH
-          - INVALID
-          - UNKNOWN
-        images:
-          type: object
-          additionalProperties:
-            type: string
+          description: the digest reference this container was started from
         roles:
           type: array
+          description: the runtime roles this process booted with
           items:
             type: string
         version:
           type: string
+          description: the version the deployment passed as <code>APP_VERSION</code>
       required:
       - channel
-      - commit
-      - identityStatus
-      - images
       - roles
       - version
     SessionView:

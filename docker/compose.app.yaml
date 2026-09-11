@@ -38,6 +38,13 @@ x-observability-env: &observability-env
   TRACING_OTLP_ENABLED: ${TRACING_OTLP_ENABLED:-false}
   TRACING_OTLP_ENDPOINT: ${TRACING_OTLP_ENDPOINT:-http://localhost:4318/v1/traces}
 
+# What the verified release lock says this container runs, reported back by every role under
+# `release` in /actuator/info (webhook-server spells the same two lines in compose.core.yaml). The
+# version itself travels as APP_VERSION above; an empty value is a deployment without a lock.
+x-release-identity-env: &release-identity-env
+  HEPHAESTUS_RELEASE_COMMIT: ${HEPHAESTUS_RELEASE_COMMIT:-}
+  HEPHAESTUS_IMAGE_APPLICATION_SERVER: ${HEPHAESTUS_IMAGE_APPLICATION_SERVER:-}
+
 services:
   webapp:
     image: "${HEPHAESTUS_IMAGE_WEBAPP:?verified release lock required}"
@@ -291,8 +298,8 @@ services:
       # a loopback provider URL may be SAVED, the worker's proxy decides whether it may be DIALLED.
       # Leave false in production.
       HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK: ${HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK:-false}
-      <<: [*practice-review-env, *scm-access-env, *observability-env]
-      HEPHAESTUS_DEPLOYMENT_IDENTITY: ${HEPHAESTUS_DEPLOYMENT_IDENTITY:-}
+      <<: [*practice-review-env, *scm-access-env, *observability-env, *release-identity-env]
+      # Only the server role asks GitHub for newer releases; set false on an air-gapped host.
       HEPHAESTUS_RELEASE_CHECK_ENABLED: ${HEPHAESTUS_RELEASE_CHECK_ENABLED:-true}
       GITLAB_WORKSPACE_CREATION: ${GITLAB_WORKSPACE_CREATION:-false}
       # LLM providers are registered at runtime (Instance admin → AI models), not via env vars —
@@ -384,8 +391,7 @@ services:
       JAVA_TOOL_OPTIONS: "-XX:MaxDirectMemorySize=${APP_MAX_DIRECT_MEMORY:-128M}"
       APP_VERSION: ${IMAGE_TAG}
       SPRING_PROFILES_ACTIVE: prod,worker
-      <<: [*practice-review-env, *scm-access-env, *observability-env]
-      HEPHAESTUS_DEPLOYMENT_IDENTITY: ${HEPHAESTUS_DEPLOYMENT_IDENTITY:-}
+      <<: [*practice-review-env, *scm-access-env, *observability-env, *release-identity-env]
       HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES:-}
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: ${HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST:-true}
       # Valueless, as on application-server above; this is the pod that actually opens sandboxes.

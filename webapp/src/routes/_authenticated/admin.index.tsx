@@ -4,14 +4,15 @@ import { Building2, Gauge, Users } from "lucide-react";
 
 import {
 	adminGetInstanceSettingsOptions,
-	adminGetReleaseOptions,
 	adminCheckReleaseMutation,
+	adminGetReleaseOptions,
+	adminGetReleaseQueryKey,
 	adminListAuthEventsOptions,
 	adminListWorkspacesOptions,
 } from "@/api/@tanstack/react-query.gen";
+import { InstanceReleaseCard } from "@/components/admin/instance/InstanceReleaseCard";
 import { OverviewStatCard } from "@/components/admin/instance/OverviewStatCard";
 import { RecentAuthActivityCard } from "@/components/admin/instance/RecentAuthActivityCard";
-import { ReleaseStatusCard } from "@/components/admin/instance/ReleaseStatusCard";
 import { SilentModeStatusCard } from "@/components/admin/instance/SilentModeStatusCard";
 import { PageHeader } from "@/components/core/PageHeader";
 import { PageLayout } from "@/components/core/PageLayout";
@@ -24,13 +25,10 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 
 function AdminOverviewPage() {
 	const queryClient = useQueryClient();
-	const releaseQuery = useQuery({ ...adminGetReleaseOptions(), refetchInterval: 60_000 });
+	const releaseQuery = useQuery(adminGetReleaseOptions());
 	const releaseCheck = useMutation({
 		...adminCheckReleaseMutation(),
-		onSuccess: async (data) => {
-			await queryClient.cancelQueries({ queryKey: adminGetReleaseOptions().queryKey, exact: true });
-			queryClient.setQueryData(adminGetReleaseOptions().queryKey, data);
-		},
+		onSuccess: (data) => queryClient.setQueryData(adminGetReleaseQueryKey(), data),
 	});
 	const settingsQuery = useQuery(adminGetInstanceSettingsOptions());
 	const workspacesQuery = useQuery(adminListWorkspacesOptions());
@@ -48,22 +46,19 @@ function AdminOverviewPage() {
 				description="What is running, and what changed recently on this instance."
 			/>
 
-			<ReleaseStatusCard
+			<InstanceReleaseCard
 				state={
 					releaseQuery.data
 						? {
 								status: "ready",
-								data: releaseQuery.data,
+								release: releaseQuery.data,
 								check: releaseCheck.isError
 									? { status: "error", error: releaseCheck.error }
 									: { status: releaseCheck.status },
 								onCheck: () => releaseCheck.mutate({}),
-								refreshError: releaseQuery.isError
-									? { error: releaseQuery.error, onRetry: () => void releaseQuery.refetch() }
-									: undefined,
 							}
 						: releaseQuery.isPending
-							? { status: "pending" }
+							? { status: "loading" }
 							: {
 									status: "error",
 									error: releaseQuery.error,

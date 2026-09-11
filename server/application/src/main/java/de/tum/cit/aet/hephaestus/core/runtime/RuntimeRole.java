@@ -1,5 +1,9 @@
 package de.tum.cit.aet.hephaestus.core.runtime;
 
+import java.util.List;
+import java.util.stream.Stream;
+import org.springframework.core.env.Environment;
+
 /**
  * Runtime role names — string constants used in {@code @ConditionalOnProperty} keys to gate
  * subsystems by deployment role. Single source of truth so role gating cannot drift between
@@ -52,4 +56,15 @@ public final class RuntimeRole {
      * up wherever jobs can run — it is the only LLM credential path a job has.
      */
     public static final String AGENT_ENABLED_PROPERTY = "hephaestus.agent.enabled";
+
+    /**
+     * The roles this process booted with, in declaration order. Reads the flags directly rather than
+     * probing for role-conditional beans, so a role-agnostic caller can answer without depending on
+     * any of them.
+     */
+    public static List<String> enabled(Environment environment) {
+        return Stream.of("server", "worker", "webhook")
+                .filter(role -> environment.getProperty(PROPERTY_PREFIX + "." + role + ".enabled", Boolean.class, true))
+                .toList();
+    }
 }

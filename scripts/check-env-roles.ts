@@ -66,9 +66,9 @@ interface RoleScope {
  */
 const ROLE_SCOPES: readonly RoleScope[] = [
 	{
-		path: "hephaestus.release",
+		path: "hephaestus.release.check-enabled",
 		role: "server",
-		why: "ReleaseCheckService and ReleaseCheckClient run only on the server role",
+		why: "ReleaseCheckService and ReleaseCheckClient are @ConditionalOnServerRole; RunningRelease, which reads the rest of hephaestus.release, is ungated",
 	},
 	{
 		path: "hephaestus.sandbox.docker",

@@ -7,41 +7,52 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 @Tag("integration")
-@TestPropertySource(properties = "hephaestus.release.check-enabled=false")
 class ReleaseAdminControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private WebTestClient client;
 
     @Test
     void shouldRejectAnonymousRequests() {
-        client.get().uri("/admin/release").exchange().expectStatus().isUnauthorized();
-        client.post().uri("/admin/release/checks").exchange().expectStatus().isUnauthorized();
+        client.get()
+                .uri("/admin/release")
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
+        // A cookie-less POST is refused by the CSRF filter before authentication is consulted.
+        client.post()
+                .uri("/admin/release/checks")
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
     @WithUser
-    void shouldRejectNonInstanceAdministrators() {
+    void shouldRejectWorkspaceMembersWhoAreNotInstanceAdministrators() {
         client.get()
                 .uri("/admin/release")
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
         client.post()
                 .uri("/admin/release/checks")
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
     @WithAdminUser
-    void shouldReturnDisabledStateWithoutAllowingManualChecksToBypassOptOut() {
+    void shouldReportTheDevelopmentBuildWithoutContactingGitHub() {
         client.get()
                 .uri("/admin/release")
                 .headers(TestAuthUtils.withCurrentUser())
@@ -51,8 +62,10 @@ class ReleaseAdminControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .expectHeader()
                 .valueEquals("Cache-Control", "no-store")
                 .expectBody()
+                .jsonPath("$.running.channel")
+                .isEqualTo("DEVELOPMENT")
                 .jsonPath("$.status")
-                .isEqualTo("DISABLED")
+                .isEqualTo("NOT_APPLICABLE")
                 .jsonPath("$.lastAttempt")
                 .doesNotExist();
         client.post()
@@ -63,7 +76,7 @@ class ReleaseAdminControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .isOk()
                 .expectBody()
                 .jsonPath("$.status")
-                .isEqualTo("DISABLED")
+                .isEqualTo("NOT_APPLICABLE")
                 .jsonPath("$.lastAttempt")
                 .doesNotExist();
     }
