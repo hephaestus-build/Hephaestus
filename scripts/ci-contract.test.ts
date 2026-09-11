@@ -2674,7 +2674,7 @@ void test("CodeQL runs advanced setup and excludes the Semgrep fixtures it would
 	assert.equal(compile.get("working-directory"), "server");
 	assert.equal(
 		compile.get("run"),
-		"./gradlew --no-daemon --no-build-cache --no-configuration-cache clean :application:testClasses",
+		"./gradlew --no-daemon --no-build-cache --no-configuration-cache -PcodeqlExtraction=true clean :application:testClasses",
 	);
 	const ci = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 	assert.equal(ci.getIn(["jobs", "CodeQL", "uses"]), "./.github/workflows/codeql.yml");
@@ -2699,6 +2699,23 @@ void test("CodeQL runs advanced setup and excludes the Semgrep fixtures it would
 		"codeql-config.yml",
 	);
 	assert.deepEqual(config["paths-ignore"], ["security/semgrep/**"]);
+});
+
+void test("only CodeQL extraction opts out of duplicate compiler analysis", async () => {
+	const build = await readFile("server/application/build.gradle.kts", "utf8");
+	assert.match(
+		build,
+		/enabled\.set\(providers\.gradleProperty\("codeqlExtraction"\)\.map \{ it != "true" \}\.orElse\(true\)\)/,
+		"ordinary compilation must keep ErrorProne enabled unless extraction explicitly opts out",
+	);
+	assert.match(build, /error\("NullAway", "RequireExplicitNullMarking"\)/);
+	assert.match(build, /"-Werror"/);
+	const callers: string[] = [];
+	for (const file of await posixGlob(".github/**/*.yml")) {
+		if ((await readFile(file, "utf8")).includes("codeqlExtraction")) callers.push(file);
+	}
+	assert.deepEqual(callers, [".github/workflows/codeql.yml"]);
+	assert.doesNotMatch(await readFile("vite.config.ts", "utf8"), /codeqlExtraction/);
 });
 
 void test("every Semgrep rule ships a positive and a negative fixture", async () => {
