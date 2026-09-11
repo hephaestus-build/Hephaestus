@@ -121,6 +121,7 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
         var metrics = new SimpleMeterRegistry();
         // Hold dispatched sandbox work outside this test: admission, locks and RUNNING rows are real.
         executor = new AgentJobExecutor(
+                mock(de.tum.cit.aet.hephaestus.agent.job.ExecutionArchiveService.class),
                 properties,
                 jobs,
                 policy,
@@ -133,7 +134,7 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mapper,
                 metrics,
                 new PracticeReviewRefusalMetrics(metrics),
-                new AgentJobTelemetry(metrics),
+                new AgentJobTelemetry(metrics, io.micrometer.tracing.Tracer.NOOP),
                 mock(LlmUsageRecorder.class),
                 budgets,
                 admission,
@@ -260,7 +261,7 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mock(LlmUsageRecorder.class),
                 mapper,
                 feedbackDispatches,
-                new AgentJobTelemetry(new SimpleMeterRegistry()),
+                new AgentJobTelemetry(new SimpleMeterRegistry(), io.micrometer.tracing.Tracer.NOOP),
                 observationAdmission);
     }
 
