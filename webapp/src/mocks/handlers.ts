@@ -34,7 +34,7 @@ export const handlers = [
 	http.get("*/user/consent", () =>
 		HttpResponse.json({
 			completed: true,
-			noticeVersion: "2026-09-10",
+			noticeVersion: "2026-09-11",
 			participateInResearch: false,
 		}),
 	),

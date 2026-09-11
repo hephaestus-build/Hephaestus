@@ -3,9 +3,9 @@ import {
 	CheckIcon,
 	ClockIcon,
 	FileTextIcon,
+	EyeIcon,
 	FlaskConicalIcon,
 	type LucideIcon,
-	ScaleIcon,
 	ShieldCheckIcon,
 	TrendingUpIcon,
 	TriangleAlertIcon,
@@ -43,7 +43,7 @@ import { cn } from "@/lib/utils";
  * screen would then be a version nobody could truthfully accept. Change any string in `TERMS` or
  * `RESEARCH` and this moves, in the same commit as the server's.
  */
-export const WORDING_VERSION = "2026-09-10";
+export const WORDING_VERSION = "2026-09-11";
 
 export interface ConsentChoice {
 	noticeVersion: string;
@@ -76,21 +76,27 @@ interface Fact {
 }
 
 /**
- * The notice, in full. It names no operator: who runs this instance is the privacy notice and the
- * imprint, which every operator configures and this page links to, so the same words are true on
- * every deployment.
+ * What the reader needs before accepting, and nothing else. It names no operator: who runs this
+ * instance is the privacy notice and the imprint, which every operator configures and this page links
+ * to, so the same words are true on every deployment.
+ *
+ * Most people reading this are developers who were added to a workspace. They do not choose which
+ * repositories are connected, so an obligation about connecting them is addressed to the wrong
+ * audience; that one belongs to the admin who connects a source, and the admin docs carry it.
  */
 const TERMS: readonly Fact[] = [
 	{
-		icon: ScaleIcon,
-		term: "Use it lawfully",
-		detail: "Only for the workspaces and the data you are allowed to access.",
+		icon: EyeIcon,
+		term: "What it reads",
+		detail: "The work in the tools your project connects — pull requests, issues, reviews, chat.",
 	},
 	{
 		icon: TriangleAlertIcon,
 		term: "Feedback can be wrong",
+		// Not "never the only basis for a grading decision": as a promise it is the operator's to make
+		// and not this screen's, and as a warning it tells a developer their work is being graded here.
 		detail:
-			"It is advisory, and never the only basis for a grading, employment or access decision.",
+			"It is written by an AI model. Check it against the work it links to before you act on it.",
 	},
 	{
 		icon: ShieldCheckIcon,
@@ -323,6 +329,12 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 									/>
 									<FieldContent>
 										<FieldLabel htmlFor={`${id}-terms`}>I accept the terms of use</FieldLabel>
+										{/* The obligations sit with the box that accepts them. The points above are
+										    what the reader needs in order to decide, not things anyone agrees to. */}
+										<FieldDescription>
+											Keep to the work you are entitled to see, and treat feedback as guidance for
+											the person it is addressed to rather than an assessment to pass on.
+										</FieldDescription>
 									</FieldContent>
 								</Field>
 							</Section>

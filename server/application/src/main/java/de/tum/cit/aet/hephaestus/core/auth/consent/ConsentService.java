@@ -24,7 +24,7 @@ public class ConsentService {
      * anyone could edit afterwards. The webapp holds the same constant beside the words and refuses to
      * render the form when the two disagree; bump both in the commit that changes any of them.
      */
-    static final String WORDING_VERSION = "2026-09-10";
+    static final String WORDING_VERSION = "2026-09-11";
 
     private final ConsentDecisionRepository decisionRepository;
     private final AccountRepository accountRepository;

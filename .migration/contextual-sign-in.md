@@ -12,7 +12,7 @@ it if you run a study. Leave it unset and setup is the terms alone, the settings
 `PUT /user/consent/research` answers 404 — accounts that already answered keep their recorded
 decision, and nothing is deleted.
 
-The wording changed and its version moved to `2026-09-10`, so every account accepts it once more. The
+The wording changed and its version moved to `2026-09-11`, so every account accepts it once more. The
 gate runs on requests from existing sessions too, so signed-in users meet it as soon as the deployment
 finishes rather than at their next sign-in. A browser tab left open on the old setup screen during the
 upgrade shows an error and needs a full refresh, not the page's own retry.
