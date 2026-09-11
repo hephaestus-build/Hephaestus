@@ -3,6 +3,10 @@ name: Security
 on:
   workflow_call:
     inputs:
+      database-artifact:
+        description: "Immutable advisory database artifact ID selected by this CI run"
+        type: string
+        required: true
       should_skip:
         description: "Whether to skip the workflow"
         required: false
@@ -45,6 +49,8 @@ jobs:
       # A blocking gate inherits Trivy's database availability as a hard dependency, so the
       # retries and the mirror fallback live in one action rather than in each caller.
       - uses: ./.github/actions/download-trivy-db
+        with:
+          database-artifact: ${{ inputs.database-artifact }}
 
       - name: Enforce the release vulnerability policy on the pinned digests
         run: node scripts/scan-upstream-images.ts reports

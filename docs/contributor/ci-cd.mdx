@@ -557,7 +557,7 @@ credential is still `GITHUB_TOKEN`, so these commits start no further workflow r
 | `restore-server-build` | Downloads and validates the packaged JARs, compiled tests and resources; outputs the executable JAR path without recompiling or installing local artifacts |
 | `setup-browsers` | Restores the exact Playwright browser version and installs Chromium system dependencies |
 | `setup-release-security-tools` | Installs Cosign, Trivy, and optionally Syft for release-evidence jobs |
-| `download-trivy-db` | Fetches the vulnerability database with retries and a mirror fallback; optionally refuses one over `max-age-hours` old and records its metadata |
+| `download-trivy-db` | Downloads with retries and mirror fallback, or restores the CI run's immutable advisory artifact; checks freshness at consumption and records metadata as requested — [database identity](./vulnerability-remediation.mdx#advisory-database-identity) owns the rerun contract |
 | `ghcr-login` | Authenticates Docker to GHCR |
 
 Browser jobs install Playwright's system dependencies using the runner's Ubuntu package sources,

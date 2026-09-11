@@ -697,7 +697,7 @@ void describe("CI contract", () => {
 		assert.match(e2e, /http:\/\/localhost:8080\/actuator\/health\/readiness/);
 		assert.doesNotMatch(e2e, /actuator\/health\/liveness/);
 		const image = job(orchestrator, "application-server-image");
-		assert.match(image, /needs: \[detect-changes, server-package\]/);
+		assert.match(image, /needs: \[detect-changes, server-package, vulnerability-database\]/);
 		assert.match(image, /use-buildpacks: true/);
 
 		// The long suites compile from source and never wait for the package job.
@@ -727,7 +727,11 @@ void describe("CI contract", () => {
 		for (const name of ["Build", "application-server-image"]) {
 			const dependencies = workflow.getIn(["jobs", name, "needs"]);
 			assert.ok(isSeq(dependencies));
-			assert.deepEqual(dependencies.toJSON(), ["detect-changes", "server-package"]);
+			assert.deepEqual(dependencies.toJSON(), [
+				"detect-changes",
+				"server-package",
+				...(name === "application-server-image" ? ["vulnerability-database"] : []),
+			]);
 		}
 		for (const name of ["Supported-host-smoke", "Release-preflight"]) {
 			const dependencies = workflow.getIn(["jobs", name, "needs"]);
@@ -736,6 +740,7 @@ void describe("CI contract", () => {
 				"detect-changes",
 				"application-server-image",
 				"Docker",
+				...(name === "Release-preflight" ? ["vulnerability-database"] : []),
 			]);
 		}
 		const gate = workflow.getIn(["jobs", "all-ci-passed", "needs"]);
@@ -853,7 +858,12 @@ void describe("CI contract", () => {
 			/version-bump: \${{ steps\.version_bump\.outputs\.changed }}/,
 		);
 		for (const name of ["workflow-lint", "zizmor", "Quality", "Security", "Test", "Compose"]) {
-			assert.match(job(source, name), /needs: \[detect-changes\]/);
+			assert.match(
+				job(source, name),
+				name === "Security"
+					? /needs: \[detect-changes, vulnerability-database\]/
+					: /needs: \[detect-changes\]/,
+			);
 			assert.match(
 				job(source, name),
 				/github\.event_name != 'push'.*needs\.detect-changes\.outputs\.version-bump == 'true'/s,
@@ -1510,7 +1520,7 @@ void describe("CI contract", () => {
 		// documents are re-derived and compared exactly as the release re-derives them.
 		assert.match(preflight, /node scripts\/verify-release-evidence\.ts evidence\n/);
 		assert.match(preflight, /max-age-hours: "24"/);
-		assert.match(preflight, /if: needs\.detect-changes\.outputs\.release-preflight == 'true'/);
+		assert.match(preflight, /if: .*needs\.detect-changes\.outputs\.release-preflight == 'true'/);
 		assert.match(cicd, /^ {6}release-preflight:$/m);
 		assert.match(job(cicd, "all-ci-passed"), /needs: \[[^\]]*Release-preflight\]/);
 

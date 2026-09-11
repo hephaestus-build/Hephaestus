@@ -10,6 +10,10 @@ on:
       SENTRY_PROJECT:
         required: false
     inputs:
+      database-artifact:
+        description: "Immutable advisory database artifact ID selected by this CI run"
+        type: string
+        required: true
       scan-images:
         description: "Scan published images here unless the caller requires complete release evidence instead."
         type: boolean
@@ -480,6 +484,8 @@ jobs:
       # A blocking gate inherits Trivy's database availability as a hard dependency, so the
       # retries and the mirror fallback live in one action rather than in each caller.
       - uses: ./.github/actions/download-trivy-db
+        with:
+          database-artifact: ${{ inputs.database-artifact }}
 
       - name: Enforce the release vulnerability policy
         env:
