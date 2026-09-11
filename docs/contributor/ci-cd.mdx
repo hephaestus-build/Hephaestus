@@ -260,9 +260,10 @@ because GitHub caps a fork token's `security-events` access at read.
 
 ### CodeQL configuration
 
-PR and merge-group diffs select analysis languages, not individual files: each selected language
-scans its configured source tree. Main and scheduled runs select all languages, as do changes to
-the CodeQL workflow or configuration. The language filters live in `.github/workflows/codeql.yml`.
+PR, merge-group and main-push diffs select analysis languages, not individual files: each selected
+language scans its configured source tree. Main compares the full pushed range against the event's
+previous commit, including multi-commit pushes and deletions. Scheduled and manual runs select all
+languages, as do pushes without a previous commit and changes to the CodeQL workflow or configuration. The language filters live in `.github/workflows/codeql.yml`.
 
 CI calls that reusable workflow, and `CI Status Gate` waits for its successful completion, including
 SARIF upload. A merge group therefore cannot pass the gate and lose its temporary ref while CodeQL
