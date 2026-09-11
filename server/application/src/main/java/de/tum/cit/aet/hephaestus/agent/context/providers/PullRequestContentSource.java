@@ -374,7 +374,6 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         return selectedKinds.contains(CORE) || selectedKinds.contains(DIFF);
     }
 
-    /** The clone and the {@code base..head} range one pull request's change is read from. */
     private record ChangeRange(Path repoPath, String base, String head) {}
 
     private ChangeRange resolveChangeRange(long repositoryId, JsonNode metadata) {
@@ -404,10 +403,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         return new ChangeRange(repoPath, range[0], range[1]);
     }
 
-    /**
-     * The commits the pull request carries, as {@code git log base..head} lists them. Returns whether the
-     * list was cut at {@link #MAX_COMMITS}.
-     */
+    /** The commits the pull request carries, as {@code git log base..head} lists them; true when cut. */
     private boolean storeCommits(Map<String, byte[]> files, ChangeRange range, long repositoryId) {
         GitDiffOperations.CommitLog commitLog =
                 gitDiffOperations.commitLog(range.repoPath(), range.base(), range.head(), MAX_COMMITS);
@@ -425,17 +421,15 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             var node = commits.addObject();
             node.put("sha", commit.sha());
             node.put("subject", commit.subject());
-            // A commit without a body has no body key, so an absent message reads as absent, not as "".
+            // An absent body or file count has no key, never a JSON null.
             if (commit.body() != null) {
                 node.put("body", commit.body());
             }
             node.put("authored_at", commit.authoredAt().toString());
             node.put("committed_at", commit.committedAt().toString());
             node.put("parent_count", commit.parentCount());
-            if (commit.stat() != null) {
-                node.put("changed_files", commit.stat().changedFiles());
-                node.put("additions", commit.stat().additions());
-                node.put("deletions", commit.stat().deletions());
+            if (commit.changedFiles() != null) {
+                node.put("changed_files", commit.changedFiles());
             }
         }
         ObjectNode root = objectMapper.createObjectNode();

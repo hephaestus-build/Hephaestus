@@ -27,6 +27,7 @@ import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.revwalk.filter.RevFilter;
 import org.eclipse.jgit.treewalk.AbstractTreeIterator;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
+import org.eclipse.jgit.treewalk.TreeWalk;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -250,9 +251,8 @@ public class GitDiffOperations {
     public record CommitLog(List<CommitLogEntry> commits, boolean truncated) {}
 
     /**
-     * One commit as {@code git log} shows it: the subject is the first paragraph of the message and the body
-     * the rest, {@code stat} is {@code --shortstat} against the parent and absent on a merge commit, whose
-     * change is its parents' work.
+     * One commit as {@code git log} shows it: {@code subject} is git's title paragraph and {@code body} the
+     * rest; {@code changedFiles} counts the paths that differ from the first parent, so a merge commit has none.
      */
     public record CommitLogEntry(
             String sha,
@@ -261,14 +261,12 @@ public class GitDiffOperations {
             Instant authoredAt,
             Instant committedAt,
             int parentCount,
-            @Nullable ChangeStat stat) {}
-
-    public record ChangeStat(int changedFiles, int additions, int deletions) {}
+            @Nullable Integer changedFiles) {}
 
     /**
-     * {@code git log --topo-order --reverse --shortstat base..head}, keeping at most {@code limit} commits.
-     * Topological order is the order a reviewer reads the history in; sorting by time instead would let the
-     * clock skew a rebase leaves behind reorder it.
+     * {@code git log --topo-order --reverse base..head}, keeping at most {@code limit} commits. Topological
+     * order keeps a merged branch's commits together where commit-time order would interleave them with the
+     * other line of history.
      */
     @Nullable
     public CommitLog commitLog(Path repoPath, String baseRef, String headRef, int limit) {
@@ -279,12 +277,11 @@ public class GitDiffOperations {
             List<CommitLogEntry> entries = new ArrayList<>();
             boolean truncated = false;
             try (RevWalk walk = new RevWalk(repo);
-                    ObjectReader reader = repo.newObjectReader();
-                    DiffFormatter formatter = newDiffFormatter(repo, null)) {
-                walk.sort(RevSort.TOPO);
+                    ObjectReader reader = repo.newObjectReader()) {
+                walk.sort(RevSort.TOPO_KEEP_BRANCH_TOGETHER);
                 walk.sort(RevSort.REVERSE, true);
-                // The walk holds the whole range before it yields its first commit; bodies are read for
-                // the kept commits only so an oversized range costs its graph, not its messages.
+                // The walk loads the whole range before it yields its first commit; keeping bodies only for
+                // the kept commits bounds what an oversized range holds in memory to its graph.
                 walk.setRetainBody(false);
                 walk.markStart(walk.parseCommit(range[1]));
                 walk.markUninteresting(walk.parseCommit(range[0]));
@@ -293,66 +290,51 @@ public class GitDiffOperations {
                         truncated = true;
                         break;
                     }
-                    entries.add(toLogEntry(commit, walk, reader, formatter));
+                    entries.add(toLogEntry(commit, walk, reader));
                 }
             }
             return new CommitLog(List.copyOf(entries), truncated);
         });
     }
 
-    private static CommitLogEntry toLogEntry(
-            RevCommit commit, RevWalk walk, ObjectReader reader, DiffFormatter formatter) throws IOException {
+    private static CommitLogEntry toLogEntry(RevCommit commit, RevWalk walk, ObjectReader reader) throws IOException {
         walk.parseBody(commit);
-        // git's own split: the subject is the first paragraph with its line breaks folded, the body what follows.
-        String message = commit.getFullMessage().replace("\r\n", "\n").strip();
-        int paragraphEnd = message.indexOf("\n\n");
-        String subject = (paragraphEnd < 0 ? message : message.substring(0, paragraphEnd)).replace('\n', ' ');
-        String body =
-                paragraphEnd < 0 ? "" : message.substring(paragraphEnd + 2).strip();
+        String[] paragraphs = commit.getFullMessage().split("\\R\\R", 2);
+        String body = paragraphs.length == 2 ? paragraphs[1].strip() : "";
 
-        ChangeStat stat = null;
+        Integer changedFiles = null;
         if (commit.getParentCount() == 1) {
-            int additions = 0;
-            int deletions = 0;
-            List<DiffEntry> changes =
-                    formatter.scan(treeIterator(reader, walk, commit.getParent(0)), treeIterator(reader, walk, commit));
-            for (DiffEntry change : changes) {
-                LineCounts counts = lineCounts(formatter, change);
-                additions += counts.additions();
-                deletions += counts.deletions();
+            // A tree walk counts the paths that differ without reading a blob, so a long history stays cheap.
+            try (TreeWalk treeWalk = new TreeWalk(reader)) {
+                treeWalk.addTree(walk.parseCommit(commit.getParent(0)).getTree());
+                treeWalk.addTree(commit.getTree());
+                treeWalk.setRecursive(true);
+                changedFiles = DiffEntry.scan(treeWalk).size();
             }
-            stat = new ChangeStat(changes.size(), additions, deletions);
         }
         return new CommitLogEntry(
                 commit.getName(),
-                subject,
+                commit.getShortMessage(),
                 body.isEmpty() ? null : body,
                 commit.getAuthorIdent().getWhenAsInstant(),
                 commit.getCommitterIdent().getWhenAsInstant(),
                 commit.getParentCount(),
-                stat);
-    }
-
-    private record LineCounts(int additions, int deletions, boolean binary) {}
-
-    private static LineCounts lineCounts(DiffFormatter formatter, DiffEntry entry) throws IOException {
-        FileHeader header = formatter.toFileHeader(entry);
-        if (header.getPatchType() == FileHeader.PatchType.BINARY) {
-            return new LineCounts(0, 0, true);
-        }
-        int additions = 0;
-        int deletions = 0;
-        for (Edit edit : header.toEditList()) {
-            deletions += edit.getEndA() - edit.getBeginA();
-            additions += edit.getEndB() - edit.getBeginB();
-        }
-        return new LineCounts(additions, deletions, false);
+                changedFiles);
     }
 
     private static String statColumn(DiffFormatter formatter, DiffEntry entry) {
         try {
-            LineCounts counts = lineCounts(formatter, entry);
-            return counts.binary() ? "Bin" : Integer.toString(counts.additions() + counts.deletions());
+            FileHeader header = formatter.toFileHeader(entry);
+            if (header.getPatchType() == FileHeader.PatchType.BINARY) {
+                return "Bin";
+            }
+            int additions = 0;
+            int deletions = 0;
+            for (Edit edit : header.toEditList()) {
+                deletions += edit.getEndA() - edit.getBeginA();
+                additions += edit.getEndB() - edit.getBeginB();
+            }
+            return Integer.toString(additions + deletions);
         } catch (IOException e) {
             log.debug("Skipped stat for {}: {}", entry.getNewPath(), e.getMessage());
             return "0";

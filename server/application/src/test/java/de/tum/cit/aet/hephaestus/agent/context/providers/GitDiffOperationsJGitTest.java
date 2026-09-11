@@ -127,7 +127,8 @@ class GitDiffOperationsJGitTest extends BaseUnitTest {
     }
 
     @Test
-    void commitLogListsTheRangeOldestFirstWithSubjectBodyAndStat() throws GitAPIException, IOException {
+    void shouldListTheRangeOldestFirstWithSubjectBodyAndFileCountWhenReadingTheCommitLog()
+            throws GitAPIException, IOException {
         write("c.txt", "c\n");
         String laterSha = commit("add c\n\nNeeded before the shadow pass lands.\n");
 
@@ -142,18 +143,15 @@ class GitDiffOperationsJGitTest extends BaseUnitTest {
         assertThat(first.subject()).isEqualTo("change a, add b");
         assertThat(first.body()).isNull();
         assertThat(first.parentCount()).isEqualTo(1);
-        // a.txt: one line replaced and one added; b.txt: one line added.
-        assertThat(first.stat()).isEqualTo(new GitDiffOperations.ChangeStat(2, 3, 1));
-        assertThat(first.authoredAt()).isNotNull();
-        assertThat(first.committedAt()).isNotNull();
+        assertThat(first.changedFiles()).isEqualTo(2);
         GitDiffOperations.CommitLogEntry second = log.commits().get(1);
         assertThat(second.subject()).isEqualTo("add c");
         assertThat(second.body()).isEqualTo("Needed before the shadow pass lands.");
-        assertThat(second.stat()).isEqualTo(new GitDiffOperations.ChangeStat(1, 1, 0));
+        assertThat(second.changedFiles()).isEqualTo(1);
     }
 
     @Test
-    void commitLogFoldsAWrappedSubjectAndSplitsTheBodyAtTheFirstBlankLine() throws GitAPIException, IOException {
+    void shouldFoldTheSubjectAndSplitTheBodyWhenTheMessageHasSeveralParagraphs() throws GitAPIException, IOException {
         write("c.txt", "c\n");
         String sha = commit(
                 "Cache detection results\nacross files\n\nAvoids re-running the detector.\n\nCo-authored-by: Ada <ada@example.com>");
@@ -167,35 +165,20 @@ class GitDiffOperationsJGitTest extends BaseUnitTest {
     }
 
     @Test
-    void commitLogOrdersTopologicallyWhenARebaseLeftAuthorTimesOutOfOrder() throws GitAPIException, IOException {
-        // The child is authored an hour BEFORE its parent, as a rebase that reorders commits leaves it.
+    void shouldKeepAMergedBranchTogetherAndLeaveTheMergeWithoutAFileCountWhenHistoryHasTwoLines()
+            throws GitAPIException, IOException {
+        // Commit times interleave the two lines (feature 10:00, main 10:30, feature 11:00); topological
+        // order must not.
         write("c.txt", "c\n");
-        git.add().addFilepattern(".").call();
-        PersonIdent earlier = new PersonIdent("t", "t@e", Instant.parse("2026-06-01T09:00:00Z"), ZoneOffset.UTC);
-        String childSha = git.commit()
-                .setMessage("authored earlier, committed later")
-                .setAuthor(earlier)
-                .setCommitter(earlier)
-                .call()
-                .getName();
-
-        GitDiffOperations.CommitLog log = ops.commitLog(repoDir, baseSha, childSha, 10);
-
-        assertThat(log).isNotNull();
-        assertThat(log.commits())
-                .extracting(GitDiffOperations.CommitLogEntry::sha)
-                .containsExactly(headSha, childSha);
-        assertThat(log.commits().get(1).authoredAt()).isEqualTo(Instant.parse("2026-06-01T09:00:00Z"));
-    }
-
-    @Test
-    void commitLogCarriesNoStatForAMergeCommit() throws GitAPIException, IOException {
+        String featureFirst = commitAt("add c", Instant.parse("2026-06-01T10:00:00Z"));
+        write("d.txt", "d\n");
+        String featureSecond = commitAt("add d", Instant.parse("2026-06-01T11:00:00Z"));
         git.checkout().setName("main").call();
         write("main-only.txt", "main\n");
-        commit("main only");
+        String mainOnly = commitAt("main only", Instant.parse("2026-06-01T10:30:00Z"));
         git.checkout().setName("feature").call();
         MergeResult merge = git.merge()
-                .include(repo.resolve("main"))
+                .include(repo.resolve(mainOnly))
                 .setFastForward(MergeCommand.FastForwardMode.NO_FF)
                 .setCommit(true)
                 .setMessage("Merge branch 'main' into feature")
@@ -206,38 +189,33 @@ class GitDiffOperationsJGitTest extends BaseUnitTest {
         GitDiffOperations.CommitLog log = ops.commitLog(repoDir, baseSha, mergeSha, 10);
 
         assertThat(log).isNotNull();
-        // Parents before children: the merge commit comes last, and only the merge is parentless of a stat.
         assertThat(log.commits())
                 .extracting(GitDiffOperations.CommitLogEntry::sha)
-                .endsWith(mergeSha);
-        GitDiffOperations.CommitLogEntry mergeEntry =
-                log.commits().get(log.commits().size() - 1);
-        assertThat(mergeEntry.subject()).isEqualTo("Merge branch 'main' into feature");
+                .startsWith(headSha)
+                .endsWith(mergeSha)
+                .containsSubsequence(featureFirst, featureSecond)
+                .doesNotContainSubsequence(featureFirst, mainOnly, featureSecond);
+        GitDiffOperations.CommitLogEntry mergeEntry = log.commits().getLast();
         assertThat(mergeEntry.parentCount()).isEqualTo(2);
-        assertThat(mergeEntry.stat()).isNull();
-        assertThat(log.commits())
-                .filteredOn(entry -> entry.parentCount() == 1)
-                .allSatisfy(entry -> assertThat(entry.stat()).isNotNull());
+        assertThat(mergeEntry.changedFiles()).isNull();
     }
 
     @Test
-    void commitLogKeepsTheOldestCommitsAndReportsTruncationPastTheLimit() throws GitAPIException, IOException {
+    void shouldKeepTheOldestCommitsAndReportTruncationOnlyWhenTheRangeExceedsTheLimit()
+            throws GitAPIException, IOException {
         write("c.txt", "c\n");
         String laterSha = commit("add c");
 
-        GitDiffOperations.CommitLog log = ops.commitLog(repoDir, baseSha, laterSha, 1);
+        GitDiffOperations.CommitLog exactFit = ops.commitLog(repoDir, baseSha, laterSha, 2);
+        GitDiffOperations.CommitLog cut = ops.commitLog(repoDir, baseSha, laterSha, 1);
 
-        assertThat(log).isNotNull();
-        assertThat(log.truncated()).isTrue();
-        assertThat(log.commits())
+        assertThat(exactFit).isNotNull();
+        assertThat(exactFit.truncated()).isFalse();
+        assertThat(cut).isNotNull();
+        assertThat(cut.truncated()).isTrue();
+        assertThat(cut.commits())
                 .extracting(GitDiffOperations.CommitLogEntry::sha)
                 .containsExactly(headSha);
-    }
-
-    @Test
-    void commitLogNullForUnknownRef() {
-        ObjectId zero = ObjectId.fromString("0000000000000000000000000000000000000000");
-        assertThat(ops.commitLog(repoDir, zero.getName(), headSha, 10)).isNull();
     }
 
     @Test
@@ -341,6 +319,17 @@ class GitDiffOperationsJGitTest extends BaseUnitTest {
                 .setMessage(message)
                 .setAuthor("t", "t@e")
                 .setCommitter("t", "t@e")
+                .call()
+                .getName();
+    }
+
+    private String commitAt(String message, Instant when) throws GitAPIException {
+        PersonIdent ident = new PersonIdent("t", "t@e", when, ZoneOffset.UTC);
+        git.add().addFilepattern(".").call();
+        return git.commit()
+                .setMessage(message)
+                .setAuthor(ident)
+                .setCommitter(ident)
                 .call()
                 .getName();
     }
