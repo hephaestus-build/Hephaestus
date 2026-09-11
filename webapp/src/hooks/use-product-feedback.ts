@@ -3,19 +3,24 @@ import { useRef } from "react";
 import { toast } from "sonner";
 
 import {
+	acknowledgeProductSurveyInvitationMutation,
 	dismissProductSurveyMutation,
+	listProductSurveyInvitationsOptions,
+	listProductSurveyInvitationsQueryKey,
 	restoreProductSurveyMutation,
-	listAvailableProductSurveysOptions,
-	listAvailableProductSurveysQueryKey,
 	submitInstanceProductFeedbackMutation,
 	submitProductSurveyResponseMutation,
 	submitWorkspaceProductFeedbackMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { FeedbackRequest } from "@/api/types.gen";
+import type { Answer, FeedbackRequest } from "@/api/types.gen";
 import { problemStatusOf } from "@/lib/problem-detail";
 
+/**
+ * The invitation cache across every workspace. An instance-wide survey is handled once per
+ * account, so a decision made in one workspace has to leave every workspace's list.
+ */
 export function productSurveyQueryScope() {
-	const [{ path: _path, ...scope }] = listAvailableProductSurveysQueryKey({
+	const [{ path: _path, ...scope }] = listProductSurveyInvitationsQueryKey({
 		path: { workspaceSlug: "" },
 	});
 	return [scope];
@@ -37,15 +42,29 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 	const sending = useRef(false);
 	const slug = workspaceSlug ?? "";
 	const query = useQuery({
-		...listAvailableProductSurveysOptions({ path: { workspaceSlug: slug } }),
+		...listProductSurveyInvitationsOptions({ path: { workspaceSlug: slug } }),
 		enabled: !!workspaceSlug,
 	});
-	const removeHandledSurveyFromCaches = (id: string) => {
+	const removeFromCaches = (id: string) => {
 		queryClient.setQueriesData({ queryKey: productSurveyQueryScope() }, (data: typeof query.data) =>
 			data?.filter((survey) => survey.id !== id),
 		);
 		void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
 	};
+	// Seen is bookkeeping, not a decision: a failure is invisible and the next visit reports it again.
+	const acknowledge = useMutation({
+		...acknowledgeProductSurveyInvitationMutation(),
+		retry: false,
+		onSuccess: (_, variables) => {
+			queryClient.setQueriesData(
+				{ queryKey: productSurveyQueryScope() },
+				(data: typeof query.data) =>
+					data?.map((survey) =>
+						survey.id === variables.path.surveyId ? { ...survey, seen: true } : survey,
+					),
+			);
+		},
+	});
 	const submit = useMutation({
 		...submitProductSurveyResponseMutation(),
 		retry: false,
@@ -53,7 +72,7 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 			sending.current = false;
 		},
 		onSuccess: (_, variables) => {
-			removeHandledSurveyFromCaches(variables.path.surveyId);
+			removeFromCaches(variables.path.surveyId);
 			toast.success("Thank you — your response was sent to this instance's administrators.");
 		},
 	});
@@ -62,21 +81,21 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 		retry: false,
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
-			toast.success("Survey restored. You can answer it from Surveys.");
+			toast.success("Survey restored. You can answer it from Feedback in the header.");
 		},
 		onError: () =>
 			toast.error(
 				"Couldn't undo the decline. The survey may no longer be available. Please try again.",
 			),
 	});
-	const dismiss = useMutation({
+	const decline = useMutation({
 		...dismissProductSurveyMutation(),
 		retry: false,
 		onSettled: () => {
 			sending.current = false;
 		},
 		onSuccess: (_, variables) => {
-			removeHandledSurveyFromCaches(variables.path.surveyId);
+			removeFromCaches(variables.path.surveyId);
 			toast.success("Survey declined.", {
 				duration: 15000,
 				action: { label: "Undo", onClick: () => restore.mutate({ path: variables.path }) },
@@ -85,33 +104,36 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 	});
 	return {
 		query,
-		isPending: submit.isPending || dismiss.isPending || restore.isPending,
+		isPending: submit.isPending || decline.isPending || restore.isPending,
 		error: submit.isError
 			? submissionError(submit.error)
-			: dismiss.isError
-				? submissionError(dismiss.error)
+			: decline.isError
+				? submissionError(decline.error)
 				: undefined,
 		reset: () => {
 			submit.reset();
-			dismiss.reset();
+			decline.reset();
 		},
-		submit: async (surveyId: string, answers: Record<string, string>) => {
+		acknowledge: (surveyId: string) => {
+			if (workspaceSlug) acknowledge.mutate({ path: { workspaceSlug: slug, surveyId } });
+		},
+		submit: async (surveyId: string, answers: Answer[]) => {
 			if (!workspaceSlug || sending.current || restore.isPending) return false;
 			sending.current = true;
 			try {
-				dismiss.reset();
+				decline.reset();
 				await submit.mutateAsync({ path: { workspaceSlug: slug, surveyId }, body: { answers } });
 				return true;
 			} catch {
 				return false;
 			}
 		},
-		dismiss: async (surveyId: string) => {
+		decline: async (surveyId: string) => {
 			if (!workspaceSlug || sending.current || restore.isPending) return false;
 			sending.current = true;
 			try {
 				submit.reset();
-				await dismiss.mutateAsync({ path: { workspaceSlug: slug, surveyId } });
+				await decline.mutateAsync({ path: { workspaceSlug: slug, surveyId } });
 				return true;
 			} catch {
 				return false;

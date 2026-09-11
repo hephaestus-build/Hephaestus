@@ -24,7 +24,7 @@ public class InstanceFeedbackController {
     @PostMapping
     @Operation(operationId = "submitInstanceProductFeedback", summary = "Send instance-scoped product feedback")
     public ResponseEntity<Void> feedback(@Valid @RequestBody FeedbackRequestDTO request) {
-        service.addFeedback(request, CurrentAccount.requireId(), null);
+        service.add(request, CurrentAccount.requireId(), null);
         return ResponseEntity.accepted().build();
     }
 }

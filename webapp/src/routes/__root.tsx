@@ -10,7 +10,8 @@ import {
 	useNavigate,
 	useRouter,
 } from "@tanstack/react-router";
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { getIntegrationCatalogOptions, listThreadsOptions } from "@/api/@tanstack/react-query.gen";
 import { ImpersonationBanner } from "@/components/auth/ImpersonationBanner";
@@ -21,8 +22,13 @@ import Header from "@/components/core/Header";
 import { AppSidebar, type SidebarContext } from "@/components/core/sidebar/AppSidebar";
 import { SkipToContent } from "@/components/core/SkipToContent";
 import { StandardPageSurface } from "@/components/core/StandardPageSurface";
-import { ProductFeedbackDialog } from "@/components/feedback/ProductFeedbackDialog";
-import { ProductSurveyInvitations } from "@/components/feedback/ProductSurveyInvitations";
+import {
+	type FeedbackKind,
+	ProductFeedbackDialog,
+} from "@/components/feedback/ProductFeedbackDialog";
+import { ProductFeedbackMenu } from "@/components/feedback/ProductFeedbackMenu";
+import { ProductSurveyDialog } from "@/components/feedback/ProductSurveyDialog";
+import { type AnswerDraft, surveyEstimate } from "@/components/feedback/survey-questions";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import environment from "@/environment";
@@ -137,33 +143,76 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 	const { pathname } = useLocation();
 	const feedback = useSubmitProductFeedback(workspaceSlug);
 	const surveys = useProductSurveys(workspaceSlug);
+	const [feedbackOpen, setFeedbackOpen] = useState(false);
+	const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>("FEEDBACK");
+	const [activeSurveyId, setActiveSurveyId] = useState<string>();
+	const [drafts, setDrafts] = useState<Record<string, AnswerDraft>>({});
+	const nudged = useRef(false);
+	const invitations = surveys.query.data ?? [];
+	const activeSurvey = invitations.find((survey) => survey.id === activeSurveyId);
+	// One quiet nudge per visit, and only for an invitation this account has never been shown:
+	// the server remembers the acknowledgement, so a reload never repeats it.
+	const unseen = invitations.find((survey) => !survey.seen);
+	useEffect(() => {
+		if (!unseen || nudged.current) return;
+		nudged.current = true;
+		surveys.acknowledge(unseen.id);
+		toast(`New survey: ${unseen.title}`, {
+			description: surveyEstimate(unseen.questions),
+			duration: 12000,
+			action: { label: "Take survey", onClick: () => setActiveSurveyId(unseen.id) },
+		});
+	}, [unseen, surveys]);
 	return (
 		<>
-			{workspaceSlug && (
-				<ProductSurveyInvitations
-					surveys={surveys.query.data ?? []}
-					isLoading={surveys.query.isLoading}
-					loadError={surveys.query.isError}
-					isPending={surveys.isPending}
-					error={surveys.error}
-					onSelect={surveys.reset}
-					onRetry={() => void surveys.query.refetch()}
-					onSubmit={surveys.submit}
-					onDismiss={surveys.dismiss}
-				/>
-			)}
+			<ProductFeedbackMenu
+				invitations={invitations}
+				onSendFeedback={(kind) => {
+					setFeedbackKind(kind);
+					setFeedbackOpen(true);
+				}}
+				onOpenSurvey={setActiveSurveyId}
+			/>
 			<ProductFeedbackDialog
+				open={feedbackOpen}
+				onOpenChange={setFeedbackOpen}
+				kind={feedbackKind}
+				onKindChange={setFeedbackKind}
+				context={
+					pathname.length <= 500
+						? { pagePath: pathname, userAgent: navigator.userAgent.slice(0, 500) }
+						: undefined
+				}
 				isSubmitting={feedback.isPending}
 				error={feedback.error}
-				pagePath={pathname.length <= 500 ? pathname : undefined}
-				onSubmit={(kind, message, includePagePath) =>
-					feedback.submit({
-						kind,
-						message,
-						pagePath: includePagePath && pathname.length <= 500 ? pathname : undefined,
-					})
-				}
+				onSubmit={feedback.submit}
 			/>
+			{activeSurvey && (
+				<ProductSurveyDialog
+					key={activeSurvey.id}
+					survey={activeSurvey}
+					open
+					onOpenChange={(open) => {
+						if (open) return;
+						// A stale failure must not greet the next survey; the draft itself is kept.
+						surveys.reset();
+						setActiveSurveyId(undefined);
+					}}
+					draft={drafts[activeSurvey.id] ?? {}}
+					onDraftChange={(draft) => setDrafts({ ...drafts, [activeSurvey.id]: draft })}
+					isSubmitting={surveys.isPending}
+					error={surveys.error}
+					onSubmit={async (answers) => {
+						if (await surveys.submit(activeSurvey.id, answers)) {
+							setDrafts(({ [activeSurvey.id]: _sent, ...rest }) => rest);
+							setActiveSurveyId(undefined);
+						}
+					}}
+					onDecline={async () => {
+						if (await surveys.decline(activeSurvey.id)) setActiveSurveyId(undefined);
+					}}
+				/>
+			)}
 		</>
 	);
 }

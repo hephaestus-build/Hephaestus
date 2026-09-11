@@ -984,6 +984,10 @@ erDiagram
         VARCHAR(500) page_path
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ submission_minute UK "NOT NULL"
+        VARCHAR(64) app_version "NOT NULL"
+        VARCHAR(500) user_agent
+        TIMESTAMPTZ resolved_at
+        BIGINT resolved_by_account_id FK
     }
 
     ProductSurvey {
@@ -997,6 +1001,17 @@ erDiagram
         BOOLEAN active "NOT NULL"
         BIGINT created_by_account_id FK
         TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    ProductSurveyParticipation {
+        UUID id PK
+        UUID survey_id FK,UK "NOT NULL"
+        BIGINT account_id FK,UK "NOT NULL"
+        BIGINT workspace_id FK
+        VARCHAR(16) status "NOT NULL"
+        JSONB answers_json
+        TIMESTAMPTZ invited_at "NOT NULL"
+        TIMESTAMPTZ decided_at
     }
 
     ProductSurveySubmission {
@@ -1647,10 +1662,14 @@ erDiagram
     Workspace ||--o{ Practice : has
     Workspace ||--o{ PracticeGroup : has
     Practice ||--o{ PracticeRevision : has
-    Account ||--o{ ProductFeedback : has
+    Account ||--o{ ProductFeedback : account_id
+    Account ||--o{ ProductFeedback : resolved_by_account_id
     Workspace ||--o{ ProductFeedback : has
     Account ||--o{ ProductSurvey : has
     Workspace ||--o{ ProductSurvey : has
+    Account ||--o{ ProductSurveyParticipation : has
+    ProductSurvey ||--o{ ProductSurveyParticipation : has
+    Workspace ||--o{ ProductSurveyParticipation : has
     Account ||--o{ ProductSurveySubmission : has
     ProductSurvey ||--o{ ProductSurveySubmission : has
     Workspace ||--o{ ProductSurveySubmission : has

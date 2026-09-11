@@ -4,42 +4,63 @@ title: Product feedback and surveys
 
 # Product feedback and surveys
 
-Instance administrators manage surveys and read submissions under **Administration → Product
-feedback**. Workspace administrator access alone does not grant access to this inbox.
+Instance administrators read submissions and publish surveys under **Administration → Product
+feedback**, which has two pages: **Inbox** for feedback and bug reports, and **Surveys** for
+publishing surveys and reading their responses. Workspace administrator access alone does not grant
+access to either.
 
 ## Publish a survey
 
-Open **Surveys** and choose an audience: one workspace or all workspaces. State the decision you
-want to inform in the purpose. Keep questions short and focused; they are optional by default.
+On **Surveys**, choose **Create survey** and pick an audience: one workspace or all workspaces.
+State the decision you want to inform in the purpose; members see it with the invitation.
 
-Use free text for context, single choice for distinct alternatives, or a 1–5 rating. Explain what
-1 and 5 mean in the question, or use single choice to label every scale point. Include “Not
-applicable” when appropriate. An optional free-text follow-up lets people explain their choice.
+Short surveys get answered: aim for one to three questions, closed questions first and one optional
+free-text question last. Questions are optional unless you mark them required. Each question is
+free text, single choice, multiple choice, a 1–5 rating with a label for each end of the scale, or
+a 0–10 recommendation question scored as a Net Promoter Score. Include “Not applicable” as a choice
+when appropriate. **Preview** shows the survey exactly as members will see it.
 
 Times use your device's local timezone. A blank start means publication time; a blank end means
 no scheduled expiry. Set an end to avoid stale invitations. Questions cannot be edited after
 publishing; publish a new survey if the wording needs changing.
 
-Available surveys appear in the app header without opening a dialog. **Pause survey** makes
-a survey unavailable; **Resume survey** restores availability within the original schedule. Resuming
-neither extends the end time nor resets responses or declines. Availability is checked when a
-response is submitted, but pausing does not cancel submissions already in progress.
+Members see open surveys under **Feedback** in the app header. The first time an account is shown
+an invitation it also gets one short, dismissible notice; nothing opens by itself, and the notice is
+never repeated. From a survey's actions:
 
-## Read and act on submissions
+- **Pause** makes a survey unavailable; **Resume** restores availability within the original
+  schedule. Resuming neither extends the end time nor resets responses or declines. Availability
+  is checked when a response is submitted, but pausing does not cancel submissions already in
+  progress.
+- **End now** closes the survey at the current time. Members are no longer invited; responses
+  stay.
+- **Delete** removes the survey and every response and decline it collected. This cannot be undone.
 
-The **Feedback** tab contains feedback and bug reports. **Survey responses** contains answers and
-explicit declines, with the submitting account shown. Check the inbox regularly;
-there are no submission notifications. Follow your team's process for acting on reports.
+## Read survey results
+
+Open a survey from the table to see who was invited, who responded and who declined, a summary per
+question, and every response with the submitting account and workspace. **Export CSV** downloads
+the responses.
 
 Voluntary responses are not a representative satisfaction measurement. Declines are not negative
 ratings, and skipped questions are not zeroes. Do not reuse product responses for research.
 
+## Act on feedback
+
+**Inbox** lists feedback and bug reports, open ones first. Each shows who sent it, from which
+workspace and page, and their browser and Hephaestus version when the report included them. **Mark
+resolved** moves an item out of the open list; **Reopen** brings it back. Nobody is notified either
+way, and there are no submission notifications, so check the inbox regularly and follow your team's
+process for acting on reports.
+
 ## Handle personal data
 
 Submissions are linked to accounts and stored on your instance. Users can choose to attach the
-displayed page path; query parameters, page contents and logs are not attached. Unsubmitted drafts
-are lost on refresh, workspace change or sign-out. Feedback is limited to one submission per account
-per minute. Each account can respond to a survey once.
+displayed page path and their browser's user agent; query parameters, page contents and logs are
+never attached, and the Hephaestus release that received the report is recorded either way.
+Unsubmitted drafts are lost on refresh, workspace change or sign-out. Feedback is limited to one
+submission per account per minute. Each account can respond to a survey once; a survey records when
+its invitation was first shown to an account, so the results page can report a completion rate.
 
 Account erasure and workspace purge remove the corresponding submissions. There is no automatic
 age-based deletion: include product feedback in your retention and rights-request procedures.

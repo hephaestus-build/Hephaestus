@@ -293,14 +293,15 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
     }
 
     /**
-     * The two {@code core.auth.spi} read-only query impls are the cross-role data-access part of auth
-     * (account identity/role lookups), consumed by the connection-identity service and the workspace /
-     * notification modules on every role. They carry no hard prod env and must stay ungated — unlike the
-     * web/OAuth/issuance layer.
+     * The {@code core.auth.spi} read-only query impls are the cross-role data-access part of auth
+     * (account identity/role/name lookups), consumed by the connection-identity service and the
+     * workspace / notification / product-feedback modules on every role. They carry no hard prod env
+     * and must stay ungated — unlike the web/OAuth/issuance layer.
      */
     private static final List<String> CROSS_ROLE_AUTH_SPI_IMPLS = List.of(
             "de.tum.cit.aet.hephaestus.core.auth.AccountIdentityQueryService",
-            "de.tum.cit.aet.hephaestus.core.auth.AccountRoleQueryService");
+            "de.tum.cit.aet.hephaestus.core.auth.AccountRoleQueryService",
+            "de.tum.cit.aet.hephaestus.core.auth.AccountSummaryQueryService");
 
     @Test
     void allAuthStereotypeBeansAreServerGated() {

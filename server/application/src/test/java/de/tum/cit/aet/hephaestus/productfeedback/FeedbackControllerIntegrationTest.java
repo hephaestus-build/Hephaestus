@@ -4,19 +4,32 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
+import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.CreateSurveyDTO;
+import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.QuestionDTO;
+import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.QuestionType;
+import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.SurveyDTO;
+import de.tum.cit.aet.hephaestus.productfeedback.SurveyParticipation.Status;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -30,147 +43,419 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     private SurveyRepository surveys;
 
     @Autowired
-    private SurveySubmissionRepository submissions;
+    private SurveyParticipationRepository participations;
+
+    @Autowired
+    private ProductFeedbackRepository feedback;
 
     @Autowired
     private AccountRepository accounts;
 
-    @Test
-    @WithAdminUser
-    void shouldPersistPauseAndResumeWithoutChangingTheQuestions() {
-        var created = publishSurvey(null);
-        var originalQuestions = surveys.findById(created.id()).orElseThrow().getQuestions();
-        for (boolean active : List.of(false, true)) {
-            webTestClient
-                    .patch()
-                    .uri("/admin/product-feedback/surveys/" + created.id() + "/status")
-                    .headers(TestAuthUtils.withCurrentUser())
-                    .bodyValue(Map.of("active", active))
-                    .exchange()
-                    .expectStatus()
-                    .isOk();
-            var persisted = surveys.findById(created.id()).orElseThrow();
-            assertThat(persisted.isActive()).isEqualTo(active);
-            assertThat(persisted.getQuestions()).isEqualTo(originalQuestions);
+    @Autowired
+    private IdentityLinkRepository identityLinks;
+
+    /** A member account signed in the way production does: a numeric JWT subject wired to a workspace member. */
+    private record Member(long accountId, Workspace workspace) {
+        Consumer<HttpHeaders> headers() {
+            return headers -> headers.setBearerAuth("mock-jwt-sub-" + accountId);
         }
+
+        String path(String suffix) {
+            return "/workspaces/" + workspace.getWorkspaceSlug() + "/product-feedback" + suffix;
+        }
+    }
+
+    @Test
+    void shouldCarryAnInvitationThroughToAResponseTheAdministratorCanRead() {
+        Member member = member("survey-flow");
+        SurveyDTO survey = publish(
+                member,
+                member.workspace().getId(),
+                List.of(
+                        new QuestionDTO(
+                                "useful", "How useful?", QuestionType.RATING, List.of(), true, "Not at all", "Very"),
+                        new QuestionDTO("why", "Why?", QuestionType.TEXT, List.of(), false, null, null)));
+
+        webTestClient
+                .get()
+                .uri(member.path("/surveys"))
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$[0].id")
+                .isEqualTo(survey.id().toString())
+                .jsonPath("$[0].seen")
+                .isEqualTo(false);
+        webTestClient
+                .put()
+                .uri(member.path("/surveys/" + survey.id() + "/invitation"))
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+        webTestClient
+                .get()
+                .uri(member.path("/surveys"))
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$[0].seen")
+                .isEqualTo(true);
+
+        webTestClient
+                .post()
+                .uri(member.path("/surveys/" + survey.id() + "/responses"))
+                .headers(member.headers())
+                .bodyValue(Map.of(
+                        "answers",
+                        List.of(
+                                Map.of("questionId", "useful", "rating", 4),
+                                Map.of("questionId", "why", "text", "Fast"))))
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+
+        SurveyParticipation stored = participations
+                .findBySurveyIdAndAccountId(survey.id(), member.accountId())
+                .orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(Status.RESPONDED);
+        assertThat(stored.getWorkspaceId()).isEqualTo(member.workspace().getId());
+        webTestClient
+                .get()
+                .uri(member.path("/surveys"))
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$")
+                .isEmpty();
+
+        webTestClient
+                .get()
+                .uri("/admin/product-feedback/surveys/" + survey.id() + "/summary")
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.participation.invited")
+                .isEqualTo(1)
+                .jsonPath("$.participation.responded")
+                .isEqualTo(1)
+                .jsonPath("$.questions[0].average")
+                .isEqualTo(4.0)
+                .jsonPath("$.questions[0].counts[3].count")
+                .isEqualTo(1);
+        webTestClient
+                .get()
+                .uri("/admin/product-feedback/surveys/" + survey.id() + "/responses")
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[0].account.displayName")
+                .isEqualTo("Member survey-flow")
+                .jsonPath("$.content[0].workspace.slug")
+                .isEqualTo(member.workspace().getWorkspaceSlug())
+                .jsonPath("$.content[0].answers[1].text")
+                .isEqualTo("Fast");
+        String csv = webTestClient
+                .get()
+                .uri("/admin/product-feedback/surveys/" + survey.id() + "/responses/export")
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .contentTypeCompatibleWith(MediaType.parseMediaType("text/csv"))
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(csv)
+                .contains("\"How useful?\",\"Why?\"")
+                .contains("\"RESPONDED\",\"Member survey-flow\"")
+                .contains("\"4\",\"Fast\"");
+    }
+
+    @Test
+    void shouldUndoOnlyADeclineAndNeverEraseAnAnswer() {
+        Member member = member("survey-undo");
+        SurveyDTO declined = publish(member, member.workspace().getId(), textQuestion());
+        SurveyDTO answered = publish(member, member.workspace().getId(), textQuestion());
+        webTestClient
+                .post()
+                .uri(member.path("/surveys/" + answered.id() + "/responses"))
+                .headers(member.headers())
+                .bodyValue(Map.of("answers", List.of(Map.of("questionId", "q", "text", "Keep my answer"))))
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+        webTestClient
+                .put()
+                .uri(member.path("/surveys/" + declined.id() + "/dismissal"))
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+        assertThat(participations.findBySurveyIdAndAccountId(declined.id(), member.accountId()))
+                .get()
+                .extracting(SurveyParticipation::getStatus)
+                .isEqualTo(Status.DECLINED);
+
+        webTestClient
+                .delete()
+                .uri(member.path("/surveys/" + declined.id() + "/dismissal"))
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+        webTestClient
+                .delete()
+                .uri(member.path("/surveys/" + answered.id() + "/dismissal"))
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+
+        assertThat(participations.findBySurveyIdAndAccountId(declined.id(), member.accountId()))
+                .get()
+                .extracting(SurveyParticipation::getStatus)
+                .isEqualTo(Status.INVITED);
+        SurveyParticipation response = participations
+                .findBySurveyIdAndAccountId(answered.id(), member.accountId())
+                .orElseThrow();
+        assertThat(response.getStatus()).isEqualTo(Status.RESPONDED);
+        assertThat(Objects.requireNonNull(response.getAnswers())
+                        .path(0)
+                        .path("text")
+                        .asString())
+                .isEqualTo("Keep my answer");
+    }
+
+    @Test
+    void shouldHideASurveyFromAnotherWorkspaceAndWhilePaused() {
+        Member member = member("survey-scope");
+        Workspace other =
+                createWorkspace("other-scope", "Other", "other-scope", AccountType.ORG, persistUser("o-scope"));
+        SurveyDTO survey = publish(member, other.getId(), textQuestion());
+
+        webTestClient
+                .get()
+                .uri(member.path("/surveys"))
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$")
+                .isEmpty();
+        webTestClient
+                .post()
+                .uri(member.path("/surveys/" + survey.id() + "/responses"))
+                .headers(member.headers())
+                .bodyValue(Map.of("answers", List.of()))
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+
+        SurveyDTO everyone = publish(member, null, textQuestion());
+        var originalQuestions = surveys.findById(everyone.id()).orElseThrow().getQuestions();
+        webTestClient
+                .put()
+                .uri("/admin/product-feedback/surveys/" + everyone.id())
+                .headers(member.headers())
+                .bodyValue(Map.of(
+                        "title",
+                        "Renamed",
+                        "description",
+                        everyone.description(),
+                        "startsAt",
+                        everyone.startsAt().toString(),
+                        "active",
+                        false))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.title")
+                .isEqualTo("Renamed")
+                .jsonPath("$.active")
+                .isEqualTo(false);
+        Survey persisted = surveys.findById(everyone.id()).orElseThrow();
+        assertThat(persisted.isActive()).isFalse();
+        assertThat(persisted.getQuestions()).isEqualTo(originalQuestions);
+        webTestClient
+                .get()
+                .uri(member.path("/surveys"))
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$")
+                .isEmpty();
+        assertThat(participations.findBySurveyIdAndAccountId(everyone.id(), member.accountId()))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldDeleteASurveyTogetherWithItsParticipation() {
+        Member member = member("survey-delete");
+        SurveyDTO survey = publish(member, member.workspace().getId(), textQuestion());
+        webTestClient
+                .put()
+                .uri(member.path("/surveys/" + survey.id() + "/dismissal"))
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+
+        webTestClient
+                .delete()
+                .uri("/admin/product-feedback/surveys/" + survey.id())
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+
+        assertThat(surveys.findById(survey.id())).isEmpty();
+        assertThat(participations.findBySurveyIdAndAccountId(survey.id(), member.accountId()))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldRejectMalformedAnswersWithoutStoringAParticipation() {
+        Member member = member("survey-validation");
+        SurveyDTO survey = publish(member, member.workspace().getId(), textQuestion());
+        webTestClient
+                .post()
+                .uri(member.path("/surveys/" + survey.id() + "/responses"))
+                .headers(member.headers())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"answers\":[null]}")
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+        webTestClient
+                .post()
+                .uri(member.path("/surveys/" + survey.id() + "/responses"))
+                .headers(member.headers())
+                .bodyValue(Map.of("answers", List.of(Map.of("questionId", "q", "rating", 3))))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+        assertThat(participations.findBySurveyIdAndAccountId(survey.id(), member.accountId()))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldKeepFeedbackContextOptionalAndLetAdministratorsTriageIt() {
+        Member member = member("feedback-triage");
+        webTestClient
+                .post()
+                .uri(member.path(""))
+                .headers(member.headers())
+                .bodyValue(Map.of(
+                        "kind", "BUG",
+                        "message", "The list jumps",
+                        "pagePath", "/w/feedback-triage/practices",
+                        "userAgent", "Mozilla/5.0 (X11; Linux x86_64)"))
+                .exchange()
+                .expectStatus()
+                .isAccepted()
+                .expectBody(Void.class);
+        ProductFeedback stored = feedback.findAll().stream()
+                .filter(item -> item.getAccountId().equals(member.accountId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(stored.getUserAgent()).isEqualTo("Mozilla/5.0 (X11; Linux x86_64)");
+        assertThat(stored.getAppVersion()).isNotBlank();
+        assertThat(stored.isResolved()).isFalse();
+
+        webTestClient
+                .get()
+                .uri("/admin/product-feedback?status=OPEN")
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[?(@.id == '" + stored.getId() + "')].account.displayName")
+                .isEqualTo("Member feedback-triage")
+                .jsonPath("$.content[?(@.id == '" + stored.getId() + "')].workspace.slug")
+                .isEqualTo("feedback-triage");
+        webTestClient
+                .patch()
+                .uri("/admin/product-feedback/" + stored.getId())
+                .headers(member.headers())
+                .bodyValue(Map.of("resolved", true))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.resolvedBy.id")
+                .isEqualTo(member.accountId());
+        webTestClient
+                .get()
+                .uri("/admin/product-feedback?status=OPEN")
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[?(@.id == '" + stored.getId() + "')]")
+                .isEmpty();
+        assertThat(feedback.findById(stored.getId()).orElseThrow().getResolvedByAccountId())
+                .isEqualTo(member.accountId());
     }
 
     @Test
     @WithUser
-    void shouldDenySurveyLifecycleChangesByNonAdministrators() {
-        webTestClient
-                .patch()
-                .uri("/admin/product-feedback/surveys/" + UUID.randomUUID() + "/status")
-                .headers(TestAuthUtils.withCurrentUser())
-                .bodyValue(Map.of("active", false))
-                .exchange()
-                .expectStatus()
-                .isForbidden();
-    }
-
-    @Test
-    @WithAdminUser
-    void shouldRejectNullAnswersWithoutStoringASubmission() {
-        var workspace = createWorkspace(
-                "validation-team",
-                "Validation team",
-                "validation-team",
-                AccountType.ORG,
-                persistUser("validation-owner"));
-        ensureAdminMembership(workspace);
-        var survey = publishSurvey(workspace.getId());
-        webTestClient
-                .post()
-                .uri("/workspaces/validation-team/product-feedback/surveys/" + survey.id() + "/responses")
-                .headers(TestAuthUtils.withCurrentUser())
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue("{\"answers\":{\"q\":null}}")
-                .exchange()
-                .expectStatus()
-                .isBadRequest();
-        assertThat(submissions.findAll())
-                .noneMatch(submission -> submission.getSurveyId().equals(survey.id()));
-    }
-
-    @Test
-    @WithAdminUser
-    void shouldUndoOnlyADismissalAndNeverEraseAnAnswer() {
-        var owner = persistUser("survey-owner");
-        var workspace = createWorkspace("survey-team", "Survey team", "survey-team", AccountType.ORG, owner);
-        var otherWorkspace = createWorkspace("other-team", "Other team", "other-team", AccountType.ORG, owner);
-        ensureAdminMembership(workspace);
-        ensureAdminMembership(otherWorkspace);
-        var declined = publishSurvey(workspace.getId());
-        var answered = publishSurvey(workspace.getId());
-        Long accountId = surveys.findById(declined.id()).orElseThrow().getCreatedByAccountId();
-        if (accountId == null) throw new AssertionError("Published survey must have an author");
-        var otherAccountId = accounts.save(new Account("other-respondent")).getId();
-        if (otherAccountId == null) throw new AssertionError("Persisted account must have an id");
-        var dismissal = submissions.saveAndFlush(new SurveySubmission(
-                declined.id(), accountId, workspace.getId(), SurveySubmission.Disposition.DISMISSED, null));
-        var otherDismissal = submissions.saveAndFlush(new SurveySubmission(
-                declined.id(), otherAccountId, workspace.getId(), SurveySubmission.Disposition.DISMISSED, null));
-        webTestClient
-                .post()
-                .uri("/workspaces/survey-team/product-feedback/surveys/" + answered.id() + "/responses")
-                .headers(TestAuthUtils.withCurrentUser())
-                .bodyValue(Map.of("answers", Map.of("q", "Keep my answer")))
-                .exchange()
-                .expectStatus()
-                .isNoContent();
-        webTestClient
-                .delete()
-                .uri("/workspaces/other-team/product-feedback/surveys/" + declined.id() + "/dismissal")
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isNotFound();
-        assertThat(submissions.findById(dismissal.getId())).isPresent();
-        for (var survey : List.of(declined, answered)) {
+    void shouldDenyAdministrationToRegularUsers() {
+        for (String uri : List.of("/admin/product-feedback", "/admin/product-feedback/surveys")) {
             webTestClient
-                    .delete()
-                    .uri("/workspaces/survey-team/product-feedback/surveys/" + survey.id() + "/dismissal")
+                    .get()
+                    .uri(uri)
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNoContent();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
-        assertThat(submissions.findById(dismissal.getId())).isEmpty();
-        assertThat(submissions.findById(otherDismissal.getId())).isPresent();
-        assertThat(submissions.findAll())
-                .filteredOn(submission -> submission.getSurveyId().equals(answered.id()))
-                .singleElement()
-                .satisfies(response -> {
-                    assertThat(response.getAccountId()).isEqualTo(accountId);
-                    assertThat(response.getDisposition()).isEqualTo(SurveySubmission.Disposition.RESPONDED);
-                    var answers = response.getAnswers();
-                    if (answers == null) throw new AssertionError("Submitted answers must be retained");
-                    assertThat(answers.path("q").asString()).isEqualTo("Keep my answer");
-                });
-    }
-
-    private FeedbackDTOs.SurveyDTO publishSurvey(@Nullable Long workspaceId) {
-        var request = new FeedbackDTOs.CreateSurveyDTO(
-                "Survey " + UUID.randomUUID(),
-                "Purpose",
-                List.of(new FeedbackDTOs.QuestionDTO(
-                        "q", "What should improve?", FeedbackDTOs.QuestionType.TEXT, List.of(), false)),
-                workspaceId,
-                Instant.now().minusSeconds(10),
-                null);
-        var result = webTestClient
-                .post()
-                .uri("/admin/product-feedback/surveys")
+        webTestClient
+                .put()
+                .uri("/admin/product-feedback/surveys/" + UUID.randomUUID())
                 .headers(TestAuthUtils.withCurrentUser())
-                .bodyValue(request)
+                .bodyValue(Map.of(
+                        "title",
+                        "t",
+                        "description",
+                        "d",
+                        "startsAt",
+                        Instant.now().toString(),
+                        "active",
+                        false))
                 .exchange()
                 .expectStatus()
-                .isCreated()
-                .expectBody(FeedbackDTOs.SurveyDTO.class)
-                .returnResult()
-                .getResponseBody();
-        if (result == null) throw new AssertionError("Publishing must return the survey");
-        return result;
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -183,19 +468,6 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .exchange()
                 .expectStatus()
                 .isOk()
-                .expectBody(Void.class);
-    }
-
-    @Test
-    @WithUser
-    void shouldDenyInboxReadWhenRegularUser() {
-        webTestClient
-                .get()
-                .uri("/admin/product-feedback")
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isForbidden()
                 .expectBody(Void.class);
     }
 
@@ -217,5 +489,50 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .expectStatus()
                 .isUnauthorized()
                 .expectBody(Void.class);
+    }
+
+    private static List<QuestionDTO> textQuestion() {
+        return List.of(new QuestionDTO("q", "What should improve?", QuestionType.TEXT, List.of(), false, null, null));
+    }
+
+    private SurveyDTO publish(Member admin, @Nullable Long workspaceId, List<QuestionDTO> questions) {
+        var request = new CreateSurveyDTO(
+                "Survey " + UUID.randomUUID(),
+                "Purpose",
+                questions,
+                workspaceId,
+                Instant.now().minusSeconds(10),
+                null);
+        SurveyDTO result = webTestClient
+                .post()
+                .uri("/admin/product-feedback/surveys")
+                .headers(admin.headers())
+                .bodyValue(request)
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody(SurveyDTO.class)
+                .returnResult()
+                .getResponseBody();
+        return Objects.requireNonNull(result, "publishing must return the survey");
+    }
+
+    /** One workspace whose admin member is a real account, so the same token can author and answer. */
+    private Member member(String slug) {
+        User actor = persistUser(slug + "-member");
+        Workspace workspace = createWorkspace(slug, "Workspace " + slug, slug, AccountType.ORG, actor);
+        ensureWorkspaceMembership(workspace, actor, WorkspaceMembership.WorkspaceRole.ADMIN);
+        Account account = new Account("Member " + slug);
+        account.setAppRole(Account.AppRole.APP_ADMIN);
+        account.setStatus(Account.Status.ACTIVE);
+        account = accounts.save(account);
+        IdentityLink link = new IdentityLink();
+        link.setAccount(account);
+        link.setProviderId(Objects.requireNonNull(ensureGitHubProvider().getId()));
+        link.setSubject(String.valueOf(actor.getNativeId()));
+        link.setUsernameAtSignup(actor.getLogin());
+        link.setExternalActorId(actor.getId());
+        identityLinks.save(link);
+        return new Member(Objects.requireNonNull(account.getId()), workspace);
     }
 }

@@ -11,6 +11,11 @@ import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
+/**
+ * A product survey published by an instance administrator. The questions are frozen at publication
+ * so every stored answer keeps its meaning; the title, purpose, schedule and pause flag stay editable
+ * because they change who is invited, never what an answer meant.
+ */
 @Entity
 @Table(name = "product_survey")
 @Getter
@@ -66,7 +71,19 @@ public class Survey {
         this.createdByAccountId = createdByAccountId;
     }
 
-    public void setActive(boolean active) {
+    public void edit(String title, String description, Instant startsAt, @Nullable Instant endsAt, boolean active) {
+        this.title = title;
+        this.description = description;
+        this.startsAt = startsAt;
+        this.endsAt = endsAt;
         this.active = active;
+    }
+
+    /** Whether the survey accepts responses from {@code workspaceId} at {@code now}. */
+    public boolean isOpenFor(Long workspaceId, Instant now) {
+        return active
+                && !startsAt.isAfter(now)
+                && (endsAt == null || endsAt.isAfter(now))
+                && (this.workspaceId == null || this.workspaceId.equals(workspaceId));
     }
 }

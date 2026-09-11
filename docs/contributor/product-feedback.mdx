@@ -6,35 +6,61 @@ title: Product feedback boundaries
 
 Product feedback collects identified submissions for instance administrators. It is separate from
 practice feedback and does not forward submissions outside the instance. See
-[operator guidance](../admin/product-feedback.mdx) for survey authoring and
-[the personal-data map](../admin/dsms/personal-data-map.md) for retention and erasure ownership.
+[operator guidance](/admin/product-feedback) for survey authoring and
+[the personal-data map](/admin/dsms/personal-data-map) for retention and erasure ownership.
+
+## Model
+
+`Survey` is published once and its questions are frozen so every stored answer keeps its meaning;
+the title, purpose, schedule and pause flag stay editable because they change who is invited, never
+what an answer meant. Availability is derived at read time from the schedule and the flag, on both
+sides of the wire, and is never stored.
+
+`SurveyParticipation` is one row per survey and account: created as `INVITED` when the header first
+shows the invitation, then `RESPONDED` or `DECLINED`; undoing a decline returns it to `INVITED` and
+never touches a response. The unique constraint on `(survey_id, account_id)` is what makes "one
+response per account" a database fact, and the invitation living on the same row is what lets the
+results page report a completion rate honestly. Answers are stored as a typed list —
+`{questionId, text | choices | rating}` — validated against the frozen questions in
+`SurveyQuestions`, which also produces the per-question summary.
+
+`ProductFeedback` carries the message, the context the sender chose to share (page path and user
+agent), the release that received it, and inbox triage (`resolved_at`, `resolved_by_account_id`).
+Names next to any of these come from the `AccountSummaryQuery` and `WorkspaceSummaryQuery` SPIs,
+one batch per page; an erased account or purged workspace simply has no name.
+
+Question types are `TEXT`, `SINGLE_CHOICE`, `MULTIPLE_CHOICE`, `RATING` (1–5 with author-written
+end labels) and `NPS` (0–10 with fixed labels, summarised as promoters minus detractors).
 
 ## Collection and state
 
-Invitations do not capture focus automatically. Closing a survey preserves its draft; declining
-records an account-wide dismissal. A dismissal undo deletes only that account's `DISMISSED` row,
-never a `RESPONDED` row. Survey content remains unchanged after publication so stored answers retain
-their meaning; availability can change without rewriting responses.
+The header owns one entry point. Invitations are never modal: the trigger carries a count, the menu
+lists them, and an unseen invitation earns one toast whose acknowledgement the server records — so a
+reload does not repeat it. Drafts belong to the signed-in account and current workspace and live
+only in memory; the root route keys the controls by both scopes so a draft never crosses either.
 
-Drafts belong to the signed-in account and current workspace and live only in memory. The root
-route keys the feedback controls by both scopes to prevent a draft from crossing either boundary.
 Page context requires opt-in; the request DTO rejects absolute URLs, protocol-relative URLs, query
-strings, fragments and control characters.
+strings, fragments and control characters, and accepts a user agent only without control characters.
 
 ## Writes and caching
 
 The generated client is the HTTP boundary. `use-product-feedback.ts` owns mutation acknowledgements
-and the available-survey cache. A successful response or dismissal removes the invitation from all
-cached workspaces before revalidation because an instance-wide survey is handled once per account,
-not once per workspace. A failed refresh must not leave the previously cached invitation in place.
-
-POST mutations do not retry automatically. Network errors preserve drafts, and a conflict is not an
-acknowledgement that the current answers were saved. The database enforces one response or dismissal
-per account and survey. Product feedback uses a separate fixed-minute limit: one submission per
-account per UTC calendar minute, not a rolling 60-second window.
+and the invitation cache. A response or decline removes the invitation from every cached workspace
+before revalidation, because an instance-wide survey is handled once per account, not once per
+workspace. POST mutations do not retry automatically; a conflict is not an acknowledgement that the
+current answers were saved. Product feedback uses a fixed-minute limit: one submission per account
+per UTC calendar minute.
 
 ## Authorization
 
-Workspace endpoints require membership and derive the submitting account from authentication.
-Instance-administrator endpoints own authoring, availability changes and the inbox. Availability
-and workspace targeting are checked on submission, not only when invitations are fetched.
+Workspace endpoints require membership and derive the account from authentication; availability and
+workspace targeting are checked on every write, not only when invitations are listed. Instance
+administrator endpoints own authoring, lifecycle, results, export and the inbox.
+
+## Schema history
+
+`product_survey_participation` replaced `product_survey_submission` in 0.80 and was filled from
+it. The old table stays one release for the immutability policy in
+[database migration](database-migration.mdx); the release after 0.80 drops it and removes the
+`product_survey_submission` entry from the drift gate's exclusions in
+`server/application/build.gradle.kts`.

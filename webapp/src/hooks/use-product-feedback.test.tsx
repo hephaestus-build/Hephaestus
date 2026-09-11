@@ -6,8 +6,9 @@ import type { ReactNode } from "react";
 import { Toaster } from "sonner";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { listAvailableProductSurveysQueryKey } from "@/api/@tanstack/react-query.gen";
-import { productSurvey } from "@/components/feedback/product-survey-fixtures";
+import { listProductSurveyInvitationsQueryKey } from "@/api/@tanstack/react-query.gen";
+import type { SurveyInvitation } from "@/api/types.gen";
+import { surveyInvitation } from "@/components/feedback/product-survey-fixtures";
 import { server } from "@/mocks/server";
 import { useProductSurveys, useSubmitProductFeedback } from "./use-product-feedback";
 
@@ -65,7 +66,7 @@ describe("product feedback wire contract", () => {
 		let received: unknown;
 		server.use(
 			http.get("*/workspaces/acme/product-feedback/surveys", () =>
-				HttpResponse.json([productSurvey]),
+				HttpResponse.json([surveyInvitation]),
 			),
 			http.post("*/workspaces/acme/product-feedback/surveys/:id/responses", async ({ request }) => {
 				received = await request.json();
@@ -73,15 +74,17 @@ describe("product feedback wire contract", () => {
 			}),
 		);
 		const { client, wrapper } = setup();
-		const otherKey = listAvailableProductSurveysQueryKey({ path: { workspaceSlug: "other" } });
-		client.setQueryData(otherKey, [productSurvey]);
+		const otherKey = listProductSurveyInvitationsQueryKey({ path: { workspaceSlug: "other" } });
+		client.setQueryData(otherKey, [surveyInvitation]);
 		const { result } = renderHook(() => useProductSurveys("acme"), { wrapper });
 		await waitFor(() => expect(result.current.query.data).toHaveLength(1));
 		server.use(http.get("*/workspaces/acme/product-feedback/surveys", () => HttpResponse.error()));
 		await act(async () => {
-			expect(await result.current.submit(productSurvey.id, { useful: "4" })).toBe(true);
+			expect(
+				await result.current.submit(surveyInvitation.id, [{ questionId: "useful", rating: 4 }]),
+			).toBe(true);
 		});
-		expect(received).toStrictEqual({ answers: { useful: "4" } });
+		expect(received).toStrictEqual({ answers: [{ questionId: "useful", rating: 4 }] });
 		expect(client.getQueryData(otherKey)).toStrictEqual([]);
 		await waitFor(() => expect(result.current.query.data).toStrictEqual([]));
 	});
@@ -89,7 +92,7 @@ describe("product feedback wire contract", () => {
 	it("reports a conflict without claiming the current answers were delivered", async () => {
 		server.use(
 			http.get("*/workspaces/acme/product-feedback/surveys", () =>
-				HttpResponse.json([productSurvey]),
+				HttpResponse.json([surveyInvitation]),
 			),
 			http.post("*/workspaces/acme/product-feedback/surveys/:id/responses", () =>
 				HttpResponse.json({ status: 409 }, { status: 409 }),
@@ -98,7 +101,9 @@ describe("product feedback wire contract", () => {
 		const { wrapper } = setup();
 		const { result } = renderHook(() => useProductSurveys("acme"), { wrapper });
 		await act(async () => {
-			expect(await result.current.submit(productSurvey.id, { useful: "3" })).toBe(false);
+			expect(
+				await result.current.submit(surveyInvitation.id, [{ questionId: "useful", rating: 3 }]),
+			).toBe(false);
 		});
 		await waitFor(() => expect(result.current.error).toContain("already answered or declined"));
 	});
@@ -106,7 +111,7 @@ describe("product feedback wire contract", () => {
 	it("replaces an earlier response conflict with the latest decline failure", async () => {
 		server.use(
 			http.get("*/workspaces/acme/product-feedback/surveys", () =>
-				HttpResponse.json([productSurvey]),
+				HttpResponse.json([surveyInvitation]),
 			),
 			http.post("*/workspaces/acme/product-feedback/surveys/:id/responses", () =>
 				HttpResponse.json({ status: 409 }, { status: 409 }),
@@ -118,17 +123,19 @@ describe("product feedback wire contract", () => {
 		const { wrapper } = setup();
 		const { result } = renderHook(() => useProductSurveys("acme"), { wrapper });
 		await act(async () => {
-			expect(await result.current.submit(productSurvey.id, { useful: "4" })).toBe(false);
+			expect(
+				await result.current.submit(surveyInvitation.id, [{ questionId: "useful", rating: 4 }]),
+			).toBe(false);
 		});
 		await waitFor(() => expect(result.current.error).toContain("already answered or declined"));
 		await act(async () => {
-			expect(await result.current.dismiss(productSurvey.id)).toBe(false);
+			expect(await result.current.decline(surveyInvitation.id)).toBe(false);
 		});
 		await waitFor(() => expect(result.current.error).toContain("Check your connection"));
 	});
 
 	it("undoes an explicit decline through the dismissal resource", async () => {
-		let availableSurveys = [productSurvey];
+		let availableSurveys = [surveyInvitation];
 		let restoredId: string | readonly string[] | undefined;
 		server.use(
 			http.get("*/workspaces/acme/product-feedback/surveys", () =>
@@ -139,7 +146,7 @@ describe("product feedback wire contract", () => {
 				return new HttpResponse(null, { status: 204 });
 			}),
 			http.delete("*/workspaces/acme/product-feedback/surveys/:id/dismissal", ({ params }) => {
-				availableSurveys = [productSurvey];
+				availableSurveys = [surveyInvitation];
 				restoredId = params.id;
 				return new HttpResponse(null, { status: 204 });
 			}),
@@ -149,13 +156,34 @@ describe("product feedback wire contract", () => {
 		const { result } = renderHook(() => useProductSurveys("acme"), { wrapper });
 		await waitFor(() => expect(result.current.query.data).toHaveLength(1));
 		await act(async () => {
-			expect(await result.current.dismiss(productSurvey.id)).toBe(true);
+			expect(await result.current.decline(surveyInvitation.id)).toBe(true);
 		});
 		const undo = await screen.findByRole("button", { name: "Undo" });
 		undo.focus();
 		await userEvent.keyboard("{Enter}");
 		await waitFor(() => expect(result.current.query.data).toHaveLength(1));
-		expect(restoredId).toBe(productSurvey.id);
+		expect(restoredId).toBe(surveyInvitation.id);
+	});
+
+	it("marks an invitation as seen in every cached workspace without refetching", async () => {
+		let acknowledged: string | readonly string[] | undefined;
+		const unseen = { ...surveyInvitation, seen: false };
+		server.use(
+			http.get("*/workspaces/acme/product-feedback/surveys", () => HttpResponse.json([unseen])),
+			http.put("*/workspaces/acme/product-feedback/surveys/:id/invitation", ({ params }) => {
+				acknowledged = params.id;
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		const { client, wrapper } = setup();
+		const otherKey = listProductSurveyInvitationsQueryKey({ path: { workspaceSlug: "other" } });
+		client.setQueryData(otherKey, [unseen]);
+		const { result } = renderHook(() => useProductSurveys("acme"), { wrapper });
+		await waitFor(() => expect(result.current.query.data?.[0]?.seen).toBe(false));
+		act(() => result.current.acknowledge(surveyInvitation.id));
+		await waitFor(() => expect(acknowledged).toBe(surveyInvitation.id));
+		await waitFor(() => expect(result.current.query.data?.[0]?.seen).toBe(true));
+		expect(client.getQueryData<SurveyInvitation[]>(otherKey)?.[0]?.seen).toBe(true);
 	});
 
 	it("rejects simultaneous feedback sends before mutation state can rerender", async () => {
@@ -179,8 +207,8 @@ describe("product feedback wire contract", () => {
 	it("does not send a survey without workspace context", async () => {
 		const { wrapper } = setup();
 		const { result } = renderHook(() => useProductSurveys(undefined), { wrapper });
-		expect(await result.current.submit(productSurvey.id, {})).toBe(false);
-		expect(await result.current.dismiss(productSurvey.id)).toBe(false);
+		expect(await result.current.submit(surveyInvitation.id, [])).toBe(false);
+		expect(await result.current.decline(surveyInvitation.id)).toBe(false);
 		expect(result.current.query.fetchStatus).toBe("idle");
 	});
 });

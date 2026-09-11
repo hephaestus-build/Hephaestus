@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!--
+        A survey row per account now starts when the invitation is shown and later becomes a response
+        or a decline, which is what lets an administrator read a completion rate. That is a different
+        table from product_survey_submission, which only ever held decisions. This is the
+        compatibility half of the rename (docs/contributor/database-migration.mdx § Changelog
+        immutability policy): the new table is created and filled from the old one, and the old
+        table stays so the previous release still boots against this schema. The next release drops
+        product_survey_submission; until it does, the object exclusion in
+        application/build.gradle.kts keeps the drift gate quiet.
+    -->
+    <changeSet id="1789117764980-1" author="hephaestus">
+        <createTable tableName="product_survey_participation">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="product_survey_participation_pkey"/>
+            </column>
+            <column name="survey_id" type="UUID">
+                <constraints nullable="false" foreignKeyName="sfk_survey_participation_survey" references="product_survey(id)" deleteCascade="true"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="sfk_survey_participation_account" references="account(id)" deleteCascade="true"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints foreignKeyName="sfk_survey_participation_workspace" references="workspace(id)" deleteCascade="true"/>
+            </column>
+            <column name="status" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="answers_json" type="JSONB"/>
+            <column name="invited_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="decided_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </createTable>
+        <addUniqueConstraint columnNames="survey_id, account_id" constraintName="uk_survey_participation_account" tableName="product_survey_participation"/>
+        <createIndex indexName="idx_survey_participation_account" tableName="product_survey_participation">
+            <column name="account_id"/>
+        </createIndex>
+        <rollback>
+            <dropTable tableName="product_survey_participation"/>
+        </rollback>
+    </changeSet>
+    <!--
+        Every submission was a decision, so it becomes a participation whose invitation and decision
+        share the submission's timestamp. "Dismissed" is now called "declined" because the row's
+        undo exists for exactly that word.
+    -->
+    <changeSet id="1789117764980-2" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="product_survey_submission"/>
+        </preConditions>
+        <sql><![CDATA[
+INSERT INTO product_survey_participation (id, survey_id, account_id, workspace_id, status, answers_json, invited_at, decided_at)
+SELECT id, survey_id, account_id, workspace_id,
+       CASE disposition WHEN 'DISMISSED' THEN 'DECLINED' ELSE disposition END,
+       answers_json, created_at, created_at
+FROM product_survey_submission
+ON CONFLICT (survey_id, account_id) DO NOTHING;
+]]></sql>
+        <rollback/>
+    </changeSet>
+    <!--
+        Feedback now records the release that received it, whether the sender chose to share browser
+        details, and inbox triage. Rows from before this release predate the version stamp, which is
+        the only honest value for them; the default exists for the backfill alone.
+    -->
+    <changeSet id="1789117764980-3" author="hephaestus">
+        <addColumn tableName="product_feedback">
+            <column name="app_version" type="VARCHAR(64)" defaultValue="before 0.80">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_agent" type="VARCHAR(500)"/>
+            <column name="resolved_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="resolved_by_account_id" type="BIGINT"/>
+        </addColumn>
+        <dropDefaultValue tableName="product_feedback" columnName="app_version" columnDataType="VARCHAR(64)"/>
+        <addForeignKeyConstraint baseTableName="product_feedback" baseColumnNames="resolved_by_account_id" constraintName="sfk_product_feedback_resolver" referencedTableName="account" referencedColumnNames="id" onDelete="SET NULL"/>
+        <rollback>
+            <dropColumn tableName="product_feedback" columnName="resolved_by_account_id"/>
+            <dropColumn tableName="product_feedback" columnName="resolved_at"/>
+            <dropColumn tableName="product_feedback" columnName="user_agent"/>
+            <dropColumn tableName="product_feedback" columnName="app_version"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

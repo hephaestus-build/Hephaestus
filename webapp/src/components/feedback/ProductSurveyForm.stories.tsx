@@ -1,87 +1,87 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Stateful } from "@/stories/stateful";
-import { productSurvey } from "./product-survey-fixtures";
+
+import { surveyQuestions } from "./product-survey-fixtures";
 import { ProductSurveyForm } from "./ProductSurveyForm";
 
 const meta = {
 	title: "Surveys/Product survey form",
 	component: ProductSurveyForm,
-	args: {
-		survey: productSurvey,
-		answers: {},
-		isSubmitting: false,
-		onAnswersChange: fn(),
-		onBack: fn(),
-		onSubmit: fn(),
-		onDismiss: fn(),
-	},
+	args: { questions: surveyQuestions, draft: {}, onDraftChange: fn() },
 	render: (args) => (
-		<Stateful initial={args.answers}>
-			{(answers, setAnswers) => (
+		<Stateful initial={args.draft}>
+			{(draft, setDraft) => (
 				<ProductSurveyForm
 					{...args}
-					answers={answers}
-					onAnswersChange={(next) => {
-						args.onAnswersChange(next);
-						setAnswers(next);
+					draft={draft}
+					onDraftChange={(next) => {
+						args.onDraftChange(next);
+						setDraft(next);
 					}}
 				/>
 			)}
 		</Stateful>
 	),
-	decorators: [
-		(Story) => (
-			<Dialog open>
-				<DialogContent>
-					<Story />
-				</DialogContent>
-			</Dialog>
-		),
-	],
+	decorators: [(Story) => <div className="max-w-lg">{<Story />}</div>],
 	tags: ["autodocs"],
 } satisfies Meta<typeof ProductSurveyForm>;
 export default meta;
 type Story = StoryObj<typeof meta>;
-export const Default: Story = {};
-export const Sending: Story = { args: { isSubmitting: true, answers: { useful: "4" } } };
-export const Error: Story = {
-	args: { error: "Couldn't send. Your draft is still here.", answers: { useful: "4" } },
-};
 
-export const OptionalChoice: Story = {
+/** Rating, single choice, recommendation and free text, in the order a short survey should ask them. */
+export const Default: Story = {};
+
+export const Answered: Story = {
 	args: {
-		survey: {
-			...productSurvey,
-			questions: [
-				{
-					id: "priority",
-					prompt: "Which improvement matters most to you?",
-					type: "SINGLE_CHOICE",
-					options: [
-						"Clearer explanations of practice feedback",
-						"More control over when I receive feedback",
-					],
-					required: false,
-				},
-			],
+		draft: {
+			useful: 4,
+			channel: "On the pull request",
+			recommend: 9,
+			improve: "Shorter feedback.",
 		},
 	},
-	globals: { viewport: { value: "reflow" } },
-	parameters: { chromatic: { viewports: [320] } },
-	play: async ({ args }) => {
-		const dialog = within(await screen.findByRole("dialog"));
-		const option = dialog.getByRole("radio", { name: "Clearer explanations of practice feedback" });
-		await userEvent.click(option);
-		await expect(option).toBeChecked();
-		await expect(args.onAnswersChange).toHaveBeenLastCalledWith({
-			priority: "Clearer explanations of practice feedback",
+};
+
+export const Disabled: Story = { args: { disabled: true, draft: { useful: 4 } } };
+
+export const MultipleChoice: Story = {
+	args: {
+		questions: [
+			{
+				id: "channels",
+				prompt: "Where do you read feedback?",
+				type: "MULTIPLE_CHOICE",
+				options: ["On the pull request", "On my practice page", "In conversation with Heph"],
+				required: false,
+			},
+		],
+	},
+	play: async ({ canvas, args }) => {
+		await userEvent.click(canvas.getByRole("checkbox", { name: "On the pull request" }));
+		await userEvent.click(canvas.getByRole("checkbox", { name: "In conversation with Heph" }));
+		await expect(args.onDraftChange).toHaveBeenLastCalledWith({
+			channels: ["On the pull request", "In conversation with Heph"],
 		});
-		await userEvent.click(dialog.getByRole("button", { name: "Clear answer" }));
-		await expect(option).not.toBeChecked();
-		await expect(args.onAnswersChange).toHaveBeenLastCalledWith({});
-		await expect(dialog.getByRole("button", { name: "Submit response" })).toBeEnabled();
+		await userEvent.click(canvas.getByRole("button", { name: "Clear answer" }));
+		await expect(args.onDraftChange).toHaveBeenLastCalledWith({});
+	},
+};
+
+/** Every scale point is a radio the keyboard reaches, and an optional answer can be taken back. */
+export const AnswersAScale: Story = {
+	play: async ({ canvas, args }) => {
+		const scale = canvas.getByRole("radiogroup", {
+			name: /How useful is the practice feedback/,
+		});
+		await userEvent.click(within(scale).getByRole("radio", { name: "4" }));
+		await expect(args.onDraftChange).toHaveBeenLastCalledWith({ useful: 4 });
+		await expect(scale).toHaveAttribute("aria-required", "true");
+		const recommend = canvas.getByRole("radiogroup", { name: /How likely are you to recommend/ });
+		await userEvent.click(within(recommend).getByRole("radio", { name: "9" }));
+		await expect(args.onDraftChange).toHaveBeenLastCalledWith({ useful: 4, recommend: 9 });
+		await userEvent.click(canvas.getByRole("button", { name: "Clear answer" }));
+		await expect(args.onDraftChange).toHaveBeenLastCalledWith({ useful: 4 });
 	},
 };

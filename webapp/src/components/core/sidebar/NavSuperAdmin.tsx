@@ -3,6 +3,7 @@ import {
 	BrainCircuit,
 	Building2,
 	CircleDollarSign,
+	ClipboardList,
 	Gauge,
 	Inbox,
 	KeyRound,
@@ -27,12 +28,6 @@ const ADMIN_NAV_GROUPS = [
 	{
 		label: "Access",
 		items: [
-			{
-				to: "/admin/feedback",
-				label: "Product feedback",
-				icon: Inbox,
-				tooltip: "Surveys and feedback inbox",
-			},
 			{ to: "/admin/users", label: "Users", icon: Users, tooltip: "Manage accounts" },
 			{ to: "/admin/workspaces", label: "Workspaces", icon: Building2, tooltip: "All workspaces" },
 			{
@@ -51,6 +46,23 @@ const ADMIN_NAV_GROUPS = [
 				label: "Practice catalog",
 				icon: LibraryBig,
 				tooltip: "What new workspaces receive",
+			},
+		],
+	},
+	{
+		label: "Product feedback",
+		items: [
+			{
+				to: "/admin/feedback",
+				label: "Inbox",
+				icon: Inbox,
+				tooltip: "Feedback and bug reports",
+			},
+			{
+				to: "/admin/surveys",
+				label: "Surveys",
+				icon: ClipboardList,
+				tooltip: "Publish surveys and read responses",
 			},
 		],
 	},

@@ -6,56 +6,85 @@ import { ProductFeedbackDialog } from "./ProductFeedbackDialog";
 
 afterEach(cleanup);
 
-describe("product feedback form", () => {
-	it("includes page context only after an explicit choice and retains failed drafts", async () => {
-		const onSubmit = vi.fn(() => Promise.resolve(false));
+const context = { pagePath: "/w/acme/practices", userAgent: "Mozilla/5.0 Test" };
+
+function renderDialog(overrides: Partial<React.ComponentProps<typeof ProductFeedbackDialog>> = {}) {
+	const props = {
+		open: true,
+		onOpenChange: vi.fn(),
+		kind: "FEEDBACK" as const,
+		onKindChange: vi.fn(),
+		context,
+		isSubmitting: false,
+		onSubmit: vi.fn(() => Promise.resolve(true)),
+		...overrides,
+	};
+	const view = render(<ProductFeedbackDialog {...props} />);
+	return { ...view, props };
+}
+
+describe("product feedback dialog", () => {
+	it("attaches page and browser details only after an explicit choice and keeps a failed draft", async () => {
 		const user = userEvent.setup();
-		render(
-			<ProductFeedbackDialog
-				isSubmitting={false}
-				pagePath="/w/acme/practices"
-				onSubmit={onSubmit}
-				error="Couldn't send. Your draft is still here."
-			/>,
-		);
-		await user.click(screen.getByRole("button", { name: "Send product feedback" }));
+		const { props, rerender } = renderDialog({
+			onSubmit: vi.fn(() => Promise.resolve(false)),
+			error: "Couldn't send. Your draft is still here.",
+		});
 		await user.type(screen.getByRole("textbox", { name: "Message" }), "  An idea  ");
 		await user.click(screen.getByRole("button", { name: "Send" }));
-		expect(onSubmit).toHaveBeenLastCalledWith("FEEDBACK", "An idea", false);
+		expect(props.onSubmit).toHaveBeenLastCalledWith({
+			kind: "FEEDBACK",
+			message: "An idea",
+			pagePath: undefined,
+			userAgent: undefined,
+		});
 		expect(screen.getByRole("alert").textContent).toContain("Your draft is still here");
-		await user.keyboard("{Escape}");
-		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-		await user.click(screen.getByRole("button", { name: "Send product feedback" }));
-		expect(await screen.findByRole("textbox", { name: "Message" })).toHaveProperty(
-			"value",
-			"  An idea  ",
-		);
-		await user.click(screen.getByRole("checkbox", { name: "Include current page path" }));
+		expect(props.onOpenChange).not.toHaveBeenCalledWith(false);
+
+		rerender(<ProductFeedbackDialog {...props} open={false} />);
+		rerender(<ProductFeedbackDialog {...props} open />);
+		expect(screen.getByRole("textbox", { name: "Message" })).toHaveProperty("value", "  An idea  ");
+		await user.click(screen.getByRole("checkbox", { name: "Include page and browser details" }));
 		await user.click(screen.getByRole("button", { name: "Send" }));
-		expect(onSubmit).toHaveBeenLastCalledWith("FEEDBACK", "An idea", true);
+		expect(props.onSubmit).toHaveBeenLastCalledWith({
+			kind: "FEEDBACK",
+			message: "An idea",
+			pagePath: context.pagePath,
+			userAgent: context.userAgent,
+		});
 	});
 
-	it("closes only after successful delivery and clears the submitted text", async () => {
-		const onSubmit = vi.fn(() => Promise.resolve(true));
+	it("starts a bug report with the details ticked and lets the sender untick them", async () => {
 		const user = userEvent.setup();
-		render(<ProductFeedbackDialog isSubmitting={false} onSubmit={onSubmit} />);
-		await user.click(screen.getByRole("button", { name: "Send product feedback" }));
+		const { props } = renderDialog({ kind: "BUG" });
+		const checkbox = screen.getByRole("checkbox", { name: "Include page and browser details" });
+		expect(checkbox.getAttribute("aria-checked")).toBe("true");
+		await user.click(checkbox);
+		await user.type(screen.getByRole("textbox", { name: "Message" }), "It broke");
+		await user.click(screen.getByRole("button", { name: "Send" }));
+		expect(props.onSubmit).toHaveBeenLastCalledWith({
+			kind: "BUG",
+			message: "It broke",
+			pagePath: undefined,
+			userAgent: undefined,
+		});
+	});
+
+	it("closes and clears the message only after the send was accepted", async () => {
+		const user = userEvent.setup();
+		const { props, rerender } = renderDialog();
 		await user.type(screen.getByRole("textbox", { name: "Message" }), "An idea");
 		await user.click(screen.getByRole("button", { name: "Send" }));
-		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-		await user.click(screen.getByRole("button", { name: "Send product feedback" }));
-		expect((await screen.findByRole("textbox", { name: "Message" })).textContent).toBe("");
+		await waitFor(() => expect(props.onOpenChange).toHaveBeenCalledWith(false));
+		rerender(<ProductFeedbackDialog {...props} open={false} />);
+		rerender(<ProductFeedbackDialog {...props} open />);
+		expect(screen.getByRole("textbox", { name: "Message" })).toHaveProperty("value", "");
 	});
-	it("does not change page-context consent while sending", async () => {
-		const props = {
-			isSubmitting: false,
-			pagePath: "/w/acme/practices",
-			onSubmit: vi.fn(() => Promise.resolve(true)),
-		};
+
+	it("does not change the context choice while sending", async () => {
 		const user = userEvent.setup();
-		const { rerender } = render(<ProductFeedbackDialog {...props} />);
-		await user.click(screen.getByRole("button", { name: "Send product feedback" }));
-		const checkbox = screen.getByRole("checkbox", { name: "Include current page path" });
+		const { props, rerender } = renderDialog();
+		const checkbox = screen.getByRole("checkbox", { name: "Include page and browser details" });
 		await user.click(checkbox);
 		rerender(<ProductFeedbackDialog {...props} isSubmitting />);
 		await user.click(checkbox);
