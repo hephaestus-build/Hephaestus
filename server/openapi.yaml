@@ -32,6 +32,8 @@ tags:
   name: Practice Group Detail
 - description: Workspace-scoped mentor chat threads
   name: Mentor Threads
+- description: Running release identity and update checks
+  name: Instance Release
 - description: The current developer's standing in each practice
   name: Practice Standings
 - description: Recipient responses to delivered practice feedback
@@ -1579,6 +1581,32 @@ paths:
       summary: Publish a product survey
       tags:
       - feedback-admin
+  /admin/release:
+    get:
+      operationId: adminGetRelease
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseStatus"
+          description: OK
+      summary: Get the running release and the last update check
+      tags:
+      - Instance Release
+  /admin/release/checks:
+    post:
+      operationId: adminCheckRelease
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseStatus"
+          description: OK
+      summary: Check GitHub for a newer release now
+      tags:
+      - Instance Release
   /admin/settings:
     get:
       operationId: adminGetInstanceSettings
@@ -10606,6 +10634,26 @@ components:
       - color
       - id
       - name
+    LatestRelease:
+      type: object
+      description: |-
+        A published release. <code>schemaMigrations</code> is the flag the release workflow publishes for
+         that one release and is absent when the notes carry none; it says nothing about releases
+         between the running one and this one.
+      properties:
+        notesUrl:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+        schemaMigrations:
+          type: boolean
+        version:
+          type: string
+      required:
+      - notesUrl
+      - publishedAt
+      - version
     LeaderboardEntry:
       type: object
       description: A ranked entry in the leaderboard (individual or team)
@@ -13285,6 +13333,57 @@ components:
           pattern: "^[CG][A-Z0-9]{8,}$"
       required:
       - slackChannelId
+    ReleaseStatus:
+      type: object
+      description: |-
+        The running release and what the last update check found. Discovery is advisory: nothing here
+         verifies an artifact or performs an upgrade.
+      properties:
+        failure:
+          type: string
+          description: "why the last attempt did not complete, when <code>status</code>\
+            \ is <code>FAILED</code>"
+          enum:
+          - RATE_LIMITED
+          - UNAVAILABLE
+          - MALFORMED
+        lastAttempt:
+          type: string
+          format: date-time
+          description: "when a check was last started, on any outcome"
+        lastSuccess:
+          type: string
+          format: date-time
+          description: "when a check last completed, which is when <code>latest</code>\
+            \ was observed"
+        latest:
+          $ref: "#/components/schemas/LatestRelease"
+          description: the newest published release as of <code>lastSuccess</code>
+        nextCheck:
+          type: string
+          format: date-time
+          description: when the next automatic check is due
+        retryUntil:
+          type: string
+          format: date-time
+          description: the wait GitHub named on a rate limit; a manual check before
+            it is refused
+        running:
+          $ref: "#/components/schemas/RunningRelease"
+          description: the identity this process reports
+        status:
+          type: string
+          description: the verdict an administrator reads first
+          enum:
+          - DISABLED
+          - NOT_APPLICABLE
+          - NEVER_CHECKED
+          - CURRENT
+          - UPDATE_AVAILABLE
+          - FAILED
+      required:
+      - running
+      - status
     RenameWorkspaceSlugRequest:
       type: object
       description: Request to rename a workspace's URL slug
@@ -14461,6 +14560,42 @@ components:
         revoked:
           type: integer
           format: int32
+    RunningRelease:
+      type: object
+      description: |-
+        Deployment-reported identity: the values the verified lock env handed this process, not an
+         observation of the container. <code>commit</code> and <code>image</code> are absent outside a lock-driven
+         deployment.
+      properties:
+        channel:
+          type: string
+          description: what kind of build that version names
+          enum:
+          - RELEASE
+          - COMMIT
+          - DEVELOPMENT
+        commit:
+          type: string
+          description: the source commit the lock names
+        image:
+          type: string
+          description: the digest reference this container was started from
+        roles:
+          type: array
+          description: the runtime roles this process booted with
+          items:
+            type: string
+            enum:
+            - SERVER
+            - WORKER
+            - WEBHOOK
+        version:
+          type: string
+          description: the version the deployment passed as <code>APP_VERSION</code>
+      required:
+      - channel
+      - roles
+      - version
     SessionView:
       type: object
       properties:

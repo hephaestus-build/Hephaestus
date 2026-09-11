@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.configuration;
 
+import de.tum.cit.aet.hephaestus.core.release.ImageReference;
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -7,7 +9,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
-import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,7 +22,6 @@ public final class ConfigurationReadinessEvaluator {
     private static final Logger log = LoggerFactory.getLogger(ConfigurationReadinessEvaluator.class);
 
     static final String DOC = "https://docs.hephaestus.build/admin/configuration-readiness";
-    private static final Pattern DIGEST = Pattern.compile("^[a-z0-9][a-z0-9._/:\\-]*@sha256:[a-f0-9]{64}$");
 
     /** Spring property paths the Docker sandbox rename retired; none has a compatibility alias. */
     private static final List<String> LEGACY_SANDBOX_PROPERTIES = List.of(
@@ -119,7 +119,7 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "external.base-url",
                 "hephaestus.host-url",
-                roles(ConfigurationRole.SERVER),
+                roles(RuntimeRole.SERVER),
                 ConfigurationRequirement.REQUIRED,
                 server,
                 this::validHttpsOrigin,
@@ -129,7 +129,7 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "webhook.shared-secret",
                 "hephaestus.webhook.secret",
-                roles(ConfigurationRole.SERVER, ConfigurationRole.WEBHOOK),
+                roles(RuntimeRole.SERVER, RuntimeRole.WEBHOOK),
                 ConfigurationRequirement.REQUIRED,
                 server || webhook,
                 this::validWebhookSecret,
@@ -149,7 +149,7 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "nats.server",
                 "hephaestus.sync.nats.server",
-                roles(ConfigurationRole.SERVER, ConfigurationRole.WEBHOOK),
+                roles(RuntimeRole.SERVER, RuntimeRole.WEBHOOK),
                 ConfigurationRequirement.REQUIRED,
                 server || webhook,
                 this::validNatsUri,
@@ -159,7 +159,7 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "auth.state-cookie-key",
                 "hephaestus.auth.state-cookie-key",
-                roles(ConfigurationRole.SERVER),
+                roles(RuntimeRole.SERVER),
                 ConfigurationRequirement.REQUIRED,
                 server,
                 this::validBase64Key,
@@ -169,7 +169,7 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "llm.proxy-egress",
                 "hephaestus.llm.egress.allow-loopback",
-                roles(ConfigurationRole.WORKER),
+                roles(RuntimeRole.WORKER),
                 ConfigurationRequirement.REQUIRED,
                 worker,
                 validFalse("hephaestus.llm.egress.allow-loopback", false),
@@ -179,7 +179,7 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "agent.image-contract",
                 "hephaestus.agent.image.reference",
-                roles(ConfigurationRole.WORKER),
+                roles(RuntimeRole.WORKER),
                 ConfigurationRequirement.REQUIRED,
                 worker,
                 this::validAgentImage,
@@ -189,7 +189,7 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "sandbox.isolation-runtime",
                 "hephaestus.sandbox.docker.container-runtime",
-                roles(ConfigurationRole.WORKER),
+                roles(RuntimeRole.WORKER),
                 ConfigurationRequirement.RECOMMENDED,
                 worker,
                 "runsc".equals(property("hephaestus.sandbox.docker.container-runtime")),
@@ -200,7 +200,7 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "sandbox.docker-legacy-configuration",
                 legacySandboxKey == null ? "hephaestus.sandbox.docker.*" : legacySandboxKey,
-                roles(ConfigurationRole.WORKER),
+                roles(RuntimeRole.WORKER),
                 ConfigurationRequirement.REQUIRED,
                 worker,
                 legacySandboxKey == null,
@@ -212,7 +212,7 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "observability.sentry",
                 "hephaestus.sentry.dsn",
-                roles(ConfigurationRole.SERVER),
+                roles(RuntimeRole.SERVER),
                 ConfigurationRequirement.OPTIONAL,
                 server,
                 this::validOptionalHttpsUri,
@@ -231,7 +231,7 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "auth.login-provider",
                 "login-provider capability",
-                roles(ConfigurationRole.SERVER),
+                roles(RuntimeRole.SERVER),
                 ConfigurationRequirement.REQUIRED,
                 server,
                 hasSignInProvider,
@@ -245,7 +245,7 @@ public final class ConfigurationReadinessEvaluator {
             List<ConfigurationFactDTO> facts,
             String id,
             String subject,
-            List<ConfigurationRole> roles,
+            List<RuntimeRole> roles,
             ConfigurationRequirement requirement,
             boolean applicable,
             Predicate<String> predicate,
@@ -261,7 +261,7 @@ public final class ConfigurationReadinessEvaluator {
             List<ConfigurationFactDTO> facts,
             String id,
             String subject,
-            List<ConfigurationRole> roles,
+            List<RuntimeRole> roles,
             ConfigurationRequirement requirement,
             boolean applicable,
             boolean satisfied,
@@ -274,7 +274,7 @@ public final class ConfigurationReadinessEvaluator {
             List<ConfigurationFactDTO> facts,
             String id,
             String subject,
-            List<ConfigurationRole> roles,
+            List<RuntimeRole> roles,
             ConfigurationRequirement requirement,
             boolean applicable,
             boolean configured,
@@ -407,10 +407,7 @@ public final class ConfigurationReadinessEvaluator {
 
     private boolean validAgentImage(@Nullable String value) {
         BooleanSetting requireDigest = booleanSetting("hephaestus.agent.image.require-digest", false);
-        return requireDigest.valid()
-                && requireDigest.value()
-                && notBlank(value)
-                && DIGEST.matcher(value).matches();
+        return requireDigest.valid() && requireDigest.value() && value != null && ImageReference.isDigestPinned(value);
     }
 
     private boolean validOptionalHttpsUri(@Nullable String value) {
@@ -427,11 +424,11 @@ public final class ConfigurationReadinessEvaluator {
         return value != null && !value.isBlank();
     }
 
-    private static List<ConfigurationRole> allRoles() {
-        return List.of(ConfigurationRole.SERVER, ConfigurationRole.WORKER, ConfigurationRole.WEBHOOK);
+    private static List<RuntimeRole> allRoles() {
+        return List.of(RuntimeRole.SERVER, RuntimeRole.WORKER, RuntimeRole.WEBHOOK);
     }
 
-    private static List<ConfigurationRole> roles(ConfigurationRole... roles) {
+    private static List<RuntimeRole> roles(RuntimeRole... roles) {
         return List.of(roles);
     }
 

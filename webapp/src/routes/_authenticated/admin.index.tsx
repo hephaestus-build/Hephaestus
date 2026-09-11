@@ -1,12 +1,16 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Building2, Gauge, Users } from "lucide-react";
 
 import {
 	adminGetInstanceSettingsOptions,
+	adminCheckReleaseMutation,
+	adminGetReleaseOptions,
+	adminGetReleaseQueryKey,
 	adminListAuthEventsOptions,
 	adminListWorkspacesOptions,
 } from "@/api/@tanstack/react-query.gen";
+import { InstanceReleaseCard } from "@/components/admin/instance/InstanceReleaseCard";
 import { OverviewStatCard } from "@/components/admin/instance/OverviewStatCard";
 import { RecentAuthActivityCard } from "@/components/admin/instance/RecentAuthActivityCard";
 import { SilentModeStatusCard } from "@/components/admin/instance/SilentModeStatusCard";
@@ -20,6 +24,12 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 });
 
 function AdminOverviewPage() {
+	const queryClient = useQueryClient();
+	const releaseQuery = useQuery(adminGetReleaseOptions());
+	const releaseCheck = useMutation({
+		...adminCheckReleaseMutation(),
+		onSuccess: (data) => queryClient.setQueryData(adminGetReleaseQueryKey(), data),
+	});
 	const settingsQuery = useQuery(adminGetInstanceSettingsOptions());
 	const workspacesQuery = useQuery(adminListWorkspacesOptions());
 	const eventsQuery = useQuery(adminListAuthEventsOptions({ query: { page: 0, size: 8 } }));
@@ -40,6 +50,27 @@ function AdminOverviewPage() {
 				settings={settingsQuery.data}
 				isLoading={settingsQuery.isLoading}
 				isError={settingsQuery.isError}
+			/>
+
+			<InstanceReleaseCard
+				state={
+					releaseQuery.data
+						? {
+								status: "ready",
+								release: releaseQuery.data,
+								check: releaseCheck.isError
+									? { status: "error", error: releaseCheck.error }
+									: { status: releaseCheck.status },
+								onCheck: () => releaseCheck.mutate({}),
+							}
+						: releaseQuery.isPending
+							? { status: "loading" }
+							: {
+									status: "error",
+									error: releaseQuery.error,
+									onRetry: () => void releaseQuery.refetch(),
+								}
+				}
 			/>
 
 			<div className="grid gap-4 sm:grid-cols-2">

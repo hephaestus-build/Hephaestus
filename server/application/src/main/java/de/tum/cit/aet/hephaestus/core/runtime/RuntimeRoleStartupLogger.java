@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.runtime;
 
-import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,20 +26,13 @@ public class RuntimeRoleStartupLogger {
 
     @EventListener(ApplicationReadyEvent.class)
     public void logRoles() {
-        boolean server = environment.getProperty(RuntimeRole.SERVER_PROPERTY, Boolean.class, true);
-        boolean worker = environment.getProperty(RuntimeRole.WORKER_PROPERTY, Boolean.class, true);
-        boolean webhook = environment.getProperty(RuntimeRole.WEBHOOK_PROPERTY, Boolean.class, true);
-
-        List<String> enabled = new ArrayList<>(3);
-        if (server) enabled.add("server");
-        if (worker) enabled.add("worker");
-        if (webhook) enabled.add("webhook");
+        List<RuntimeRole> enabled = RuntimeRole.enabled(environment);
 
         var event = enabled.isEmpty() ? log.atWarn() : log.atInfo();
         event = event.addKeyValue("event.name", "runtime.roles.configured")
-                .addKeyValue("runtime.server.enabled", server)
-                .addKeyValue("runtime.worker.enabled", worker)
-                .addKeyValue("runtime.webhook.enabled", webhook);
+                .addKeyValue("runtime.server.enabled", enabled.contains(RuntimeRole.SERVER))
+                .addKeyValue("runtime.worker.enabled", enabled.contains(RuntimeRole.WORKER))
+                .addKeyValue("runtime.webhook.enabled", enabled.contains(RuntimeRole.WEBHOOK));
         if (enabled.isEmpty()) {
             event.log(
                     "All runtime roles disabled — this JVM will accept no work. Set at least one of "
