@@ -119,7 +119,10 @@ describe("practice-group routes", () => {
 			),
 		);
 		const { router } = renderRouteAtWithRouter(path);
-		await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/user/ada"));
+		await waitFor(
+			() => expect(router.state.location.pathname).toBe("/w/acme/user/ada"),
+			ROUTE_RENDER_WAIT,
+		);
 		expect(practiceReads).toBe(0);
 	});
 	it("waits for features without redirecting, then loads the enabled surface", async () => {
