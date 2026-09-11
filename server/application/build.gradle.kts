@@ -116,8 +116,6 @@ tasks.withType<JavaCompile>().configureEach {
         listOf("-Werror", "-Xlint:all,-processing", "-XDaddTypeAnnotationsToSymbol=true")
     )
     options.errorprone {
-        // CodeQL recompiles analysis inputs; normal builds own NullAway enforcement.
-        enabled.set(providers.gradleProperty("codeqlExtraction").map { it != "true" }.orElse(true))
         disableAllChecks.set(true)
         error("NullAway", "RequireExplicitNullMarking")
         option("NullAway:AnnotatedPackages", "de.tum.cit.aet.hephaestus")
