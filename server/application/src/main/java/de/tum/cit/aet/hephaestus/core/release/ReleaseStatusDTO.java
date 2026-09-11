@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.release;
 
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
@@ -13,7 +14,8 @@ import org.jspecify.annotations.Nullable;
  * @param status      the verdict an administrator reads first
  * @param lastAttempt when a check was last started, on any outcome
  * @param lastSuccess when a check last completed, which is when {@code latest} was observed
- * @param nextCheck   when the scheduler will try again; a rate-limit window also blocks manual checks
+ * @param nextCheck   when the next automatic check is due
+ * @param retryUntil  the wait GitHub named on a rate limit; a manual check before it is refused
  * @param failure     why the last attempt did not complete, when {@code status} is {@code FAILED}
  * @param latest      the newest published release as of {@code lastSuccess}
  */
@@ -23,6 +25,7 @@ public record ReleaseStatusDTO(
         @Nullable Instant lastAttempt,
         @Nullable Instant lastSuccess,
         @Nullable Instant nextCheck,
+        @Nullable Instant retryUntil,
         @Nullable ReleaseCheckFailure failure,
         @Nullable LatestReleaseDTO latest) {
 
@@ -42,7 +45,7 @@ public record ReleaseStatusDTO(
             @NonNull ReleaseChannel channel,
             @Nullable String commit,
             @Nullable String image,
-            @NonNull List<String> roles) {}
+            @NonNull List<RuntimeRole> roles) {}
 
     /**
      * A published release. {@code schemaMigrations} is the flag the release workflow publishes for

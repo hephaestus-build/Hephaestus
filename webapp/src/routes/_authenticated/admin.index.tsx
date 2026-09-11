@@ -46,6 +46,12 @@ function AdminOverviewPage() {
 				description="What is running, and what changed recently on this instance."
 			/>
 
+			<SilentModeStatusCard
+				settings={settingsQuery.data}
+				isLoading={settingsQuery.isLoading}
+				isError={settingsQuery.isError}
+			/>
+
 			<InstanceReleaseCard
 				state={
 					releaseQuery.data
@@ -65,12 +71,6 @@ function AdminOverviewPage() {
 									onRetry: () => void releaseQuery.refetch(),
 								}
 				}
-			/>
-
-			<SilentModeStatusCard
-				settings={settingsQuery.data}
-				isLoading={settingsQuery.isLoading}
-				isError={settingsQuery.isError}
 			/>
 
 			<div className="grid gap-4 sm:grid-cols-2">

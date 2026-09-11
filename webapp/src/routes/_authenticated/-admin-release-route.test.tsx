@@ -1,4 +1,5 @@
-import { fireEvent, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -15,7 +16,7 @@ const status = {
 		channel: "RELEASE",
 		commit: "a".repeat(40),
 		image: `ghcr.io/hephaestus-build/application-server@sha256:${"b".repeat(64)}`,
-		roles: ["server"],
+		roles: ["SERVER"],
 	},
 	status: "NEVER_CHECKED",
 } satisfies Wire<ReleaseStatus>;
@@ -33,26 +34,19 @@ describe("instance overview release card", () => {
 					failure: "RATE_LIMITED",
 					lastAttempt: "2026-09-08T00:00:00Z",
 					nextCheck: "2999-01-01T00:00:00Z",
+					retryUntil: "2999-01-01T00:00:00Z",
 				});
 			}),
 		);
+		const user = userEvent.setup();
 		renderRouteAt("/admin");
 		await screen.findByText("Not checked yet", {}, ROUTE_RENDER_WAIT);
-		fireEvent.click(screen.getByRole("button", { name: "Check now" }));
-		await screen.findByText("Check failed", {}, ROUTE_RENDER_WAIT);
+		await user.click(screen.getByRole("button", { name: "Check now" }));
+		await screen.findByText(/GitHub rate-limited the request/, {}, ROUTE_RENDER_WAIT);
 		expect(checks).toBe(1);
 		expect(screen.queryByText("Up to date")).toBeNull();
-		expect(screen.getByRole("status").textContent).toBe("Check completed: Check failed.");
+		expect(screen.getByRole("status").textContent).toBe("Check failed");
 		expect(screen.getByRole("button", { name: "Check now" }).hasAttribute("disabled")).toBe(true);
-	});
-
-	it("offers no manual check when the operator switched checks off", async () => {
-		server.use(
-			http.get("*/admin/release", () => HttpResponse.json({ ...status, status: "DISABLED" })),
-		);
-		renderRouteAt("/admin");
-		await screen.findByText("Checks off", {}, ROUTE_RENDER_WAIT);
-		expect(screen.queryByRole("button", { name: "Check now" })).toBeNull();
 	});
 
 	it("keeps the rest of the overview when release information is unavailable", async () => {

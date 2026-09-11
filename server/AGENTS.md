@@ -116,6 +116,10 @@ or on "the only" result, and never write cleanup that another test depends on ha
   a `RuntimeRole` property, as in `LeaderboardTaskScheduler`), and a consumer that must survive its
   absence takes `ObjectProvider` (`WorkspaceSyncTargetProvider`). An ungated consumer crash-loops the
   `worker` and `webhook` runtimes, which start a different slice of the context.
+- **A test-tree `package-info.java` shadows the main one.** Test classes sit first on the classpath,
+  so a `@NullMarked`-only `package-info` under `src/test` hides a main package's `@NamedInterface` from
+  Modulith and the architecture tier reports the package as non-exposed. Main's annotation already
+  covers the test package; do not add a second file.
 - **`SlackMessageService` resolves bot tokens per workspace at send time** via `ConnectionService`.
   There is no global `App` bean and no `slack.token` property; admins connect each workspace through
   `/oauth/callback/slack`.

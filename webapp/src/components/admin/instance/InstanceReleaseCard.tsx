@@ -1,4 +1,10 @@
-import { ExternalLinkIcon, PackageIcon, RefreshCwIcon } from "lucide-react";
+import {
+	ExternalLinkIcon,
+	InfoIcon,
+	PackageIcon,
+	RefreshCwIcon,
+	TriangleAlertIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { ReleaseStatus } from "@/api/types.gen";
@@ -29,7 +35,6 @@ import {
 const RELEASES_URL = "https://github.com/hephaestus-build/Hephaestus/releases";
 const UPGRADE_GUIDE_URL = "https://docs.hephaestus.build/admin/install#upgrades";
 
-/** The manual check the reader last asked for; `success` is what the live region announces. */
 export type ReleaseCheckRequest =
 	| { status: "idle" | "pending" | "success" }
 	| { status: "error"; error: unknown };
@@ -70,22 +75,79 @@ function runningLabel(running: ReleaseStatus["running"]): string {
 		case "COMMIT":
 			return `commit ${running.version.slice(0, 7)}`;
 		case "DEVELOPMENT":
-			return `development build ${running.version}`;
+			return running.version;
 	}
 }
 
-/**
- * What this server reports it runs, and what GitHub last said about newer releases. Every state the
- * server distinguishes stays distinguishable here: a failed or never-performed check is never
- * folded into "up to date".
- */
+function CheckSummary({ release }: { release: ReleaseStatus }) {
+	const description = RELEASE_CHECK_STATUS_DEFS[release.status].description;
+	const checked = <RelativeTime value={release.lastSuccess} fallback="at an unknown time" />;
+	switch (release.status) {
+		case "CURRENT":
+			return (
+				<>
+					{description} Checked {checked}.
+				</>
+			);
+		case "UPDATE_AVAILABLE":
+			return (
+				<>
+					{description}
+					{release.latest ? (
+						<>
+							{" "}
+							v{release.latest.version} was published{" "}
+							<RelativeTime value={release.latest.publishedAt} />; checked {checked}.
+						</>
+					) : null}
+				</>
+			);
+		case "FAILED":
+			return (
+				<>
+					{description}
+					{release.failure ? (
+						<>
+							{" "}
+							{RELEASE_CHECK_FAILURE_LABELS[release.failure]}{" "}
+							<RelativeTime value={release.lastAttempt} fallback="at an unknown time" />
+							{release.nextCheck ? (
+								<>
+									; next automatic check <RelativeTime value={release.nextCheck} />
+								</>
+							) : null}
+							.
+						</>
+					) : null}
+					{release.latest ? (
+						<>
+							{" "}
+							The last completed check, {checked}, found v{release.latest.version}.
+						</>
+					) : null}
+				</>
+			);
+		case "NEVER_CHECKED":
+			return <>{description} The first one runs a minute after start.</>;
+		case "DISABLED":
+			return (
+				<>
+					{description} Set <code>HEPHAESTUS_RELEASE_CHECK_ENABLED=true</code> to resume, or compare
+					with the <ExternalLink href={RELEASES_URL}>published releases</ExternalLink> yourself.
+				</>
+			);
+		case "NOT_APPLICABLE":
+			return <>{description}</>;
+	}
+}
+
+/** A failed or never-performed check is never folded into "up to date"; the server's verdict is shown as is. */
 export function InstanceReleaseCard({ state }: InstanceReleaseCardProps) {
 	const now = useNow();
 	const release = state.status === "ready" ? state.release : undefined;
 	const def = release ? RELEASE_CHECK_STATUS_DEFS[release.status] : undefined;
-	const nextCheck = asDate(release?.nextCheck);
-	const rateLimited =
-		release?.failure === "RATE_LIMITED" && nextCheck !== undefined && nextCheck.getTime() > now;
+	const retryUntil = asDate(release?.retryUntil);
+	const rateLimited = retryUntil !== undefined && retryUntil.getTime() > now;
 	const checking = state.status === "ready" && state.check.status === "pending";
 	const canCheck =
 		release !== undefined && release.status !== "DISABLED" && release.status !== "NOT_APPLICABLE";
@@ -100,7 +162,7 @@ export function InstanceReleaseCard({ state }: InstanceReleaseCardProps) {
 					Release
 				</CardTitle>
 				<CardDescription>
-					What this instance runs, and whether a newer release is published.
+					What this server runs, and whether a newer release is published.
 				</CardDescription>
 				{canCheck && state.status === "ready" && (
 					<CardAction>
@@ -117,11 +179,16 @@ export function InstanceReleaseCard({ state }: InstanceReleaseCardProps) {
 				)}
 			</CardHeader>
 			<CardContent className="space-y-3">
-				{/* Mounted empty so the role exists before the message (ARIA22). */}
-				<p role="status" className="sr-only">
-					{state.status === "ready" && state.check.status === "success" && def
-						? `Check completed: ${def.label}.`
-						: ""}
+				{/* Mounted empty so the role exists before a message (ARIA22); the visible copy cannot be
+				    the live region because its relative times re-render every tick. */}
+				<p role="status" aria-live="polite" className="sr-only">
+					{state.status !== "ready" || !def
+						? ""
+						: state.check.status === "pending"
+							? "Checking for a newer release"
+							: state.check.status === "success"
+								? def.label
+								: ""}
 				</p>
 				{state.status === "loading" ? (
 					<div className="space-y-2">
@@ -143,51 +210,12 @@ export function InstanceReleaseCard({ state }: InstanceReleaseCardProps) {
 						</div>
 
 						<p className="text-sm text-muted-foreground">
-							{release.status === "CURRENT" ? (
-								<>
-									GitHub reported no newer release{" "}
-									<RelativeTime value={release.lastSuccess} fallback="at an unknown time" />.
-								</>
-							) : release.status === "UPDATE_AVAILABLE" && latest ? (
-								<>
-									v{latest.version} was published <RelativeTime value={latest.publishedAt} />;
-									checked <RelativeTime value={release.lastSuccess} fallback="at an unknown time" />
-									.
-								</>
-							) : release.status === "FAILED" && release.failure ? (
-								<>
-									{RELEASE_CHECK_FAILURE_LABELS[release.failure]}{" "}
-									<RelativeTime value={release.lastAttempt} fallback="at an unknown time" />
-									{nextCheck ? (
-										<>
-											; the next attempt is <RelativeTime value={nextCheck} />
-										</>
-									) : null}
-									.
-									{latest ? (
-										<>
-											{" "}
-											The last completed check,{" "}
-											<RelativeTime value={release.lastSuccess} fallback="at an unknown time" />,
-											found v{latest.version}.
-										</>
-									) : null}
-								</>
-							) : release.status === "NEVER_CHECKED" ? (
-								<>{def.description} The first one runs a minute after start.</>
-							) : release.status === "DISABLED" ? (
-								<>
-									Outbound checks are off (<code>HEPHAESTUS_RELEASE_CHECK_ENABLED=false</code>).
-									Compare with the{" "}
-									<ExternalLink href={RELEASES_URL}>published releases</ExternalLink> yourself.
-								</>
-							) : (
-								def.description
-							)}
+							<CheckSummary release={release} />
 						</p>
 
 						{newer && (
-							<Alert variant={latest.schemaMigrations ? "warning" : "default"}>
+							<Alert variant={latest.schemaMigrations === true ? "warning" : "default"}>
+								{latest.schemaMigrations === true ? <TriangleAlertIcon /> : <InfoIcon />}
 								<AlertTitle>v{latest.version}</AlertTitle>
 								<AlertDescription>
 									<p>
@@ -220,7 +248,7 @@ export function InstanceReleaseCard({ state }: InstanceReleaseCardProps) {
 									/>
 								}
 							>
-								Deployment identity
+								Show deployment identity
 							</CollapsibleTrigger>
 							<CollapsibleContent className="mt-2">
 								<dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
@@ -233,7 +261,7 @@ export function InstanceReleaseCard({ state }: InstanceReleaseCardProps) {
 									<dt className="text-muted-foreground">Image</dt>
 									<dd className="break-all font-mono">{release.running.image ?? "not reported"}</dd>
 									<dt className="text-muted-foreground">Roles</dt>
-									<dd>{release.running.roles.join(", ")}</dd>
+									<dd>{release.running.roles.map((role) => role.toLowerCase()).join(", ")}</dd>
 								</dl>
 								<p className="mt-2 text-xs text-muted-foreground">
 									Reported by this server from its release lock, not observed from the container.

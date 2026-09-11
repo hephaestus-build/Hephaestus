@@ -18,6 +18,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -25,39 +26,30 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 /**
- * Asks GitHub for the newest published release of this repository. One unauthenticated, conditional
- * GET on its own short-timeout client: no workspace credential, no redirect, and nothing about the
- * instance in the request beyond the static user agent — the privacy statement in
- * {@code docs/admin/install.mdx} describes exactly this request.
+ * One unauthenticated, conditional GET for the newest published release, on its own client so no
+ * workspace credential can reach it. The request carries nothing about the instance beyond the static
+ * user agent; {@code docs/admin/install.mdx} promises operators exactly that.
  */
 @Component
 @ConditionalOnServerRole
 public class ReleaseCheckClient {
-    static final String REPOSITORY = "hephaestus-build/Hephaestus";
-    static final String REPOSITORY_URL = "https://github.com/" + REPOSITORY;
+    private static final String REPOSITORY = "hephaestus-build/Hephaestus";
 
-    /**
-     * The flag {@code .github/workflows/release.yml} writes into every release's notes, invisible in
-     * GitHub's rendering. Absent from releases published before the workflow learned to write it.
-     */
+    /** Written into every release's notes by {@code .github/workflows/release.yml}; older releases have none. */
     private static final String SCHEMA_MIGRATIONS_FLAG = "<!-- hephaestus:schema-migrations=";
 
     private static final Duration UNPARSEABLE_WAIT = Duration.ofHours(24);
 
-    /** What one request established. */
     public sealed interface Outcome permits Found, NotModified, Failed {}
 
-    /** GitHub answered with a release this checker understands. */
     public record Found(LatestReleaseDTO release, @Nullable String etag) implements Outcome {}
 
-    /** GitHub confirmed the release behind the offered ETag is still the latest. */
     public record NotModified() implements Outcome {}
 
-    /** The request did not yield a release; {@code retryAt} is the wait GitHub named, if any. */
+    /** {@code retryAt} is the wait GitHub named, present only on a rate limit. */
     public record Failed(
             ReleaseCheckFailure reason, @Nullable Instant retryAt) implements Outcome {}
 
-    /** The subset of GitHub's release object this checker reads; everything else is ignored. */
     record GitHubRelease(
             @JsonProperty("tag_name") @Nullable String tagName,
             boolean draft,
@@ -70,13 +62,7 @@ public class ReleaseCheckClient {
 
     @Autowired
     ReleaseCheckClient(Clock clock) {
-        this(
-                RestClient.builder()
-                        .requestFactory(ClientHttpRequestFactoryBuilder.jdk()
-                                .build(HttpClientSettings.defaults()
-                                        .withTimeouts(Duration.ofSeconds(5), Duration.ofSeconds(10))
-                                        .withRedirects(HttpRedirects.DONT_FOLLOW))),
-                clock);
+        this(RestClient.builder().requestFactory(isolatedRequestFactory()), clock);
     }
 
     ReleaseCheckClient(RestClient.Builder builder, Clock clock) {
@@ -88,7 +74,13 @@ public class ReleaseCheckClient {
                 .build();
     }
 
-    /** Fetches the latest release, revalidating {@code etag} when the caller still holds one. */
+    private static ClientHttpRequestFactory isolatedRequestFactory() {
+        return ClientHttpRequestFactoryBuilder.jdk()
+                .build(HttpClientSettings.defaults()
+                        .withTimeouts(Duration.ofSeconds(5), Duration.ofSeconds(10))
+                        .withRedirects(HttpRedirects.DONT_FOLLOW));
+    }
+
     public Outcome fetchLatest(@Nullable String etag) {
         ResponseEntity<GitHubRelease> response;
         try {
@@ -122,7 +114,7 @@ public class ReleaseCheckClient {
                 new LatestReleaseDTO(
                         tag.substring(1),
                         release.publishedAt(),
-                        REPOSITORY_URL + "/releases/tag/" + tag,
+                        "https://github.com/" + REPOSITORY + "/releases/tag/" + tag,
                         schemaMigrations(release.body())),
                 response.getHeaders().getETag());
     }
@@ -135,9 +127,9 @@ public class ReleaseCheckClient {
     }
 
     /**
-     * GitHub signals an exhausted primary or secondary limit as 429 or 403, with {@code Retry-After}
-     * or {@code X-RateLimit-Remaining: 0} plus {@code X-RateLimit-Reset}; a 403 without either is an
-     * ordinary refusal. Continuing to ask while limited risks a ban, so the wait is taken as named.
+     * GitHub signals an exhausted limit as 429 or 403 with {@code Retry-After} or
+     * {@code X-RateLimit-Remaining: 0} plus {@code X-RateLimit-Reset}; a 403 without either is an
+     * ordinary refusal. Asking again inside the window risks a ban, so the wait is taken as named.
      */
     private Outcome failed(HttpStatusCode status, HttpHeaders headers) {
         Instant now = clock.instant();
@@ -157,16 +149,15 @@ public class ReleaseCheckClient {
         return right.isAfter(left) ? right : left;
     }
 
+    /** Seconds or an HTTP date per RFC 9110; anything else earns the longest wait rather than a retry. */
     private static Instant parseRetryAfter(String value, Instant now) {
         try {
-            return now.plusSeconds(Long.parseLong(value));
-        } catch (NumberFormatException notSeconds) {
-            try {
-                return ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME)
-                        .toInstant();
-            } catch (DateTimeException notDate) {
-                return now.plus(UNPARSEABLE_WAIT);
-            }
+            return value.chars().allMatch(Character::isDigit)
+                    ? now.plusSeconds(Long.parseLong(value))
+                    : ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME)
+                            .toInstant();
+        } catch (NumberFormatException | DateTimeException exception) {
+            return now.plus(UNPARSEABLE_WAIT);
         }
     }
 

@@ -26,13 +26,13 @@ public class RuntimeRoleStartupLogger {
 
     @EventListener(ApplicationReadyEvent.class)
     public void logRoles() {
-        List<String> enabled = RuntimeRole.enabled(environment);
+        List<RuntimeRole> enabled = RuntimeRole.enabled(environment);
 
         var event = enabled.isEmpty() ? log.atWarn() : log.atInfo();
         event = event.addKeyValue("event.name", "runtime.roles.configured")
-                .addKeyValue("runtime.server.enabled", enabled.contains("server"))
-                .addKeyValue("runtime.worker.enabled", enabled.contains("worker"))
-                .addKeyValue("runtime.webhook.enabled", enabled.contains("webhook"));
+                .addKeyValue("runtime.server.enabled", enabled.contains(RuntimeRole.SERVER))
+                .addKeyValue("runtime.worker.enabled", enabled.contains(RuntimeRole.WORKER))
+                .addKeyValue("runtime.webhook.enabled", enabled.contains(RuntimeRole.WEBHOOK));
         if (enabled.isEmpty()) {
             event.log(
                     "All runtime roles disabled — this JVM will accept no work. Set at least one of "

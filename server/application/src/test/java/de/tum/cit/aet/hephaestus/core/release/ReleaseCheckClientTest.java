@@ -82,21 +82,19 @@ class ReleaseCheckClientTest {
     }
 
     @Test
-    void shouldRejectDraftsPrereleasesAndUnboundedTagsAsMalformed() {
+    void shouldRejectDraftsPrereleasesUnboundedTagsAndNonJsonAsMalformed() {
+        var malformed = new java.util.ArrayList<String>();
         for (String tag : new String[] {"v1.0.0-rc.1", "v01.2.3", "v9999999999.0.0", "1.2.3", "main"}) {
-            server.reset();
-            server.expect(anything()).andRespond(withSuccess(release(tag, ""), MediaType.APPLICATION_JSON));
-            assertThat(client.fetchLatest(null)).as(tag).isEqualTo(new Failed(ReleaseCheckFailure.MALFORMED, null));
+            malformed.add(release(tag, ""));
         }
-        server.reset();
-        server.expect(anything())
-                .andRespond(withSuccess(
-                        release("v1.2.3", "").replace("\"prerelease\":false", "\"prerelease\":true"),
-                        MediaType.APPLICATION_JSON));
-        assertThat(client.fetchLatest(null)).isEqualTo(new Failed(ReleaseCheckFailure.MALFORMED, null));
-        server.reset();
-        server.expect(anything()).andRespond(withSuccess("not json", MediaType.APPLICATION_JSON));
-        assertThat(client.fetchLatest(null)).isEqualTo(new Failed(ReleaseCheckFailure.MALFORMED, null));
+        malformed.add(release("v1.2.3", "").replace("\"prerelease\":false", "\"prerelease\":true"));
+        malformed.add(release("v1.2.3", "").replace("\"draft\":false", "\"draft\":true"));
+        malformed.add("not json");
+        for (String body : malformed) {
+            server.reset();
+            server.expect(anything()).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+            assertThat(client.fetchLatest(null)).as(body).isEqualTo(new Failed(ReleaseCheckFailure.MALFORMED, null));
+        }
     }
 
     @Test
@@ -114,10 +112,17 @@ class ReleaseCheckClientTest {
     }
 
     @Test
-    void shouldTakeTheLaterOfRetryAfterAndRateLimitResetAndFallBackForGarbage() {
+    void shouldReadTheExhaustedPrimaryLimitFromTheResetHeaderAndFallBackForGarbage() {
         long reset = NOW.plusSeconds(10_800).getEpochSecond();
         server.expect(anything())
                 .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .header("X-RateLimit-Remaining", "0")
+                        .header("X-RateLimit-Reset", Long.toString(reset)));
+        assertThat(client.fetchLatest(null))
+                .isEqualTo(new Failed(ReleaseCheckFailure.RATE_LIMITED, Instant.ofEpochSecond(reset)));
+        server.reset();
+        server.expect(anything())
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS)
                         .header("Retry-After", "60")
                         .header("X-RateLimit-Remaining", "0")
                         .header("X-RateLimit-Reset", Long.toString(reset)));

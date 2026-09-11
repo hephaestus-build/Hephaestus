@@ -13362,8 +13362,12 @@ components:
         nextCheck:
           type: string
           format: date-time
-          description: when the scheduler will try again; a rate-limit window also
-            blocks manual checks
+          description: when the scheduler will try again
+        retryUntil:
+          type: string
+          format: date-time
+          description: the wait GitHub named on a rate limit; a manual check before
+            it is refused
         running:
           $ref: "#/components/schemas/RunningRelease"
           description: the identity this process reports
@@ -14581,6 +14585,10 @@ components:
           description: the runtime roles this process booted with
           items:
             type: string
+            enum:
+            - SERVER
+            - WORKER
+            - WEBHOOK
         version:
           type: string
           description: the version the deployment passed as <code>APP_VERSION</code>

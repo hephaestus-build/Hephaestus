@@ -43,7 +43,7 @@ x-observability-env: &observability-env
 # version itself travels as APP_VERSION above; an empty value is a deployment without a lock.
 x-release-identity-env: &release-identity-env
   HEPHAESTUS_RELEASE_COMMIT: ${HEPHAESTUS_RELEASE_COMMIT:-}
-  HEPHAESTUS_IMAGE_APPLICATION_SERVER: ${HEPHAESTUS_IMAGE_APPLICATION_SERVER:-}
+  HEPHAESTUS_IMAGE_APPLICATION_SERVER: ${HEPHAESTUS_IMAGE_APPLICATION_SERVER}
 
 services:
   webapp:

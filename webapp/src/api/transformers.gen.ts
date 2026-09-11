@@ -237,6 +237,9 @@ const releaseStatusSchemaResponseTransformer = (data: any) => {
   if (data.nextCheck) {
     data.nextCheck = new Date(data.nextCheck);
   }
+  if (data.retryUntil) {
+    data.retryUntil = new Date(data.retryUntil);
+  }
   return data;
 };
 

@@ -1,7 +1,11 @@
 package de.tum.cit.aet.hephaestus.core.release;
 
+import static de.tum.cit.aet.hephaestus.core.release.ReleaseFixtures.COMMIT;
+import static de.tum.cit.aet.hephaestus.core.release.ReleaseFixtures.IMAGE;
+import static de.tum.cit.aet.hephaestus.core.release.ReleaseFixtures.running;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.actuate.info.Info;
@@ -9,17 +13,6 @@ import org.springframework.mock.env.MockEnvironment;
 
 @Tag("unit")
 class RunningReleaseTest {
-    static final String COMMIT = "a".repeat(40);
-    static final String IMAGE = "ghcr.io/hephaestus-build/application-server@sha256:" + "b".repeat(64);
-
-    static RunningRelease running(String version, ReleaseProperties properties, MockEnvironment environment) {
-        return new RunningRelease(version, properties, environment);
-    }
-
-    static RunningRelease running(String version) {
-        return running(version, new ReleaseProperties(COMMIT, IMAGE, true), new MockEnvironment());
-    }
-
     @Test
     void shouldReportReleaseChannelWithLockIdentityWhenVersionIsReleaseTag() {
         var identity = running("1.2.3").get();
@@ -42,20 +35,14 @@ class RunningReleaseTest {
     }
 
     @Test
-    void shouldOmitIdentityWhenDeploymentSuppliesNone() {
-        var identity = running("0.0.0-development", new ReleaseProperties("", "", true), new MockEnvironment())
-                .get();
-        assertThat(identity.commit()).isNull();
-        assertThat(identity.image()).isNull();
-    }
-
-    @Test
-    void shouldListOnlyEnabledRolesAndContributeIdentityToActuatorInfo() {
+    void shouldOmitIdentityAndListOnlyEnabledRolesAndContributeToActuatorInfo() {
         var environment = new MockEnvironment()
                 .withProperty("hephaestus.runtime.worker.enabled", "false")
                 .withProperty("hephaestus.runtime.webhook.enabled", "false");
-        var running = running("1.2.3", new ReleaseProperties(COMMIT, IMAGE, true), environment);
-        assertThat(running.get().roles()).containsExactly("server");
+        var running = new RunningRelease("0.0.0-development", new ReleaseProperties("", "", true), environment);
+        assertThat(running.get().commit()).isNull();
+        assertThat(running.get().image()).isNull();
+        assertThat(running.get().roles()).containsExactly(RuntimeRole.SERVER);
         var info = new Info.Builder();
         running.contribute(info);
         assertThat(info.build().getDetails()).containsEntry("release", running.get());

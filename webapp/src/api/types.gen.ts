@@ -3790,9 +3790,13 @@ export type ReleaseStatus = {
    */
   latest?: LatestRelease;
   /**
-   * when the scheduler will try again; a rate-limit window also blocks manual checks
+   * when the scheduler will try again
    */
   nextCheck?: Date;
+  /**
+   * the wait GitHub named on a rate limit; a manual check before it is refused
+   */
+  retryUntil?: Date;
   /**
    * the identity this process reports
    */
@@ -4520,7 +4524,7 @@ export type RunningRelease = {
   /**
    * the runtime roles this process booted with
    */
-  roles: Array<string>;
+  roles: Array<'SERVER' | 'WORKER' | 'WEBHOOK'>;
   /**
    * the version the deployment passed as <code>APP_VERSION</code>
    */

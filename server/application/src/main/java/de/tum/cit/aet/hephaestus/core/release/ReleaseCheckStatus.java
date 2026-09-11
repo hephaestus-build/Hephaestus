@@ -1,20 +1,17 @@
 package de.tum.cit.aet.hephaestus.core.release;
 
-/**
- * The one verdict an administrator reads. A failed or never-performed check is its own value so that
- * the absence of a known update is never mistaken for being up to date.
- */
+/** A check that failed or never ran is its own verdict, never folded into {@link #CURRENT}. */
 public enum ReleaseCheckStatus {
-    /** The operator opted out of outbound checks; nothing is known and nothing will be asked. */
+    /** The operator switched outbound checks off. */
     DISABLED,
-    /** The running build is not a published release, so there is no release to compare with. */
+    /** The running build is not a published release, so there is nothing to compare with. */
     NOT_APPLICABLE,
-    /** Checks are on but none has completed since this process started. */
+    /** No check has completed since this process started. */
     NEVER_CHECKED,
-    /** The last check completed and no newer release is published. */
+    /** No newer release was published when GitHub was last asked. */
     CURRENT,
-    /** The last check completed and a newer release is published. */
+    /** A newer release is published. */
     UPDATE_AVAILABLE,
-    /** The last check did not complete; any {@code latest} shown dates from the last success. */
+    /** The last check did not complete; {@code latest} is whatever the last completed check found. */
     FAILED
 }

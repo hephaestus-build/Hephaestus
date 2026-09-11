@@ -30,25 +30,28 @@ import org.springframework.stereotype.Service;
 public class ReleaseCheckService {
     private static final Logger log = LoggerFactory.getLogger(ReleaseCheckService.class);
 
-    /** How long a completed answer stands before the scheduler asks again. */
-    static final Duration CACHE = Duration.ofHours(24);
-
-    /** Retry schedule after a failure: fifteen minutes, doubling, capped at the cache period. */
+    private static final Duration CACHE = Duration.ofHours(24);
     private static final IntervalFunction BACKOFF =
             IntervalFunction.ofExponentialBackoff(Duration.ofMinutes(15), 2, CACHE);
 
+    /** An ETag is only meaningful next to the answer it revalidates, so the two travel as one. */
+    private record Answer(LatestReleaseDTO latest, @Nullable String etag) {}
+
     /**
-     * Everything a check can change, replaced as one value so a read never sees half an update.
+     * Replaced as one value so a read never sees half an update.
      *
-     * @param consecutiveFailures how many attempts in a row did not complete, for the backoff step
+     * @param nextCheck           when the next automatic check is due
+     * @param retryUntil          the wait GitHub named on a rate limit, which also blocks manual checks
+     * @param consecutiveFailures automatic attempts in a row that did not complete; manual attempts
+     *                            do not count, so they cannot escalate the backoff
      */
     private record State(
             @Nullable Instant lastAttempt,
             @Nullable Instant lastSuccess,
             @Nullable Instant nextCheck,
+            @Nullable Instant retryUntil,
             @Nullable ReleaseCheckFailure failure,
-            @Nullable LatestReleaseDTO latest,
-            @Nullable String etag,
+            @Nullable Answer answer,
             int consecutiveFailures) {
         static final State INITIAL = new State(null, null, null, null, null, null, 0);
     }
@@ -73,17 +76,15 @@ public class ReleaseCheckService {
         return status(state.get());
     }
 
-    /** The scheduled tick: cheap unless the cache or the backoff has run out. */
     @Scheduled(initialDelayString = "PT1M", fixedDelayString = "PT1M")
     @WorkspaceAgnostic("Public release metadata is instance-wide; no tenant row is read or written")
     public void poll() {
-        Instant nextCheck = state.get().nextCheck();
-        if (nextCheck == null || !clock.instant().isBefore(nextCheck)) check(false);
+        if (due(state.get().nextCheck())) check(false);
     }
 
     /**
-     * An administrator's request. It does not wait for the cache, because sixty requests an hour
-     * cover any number of clicks; it does wait out a rate-limit window, because GitHub asked.
+     * An administrator's request: skips the cache, never delays the next automatic check, and only
+     * waits out a rate-limit window GitHub named.
      */
     public ReleaseStatusDTO check() {
         return check(true);
@@ -93,15 +94,12 @@ public class ReleaseCheckService {
         if (!applicable()) return status();
         checking.lock();
         try {
+            // Read under the lock: the check that held it may have satisfied this tick or opened a window.
             State current = state.get();
-            Instant now = clock.instant();
-            boolean limited = current.failure() == ReleaseCheckFailure.RATE_LIMITED
-                    && current.nextCheck() != null
-                    && now.isBefore(current.nextCheck());
-            // A concurrent check that just finished has moved nextCheck past now; its answer stands.
-            boolean fresh = !manual && current.nextCheck() != null && now.isBefore(current.nextCheck());
-            if (limited || fresh) return status(current);
-            State next = apply(current, client.fetchLatest(current.etag()), now);
+            boolean blocked = manual ? !due(current.retryUntil()) : !due(current.nextCheck());
+            if (blocked) return status(current);
+            String etag = current.answer() == null ? null : current.answer().etag();
+            State next = apply(current, client.fetchLatest(etag), clock.instant(), manual);
             state.set(next);
             return status(next);
         } finally {
@@ -109,46 +107,52 @@ public class ReleaseCheckService {
         }
     }
 
+    private boolean due(@Nullable Instant at) {
+        return at == null || !clock.instant().isBefore(at);
+    }
+
     private boolean applicable() {
         return enabled && running.get().channel() == ReleaseChannel.RELEASE;
     }
 
-    private static State apply(State current, ReleaseCheckClient.Outcome outcome, Instant now) {
+    private static State apply(State current, ReleaseCheckClient.Outcome outcome, Instant now, boolean manual) {
         return switch (outcome) {
-            case Found found -> completed(now, found.release(), found.etag());
+            case Found found -> completed(now, new Answer(found.release(), found.etag()));
             case NotModified ignored ->
-                current.latest() == null
-                        // Nothing to revalidate against: the ETag came from a release this process no longer holds.
-                        ? failed(current, now, ReleaseCheckFailure.MALFORMED, null)
-                        : completed(now, current.latest(), current.etag());
-            case Failed failed -> failed(current, now, failed.reason(), failed.retryAt());
+                current.answer() == null
+                        // 304 to a request that sent no ETag: GitHub answered a question nobody asked.
+                        ? failed(current, now, ReleaseCheckFailure.MALFORMED, null, manual)
+                        : completed(now, current.answer());
+            case Failed failed -> failed(current, now, failed.reason(), failed.retryAt(), manual);
         };
     }
 
-    private static State completed(Instant now, LatestReleaseDTO latest, @Nullable String etag) {
-        return new State(now, now, now.plus(CACHE), null, latest, etag, 0);
+    private static State completed(Instant now, Answer answer) {
+        return new State(now, now, now.plus(CACHE), null, null, answer, 0);
     }
 
-    private static State failed(State current, Instant now, ReleaseCheckFailure reason, @Nullable Instant retryAt) {
-        int failures = current.consecutiveFailures() + 1;
-        Instant backoff = now.plusMillis(BACKOFF.apply(failures));
-        Instant nextCheck = retryAt != null && retryAt.isAfter(backoff) ? retryAt : backoff;
+    private static State failed(
+            State current, Instant now, ReleaseCheckFailure reason, @Nullable Instant retryAt, boolean manual) {
+        int failures = manual ? current.consecutiveFailures() : current.consecutiveFailures() + 1;
+        Instant nextCheck = manual ? current.nextCheck() : now.plusMillis(BACKOFF.apply(failures));
+        if (retryAt != null && (nextCheck == null || retryAt.isAfter(nextCheck))) nextCheck = retryAt;
         log.atWarn()
                 .addKeyValue("event.name", "release.check.failed")
                 .addKeyValue("release.check.failure", reason)
-                .addKeyValue("release.check.next", nextCheck)
-                .log("Release check did not complete: {}; next attempt at {}", reason, nextCheck);
-        return new State(now, current.lastSuccess(), nextCheck, reason, current.latest(), current.etag(), failures);
+                .log("Release check did not complete: {}", reason);
+        return new State(now, current.lastSuccess(), nextCheck, retryAt, reason, current.answer(), failures);
     }
 
     private ReleaseStatusDTO status(State current) {
         var identity = running.get();
+        LatestReleaseDTO latest =
+                current.answer() == null ? null : current.answer().latest();
         ReleaseCheckStatus status;
         if (!enabled) status = ReleaseCheckStatus.DISABLED;
         else if (identity.channel() != ReleaseChannel.RELEASE) status = ReleaseCheckStatus.NOT_APPLICABLE;
         else if (current.failure() != null) status = ReleaseCheckStatus.FAILED;
-        else if (current.latest() == null) status = ReleaseCheckStatus.NEVER_CHECKED;
-        else if (Version.parse(current.latest().version()).isGreaterThan(Version.parse(identity.version()))) {
+        else if (latest == null) status = ReleaseCheckStatus.NEVER_CHECKED;
+        else if (Version.parse(latest.version()).isGreaterThan(Version.parse(identity.version()))) {
             status = ReleaseCheckStatus.UPDATE_AVAILABLE;
         } else status = ReleaseCheckStatus.CURRENT;
         return new ReleaseStatusDTO(
@@ -157,7 +161,8 @@ public class ReleaseCheckService {
                 current.lastAttempt(),
                 current.lastSuccess(),
                 current.nextCheck(),
+                current.retryUntil(),
                 current.failure(),
-                current.latest());
+                latest);
     }
 }

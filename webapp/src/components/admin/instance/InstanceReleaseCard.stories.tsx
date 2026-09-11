@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, userEvent } from "storybook/test";
 
+import { expectGenuinelyDisabled } from "@/test/controls";
+
 import type { ReleaseStatus } from "@/api/types.gen";
 import {
 	daysBefore,
@@ -20,7 +22,7 @@ const running = {
 	channel: "RELEASE",
 	commit: "a".repeat(40),
 	image: `ghcr.io/hephaestus-build/application-server@sha256:${"b".repeat(64)}`,
-	roles: ["server"],
+	roles: ["SERVER"],
 } satisfies ReleaseStatus["running"];
 
 const latest = {
@@ -30,6 +32,8 @@ const latest = {
 	schemaMigrations: true,
 } satisfies NonNullable<ReleaseStatus["latest"]>;
 
+const onCheck = fn();
+
 function ready(
 	release: Partial<ReleaseStatus>,
 	check: ReleaseCheckRequest = { status: "idle" },
@@ -38,7 +42,7 @@ function ready(
 		status: "ready",
 		release: { running, status: "NEVER_CHECKED", ...release },
 		check,
-		onCheck: fn(),
+		onCheck,
 	};
 }
 
@@ -52,11 +56,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const NeverChecked: Story = {
-	play: async ({ canvas, args }) => {
+export const Default: Story = {
+	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Not checked yet")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Check now" }));
-		if (args.state.status === "ready") await expect(args.state.onCheck).toHaveBeenCalledOnce();
+		await expect(onCheck).toHaveBeenCalledOnce();
 	},
 };
 
@@ -106,6 +110,19 @@ export const UpdateAvailableWithoutMigrations: Story = {
 	},
 };
 
+export const UpdateAvailableMigrationsUnknown: Story = {
+	args: {
+		state: ready({
+			status: "UPDATE_AVAILABLE",
+			lastSuccess: hoursBefore(1),
+			latest: { ...latest, schemaMigrations: undefined },
+		}),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/read the release notes/i)).toBeVisible();
+	},
+};
+
 export const CheckFailedAfterASuccess: Story = {
 	args: {
 		state: ready({
@@ -132,18 +149,19 @@ export const RateLimited: Story = {
 			failure: "RATE_LIMITED",
 			lastAttempt: minutesBefore(1),
 			nextCheck: minutesAfter(45),
+			retryUntil: minutesAfter(45),
 		}),
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText(/rate-limited/)).toBeVisible();
-		await expect(canvas.getByRole("button", { name: "Check now" })).toBeDisabled();
+		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Check now" }));
 	},
 };
 
 export const Checking: Story = {
 	args: { state: ready({}, { status: "pending" }) },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Checking…" })).toBeDisabled();
+		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Checking…" }));
 	},
 };
 
@@ -160,6 +178,7 @@ export const CommitBuild: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Not a release")).toBeVisible();
+		await expect(canvas.getByText("commit ccccccc")).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: "Check now" })).toBeNull();
 	},
 };
@@ -171,20 +190,30 @@ export const DevelopmentBuild: Story = {
 			running: {
 				version: "0.0.0-development",
 				channel: "DEVELOPMENT",
-				roles: ["server", "worker", "webhook"],
+				roles: ["SERVER", "WORKER", "WEBHOOK"],
 			},
 		}),
 	},
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Deployment identity" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Show deployment identity" }));
 		await expect(canvas.getAllByText("not reported")).toHaveLength(2);
+		await expect(canvas.getByText("server, worker, webhook")).toBeVisible();
+	},
+};
+
+export const IdentityExpandedOnAPhone: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: async ({ canvas, canvasElement }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Show deployment identity" }));
+		await expect(canvas.getByText(running.image)).toBeVisible();
+		await expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth);
 	},
 };
 
 export const ChecksDisabled: Story = {
 	args: { state: ready({ status: "DISABLED" }) },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Checks off")).toBeVisible();
+		await expect(canvas.getByText("Checks disabled")).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: "Check now" })).toBeNull();
 	},
 };
