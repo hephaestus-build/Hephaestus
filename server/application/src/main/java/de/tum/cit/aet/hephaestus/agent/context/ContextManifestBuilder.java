@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
@@ -210,6 +211,12 @@ public class ContextManifestBuilder {
      * read. No source is dropped because no practice asked for it.
      */
     Set<SourceKind> stagedSources(EvidencePlan plan) {
+        // A retired contract stays readable for the feedback recorded under it; a new capture runs only
+        // under the contract this runtime ships, so a practice left behind by a migration fails here.
+        if (!catalogs.current().version().equals(plan.contractVersion())) {
+            throw new JobPreparationException("Practices pin source contract " + plan.contractVersion()
+                    + "; this runtime captures under " + catalogs.current().version());
+        }
         return catalogs.requireSourcesFor(
                 plan.contractVersion(), plan.artifactKind().value());
     }

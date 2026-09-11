@@ -120,10 +120,10 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
                 .anyMatch(decision -> decision.permitsAt(clock.instant(), purpose));
     }
 
+    /** A definition is read against the contract it pins; which contract a new review runs under is the manifest's decision. */
     @Override
     public Set<SourceKind> requireSourcesFor(SourceContractVersion version, String artifactKind) {
-        requireSupported(version);
-        Set<SourceKind> sources = catalog.sourcesFor(artifactKind);
+        Set<SourceKind> sources = readableCatalog(version).sourcesFor(artifactKind);
         if (sources.isEmpty()) {
             throw new IllegalArgumentException(
                     "No evidence source in contract " + version + " applies to artifact kind: " + artifactKind);
@@ -134,7 +134,7 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
     @Override
     public List<SourceKind> requireDefaultSourcesFor(SourceContractVersion version, String artifactKind) {
         requireSourcesFor(version, artifactKind);
-        return catalog.defaultSourcesFor(artifactKind);
+        return readableCatalog(version).defaultSourcesFor(artifactKind);
     }
 
     @Override
@@ -166,12 +166,6 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
             return historicalCatalog;
         }
         throw new IllegalArgumentException("Unsupported source contract version: " + version);
-    }
-
-    private void requireSupported(SourceContractVersion version) {
-        if (!catalog.version().equals(version)) {
-            throw new IllegalArgumentException("Unsupported source contract version: " + version);
-        }
     }
 
     static ArtifactSourceCatalog parse(JsonNode root) {

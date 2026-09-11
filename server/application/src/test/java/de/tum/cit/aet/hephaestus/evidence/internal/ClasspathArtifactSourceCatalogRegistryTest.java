@@ -53,7 +53,7 @@ class ClasspathArtifactSourceCatalogRegistryTest {
     }
 
     @Test
-    void shouldAuthorizeHistoricalDeliveryWithoutAllowingNewCaptureUnderRetiredContract() {
+    void shouldReadARetiredContractForTheFeedbackRecordedUnderIt() {
         var registry = new ClasspathArtifactSourceCatalogRegistry(
                 objectMapper, Clock.fixed(Instant.parse("2026-09-11T12:00:00Z"), java.time.ZoneOffset.UTC));
         var previous = new SourceContractVersion("1.0.0");
@@ -62,7 +62,7 @@ class ClasspathArtifactSourceCatalogRegistryTest {
         assertThat(registry.isSourceUsePermitted(previous, source, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isTrue();
         assertThat(registry.requireSource(previous, source).displayName()).isNotEqualTo("Repository files and history");
-        assertThatIllegalArgumentException().isThrownBy(() -> registry.requireSourcesFor(previous, "scm.pull_request"));
+        assertThat(registry.requireSourcesFor(previous, "scm.pull_request")).contains(source);
     }
 
     @Test
@@ -73,7 +73,7 @@ class ClasspathArtifactSourceCatalogRegistryTest {
                 .isThrownBy(() -> registry.requireSource(
                         new SourceContractVersion("2.0.0"), new SourceKind("scm.repository.tree")));
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> registry.requireSourcesFor(new SourceContractVersion("1.0.0"), "scm.pull_request"));
+                .isThrownBy(() -> registry.requireSourcesFor(new SourceContractVersion("2.0.0"), "scm.pull_request"));
         assertThatIllegalArgumentException()
                 .isThrownBy(() ->
                         registry.requireSource(new SourceContractVersion("1.1.0"), new SourceKind("scm.unknown")));

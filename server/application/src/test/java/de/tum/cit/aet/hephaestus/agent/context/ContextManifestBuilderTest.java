@@ -133,6 +133,14 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRefuseANewCaptureUnderARetiredContract() {
+        var retired = new EvidencePlan(new SourceContractVersion("1.0.0"), ArtifactKinds.PULL_REQUEST);
+        assertThatThrownBy(() -> builder.stagedSources(retired))
+                .isInstanceOf(de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException.class)
+                .hasMessageContaining("1.0.0");
+    }
+
+    @Test
     void shouldAuthorizeCaptureForTheDetectionAudience() {
         ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
         ContextManifestBuilder target =
@@ -665,6 +673,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                 diff.erasurePolicy(),
                 diff.useDecisionIds());
         ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
+        when(catalogs.current()).thenReturn(realCatalogs.current());
         when(catalogs.requireSourcesFor(any(), any()))
                 .thenAnswer(invocation ->
                         realCatalogs.requireSourcesFor(invocation.getArgument(0), invocation.getArgument(1)));
