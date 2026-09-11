@@ -148,6 +148,7 @@ Severity, feedback routing and result counts use the derived outcome, not assess
 server, sandbox tool contract and database reject contradictory axes. They never manufacture a
 judgment by defaulting status, presence, assessment or severity. See the
 [review pipeline](./practice-review-pipeline.mdx) for capture and delivery boundaries.
+
 ## Member onboarding and AI choices
 
 **Member onboarding** is first-visit setup after existing workspace membership. It is not an
