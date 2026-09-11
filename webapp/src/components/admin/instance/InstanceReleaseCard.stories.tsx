@@ -173,7 +173,7 @@ export const CommitBuild: Story = {
 	args: {
 		state: ready({
 			status: "NOT_APPLICABLE",
-			running: { ...running, version: "c".repeat(40), commit: "c".repeat(40) },
+			running: { ...running, channel: "COMMIT", version: "c".repeat(40), commit: "c".repeat(40) },
 		}),
 	},
 	play: async ({ canvas }) => {
