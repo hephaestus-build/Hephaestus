@@ -84,7 +84,7 @@ public class GitRepositoryManager {
     /** The walk stopped at {@code hephaestus.git.tree-max-total-size}; the rest was never read. */
     public static final String TREE_LIMITATION_TOTAL_SIZE = "TOTAL_SIZE_LIMIT_REACHED";
 
-    /** A blob {@link RawText#isBinary} calls binary was skipped; the walk continued. */
+    /** A blob {@link RawText#isBinary}, the diff's own heuristic, calls binary was skipped; the walk continued. */
     public static final String TREE_LIMITATION_BINARY = "BINARY_FILE_EXCLUDED";
 
     private final GitRepositoryProperties properties;
@@ -745,25 +745,17 @@ public class GitRepositoryManager {
     /**
      * Materialises a commit tree into a temporary directory.
      *
+     * The caller owns the result and must {@link GitTreeSnapshot#close() close} it to delete the directory.
+     *
      * <p>Symlinks, submodules and paths that escape the staging root are excluded rather than followed,
-     * so nothing outside the commit's own tree can be written or read through the snapshot. Each
-     * exclusion is named in {@link GitTreeSnapshot#limitations()} so a consumer can say what it did not
-     * see instead of treating a partial tree as the whole repository.
+     * so nothing outside the commit's own tree can be written or read through the snapshot. Every
+     * exclusion, and every bound in {@link GitRepositoryProperties} the walk hits, is named in
+     * {@link GitTreeSnapshot#limitations()} and makes {@link GitTreeSnapshot#complete()} false, so nothing
+     * downstream can claim something is absent from a repository it only partly saw.
      *
-     * <p>Blobs are streamed one at a time from the object database straight to disk, so peak memory is
-     * one buffer regardless of repository size. The caller owns the result and must
-     * {@link GitTreeSnapshot#close() close} it to delete the directory.
-     *
-     * <p>Peak memory being bounded is not the same as the capture being bounded: a repository can be
-     * arbitrarily large, and the whole snapshot is copied into the sandbox for every review. The walk
-     * therefore stops at {@code hephaestus.git.tree-max-files} and {@code tree-max-total-size}, and skips
-     * any blob over {@code tree-max-file-size} — each of which makes {@link GitTreeSnapshot#complete()}
-     * false, so nothing downstream can claim something is absent from a repository it only partly saw.
-     *
-     * <p>Binary blobs are skipped by the rule {@link DiffFormatter} applies to the diff the same review
-     * reads: the review can only read and grep text, and a binary would spend the bound the surrounding
-     * source is bought with. A blob's size is read from the object database before it is written, so an
-     * oversized file is never staged and then deleted.
+     * <p>A binary blob is skipped and not counted against the bounds: a practice review reads source, and
+     * an image or an archive shows it nothing. Nothing of a rejected blob reaches disk — its size comes
+     * from the object database, and the head the binary rule reads is held in memory.
      *
      * <p>Git handles are opened and closed entirely within this call rather than returned as lazy readers,
      * which would leave an {@code ObjectReader} and the repository read lock open across the staging
@@ -846,23 +838,21 @@ public class GitRepositoryManager {
                             }
                             ObjectId blobId = treeWalk.getObjectId(0);
                             long blobSize = reader.getObjectSize(blobId, Constants.OBJ_BLOB);
-                            if (blobSize > maxFileBytes) {
-                                // One outsized blob does not end the walk: it is almost always a binary
-                                // asset, and dropping the rest of the tree with it would cost the review
-                                // the source files it came for.
-                                limitations.add(TREE_LIMITATION_FILE_TOO_LARGE);
-                                log.debug("Skipping oversized file: path={}, size={}", sourcePath, blobSize);
-                                continue;
-                            }
                             Path target = stagingDir.resolve(sourcePath);
-                            // The head is read before the size check, since a blob that is never staged
-                            // must not be what ends the walk, and held in memory rather than written, so
-                            // a rejected blob never touches the staging volume.
                             try (InputStream blob =
                                     reader.open(blobId, Constants.OBJ_BLOB).openStream()) {
+                                // Sniffed before either size bound: a skipped blob must not end the walk,
+                                // and an oversized image is a binary, not missing source.
                                 byte[] head = blob.readNBytes(RawText.getBufferSize());
                                 if (RawText.isBinary(head, head.length, head.length >= blobSize)) {
                                     limitations.add(TREE_LIMITATION_BINARY);
+                                    continue;
+                                }
+                                if (blobSize > maxFileBytes) {
+                                    // One outsized blob does not end the walk: dropping the rest of the
+                                    // tree with it would cost the review the source it came for.
+                                    limitations.add(TREE_LIMITATION_FILE_TOO_LARGE);
+                                    log.debug("Skipping oversized file: path={}, size={}", sourcePath, blobSize);
                                     continue;
                                 }
                                 if (totalBytes + blobSize > maxTotalBytes) {

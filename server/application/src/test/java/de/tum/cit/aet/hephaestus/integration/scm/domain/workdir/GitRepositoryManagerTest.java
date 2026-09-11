@@ -18,6 +18,7 @@ import java.util.Map;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.errors.InvalidRemoteException;
+import org.eclipse.jgit.diff.RawText;
 import org.eclipse.jgit.errors.NoRemoteRepositoryException;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.PersonIdent;
@@ -683,30 +684,26 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("skips a binary blob without spending the size bound on it or ending the walk")
-        void shouldSkipABinaryBlobWithoutSpendingTheBoundOnIt() throws Exception {
-            // The image fits the per-file bound; image and filler together do not fit the total, so a
-            // walk that staged the image would end at the filler and never reach the source behind it.
-            manager = createManager(true, 20_000, DataSize.ofKilobytes(70), DataSize.ofKilobytes(70));
+        @DisplayName("skips a binary blob without counting it against any bound or ending the walk")
+        void shouldSkipABinaryBlobWithoutCountingItOrEndingTheWalk() throws Exception {
+            DataSize bound = DataSize.ofKilobytes(64);
+            manager = createManager(true, 20_000, bound, bound);
             try (Git sourceGit = createSourceRepo()) {
-                // Longer than the head the binary rule reads, so the staged copy has to carry both parts.
-                String source = "class Service {}\n".repeat(1024);
-                Files.write(sourceRepoPath.resolve("a-screenshot.png"), new byte[64 * 1024]);
-                Files.writeString(sourceRepoPath.resolve("b-filler.txt"), "x".repeat(40 * 1024));
-                Files.writeString(sourceRepoPath.resolve("c-service.java"), source);
+                String source = "x\n".repeat(RawText.getBufferSize());
+                Files.write(sourceRepoPath.resolve("image.png"), new byte[(int) bound.toBytes() + 1]);
+                Files.writeString(sourceRepoPath.resolve("src.java"), source);
                 sourceGit.add().addFilepattern(".").call();
-                String sha = commit(sourceGit, "Add a documentation image ahead of the source");
+                String sha = commit(sourceGit, "Add an image beside a source file");
 
                 manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
 
                 try (var snapshot = manager.readTreeSnapshot(1L, sha)) {
-                    assertThat(snapshot.files()).doesNotContainKey("a-screenshot.png");
-                    assertThat(snapshot.files()).containsKeys("b-filler.txt", "c-service.java");
-                    assertThat(Files.readString(snapshot.files().get("c-service.java")))
+                    assertThat(snapshot.files()).doesNotContainKey("image.png");
+                    assertThat(snapshot.stagingDir().resolve("image.png")).doesNotExist();
+                    assertThat(Files.readString(snapshot.files().get("src.java")))
                             .isEqualTo(source);
-                    assertThat(snapshot.limitations())
-                            .contains(GitRepositoryManager.TREE_LIMITATION_BINARY)
-                            .doesNotContain(GitRepositoryManager.TREE_LIMITATION_TOTAL_SIZE);
+                    assertThat(snapshot.totalBytes()).isLessThan(bound.toBytes());
+                    assertThat(snapshot.limitations()).containsExactly(GitRepositoryManager.TREE_LIMITATION_BINARY);
                     assertThat(snapshot.complete()).isFalse();
                 }
             }
@@ -804,15 +801,15 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         void shouldSkipABlobOverThePerFileBoundWithoutLosingTheTree() throws Exception {
             manager = createManager(true, 20_000, DataSize.ofMegabytes(32), DataSize.ofKilobytes(4));
             try (Git sourceGit = createSourceRepo()) {
-                Files.write(sourceRepoPath.resolve("asset.bin"), new byte[16 * 1024]);
+                Files.writeString(sourceRepoPath.resolve("bundle.js"), "x".repeat(16 * 1024));
                 Files.writeString(sourceRepoPath.resolve("src.java"), "class A {}\n");
                 sourceGit.add().addFilepattern(".").call();
-                String sha = commit(sourceGit, "Add an oversized asset beside a source file");
+                String sha = commit(sourceGit, "Add an oversized bundle beside a source file");
 
                 manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
 
                 try (var snapshot = manager.readTreeSnapshot(1L, sha)) {
-                    assertThat(snapshot.files()).doesNotContainKey("asset.bin");
+                    assertThat(snapshot.files()).doesNotContainKey("bundle.js");
                     assertThat(snapshot.files()).containsKeys("src.java", "README.md");
                     assertThat(snapshot.limitations()).contains(GitRepositoryManager.TREE_LIMITATION_FILE_TOO_LARGE);
                     assertThat(snapshot.complete()).isFalse();
@@ -847,7 +844,6 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             manager = createManager(true, 20_000, DataSize.ofKilobytes(6), DataSize.ofKilobytes(4));
             try (Git sourceGit = createSourceRepo()) {
                 for (int i = 0; i < 8; i++) {
-                    // Text: zero-filled blobs are binary and would never reach the bound under test.
                     Files.writeString(sourceRepoPath.resolve("file" + i + ".txt"), "x".repeat(2 * 1024));
                 }
                 sourceGit.add().addFilepattern(".").call();
@@ -869,16 +865,14 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         void shouldNotStageAnOversizedBlobBeforeRejectingIt() throws Exception {
             manager = createManager(true, 20_000, DataSize.ofMegabytes(32), DataSize.ofKilobytes(4));
             try (Git sourceGit = createSourceRepo()) {
-                Files.write(sourceRepoPath.resolve("asset.bin"), new byte[64 * 1024]);
+                Files.writeString(sourceRepoPath.resolve("bundle.js"), "x".repeat(64 * 1024));
                 sourceGit.add().addFilepattern(".").call();
-                String sha = commit(sourceGit, "Add an oversized asset");
+                String sha = commit(sourceGit, "Add an oversized bundle");
 
                 manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
 
                 try (var snapshot = manager.readTreeSnapshot(1L, sha)) {
-                    // The bound has to protect the disk too: measuring the blob after writing it would
-                    // let a repository full of huge files fill the staging volume before being rejected.
-                    assertThat(snapshot.stagingDir().resolve("asset.bin")).doesNotExist();
+                    assertThat(snapshot.stagingDir().resolve("bundle.js")).doesNotExist();
                     assertThat(snapshot.totalBytes()).isLessThan(64 * 1024);
                 }
             }

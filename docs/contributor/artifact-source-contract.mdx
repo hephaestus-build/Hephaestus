@@ -288,13 +288,6 @@ shows the changed lines and not the code they call into, so a reviewer restricte
 surrounding contract or abstains. The tree is contextual rather than required deliberately: a deployment that
 keeps no working copy, or a repository not yet mirrored, loses the surrounding code and still gets the review.
 
-The tree stages text. The review's tools read and grep; an image, an archive or a compiled artifact
-shows them nothing and would spend the bound the surrounding source is bought with. A blob is binary by
-the rule JGit's `RawText.isBinary` applies to the diff the same review reads, so the tree and the diff
-agree on what is text; it is neither staged nor counted against the bound, and the capture records the
-exclusion as `BINARY_FILE_EXCLUDED`. The rule is a heuristic over a blob's opening bytes: a binary
-format that opens as text is staged, and a UTF-16 text file is not.
-
 `automatedReview` is explicitly relative to Hephaestus, the pinned source contract, the declared bindings, and
 the governed integrations. It does not claim that a practice is universally observable. A developer, peer, or human mentor may have different context for a particular practice. This contract makes no claim that human review is always possible.
 
