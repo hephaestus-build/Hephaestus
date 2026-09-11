@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.SubmitSurveyDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.SurveyInvitationDTO;
@@ -16,6 +17,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @WorkspaceScopedController
+@ConditionalOnServerRole
 @RequestMapping("/product-feedback")
 @PreAuthorize("@workspaceSecure.isMember()")
 @RequiredArgsConstructor

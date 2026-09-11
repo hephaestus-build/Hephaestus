@@ -26,6 +26,7 @@ const survey = {
 			allowOther: false,
 		},
 	],
+	purpose: "PRODUCT",
 	startsAt: "2026-09-01T09:00:00.000Z",
 	active: true,
 	createdAt: "2026-09-01T09:00:00.000Z",
@@ -223,11 +224,16 @@ describe("instance surveys route", () => {
 			await screen.findByRole("textbox", { name: "Title" }),
 			"Help improve practice feedback",
 		);
-		await user.type(screen.getByRole("textbox", { name: "Purpose" }), "Three quick questions.");
 		await user.type(
-			screen.getByRole("textbox", { name: "Prompt" }),
+			screen.getByRole("textbox", { name: "Introduction" }),
+			"Three quick questions.",
+		);
+		await user.type(
+			screen.getByRole("textbox", { name: "Question" }),
 			"What would make it more useful?",
 		);
+		// The instance runs no research programme, so there is no purpose to choose.
+		expect(screen.queryByRole("radiogroup", { name: "Purpose" })).toBeNull();
 		await user.click(screen.getByRole("button", { name: "Publish survey" }));
 
 		await waitFor(() => expect(created).toHaveLength(1));
@@ -235,6 +241,7 @@ describe("instance surveys route", () => {
 		expect(body).toMatchObject({
 			title: "Help improve practice feedback",
 			description: "Three quick questions.",
+			purpose: "PRODUCT",
 			questions: [
 				{
 					prompt: "What would make it more useful?",
@@ -258,5 +265,40 @@ describe("instance surveys route", () => {
 		);
 		expect(screen.queryByRole("button", { name: "Discard changes" })).toBeNull();
 		expect(screen.queryByRole("textbox", { name: "Title" })).toBeNull();
+	});
+
+	it("offers a research purpose only where the instance names a study, and sends it", async () => {
+		mockSurveys([]);
+		const created: Record<string, unknown>[] = [];
+		server.use(
+			http.get("*/user/consent", () =>
+				HttpResponse.json({
+					completed: true,
+					noticeVersion: "2026-09-11",
+					participateInResearch: true,
+					researchOrganization: "Technical University of Munich",
+				}),
+			),
+			http.post("*/admin/product-feedback/surveys", async ({ request }) => {
+				created.push(await recordOf(request));
+				return HttpResponse.json({
+					...survey,
+					purpose: "RESEARCH",
+					researchOrganization: "Technical University of Munich",
+				});
+			}),
+		);
+		renderRouteAt("/admin/surveys");
+		const user = userEvent.setup();
+
+		await user.click(await screen.findByRole("link", { name: "Create survey" }, ROUTE_RENDER_WAIT));
+		await user.type(await screen.findByRole("textbox", { name: "Title" }), "Acting on feedback");
+		await user.type(screen.getByRole("textbox", { name: "Introduction" }), "Part of the study.");
+		await user.type(screen.getByRole("textbox", { name: "Question" }), "What did you do next?");
+		await user.click(await screen.findByRole("radio", { name: "Research" }));
+		await user.click(screen.getByRole("button", { name: "Publish survey" }));
+
+		await waitFor(() => expect(created).toHaveLength(1));
+		expect(created[0]).toMatchObject({ purpose: "RESEARCH" });
 	});
 });

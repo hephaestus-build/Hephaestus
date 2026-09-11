@@ -50,10 +50,10 @@ export const SendsFeedbackWithoutContext: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expect(
-			dialog.getByRole("checkbox", { name: "Include page and browser details" }),
+			dialog.getByRole("checkbox", { name: "Attach the page and browser you're on" }),
 		).not.toBeChecked();
 		await userEvent.type(
-			dialog.getByRole("textbox", { name: "Message" }),
+			dialog.getByRole("textbox", { name: "Your feedback" }),
 			"The survey flow is clear.",
 		);
 		await userEvent.click(dialog.getByRole("button", { name: "Send" }));
@@ -72,11 +72,15 @@ export const BugReport: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expect(
-			dialog.getByRole("checkbox", { name: "Include page and browser details" }),
+			dialog.getByRole("checkbox", { name: "Attach the page and browser you're on" }),
 		).toBeChecked();
 		await expectSettledVisible(dialog.getByText(context.pagePath));
 		await expectSettledVisible(dialog.getByText(context.userAgent));
-		await userEvent.type(dialog.getByRole("textbox", { name: "Message" }), "The list jumps.");
+		await expectSettledVisible(dialog.getByRole("heading", { name: "Report a bug" }));
+		await userEvent.type(
+			dialog.getByRole("textbox", { name: "What happened?" }),
+			"The list jumps.",
+		);
 		await userEvent.click(dialog.getByRole("button", { name: "Send" }));
 		await expect(args.onSubmit).toHaveBeenCalledWith({
 			kind: "BUG",
@@ -87,12 +91,43 @@ export const BugReport: Story = {
 	},
 };
 
+/** Choosing a kind renames the dialog and the field, so the ask matches what was picked. */
+export const Idea: Story = {
+	args: { kind: "IDEA" },
+	play: async ({ args }) => {
+		const dialog = within(await screen.findByRole("dialog"));
+		await expectSettledVisible(dialog.getByRole("heading", { name: "Share an idea" }));
+		await expect(
+			dialog.getByRole("checkbox", { name: "Attach the page and browser you're on" }),
+		).not.toBeChecked();
+		await userEvent.type(dialog.getByRole("textbox", { name: "Your idea" }), "Pin a practice.");
+		await userEvent.click(dialog.getByRole("radio", { name: "Bug" }));
+		await expect(dialog.getByRole("heading", { name: "Report a bug" })).toBeVisible();
+		await expect(dialog.getByRole("textbox", { name: "What happened?" })).toHaveValue(
+			"Pin a practice.",
+		);
+		await expect(args.onKindChange).toHaveBeenCalledWith("BUG");
+	},
+};
+
+/** The counter appears only when the limit is near; before that it would only be noise. */
+export const NearTheLimit: Story = {
+	play: async () => {
+		const dialog = within(await screen.findByRole("dialog"));
+		const field = dialog.getByRole("textbox", { name: "Your feedback" });
+		await expect(dialog.queryByText(/left$/)).toBeNull();
+		await userEvent.click(field);
+		await userEvent.paste("x".repeat(4_600));
+		await expectSettledVisible(dialog.getByText("400 characters left"));
+	},
+};
+
 export const Sending: Story = {
 	args: { isSubmitting: true },
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expectSettledVisible(dialog.getByRole("button", { name: "Sending…" }));
-		await expect(dialog.getByRole("textbox", { name: "Message" })).toBeDisabled();
+		await expect(dialog.getByRole("textbox", { name: "Your feedback" })).toBeDisabled();
 	},
 };
 

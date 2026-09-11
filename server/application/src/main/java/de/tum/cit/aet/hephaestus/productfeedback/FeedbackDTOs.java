@@ -53,6 +53,7 @@ final class FeedbackDTOs {
     record CreateSurveyDTO(
             @NotBlank @Size(max = 160) @NonNull String title,
             @NotBlank @Size(max = 500) @NonNull String description,
+            @NotNull Survey.@NonNull Purpose purpose,
             @NotEmpty @Size(max = 20) @NonNull List<@NotNull @Valid QuestionDTO> questions,
             @Nullable Long workspaceId,
             @NotNull @NonNull Instant startsAt,
@@ -83,6 +84,9 @@ final class FeedbackDTOs {
             @NonNull UUID id,
             @NonNull String title,
             @NonNull String description,
+            Survey.@NonNull Purpose purpose,
+            /** The organisation a research survey was published for; absent for a product survey. */
+            @Nullable String researchOrganization,
             @NonNull List<QuestionDTO> questions,
             @Nullable FeedbackWorkspaceRefDTO workspace,
             @NonNull Instant startsAt,
@@ -102,6 +106,9 @@ final class FeedbackDTOs {
             @NonNull UUID id,
             @NonNull String title,
             @NonNull String description,
+            Survey.@NonNull Purpose purpose,
+            /** Set for a research survey: the organisation whose study the answers join. */
+            @Nullable String researchOrganization,
             @NonNull List<QuestionDTO> questions,
             @Nullable Instant endsAt,
             /** The account has been shown this invitation; the webapp nudges only while false. */

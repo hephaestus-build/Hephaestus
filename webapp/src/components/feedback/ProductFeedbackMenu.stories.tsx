@@ -3,7 +3,7 @@ import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import { expectSettledVisible } from "@/test/overlay";
 
-import { surveyInvitation } from "./product-survey-fixtures";
+import { researchInvitation, surveyInvitation } from "./product-survey-fixtures";
 import { ProductFeedbackMenu } from "./ProductFeedbackMenu";
 
 const meta = {
@@ -19,7 +19,7 @@ type Story = StoryObj<typeof meta>;
 /** The count on the trigger is the only signal; nothing opens until the member chooses. */
 export const WithInvitation: Story = {
 	play: async ({ canvas, args }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Product feedback, 1 open survey" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Feedback, 1 survey waiting" }));
 		const menu = within(await screen.findByRole("menu"));
 		await expectSettledVisible(menu.getByText(/4 questions · about 2 minutes/));
 		await userEvent.click(menu.getByRole("menuitem", { name: /Help improve practice feedback/ }));
@@ -30,20 +30,34 @@ export const WithInvitation: Story = {
 export const NoSurveys: Story = {
 	args: { invitations: [] },
 	play: async ({ canvas, args }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Product feedback" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Feedback" }));
 		const menu = within(await screen.findByRole("menu"));
-		await expectSettledVisible(menu.getByText("No open surveys."));
+		await expectSettledVisible(menu.getByRole("menuitem", { name: "Share an idea" }));
+		// No survey, no survey section: an empty list in a menu is noise.
+		await expect(menu.queryByText(/Surveys/)).toBeNull();
+		await expect(menu.getByRole("menuitem", { name: /Open an issue on GitHub/ })).toHaveAttribute(
+			"href",
+			"https://github.com/hephaestus-build/Hephaestus/issues/new/choose",
+		);
 		await userEvent.click(menu.getByRole("menuitem", { name: "Report a bug" }));
 		await expect(args.onSendFeedback).toHaveBeenCalledWith("BUG");
+	},
+};
+
+/** A research invitation says so in the list, before anything opens. */
+export const WithResearchInvitation: Story = {
+	args: { invitations: [surveyInvitation, researchInvitation] },
+	play: async ({ canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Feedback, 2 surveys waiting" }));
+		const menu = within(await screen.findByRole("menu"));
+		await expectSettledVisible(menu.getByText(/Research · 3 questions · about 2 minutes/));
 	},
 };
 
 /** The trigger's name counts the invitations, so a screen reader hears how many are waiting. */
 export const SeveralSurveys: Story = {
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getByRole("button", { name: "Product feedback, 2 open surveys" }),
-		).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Feedback, 2 surveys waiting" })).toBeVisible();
 	},
 	args: {
 		invitations: [

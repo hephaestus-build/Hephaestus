@@ -13,7 +13,8 @@ class SurveyTest {
 
     @Test
     void shouldBeOpenOnlyWhileActiveInsideTheScheduleAndForTheTargetedWorkspace() {
-        Survey survey = new Survey("t", "d", new ObjectMapper().createArrayNode(), 7L, NOW.minusSeconds(1), null, 1L);
+        Survey survey =
+                new Survey("t", "d", null, new ObjectMapper().createArrayNode(), 7L, NOW.minusSeconds(1), null, 1L);
         assertThat(survey.isOpenFor(7L, NOW)).isTrue();
         assertThat(survey.isOpenFor(8L, NOW)).isFalse();
 
@@ -32,7 +33,7 @@ class SurveyTest {
 
     @Test
     void shouldBeOpenForEveryWorkspaceWhenNotTargeted() {
-        Survey survey = new Survey("t", "d", new ObjectMapper().createArrayNode(), null, NOW, null, 1L);
+        Survey survey = new Survey("t", "d", null, new ObjectMapper().createArrayNode(), null, NOW, null, 1L);
         assertThat(survey.isOpenFor(7L, NOW)).isTrue();
         assertThat(survey.isOpenFor(8L, NOW)).isTrue();
     }

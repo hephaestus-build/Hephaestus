@@ -8,7 +8,10 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { listProductSurveyInvitationsQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { SurveyInvitation } from "@/api/types.gen";
-import { surveyInvitation } from "@/components/feedback/product-survey-fixtures";
+import {
+	researchInvitation,
+	surveyInvitation,
+} from "@/components/feedback/product-survey-fixtures";
 import { server } from "@/mocks/server";
 import { useProductSurveys, useSubmitProductFeedback } from "./use-product-feedback";
 
@@ -81,7 +84,7 @@ describe("product feedback wire contract", () => {
 		server.use(http.get("*/workspaces/acme/product-feedback/surveys", () => HttpResponse.error()));
 		await act(async () => {
 			expect(
-				await result.current.submit(surveyInvitation.id, [{ questionId: "useful", rating: 4 }]),
+				await result.current.submit(surveyInvitation, [{ questionId: "useful", rating: 4 }]),
 			).toBe(true);
 		});
 		expect(received).toStrictEqual({ answers: [{ questionId: "useful", rating: 4 }] });
@@ -103,7 +106,7 @@ describe("product feedback wire contract", () => {
 		await waitFor(() => expect(result.current.query.data).toHaveLength(1));
 		server.use(http.get("*/workspaces/acme/product-feedback/surveys", () => HttpResponse.json([])));
 		await act(async () => {
-			expect(await result.current.submit(surveyInvitation.id, [])).toBe(false);
+			expect(await result.current.submit(surveyInvitation, [])).toBe(false);
 		});
 		await waitFor(() => expect(result.current.error).toContain("already answered or declined"));
 		await waitFor(() => expect(result.current.query.data).toStrictEqual([]));
@@ -125,7 +128,7 @@ describe("product feedback wire contract", () => {
 		const { result } = renderHook(() => useProductSurveys("acme"), { wrapper });
 		await act(async () => {
 			expect(
-				await result.current.submit(surveyInvitation.id, [{ questionId: "useful", rating: 4 }]),
+				await result.current.submit(surveyInvitation, [{ questionId: "useful", rating: 4 }]),
 			).toBe(false);
 		});
 		await waitFor(() => expect(result.current.error).toContain("already answered or declined"));
@@ -150,13 +153,49 @@ describe("product feedback wire contract", () => {
 		const { wrapper } = setup();
 		const { result } = renderHook(() => useProductSurveys("acme"), { wrapper });
 		await act(async () => {
-			expect(await result.current.submit(surveyInvitation.id, [])).toBe(false);
+			expect(await result.current.submit(surveyInvitation, [])).toBe(false);
 		});
 		await waitFor(() =>
 			expect(result.current.error).toBe(
 				"Couldn't send (a required question was not answered). Your draft is still here.",
 			),
 		);
+	});
+
+	it("thanks a respondent for the study a research survey belongs to, and a sender by kind", async () => {
+		server.use(
+			http.get("*/workspaces/acme/product-feedback/surveys", () =>
+				HttpResponse.json([surveyInvitation, researchInvitation]),
+			),
+			http.post(
+				"*/workspaces/acme/product-feedback/surveys/:id/responses",
+				() => new HttpResponse(null, { status: 204 }),
+			),
+			http.post(
+				"*/workspaces/acme/product-feedback",
+				() => new HttpResponse(null, { status: 202 }),
+			),
+		);
+		const { wrapper } = setup();
+		render(<Toaster />);
+		const surveys = renderHook(() => useProductSurveys("acme"), { wrapper });
+		await waitFor(() => expect(surveys.result.current.query.data).toHaveLength(2));
+		await act(async () => {
+			expect(await surveys.result.current.submit(researchInvitation, [])).toBe(true);
+		});
+		await screen.findByText(
+			"Thank you — your answers were recorded for a study run by Technical University of Munich.",
+		);
+		await act(async () => {
+			expect(await surveys.result.current.submit(surveyInvitation, [])).toBe(true);
+		});
+		await screen.findByText("Thank you — your answers are with this instance's administrators.");
+
+		const feedback = renderHook(() => useSubmitProductFeedback("acme"), { wrapper });
+		await act(async () => {
+			expect(await feedback.result.current.submit({ kind: "IDEA", message: "Pin it" })).toBe(true);
+		});
+		await screen.findByText("Thanks — your idea is with this instance's administrators.");
 	});
 
 	it("undoes a decline from the toast", async () => {
@@ -230,7 +269,7 @@ describe("product feedback wire contract", () => {
 	it("does not send a survey without workspace context", async () => {
 		const { wrapper } = setup();
 		const { result } = renderHook(() => useProductSurveys(undefined), { wrapper });
-		expect(await result.current.submit(surveyInvitation.id, [])).toBe(false);
+		expect(await result.current.submit(surveyInvitation, [])).toBe(false);
 		expect(await result.current.decline(surveyInvitation.id)).toBe(false);
 	});
 });

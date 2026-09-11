@@ -32,11 +32,43 @@ export type FeedbackKind = FeedbackRequest["kind"];
 export const MESSAGE_MAX_LENGTH = 5000;
 export const PAGE_PATH_MAX_LENGTH = 500;
 export const USER_AGENT_MAX_LENGTH = 500;
+/** The counter appears once this many characters are left, not before: a count nobody is near is noise. */
+const COUNTER_THRESHOLD = 500;
 
-const KINDS: { value: FeedbackKind; title: string; detail: string }[] = [
-	{ value: "FEEDBACK", title: "Feedback", detail: "An idea, or what works and what does not." },
-	{ value: "BUG", title: "Bug report", detail: "Something broke or behaved unexpectedly." },
-];
+interface KindCopy {
+	title: string;
+	detail: string;
+	/** The dialog's heading and the message field's label once this kind is chosen. */
+	heading: string;
+	label: string;
+	placeholder: string;
+}
+
+export const FEEDBACK_KIND_COPY: Record<FeedbackKind, KindCopy> = {
+	IDEA: {
+		title: "Idea",
+		detail: "A feature or change that would help.",
+		heading: "Share an idea",
+		label: "Your idea",
+		placeholder: "What would you change or add, and what would it let you do?",
+	},
+	BUG: {
+		title: "Bug",
+		detail: "Something broke or behaved unexpectedly.",
+		heading: "Report a bug",
+		label: "What happened?",
+		placeholder: "What were you doing, what happened, and what did you expect instead?",
+	},
+	FEEDBACK: {
+		title: "Feedback",
+		detail: "What works, what gets in your way.",
+		heading: "Send feedback",
+		label: "Your feedback",
+		placeholder: "What works well for you, and what does not?",
+	},
+};
+
+const KINDS: FeedbackKind[] = ["IDEA", "BUG", "FEEDBACK"];
 
 export interface FeedbackContext {
 	pagePath: string;
@@ -58,7 +90,7 @@ export interface ProductFeedbackDialogProps {
 /**
  * The message draft lives in this component and survives closing because the header keeps it
  * mounted; only an accepted send clears it. The details box starts ticked for a bug report, where
- * the page and browser are what make it reproducible, and unticked for feedback.
+ * the page and browser are what make it reproducible, and unticked otherwise.
  */
 export function ProductFeedbackDialog({
 	open,
@@ -74,6 +106,8 @@ export function ProductFeedbackDialog({
 	const [message, setMessage] = useState("");
 	const [includeContext, setIncludeContext] = useState<boolean>();
 	const attachContext = includeContext ?? kind === "BUG";
+	const copy = FEEDBACK_KIND_COPY[kind];
+	const remaining = MESSAGE_MAX_LENGTH - message.length;
 	const submit = async () => {
 		if (!message.trim() || isSubmitting) return;
 		const accepted = await onSubmit({
@@ -99,42 +133,44 @@ export function ProductFeedbackDialog({
 					}}
 				>
 					<DialogHeader>
-						<DialogTitle>Send product feedback</DialogTitle>
+						<DialogTitle>{copy.heading}</DialogTitle>
 						<DialogDescription>
-							Goes to this instance's administrators, linked to your account. It is not anonymous
-							and is not sent to the Hephaestus project.
+							Read by this instance's administrators, with your name attached. Nothing is sent to
+							the Hephaestus project.
 						</DialogDescription>
 					</DialogHeader>
 					<DialogBody className="flex flex-col gap-5 py-1">
 						<FieldSet disabled={isSubmitting} className="gap-5">
-							<FieldLegend className="sr-only">Product feedback</FieldLegend>
+							<FieldLegend className="sr-only">Kind and message</FieldLegend>
 							<RadioGroup
-								aria-label="Type"
+								aria-label="What is this about?"
 								value={kind}
 								onValueChange={onKindChange}
-								className="grid gap-2 sm:grid-cols-2"
+								className="grid gap-2 sm:grid-cols-3"
 							>
-								{KINDS.map((option) => (
-									<FieldLabel key={option.value} htmlFor={`${id}-${option.value}`}>
-										<Field orientation="horizontal" className="rounded-md border px-3 py-2">
-											<RadioGroupItem
-												id={`${id}-${option.value}`}
-												value={option.value}
-												aria-labelledby={`${id}-${option.value}-title`}
-												aria-describedby={`${id}-${option.value}-detail`}
-											/>
+								{KINDS.map((value) => (
+									<FieldLabel key={value} htmlFor={`${id}-${value}`}>
+										<Field orientation="horizontal">
 											<FieldContent>
-												<FieldTitle id={`${id}-${option.value}-title`}>{option.title}</FieldTitle>
-												<FieldDescription id={`${id}-${option.value}-detail`}>
-													{option.detail}
+												<FieldTitle id={`${id}-${value}-title`}>
+													{FEEDBACK_KIND_COPY[value].title}
+												</FieldTitle>
+												<FieldDescription id={`${id}-${value}-detail`}>
+													{FEEDBACK_KIND_COPY[value].detail}
 												</FieldDescription>
 											</FieldContent>
+											<RadioGroupItem
+												id={`${id}-${value}`}
+												value={value}
+												aria-labelledby={`${id}-${value}-title`}
+												aria-describedby={`${id}-${value}-detail`}
+											/>
 										</Field>
 									</FieldLabel>
 								))}
 							</RadioGroup>
 							<Field>
-								<FieldLabel htmlFor={`${id}-message`}>Message</FieldLabel>
+								<FieldLabel htmlFor={`${id}-message`}>{copy.label}</FieldLabel>
 								<Textarea
 									id={`${id}-message`}
 									name="message"
@@ -143,17 +179,15 @@ export function ProductFeedbackDialog({
 									maxLength={MESSAGE_MAX_LENGTH}
 									rows={5}
 									aria-describedby={`${id}-hint`}
-									placeholder={
-										kind === "BUG"
-											? "What were you doing? What happened, and what did you expect?"
-											: "What worked well, or what would make Hephaestus more useful?"
-									}
+									placeholder={copy.placeholder}
 									onChange={(event) => setMessage(event.target.value)}
 								/>
-								<FieldDescription id={`${id}-hint`}>
-									{message.length.toLocaleString()} / {MESSAGE_MAX_LENGTH.toLocaleString()} · Leave
-									out secrets and personal data about others. Closing keeps this draft until you
-									reload, switch workspace, or sign out.
+								<FieldDescription id={`${id}-hint`} className="flex justify-between gap-3">
+									<span>Leave out secrets and other people's personal data.</span>
+									<span aria-live="polite" className="shrink-0 tabular-nums">
+										{remaining <= COUNTER_THRESHOLD &&
+											`${remaining.toLocaleString()} characters left`}
+									</span>
 								</FieldDescription>
 							</Field>
 							{context && (
@@ -165,7 +199,7 @@ export function ProductFeedbackDialog({
 									/>
 									<FieldContent>
 										<FieldLabel htmlFor={`${id}-context`}>
-											Include page and browser details
+											Attach the page and browser you're on
 										</FieldLabel>
 										<FieldDescription className="break-all">
 											<code className="text-xs">{context.pagePath}</code>

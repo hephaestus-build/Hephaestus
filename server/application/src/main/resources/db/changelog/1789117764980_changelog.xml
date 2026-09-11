@@ -98,4 +98,9 @@ ON CONFLICT (survey_id, account_id) DO NOTHING;
             <dropForeignKeyConstraint baseTableName="product_feedback" constraintName="sfk_product_feedback_resolver"/>
         </rollback>
     </changeSet>
+    <changeSet id="1789117764980-7" author="hephaestus">
+        <addColumn tableName="product_survey">
+            <column name="research_organization" type="VARCHAR(200)"/>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>

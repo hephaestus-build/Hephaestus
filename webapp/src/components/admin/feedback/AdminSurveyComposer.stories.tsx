@@ -45,12 +45,18 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
+/** Where no study runs, the purpose is not a question: every survey is a product survey. */
+export const Default: Story = {
+	play: async () => {
+		await screen.findByRole("textbox", { name: "Title" });
+		await expect(screen.queryByRole("radiogroup", { name: "Purpose" })).toBeNull();
+	},
+};
 
 export const ValidationErrors: Story = {
 	play: async ({ args }) => {
 		await userEvent.click(await screen.findByRole("button", { name: "Publish survey" }));
-		// Title, purpose and the one empty question: three problems, each linked to its field.
+		// Title, introduction and the one empty question: three problems, each linked to its field.
 		await expectSettledVisible(
 			await screen.findByRole("heading", { name: "There are 3 problems" }),
 		);
@@ -69,13 +75,13 @@ export const ValidationErrors: Story = {
 
 export const ChoiceQuestion: Story = {
 	play: async () => {
-		await expect(screen.queryByRole("checkbox", { name: "Allow another answer" })).toBeNull();
+		await expect(screen.queryByRole("checkbox", { name: "Allow “Something else”" })).toBeNull();
 		await userEvent.click(await screen.findByRole("combobox", { name: "Answer type" }));
 		await userEvent.click(await screen.findByRole("option", { name: "Single choice" }));
-		const allowOther = await screen.findByRole("checkbox", { name: "Allow another answer" });
+		const allowOther = await screen.findByRole("checkbox", { name: "Allow “Something else”" });
 		await expect(allowOther).not.toBeChecked();
 		await expect(allowOther).toHaveAccessibleDescription(
-			"Adds a free-text line under the choices for an answer you did not list.",
+			"Adds a line under the choices for an answer you did not list.",
 		);
 		await userEvent.click(allowOther);
 		await expect(allowOther).toBeChecked();
@@ -110,10 +116,10 @@ export const ManyQuestions: Story = {
 
 		// Moving swaps the questions themselves, prompts included, not just their numbers.
 		const expectPrompts = async (...values: string[]) => {
-			const fields = screen.getAllByRole("textbox", { name: "Prompt" });
+			const fields = screen.getAllByRole("textbox", { name: "Question" });
 			for (const [index, value] of values.entries()) await expect(fields[index]).toHaveValue(value);
 		};
-		const [first, second] = screen.getAllByRole("textbox", { name: "Prompt" });
+		const [first, second] = screen.getAllByRole("textbox", { name: "Question" });
 		if (!first || !second) throw new Error("expected two prompts");
 		await userEvent.type(first, "First");
 		await userEvent.type(second, "Second");
@@ -131,7 +137,7 @@ export const ManyQuestions: Story = {
 async function fillSurvey(title: string) {
 	await userEvent.type(await screen.findByRole("textbox", { name: "Title" }), title);
 	await userEvent.type(
-		screen.getByRole("textbox", { name: "Purpose" }),
+		screen.getByRole("textbox", { name: "Introduction" }),
 		"To decide what the next release should focus on.",
 	);
 }
@@ -141,13 +147,13 @@ export const Preview: Story = {
 	play: async () => {
 		await fillSurvey("Onboarding check-in");
 		await userEvent.type(
-			screen.getByRole("textbox", { name: "Prompt" }),
+			screen.getByRole("textbox", { name: "Question" }),
 			"What slowed you down in your first week?",
 		);
 		await userEvent.type(screen.getByLabelText("End"), "2099-01-01T09:00");
 		await userEvent.click(screen.getByRole("button", { name: "Preview" }));
 		const dialog = within(await screen.findByRole("dialog", { name: "Onboarding check-in" }));
-		await expectSettledVisible(dialog.getByText(/1 question · under a minute · Closes in/));
+		await expectSettledVisible(dialog.getByText(/1 question · under a minute · closes in/));
 		await expect(dialog.getByRole("progressbar")).toHaveTextContent("Question 1 of 1");
 		await expect(dialog.getByText(/What slowed you down in your first week\?/)).toBeVisible();
 		await userEvent.keyboard("{Escape}");
@@ -177,21 +183,46 @@ export const PreviewRefused: Story = {
 export const PreviewWithAnotherAnswer: Story = {
 	play: async () => {
 		await fillSurvey("Where do you read feedback?");
-		await userEvent.type(screen.getByRole("textbox", { name: "Prompt" }), "Where, mostly?");
+		await userEvent.type(screen.getByRole("textbox", { name: "Question" }), "Where, mostly?");
 		await userEvent.click(screen.getByRole("combobox", { name: "Answer type" }));
 		await userEvent.click(await screen.findByRole("option", { name: "Single choice" }));
 		await userEvent.type(
 			await screen.findByRole("textbox", { name: "Choices (one per line)" }),
 			"On the pull request{enter}On my practice page",
 		);
-		await userEvent.click(screen.getByRole("checkbox", { name: "Allow another answer" }));
+		await userEvent.click(screen.getByRole("checkbox", { name: "Allow “Something else”" }));
 		await userEvent.click(screen.getByRole("button", { name: "Preview" }));
 		const dialog = within(
 			await screen.findByRole("dialog", { name: "Where do you read feedback?" }),
 		);
 		await expectSettledVisible(dialog.getByText("On the pull request"));
 		await expect(dialog.getByRole("radio", { name: "On my practice page" })).not.toBeChecked();
-		await expect(dialog.getByRole("textbox", { name: "Another answer" })).toBeVisible();
+		await expect(dialog.getByRole("textbox", { name: "Something else" })).toBeVisible();
+	},
+};
+
+/**
+ * Only an instance that names a research organisation can publish a research survey, so the
+ * purpose is offered there and nowhere else; the preview then carries the research framing.
+ */
+export const WithResearchProgramme: Story = {
+	args: { researchOrganization: "Technical University of Munich" },
+	parameters: { chromatic: { viewports: [320, 1440] } },
+	play: async () => {
+		await fillSurvey("Acting on feedback");
+		await userEvent.type(
+			screen.getByRole("textbox", { name: "Question" }),
+			"What did you do next?",
+		);
+		await expect(screen.getByRole("radio", { name: "Product" })).toBeChecked();
+		await userEvent.click(screen.getByRole("radio", { name: "Research" }));
+		await userEvent.click(screen.getByRole("button", { name: "Preview" }));
+		const dialog = within(await screen.findByRole("dialog", { name: "Acting on feedback" }));
+		await expectSettledVisible(dialog.getByText("Research"));
+		await expect(
+			dialog.getByText(/study run by Technical University of Munich, which you agreed to join/),
+		).toBeVisible();
+		await expect(dialog.getByRole("link", { name: "User settings" })).toBeVisible();
 	},
 };
 

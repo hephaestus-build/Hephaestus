@@ -9537,6 +9537,11 @@ components:
         endsAt:
           type: string
           format: date-time
+        purpose:
+          type: string
+          enum:
+          - PRODUCT
+          - RESEARCH
         questions:
           type: array
           items:
@@ -9555,6 +9560,7 @@ components:
           format: int64
       required:
       - description
+      - purpose
       - questions
       - startsAt
       - title
@@ -10330,8 +10336,9 @@ components:
         kind:
           type: string
           enum:
-          - FEEDBACK
+          - IDEA
           - BUG
+          - FEEDBACK
         message:
           type: string
         pagePath:
@@ -10356,8 +10363,9 @@ components:
         kind:
           type: string
           enum:
-          - FEEDBACK
+          - IDEA
           - BUG
+          - FEEDBACK
         message:
           type: string
           maxLength: 5000
@@ -15256,10 +15264,17 @@ components:
           format: uuid
         participation:
           $ref: "#/components/schemas/ParticipationCounts"
+        purpose:
+          type: string
+          enum:
+          - PRODUCT
+          - RESEARCH
         questions:
           type: array
           items:
             $ref: "#/components/schemas/Question"
+        researchOrganization:
+          type: string
         startsAt:
           type: string
           format: date-time
@@ -15273,6 +15288,7 @@ components:
       - description
       - id
       - participation
+      - purpose
       - questions
       - startsAt
       - title
@@ -15311,10 +15327,17 @@ components:
         id:
           type: string
           format: uuid
+        purpose:
+          type: string
+          enum:
+          - PRODUCT
+          - RESEARCH
         questions:
           type: array
           items:
             $ref: "#/components/schemas/Question"
+        researchOrganization:
+          type: string
         seen:
           type: boolean
         title:
@@ -15322,6 +15345,7 @@ components:
       required:
       - description
       - id
+      - purpose
       - questions
       - seen
       - title

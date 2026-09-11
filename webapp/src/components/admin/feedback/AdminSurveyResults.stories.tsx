@@ -6,6 +6,7 @@ import { STORY_NOW } from "@/components/common/story-clock";
 import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
 import {
 	adminSurvey,
+	researchSurvey,
 	scheduledSurvey,
 	surveyResponses,
 	surveySummary,
@@ -78,6 +79,17 @@ export const Default: Story = {
 		await expect(screen.getByText("Deleted account")).toBeVisible();
 		await expect(screen.getByText("Declined", { selector: "p" })).toBeVisible();
 		await expect(screen.getByText("Shorter feedback on small pull requests.")).toBeVisible();
+	},
+};
+
+/** Research answers are labelled as such and come with a reminder of whose data they are. */
+export const Research: Story = {
+	args: { state: ready(researchSurvey) },
+	play: async () => {
+		await expectSettledVisible(await screen.findByText("Research"));
+		await expect(
+			screen.getByText(/belong to the study run by Technical University of Munich/),
+		).toBeVisible();
 	},
 };
 

@@ -37,7 +37,7 @@ The synchronised activity is analysed against a set of practices configured by t
 
 Contributors who sign in with their GitHub or LRZ-GitLab account get a personal dashboard summarising their observations and activity, access to the conversational mentor, and their account preferences. Sign-in adds the federated user identifier, username, display name, email, and avatar URL to what Hephaestus holds about that contributor. Workspace administrators can additionally enable a leaderboard and leagues based on workspace activity (all off by default), plus Slack integration for App Home privacy controls, mentor DMs, optional digests, and explicitly activated monitored channels.
 
-Signed-in contributors can send product feedback and answer or decline surveys authored by instance administrators. These submissions stay in the instance database and are available to instance administrators for product improvement; they are not reused for research without the separate research opt-in.
+Signed-in contributors can send product feedback and answer or decline surveys authored by instance administrators. These submissions stay in the instance database and are available to instance administrators for product improvement; they are not reused for research. Research-purpose surveys are covered under *Legal basis* below.
 
 These workspace-level configuration choices are made by the workspace administrator and TUM/AET as joint controllers under Art. 26 GDPR (the choices are enumerated in "Legal basis" below). Hephaestus is built around the contributor's own development: observations serve the contributor and give the workspace administrator a way to deliver targeted feedback during the project. Observations are advisory and contestable; the platform makes no automated decisions within the meaning of Art. 22 GDPR and feeds no grading, assessment, HR, or access-control pipeline. Signed-in contributors can stop new practice-feedback comments and related Slack reminders through the in-app **Comments and Slack reminders** setting and respond to individual pieces of feedback by recording whether they were helpful and how they were handled. This delivery setting does not stop review processing; objections to processing under Art. 21 GDPR use the contact process in privacy §7.
 ```
@@ -82,7 +82,7 @@ Separate controller (not an Art. 28 processor):
 
 Per-processor AVV detail and the EDPB 07/2020 reasoning for the LRZ relationship are in `processor-checklist.md`.
 
-Product feedback and surveys are first-party processing: submissions stay in the instance database, are visible to instance administrators, create no new recipient, and are not reused for research without the separate opt-in.
+Product feedback and surveys are first-party processing: submissions stay in the instance database, are visible to instance administrators, create no new recipient, and are not reused for research. Research-purpose surveys are covered under *Legal basis* below.
 
 ## Third-country transfers (Art. 30(1)(e))
 
@@ -225,7 +225,7 @@ Voluntary sign-in by non-TUM contributors to use personal features: Art. 6(1)(b)
 
 Optional academic-research participation: Art. 6(1)(a) GDPR. It is separate from the terms and from the public-task basis for platform operation. Research enrollment and analysis require the latest `RESEARCH_PARTICIPATION` decision to be a grant for the current notice version; they do not fall back to a preference flag or another legal basis after withdrawal. The append-only ledger records grants, refusals and withdrawals with a UTC timestamp, mechanism and notice version. The version identifies the first-layer wording, which is the first-login screen as published in that signed release and immutable in git; the operator-specific detail that screen links to is the privacy notice served at `/privacy`, which is versioned by the deployment rather than by this ledger. Withdrawal ends the authorization for further research processing immediately. Account erasure removes the ledger's account reference; the resulting non-account-linked event remains, with its notice version, as evidence of how consent was managed.
 
-Product feedback and surveys for improving the TUM-operated instance: Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG and Art. 4(1) BayDSG. Responses are not reused for research without the separate research opt-in.
+Product feedback and product-purpose surveys for improving the TUM-operated instance: Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG and Art. 4(1) BayDSG. Responses are not reused for research. Research-purpose surveys: Art. 6(1)(a) GDPR under the research participation above. Such a survey is offered only to accounts whose latest research decision is a grant for the organisation it names, is labelled as research on screen, and its answers are that study's data rather than product feedback; they stay in the same database, the instance administrators who read them do so on behalf of the study, and answers already given remain after withdrawal until the data subject asks for their erasure.
 
 The Hephaestus session cookie (`__Host-HEPHAESTUS_AT`), the CSRF + OAuth-state cookies, and theme-preference localStorage: § 25 Abs. 2 Nr. 2 TDDDG (technisch unbedingt erforderlich) i.V.m. Art. 6(1)(e) GDPR.
 ```

@@ -1062,6 +1062,7 @@ export type CreateReviewSweepScheduleRequest = {
 export type CreateSurvey = {
   description: string;
   endsAt?: Date;
+  purpose: 'PRODUCT' | 'RESEARCH';
   questions: Array<Question>;
   startsAt: Date;
   title: string;
@@ -1465,7 +1466,7 @@ export type FeedbackItem = {
   appVersion?: string;
   createdAt: Date;
   id: string;
-  kind: 'FEEDBACK' | 'BUG';
+  kind: 'IDEA' | 'BUG' | 'FEEDBACK';
   message: string;
   pagePath?: string;
   resolvedAt?: Date;
@@ -1475,7 +1476,7 @@ export type FeedbackItem = {
 };
 
 export type FeedbackRequest = {
-  kind: 'FEEDBACK' | 'BUG';
+  kind: 'IDEA' | 'BUG' | 'FEEDBACK';
   message: string;
   pagePath?: string;
   userAgent?: string;
@@ -4788,7 +4789,9 @@ export type Survey = {
   endsAt?: Date;
   id: string;
   participation: ParticipationCounts;
+  purpose: 'PRODUCT' | 'RESEARCH';
   questions: Array<Question>;
+  researchOrganization?: string;
   startsAt: Date;
   title: string;
   workspace?: FeedbackWorkspaceRef;
@@ -4806,7 +4809,9 @@ export type SurveyInvitation = {
   description: string;
   endsAt?: Date;
   id: string;
+  purpose: 'PRODUCT' | 'RESEARCH';
   questions: Array<Question>;
+  researchOrganization?: string;
   seen: boolean;
   title: string;
 };

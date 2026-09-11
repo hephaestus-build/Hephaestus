@@ -557,8 +557,8 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .uri(member.path(""))
                 .headers(member.headers())
                 .bodyValue(Map.of(
-                        "kind", "BUG",
-                        "message", "The list jumps",
+                        "kind", "IDEA",
+                        "message", "Let me pin a practice",
                         "pagePath", "/w/feedback-triage/practices",
                         "userAgent", "Mozilla/5.0 (X11; Linux x86_64)"))
                 .exchange()
@@ -569,6 +569,7 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .filter(item -> item.getAccountId().equals(member.accountId()))
                 .findFirst()
                 .orElseThrow();
+        assertThat(stored.getKind()).isEqualTo(ProductFeedback.Kind.IDEA);
         assertThat(stored.getUserAgent()).isEqualTo("Mozilla/5.0 (X11; Linux x86_64)");
         assertThat(stored.getAppVersion()).isNotBlank();
         assertThat(stored.isResolved()).isFalse();
@@ -608,6 +609,37 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .isEmpty();
         assertThat(feedback.findById(stored.getId()).orElseThrow().getResolvedByAccountId())
                 .isEqualTo(member.accountId());
+    }
+
+    /** The test instance names no research organisation, so consent could not name a controller. */
+    @Test
+    @WithAdminUser
+    void shouldRefuseAResearchSurveyWhileTheInstanceRunsNoProgramme() {
+        Member admin = member("no-programme");
+        webTestClient
+                .post()
+                .uri("/admin/product-feedback/surveys")
+                .headers(admin.headers())
+                .bodyValue(createSurvey(Survey.Purpose.RESEARCH, null, textQuestion()))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody()
+                .jsonPath("$.detail")
+                .isEqualTo("This instance runs no research programme");
+        SurveyDTO product = publish(admin, null, textQuestion());
+        assertThat(product.purpose()).isEqualTo(Survey.Purpose.PRODUCT);
+        assertThat(product.researchOrganization()).isNull();
+        webTestClient
+                .get()
+                .uri(admin.path("/surveys"))
+                .headers(admin.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$[?(@.id == '" + product.id() + "')].purpose")
+                .isEqualTo("PRODUCT");
     }
 
     @Test
@@ -681,18 +713,11 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     private SurveyDTO publish(Member admin, @Nullable Long workspaceId, List<QuestionDTO> questions) {
-        var request = new CreateSurveyDTO(
-                "Survey " + UUID.randomUUID(),
-                "Purpose",
-                questions,
-                workspaceId,
-                Instant.now().minusSeconds(10),
-                null);
         SurveyDTO result = webTestClient
                 .post()
                 .uri("/admin/product-feedback/surveys")
                 .headers(admin.headers())
-                .bodyValue(request)
+                .bodyValue(createSurvey(Survey.Purpose.PRODUCT, workspaceId, questions))
                 .exchange()
                 .expectStatus()
                 .isCreated()
@@ -700,6 +725,18 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .returnResult()
                 .getResponseBody();
         return Objects.requireNonNull(result, "publishing must return the survey");
+    }
+
+    private static CreateSurveyDTO createSurvey(
+            Survey.Purpose purpose, @Nullable Long workspaceId, List<QuestionDTO> questions) {
+        return new CreateSurveyDTO(
+                "Survey " + UUID.randomUUID(),
+                "Intro",
+                purpose,
+                questions,
+                workspaceId,
+                Instant.now().minusSeconds(10),
+                null);
     }
 
     /** One workspace whose admin member is a real account, so the same token can author and answer. */

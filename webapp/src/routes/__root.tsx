@@ -172,11 +172,16 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 	const unseen = invitations.find((candidate) => !candidate.seen);
 	const nudge = useEffectEvent((invitation: SurveyInvitation) => {
 		surveys.acknowledge(invitation.id);
-		toast(`New survey: ${invitation.title}`, {
-			description: surveyEstimate(invitation.questions),
-			duration: 12000,
-			action: { label: "Take survey", onClick: () => openSurvey(invitation.id) },
-		});
+		toast(
+			invitation.purpose === "RESEARCH"
+				? `New research survey: ${invitation.title}`
+				: `New survey: ${invitation.title}`,
+			{
+				description: `${surveyEstimate(invitation.questions)}. It waits in the feedback menu.`,
+				duration: 12000,
+				action: { label: "Take survey", onClick: () => openSurvey(invitation.id) },
+			},
+		);
 	});
 	useEffect(() => {
 		if (!unseen || nudged.current) return;
@@ -221,7 +226,7 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 					isSubmitting={surveys.isPending}
 					error={surveys.error}
 					onSubmit={async (answers) => {
-						if (await surveys.submit(survey.id, answers)) {
+						if (await surveys.submit(survey, answers)) {
 							setDrafts(({ [survey.id]: _sent, ...rest }) => rest);
 							closeSurvey();
 						}

@@ -241,14 +241,14 @@ class ConsentServiceTest extends BaseUnitTest {
         ConsentService other =
                 new ConsentService(decisionRepository, accountRepository, new ConsentProperties("Another lab"));
 
-        assertThat(other.participatesInResearch(42L)).isFalse();
+        assertThat(other.participates(42L)).isFalse();
     }
 
     @Test
     void shouldReportNoParticipationWhileNoStudyIsConfigured() {
         researchOnRecord(researchDecision(true, VERSION, ORG));
 
-        assertThat(serviceWithoutResearch().participatesInResearch(42L)).isFalse();
+        assertThat(serviceWithoutResearch().participates(42L)).isFalse();
         assertThat(serviceWithoutResearch().status(42L).participateInResearch()).isFalse();
     }
 
@@ -291,7 +291,7 @@ class ConsentServiceTest extends BaseUnitTest {
         researchOnRecord(researchDecision(false, VERSION, "Another lab"));
 
         assertThat(serviceWithResearch().status(42L).completed()).isFalse();
-        assertThat(serviceWithResearch().participatesInResearch(42L)).isFalse();
+        assertThat(serviceWithResearch().participates(42L)).isFalse();
     }
 
     @Test
@@ -300,7 +300,7 @@ class ConsentServiceTest extends BaseUnitTest {
         researchOnRecord(researchDecision(false, VERSION, ORG));
 
         assertThat(serviceWithResearch().status(42L).completed()).isTrue();
-        assertThat(serviceWithResearch().participatesInResearch(42L)).isFalse();
+        assertThat(serviceWithResearch().participates(42L)).isFalse();
     }
 
     @Test

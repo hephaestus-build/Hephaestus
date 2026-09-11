@@ -44,7 +44,10 @@ export interface AdminFeedbackListProps {
 const EMPTY_COPY: Record<FeedbackStatusFilter, { title: string; description: string }> = {
 	OPEN: { title: "Inbox zero", description: "Nothing is waiting." },
 	RESOLVED: { title: "No resolved feedback yet", description: "Resolved feedback moves here." },
-	ALL: { title: "No feedback yet", description: "Members can send feedback from the header." },
+	ALL: {
+		title: "No feedback yet",
+		description: "Members send ideas, bug reports and feedback from the header.",
+	},
 };
 
 const SKELETON_ROWS = 3;

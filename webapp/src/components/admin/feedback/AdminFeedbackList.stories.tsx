@@ -34,12 +34,13 @@ const ready = (
 export const Open: Story = {
 	args: { state: ready(openFeedback, "OPEN") },
 	play: async ({ canvas, args }) => {
-		await expect(canvas.getAllByText("Bug report")).toHaveLength(1);
+		await expect(canvas.getAllByText("Bug")).toHaveLength(1);
+		await expect(canvas.getAllByText("Idea")).toHaveLength(1);
 		await expect(canvas.getAllByText("Feedback")).toHaveLength(2);
 		// An erased account and a submission from outside any workspace still read as sentences.
 		await expect(canvas.getByText("Deleted account")).toBeVisible();
 		await expect(canvas.getAllByText("No workspace")).toHaveLength(1);
-		await expect(canvas.getAllByRole("button", { name: "Mark resolved" })).toHaveLength(3);
+		await expect(canvas.getAllByRole("button", { name: "Mark resolved" })).toHaveLength(4);
 		// The first card is the bug report, so the item handed back is the one the reader pressed on.
 		const [firstCard] = canvas.getAllByRole("listitem");
 		if (firstCard) {
@@ -65,7 +66,7 @@ export const Saving: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Saving…" })).toBeDisabled();
-		await expect(canvas.getAllByRole("button", { name: "Mark resolved" })).toHaveLength(2);
+		await expect(canvas.getAllByRole("button", { name: "Mark resolved" })).toHaveLength(3);
 	},
 };
 

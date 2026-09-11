@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.Csv;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.AnswerDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.CreateSurveyDTO;
@@ -31,6 +33,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 class SurveyService {
     static final int EXPORT_MAX_ROWS = 10_000;
@@ -38,15 +41,23 @@ class SurveyService {
     private final SurveyRepository surveys;
     private final SurveyParticipationRepository participations;
     private final FeedbackRefs refs;
+    private final ResearchParticipationQuery research;
     private final ObjectMapper mapper;
     private final Clock clock;
 
     @Transactional
     public SurveyDTO create(CreateSurveyDTO request, Long accountId) {
         SurveyQuestions.validateDefinition(request.questions());
+        String organisation = null;
+        if (request.purpose() == Survey.Purpose.RESEARCH) {
+            organisation = research.researchOrganization()
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST, "This instance runs no research programme"));
+        }
         Survey survey = surveys.saveAndFlush(new Survey(
                 request.title(),
                 request.description(),
+                organisation,
                 mapper.valueToTree(request.questions()),
                 request.workspaceId(),
                 request.startsAt(),
@@ -151,8 +162,9 @@ class SurveyService {
     @Transactional(readOnly = true)
     public List<SurveyInvitationDTO> invitations(Long workspaceId, Long accountId) {
         Instant now = clock.instant();
+        Participant participant = participant(accountId);
         List<Survey> open = surveys.findAllByActiveTrueOrderByStartsAtAscCreatedAtAsc().stream()
-                .filter(survey -> survey.isOpenFor(workspaceId, now))
+                .filter(survey -> survey.isOpenFor(workspaceId, now) && participant.isOffered(survey))
                 .toList();
         Map<UUID, Status> handled = new HashMap<>();
         participations
@@ -165,6 +177,8 @@ class SurveyService {
                         survey.getId(),
                         survey.getTitle(),
                         survey.getDescription(),
+                        survey.getPurpose(),
+                        survey.getResearchOrganization(),
                         readQuestions(survey.getQuestions()),
                         survey.getEndsAt(),
                         handled.containsKey(survey.getId())))
@@ -173,13 +187,13 @@ class SurveyService {
 
     @Transactional
     public void markInvited(UUID id, Long workspaceId, Long accountId) {
-        open(id, workspaceId);
+        open(id, workspaceId, accountId);
         participations.insertIfAbsent(UUID.randomUUID(), id, accountId, workspaceId);
     }
 
     @Transactional
     public void respond(UUID id, Long workspaceId, Long accountId, SubmitSurveyDTO request) {
-        Survey survey = open(id, workspaceId);
+        Survey survey = open(id, workspaceId, accountId);
         List<AnswerDTO> answers =
                 SurveyQuestions.validateAnswers(readQuestions(survey.getQuestions()), request.answers());
         invitation(id, workspaceId, accountId).respond(mapper.valueToTree(answers), workspaceId, clock.instant());
@@ -187,13 +201,13 @@ class SurveyService {
 
     @Transactional
     public void decline(UUID id, Long workspaceId, Long accountId) {
-        open(id, workspaceId);
+        open(id, workspaceId, accountId);
         invitation(id, workspaceId, accountId).decline(workspaceId, clock.instant());
     }
 
     @Transactional
     public void undoDecline(UUID id, Long workspaceId, Long accountId) {
-        open(id, workspaceId);
+        open(id, workspaceId, accountId);
         participations
                 .findBySurveyIdAndAccountId(id, accountId)
                 .filter(participation -> participation.getStatus() == Status.DECLINED)
@@ -205,11 +219,41 @@ class SurveyService {
         return surveys.findById(id).orElseThrow(() -> new EntityNotFoundException("Survey", id.toString()));
     }
 
-    /** A paused, unscheduled or foreign survey does not exist for a member: 404, never 403. */
-    private Survey open(UUID id, Long workspaceId) {
+    /**
+     * A paused, unscheduled or foreign survey does not exist for a member, and neither does a research
+     * survey for an account that has not agreed to the study: 404, never 403.
+     */
+    private Survey open(UUID id, Long workspaceId, Long accountId) {
         Survey survey = require(id);
-        if (!survey.isOpenFor(workspaceId, clock.instant())) throw new EntityNotFoundException("Survey", id.toString());
+        if (!survey.isOpenFor(workspaceId, clock.instant())
+                || !participant(accountId).isOffered(survey))
+            throw new EntityNotFoundException("Survey", id.toString());
         return survey;
+    }
+
+    private Participant participant(Long accountId) {
+        return new Participant(research.researchOrganization().orElse(null), accountId);
+    }
+
+    /** One account's view of research surveys; consent is read at most once however many are open. */
+    private final class Participant {
+        private final @Nullable String organisation;
+        private final Long accountId;
+        private @Nullable Boolean participates;
+
+        Participant(@Nullable String organisation, Long accountId) {
+            this.organisation = organisation;
+            this.accountId = accountId;
+        }
+
+        /** A research survey is offered only while the organisation it names is the one running the study. */
+        boolean isOffered(Survey survey) {
+            String studyOf = survey.getResearchOrganization();
+            if (studyOf == null) return true;
+            if (!studyOf.equals(organisation)) return false;
+            if (participates == null) participates = research.participates(accountId);
+            return participates;
+        }
     }
 
     private SurveyParticipation invitation(UUID surveyId, Long workspaceId, Long accountId) {
@@ -232,6 +276,8 @@ class SurveyService {
                         s.getId(),
                         s.getTitle(),
                         s.getDescription(),
+                        s.getPurpose(),
+                        s.getResearchOrganization(),
                         readQuestions(s.getQuestions()),
                         resolved.workspace(s.getWorkspaceId()),
                         s.getStartsAt(),

@@ -7,6 +7,7 @@ import {
 	type QuestionDraft,
 	type SurveyDraft,
 	toCreateSurvey,
+	toPreviewSurvey,
 	validateSurveyDraft,
 } from "./admin-survey-draft";
 
@@ -34,7 +35,7 @@ describe("validateSurveyDraft", () => {
 	it("names the empty fields", () => {
 		const errors = validateSurveyDraft(emptySurveyDraft("q1"), NOW);
 		expect(errors.title).toBe("Give the survey a title.");
-		expect(errors.description).toBe("Say what the answers are for.");
+		expect(errors.description).toBe("Tell members why you're asking.");
 		expect(errors.questionErrors).toStrictEqual([{ prompt: "Write the question." }]);
 	});
 
@@ -122,6 +123,7 @@ describe("toCreateSurvey", () => {
 				],
 			}),
 			publishedAt,
+			undefined,
 		);
 		expect(body.questions).toStrictEqual([
 			{
@@ -161,17 +163,33 @@ describe("toCreateSurvey", () => {
 		]);
 	});
 
-	it("opens at the publish time when no start is set and to every workspace by default", () => {
-		const body = toCreateSurvey(draft(), publishedAt);
+	it("opens at the publish time when no start is set, to every workspace, as a product survey", () => {
+		const body = toCreateSurvey(draft(), publishedAt, undefined);
 		expect(body.startsAt).toBe(publishedAt);
 		expect(body.endsAt).toBeUndefined();
 		expect(body.workspaceId).toBeUndefined();
+		expect(body.purpose).toBe("PRODUCT");
+	});
+
+	it("names the research organisation only on a research preview", () => {
+		expect(toPreviewSurvey(draft(), "TUM").researchOrganization).toBeUndefined();
+		const research = toPreviewSurvey(draft({ purpose: "RESEARCH" }), "TUM");
+		expect(research.purpose).toBe("RESEARCH");
+		expect(research.researchOrganization).toBe("TUM");
+	});
+
+	it("falls back to a product survey when the programme is gone", () => {
+		expect(toCreateSurvey(draft({ purpose: "RESEARCH" }), publishedAt, undefined).purpose).toBe(
+			"PRODUCT",
+		);
+		expect(toPreviewSurvey(draft({ purpose: "RESEARCH" }), undefined).purpose).toBe("PRODUCT");
 	});
 
 	it("converts the device-local schedule and the chosen audience", () => {
 		const body = toCreateSurvey(
 			draft({ audience: "7", startsAt: "2030-01-01T09:00", endsAt: "2030-01-08T09:00" }),
 			publishedAt,
+			undefined,
 		);
 		expect(body.workspaceId).toBe(7);
 		expect(body.startsAt).toStrictEqual(new Date("2030-01-01T09:00"));

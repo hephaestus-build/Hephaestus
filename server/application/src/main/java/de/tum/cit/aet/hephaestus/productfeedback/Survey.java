@@ -12,9 +12,10 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
 /**
- * A product survey published by an instance administrator. The questions are frozen at publication
- * so every stored answer keeps its meaning; the title, purpose, schedule and pause flag stay editable
- * because they change who is invited, never what an answer meant.
+ * A survey published by an instance administrator. The questions and the purpose are frozen at
+ * publication so every stored answer keeps its meaning and its legal footing; the title,
+ * introduction, schedule and pause flag stay editable because they change who is invited, never
+ * what an answer meant.
  */
 @Entity
 @Table(name = "product_survey")
@@ -33,6 +34,14 @@ public class Survey {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "questions_json", nullable = false, columnDefinition = "jsonb")
     private JsonNode questions;
+
+    /**
+     * Set on a research survey: the organisation it was published for, which makes it one. Consent
+     * names the controller, so the survey is served only while the instance still names the same
+     * one; a renamed programme is a different study.
+     */
+    @Column(name = "research_organization", length = 200)
+    private @Nullable String researchOrganization;
 
     @Column(name = "workspace_id")
     private @Nullable Long workspaceId;
@@ -56,6 +65,7 @@ public class Survey {
     public Survey(
             String title,
             String description,
+            @Nullable String researchOrganization,
             JsonNode questions,
             @Nullable Long workspaceId,
             Instant startsAt,
@@ -63,6 +73,7 @@ public class Survey {
             Long createdByAccountId) {
         this.title = title;
         this.description = description;
+        this.researchOrganization = researchOrganization;
         this.questions = questions;
         this.workspaceId = workspaceId;
         this.startsAt = startsAt;
@@ -84,5 +95,16 @@ public class Survey {
                 && !startsAt.isAfter(now)
                 && (endsAt == null || endsAt.isAfter(now))
                 && (this.workspaceId == null || this.workspaceId.equals(workspaceId));
+    }
+
+    public Purpose getPurpose() {
+        return researchOrganization == null ? Purpose.PRODUCT : Purpose.RESEARCH;
+    }
+
+    public enum Purpose {
+        /** Improving this instance; read by its administrators. */
+        PRODUCT,
+        /** Part of the study by the survey's research organisation; offered only to participants. */
+        RESEARCH
     }
 }

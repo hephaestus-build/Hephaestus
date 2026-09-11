@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@ConditionalOnServerRole
 @RequestMapping("/product-feedback")
 @PreAuthorize("isAuthenticated()")
 @RequiredArgsConstructor

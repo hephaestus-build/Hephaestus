@@ -2,10 +2,11 @@ import deepEqual from "fast-deep-equal";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
 
-import type { CreateSurvey, Question } from "@/api/types.gen";
+import type { CreateSurvey, Question, Survey } from "@/api/types.gen";
 import { type FormError, FormErrorSummary } from "@/components/common/FormErrorSummary";
 import { DetailDrawerHeader } from "@/components/core/detail-drawer/DetailDrawerHeader";
 import { ProductSurveyDialog } from "@/components/feedback/ProductSurveyDialog";
+import { SURVEY_PURPOSE_DEFS } from "@/components/feedback/survey-purpose-defs";
 import {
 	EMPTY_SURVEY_RESPONSE_DRAFT,
 	type SurveyResponseDraft,
@@ -24,8 +25,10 @@ import {
 	FieldLabel,
 	FieldLegend,
 	FieldSet,
+	FieldTitle,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
 	Select,
 	SelectContent,
@@ -63,6 +66,11 @@ export interface AdminSurveyComposerProps {
 	nested?: boolean;
 	/** The audiences on offer besides every workspace. */
 	workspaces: readonly { id: number; displayName: string }[];
+	/**
+	 * The organisation running this instance's research programme, when there is one. Without it a
+	 * research survey cannot exist: consent names a controller, and the server refuses the request.
+	 */
+	researchOrganization?: string;
 	isPending: boolean;
 	/** What "leave without saving" does. The host owns it, because only the host knows where back is. */
 	cancel: ReactNode;
@@ -103,6 +111,7 @@ const QUESTION_TYPES = Object.keys(QUESTION_TYPE_LABELS)
 	.map((value) => ({ value, label: QUESTION_TYPE_LABELS[value] }));
 
 const NO_ERRORS: SurveyDraftErrors = { questionErrors: [] };
+const PURPOSES: Survey["purpose"][] = ["PRODUCT", "RESEARCH"];
 
 function describedBy(...ids: (string | false | undefined)[]): string | undefined {
 	return ids.filter(Boolean).join(" ") || undefined;
@@ -116,6 +125,7 @@ function describedBy(...ids: (string | false | undefined)[]): string | undefined
 export function AdminSurveyComposer({
 	nested,
 	workspaces,
+	researchOrganization,
 	isPending,
 	cancel,
 	onSubmit,
@@ -221,7 +231,7 @@ export function AdminSurveyComposer({
 		if (isPending) return;
 		const publishedAt = new Date();
 		if (refuse(publishedAt)) return;
-		unsavedChanges.track(onSubmit(toCreateSurvey(draft, publishedAt)));
+		unsavedChanges.track(onSubmit(toCreateSurvey(draft, publishedAt, researchOrganization)));
 	};
 
 	const preview = () => {
@@ -235,7 +245,7 @@ export function AdminSurveyComposer({
 			{unsavedChanges.dialog}
 			<AdminSurveyComposerHeader nested={nested} />
 			<ProductSurveyDialog
-				survey={toPreviewSurvey(draft)}
+				survey={toPreviewSurvey(draft, researchOrganization)}
 				open={previewOpen}
 				onOpenChange={setPreviewOpen}
 				draft={previewDraft}
@@ -267,7 +277,7 @@ export function AdminSurveyComposer({
 								</Field>
 
 								<Field data-invalid={errors.description ? "true" : undefined}>
-									<FieldLabel htmlFor={fieldId("description")}>Purpose</FieldLabel>
+									<FieldLabel htmlFor={fieldId("description")}>Introduction</FieldLabel>
 									<Textarea
 										id={fieldId("description")}
 										value={draft.description}
@@ -282,12 +292,55 @@ export function AdminSurveyComposer({
 										onChange={(event) => patch({ description: event.target.value })}
 									/>
 									<FieldDescription id={fieldId("description-help")}>
-										What decision will these answers help you make? Members see this.
+										Members read this before the first question. Say why you're asking and what the
+										answers will change.
 									</FieldDescription>
 									{errors.description && (
 										<FieldError id={fieldId("description-error")}>{errors.description}</FieldError>
 									)}
 								</Field>
+
+								{researchOrganization && (
+									<FieldSet>
+										<FieldLegend variant="label" id={fieldId("purpose-label")}>
+											Purpose
+										</FieldLegend>
+										<FieldDescription id={fieldId("purpose-help")}>
+											Fixed once published, because it decides who is asked and whose data the
+											answers become.
+										</FieldDescription>
+										<RadioGroup
+											aria-labelledby={fieldId("purpose-label")}
+											aria-describedby={fieldId("purpose-help")}
+											value={draft.purpose}
+											onValueChange={(purpose) => patch({ purpose })}
+											className="grid gap-2 sm:grid-cols-2"
+										>
+											{PURPOSES.map((purpose) => (
+												<FieldLabel key={purpose} htmlFor={fieldId(`purpose-${purpose}`)}>
+													<Field orientation="horizontal">
+														<FieldContent>
+															<FieldTitle id={fieldId(`purpose-${purpose}-title`)}>
+																{SURVEY_PURPOSE_DEFS[purpose].label}
+															</FieldTitle>
+															<FieldDescription id={fieldId(`purpose-${purpose}-detail`)}>
+																{SURVEY_PURPOSE_DEFS[purpose].description}
+																{purpose === "RESEARCH" &&
+																	` Run by ${researchOrganization}; members who leave the study stop being asked.`}
+															</FieldDescription>
+														</FieldContent>
+														<RadioGroupItem
+															id={fieldId(`purpose-${purpose}`)}
+															value={purpose}
+															aria-labelledby={fieldId(`purpose-${purpose}-title`)}
+															aria-describedby={fieldId(`purpose-${purpose}-detail`)}
+														/>
+													</Field>
+												</FieldLabel>
+											))}
+										</RadioGroup>
+									</FieldSet>
+								)}
 
 								<Field orientation="responsive">
 									<FieldContent>
@@ -368,7 +421,8 @@ export function AdminSurveyComposer({
 									</h2>
 									<p className="max-w-2xl text-muted-foreground text-sm">
 										Short surveys get answered: aim for 1–3 questions, closed questions first and
-										one optional free-text question last.
+										one optional free-text question last. Ask what members did, not what they would
+										do.
 									</p>
 								</div>
 								{draft.questions.map((question, index) => (
@@ -457,7 +511,7 @@ function QuestionCard({
 			<FieldLegend className="px-1">Question {number}</FieldLegend>
 			<FieldGroup className="gap-4">
 				<Field data-invalid={errors.prompt ? "true" : undefined}>
-					<FieldLabel htmlFor={fieldId("prompt")}>Prompt</FieldLabel>
+					<FieldLabel htmlFor={fieldId("prompt")}>Question</FieldLabel>
 					<Textarea
 						id={fieldId("prompt")}
 						value={question.prompt}
@@ -524,9 +578,9 @@ function QuestionCard({
 							onCheckedChange={(checked) => onChange({ allowOther: checked })}
 						/>
 						<FieldContent>
-							<FieldLabel htmlFor={fieldId("allow-other")}>Allow another answer</FieldLabel>
+							<FieldLabel htmlFor={fieldId("allow-other")}>Allow “Something else”</FieldLabel>
 							<FieldDescription id={fieldId("allow-other-help")}>
-								Adds a free-text line under the choices for an answer you did not list.
+								Adds a line under the choices for an answer you did not list.
 							</FieldDescription>
 						</FieldContent>
 					</Field>
@@ -589,9 +643,15 @@ function QuestionCard({
 					<Checkbox
 						id={fieldId("required")}
 						checked={question.required}
+						aria-describedby={fieldId("required-help")}
 						onCheckedChange={(checked) => onChange({ required: checked })}
 					/>
-					<FieldLabel htmlFor={fieldId("required")}>Required</FieldLabel>
+					<FieldContent>
+						<FieldLabel htmlFor={fieldId("required")}>Required</FieldLabel>
+						<FieldDescription id={fieldId("required-help")}>
+							Keep most questions optional: someone who cannot answer a required one leaves.
+						</FieldDescription>
+					</FieldContent>
 				</Field>
 			</FieldGroup>
 

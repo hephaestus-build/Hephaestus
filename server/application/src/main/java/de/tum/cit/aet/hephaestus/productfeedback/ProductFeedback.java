@@ -89,7 +89,11 @@ public class ProductFeedback {
     }
 
     public enum Kind {
-        FEEDBACK,
-        BUG
+        /** A feature or change the sender would like. */
+        IDEA,
+        /** Something that broke or behaved unexpectedly. */
+        BUG,
+        /** Anything else: what works, what does not. */
+        FEEDBACK
     }
 }

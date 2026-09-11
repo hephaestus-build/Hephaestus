@@ -74,7 +74,7 @@ class FeedbackValidationTest {
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             var validator = factory.getValidator();
             assertThat(validator.validate(new FeedbackDTOs.CreateSurveyDTO(
-                            "Survey", "Purpose", questions, null, start, start.minusSeconds(1))))
+                            "Survey", "Intro", Survey.Purpose.PRODUCT, questions, null, start, start.minusSeconds(1))))
                     .singleElement()
                     .satisfies(
                             violation -> assertThat(violation.getMessage()).isEqualTo("endsAt must be after startsAt"));
@@ -86,13 +86,25 @@ class FeedbackValidationTest {
     }
 
     @Test
+    void shouldRequireAPurpose() {
+        var request = MAPPER.readValue(
+                "{\"title\":\"Survey\",\"description\":\"Intro\",\"startsAt\":\"2026-01-01T00:00:00Z\",\"questions\":[]}",
+                FeedbackDTOs.CreateSurveyDTO.class);
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            assertThat(factory.getValidator().validate(request))
+                    .anySatisfy(violation ->
+                            assertThat(violation.getPropertyPath().toString()).isEqualTo("purpose"));
+        }
+    }
+
+    @Test
     void shouldRejectNullQuestionsAndNullOptionsBeforeTheyReachTheService() {
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             for (String questions : List.of(
                     "[null]",
                     "[{\"id\":\"q\",\"prompt\":\"Question\",\"type\":\"TEXT\",\"options\":null,\"required\":false}]")) {
                 var request = MAPPER.readValue(
-                        "{\"title\":\"Survey\",\"description\":\"Purpose\",\"startsAt\":\"2026-01-01T00:00:00Z\",\"questions\":"
+                        "{\"title\":\"Survey\",\"description\":\"Intro\",\"purpose\":\"PRODUCT\",\"startsAt\":\"2026-01-01T00:00:00Z\",\"questions\":"
                                 + questions + "}",
                         FeedbackDTOs.CreateSurveyDTO.class);
                 assertThat(factory.getValidator().validate(request)).isNotEmpty();

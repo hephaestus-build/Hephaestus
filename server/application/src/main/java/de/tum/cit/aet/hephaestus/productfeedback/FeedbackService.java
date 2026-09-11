@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.exception.DataIntegrityViolationConstraints;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackFilter;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackItemDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
+@ConditionalOnServerRole
 class FeedbackService {
     private final ProductFeedbackRepository feedback;
     private final FeedbackRefs refs;

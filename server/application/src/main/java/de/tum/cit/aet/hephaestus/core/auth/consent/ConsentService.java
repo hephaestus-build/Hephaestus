@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.core.auth.consent;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
+import java.util.Optional;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
@@ -16,7 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @ConditionalOnServerRole
 @WorkspaceAgnostic("Consent decisions belong to an account, not a workspace")
-public class ConsentService {
+public class ConsentService implements ResearchParticipationQuery {
 
     /**
      * The version of the wording on the first-login screen. That screen is in the webapp, published in
@@ -134,13 +136,19 @@ public class ConsentService {
         return currentStatus(accountId);
     }
 
+    @Override
+    public Optional<String> researchOrganization() {
+        return Optional.ofNullable(properties.researchProgramme());
+    }
+
     /**
      * Whether research processing is authorised right now. A grant given to a study that has since
      * been switched off, or handed to a different organisation, is history rather than permission:
      * both change the notice version, and only the current one authorises anything.
      */
+    @Override
     @Transactional(readOnly = true)
-    public boolean participatesInResearch(Long accountId) {
+    public boolean participates(long accountId) {
         return researchAuthorised(accountId);
     }
 

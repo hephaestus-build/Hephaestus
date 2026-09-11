@@ -6,6 +6,7 @@ import {
 	adminGetProductSurveyQueryKey,
 	adminListProductSurveysQueryKey,
 	adminListWorkspacesOptions,
+	getConsentStatusOptions,
 } from "@/api/@tanstack/react-query.gen";
 import {
 	AdminSurveyComposer,
@@ -28,6 +29,8 @@ export interface AdminSurveyCreateLevelProps {
 export function AdminSurveyCreateLevel({ nested, onPublished }: AdminSurveyCreateLevelProps) {
 	const queryClient = useQueryClient();
 	const workspacesQuery = useQuery(adminListWorkspacesOptions());
+	// Consent status carries the instance's research programme; the auth guard already fetched it.
+	const consentQuery = useQuery(getConsentStatusOptions({}));
 	const create = useMutation({
 		...adminCreateProductSurveyMutation(),
 		onSuccess: (survey) => {
@@ -46,12 +49,14 @@ export function AdminSurveyCreateLevel({ nested, onPublished }: AdminSurveyCreat
 			}),
 	});
 
-	// Data first: a refetch that fails keeps the audiences it had, and the draft with them.
-	if (workspacesQuery.data) {
+	// Both answers are needed before the form mounts, or the purpose choice would appear under a
+	// draft someone is already typing.
+	if (workspacesQuery.data && consentQuery.data) {
 		return (
 			<AdminSurveyComposer
 				nested={nested}
 				workspaces={workspacesQuery.data}
+				researchOrganization={consentQuery.data.researchOrganization}
 				isPending={create.isPending}
 				cancel={<LevelCancel />}
 				onSubmit={(body) => create.mutateAsync({ body })}
@@ -61,12 +66,15 @@ export function AdminSurveyCreateLevel({ nested, onPublished }: AdminSurveyCreat
 	return (
 		<>
 			<AdminSurveyComposerHeader nested={nested} />
-			{workspacesQuery.isError ? (
+			{workspacesQuery.isError || consentQuery.isError ? (
 				<DrawerBody>
 					<QueryErrorAlert
-						error={workspacesQuery.error}
-						title="Workspace audiences couldn't be loaded"
-						onRetry={() => void workspacesQuery.refetch()}
+						error={workspacesQuery.error ?? consentQuery.error}
+						title="The survey composer couldn't be loaded"
+						onRetry={() => {
+							void workspacesQuery.refetch();
+							void consentQuery.refetch();
+						}}
 					/>
 				</DrawerBody>
 			) : (

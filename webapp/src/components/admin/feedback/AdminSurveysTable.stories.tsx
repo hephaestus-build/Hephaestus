@@ -7,13 +7,14 @@ import {
 	adminSurvey,
 	endedSurvey,
 	pausedSurvey,
+	researchSurvey,
 	scheduledSurvey,
 } from "@/components/feedback/product-survey-fixtures";
 import { withStandardPage } from "@/stories/decorators";
 
 import { AdminSurveysTable } from "./AdminSurveysTable";
 
-const surveys: Survey[] = [adminSurvey, scheduledSurvey, pausedSurvey, endedSurvey];
+const surveys: Survey[] = [adminSurvey, researchSurvey, scheduledSurvey, pausedSurvey, endedSurvey];
 
 const ready = (rows: Survey[], onPageChange = fn()) => ({
 	status: "ready" as const,
@@ -51,6 +52,13 @@ export const Default: Story = {
 		await expect(canvas.getByRole("cell", { name: "Scheduled" })).toBeVisible();
 		await expect(canvas.getByRole("cell", { name: "Paused" })).toBeVisible();
 		await expect(canvas.getByRole("cell", { name: "Ended" })).toBeVisible();
+		// A research survey carries a second badge and names the study in its audience.
+		await expect(canvas.getByRole("cell", { name: "Open Research" })).toBeVisible();
+		await expect(
+			canvas.getByText(
+				"All workspaces · participants in the study by Technical University of Munich",
+			),
+		).toBeVisible();
 		// 17 of 42 rounds to 40%; a survey nobody was invited to shows no rate at all.
 		await expect(canvas.getByText("· 40%")).toBeVisible();
 		await expect(canvas.getByText("0 of 0")).toBeVisible();

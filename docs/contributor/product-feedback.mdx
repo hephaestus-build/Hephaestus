@@ -21,3 +21,7 @@ ownership is in the [personal-data map](/admin/dsms/personal-data-map). The code
   client is the only HTTP boundary. A response or decline is handled once per account, not once
   per workspace.
 - Feedback is rate-limited by the unique constraint on `(account_id, submission_minute)`.
+- A survey's purpose is fixed at publication. `RESEARCH` surveys snapshot the organisation they
+  were published for and are offered only while `ResearchParticipationQuery` (implemented by
+  `ConsentService`) names the same organisation and reports a current grant for the account; the
+  check runs on listing and on every member write, so a withdrawal takes effect at once.

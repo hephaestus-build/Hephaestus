@@ -1,4 +1,4 @@
-import { Download } from "lucide-react";
+import { Download, FlaskConical } from "lucide-react";
 import { useId } from "react";
 
 import type {
@@ -16,8 +16,10 @@ import {
 	SURVEY_AVAILABILITY_DEFS,
 	surveyAvailability,
 } from "@/components/feedback/survey-availability-defs";
+import { SURVEY_PURPOSE_DEFS } from "@/components/feedback/survey-purpose-defs";
 import { formatAnswer, NPS_LABELS } from "@/components/feedback/survey-questions";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { DrawerBody, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -121,6 +123,7 @@ export function AdminSurveyResults({
 					<DrawerTitle className="break-words">{survey.title}</DrawerTitle>
 					<div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
 						<StatusBadge def={SURVEY_AVAILABILITY_DEFS[availability]} />
+						{survey.purpose === "RESEARCH" && <StatusBadge def={SURVEY_PURPOSE_DEFS.RESEARCH} />}
 						<span>{surveyAudience(survey)}</span>
 					</div>
 					<DrawerDescription>
@@ -162,6 +165,16 @@ export function AdminSurveyResults({
 			</DetailDrawerHeader>
 
 			<DrawerBody className="flex flex-col gap-8">
+				{survey.purpose === "RESEARCH" && (
+					<Alert>
+						<FlaskConical />
+						<AlertTitle>Research data, not product feedback</AlertTitle>
+						<AlertDescription>
+							These answers belong to the study run by {survey.researchOrganization}, given under
+							the consent members recorded for it. Handle them by that study's protocol.
+						</AlertDescription>
+					</Alert>
+				)}
 				<dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
 					{stats.map((stat) => (
 						<div key={stat.label} className="rounded-lg border p-3">

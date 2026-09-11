@@ -10,6 +10,7 @@ import {
 	SURVEY_AVAILABILITY_DEFS,
 	surveyAvailability,
 } from "@/components/feedback/survey-availability-defs";
+import { SURVEY_PURPOSE_DEFS } from "@/components/feedback/survey-purpose-defs";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
@@ -54,8 +55,13 @@ export interface AdminSurveysTableProps {
 
 const SKELETON_COLUMNS = ["w-48", "w-20", "w-32", "w-24", null];
 
-export function surveyAudience(survey: Pick<Survey, "workspace">): string {
-	return survey.workspace?.displayName ?? "All workspaces";
+export function surveyAudience(
+	survey: Pick<Survey, "workspace" | "purpose" | "researchOrganization">,
+): string {
+	const workspace = survey.workspace?.displayName ?? "All workspaces";
+	return survey.purpose === "RESEARCH"
+		? `${workspace} · participants in the study by ${survey.researchOrganization}`
+		: workspace;
 }
 
 export function AdminSurveysTable({
@@ -84,7 +90,8 @@ export function AdminSurveysTable({
 					</EmptyMedia>
 					<EmptyTitle>No surveys yet</EmptyTitle>
 					<EmptyDescription>
-						Publish a short survey to ask members what would make Hephaestus more useful.
+						Publish a short survey to learn what members did with their feedback and what would make
+						Hephaestus more useful.
 					</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
@@ -127,7 +134,12 @@ export function AdminSurveysTable({
 											</span>
 										</TableCell>
 										<TableCell>
-											<StatusBadge def={SURVEY_AVAILABILITY_DEFS[availability]} />
+											<span className="flex flex-wrap gap-1">
+												<StatusBadge def={SURVEY_AVAILABILITY_DEFS[availability]} />
+												{survey.purpose === "RESEARCH" && (
+													<StatusBadge def={SURVEY_PURPOSE_DEFS.RESEARCH} />
+												)}
+											</span>
 										</TableCell>
 										<TableCell className="text-sm text-muted-foreground">
 											<span className="block">

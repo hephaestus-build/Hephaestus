@@ -4,7 +4,7 @@ import { expect, fn, screen, userEvent, within } from "storybook/test";
 import { Stateful } from "@/stories/stateful";
 import { expectSettledVisible } from "@/test/overlay";
 
-import { surveyInvitation } from "./product-survey-fixtures";
+import { researchInvitation, surveyInvitation } from "./product-survey-fixtures";
 import { ProductSurveyDialog } from "./ProductSurveyDialog";
 import { EMPTY_SURVEY_RESPONSE_DRAFT } from "./survey-questions";
 
@@ -45,7 +45,7 @@ export const Default: Story = {
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expectSettledVisible(dialog.getByText(/4 questions · about 2 minutes/));
-		await expect(dialog.getByText(/Closes in 6 days/)).toBeVisible();
+		await expect(dialog.getByText(/closes in 6 days/)).toBeVisible();
 		await expect(dialog.getByRole("progressbar")).toHaveTextContent("Question 1 of 4");
 		await expect(dialog.getByRole("button", { name: "Decline survey" })).toBeVisible();
 	},
@@ -75,6 +75,37 @@ export const SkipsAnOptionalQuestionAndSends: Story = {
 			{ questionId: "channel", choices: ["On the pull request"] },
 			{ questionId: "improve", text: "Less noise" },
 		]);
+	},
+};
+
+/**
+ * A research survey names the organisation whose study the answers join, says the answers are
+ * not product feedback, and points to where the member can leave the study.
+ */
+export const Research: Story = {
+	args: { survey: researchInvitation },
+	play: async () => {
+		const dialog = within(await screen.findByRole("dialog"));
+		await expectSettledVisible(dialog.getByText("Research"));
+		await expect(
+			dialog.getByText(/study run by Technical University of Munich, which you agreed to join/),
+		).toBeVisible();
+		await expect(dialog.getByRole("link", { name: "User settings" })).toHaveAttribute(
+			"href",
+			"/settings",
+		);
+		await expect(dialog.getByText(/answers already sent stay with the study/)).toBeVisible();
+		await expect(dialog.getByRole("group", { name: /\(optional\)/ })).toBeVisible();
+	},
+};
+
+/** A product survey says who reads it and that it is not research, before the first question. */
+export const ProductFraming: Story = {
+	play: async () => {
+		const dialog = within(await screen.findByRole("dialog"));
+		await expectSettledVisible(dialog.getByText(/Read by this instance's administrators/));
+		await expect(dialog.getByText(/Not used for research/)).toBeVisible();
+		await expect(dialog.queryByText("Research")).toBeNull();
 	},
 };
 

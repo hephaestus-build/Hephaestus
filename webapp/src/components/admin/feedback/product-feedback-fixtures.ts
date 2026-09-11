@@ -14,6 +14,16 @@ export const bugReport = {
 	createdAt: minutesBefore(40),
 } satisfies FeedbackItem;
 
+export const idea = {
+	id: "f1f1f1f1-0000-0000-0000-000000000005",
+	kind: "IDEA",
+	message: "Let me pin the practices I am working on to the top of my page.",
+	account: { id: 5, displayName: "Barbara Liskov", email: "barbara@example.org" },
+	workspace: { id: 7, slug: "acme", displayName: "Acme" },
+	appVersion: "0.71.0",
+	createdAt: hoursBefore(2),
+} satisfies FeedbackItem;
+
 export const praise = {
 	id: "f1f1f1f1-0000-0000-0000-000000000002",
 	kind: "FEEDBACK",
@@ -49,5 +59,5 @@ export const resolvedBugReport = {
 	resolvedBy: { id: 1, displayName: "Ada Lovelace", email: "ada@example.org" },
 } satisfies FeedbackItem;
 
-export const openFeedback: FeedbackItem[] = [bugReport, praise, orphanedFeedback];
+export const openFeedback: FeedbackItem[] = [bugReport, idea, praise, orphanedFeedback];
 export const resolvedFeedback: FeedbackItem[] = [resolvedBugReport];

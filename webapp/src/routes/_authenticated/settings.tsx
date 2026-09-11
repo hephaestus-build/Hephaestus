@@ -29,6 +29,7 @@ import type {
 import type { LinkedAccountsSectionProps } from "@/components/settings/LinkedAccountsSection";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import type { SlackPreferencesSectionProps } from "@/components/settings/SlackPreferencesSection";
+import { productSurveyQueryScope } from "@/hooks/use-product-feedback";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
@@ -118,6 +119,8 @@ function RouteComponent() {
 		...updateResearchConsentMutation(),
 		onSuccess: (status) => {
 			queryClient.setQueryData(getConsentStatusQueryKey({}), status);
+			// Research surveys are offered on the strength of this answer, so the menu must follow it.
+			void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
 		},
 		onError: () => {
 			// The refusal may be the notice moving on — a renamed research organisation, or setup owed

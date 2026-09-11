@@ -42,8 +42,53 @@ export const surveyInvitation = {
 	id: "11111111-1111-1111-1111-111111111111",
 	title: "Help improve practice feedback",
 	description: "Four quick questions to decide what the next release should focus on.",
+	purpose: "PRODUCT",
 	questions: surveyQuestions,
 	endsAt: daysAfter(6),
+	seen: true,
+} satisfies SurveyInvitation;
+
+export const researchInvitation = {
+	id: "55555555-5555-5555-5555-555555555555",
+	title: "How developers act on automated feedback",
+	description:
+		"Three questions about what you did after your last piece of feedback. Part of the study on mentoring at scale.",
+	purpose: "RESEARCH",
+	researchOrganization: "Technical University of Munich",
+	questions: [
+		{
+			id: "acted",
+			prompt: "What did you do after reading your most recent practice feedback?",
+			type: "MULTIPLE_CHOICE",
+			options: [
+				"Changed the pull request",
+				"Discussed it with a teammate",
+				"Asked Heph about it",
+				"Nothing yet",
+			],
+			required: false,
+			allowOther: true,
+		},
+		{
+			id: "trust",
+			prompt: "How much do you trust the feedback to be accurate?",
+			type: "RATING",
+			options: [],
+			required: false,
+			allowOther: false,
+			lowLabel: "Not at all",
+			highLabel: "Completely",
+		},
+		{
+			id: "why",
+			prompt: "What made you trust it more or less?",
+			type: "TEXT",
+			options: [],
+			required: false,
+			allowOther: false,
+		},
+	],
+	endsAt: daysAfter(20),
 	seen: true,
 } satisfies SurveyInvitation;
 
@@ -51,6 +96,7 @@ export const adminSurvey = {
 	id: surveyInvitation.id,
 	title: surveyInvitation.title,
 	description: surveyInvitation.description,
+	purpose: "PRODUCT",
 	questions: surveyQuestions,
 	startsAt: daysBefore(2),
 	endsAt: daysAfter(6),
@@ -78,6 +124,20 @@ export const pausedSurvey = {
 	active: false,
 	createdAt: daysBefore(10),
 	participation: { invited: 12, responded: 3, declined: 1 },
+} satisfies Survey;
+
+export const researchSurvey = {
+	...adminSurvey,
+	id: researchInvitation.id,
+	title: researchInvitation.title,
+	description: researchInvitation.description,
+	purpose: "RESEARCH",
+	researchOrganization: researchInvitation.researchOrganization,
+	questions: researchInvitation.questions,
+	startsAt: daysBefore(5),
+	endsAt: daysAfter(20),
+	createdAt: daysBefore(5),
+	participation: { invited: 9, responded: 4, declined: 1 },
 } satisfies Survey;
 
 export const endedSurvey = {

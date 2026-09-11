@@ -1,6 +1,14 @@
-import { Bug, ClipboardList, MessageSquare, MessageSquarePlus } from "lucide-react";
+import {
+	Bug,
+	ClipboardList,
+	ExternalLink,
+	Lightbulb,
+	MessageSquare,
+	MessageSquarePlus,
+} from "lucide-react";
 
 import type { SurveyInvitation } from "@/api/types.gen";
+import { GithubIcon } from "@/components/icons/brand";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -13,7 +21,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import type { FeedbackKind } from "./ProductFeedbackDialog";
+import { SURVEY_PURPOSE_DEFS } from "./survey-purpose-defs";
 import { surveyEstimate } from "./survey-questions";
+
+/** Where the Hephaestus project itself takes bug reports and feature ideas from anyone. */
+export const HEPHAESTUS_GITHUB_ISSUES_URL =
+	"https://github.com/hephaestus-build/Hephaestus/issues/new/choose";
 
 export interface ProductFeedbackMenuProps {
 	invitations: SurveyInvitation[];
@@ -21,10 +34,16 @@ export interface ProductFeedbackMenuProps {
 	onOpenSurvey: (surveyId: string) => void;
 }
 
+const KINDS: { kind: FeedbackKind; label: string; icon: typeof Bug }[] = [
+	{ kind: "IDEA", label: "Share an idea", icon: Lightbulb },
+	{ kind: "BUG", label: "Report a bug", icon: Bug },
+	{ kind: "FEEDBACK", label: "Send feedback", icon: MessageSquare },
+];
+
 /**
- * The one header entry for talking to the instance's administrators. Survey invitations live here
- * rather than in a dialog of their own: the count on the trigger says something is waiting, and
- * nothing opens until the member chooses to.
+ * The one place to talk to the people behind this instance — and, one step further, to the
+ * project. Survey invitations wait here rather than in a dialog of their own: the count on the
+ * trigger says something is waiting, and nothing opens until the member chooses to.
  */
 export function ProductFeedbackMenu({
 	invitations,
@@ -37,8 +56,8 @@ export function ProductFeedbackMenu({
 			<DropdownMenuTrigger
 				aria-label={
 					count > 0
-						? `Product feedback, ${count} open ${count === 1 ? "survey" : "surveys"}`
-						: "Product feedback"
+						? `Feedback, ${count} ${count === 1 ? "survey" : "surveys"} waiting`
+						: "Feedback"
 				}
 				render={<Button variant="ghost" size="icon" className="relative" />}
 			>
@@ -54,37 +73,57 @@ export function ProductFeedbackMenu({
 			</DropdownMenuTrigger>
 			<DropdownMenuContent className="w-72" align="end">
 				<DropdownMenuGroup>
-					<DropdownMenuItem onClick={() => onSendFeedback("FEEDBACK")}>
-						<MessageSquare />
-						<span>Send feedback</span>
-					</DropdownMenuItem>
-					<DropdownMenuItem onClick={() => onSendFeedback("BUG")}>
-						<Bug />
-						<span>Report a bug</span>
-					</DropdownMenuItem>
+					<DropdownMenuLabel>To this instance's administrators</DropdownMenuLabel>
+					{KINDS.map(({ kind, label, icon: Icon }) => (
+						<DropdownMenuItem key={kind} onClick={() => onSendFeedback(kind)}>
+							<Icon />
+							<span>{label}</span>
+						</DropdownMenuItem>
+					))}
 				</DropdownMenuGroup>
+				{count > 0 && (
+					<>
+						<DropdownMenuSeparator />
+						<DropdownMenuGroup>
+							<DropdownMenuLabel>Surveys waiting for you</DropdownMenuLabel>
+							{invitations.map((survey) => (
+								<DropdownMenuItem
+									key={survey.id}
+									className="items-start"
+									onClick={() => onOpenSurvey(survey.id)}
+								>
+									<ClipboardList className="mt-0.5" />
+									<span className="flex min-w-0 flex-col">
+										<span className="truncate">{survey.title}</span>
+										<span className="text-xs text-muted-foreground">
+											{survey.purpose === "RESEARCH" && `${SURVEY_PURPOSE_DEFS.RESEARCH.label} · `}
+											{surveyEstimate(survey.questions)}
+										</span>
+									</span>
+								</DropdownMenuItem>
+							))}
+						</DropdownMenuGroup>
+					</>
+				)}
 				<DropdownMenuSeparator />
 				<DropdownMenuGroup>
-					<DropdownMenuLabel>Surveys</DropdownMenuLabel>
-					{count === 0 ? (
-						<p className="px-1.5 pb-1 text-sm text-muted-foreground">No open surveys.</p>
-					) : (
-						invitations.map((survey) => (
-							<DropdownMenuItem
-								key={survey.id}
-								className="items-start"
-								onClick={() => onOpenSurvey(survey.id)}
-							>
-								<ClipboardList className="mt-0.5" />
-								<span className="flex min-w-0 flex-col">
-									<span className="truncate">{survey.title}</span>
-									<span className="text-xs text-muted-foreground">
-										{surveyEstimate(survey.questions)}
-									</span>
-								</span>
-							</DropdownMenuItem>
-						))
-					)}
+					<DropdownMenuLabel>To the Hephaestus project</DropdownMenuLabel>
+					<DropdownMenuItem
+						className="items-start"
+						render={<a href={HEPHAESTUS_GITHUB_ISSUES_URL} target="_blank" rel="noreferrer" />}
+					>
+						<GithubIcon className="mt-0.5" />
+						<span className="flex min-w-0 flex-col">
+							<span className="flex items-center gap-1">
+								Open an issue on GitHub
+								<ExternalLink aria-hidden className="size-3" />
+								<span className="sr-only">(opens in a new tab)</span>
+							</span>
+							<span className="text-xs text-muted-foreground">
+								Public, for bugs and ideas that concern every instance.
+							</span>
+						</span>
+					</DropdownMenuItem>
 				</DropdownMenuGroup>
 			</DropdownMenuContent>
 		</DropdownMenu>

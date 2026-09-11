@@ -27,14 +27,19 @@ describe("product feedback dialog", () => {
 	it("keeps a refused draft across close and reopen, and attaches details only once chosen", async () => {
 		const user = userEvent.setup();
 		const { props, rerender } = renderDialog({ onSubmit: vi.fn(() => Promise.resolve(false)) });
-		await user.type(screen.getByRole("textbox", { name: "Message" }), "  An idea  ");
+		await user.type(screen.getByRole("textbox", { name: "Your feedback" }), "  An idea  ");
 		await user.click(screen.getByRole("button", { name: "Send" }));
 		expect(props.onOpenChange).not.toHaveBeenCalledWith(false);
 
 		rerender(<ProductFeedbackDialog {...props} open={false} />);
 		rerender(<ProductFeedbackDialog {...props} open />);
-		expect(screen.getByRole("textbox", { name: "Message" })).toHaveProperty("value", "  An idea  ");
-		await user.click(screen.getByRole("checkbox", { name: "Include page and browser details" }));
+		expect(screen.getByRole("textbox", { name: "Your feedback" })).toHaveProperty(
+			"value",
+			"  An idea  ",
+		);
+		await user.click(
+			screen.getByRole("checkbox", { name: "Attach the page and browser you're on" }),
+		);
 		await user.click(screen.getByRole("button", { name: "Send" }));
 		expect(props.onSubmit).toHaveBeenLastCalledWith({
 			kind: "FEEDBACK",
@@ -47,18 +52,20 @@ describe("product feedback dialog", () => {
 	it("closes and clears the message only after the send was accepted", async () => {
 		const user = userEvent.setup();
 		const { props, rerender } = renderDialog();
-		await user.type(screen.getByRole("textbox", { name: "Message" }), "An idea");
+		await user.type(screen.getByRole("textbox", { name: "Your feedback" }), "An idea");
 		await user.click(screen.getByRole("button", { name: "Send" }));
 		await waitFor(() => expect(props.onOpenChange).toHaveBeenCalledWith(false));
 		rerender(<ProductFeedbackDialog {...props} open={false} />);
 		rerender(<ProductFeedbackDialog {...props} open />);
-		expect(screen.getByRole("textbox", { name: "Message" })).toHaveProperty("value", "");
+		expect(screen.getByRole("textbox", { name: "Your feedback" })).toHaveProperty("value", "");
 	});
 
 	it("does not change the context choice while sending", async () => {
 		const user = userEvent.setup();
 		const { props, rerender } = renderDialog();
-		const checkbox = screen.getByRole("checkbox", { name: "Include page and browser details" });
+		const checkbox = screen.getByRole("checkbox", {
+			name: "Attach the page and browser you're on",
+		});
 		await user.click(checkbox);
 		rerender(<ProductFeedbackDialog {...props} isSubmitting />);
 		await user.click(checkbox);

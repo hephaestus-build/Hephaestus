@@ -1,4 +1,4 @@
-import type { CreateSurvey, Question, SurveyInvitation } from "@/api/types.gen";
+import type { CreateSurvey, Question, Survey, SurveyInvitation } from "@/api/types.gen";
 
 /**
  * What the composer holds while a survey is written: strings as the fields hold them, so a
@@ -21,6 +21,7 @@ export interface QuestionDraft {
 export interface SurveyDraft {
 	title: string;
 	description: string;
+	purpose: Survey["purpose"];
 	/** `ALL_WORKSPACES` or a workspace id as the select holds it. */
 	audience: string;
 	/** `datetime-local` values. */
@@ -66,6 +67,7 @@ export function emptySurveyDraft(firstQuestionId: string): SurveyDraft {
 	return {
 		title: "",
 		description: "",
+		purpose: "PRODUCT",
 		audience: ALL_WORKSPACES,
 		startsAt: "",
 		endsAt: "",
@@ -151,7 +153,7 @@ function localDateTime(value: string): Date | undefined {
 export function validateSurveyDraft(draft: SurveyDraft, now: number): SurveyDraftErrors {
 	const errors: SurveyDraftErrors = { questionErrors: draft.questions.map(validateQuestion) };
 	if (!draft.title.trim()) errors.title = "Give the survey a title.";
-	if (!draft.description.trim()) errors.description = "Say what the answers are for.";
+	if (!draft.description.trim()) errors.description = "Tell members why you're asking.";
 	const endsAt = localDateTime(draft.endsAt);
 	if (endsAt && endsAt.getTime() <= (localDateTime(draft.startsAt)?.getTime() ?? now)) {
 		errors.endsAt = "The end must be after the start.";
@@ -168,10 +170,27 @@ export function hasDraftErrors(errors: SurveyDraftErrors): boolean {
 	);
 }
 
-export function toCreateSurvey(draft: SurveyDraft, publishedAt: Date): CreateSurvey {
+/**
+ * A research purpose needs a study to belong to. Without an organisation — the programme was
+ * switched off while the draft was open — the survey is published as a product survey rather than
+ * refused, because that is the only survey this instance can still run.
+ */
+function purposeOf(
+	draft: SurveyDraft,
+	researchOrganization: string | undefined,
+): Survey["purpose"] {
+	return draft.purpose === "RESEARCH" && researchOrganization ? "RESEARCH" : "PRODUCT";
+}
+
+export function toCreateSurvey(
+	draft: SurveyDraft,
+	publishedAt: Date,
+	researchOrganization: string | undefined,
+): CreateSurvey {
 	return {
 		title: draft.title.trim(),
 		description: draft.description.trim(),
+		purpose: purposeOf(draft, researchOrganization),
 		workspaceId: draft.audience === ALL_WORKSPACES ? undefined : Number(draft.audience),
 		startsAt: localDateTime(draft.startsAt) ?? publishedAt,
 		endsAt: localDateTime(draft.endsAt),
@@ -180,11 +199,17 @@ export function toCreateSurvey(draft: SurveyDraft, publishedAt: Date): CreateSur
 }
 
 /** The invitation members would get were the draft published as it stands; Preview shows it. */
-export function toPreviewSurvey(draft: SurveyDraft): SurveyInvitation {
+export function toPreviewSurvey(
+	draft: SurveyDraft,
+	researchOrganization: string | undefined,
+): SurveyInvitation {
+	const purpose = purposeOf(draft, researchOrganization);
 	return {
 		id: "preview",
 		title: draft.title.trim(),
 		description: draft.description.trim(),
+		purpose,
+		researchOrganization: purpose === "RESEARCH" ? researchOrganization : undefined,
 		questions: prepareQuestions(draft.questions),
 		endsAt: localDateTime(draft.endsAt),
 		seen: true,

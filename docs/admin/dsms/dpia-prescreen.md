@@ -74,7 +74,7 @@ They remain mandatory while the determination is pending.
 - **Workspace-administrator joint-controller notice** in the privacy statement (§10). Structural changes to the shared-responsibility split require an amended record.
 - **No HTTP access log.** Tomcat's access log is disabled in the production profile, the Traefik ingress runs without `--accesslog`, and both nginx containers disable it at the server level, so request-level IP/URL data is never written at any layer. Enabling it at any layer is a material change.
 - **Error telemetry remains disabled.** The webapp ships an optional Sentry integration that is disabled in the current production deployment. Activating it is a material change.
-- **First-party product feedback.** Feedback and survey responses stay in the instance database, are visible only to instance administrators, and are not reused for research without the separate research opt-in.
+- **First-party product feedback.** Feedback and survey responses stay in the instance database, are visible only to instance administrators, and are not reused for research. A research-purpose survey reaches only accounts with a current research grant for the named organisation and says so on screen; its answers are research data under that consent.
 
 ## 6. Required determination and change freeze
 

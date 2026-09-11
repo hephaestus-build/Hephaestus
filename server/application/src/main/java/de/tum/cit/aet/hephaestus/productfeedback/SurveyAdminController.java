@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.productfeedback;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.CreateSurveyDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.SurveyDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.SurveyEditDTO;
@@ -25,6 +26,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
+@ConditionalOnServerRole
 @RequestMapping("/admin/product-feedback/surveys")
 @RecentSignInExempt(reason = "manages product surveys; grants no access and stores no credential")
 @PreAuthorize("hasAuthority('app_admin')")

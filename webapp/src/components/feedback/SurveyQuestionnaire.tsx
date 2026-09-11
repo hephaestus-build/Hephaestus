@@ -108,6 +108,15 @@ export function SurveyQuestionnaire({
 	);
 }
 
+/** How an answer is given, for the error a Next without one shows. */
+const ANSWER_VERB: Record<Question["type"], string> = {
+	TEXT: "Type an answer",
+	SINGLE_CHOICE: "Choose an answer",
+	MULTIPLE_CHOICE: "Choose at least one answer",
+	RATING: "Pick a number",
+	NPS: "Pick a number",
+};
+
 function choiceValues(question: Question): readonly string[] {
 	if (question.type === "RATING") return RATING_SCALE.map(String);
 	if (question.type === "NPS") return NPS_SCALE.map(String);
@@ -150,16 +159,16 @@ function Items({ className, ...props }: ComponentProps<"div">) {
 							if (status === "skipped") answer(question.id, undefined);
 						}}
 					>
-						<QuestionnaireTitle>{question.prompt}</QuestionnaireTitle>
+						<QuestionnaireTitle>
+							{question.prompt}
+							{!question.required && (
+								<span className="font-normal text-muted-foreground"> (optional)</span>
+							)}
+						</QuestionnaireTitle>
 						{scale?.low && scale.high && (
 							<QuestionnaireDescription>
 								{scale.points[0]} = {scale.low} · {scale.points[scale.points.length - 1]} ={" "}
 								{scale.high}
-							</QuestionnaireDescription>
-						)}
-						{!question.required && (
-							<QuestionnaireDescription>
-								Optional — skip it if it doesn't apply.
 							</QuestionnaireDescription>
 						)}
 						{question.type === "TEXT" ? (
@@ -197,8 +206,8 @@ function Items({ className, ...props }: ComponentProps<"div">) {
 								))}
 								{question.allowOther && (
 									<QuestionnaireInput
-										aria-label="Another answer"
-										placeholder="Another answer…"
+										aria-label="Something else"
+										placeholder="Something else…"
 										maxLength={OTHER_ANSWER_MAX_LENGTH}
 										defaultValue={other}
 										onChange={(event) => {
@@ -212,9 +221,8 @@ function Items({ className, ...props }: ComponentProps<"div">) {
 							</QuestionnaireChoices>
 						)}
 						<QuestionnaireError>
-							{question.required
-								? "Choose an answer to continue."
-								: "Choose an answer, or skip this question."}
+							{ANSWER_VERB[question.type]}
+							{question.required ? " to continue." : ", or skip this question."}
 						</QuestionnaireError>
 					</QuestionnaireItem>
 				);

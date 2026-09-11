@@ -65,8 +65,12 @@ export const Default: Story = {
 export const RequiredQuestionBlocksNext: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Next" }));
-		await expect(canvas.getByRole("alert")).toHaveTextContent("Choose an answer to continue.");
+		await expect(canvas.getByRole("alert")).toHaveTextContent("Pick a number to continue.");
 		await expect(canvas.getByRole("progressbar")).toHaveTextContent("Question 1 of 4");
+		// A required question is the unmarked one; the optional ones say so in their own heading.
+		await expect(canvas.getByRole("group", { name: /How useful/ })).not.toHaveAccessibleName(
+			/optional/,
+		);
 		await userEvent.click(canvas.getByRole("radio", { name: "4" }));
 		await userEvent.click(canvas.getByRole("button", { name: "Next" }));
 		await expect(canvas.getByRole("progressbar")).toHaveTextContent("Question 2 of 4");
@@ -78,6 +82,9 @@ export const OptionalQuestionCanBeSkipped: Story = {
 	args: { draft: { answers: { useful: "4" }, item: "channel" } },
 	play: async ({ canvas, args }) => {
 		await expect(canvas.getByRole("progressbar")).toHaveTextContent("Question 2 of 4");
+		await expect(
+			canvas.getByRole("group", { name: /Where do you read feedback.*\(optional\)/ }),
+		).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Next" }));
 		await expect(canvas.getByRole("alert")).toHaveTextContent(
 			"Choose an answer, or skip this question.",
@@ -95,7 +102,7 @@ export const AnswersEveryQuestionAndSubmits: Story = {
 	play: async ({ canvas, args }) => {
 		await userEvent.click(canvas.getByRole("radio", { name: "5" }));
 		await userEvent.click(canvas.getByRole("button", { name: "Next" }));
-		await userEvent.type(canvas.getByRole("textbox", { name: "Another answer" }), "In the CLI");
+		await userEvent.type(canvas.getByRole("textbox", { name: "Something else" }), "In the CLI");
 		await userEvent.click(canvas.getByRole("button", { name: "Next" }));
 		await userEvent.click(canvas.getByRole("radio", { name: "9" }));
 		await userEvent.click(canvas.getByRole("button", { name: "Next" }));
@@ -181,7 +188,7 @@ export const MultipleChoiceWithAnotherAnswer: Story = {
 		await userEvent.click(canvas.getByRole("checkbox", { name: /Shorter feedback/ }));
 		await userEvent.click(canvas.getByRole("checkbox", { name: /Examples from my own code/ }));
 		await userEvent.type(
-			canvas.getByRole("textbox", { name: "Another answer" }),
+			canvas.getByRole("textbox", { name: "Something else" }),
 			"A weekly digest",
 		);
 		await userEvent.click(canvas.getByRole("button", { name: "Send answers" }));
@@ -375,7 +382,7 @@ export const SendJumpsBackToAnUnansweredRequiredQuestion: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Send answers" }));
 		await expect(args.onSubmit).not.toHaveBeenCalled();
 		await expect(canvas.getByRole("progressbar")).toHaveTextContent("Question 1 of 4");
-		await expect(canvas.getByRole("alert")).toHaveTextContent("Choose an answer to continue.");
+		await expect(canvas.getByRole("alert")).toHaveTextContent("Pick a number to continue.");
 		await expect(args.onDraftChange).toHaveBeenLastCalledWith(
 			expect.objectContaining({ item: "useful" }),
 		);

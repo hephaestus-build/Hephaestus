@@ -11,7 +11,8 @@ import {
 	submitProductSurveyResponseMutation,
 	submitWorkspaceProductFeedbackMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { Answer, FeedbackRequest } from "@/api/types.gen";
+import type { Answer, FeedbackRequest, SurveyInvitation } from "@/api/types.gen";
+import { studyOf } from "@/components/feedback/survey-purpose-defs";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 
 /**
@@ -34,16 +35,26 @@ const FEEDBACK_SEND = ["product-feedback-send"];
 
 const DRAFT_KEPT = "Your draft is still here.";
 
-function submissionError(error: unknown): string {
+function submissionError(error: unknown, subject: "survey" | "feedback"): string {
 	const status = problemStatusOf(error);
 	if (status === undefined)
 		return `Couldn't send. ${DRAFT_KEPT} Check your connection and try again.`;
 	if (status === 429) return `Please wait a minute before sending more feedback. ${DRAFT_KEPT}`;
 	if (status === 401) return "Your session has expired. Sign in again before sending.";
-	if (status === 409)
+	if (subject === "survey" && status === 409)
 		return "This survey was already answered or declined, possibly in another tab.";
-	if (status === 404) return "This survey is no longer available. Your answers have not been sent.";
+	if (subject === "survey" && status === 404)
+		return "This survey is no longer available. Your answers have not been sent.";
 	return `Couldn't send (${problemDetailOf(error, "the server refused the request")}). ${DRAFT_KEPT}`;
+}
+
+/** What a member needs to know about a survey to be thanked for it: `submit` takes it from the dialog. */
+type SurveyIdentity = Pick<SurveyInvitation, "id" | "purpose" | "researchOrganization">;
+
+function surveyAcknowledgement(survey: SurveyIdentity): string {
+	return survey.purpose === "RESEARCH"
+		? `Thank you — your answers were recorded for ${studyOf(survey)}.`
+		: "Thank you — your answers are with this instance's administrators.";
 }
 
 export function useProductSurveys(workspaceSlug: string | undefined) {
@@ -83,10 +94,7 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 		...submitProductSurveyResponseMutation(),
 		mutationKey: SURVEY_DECISION,
 		retry: false,
-		onSuccess: (_, variables) => {
-			removeFromCaches(variables.path.surveyId);
-			toast.success("Thank you — your response was sent to this instance's administrators.");
-		},
+		onSuccess: (_, variables) => removeFromCaches(variables.path.surveyId),
 		onError: dropWhenGone,
 	});
 	const undoDecline = useMutation({
@@ -95,7 +103,7 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 		retry: false,
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
-			toast.success("Decline undone. The survey is back under Product feedback in the header.");
+			toast.success("Decline undone. The survey is back in the header's feedback menu.");
 		},
 		onError: () =>
 			toast.error(
@@ -108,7 +116,7 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 		retry: false,
 		onSuccess: (_, variables) => {
 			removeFromCaches(variables.path.surveyId);
-			toast.success("Survey declined.", {
+			toast.success("Survey declined. You won't be asked again.", {
 				duration: 15000,
 				action: { label: "Undo", onClick: () => undoDecline.mutate({ path: variables.path }) },
 			});
@@ -121,9 +129,9 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 		query,
 		isPending: submit.isPending || decline.isPending || undoDecline.isPending,
 		error: submit.isError
-			? submissionError(submit.error)
+			? submissionError(submit.error, "survey")
 			: decline.isError
-				? submissionError(decline.error)
+				? submissionError(decline.error, "survey")
 				: undefined,
 		reset: () => {
 			submit.reset();
@@ -132,11 +140,15 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 		acknowledge: (surveyId: string) => {
 			if (workspaceSlug) acknowledge.mutate({ path: { workspaceSlug: slug, surveyId } });
 		},
-		submit: async (surveyId: string, answers: Answer[]) => {
+		submit: async (survey: SurveyIdentity, answers: Answer[]) => {
 			if (deciding()) return false;
 			decline.reset();
 			try {
-				await submit.mutateAsync({ path: { workspaceSlug: slug, surveyId }, body: { answers } });
+				await submit.mutateAsync({
+					path: { workspaceSlug: slug, surveyId: survey.id },
+					body: { answers },
+				});
+				toast.success(surveyAcknowledgement(survey));
 				return true;
 			} catch {
 				return false;
@@ -155,20 +167,26 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 	};
 }
 
+const FEEDBACK_SENT: Record<FeedbackRequest["kind"], string> = {
+	IDEA: "Thanks — your idea is with this instance's administrators.",
+	BUG: "Thanks — your bug report is with this instance's administrators.",
+	FEEDBACK: "Thanks — your feedback is with this instance's administrators.",
+};
+
 export function useSubmitProductFeedback(workspaceSlug: string | undefined) {
 	const queryClient = useQueryClient();
 	const shared = {
 		mutationKey: FEEDBACK_SEND,
 		retry: false,
-		onSuccess: () =>
-			toast.success("Thanks — your feedback was sent to this instance's administrators."),
+		onSuccess: (_: unknown, variables: { body: FeedbackRequest }) =>
+			toast.success(FEEDBACK_SENT[variables.body.kind]),
 	};
 	const workspaceMutation = useMutation({ ...submitWorkspaceProductFeedbackMutation(), ...shared });
 	const instanceMutation = useMutation({ ...submitInstanceProductFeedbackMutation(), ...shared });
 	const mutation = workspaceSlug ? workspaceMutation : instanceMutation;
 	return {
 		isPending: mutation.isPending,
-		error: mutation.isError ? submissionError(mutation.error) : undefined,
+		error: mutation.isError ? submissionError(mutation.error, "feedback") : undefined,
 		reset: mutation.reset,
 		submit: async (body: FeedbackRequest) => {
 			if (queryClient.isMutating({ mutationKey: FEEDBACK_SEND }) > 0) return false;
