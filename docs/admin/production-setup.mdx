@@ -49,6 +49,7 @@ These variables exist only in the reference deployment, so they live here:
 | Variable | Purpose |
 | --- | --- |
 | `LEGAL_PROFILE` | Selects a bundled imprint/privacy profile. Use `tumaet` only for the canonical AET deployment; self-hosters leave empty and mount `/legal-overrides/`. See [Legal Pages](./legal-pages). |
+| `HEPHAESTUS_RESEARCH_ORGANIZATION` | Names the organisation running an optional academic-research study. Set it and first-login setup asks each account whether to take part, showing this name; leave it empty — the default — and the question is never asked. See [Legal Pages](./legal-pages#the-optional-research-question). |
 | `HEPHAESTUS_INTEGRATION_OAUTH_SUCCESS_REDIRECT` / `HEPHAESTUS_INTEGRATION_OAUTH_FAILURE_REDIRECT` | Post-callback landing URLs for integration OAuth. Success defaults to `/integrations?status=success`, failure to the success base + `?status=error`. Set absolute URLs when the SPA host differs from the API host. |
 | `SPRINGDOC_API_DOCS_ENABLED` / `SPRINGDOC_SWAGGER_UI_ENABLED` | Publish the OpenAPI description at `/v3/api-docs` and the interactive Swagger UI. Both default to `false`. |
 

@@ -112,6 +112,20 @@ describe("consent recovery", () => {
 		await userEvent.click(screen.getByRole("radio", { name: /don't take part/ }));
 		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await screen.findByRole("alert");
+
+		// A failed write is the server's problem, not the reader's: nothing they chose is undone, and
+		// the same answers can be sent again.
+		expect(
+			screen.getByRole("checkbox", { name: /terms of use/i }).getAttribute("aria-checked"),
+		).toBe("true");
+		expect(
+			screen.getByRole("radio", { name: /don't take part/ }).getAttribute("aria-checked"),
+		).toBe("true");
+		await waitFor(() =>
+			expect(screen.getByRole<HTMLButtonElement>("button", { name: "Continue" }).disabled).toBe(
+				false,
+			),
+		);
 	});
 
 	it("stops offering the form when a rejected save reveals a newer notice version", async () => {
