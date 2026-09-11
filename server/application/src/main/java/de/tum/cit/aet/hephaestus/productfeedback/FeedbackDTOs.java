@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
-import com.fasterxml.jackson.annotation.JsonSetter;
-import com.fasterxml.jackson.annotation.Nulls;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -40,11 +38,8 @@ final class FeedbackDTOs {
             @NotNull @NonNull QuestionType type,
             @NotNull @Size(max = 20) @NonNull List<@NotBlank @Size(max = 200) String> options,
             @NonNull boolean required,
-            /**
-             * A choice question may also take one free-text answer that is not among its options. Surveys
-             * stored before the flag existed omit it, which reads as {@code false}.
-             */
-            @JsonSetter(nulls = Nulls.AS_EMPTY) @NonNull boolean allowOther,
+            /** A choice question may also take one free-text answer; surveys stored before the flag existed omit it. */
+            @NonNull boolean allowOther,
             @Size(max = 60) @Nullable String lowLabel,
             @Size(max = 60) @Nullable String highLabel) {}
 

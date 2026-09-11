@@ -52,11 +52,13 @@ export function ProductSurveyDialog({
 			<DialogContent
 				className="sm:max-w-lg"
 				// The scroll region is the first tabbable in the popup; the question's first answer is
-				// where a member expects to land.
-				initialFocus={() =>
-					body.current?.querySelector<HTMLElement>(
-						"fieldset:not([hidden]) :is(input, textarea):not([disabled])",
-					) ?? false
+				// where a member expects to land. Touch keeps Base UI's default so the keyboard stays shut.
+				initialFocus={(interaction) =>
+					interaction === "touch"
+						? null
+						: (body.current?.querySelector<HTMLElement>(
+								"fieldset:not([hidden]) :is(input, textarea):not([disabled])",
+							) ?? null)
 				}
 			>
 				<SurveyQuestionnaire
@@ -72,8 +74,11 @@ export function ProductSurveyDialog({
 						<DialogDescription className="break-words">{survey.description}</DialogDescription>
 						<p className="text-xs text-muted-foreground">
 							{surveyEstimate(survey.questions)}
-							{closes ? ` · ${closes}` : ""} · Answers are linked to your account and visible only
-							to this instance's administrators; they are not used for research.
+							{closes ? ` · ${closes}` : ""}
+						</p>
+						<p className="text-xs text-muted-foreground">
+							Answers are linked to your account and visible only to this instance's administrators;
+							they are not used for research.
 						</p>
 					</DialogHeader>
 					<DialogBody ref={body} className="flex flex-col gap-4 py-1">

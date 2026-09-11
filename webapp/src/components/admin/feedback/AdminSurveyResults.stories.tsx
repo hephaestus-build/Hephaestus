@@ -82,33 +82,24 @@ export const Default: Story = {
 };
 
 export const OtherAnswers: Story = {
-	args: {
-		state: ready(
-			{
-				...adminSurvey,
-				questions: adminSurvey.questions.map((question) =>
-					question.id === "channel" ? { ...question, allowOther: true } : question,
-				),
-			},
-			{
-				summary: {
-					...surveySummary,
-					questions: surveySummary.questions.map((question) =>
-						question.questionId === "channel" ? { ...question, other: 3 } : question,
-					),
-				},
-			},
-		),
-	},
+	args: { state: ready(adminSurvey) },
 	play: async () => {
 		await expectSettledVisible(await screen.findByRole("heading", { name: adminSurvey.title }));
-		// The typed answers are counted after the options and never as a share of them.
+		// 9 + 3 + 2 chose an option and 3 typed their own: every share is of all 17 who answered.
 		const rows = screen.getByRole("list", { name: "Answers to question 2" });
 		const items = within(rows).getAllByRole("listitem");
 		await expect(items).toHaveLength(4);
-		await expect(items[0]).toHaveTextContent("On the pull request9 · 60%");
-		await expect(items[3]).toHaveTextContent("Another answer3");
-		await expect(items[3]).not.toHaveTextContent("%");
+		await expect(items[0]).toHaveTextContent("On the pull request9 · 53%");
+		await expect(items[3]).toHaveTextContent("Another answer3 · 18%");
+	},
+};
+
+export const Reflow: Story = {
+	args: { state: ready(adminSurvey) },
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: async () => {
+		await expectSettledVisible(await screen.findByRole("heading", { name: adminSurvey.title }));
+		await expect(screen.getByRole("button", { name: "Export CSV" })).toBeVisible();
 	},
 };
 

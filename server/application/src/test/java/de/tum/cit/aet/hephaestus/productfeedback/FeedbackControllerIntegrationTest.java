@@ -492,6 +492,64 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
+    void shouldCountAnAnswerOutsideTheOptionsApartAndRefuseASecondOne() {
+        Member admin = member("survey-other-admin");
+        Member member = plainMember("survey-other", admin.workspace());
+        SurveyDTO survey = publish(
+                admin,
+                admin.workspace().getId(),
+                List.of(new QuestionDTO(
+                        "channel",
+                        "Where do you read feedback?",
+                        QuestionType.SINGLE_CHOICE,
+                        List.of("On the pull request", "In conversation with Heph"),
+                        false,
+                        true,
+                        null,
+                        null)));
+
+        webTestClient
+                .post()
+                .uri(admin.path("/surveys/" + survey.id() + "/responses"))
+                .headers(admin.headers())
+                .bodyValue(Map.of(
+                        "answers", List.of(Map.of("questionId", "channel", "choices", List.of("my own answer")))))
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+        webTestClient
+                .get()
+                .uri("/admin/product-feedback/surveys/" + survey.id() + "/summary")
+                .headers(admin.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.questions[0].answered")
+                .isEqualTo(1)
+                .jsonPath("$.questions[0].other")
+                .isEqualTo(1)
+                .jsonPath("$.questions[0].counts[0].count")
+                .isEqualTo(0)
+                .jsonPath("$.questions[0].counts[1].count")
+                .isEqualTo(0);
+
+        webTestClient
+                .post()
+                .uri(member.path("/surveys/" + survey.id() + "/responses"))
+                .headers(member.headers())
+                .bodyValue(Map.of(
+                        "answers", List.of(Map.of("questionId", "channel", "choices", List.of("one", "another")))))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+        assertThat(participations.findBySurveyIdAndAccountId(survey.id(), member.accountId()))
+                .isEmpty();
+    }
+
+    @Test
     void shouldKeepFeedbackContextOptionalAndLetAdministratorsTriageIt() {
         Member member = member("feedback-triage");
         webTestClient

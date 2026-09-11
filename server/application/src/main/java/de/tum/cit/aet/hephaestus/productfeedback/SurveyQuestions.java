@@ -17,8 +17,6 @@ final class SurveyQuestions {
     static final int RATING_MAX = 5;
     static final int NPS_MIN = 0;
     static final int NPS_MAX = 10;
-    /** A free-text choice answer fits the same limit as the option it stands beside. */
-    static final int OTHER_MAX_LENGTH = 200;
 
     private SurveyQuestions() {}
 
@@ -95,10 +93,7 @@ final class SurveyQuestions {
                     }
                     if (!question.allowOther() || hasOther) throw bad("a choice is not one of the question's options");
                     hasOther = true;
-                    String other = choice.strip();
-                    if (other.isEmpty() || other.length() > OTHER_MAX_LENGTH)
-                        throw bad("another answer must fit an option");
-                    choices.add(other);
+                    choices.add(choice.strip());
                 }
                 if (new HashSet<>(choices).size() != choices.size()) throw bad("a choice was given twice");
                 yield new AnswerDTO(question.id(), null, List.copyOf(choices), null);

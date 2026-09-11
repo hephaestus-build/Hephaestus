@@ -38,14 +38,22 @@ export function completionRate(participation: ParticipationCounts): string {
 	return percentOf(participation.responded, participation.invited) ?? "—";
 }
 
-/** The counts as the bars draw them: a share of the largest count, so the longest bar is full. */
-export function distributionRows(counts: readonly OptionCount[]) {
-	const answered = counts.reduce((sum, { count }) => sum + count, 0);
+/** A row's share of the question's answers; "0%" rather than a dash, since the row is drawn either way. */
+export function shareOf(count: number, answered: number): string {
+	return percentOf(count, answered) ?? PERCENT.format(0);
+}
+
+/**
+ * The counts as the bars draw them: each a share of everyone who answered the question — which
+ * includes those who typed an answer of their own — and a width relative to the largest count, so
+ * the longest bar is full.
+ */
+export function distributionRows(counts: readonly OptionCount[], answered: number) {
 	const largest = Math.max(0, ...counts.map(({ count }) => count));
 	return counts.map(({ value, count }) => ({
 		value,
 		count,
-		percent: percentOf(count, answered) ?? PERCENT.format(0),
+		percent: shareOf(count, answered),
 		width: largest > 0 ? (100 * count) / largest : 0,
 	}));
 }

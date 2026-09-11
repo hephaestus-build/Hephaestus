@@ -38,7 +38,13 @@ export const NoSurveys: Story = {
 	},
 };
 
+/** The trigger's name counts the invitations, so a screen reader hears how many are waiting. */
 export const SeveralSurveys: Story = {
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByRole("button", { name: "Product feedback, 2 open surveys" }),
+		).toBeVisible();
+	},
 	args: {
 		invitations: [
 			surveyInvitation,

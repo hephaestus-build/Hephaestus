@@ -51,14 +51,22 @@ export const Default: Story = {
 	},
 };
 
-/** The whole survey, question by question, ends in one send with every answer in place. */
-export const AnswersAllQuestionsAndSends: Story = {
+/** Opening lands on the first answer, not on the scroll region in front of it. */
+export const FocusesTheFirstAnswer: Story = {
+	play: async () => {
+		const dialog = within(await screen.findByRole("dialog"));
+		await expectSettledVisible(dialog.getByRole("progressbar"));
+		await expect(dialog.getByRole("radio", { name: "1" })).toHaveFocus();
+	},
+};
+
+/** A skipped question is left out of the send. */
+export const SkipsAnOptionalQuestionAndSends: Story = {
+	args: {
+		draft: { answers: { useful: "5", channel: "On the pull request" }, item: "recommend" },
+	},
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await userEvent.click(dialog.getByRole("radio", { name: "5" }));
-		await userEvent.click(dialog.getByRole("button", { name: "Next" }));
-		await userEvent.click(dialog.getByRole("radio", { name: /On the pull request/ }));
-		await userEvent.click(dialog.getByRole("button", { name: "Next" }));
 		await userEvent.click(dialog.getByRole("button", { name: "Skip" }));
 		await userEvent.type(dialog.getByRole("textbox", { name: "Your answer" }), "Less noise ");
 		await userEvent.click(dialog.getByRole("button", { name: "Send answers" }));

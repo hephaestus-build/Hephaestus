@@ -9,10 +9,17 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 @Tag("unit")
 class FeedbackValidationTest {
+    // Mirrors spring.jackson.deserialization.fail-on-null-for-primitives=false from application.yml.
+    private static final ObjectMapper MAPPER = JsonMapper.builder()
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
+
     @ParameterizedTest
     @ValueSource(
             strings = {
@@ -50,7 +57,7 @@ class FeedbackValidationTest {
 
     @Test
     void shouldRejectNullAnswersAtTheRequestBoundary() {
-        var request = new ObjectMapper().readValue("{\"answers\":[null]}", FeedbackDTOs.SubmitSurveyDTO.class);
+        var request = MAPPER.readValue("{\"answers\":[null]}", FeedbackDTOs.SubmitSurveyDTO.class);
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             assertThat(factory.getValidator().validate(request))
                     .singleElement()
@@ -80,12 +87,11 @@ class FeedbackValidationTest {
 
     @Test
     void shouldRejectNullQuestionsAndNullOptionsBeforeTheyReachTheService() {
-        var mapper = new ObjectMapper();
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             for (String questions : List.of(
                     "[null]",
                     "[{\"id\":\"q\",\"prompt\":\"Question\",\"type\":\"TEXT\",\"options\":null,\"required\":false}]")) {
-                var request = mapper.readValue(
+                var request = MAPPER.readValue(
                         "{\"title\":\"Survey\",\"description\":\"Purpose\",\"startsAt\":\"2026-01-01T00:00:00Z\",\"questions\":"
                                 + questions + "}",
                         FeedbackDTOs.CreateSurveyDTO.class);

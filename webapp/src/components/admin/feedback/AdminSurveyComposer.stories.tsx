@@ -69,7 +69,6 @@ export const ValidationErrors: Story = {
 
 export const ChoiceQuestion: Story = {
 	play: async () => {
-		// Only a choice question can take an answer outside its options.
 		await expect(screen.queryByRole("checkbox", { name: "Allow another answer" })).toBeNull();
 		await userEvent.click(await screen.findByRole("combobox", { name: "Answer type" }));
 		await userEvent.click(await screen.findByRole("option", { name: "Single choice" }));
@@ -128,26 +127,71 @@ export const ManyQuestions: Story = {
 	},
 };
 
+/** The fields a preview needs; the schedule and the questions are the story's own. */
+async function fillSurvey(title: string) {
+	await userEvent.type(await screen.findByRole("textbox", { name: "Title" }), title);
+	await userEvent.type(
+		screen.getByRole("textbox", { name: "Purpose" }),
+		"To decide what the next release should focus on.",
+	);
+}
+
 /** Preview opens the dialog members get, on the draft as it stands, and sends nothing. */
 export const Preview: Story = {
 	play: async () => {
-		await userEvent.type(
-			await screen.findByRole("textbox", { name: "Title" }),
-			"Onboarding check-in",
-		);
+		await fillSurvey("Onboarding check-in");
 		await userEvent.type(
 			screen.getByRole("textbox", { name: "Prompt" }),
 			"What slowed you down in your first week?",
 		);
+		await userEvent.type(screen.getByLabelText("End"), "2099-01-01T09:00");
 		await userEvent.click(screen.getByRole("button", { name: "Preview" }));
 		const dialog = within(await screen.findByRole("dialog", { name: "Onboarding check-in" }));
-		await expectSettledVisible(dialog.getByText(/1 question · under a minute/));
+		await expectSettledVisible(dialog.getByText(/1 question · under a minute · Closes in/));
 		await expect(dialog.getByRole("progressbar")).toHaveTextContent("Question 1 of 1");
 		await expect(dialog.getByText(/What slowed you down in your first week\?/)).toBeVisible();
 		await userEvent.keyboard("{Escape}");
 		await waitFor(() =>
 			expect(screen.queryByRole("dialog", { name: "Onboarding check-in" })).toBeNull(),
 		);
+		// Closing the preview is not leaving the composer, so the unsaved-changes guard stays down.
+		await expect(screen.queryByRole("alertdialog")).toBeNull();
+		await expect(screen.getByRole("dialog", { name: "Create survey" })).toBeVisible();
+		await expect(screen.getByRole("button", { name: "Preview" })).toHaveFocus();
+	},
+};
+
+/** Preview refuses what Publish would refuse, and explains it in the same place. */
+export const PreviewRefused: Story = {
+	play: async ({ args }) => {
+		await userEvent.type(await screen.findByRole("textbox", { name: "Title" }), "Check-in");
+		await userEvent.click(screen.getByRole("button", { name: "Preview" }));
+		await expectSettledVisible(
+			await screen.findByRole("heading", { name: "There are 2 problems" }),
+		);
+		await expect(screen.queryByRole("dialog", { name: "Check-in" })).toBeNull();
+		await expect(args.onSubmit).not.toHaveBeenCalled();
+	},
+};
+
+export const PreviewWithAnotherAnswer: Story = {
+	play: async () => {
+		await fillSurvey("Where do you read feedback?");
+		await userEvent.type(screen.getByRole("textbox", { name: "Prompt" }), "Where, mostly?");
+		await userEvent.click(screen.getByRole("combobox", { name: "Answer type" }));
+		await userEvent.click(await screen.findByRole("option", { name: "Single choice" }));
+		await userEvent.type(
+			await screen.findByRole("textbox", { name: "Choices (one per line)" }),
+			"On the pull request{enter}On my practice page",
+		);
+		await userEvent.click(screen.getByRole("checkbox", { name: "Allow another answer" }));
+		await userEvent.click(screen.getByRole("button", { name: "Preview" }));
+		const dialog = within(
+			await screen.findByRole("dialog", { name: "Where do you read feedback?" }),
+		);
+		await expectSettledVisible(dialog.getByText("On the pull request"));
+		await expect(dialog.getByRole("radio", { name: "On my practice page" })).not.toBeChecked();
+		await expect(dialog.getByRole("textbox", { name: "Another answer" })).toBeVisible();
 	},
 };
 
@@ -156,5 +200,13 @@ export const Publishing: Story = {
 	play: async () => {
 		await expect(await screen.findByRole("button", { name: "Publishing…" })).toBeDisabled();
 		await expect(screen.getByRole("textbox", { name: "Title" })).toBeDisabled();
+	},
+};
+
+export const Reflow: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: async () => {
+		await expectSettledVisible(await screen.findByRole("textbox", { name: "Title" }));
+		await expect(screen.getByRole("button", { name: "Publish survey" })).toBeVisible();
 	},
 };

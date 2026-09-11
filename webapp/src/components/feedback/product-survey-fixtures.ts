@@ -107,12 +107,13 @@ export const surveySummary = {
 		},
 		{
 			questionId: "channel",
-			answered: 15,
+			answered: 17,
 			counts: [
 				{ value: "On the pull request", count: 9 },
-				{ value: "On my practice page", count: 4 },
+				{ value: "On my practice page", count: 3 },
 				{ value: "In conversation with Heph", count: 2 },
 			],
+			other: 3,
 		},
 		{
 			questionId: "recommend",

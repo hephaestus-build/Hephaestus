@@ -1,4 +1,4 @@
-import type { CreateSurvey, Question } from "@/api/types.gen";
+import type { CreateSurvey, Question, SurveyInvitation } from "@/api/types.gen";
 
 /**
  * What the composer holds while a survey is written: strings as the fields hold them, so a
@@ -138,6 +138,11 @@ function validateQuestion(draft: QuestionDraft): QuestionDraftErrors {
 	return errors;
 }
 
+/** A `datetime-local` value as an instant in the device's timezone; blank is no date. */
+function localDateTime(value: string): Date | undefined {
+	return value ? new Date(value) : undefined;
+}
+
 /**
  * Mirrors the server's rules (`SurveyQuestions.validateDefinition` and the DTO constraints) so a
  * refused draft is explained beside the field rather than by a 400. `now` stands in for a blank
@@ -147,11 +152,9 @@ export function validateSurveyDraft(draft: SurveyDraft, now: number): SurveyDraf
 	const errors: SurveyDraftErrors = { questionErrors: draft.questions.map(validateQuestion) };
 	if (!draft.title.trim()) errors.title = "Give the survey a title.";
 	if (!draft.description.trim()) errors.description = "Say what the answers are for.";
-	if (draft.endsAt) {
-		const start = draft.startsAt ? new Date(draft.startsAt).getTime() : now;
-		if (new Date(draft.endsAt).getTime() <= start) {
-			errors.endsAt = "The end must be after the start.";
-		}
+	const endsAt = localDateTime(draft.endsAt);
+	if (endsAt && endsAt.getTime() <= (localDateTime(draft.startsAt)?.getTime() ?? now)) {
+		errors.endsAt = "The end must be after the start.";
 	}
 	if (draft.questions.length === 0) errors.questions = "Add at least one question.";
 	return errors;
@@ -170,8 +173,20 @@ export function toCreateSurvey(draft: SurveyDraft, publishedAt: Date): CreateSur
 		title: draft.title.trim(),
 		description: draft.description.trim(),
 		workspaceId: draft.audience === ALL_WORKSPACES ? undefined : Number(draft.audience),
-		startsAt: draft.startsAt ? new Date(draft.startsAt) : publishedAt,
-		endsAt: draft.endsAt ? new Date(draft.endsAt) : undefined,
+		startsAt: localDateTime(draft.startsAt) ?? publishedAt,
+		endsAt: localDateTime(draft.endsAt),
 		questions: prepareQuestions(draft.questions),
+	};
+}
+
+/** The invitation members would get were the draft published as it stands; Preview shows it. */
+export function toPreviewSurvey(draft: SurveyDraft): SurveyInvitation {
+	return {
+		id: "preview",
+		title: draft.title.trim(),
+		description: draft.description.trim(),
+		questions: prepareQuestions(draft.questions),
+		endsAt: localDateTime(draft.endsAt),
+		seen: true,
 	};
 }

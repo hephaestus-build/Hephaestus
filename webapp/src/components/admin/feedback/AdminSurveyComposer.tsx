@@ -55,6 +55,7 @@ import {
 	type SurveyDraftErrors,
 	TITLE_MAX_LENGTH,
 	toCreateSurvey,
+	toPreviewSurvey,
 	validateSurveyDraft,
 } from "./admin-survey-draft";
 
@@ -208,15 +209,25 @@ export function AdminSurveyComposer({
 		),
 	].filter((entry): entry is FormError => Boolean(entry));
 
+	/** Publish and Preview refuse the same drafts: a preview of a survey that cannot ship misleads. */
+	const refuse = (at: Date): boolean => {
+		const refused = hasDraftErrors(validateSurveyDraft(draft, at.getTime()));
+		if (refused) setRefusedAt(at.getTime());
+		return refused;
+	};
+
 	const submit = (event: React.SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		if (isPending) return;
 		const publishedAt = new Date();
-		if (hasDraftErrors(validateSurveyDraft(draft, publishedAt.getTime()))) {
-			setRefusedAt(publishedAt.getTime());
-			return;
-		}
+		if (refuse(publishedAt)) return;
 		unsavedChanges.track(onSubmit(toCreateSurvey(draft, publishedAt)));
+	};
+
+	const preview = () => {
+		if (refuse(new Date())) return;
+		setPreviewDraft(EMPTY_SURVEY_RESPONSE_DRAFT);
+		setPreviewOpen(true);
 	};
 
 	return (
@@ -224,13 +235,7 @@ export function AdminSurveyComposer({
 			{unsavedChanges.dialog}
 			<AdminSurveyComposerHeader nested={nested} />
 			<ProductSurveyDialog
-				survey={{
-					id: "preview",
-					title: draft.title.trim() || "Untitled survey",
-					description: draft.description.trim(),
-					questions: prepared,
-					seen: true,
-				}}
+				survey={toPreviewSurvey(draft)}
 				open={previewOpen}
 				onOpenChange={setPreviewOpen}
 				draft={previewDraft}
@@ -409,10 +414,7 @@ export function AdminSurveyComposer({
 						type="button"
 						variant="outline"
 						disabled={prepared.length === 0}
-						onClick={() => {
-							setPreviewDraft(EMPTY_SURVEY_RESPONSE_DRAFT);
-							setPreviewOpen(true);
-						}}
+						onClick={preview}
 					>
 						Preview
 					</Button>
@@ -578,7 +580,8 @@ function QuestionCard({
 
 				{question.type === "NPS" && (
 					<FieldDescription>
-						0–10, labelled {NPS_LABELS.low} → {NPS_LABELS.high}
+						0–10, labelled {NPS_LABELS.low} → {NPS_LABELS.high}. Members get no answer shortcuts in
+						a survey with a recommendation question.
 					</FieldDescription>
 				)}
 

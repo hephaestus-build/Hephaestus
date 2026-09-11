@@ -325,7 +325,10 @@ export const Sending: Story = {
 			await expect(canvas.getByRole("button", { name })).toBeDisabled();
 		}
 		await expect(canvas.getByRole("progressbar")).toHaveTextContent("Question 4 of 4");
-		await expect(canvas.getByRole("textbox", { name: "Your answer" })).not.toBeDisabled();
+		const field = canvas.getByRole("textbox", { name: "Your answer" });
+		await expect(field).not.toBeDisabled();
+		field.focus();
+		await expect(field).not.toHaveFocus();
 	},
 };
 
@@ -338,9 +341,10 @@ export const SkipThenPreviousLeavesNothingChecked: Story = {
 		await expect(canvas.getByRole("progressbar")).toHaveTextContent("Question 3 of 4");
 		await userEvent.click(canvas.getByRole("button", { name: "Previous" }));
 		await expect(canvas.getByRole("radio", { name: /On my practice page/ })).not.toBeChecked();
-		await expect(args.onDraftChange).toHaveBeenLastCalledWith(
-			expect.objectContaining({ answers: { useful: "4" } }),
-		);
+		await expect(args.onDraftChange).toHaveBeenLastCalledWith({
+			answers: { useful: "4", channel: undefined },
+			item: "channel",
+		});
 	},
 };
 

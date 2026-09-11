@@ -57,7 +57,10 @@ export interface SurveyQuestionnaireProps extends Omit<
 	draft: SurveyResponseDraft;
 	onDraftChange: (draft: SurveyResponseDraft) => void;
 	onSubmit: (answers: Answer[]) => void;
-	/** A submission is in flight: the answers stay readable and nothing can be pressed. */
+	/**
+	 * A submission is in flight: the answers stay on screen and checked while the whole form is
+	 * `inert`, which also drops it from the accessibility tree until the send settles.
+	 */
 	disabled?: boolean;
 	children: ReactNode;
 }
@@ -148,17 +151,16 @@ function Items({ className, ...props }: ComponentProps<"div">) {
 						}}
 					>
 						<QuestionnaireTitle>{question.prompt}</QuestionnaireTitle>
-						{scale?.low && scale.high ? (
+						{scale?.low && scale.high && (
 							<QuestionnaireDescription>
 								{scale.points[0]} = {scale.low} · {scale.points[scale.points.length - 1]} ={" "}
 								{scale.high}
 							</QuestionnaireDescription>
-						) : (
-							!question.required && (
-								<QuestionnaireDescription>
-									Optional — skip it if it doesn't apply.
-								</QuestionnaireDescription>
-							)
+						)}
+						{!question.required && (
+							<QuestionnaireDescription>
+								Optional — skip it if it doesn't apply.
+							</QuestionnaireDescription>
 						)}
 						{question.type === "TEXT" ? (
 							<QuestionnaireInput

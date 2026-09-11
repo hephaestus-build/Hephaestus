@@ -24,7 +24,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 
 import { surveyAudience } from "./AdminSurveysTable";
-import { completionRate, distributionRows, NPS_BUCKETS, npsBuckets } from "./survey-summary";
+import {
+	completionRate,
+	distributionRows,
+	NPS_BUCKETS,
+	npsBuckets,
+	shareOf,
+} from "./survey-summary";
 import { SurveyActions } from "./SurveyActions";
 
 export type AdminSurveyResultsState =
@@ -231,6 +237,7 @@ function QuestionResults({ headingId, number, question, summary }: QuestionResul
 				<>
 					<Distribution
 						rows={counts}
+						answered={answered}
 						other={summary?.other}
 						label={`Answers to question ${number}`}
 					/>
@@ -249,20 +256,23 @@ function QuestionResults({ headingId, number, question, summary }: QuestionResul
 
 /**
  * The option counts, then — set apart, without a bar — how many respondents typed an answer of
- * their own. Those answers are read one by one in the responses below, not compared as a share.
+ * their own. Every share, that one included, is of everyone who answered the question; the typed
+ * answers themselves are read one by one in the responses below.
  */
 function Distribution({
 	rows,
+	answered,
 	other,
 	label,
 }: {
 	rows: QuestionSummary["counts"];
+	answered: number;
 	other: number | undefined;
 	label: string;
 }) {
 	return (
 		<ul className="flex flex-col gap-1.5" aria-label={label}>
-			{distributionRows(rows).map((row) => (
+			{distributionRows(rows, answered).map((row) => (
 				<li key={row.value} className="flex flex-col gap-1 text-sm">
 					<span className="flex items-baseline justify-between gap-3">
 						<span className="min-w-0 break-words">{row.value}</span>
@@ -278,7 +288,9 @@ function Distribution({
 			{other !== undefined && other > 0 && (
 				<li className="flex items-baseline justify-between gap-3 text-sm text-muted-foreground">
 					<span className="min-w-0 italic">Another answer</span>
-					<span className="shrink-0 tabular-nums">{other}</span>
+					<span className="shrink-0 tabular-nums">
+						{other} · {shareOf(other, answered)}
+					</span>
 				</li>
 			)}
 		</ul>

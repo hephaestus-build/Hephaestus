@@ -13,7 +13,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 @Tag("unit")
 class SurveyQuestionsTest {
@@ -32,6 +34,10 @@ class SurveyQuestionsTest {
             "single", "Pick one", QuestionType.SINGLE_CHOICE, List.of("A", "B"), false, true, null, null);
     private static final QuestionDTO MULTI_WITH_OTHER = new QuestionDTO(
             "multi", "Pick any", QuestionType.MULTIPLE_CHOICE, List.of("X", "Y", "Z"), false, true, null, null);
+    // Mirrors spring.jackson.deserialization.fail-on-null-for-primitives=false from application.yml.
+    private static final ObjectMapper MAPPER = JsonMapper.builder()
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     static List<List<QuestionDTO>> invalidDefinitions() {
         return List.of(
@@ -119,14 +125,12 @@ class SurveyQuestionsTest {
         return List.of(
                 List.of(new AnswerDTO("single", null, List.of("A", "C"), null)),
                 List.of(new AnswerDTO("multi", null, List.of("X", "one", "two"), null)),
-                List.of(new AnswerDTO("multi", null, List.of("   "), null)),
-                List.of(new AnswerDTO("multi", null, List.of("x".repeat(SurveyQuestions.OTHER_MAX_LENGTH + 1)), null)),
                 List.of(new AnswerDTO("multi", null, List.of("X", " X "), null)));
     }
 
     @ParameterizedTest
     @MethodSource("invalidOtherAnswers")
-    void shouldRejectOtherAnswersThatAreNotOneFittingValue(List<AnswerDTO> answers) {
+    void shouldRejectMoreThanOneOtherAnswer(List<AnswerDTO> answers) {
         assertThatThrownBy(() -> SurveyQuestions.validateAnswers(List.of(SINGLE_WITH_OTHER, MULTI_WITH_OTHER), answers))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("400");
@@ -149,10 +153,9 @@ class SurveyQuestionsTest {
 
     @Test
     void shouldReadAStoredQuestionWithoutTheOtherFlagAsNotAllowingOne() {
-        QuestionDTO question = new ObjectMapper()
-                .readValue(
-                        "{\"id\":\"q\",\"prompt\":\"Why?\",\"type\":\"TEXT\",\"options\":[],\"required\":true}",
-                        QuestionDTO.class);
+        QuestionDTO question = MAPPER.readValue(
+                "{\"id\":\"q\",\"prompt\":\"Why?\",\"type\":\"TEXT\",\"options\":[],\"required\":true}",
+                QuestionDTO.class);
         assertThat(question.allowOther()).isFalse();
         assertThat(question.required()).isTrue();
     }
