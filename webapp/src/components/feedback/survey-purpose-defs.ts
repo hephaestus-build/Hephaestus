@@ -18,7 +18,7 @@ export const SURVEY_PURPOSE_DEFS: StatusDefs<Survey["purpose"]> = {
 		label: "Product",
 		icon: Wrench,
 		badgeVariant: "secondary",
-		description: "Read by this instance's administrators to improve Hephaestus here.",
+		description: "Read by the people who run Hephaestus here, to improve it here.",
 	},
 	RESEARCH: {
 		label: "Research",

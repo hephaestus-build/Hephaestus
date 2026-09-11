@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import {
 	Bug,
 	ClipboardList,
@@ -6,6 +7,7 @@ import {
 	MessageSquare,
 	MessageSquarePlus,
 } from "lucide-react";
+import { useId } from "react";
 
 import type { SurveyInvitation } from "@/api/types.gen";
 import { GithubIcon } from "@/components/icons/brand";
@@ -20,7 +22,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-import type { FeedbackKind } from "./ProductFeedbackDialog";
+import { FEEDBACK_KIND_COPY, type FeedbackKind, READERS } from "./feedback-copy";
 import { SURVEY_PURPOSE_DEFS } from "./survey-purpose-defs";
 import { surveyEstimate } from "./survey-questions";
 
@@ -34,22 +36,23 @@ export interface ProductFeedbackMenuProps {
 	onOpenSurvey: (surveyId: string) => void;
 }
 
-const KINDS: { kind: FeedbackKind; label: string; icon: typeof Bug }[] = [
-	{ kind: "IDEA", label: "Share an idea", icon: Lightbulb },
-	{ kind: "BUG", label: "Report a bug", icon: Bug },
-	{ kind: "FEEDBACK", label: "Send feedback", icon: MessageSquare },
+const KINDS: { kind: FeedbackKind; icon: typeof Bug }[] = [
+	{ kind: "IDEA", icon: Lightbulb },
+	{ kind: "BUG", icon: Bug },
+	{ kind: "FEEDBACK", icon: MessageSquare },
 ];
 
 /**
  * The one place to talk to the people behind this instance — and, one step further, to the
- * project. Survey invitations wait here rather than in a dialog of their own: the count on the
- * trigger says something is waiting, and nothing opens until the member chooses to.
+ * project. The trigger is a labelled pill rather than a bare icon so the door is visible; survey
+ * invitations wait behind it, counted on the trigger, and nothing opens until the member chooses.
  */
 export function ProductFeedbackMenu({
 	invitations,
 	onSendFeedback,
 	onOpenSurvey,
 }: ProductFeedbackMenuProps) {
+	const id = useId();
 	const count = invitations.length;
 	return (
 		<DropdownMenu>
@@ -59,25 +62,52 @@ export function ProductFeedbackMenu({
 						? `Feedback, ${count} ${count === 1 ? "survey" : "surveys"} waiting`
 						: "Feedback"
 				}
-				render={<Button variant="ghost" size="icon" className="relative" />}
+				render={
+					<Button
+						variant="outline"
+						className={cn(
+							// A 32px square on a phone, where the header is already full; a labelled pill from `sm`.
+							"group relative rounded-full px-2 sm:px-3",
+							count > 0 && "border-primary/40 bg-primary/5 hover:bg-primary/10",
+						)}
+					/>
+				}
 			>
-				<MessageSquarePlus />
+				<MessageSquarePlus
+					aria-hidden
+					className="transition-transform duration-200 group-hover:-rotate-12 group-hover:scale-110 motion-reduce:transition-none motion-reduce:group-hover:transform-none"
+				/>
+				<span className="hidden sm:inline">Feedback</span>
 				{count > 0 && (
 					<span
 						aria-hidden
-						className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium tabular-nums text-primary-foreground"
+						className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold tabular-nums text-primary-foreground sm:static"
 					>
 						{count}
 					</span>
 				)}
 			</DropdownMenuTrigger>
-			<DropdownMenuContent className="w-72" align="end">
+			<DropdownMenuContent className="w-80" align="end">
+				<div className="px-2 pt-1.5 pb-2">
+					<p className="text-sm font-medium">Help make Hephaestus better</p>
+					<p className="text-xs text-muted-foreground">Ideas, bugs and feedback go to {READERS}.</p>
+				</div>
 				<DropdownMenuGroup>
-					<DropdownMenuLabel>To this instance's administrators</DropdownMenuLabel>
-					{KINDS.map(({ kind, label, icon: Icon }) => (
-						<DropdownMenuItem key={kind} onClick={() => onSendFeedback(kind)}>
-							<Icon />
-							<span>{label}</span>
+					{KINDS.map(({ kind, icon: Icon }) => (
+						<DropdownMenuItem
+							key={kind}
+							className="items-start"
+							aria-label={FEEDBACK_KIND_COPY[kind].heading}
+							aria-describedby={`${id}-${kind}`}
+							onClick={() => onSendFeedback(kind)}
+						>
+							<Icon className="mt-0.5" />
+							<span className="flex min-w-0 flex-col">
+								<span>{FEEDBACK_KIND_COPY[kind].heading}</span>
+								<span id={`${id}-${kind}`} className="text-xs text-muted-foreground">
+									{FEEDBACK_KIND_COPY[kind].detail}
+								</span>
+							</span>
 						</DropdownMenuItem>
 					))}
 				</DropdownMenuGroup>
@@ -90,12 +120,14 @@ export function ProductFeedbackMenu({
 								<DropdownMenuItem
 									key={survey.id}
 									className="items-start"
+									aria-label={survey.title}
+									aria-describedby={`${id}-${survey.id}`}
 									onClick={() => onOpenSurvey(survey.id)}
 								>
 									<ClipboardList className="mt-0.5" />
 									<span className="flex min-w-0 flex-col">
 										<span className="truncate">{survey.title}</span>
-										<span className="text-xs text-muted-foreground">
+										<span id={`${id}-${survey.id}`} className="text-xs text-muted-foreground">
 											{survey.purpose === "RESEARCH" && `${SURVEY_PURPOSE_DEFS.RESEARCH.label} · `}
 											{surveyEstimate(survey.questions)}
 										</span>
@@ -107,9 +139,10 @@ export function ProductFeedbackMenu({
 				)}
 				<DropdownMenuSeparator />
 				<DropdownMenuGroup>
-					<DropdownMenuLabel>To the Hephaestus project</DropdownMenuLabel>
 					<DropdownMenuItem
 						className="items-start"
+						aria-label="Open an issue on GitHub (opens in a new tab)"
+						aria-describedby={`${id}-github`}
 						render={<a href={HEPHAESTUS_GITHUB_ISSUES_URL} target="_blank" rel="noreferrer" />}
 					>
 						<GithubIcon className="mt-0.5" />
@@ -117,10 +150,9 @@ export function ProductFeedbackMenu({
 							<span className="flex items-center gap-1">
 								Open an issue on GitHub
 								<ExternalLink aria-hidden className="size-3" />
-								<span className="sr-only">(opens in a new tab)</span>
 							</span>
-							<span className="text-xs text-muted-foreground">
-								Public, for bugs and ideas that concern every instance.
+							<span id={`${id}-github`} className="text-xs text-muted-foreground">
+								Public, for bugs and ideas about Hephaestus itself.
 							</span>
 						</span>
 					</DropdownMenuItem>

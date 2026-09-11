@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 
+import { READERS } from "./feedback-copy";
 import { studyOf, SURVEY_PURPOSE_DEFS } from "./survey-purpose-defs";
 import { type SurveyResponseDraft, surveyEstimate } from "./survey-questions";
 import { SurveyQuestionnaire } from "./SurveyQuestionnaire";
@@ -91,9 +92,8 @@ export function ProductSurveyDialog({
 							{research ? (
 								<>
 									Part of {studyOf(survey)}, which you agreed to join. Your answers go to that
-									study, linked to your account; this instance's administrators see them as study
-									data, not as product feedback. Skip anything you'd rather not answer. You can
-									leave the study in{" "}
+									study, linked to your account; {READERS} see them as study data, not as product
+									feedback. Skip anything you'd rather not answer. You can leave the study in{" "}
 									<Link
 										to="/settings"
 										className="underline underline-offset-2"
@@ -105,8 +105,8 @@ export function ProductSurveyDialog({
 								</>
 							) : (
 								<>
-									Read by this instance's administrators, with your name attached. Not used for
-									research, and not sent to the Hephaestus project.
+									Read by {READERS}, with your name attached. Not research, and nothing goes to the
+									Hephaestus project.
 								</>
 							)}
 						</p>

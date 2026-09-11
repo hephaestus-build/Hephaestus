@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn } from "storybook/test";
 
+import { surveyInvitation } from "@/components/feedback/product-survey-fixtures";
+import { ProductFeedbackMenu } from "@/components/feedback/ProductFeedbackMenu";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { expectNoPageOverflow } from "@/test/reflow";
 
@@ -13,6 +15,7 @@ const meta = {
 		viewport: { defaultViewport: "desktop" },
 	},
 	tags: ["autodocs"],
+	argTypes: { feedbackDialog: { control: false }, sidebarTrigger: { control: false } },
 	args: {
 		version: "1.0.0",
 		environmentName: "Production",
@@ -21,6 +24,13 @@ const meta = {
 		username: "johnDoe",
 		workspaceSlug: "demo-workspace",
 		sidebarTrigger: <SidebarTrigger />,
+		feedbackDialog: (
+			<ProductFeedbackMenu
+				invitations={[surveyInvitation]}
+				onSendFeedback={fn()}
+				onOpenSurvey={fn()}
+			/>
+		),
 		onLogin: fn(),
 		onLogout: fn(),
 	},

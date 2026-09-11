@@ -12,6 +12,7 @@ import {
 	submitWorkspaceProductFeedbackMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { Answer, FeedbackRequest, SurveyInvitation } from "@/api/types.gen";
+import { READERS } from "@/components/feedback/feedback-copy";
 import { studyOf } from "@/components/feedback/survey-purpose-defs";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 
@@ -54,7 +55,7 @@ type SurveyIdentity = Pick<SurveyInvitation, "id" | "purpose" | "researchOrganiz
 function surveyAcknowledgement(survey: SurveyIdentity): string {
 	return survey.purpose === "RESEARCH"
 		? `Thank you — your answers were recorded for ${studyOf(survey)}.`
-		: "Thank you — your answers are with this instance's administrators.";
+		: `Thank you — your answers are on their way to ${READERS}.`;
 }
 
 export function useProductSurveys(workspaceSlug: string | undefined) {
@@ -168,9 +169,9 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 }
 
 const FEEDBACK_SENT: Record<FeedbackRequest["kind"], string> = {
-	IDEA: "Thanks — your idea is with this instance's administrators.",
-	BUG: "Thanks — your bug report is with this instance's administrators.",
-	FEEDBACK: "Thanks — your feedback is with this instance's administrators.",
+	IDEA: `Thanks — your idea is on its way to ${READERS}.`,
+	BUG: `Thanks — your bug report is on its way to ${READERS}.`,
+	FEEDBACK: `Thanks — your feedback is on its way to ${READERS}.`,
 };
 
 export function useSubmitProductFeedback(workspaceSlug: string | undefined) {

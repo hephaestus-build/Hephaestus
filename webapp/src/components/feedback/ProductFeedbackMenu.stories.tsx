@@ -32,7 +32,11 @@ export const NoSurveys: Story = {
 	play: async ({ canvas, args }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Feedback" }));
 		const menu = within(await screen.findByRole("menu"));
-		await expectSettledVisible(menu.getByRole("menuitem", { name: "Share an idea" }));
+		const idea = menu.getByRole("menuitem", { name: "Share an idea" });
+		await expectSettledVisible(idea);
+		// The detail is announced as a description, not folded into the item's name.
+		await expect(idea).toHaveAccessibleDescription("A feature or change that would help.");
+		await expect(menu.getByText("Help make Hephaestus better")).toBeVisible();
 		// No survey, no survey section: an empty list in a menu is noise.
 		await expect(menu.queryByText(/Surveys/)).toBeNull();
 		await expect(menu.getByRole("menuitem", { name: /Open an issue on GitHub/ })).toHaveAttribute(
@@ -41,6 +45,14 @@ export const NoSurveys: Story = {
 		);
 		await userEvent.click(menu.getByRole("menuitem", { name: "Report a bug" }));
 		await expect(args.onSendFeedback).toHaveBeenCalledWith("BUG");
+	},
+};
+
+/** On a narrow screen the label folds away; the icon and the count stay, and the name does not change. */
+export const Compact: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Feedback, 1 survey waiting" })).toBeVisible();
 	},
 };
 

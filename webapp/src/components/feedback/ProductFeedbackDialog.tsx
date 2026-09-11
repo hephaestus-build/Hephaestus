@@ -26,7 +26,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 
-export type FeedbackKind = FeedbackRequest["kind"];
+import { FEEDBACK_KIND_COPY, type FeedbackKind, READERS } from "./feedback-copy";
 
 /** The server's `FeedbackRequest` limits; a longer value is refused, so the sender never sees a cut. */
 export const MESSAGE_MAX_LENGTH = 5000;
@@ -34,39 +34,6 @@ export const PAGE_PATH_MAX_LENGTH = 500;
 export const USER_AGENT_MAX_LENGTH = 500;
 /** The counter appears once this many characters are left, not before: a count nobody is near is noise. */
 const COUNTER_THRESHOLD = 500;
-
-interface KindCopy {
-	title: string;
-	detail: string;
-	/** The dialog's heading and the message field's label once this kind is chosen. */
-	heading: string;
-	label: string;
-	placeholder: string;
-}
-
-export const FEEDBACK_KIND_COPY: Record<FeedbackKind, KindCopy> = {
-	IDEA: {
-		title: "Idea",
-		detail: "A feature or change that would help.",
-		heading: "Share an idea",
-		label: "Your idea",
-		placeholder: "What would you change or add, and what would it let you do?",
-	},
-	BUG: {
-		title: "Bug",
-		detail: "Something broke or behaved unexpectedly.",
-		heading: "Report a bug",
-		label: "What happened?",
-		placeholder: "What were you doing, what happened, and what did you expect instead?",
-	},
-	FEEDBACK: {
-		title: "Feedback",
-		detail: "What works, what gets in your way.",
-		heading: "Send feedback",
-		label: "Your feedback",
-		placeholder: "What works well for you, and what does not?",
-	},
-};
 
 const KINDS: FeedbackKind[] = ["IDEA", "BUG", "FEEDBACK"];
 
@@ -135,8 +102,8 @@ export function ProductFeedbackDialog({
 					<DialogHeader>
 						<DialogTitle>{copy.heading}</DialogTitle>
 						<DialogDescription>
-							Read by this instance's administrators, with your name attached. Nothing is sent to
-							the Hephaestus project.
+							Goes to {READERS}, with your name so they can follow up. Nothing is sent to the
+							Hephaestus project.
 						</DialogDescription>
 					</DialogHeader>
 					<DialogBody className="flex flex-col gap-5 py-1">

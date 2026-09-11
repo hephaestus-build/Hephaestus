@@ -103,8 +103,8 @@ export const Research: Story = {
 export const ProductFraming: Story = {
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await expectSettledVisible(dialog.getByText(/Read by this instance's administrators/));
-		await expect(dialog.getByText(/Not used for research/)).toBeVisible();
+		await expectSettledVisible(dialog.getByText(/Read by the people who run Hephaestus here/));
+		await expect(dialog.getByText(/Not research/)).toBeVisible();
 		await expect(dialog.queryByText("Research")).toBeNull();
 	},
 };

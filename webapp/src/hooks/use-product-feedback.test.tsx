@@ -189,13 +189,17 @@ describe("product feedback wire contract", () => {
 		await act(async () => {
 			expect(await surveys.result.current.submit(surveyInvitation, [])).toBe(true);
 		});
-		await screen.findByText("Thank you — your answers are with this instance's administrators.");
+		await screen.findByText(
+			"Thank you — your answers are on their way to the people who run Hephaestus here.",
+		);
 
 		const feedback = renderHook(() => useSubmitProductFeedback("acme"), { wrapper });
 		await act(async () => {
 			expect(await feedback.result.current.submit({ kind: "IDEA", message: "Pin it" })).toBe(true);
 		});
-		await screen.findByText("Thanks — your idea is with this instance's administrators.");
+		await screen.findByText(
+			"Thanks — your idea is on its way to the people who run Hephaestus here.",
+		);
 	});
 
 	it("undoes a decline from the toast", async () => {

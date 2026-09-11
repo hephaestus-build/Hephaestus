@@ -23,8 +23,8 @@ import Header from "@/components/core/Header";
 import { AppSidebar, type SidebarContext } from "@/components/core/sidebar/AppSidebar";
 import { SkipToContent } from "@/components/core/SkipToContent";
 import { StandardPageSurface } from "@/components/core/StandardPageSurface";
+import type { FeedbackKind } from "@/components/feedback/feedback-copy";
 import {
-	type FeedbackKind,
 	PAGE_PATH_MAX_LENGTH,
 	ProductFeedbackDialog,
 	USER_AGENT_MAX_LENGTH,
