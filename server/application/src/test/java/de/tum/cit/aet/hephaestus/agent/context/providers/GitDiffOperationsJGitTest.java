@@ -8,11 +8,14 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.MergeCommand;
 import org.eclipse.jgit.api.MergeResult;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevWalk;
@@ -124,17 +127,93 @@ class GitDiffOperationsJGitTest extends BaseUnitTest {
     }
 
     @Test
-    void shortLogEmitsAbbreviatedShaAndSubject() throws GitAPIException, IOException {
+    void shouldListCommitsOldestFirstWithSubjectBodyAndFileCountWhenTheHistoryIsLinear()
+            throws GitAPIException, IOException {
+        write("c.txt", "c\n");
+        String laterSha = commit("add c\n\nNeeded before the shadow pass lands.\n");
+
+        GitDiffOperations.CommitLog log = ops.commitLog(repoDir, baseSha, laterSha, 10);
+
+        assertThat(log).isNotNull();
+        assertThat(log.truncated()).isFalse();
+        assertThat(log.commits())
+                .extracting(GitDiffOperations.CommitLogEntry::sha)
+                .containsExactly(headSha, laterSha);
+        GitDiffOperations.CommitLogEntry first = log.commits().get(0);
+        assertThat(first.subject()).isEqualTo("change a, add b");
+        assertThat(first.body()).isNull();
+        assertThat(first.parentCount()).isEqualTo(1);
+        assertThat(first.changedFiles()).isEqualTo(2);
+        GitDiffOperations.CommitLogEntry second = log.commits().get(1);
+        assertThat(second.subject()).isEqualTo("add c");
+        assertThat(second.body()).isEqualTo("Needed before the shadow pass lands.");
+        assertThat(second.changedFiles()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldFoldTheSubjectAndSplitTheBodyWhenTheMessageHasSeveralParagraphs() throws GitAPIException, IOException {
+        write("c.txt", "c\n");
+        String sha = commit(
+                "Cache detection results\nacross files\n\nAvoids re-running the detector.\n\nCo-authored-by: Ada <ada@example.com>");
+
+        GitDiffOperations.CommitLog log = ops.commitLog(repoDir, headSha, sha, 10);
+
+        assertThat(log).isNotNull();
+        GitDiffOperations.CommitLogEntry entry = log.commits().get(0);
+        assertThat(entry.subject()).isEqualTo("Cache detection results across files");
+        assertThat(entry.body()).isEqualTo("Avoids re-running the detector.\n\nCo-authored-by: Ada <ada@example.com>");
+    }
+
+    @Test
+    void shouldKeepAMergedBranchTogetherWhenCommitTimesInterleaveTheLines() throws GitAPIException, IOException {
+        // Commit times interleave the two lines; topological order must not.
+        write("c.txt", "c\n");
+        String featureFirst = commitAt("add c", Instant.parse("2026-06-01T10:00:00Z"));
+        write("d.txt", "d\n");
+        String featureSecond = commitAt("add d", Instant.parse("2026-06-01T11:00:00Z"));
+        git.checkout().setName("main").call();
+        write("main-only.txt", "main\n");
+        String mainOnly = commitAt("main only", Instant.parse("2026-06-01T10:30:00Z"));
+        git.checkout().setName("feature").call();
+        MergeResult merge = git.merge()
+                .include(repo.resolve(mainOnly))
+                .setFastForward(MergeCommand.FastForwardMode.NO_FF)
+                .setCommit(true)
+                .setMessage("Merge branch 'main' into feature")
+                .call();
+        assertThat(merge.getMergeStatus().isSuccessful()).isTrue();
+        String mergeSha = merge.getNewHead().getName();
+
+        GitDiffOperations.CommitLog log = ops.commitLog(repoDir, baseSha, mergeSha, 10);
+
+        assertThat(log).isNotNull();
+        assertThat(log.commits())
+                .extracting(GitDiffOperations.CommitLogEntry::sha)
+                .startsWith(headSha)
+                .endsWith(mergeSha)
+                .containsSubsequence(featureFirst, featureSecond)
+                .doesNotContainSubsequence(featureFirst, mainOnly, featureSecond);
+        GitDiffOperations.CommitLogEntry mergeEntry = log.commits().getLast();
+        assertThat(mergeEntry.parentCount()).isEqualTo(2);
+        assertThat(mergeEntry.changedFiles()).isNull();
+    }
+
+    @Test
+    void shouldKeepTheOldestCommitsAndReportTruncationOnlyWhenTheRangeExceedsTheLimit()
+            throws GitAPIException, IOException {
         write("c.txt", "c\n");
         String laterSha = commit("add c");
 
-        String log = ops.shortLog(repoDir, baseSha, laterSha);
-        assertThat(log).isNotNull();
-        String[] lines = log.trim().split("\n");
-        assertThat(lines).hasSize(2);
-        assertThat(lines[0]).matches("[0-9a-f]{7}\tadd c");
-        assertThat(lines[1]).matches("[0-9a-f]{7}\tchange a, add b");
-        assertThat(laterSha).startsWith(lines[0].split("\t")[0]);
+        GitDiffOperations.CommitLog exactFit = ops.commitLog(repoDir, baseSha, laterSha, 2);
+        GitDiffOperations.CommitLog cut = ops.commitLog(repoDir, baseSha, laterSha, 1);
+
+        assertThat(exactFit).isNotNull();
+        assertThat(exactFit.truncated()).isFalse();
+        assertThat(cut).isNotNull();
+        assertThat(cut.truncated()).isTrue();
+        assertThat(cut.commits())
+                .extracting(GitDiffOperations.CommitLogEntry::sha)
+                .containsExactly(headSha);
     }
 
     @Test
@@ -238,6 +317,17 @@ class GitDiffOperationsJGitTest extends BaseUnitTest {
                 .setMessage(message)
                 .setAuthor("t", "t@e")
                 .setCommitter("t", "t@e")
+                .call()
+                .getName();
+    }
+
+    private String commitAt(String message, Instant when) throws GitAPIException {
+        PersonIdent ident = new PersonIdent("t", "t@e", when, ZoneOffset.UTC);
+        git.add().addFilepattern(".").call();
+        return git.commit()
+                .setMessage(message)
+                .setAuthor(ident)
+                .setCommitter(ident)
                 .call()
                 .getName();
     }

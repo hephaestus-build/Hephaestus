@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
+import de.tum.cit.aet.hephaestus.core.release.ImageReference;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -58,8 +59,6 @@ public class AgentImageReferenceGuard {
     /** Docker's tag grammar. A reference whose tag is empty or malformed only fails at the daemon. */
     private static final Pattern TAG = Pattern.compile("[A-Za-z0-9_][A-Za-z0-9._-]{0,127}");
 
-    private static final Pattern DIGEST_PINNED = Pattern.compile("^[^@]+@sha256:[a-f0-9]{64}$");
-
     private static final String DOCS = "See docs/admin/release-image-lock.md.";
 
     private static final String FIX =
@@ -82,10 +81,10 @@ public class AgentImageReferenceGuard {
                     "hephaestus.agent.image.reference is not set and could not be derived. " + DOCS);
         }
         if (reference.indexOf('@') >= 0) {
-            if (!DIGEST_PINNED.matcher(reference).matches()) {
+            if (!ImageReference.isDigestPinned(reference)) {
                 throw new IllegalStateException(
-                        "hephaestus.agent.image.reference is digest-pinned but the digest is not a sha256 of "
-                                + "64 lowercase hex characters: "
+                        "hephaestus.agent.image.reference carries a digest but is not a lowercase name with a "
+                                + "sha256 of 64 lowercase hex characters: "
                                 + reference
                                 + ". "
                                 + DOCS);

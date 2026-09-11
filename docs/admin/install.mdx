@@ -292,6 +292,29 @@ Before startup, compare `.env` with the release's `.env.example` and complete an
 major-version changes. Return to **Validate then deploy** in the runbook for guarded startup.
 The [compatibility policy](./compatibility-policy#upgrade-guarantee) defines skip-version support.
 
+### Update checks
+
+**Instance administration → Overview** shows the release this server reports from its lock
+([runtime identity handoff](./release-image-lock#runtime-identity-handoff)) and whether GitHub has
+published a newer one. A failed, rate-limited, disabled or never-completed check is shown as exactly
+that, never as "up to date". For a newer release the card links its notes and the upgrade guide and
+says whether that release carries schema migrations. The flag describes the newest release only:
+read every release note between yours and it before upgrading. Nothing here verifies an artifact or
+performs an upgrade.
+
+The server asks GitHub a minute after start and then once a day. After a failure it retries after
+15 minutes, doubling up to a day, or later when GitHub names a longer wait. **Check now** ignores the
+daily cache, never delays the automatic retry, and only waits out a wait GitHub named. A restart
+forgets the last answer. A commit channel or a local build runs no release and is never checked.
+
+Each check is one unauthenticated HTTPS GET to
+`https://api.github.com/repos/hephaestus-build/Hephaestus/releases/latest` with the static user agent
+`Hephaestus-release-check` and, after the first answer, its ETag. It carries no version, credential,
+workspace data or configuration; GitHub sees the source IP and the time. On an air-gapped host set
+`HEPHAESTUS_RELEASE_CHECK_ENABLED=false` in `.env` and recreate `application-server`; the overview
+then shows the identity and no check. A failed check reaches only instance administration, never
+health or readiness.
+
 ## Rollback
 
 Follow [failed-migration recovery](./production-operations-runbook#if-migration-fails) to restore the

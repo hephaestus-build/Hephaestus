@@ -77,6 +77,24 @@ class PullRequestContentSourceTest extends BaseUnitTest {
     private static final SourceKind DIFF = new SourceKind("scm.pull-request.diff");
     private static final SourceKind COMMENTS = new SourceKind("scm.pull-request.comments");
 
+    private static final GitDiffOperations.CommitLogEntry AUTHORED = new GitDiffOperations.CommitLogEntry(
+            "a".repeat(40),
+            "Extract the retry logic into a helper",
+            "The upload and the download paths duplicated it.",
+            Instant.parse("2026-06-01T10:00:00Z"),
+            Instant.parse("2026-06-01T10:01:00Z"),
+            1,
+            3);
+
+    private static final GitDiffOperations.CommitLogEntry MERGE = new GitDiffOperations.CommitLogEntry(
+            "b".repeat(40),
+            "Merge branch 'main' into feature/auth-fix",
+            null,
+            Instant.parse("2026-06-01T11:00:00Z"),
+            Instant.parse("2026-06-01T11:00:00Z"),
+            2,
+            null);
+
     private PullRequestContentSource provider;
 
     @BeforeEach
@@ -145,6 +163,13 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         lenient()
                 .when(gitDiffOperations.diffStat(Path.of("/tmp/hephaestus-git-repos/123"), "main", "abc123def456"))
                 .thenReturn(" a.txt | 1\n");
+        lenient()
+                .when(gitDiffOperations.commitLog(
+                        Path.of("/tmp/hephaestus-git-repos/123"),
+                        "main",
+                        "abc123def456",
+                        PullRequestContentSource.MAX_COMMITS))
+                .thenReturn(new GitDiffOperations.CommitLog(List.of(AUTHORED, MERGE), false));
     }
 
     @Nested
@@ -160,11 +185,71 @@ class PullRequestContentSourceTest extends BaseUnitTest {
     class MetadataAndComments {
 
         @Test
-        void capturesCoreWithoutARepositoryClone() {
+        void shouldFailTheRecordWhenTheCloneIsUnavailable() {
+            when(gitRepositoryManager.isEnabled()).thenReturn(false);
+
+            assertThatThrownBy(() -> provider.capture(request(sampleMetadata()), java.util.Set.of(CORE)))
+                    .isInstanceOf(JobPreparationException.class)
+                    .hasMessageContaining("Git local storage is disabled");
+            verifyNoInteractions(gitDiffOperations);
+        }
+
+        @Test
+        void shouldWriteTheRecordAndItsCommitsWhenCoreIsCaptured() throws Exception {
+            stubGit();
+
             EvidenceContribution contribution = provider.capture(request(sampleMetadata()), java.util.Set.of(CORE));
 
-            assertThat(contribution.files()).containsKey("inputs/context/metadata.json");
-            verifyNoInteractions(gitRepositoryManager);
+            assertThat(contribution.files())
+                    .containsOnlyKeys("inputs/context/metadata.json", "inputs/context/commits.json");
+            assertThat(contribution.completeness().get(CORE)).isEqualTo(SourceCompleteness.COMPLETE);
+            JsonNode commits = objectMapper.readTree(contribution.files().get("inputs/context/commits.json"));
+            assertThat(commits.get("truncated").asBoolean()).isFalse();
+            assertThat(commits.get("commits")).hasSize(2);
+            JsonNode authored = commits.get("commits").get(0);
+            assertThat(authored.get("sha").asString()).isEqualTo("a".repeat(40));
+            assertThat(authored.get("subject").asString()).isEqualTo("Extract the retry logic into a helper");
+            assertThat(authored.get("body").asString()).isEqualTo("The upload and the download paths duplicated it.");
+            assertThat(authored.get("authored_at").asString()).isEqualTo("2026-06-01T10:00:00Z");
+            assertThat(authored.get("committed_at").asString()).isEqualTo("2026-06-01T10:01:00Z");
+            assertThat(authored.get("parent_count").asInt()).isEqualTo(1);
+            assertThat(authored.get("changed_files").asInt()).isEqualTo(3);
+            JsonNode merge = commits.get("commits").get(1);
+            assertThat(merge.get("parent_count").asInt()).isEqualTo(2);
+            assertThat(merge.has("body")).isFalse();
+            assertThat(merge.has("changed_files")).isFalse();
+        }
+
+        @Test
+        void shouldReportThePartialRecordWhenTheCommitLogIsTruncated() throws Exception {
+            stubGit();
+            when(gitDiffOperations.commitLog(
+                            Path.of("/tmp/hephaestus-git-repos/123"),
+                            "main",
+                            "abc123def456",
+                            PullRequestContentSource.MAX_COMMITS))
+                    .thenReturn(new GitDiffOperations.CommitLog(List.of(AUTHORED), true));
+
+            EvidenceContribution contribution = provider.capture(request(sampleMetadata()), java.util.Set.of(CORE));
+
+            assertThat(contribution.completeness().get(CORE)).isEqualTo(SourceCompleteness.PARTIAL);
+            JsonNode commits = objectMapper.readTree(contribution.files().get("inputs/context/commits.json"));
+            assertThat(commits.get("truncated").asBoolean()).isTrue();
+        }
+
+        @Test
+        void shouldAbortWhenTheCommitLogCannotBeRead() {
+            stubGit();
+            when(gitDiffOperations.commitLog(
+                            Path.of("/tmp/hephaestus-git-repos/123"),
+                            "main",
+                            "abc123def456",
+                            PullRequestContentSource.MAX_COMMITS))
+                    .thenReturn(null);
+
+            assertThatThrownBy(() -> provider.capture(request(sampleMetadata()), java.util.Set.of(CORE)))
+                    .isInstanceOf(JobPreparationException.class)
+                    .hasMessageContaining("Commit log could not be read");
         }
 
         @Test
@@ -405,6 +490,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
             EvidenceContribution contribution = provider.capture(request(sampleMetadata()), java.util.Set.of(DIFF));
 
+            assertThat(contribution.files()).doesNotContainKey("inputs/context/commits.json");
             assertThat(contribution.files().get("inputs/context/diff.patch")).isEmpty();
             assertThat(contribution.contentStates().get(DIFF)).isEqualTo(SourceContentState.EMPTY);
             assertThat(contribution.completeness().get(DIFF)).isEqualTo(SourceCompleteness.COMPLETE);
@@ -569,6 +655,19 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         var restored = provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
         assertThat(restored.stateOverrides()).isEmpty();
         assertThat(restored.files()).isNotEmpty();
+    }
+
+    @Test
+    void shouldFetchTheCloneWhenOnlyCoreIsPrepared() {
+        when(gitRepositoryManager.isEnabled()).thenReturn(true);
+        when(gitRepositoryManager.isRepositoryCloned(123L)).thenReturn(true);
+        when(connectionService.findActiveProviderKind(WORKSPACE_ID)).thenReturn(Optional.of(IntegrationKind.GITLAB));
+        when(scmTokenSource.serverUrl(WORKSPACE_ID)).thenReturn(Optional.of("https://scm.example"));
+        when(scmTokenSource.accessToken(WORKSPACE_ID)).thenReturn(Optional.of("token"));
+
+        provider.prepareCapture(request(sampleMetadata()), Set.of(CORE));
+
+        verify(gitRepositoryManager).ensureRepository(123L, "https://scm.example/owner/repo.git", "token");
     }
 
     @Test

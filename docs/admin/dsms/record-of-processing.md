@@ -195,7 +195,7 @@ Recovery (Art. 32(1)(c))
 - No scheduled off-host backup of personal data is configured in the application repository at the time of submission. The PostgreSQL container uses a named Docker volume on the host. The authoritative copies of pull/merge-request content live on GitHub and gitlab.lrz.de. Loss of the host-local PostgreSQL volume would lose Hephaestus-specific state (workspace state, observations, practice configurations) — risk accepted at this scope, with off-host backup tracked as an open AET-ops item.
 
 Testing and evaluation (Art. 32(1)(d))
-- CI runs CodeQL (GitHub Default Setup), Trivy (filesystem and container image), TruffleHog secret detection, and Renovate dependency updates.
+- CI runs repository-specific Semgrep checks, Trivy (filesystem and container image), TruffleHog secret detection, and Renovate dependency updates.
 - Unit, integration, and end-to-end tests run on every change.
 
 Organisational

@@ -13,7 +13,7 @@ export type StatusBadgeProps = StatusBadgeOwnProps &
 	Omit<React.ComponentProps<typeof Badge>, "variant" | keyof StatusBadgeOwnProps>;
 
 /**
- * The one badge every practice-review status renders through. It takes a whole registry entry so
+ * The one badge every status registry renders through. It takes a whole registry entry so
  * the words, the colour and the icon travel together and cannot be recombined at a call site; a
  * per-enum wrapper exists only to pick the entry, never to re-decide how a badge looks.
  */

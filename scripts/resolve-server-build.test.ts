@@ -14,12 +14,10 @@ const requiredJobs = [
 	"Build / App Server: Database",
 	"Build / Webapp: E2E",
 	"App Server image / Build linux/amd64 Docker Image",
-	"App Server image / Build linux/arm64 Docker Image",
 	"Test / App Server: Unit and architecture",
 	"Test / App Server: Integration (application)",
 	"Test / App Server: Integration (providers-and-startup)",
 	"Security / Dependencies, secrets, and policy",
-	"Release evidence preflight",
 	"CI Status Gate",
 ];
 function fixture() {
@@ -35,7 +33,11 @@ function fixture() {
 			repository: { id: 7, full_name: repository },
 			head_repository: { id: 7, full_name: repository },
 		},
-		jobs: requiredJobs.map((name) => ({ name, conclusion: "success" })),
+		jobs: [
+			...requiredJobs,
+			"App Server image / Build linux/arm64 Docker Image",
+			"Release evidence preflight",
+		].map((name) => ({ name, conclusion: "success" })),
 		artifact: {
 			id: 202,
 			name: "server-build-101",
@@ -60,6 +62,16 @@ await test("selects the immutable artifact of an exact-commit successful release
 	assert.deepEqual(await resolve(), { runId: 101, artifactId: 202 });
 });
 
+await test("reuses an ordinary merge group without release-only image and evidence jobs", async () => {
+	const data = fixture();
+	data.jobs = data.jobs
+		.filter((job) => job.name !== "App Server image / Build linux/arm64 Docker Image")
+		.map((job) =>
+			job.name === "Release evidence preflight" ? { ...job, conclusion: "skipped" } : job,
+		);
+	assert.deepEqual(await resolve(data), { runId: 101, artifactId: 202 });
+});
+
 await test("rejects a different commit, repository, event, workflow, branch or incomplete run", async () => {
 	for (const patch of [
 		{ head_sha: "c".repeat(40) },
@@ -78,7 +90,7 @@ await test("rejects a different commit, repository, event, workflow, branch or i
 	}
 });
 
-await test("every artifact gate, test, security, architecture and release verdict must succeed", async () => {
+await test("every required artifact, test, security and final verdict must succeed", async () => {
 	for (const missing of requiredJobs) {
 		for (const conclusion of ["skipped", "failure", "cancelled", ""]) {
 			const data = fixture();
