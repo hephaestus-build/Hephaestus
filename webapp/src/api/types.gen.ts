@@ -13,53 +13,6 @@ export type AccountRef = {
   id: number;
 };
 
-/**
- * Achievement with user-specific progress information
- */
-export type Achievement = {
-  /**
-   * Category for grouping achievements
-   */
-  category: 'pull_requests' | 'commits' | 'communication' | 'issues' | 'milestones';
-  /**
-   * Unique identifier for the achievement
-   */
-  id: AchievementId;
-  /**
-   * Whether the achievement should be hidden until unlocked
-   */
-  isHidden?: boolean;
-  /**
-   * Parent achievement in progression chain
-   */
-  parent?: string;
-  /**
-   * The structured progress data based on the achievements evaluator
-   */
-  progressData: BinaryAchievementProgress | LinearAchievementProgress;
-  /**
-   * Visual level tier/rarity for badge styling
-   */
-  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic';
-  /**
-   * Current status of the achievement for this user
-   */
-  status: 'locked' | 'available' | 'unlocked' | 'hidden';
-  /**
-   * When the achievement was unlocked, absent while it is still locked
-   */
-  unlockedAt?: Date;
-};
-
-export type AchievementId = 'commit.common.1' | 'commit.common.2' | 'commit.epic' | 'commit.legendary' | 'commit.mythic' | 'commit.rare' | 'commit.special.atomic_changes' | 'commit.special.brute_force' | 'commit.special.cross_boundary' | 'commit.special.itsy_bitsy' | 'commit.uncommon.1' | 'commit.uncommon.2' | 'issue.close.common.1' | 'issue.close.common.2' | 'issue.close.epic' | 'issue.close.legendary' | 'issue.close.rare' | 'issue.close.uncommon' | 'issue.open.common.1' | 'issue.open.common.2' | 'issue.open.epic' | 'issue.open.legendary' | 'issue.open.rare' | 'issue.open.uncommon' | 'issue.special.hive_mind' | 'issue.special.necromancer' | 'issue.special.oracle' | 'milestone.all_epic' | 'milestone.all_legendary' | 'milestone.all_rare' | 'milestone.first_action' | 'milestone.long_time_return' | 'milestone.night_owl' | 'milestone.polyglot' | 'pr.merged.common.1' | 'pr.merged.common.2' | 'pr.merged.epic' | 'pr.merged.legendary' | 'pr.merged.rare' | 'pr.merged.uncommon' | 'pr.special.speedster' | 'review.common.1' | 'review.common.2' | 'review.epic' | 'review.legendary' | 'review.mythic' | 'review.rare' | 'review.uncommon.1' | 'review.uncommon.2';
-
-/**
- * Polymorphic progress data
- */
-export type AchievementProgress = {
-  type: string;
-};
-
 export type AdminAccountView = {
   appRole?: string;
   displayName?: string;
@@ -479,14 +432,6 @@ export type BackfillSummary = {
 };
 
 /**
- * Binary progress indicating unlocked state
- */
-export type BinaryAchievementProgress = Omit<AchievementProgress, 'type'> & {
-  unlocked: boolean;
-  type: 'BinaryAchievementProgress';
-};
-
-/**
  * Request to move a practice to a group or Unassigned
  */
 export type BindPracticeGroupRequest = {
@@ -822,9 +767,15 @@ export type ConnectionSyncStatus = {
 
 export type ConsentStatus = {
   completed: boolean;
-  noticeText: string;
+  /**
+   * Version of the first-login wording the client must be rendering
+   */
   noticeVersion: string;
   participateInResearch: boolean;
+  /**
+   * Organisation running the optional research programme, or null when this instance runs none
+   */
+  researchOrganization?: string;
 };
 
 /**
@@ -1560,7 +1511,14 @@ export type FeedbackSourceCount = {
 
 export type FirstLoginConsent = {
   noticeVersion: string;
-  participateInResearch: boolean;
+  /**
+   * Required when the instance names a research organisation, omitted otherwise
+   */
+  participateInResearch?: boolean;
+  /**
+   * The organisation the research question named on screen; omitted when it asked none
+   */
+  researchOrganization?: string;
   termsAccepted: boolean;
 };
 
@@ -1999,15 +1957,6 @@ export type LeaderboardEntry = {
 export type LeagueChange = {
   leaguePointsChange: number;
   login: string;
-};
-
-/**
- * Linear progress with current and target counts
- */
-export type LinearAchievementProgress = Omit<AchievementProgress, 'type'> & {
-  current: number;
-  target: number;
-  type: 'LinearAchievementProgress';
 };
 
 /**
@@ -2535,48 +2484,6 @@ export type OutlineTokenStatus = {
   name?: string;
 };
 
-export type PageAgentJob = {
-  content?: Array<AgentJob>;
-  empty?: boolean;
-  first?: boolean;
-  last?: boolean;
-  number?: number;
-  numberOfElements?: number;
-  pageable?: PageableObject;
-  size?: number;
-  sort?: SortObject;
-  totalElements?: number;
-  totalPages?: number;
-};
-
-export type PageAuthEventView = {
-  content?: Array<AuthEventView>;
-  empty?: boolean;
-  first?: boolean;
-  last?: boolean;
-  number?: number;
-  numberOfElements?: number;
-  pageable?: PageableObject;
-  size?: number;
-  sort?: SortObject;
-  totalElements?: number;
-  totalPages?: number;
-};
-
-export type PageConfigAuditEntryView = {
-  content?: Array<ConfigAuditEntryView>;
-  empty?: boolean;
-  first?: boolean;
-  last?: boolean;
-  number?: number;
-  numberOfElements?: number;
-  pageable?: PageableObject;
-  size?: number;
-  sort?: SortObject;
-  totalElements?: number;
-  totalPages?: number;
-};
-
 export type PageMetadata = {
   number?: number;
   size?: number;
@@ -2584,40 +2491,107 @@ export type PageMetadata = {
   totalPages?: number;
 };
 
-export type PageObservationList = {
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoAgentJob = {
+  content?: Array<AgentJob>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoAuthEventView = {
+  content?: Array<AuthEventView>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoConfigAuditEntryView = {
+  content?: Array<ConfigAuditEntryView>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoObservationList = {
   content?: Array<ObservationList>;
   empty?: boolean;
   first?: boolean;
   last?: boolean;
   number?: number;
   numberOfElements?: number;
-  pageable?: PageableObject;
+  pageable?: Pageable;
   size?: number;
-  sort?: SortObject;
+  sort?: Sort;
   totalElements?: number;
   totalPages?: number;
 };
 
-export type PageSyncJob = {
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoSyncJob = {
   content?: Array<SyncJob>;
   empty?: boolean;
   first?: boolean;
   last?: boolean;
   number?: number;
   numberOfElements?: number;
-  pageable?: PageableObject;
+  pageable?: Pageable;
   size?: number;
-  sort?: SortObject;
+  sort?: Sort;
   totalElements?: number;
   totalPages?: number;
 };
 
-export type PageableObject = {
+export type Pageable = {
   offset?: number;
   pageNumber?: number;
   pageSize?: number;
   paged?: boolean;
-  sort?: SortObject;
+  sort?: Sort;
   unpaged?: boolean;
 };
 
@@ -3852,6 +3826,11 @@ export type RepositoryInfo = {
 
 export type ResearchConsent = {
   granted: boolean;
+  noticeVersion: string;
+  /**
+   * The organisation this control named on screen
+   */
+  researchOrganization?: string;
 };
 
 /**
@@ -4617,7 +4596,7 @@ export type SlackUserWorkspacePreferences = {
   workspaceSlug: string;
 };
 
-export type SortObject = {
+export type Sort = {
   empty?: boolean;
   sorted?: boolean;
   unsorted?: boolean;
@@ -5386,10 +5365,6 @@ export type UpdateTeamSettingsRequest = {
  */
 export type UpdateWorkspaceFeaturesRequest = {
   /**
-   * Enable the achievements system
-   */
-  achievementsEnabled?: boolean;
-  /**
    * Enable the leaderboard ranking page
    */
   leaderboardEnabled?: boolean;
@@ -5620,10 +5595,6 @@ export type Workspace = {
    */
   accountLogin: string;
   /**
-   * Whether the achievements system is enabled
-   */
-  achievementsEnabled: boolean;
-  /**
    * Timestamp when the workspace was created
    */
   createdAt: Date;
@@ -5745,10 +5716,6 @@ export type WorkspaceListItem = {
    * Git provider account login associated with this workspace
    */
   accountLogin: string;
-  /**
-   * Whether the achievements system is enabled
-   */
-  achievementsEnabled: boolean;
   /**
    * Timestamp when the workspace was created
    */
@@ -6151,7 +6118,7 @@ export type AdminListAuthEventsResponses = {
   /**
    * OK
    */
-  200: PageAuthEventView;
+  200: PageResponseDtoAuthEventView;
 };
 
 export type AdminListAuthEventsResponse = AdminListAuthEventsResponses[keyof AdminListAuthEventsResponses];
@@ -6201,7 +6168,7 @@ export type AdminListConfigAuditEventsResponses = {
   /**
    * OK
    */
-  200: PageConfigAuditEntryView;
+  200: PageResponseDtoConfigAuditEntryView;
 };
 
 export type AdminListConfigAuditEventsResponse = AdminListConfigAuditEventsResponses[keyof AdminListConfigAuditEventsResponses];
@@ -7454,12 +7421,21 @@ export type RefreshData = {
   url: '/auth/refresh';
 };
 
+export type RefreshErrors = {
+  /**
+   * Session has ended
+   */
+  401: unknown;
+};
+
 export type RefreshResponses = {
   /**
-   * OK
+   * Session renewal completed
    */
-  200: unknown;
+  204: void;
 };
+
+export type RefreshResponse = RefreshResponses[keyof RefreshResponses];
 
 export type ListGlobalContributorsData = {
   body?: never;
@@ -8015,7 +7991,7 @@ export type ListAgentJobsResponses = {
   /**
    * Paginated job list
    */
-  200: PageAgentJob;
+  200: PageResponseDtoAgentJob;
 };
 
 export type ListAgentJobsResponse = ListAgentJobsResponses[keyof ListAgentJobsResponses];
@@ -8192,7 +8168,7 @@ export type ListWorkspaceConfigAuditEventsResponses = {
   /**
    * OK
    */
-  200: PageConfigAuditEntryView;
+  200: PageResponseDtoConfigAuditEntryView;
 };
 
 export type ListWorkspaceConfigAuditEventsResponse = ListWorkspaceConfigAuditEventsResponses[keyof ListWorkspaceConfigAuditEventsResponses];
@@ -8354,7 +8330,7 @@ export type ListConnectionSyncJobsResponses = {
   /**
    * OK
    */
-  200: PageSyncJob;
+  200: PageResponseDtoSyncJob;
 };
 
 export type ListConnectionSyncJobsResponse = ListConnectionSyncJobsResponses[keyof ListConnectionSyncJobsResponses];
@@ -10469,7 +10445,7 @@ export type ListObservationsResponses = {
   /**
    * Paginated observations returned
    */
-  200: PageObservationList;
+  200: PageResponseDtoObservationList;
 };
 
 export type ListObservationsResponse = ListObservationsResponses[keyof ListObservationsResponses];
@@ -12212,93 +12188,3 @@ export type GetUsersWithTeamsResponses = {
 };
 
 export type GetUsersWithTeamsResponse = GetUsersWithTeamsResponses[keyof GetUsersWithTeamsResponses];
-
-export type GetUserAchievementsData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    /**
-     * the user's GitHub login
-     */
-    login: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/users/{login}/achievements';
-};
-
-export type GetUserAchievementsResponses = {
-  /**
-   * list of all achievements with user-specific progress
-   */
-  200: Array<Achievement>;
-};
-
-export type GetUserAchievementsResponse = GetUserAchievementsResponses[keyof GetUserAchievementsResponses];
-
-export type GetAllAchievementDefinitionsData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    login: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/users/{login}/achievements/definitions';
-};
-
-export type GetAllAchievementDefinitionsResponses = {
-  /**
-   * OK
-   */
-  200: Array<Achievement>;
-};
-
-export type GetAllAchievementDefinitionsResponse = GetAllAchievementDefinitionsResponses[keyof GetAllAchievementDefinitionsResponses];
-
-export type RecalculateUserAchievementsData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    /**
-     * the user's GitHub login
-     */
-    login: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/users/{login}/achievements/recalculate';
-};
-
-export type RecalculateUserAchievementsResponses = {
-  /**
-   * Recalculation task started successfully
-   */
-  202: unknown;
-};
-
-export type ReloadAchievementsData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    login: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/users/{login}/achievements/reload';
-};
-
-export type ReloadAchievementsResponses = {
-  /**
-   * OK
-   */
-  200: unknown;
-};

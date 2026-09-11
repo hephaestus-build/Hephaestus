@@ -1,6 +1,5 @@
 /**
- * Servlet filters shared by the request surfaces that need them, so a rule the whole instance owes —
- * such as the payload cap — is written once rather than per surface.
+ * Shared HTTP boundaries: servlet filters and stable wire representations used across product surfaces.
  */
 @org.springframework.modulith.NamedInterface("web")
 @org.jspecify.annotations.NullMarked

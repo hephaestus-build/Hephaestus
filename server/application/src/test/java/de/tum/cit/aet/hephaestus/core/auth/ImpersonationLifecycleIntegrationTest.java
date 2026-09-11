@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -31,7 +30,6 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * survives a rotation unchanged, the rotation itself is where the impersonation ends, and the
  * operator's own session bounds both.
  */
-@Sql(scripts = "/db/auth-event-sequence.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 class ImpersonationLifecycleIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
@@ -156,7 +154,8 @@ class ImpersonationLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .headers(h -> h.setBearerAuth(uncappedImpersonation))
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
 
         assertThat(impersonationEndsFor(target)).isEmpty();
     }

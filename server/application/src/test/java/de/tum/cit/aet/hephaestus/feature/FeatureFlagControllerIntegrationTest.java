@@ -28,7 +28,8 @@ class FeatureFlagControllerIntegrationTest extends BaseIntegrationTest {
                     .headers(TestAuthUtils.withCurrentUserOrNone())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
 
         @Test

@@ -5,13 +5,10 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -633,73 +630,4 @@ public interface ActivityEventRepository extends JpaRepository<ActivityEvent, UU
             @Param("actorId") Long actorId,
             @Param("since") Instant since,
             @Param("until") Instant until);
-
-    // Achievement Progress Queries
-
-    @WorkspaceAgnostic("Achievements are per-user lifetime accomplishments across all workspaces")
-    @Query(value = """
-        SELECT COUNT(*)
-        FROM activity_event e
-        WHERE e.actor_id = :actorId
-        AND e.event_type IN :eventTypes
-        """, nativeQuery = true)
-    long countByActorIdAndEventTypes(@Param("actorId") Long actorId, @Param("eventTypes") Set<String> eventTypes);
-
-    /**
-     * Chronological slice of an actor's events for achievement recalculation.
-     * Uses Slice (not Stream) to avoid open-cursor issues when interleaving nested queries.
-     */
-    @WorkspaceAgnostic("Achievement recalculation replays all user events across workspaces")
-    @Query("""
-        SELECT e
-        FROM ActivityEvent e
-        WHERE e.actor.id = :actorId
-        ORDER BY e.occurredAt ASC
-        """)
-    Slice<ActivityEvent> findSliceByActorIdOrderByOccurredAtAsc(@Param("actorId") Long actorId, Pageable pageable);
-
-    /** Count events of a type for an actor in [start, end). Used by BruteForce / NightOwl. */
-    @WorkspaceAgnostic("Achievements are per-user lifetime accomplishments across all workspaces")
-    @Query(value = """
-        SELECT COUNT(*)
-        FROM activity_event e
-        WHERE e.actor_id = :actorId
-        AND e.event_type = :eventType
-        AND e.occurred_at >= :start
-        AND e.occurred_at < :end
-        """, nativeQuery = true)
-    long countByActorIdAndEventTypeInWindow(
-            @Param("actorId") Long actorId,
-            @Param("eventType") String eventType,
-            @Param("start") Instant start,
-            @Param("end") Instant end);
-
-    /**
-     * Count events for an actor in [start, end] (inclusive end). Lets achievement evaluators
-     * pass {@code event.occurredAt()} as {@code end} without adding artificial padding.
-     */
-    @WorkspaceAgnostic("Achievements are per-user lifetime accomplishments across all workspaces")
-    @Query(value = """
-        SELECT COUNT(*)
-        FROM activity_event e
-        WHERE e.actor_id = :actorId
-        AND e.event_type = :eventType
-        AND e.occurred_at >= :start
-        AND e.occurred_at <= :end
-        """, nativeQuery = true)
-    long countByActorIdAndEventTypeInWindowInclusiveEnd(
-            @Param("actorId") Long actorId,
-            @Param("eventType") String eventType,
-            @Param("start") Instant start,
-            @Param("end") Instant end);
-
-    /** Most recent event timestamp for an actor before {@code before}. Used by LongTimeReturn. */
-    @WorkspaceAgnostic("Achievements are per-user lifetime accomplishments across all workspaces")
-    @Query(value = """
-        SELECT MAX(e.occurred_at)
-        FROM activity_event e
-        WHERE e.actor_id = :actorId
-        AND e.occurred_at < :before
-        """, nativeQuery = true)
-    Optional<Instant> findMaxOccurredAtByActorIdBefore(@Param("actorId") Long actorId, @Param("before") Instant before);
 }

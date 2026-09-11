@@ -322,7 +322,7 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
         try {
             closeExecutor.execute(() -> runClose(graceTimeout));
         } catch (RejectedExecutionException ree) {
-            // Executor shut down (e.g. by a @Scheduled tick during Spring destruction).
+            // Executor shut down (e.g. by a maintenance tick during Spring destruction).
             log.warn("closeExecutor rejected runClose for sessionId={} — running inline", sessionId);
             runClose(graceTimeout);
         }

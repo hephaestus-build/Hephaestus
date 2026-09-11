@@ -22,6 +22,11 @@ export interface SectionProps
 	actions?: ReactNode;
 	/** `h3` when the section sits inside another one, so the outline stays truthful. */
 	level?: 2 | 3;
+	/**
+	 * Base for `${id}-title` and `${id}-description`, for a nested control that has to be named or
+	 * described by them — a `role="radiogroup"` is not named by an enclosing heading.
+	 */
+	id?: string;
 }
 
 /**
@@ -35,20 +40,34 @@ export function Section({
 	level = 2,
 	size,
 	className,
+	id,
 	children,
 	...props
 }: SectionProps) {
-	const headingId = useId();
+	const generatedId = useId();
+	const base = id ?? generatedId;
 	const Heading = level === 2 ? "h2" : "h3";
 
 	return (
-		<section aria-labelledby={headingId} className={cn("space-y-3", className)} {...props}>
+		<section
+			id={id}
+			aria-labelledby={`${base}-title`}
+			className={cn("space-y-3", className)}
+			{...props}
+		>
 			<div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
 				<div className="min-w-0 space-y-1">
-					<Heading id={headingId} className={cn(sectionTitleVariants({ size }), "break-words")}>
+					<Heading
+						id={`${base}-title`}
+						className={cn(sectionTitleVariants({ size }), "break-words")}
+					>
 						{title}
 					</Heading>
-					{description && <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>}
+					{description && (
+						<p id={`${base}-description`} className="max-w-2xl text-sm text-muted-foreground">
+							{description}
+						</p>
+					)}
 				</div>
 				{actions}
 			</div>

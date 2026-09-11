@@ -12,12 +12,7 @@ export interface Hint {
 /** A hint flag renders into summary.md verbatim, so it stays a JSON scalar. */
 export type HintFlag = boolean | number | string;
 
-/**
- * The parsed `inputs/context/metadata.json` every script receives as its 3rd argument. Its shape
- * depends on the artifact under review — `PullRequestMetadata` below for a pull request, the issue
- * metadata the issue scripts declare for an issue — so the shared contract says only "a JSON
- * object". A script narrows it by declaring the parameter type it actually reads.
- */
+/** Metadata varies by reviewed artifact; scripts validate the fields they use. */
 export type ArtifactMetadata = Record<string, unknown>;
 
 /**
@@ -36,15 +31,7 @@ export interface PracticeResult extends PracticeFindings {
 	status: "ok" | "error" | "timeout";
 }
 
-/**
- * A precompute script's default export. Receives the repo checkout, the parsed diff, the artifact
- * metadata, and (optionally) the materialised context directory so it can read the SAME cross-artifact
- * context the agent sees (project_inventory.json, linked_work_items.json, …) via lib/context.ts helpers.
- * The 4th argument is additive — existing 3-arg scripts keep working unchanged.
- *
- * Scripts are dynamic data (injected from the DB), so this is the contract the runner CALLS under,
- * not a guarantee: `parseFindings` in lib/practice-contract.ts re-checks the return value at runtime.
- */
+/** Injected scripts are untrusted; the runner validates their results with parseFindings. */
 export type PracticeScript = (
 	repoPath: string,
 	diffFiles: Map<string, DiffFile>,

@@ -99,7 +99,6 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
     private static final Set<String> GLOBAL_ENTITIES = Set.of(
             "User", // Users can belong to multiple workspaces
             "UserPreferences", // Belongs to User which is global
-            "UserAchievement", // Per-user achievement progress, cross-workspace
             "Organization", // Synced from GitHub, workspace is set separately
             "Workspace", // Is the tenant root
             "WorkspaceSlugHistory", // Tracks workspace slug changes
@@ -125,7 +124,6 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "AccountExport", // GDPR Art. 20 self-service export; account-scoped, spans workspaces
             "LoginProvider", // Instance-scoped OAuth login provider (sign-in option); not workspace-scoped
             "ConsentDecision", // Account-scoped consent evidence; spans workspaces
-            "ConsentNotice", // System-wide archive of the exact notices presented to accounts
             "WorkerRegistry", // Fleet-wide worker liveness/capacity registry (#1138); not workspace-scoped
             "InstanceSettings" // Singleton instance-wide operator settings (silent-mode brake, #1386)
             );

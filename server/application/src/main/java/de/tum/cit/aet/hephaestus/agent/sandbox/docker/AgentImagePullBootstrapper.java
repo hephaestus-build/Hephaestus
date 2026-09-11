@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.annotation.Profile;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -16,8 +17,10 @@ import org.springframework.stereotype.Component;
  * Pre-pulls the agent container image on startup. Part of the worker capability (the Docker
  * sandbox), so it shares the worker-role gate with {@code DockerSandboxConfiguration} — present
  * in the monolith ({@code matchIfMissing=true}), absent on non-worker pods.
+ * Artifact generation does not run containers and must not contact the Docker registry.
  */
 @Component
+@Profile("!specs & !cds-training")
 @ConditionalOnProperty(name = RuntimeRole.WORKER_PROPERTY, havingValue = "true", matchIfMissing = true)
 public class AgentImagePullBootstrapper {
 

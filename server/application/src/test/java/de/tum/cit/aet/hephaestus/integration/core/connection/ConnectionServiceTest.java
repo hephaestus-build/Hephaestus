@@ -76,7 +76,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         MockitoAnnotations.openMocks(this);
         // Real converter so the credential-purge case operates on a genuine AES-GCM blob,
         // not a mock stand-in.
-        credentialConverter = new CredentialBundleConverter("a".repeat(32), "dev");
+        credentialConverter = new CredentialBundleConverter("a".repeat(32), false);
         // The revoke callback runs through a TransactionTemplate over this manager; a stub status is
         // enough to let the template execute, and it lets us assert the propagation it asked for.
         Mockito.lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());

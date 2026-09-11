@@ -117,12 +117,17 @@ describe("DangerZoneSection — account deletion", () => {
 		openDeleteDialog();
 
 		const dialog = await screen.findByRole("alertdialog");
-		fireEvent.change(within(dialog).getByLabelText("Confirmation phrase"), {
-			target: { value: "nope" },
+		const input = within(dialog).getByLabelText("Confirmation phrase");
+		const confirmButton = within(dialog).getByRole<HTMLButtonElement>("button", {
+			name: "Delete account",
 		});
-		fireEvent.click(within(dialog).getByRole("button", { name: "Delete account" }));
+		// The phrase, not an unfinished session lookup, must be what blocks deletion.
+		fireEvent.change(input, { target: { value: "delete my account" } });
+		await waitFor(() => expect(confirmButton.disabled).toBe(false));
+		fireEvent.change(input, { target: { value: "nope" } });
+		expect(confirmButton.disabled).toBe(true);
+		fireEvent.click(confirmButton);
 
-		await Promise.resolve();
 		expect(deleteHit).toBe(false);
 		expect(onAccountDeleted).not.toHaveBeenCalled();
 	});

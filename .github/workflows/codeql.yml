@@ -1,17 +1,14 @@
 name: CodeQL
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-  merge_group:
+  workflow_call:
   schedule:
     - cron: "15 5 * * 1"
 
 permissions: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: codeql-${{ github.ref }}
   # Preserve analysis for every default-branch commit.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
@@ -39,6 +36,7 @@ jobs:
             java-kotlin:
               - 'server/**'
               - '.java-version'
+              - '.github/actions/setup-caches/**'
               - '.github/codeql/**'
               - '.github/workflows/codeql.yml'
             javascript-typescript:
@@ -70,13 +68,24 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Java build
+        if: matrix.language == 'java-kotlin'
+        uses: ./.github/actions/setup-caches
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           languages: ${{ matrix.language }}
-          # The repository has no Kotlin, and CodeQL supports build-mode: none for Java without it.
-          build-mode: none
+          # Trace the real Java toolchain, dependencies and generated clients rather than guessing them.
+          build-mode: ${{ matrix.language == 'java-kotlin' && 'manual' || 'none' }}
           config-file: ./.github/codeql/codeql-config.yml
+
+      - name: Compile Java for analysis
+        if: matrix.language == 'java-kotlin'
+        working-directory: server
+        # Extraction observes javac: restored classes and a reused Gradle daemon bypass it.
+        # This produces analysis inputs, never the packaged server that CI tests and ships.
+        run: ./gradlew --no-daemon --no-build-cache --no-configuration-cache clean :application:testClasses
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9

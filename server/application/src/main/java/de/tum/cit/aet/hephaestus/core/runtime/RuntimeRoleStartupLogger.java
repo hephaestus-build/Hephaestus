@@ -36,8 +36,13 @@ public class RuntimeRoleStartupLogger {
         if (worker) enabled.add("worker");
         if (webhook) enabled.add("webhook");
 
+        var event = enabled.isEmpty() ? log.atWarn() : log.atInfo();
+        event = event.addKeyValue("event.name", "runtime.roles.configured")
+                .addKeyValue("runtime.server.enabled", server)
+                .addKeyValue("runtime.worker.enabled", worker)
+                .addKeyValue("runtime.webhook.enabled", webhook);
         if (enabled.isEmpty()) {
-            log.warn(
+            event.log(
                     "All runtime roles disabled — this JVM will accept no work. Set at least one of "
                             + "{}=true, {}=true, or {}=true.",
                     RuntimeRole.SERVER_PROPERTY,
@@ -45,6 +50,6 @@ public class RuntimeRoleStartupLogger {
                     RuntimeRole.WEBHOOK_PROPERTY);
             return;
         }
-        log.info("Runtime roles enabled: {}", enabled);
+        event.log("Runtime roles enabled: {}", enabled);
     }
 }

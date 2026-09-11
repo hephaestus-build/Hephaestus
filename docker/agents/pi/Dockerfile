@@ -1,14 +1,14 @@
-# syntax=docker/dockerfile:1.26@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
+# syntax=docker/dockerfile:1.27@sha256:bde3983e9c939224420ddaf6b784cc30e09b035a4dea01f581230c50809f372e
 # renovate: datasource=node-version depName=node
-ARG NODE_VERSION=24.19.0
-FROM ghcr.io/pnpm/pnpm:12.0.0@sha256:bce5ae25ef95edd79e696d7fa8489b80561ef660100fd35bd0286d0f90db3dcc AS dependencies
+ARG NODE_VERSION=24.20.0
+FROM ghcr.io/pnpm/pnpm:12.3.4@sha256:b81d53184f670fe19d1a33f9d5041907d314b31d596838e8133cbd83d45be043 AS dependencies
 ARG NODE_VERSION
 WORKDIR /opt/pi-sdk
 RUN pnpm runtime set node ${NODE_VERSION} -g
 COPY pi/package.json pi/pnpm-lock.yaml pi/pnpm-workspace.yaml ./
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
-FROM node:${NODE_VERSION}-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df
+FROM node:${NODE_VERSION}-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e
 ARG NODE_VERSION
 
 # The base digest is pinned, so Debian security updates published after the upstream image was
@@ -22,7 +22,7 @@ ARG NODE_VERSION
 ARG SOURCE_COMMIT
 RUN echo "source commit: ${SOURCE_COMMIT:-<unset — local build>}" && \
     apt-get update -qq && apt-get upgrade -y -qq && \
-    apt-get install -y --no-install-recommends git findutils tree jq ca-certificates grep && \
+    apt-get install -y --no-install-recommends git findutils tree jq ca-certificates grep coreutils util-linux && \
     rm -rf /var/lib/apt/lists/*
 
 RUN groupmod --new-name agent node && \

@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 import {
 	type AgentSession,
@@ -31,6 +32,7 @@ import {
 } from "./pi-observation-normalize.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { loadProviderConfig, registerHephaestusProvider } from "./pi-provider.ts";
+import { ReviewTrace } from "./pi-review-trace.ts";
 import {
 	buildReviewTree,
 	mapConcurrent,
@@ -68,49 +70,29 @@ import {
 	newUsageLedger,
 	type UsageReport,
 } from "./pi-runner-usage.ts";
+import { stopSession } from "./pi-session-lifecycle.ts";
 import { forkSessions, reconnaissanceSeed } from "./pi-session-tree.ts";
+import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
 
-// ── Reading what other processes wrote ───────────────────────────────────────
-// Everything this runner is handed — the task envelope, the manifest, the practice index, the
-// composition request, the staged history, the admission response — is JSON written by another process.
-// None of it is typed by having been parsed, so each reader below states the shape it needs and checks
-// for it, and the checks are the only reason the shapes are true.
-
-/** JSON.parse with the return type it actually has. */
 function parseJson(text: string): unknown {
 	return JSON.parse(text);
 }
 
-/** The elements of a value the writer was supposed to send as an array, and none for anything else. */
 function jsonArray(value: unknown): unknown[] {
 	return Array.isArray(value) ? value : [];
 }
 
-/**
- * A value nobody has checked, as log text. A string reads as itself; anything else is rendered as the
- * JSON it arrived as, because an object coerced to a string is "[object Object]" — and a line that
- * reports a rejected envelope that way has said nothing about the envelope.
- */
 function logValue(value: unknown): string {
 	if (typeof value === "string") return value;
 	if (value === undefined) return "undefined";
 	return JSON.stringify(value);
 }
 
-/**
- * An array field the SDK declares required, read as the empty list when it is not there.
- *
- * <p>These reads run over whatever a session has left behind — before a first turn, after an abort,
- * after a provider error — which is the state in which pi-runner-usage.ts records a message arriving
- * without the usage block its declaration promises. Neither a session with no transcript nor a
- * message with no parts is a reason to throw inside an event subscription, or to end a review that
- * has already measured something.
- */
+/** SDK event arrays may be absent before completion or after abort. */
 function listOrEmpty<T>(items: T[] | undefined): T[] {
 	return items ?? [];
 }
 
-/** One practice this run may report on, as inputs/practices/index.json describes it. */
 interface PracticeIndexEntry {
 	slug: string;
 	group?: string;
@@ -123,6 +105,7 @@ interface TaskEnvelope {
 	schemaVersion: number;
 	jobId: unknown;
 	workspaceId: unknown;
+	paths: ReturnType<typeof taskPaths>;
 	task: {
 		kind: string;
 		prompt: string;
@@ -141,33 +124,19 @@ interface ChannelBounds {
 /** Where an IN_CONTEXT note may be placed on this artifact. */
 type PlacementKind = "DIFF" | "ARTIFACT";
 
-/** inputs/feedback-composition.json, once its bounds have been clamped to what this run may do. */
+/** The task-declared composition request, once its bounds have been clamped to what this run may do. */
 interface CompositionRequest {
 	channels: Record<Channel, ChannelBounds>;
 	inContextPlacementKinds: PlacementKind[];
 	minDistinctArtifacts: number;
 }
 
-/**
- * One citation of an observation Java has admitted.
- *
- * <p>Only `index` is named, because only `index` is checked. Everything else the server sends rides the
- * index signature: the runner copies those fields onward without reading them, and naming a type it
- * never verifies would be a claim about the server's payload that nothing here establishes.
- */
 interface AdmittedCitation {
 	index: number;
 	[key: string]: unknown;
 }
 
-/**
- * An observation after Java has admitted it.
- *
- * <p>The server owns this shape and the runner re-emits it whole — work/composition/observations.json is
- * this object verbatim, because the composer's prompt reads fields the runner never looks at. So the
- * three fields the runner itself depends on are named and checked, and the index signature is what
- * carries the rest of the server's payload across untouched.
- */
+/** Validate consumed fields; preserve other server fields for the composer. */
 interface AdmittedObservation {
 	id: string;
 	practiceSlug: string;
@@ -189,14 +158,20 @@ function isAdmittedObservation(value: unknown): value is AdmittedObservation {
 	);
 }
 
-// Overridable so a harness with no /workspace can drive the runner. Production never sets it.
 const WORKSPACE_ROOT = "/workspace";
 // The SDK's grep spawns ripgrep, which the sandbox forbids; the runner's own search tool takes its
 // place in every session under the same name. "grep" stays listed: the SDK filters custom tools
 // through this list too, and a listed custom definition replaces the built-in of that name.
 const EVIDENCE_TOOLS = ["read", "grep"] as const;
 const CWD = process.env.PI_RUNNER_CWD ?? WORKSPACE_ROOT;
+const ENVELOPE_MISMATCH_EXIT = 42;
+const SUPPORTED_KIND = "practice_review";
+const TASK_PATH = `${CWD}/task.json`;
+const taskEnvelope = readTaskEnvelope();
+const INPUT_PATHS = resolveTaskPaths(CWD, taskEnvelope.paths);
 const OUTPUT = `${CWD}/out`;
+const reviewTrace = process.env.PI_REVIEW_CAPTURE === "true" ? new ReviewTrace(OUTPUT) : undefined;
+process.on("exit", (code) => reviewTrace?.finish(code));
 const RESULT_PATH = outputPath(OUTPUT, "result.json");
 const REVIEW_STATE_PATH = outputPath(OUTPUT, "review-state.json");
 const WATCHDOG_PATH = outputPath(OUTPUT, "watchdog-killed.json");
@@ -213,10 +188,7 @@ const AGENT_DIR = process.env.PI_CODING_AGENT_DIR;
 if (!AGENT_DIR) {
 	throw new Error("PI_CODING_AGENT_DIR env var is required");
 }
-const TIMEOUTS = deriveTimeouts(
-	AGENT_BUDGET_MS,
-	existsSync(`${CWD}/inputs/feedback-composition.json`),
-);
+const TIMEOUTS = deriveTimeouts(AGENT_BUDGET_MS, existsSync(INPUT_PATHS.compositionRequest));
 const {
 	initialMs: INITIAL_TIMEOUT_MS,
 	retryMs: RETRY_TIMEOUT_MS,
@@ -255,15 +227,15 @@ function readManifest(): {
 	availableSourceKinds: Set<string>;
 	artifactSources: Map<string, string>;
 } {
-	const manifest = parseJson(readFileSync(`${CWD}/inputs/manifest.json`, "utf8"));
+	const manifest = parseJson(readFileSync(INPUT_PATHS.manifest, "utf8"));
 	if (!isRecord(manifest) || !Array.isArray(manifest.sources)) {
-		throw new Error("inputs/manifest.json: expected a sources array");
+		throw new Error("Task manifest: expected a sources array");
 	}
 	const availableSourceKinds = new Set<string>();
 	const artifactSources = new Map<string, string>();
 	for (const source of jsonArray(manifest.sources)) {
 		if (!isRecord(source) || typeof source.kind !== "string" || !isRecord(source.state)) {
-			throw new Error("inputs/manifest.json: every source needs a string kind and a state");
+			throw new Error("Task manifest: every source needs a string kind and a state");
 		}
 		if (source.state.availability === "AVAILABLE") availableSourceKinds.add(source.kind);
 		for (const artifact of jsonArray(source.artifacts)) {
@@ -281,11 +253,11 @@ function readManifest(): {
  * waiting to happen.
  */
 function readPracticeIndex(): PracticeIndexEntry[] {
-	const index = parseJson(readFileSync(`${CWD}/inputs/practices/index.json`, "utf8"));
-	if (!Array.isArray(index)) throw new Error("inputs/practices/index.json: expected an array");
+	const index = parseJson(readFileSync(INPUT_PATHS.practiceIndex, "utf8"));
+	if (!Array.isArray(index)) throw new Error("the task-declared practice index: expected an array");
 	return jsonArray(index).map((practice): PracticeIndexEntry => {
 		if (!isRecord(practice) || typeof practice.slug !== "string") {
-			throw new Error("inputs/practices/index.json: every practice needs a string slug");
+			throw new Error("the task-declared practice index: every practice needs a string slug");
 		}
 		return {
 			slug: practice.slug,
@@ -737,7 +709,6 @@ const PERSIST_DISCIPLINE =
 	`Do not add derivative low-signal observations when a stronger observation already covers the problem. ` +
 	`Use tools only from this point onward. Do not write planning prose or plain-text commentary.`;
 
-const ENVELOPE_MISMATCH_EXIT = 42;
 /**
  * The review is finished and only the call carrying it home did not arrive. The server keeps the
  * work queued for another attempt when it sees this, so the measurement is repeated against a
@@ -757,9 +728,6 @@ const PROVIDER_UNREACHABLE_EXIT = 76;
  * and their retry lane. A practice is reached from one of these or not at all.
  */
 const RECORDING_LANE = /^(observer|retry):/;
-const SUPPORTED_SCHEMA_VERSION = 1;
-const SUPPORTED_KIND = "practice_review";
-const TASK_PATH = `${CWD}/task.json`;
 
 function readTaskEnvelope(): TaskEnvelope {
 	let raw: string;
@@ -780,7 +748,7 @@ function readTaskEnvelope(): TaskEnvelope {
 	if (envelope.schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
 		console.error(
 			`[pi-runner] Unsupported schemaVersion: got ${logValue(envelope.schemaVersion)}, expected ${SUPPORTED_SCHEMA_VERSION}. ` +
-				`Server/image version drift — rebuild the agent-pi image or roll back the server.`,
+				`Task envelope and staged runner disagree.`,
 		);
 		process.exit(ENVELOPE_MISMATCH_EXIT);
 	}
@@ -796,7 +764,15 @@ function readTaskEnvelope(): TaskEnvelope {
 		console.error(`[pi-runner] task.prompt is missing or blank in ${TASK_PATH}`);
 		process.exit(ENVELOPE_MISMATCH_EXIT);
 	}
+	let paths: ReturnType<typeof taskPaths>;
+	try {
+		paths = taskPaths(envelope.paths);
+	} catch (error) {
+		console.error(`[pi-runner] ${errorText(error)}`);
+		process.exit(ENVELOPE_MISMATCH_EXIT);
+	}
 	return {
+		paths,
 		schemaVersion: SUPPORTED_SCHEMA_VERSION,
 		jobId: envelope.jobId,
 		workspaceId: envelope.workspaceId,
@@ -809,7 +785,6 @@ function readTaskEnvelope(): TaskEnvelope {
 	};
 }
 
-const taskEnvelope = readTaskEnvelope();
 const prompt = taskEnvelope.task.prompt.trim();
 console.error(
 	`[pi-runner] Task envelope loaded: kind=${taskEnvelope.task.kind}, ` +
@@ -818,10 +793,10 @@ console.error(
 		`prNumber=${logValue(taskEnvelope.task.pullRequestNumber ?? "?")}`,
 );
 
-const COMPOSITION_REQUEST_PATH = `${CWD}/inputs/feedback-composition.json`;
+const COMPOSITION_REQUEST_PATH = INPUT_PATHS.compositionRequest;
 const FEEDBACK_PATH = outputPath(OUTPUT, "feedback.json");
 const COMPOSER_PROMPT_PATH = `${CWD}/feedback-composer.md`;
-const PREPARED_FEEDBACK_PATH = `${CWD}/inputs/history/prepared.json`;
+const PREPARED_FEEDBACK_PATH = INPUT_PATHS.preparedFeedback;
 const COMPOSITION_OBSERVATIONS_PATH = `${CWD}/work/composition/observations.json`;
 let compositionAdmitted = false;
 let admissionDigest: string | null = null;
@@ -1160,7 +1135,7 @@ function buildFeedbackTool(
 							type: "string",
 							maxLength: 64,
 							description:
-								"Required for SUPERSEDE: the threadKey of an entry in inputs/history/prepared.json. " +
+								"Required for SUPERSEDE: the threadKey of an entry in the task-declared prepared-feedback file. " +
 								"You may not name a key that is not in that file.",
 						},
 						withholdReason: { type: "string", enum: WITHHOLD_REASONS },
@@ -1390,7 +1365,7 @@ function validateUnit(
 					target.practiceSlug === unit.practiceSlug,
 			)
 		) {
-			return `No queued message has threadKey '${unit.supersedesThreadKey}'; it must come from inputs/history/prepared.json. Skipped.`;
+			return `No queued message has threadKey '${unit.supersedesThreadKey}'; it must come from the task-declared prepared-feedback file. Skipped.`;
 		}
 	}
 	if (unit.channel === "IN_CHAT") {
@@ -1638,15 +1613,12 @@ function scheduleDeadline(timeoutMs: number, onTimeout: () => void) {
 	return { elapsed, timer, state };
 }
 
-/**
- * Ends a session for good. A steer still queued when a session is disposed is not dropped: the SDK
- * keeps it on the agent and starts a fresh run to deliver it, so a nudge that arrived just as a
- * deadline did would spend the budget that deadline just took away. Clearing the queue first is what
- * the SDK's own interactive mode does before it aborts.
- */
-function stopSession(session: AgentSession) {
+/** Timers request cancellation; the owning finally block drains events before disposal. */
+function abortSession(session: AgentSession) {
 	session.clearQueue();
-	session.dispose();
+	void session.abort().catch((error) => {
+		console.error(`[pi-runner] session abort failed: ${errorText(error)}`);
+	});
 }
 
 function scheduleTurnTimers(
@@ -1675,7 +1647,7 @@ function scheduleTurnTimers(
 		console.error(
 			`[pi-runner] turn ${turnNumber}/${turnCount} exhausted its fair share — aborting this turn`,
 		);
-		stopSession(session);
+		abortSession(session);
 	});
 	return { softTimer, hardTimer: hard.timer, hardDeadline: hard.elapsed, state };
 }
@@ -1705,6 +1677,7 @@ async function main() {
 			agentDir: AGENT_DIR ?? getAgentDir(),
 			settingsManager,
 			...SANDBOX_RESOURCE_LOADER_OPTIONS,
+			extensionFactories: reviewTrace ? [reviewTrace.extension] : [],
 			agentsFilesOverride: () => ({
 				agentsFiles: [{ path: orchestratorPath, content: orchestrator }],
 			}),
@@ -1755,8 +1728,11 @@ async function main() {
 		trackedSession: AgentSession,
 		label: string,
 		pace: RecordingPace | null = null,
-	) =>
-		trackedSession.subscribe((event: AgentSessionEvent) => {
+	) => {
+		const sessionId = trackedSession.sessionManager.getSessionId();
+		reviewTrace?.session(sessionId, label, trackedSession.sessionManager.getSessionFile());
+		return trackedSession.subscribe((event: AgentSessionEvent) => {
+			reviewTrace?.event(sessionId, event);
 			if (event.type === "tool_execution_start") {
 				console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
 			}
@@ -1808,11 +1784,7 @@ async function main() {
 					console.error(
 						`[pi-runner] ${label}: ${Math.round(reached * 100)}% of its context spent — asking it to record`,
 					);
-					// Neither an order to stop reading nor a licence to keep reading, because this can
-					// arrive alongside the fair-share nudge above. The orchestrator's READ-BEFORE-NA gate
-					// makes reading the whole diff a precondition of half the answers, so a session pushed
-					// to settle a practice early settles it on evidence it cannot quote — which is the
-					// failure this whole pipeline exists to prevent.
+					// Checkpoint nudges must not relax the evidence requirements.
 					trackedSession
 						.steer(
 							`You have spent ${Math.round(reached * 100)}% of your context. Record now every practice your ` +
@@ -1824,6 +1796,7 @@ async function main() {
 			}
 			events.push({ type: `${label}:${event.type}`, timestamp: Date.now() });
 		});
+	};
 
 	/**
 	 * @param notReached the practices this review never settled, named for the composer so nothing it
@@ -1844,7 +1817,9 @@ async function main() {
 				agentDir: AGENT_DIR,
 				tools: ["read", "grep", "report_feedback", "report_summary"],
 				customTools: [grepTool, feedbackTool, buildSummaryTool()],
-				sessionManager: SessionManager.inMemory(),
+				sessionManager: reviewTrace
+					? SessionManager.create(CWD, reviewTrace.sessionDir)
+					: SessionManager.inMemory(),
 				settingsManager,
 				resourceLoader: await loadResources(),
 				modelRuntime,
@@ -1861,8 +1836,8 @@ async function main() {
 		);
 		if (compositionMs === 0) {
 			console.error("[pi-runner] Composition budget exhausted — preserving admitted observations");
+			await stopSession(composerSession);
 			unsubscribeComposer();
-			stopSession(composerSession);
 			persistComposedFeedback();
 			return;
 		}
@@ -1870,7 +1845,7 @@ async function main() {
 			console.error(
 				`[pi-runner] Composition timeout — preserving observations and composed units so far`,
 			);
-			stopSession(composerSession);
+			abortSession(composerSession);
 		});
 		try {
 			await Promise.race([
@@ -1881,8 +1856,8 @@ async function main() {
 			]);
 		} finally {
 			clearTimeout(compositionDeadline.timer);
+			await stopSession(composerSession);
 			unsubscribeComposer();
-			stopSession(composerSession);
 			persistComposedFeedback();
 		}
 		const combinedUsage = extractUsageFromSession(composerSession.state, streamUsage);
@@ -1901,7 +1876,7 @@ async function main() {
 		hardAbort.abort();
 		console.error(`[pi-runner] Hard timeout — aborting ${activeSessions.size} active session(s)`);
 		for (const activeSession of activeSessions) {
-			stopSession(activeSession);
+			abortSession(activeSession);
 		}
 	};
 	const initialWindowMs = Math.max(0, reviewDeadline - Date.now());
@@ -1921,7 +1896,7 @@ async function main() {
 		process.env.PI_REVIEW_CONCURRENCY,
 		tree.practiceCount,
 	);
-	const sessionDir = `${CWD}/.sessions`;
+	const sessionDir = reviewTrace?.sessionDir ?? `${CWD}/.sessions`;
 	console.error(
 		`[pi-runner] Review tree: ${tree.practiceCount} practices, ${tree.groups.length} evidence group(s), concurrency=${concurrency}`,
 	);
@@ -1945,7 +1920,7 @@ async function main() {
 			if (hardAbort.signal.aborted || Date.now() >= reviewDeadline) {
 				hardAborted = true;
 				hardAbort.abort();
-				stopSession(reconSession);
+				await stopSession(reconSession);
 			} else {
 				const unsubscribeRecon = subscribeSession(reconSession, "recon:shared");
 				activeSessions.add(reconSession);
@@ -1953,7 +1928,7 @@ async function main() {
 					deriveReconBudget(INITIAL_TIMEOUT_MS),
 					reviewDeadline - Date.now(),
 				);
-				const reconDeadline = scheduleDeadline(reconBudgetMs, () => stopSession(reconSession));
+				const reconDeadline = scheduleDeadline(reconBudgetMs, () => abortSession(reconSession));
 				try {
 					const groupScope = tree.groups
 						.map((group) => `${group.id} [${group.practiceSlugs.join(", ")}]`)
@@ -1980,8 +1955,8 @@ async function main() {
 				} finally {
 					clearTimeout(reconDeadline.timer);
 					activeSessions.delete(reconSession);
+					await stopSession(reconSession);
 					unsubscribeRecon();
-					stopSession(reconSession);
 				}
 			}
 		} catch (error) {
@@ -2015,7 +1990,7 @@ async function main() {
 					if (hardAbort.signal.aborted || Date.now() >= reviewDeadline) {
 						hardAborted = true;
 						hardAbort.abort();
-						stopSession(observerSession);
+						await stopSession(observerSession);
 						return;
 					}
 					const unsubscribeObserver = subscribeSession(
@@ -2039,7 +2014,7 @@ async function main() {
 						await Promise.race([
 							observerSession.prompt(
 								`${prompt}\n\n## Practice group: ${group.id}\nEvaluate exactly these practices: ${group.practiceSlugs.join(", ")}. ` +
-									`Read their files under inputs/practices/, then start with the cheapest decisive practice. Persist each ` +
+									`Read their files under ${dirname(taskEnvelope.paths.practiceIndex)}/, then start with the cheapest decisive practice. Persist each ` +
 									`observation as soon as it is supported; do not finish a group-wide evidence map first. Reuse evidence ` +
 									`already gathered when investigating the remaining practices. Persist at least one disposition for ` +
 									`every listed practice, plus any distinct material problems a practice exposes. Use ` +
@@ -2056,8 +2031,8 @@ async function main() {
 						clearTimeout(timers.softTimer);
 						clearTimeout(timers.hardTimer);
 						activeSessions.delete(observerSession);
+						await stopSession(observerSession);
 						unsubscribeObserver();
-						stopSession(observerSession);
 					}
 				} catch (error) {
 					console.error(`[pi-runner] observer ${group.id} failed: ${errorText(error)}`);
@@ -2122,7 +2097,7 @@ async function main() {
 			retryAbort.abort();
 			console.error(`[pi-runner] Retry hard timeout — aborting`);
 			for (const activeSession of activeSessions) {
-				stopSession(activeSession);
+				abortSession(activeSession);
 			}
 		},
 	);
@@ -2165,7 +2140,9 @@ async function main() {
 						customTools: [grepTool, retryTool],
 						sessionManager: priorSessionFile
 							? SessionManager.open(priorSessionFile, sessionDir)
-							: SessionManager.inMemory(),
+							: reviewTrace
+								? SessionManager.create(CWD, reviewTrace.sessionDir)
+								: SessionManager.inMemory(),
 						settingsManager,
 						resourceLoader: await loadResources(),
 						modelRuntime,
@@ -2176,7 +2153,7 @@ async function main() {
 					if (retryIsOver()) {
 						retryAborted = true;
 						retryAbort.abort();
-						stopSession(retrySession);
+						await stopSession(retrySession);
 						return;
 					}
 					const remainingRetryMs = Math.max(0, retryStartMs + retry.windowMs - Date.now());
@@ -2193,7 +2170,7 @@ async function main() {
 						retriesRemaining,
 					);
 					const retryDeadline = scheduleDeadline(retryBudgetMs, () => {
-						stopSession(retrySession);
+						abortSession(retrySession);
 					});
 					try {
 						await Promise.race([
@@ -2208,8 +2185,8 @@ async function main() {
 					} finally {
 						clearTimeout(retryDeadline.timer);
 						activeSessions.delete(retrySession);
+						await stopSession(retrySession);
 						unsubscribeRetry();
-						stopSession(retrySession);
 					}
 				} catch (error) {
 					console.error(`[pi-runner] retry ${group.id} failed: ${errorText(error)}`);

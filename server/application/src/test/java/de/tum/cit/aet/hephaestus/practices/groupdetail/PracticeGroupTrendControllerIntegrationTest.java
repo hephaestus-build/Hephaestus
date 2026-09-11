@@ -97,7 +97,8 @@ class PracticeGroupTrendControllerIntegrationTest extends AbstractWorkspaceInteg
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test

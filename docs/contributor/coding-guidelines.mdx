@@ -13,7 +13,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 - Smoke-test the critical scripts. `vp run build:webapp` must pass. If you changed migrations, run `vp run db:generate-erd-docs`.
 - Update Chromatic snapshots when you change UI components.
 - Regenerate clients and documentation when you change an API contract.
-- Rerun the quality gates that match your changes: `vp run check`, `vp run generate:api`, or `cd server && ./mvnw test`.
+- Run the [local verification](./local-verification.mdx) appropriate to your changes.
 - Document what you verified in the pull request template. Link failing checks to tickets if you must defer.
 
 ## Webapp (`/webapp`)
@@ -69,7 +69,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 ### Null safety
 
 - `server/AGENTS.md` § Null-safety owns the NullAway policy. On API DTOs, use explicit `@NonNull` for components that must be `required` in OpenAPI.
-- Run `vp run gate:java-nullness` for the policy check and `cd server && ./mvnw test-compile -DskipTests` for compiler analysis.
+- Run `vp run gate:java-nullness` for the policy check and `cd server && ./gradlew :application:testClasses` for compiler analysis.
 
 ### Safe workflows
 
@@ -77,9 +77,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 - Share long-lived infrastructure in tests. Lean on Testcontainers and GitHub fixtures where possible.
 - After updating Liquibase migrations, run `vp run db:generate-erd-docs`. Regenerate OpenAPI and
   the REST client only when the HTTP API contract changes.
-- Run architecture checks and the unit/integration lifecycle with
-  `cd server && ./mvnw test -Parchitecture-tests && ./mvnw verify`. The reactor builds the
-  generated-client dependency before the application.
+- Run the affected [test tiers](./testing.mdx#gradle-recipes), including architecture checks when changing module boundaries.
 - Prefer integration tests that extend `BaseIntegrationTest`, or `AbstractWorkspaceIntegrationTest` for anything workspace-scoped, when you touch persistence logic. See [Testing](./testing.mdx).
 
 ## Webhook receiver (`server/.../integration/core/webhook/`)

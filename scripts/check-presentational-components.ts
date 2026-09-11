@@ -36,8 +36,6 @@ const MOCK_MODULES = ["msw", "msw-storybook-addon", "story-mock-server", "@/mock
 /** Shrink only: refactor a file, delete its line. An entry that scans clean fails the build. */
 const ALLOWLIST = {
 	fetching: [
-		"webapp/src/components/achievements/AchievementsView.tsx",
-		"webapp/src/components/admin/AdminAchievementsPage.tsx",
 		"webapp/src/components/admin/AdminDangerZoneSettings.tsx",
 		"webapp/src/components/admin/ai/WorkspaceLlmProviderPanel.tsx",
 		"webapp/src/components/admin/audit/AuthAuditPanel.tsx",
@@ -46,8 +44,6 @@ const ALLOWLIST = {
 		"webapp/src/components/admin/integrations/outline/AddCollectionDialog.tsx",
 		"webapp/src/components/admin/integrations/slack-channels/ChannelHistorySheet.tsx",
 		"webapp/src/components/auth/ImpersonationBanner.tsx",
-		"webapp/src/components/auth/LandingSignInCta.tsx",
-		"webapp/src/components/auth/SignInButtons.tsx",
 		"webapp/src/components/settings/DangerZoneSection.tsx",
 		"webapp/src/components/settings/SessionsSection.tsx",
 		"webapp/src/components/workspace/create-workspace/ConnectGitLabStep.tsx",

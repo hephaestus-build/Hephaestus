@@ -263,8 +263,9 @@ erDiagram
         BOOLEAN granted "NOT NULL"
         VARCHAR(32) mechanism "NOT NULL"
         VARCHAR(32) notice_version FK "NOT NULL"
-        VARCHAR(64) notice_sha256 FK "NOT NULL"
+        VARCHAR(64) notice_sha256 FK
         TIMESTAMPTZ occurred_at "NOT NULL"
+        VARCHAR(255) research_organization
     }
 
     ConsentNotice {
@@ -1392,15 +1393,6 @@ erDiagram
         BIGINT provider_id FK,UK "NOT NULL"
     }
 
-    UserAchievement {
-        UUID id PK
-        BIGINT user_id FK,UK "NOT NULL"
-        VARCHAR(64) achievement_id UK "NOT NULL"
-        TIMESTAMPTZ unlocked_at
-        JSONB progress_data "NOT NULL"
-        BIGINT version "NOT NULL"
-    }
-
     UserPreference {
         BIGINT id PK
         BIGINT user_id FK,UK "NOT NULL"
@@ -1442,7 +1434,6 @@ erDiagram
         TIMESTAMPTZ issue_types_synced_at
         TIMESTAMPTZ issue_dependencies_synced_at
         BOOLEAN practices_enabled "NOT NULL"
-        BOOLEAN achievements_enabled "NOT NULL"
         BOOLEAN leaderboard_enabled "NOT NULL"
         BOOLEAN progression_enabled "NOT NULL"
         BOOLEAN leagues_enabled "NOT NULL"
@@ -1706,7 +1697,6 @@ erDiagram
     Workspace ||--o{ SyncJob : has
     IdentityProvider ||--o{ Team : references
     IdentityProvider ||--o{ User : references
-    User ||--o{ UserAchievement : has
     LlmModel ||--o{ WorkspaceAgentBinding : references
     Workspace ||--o{ WorkspaceAgentBinding : has
     WorkspaceLlmModel ||--o{ WorkspaceAgentBinding : workspace_model_id

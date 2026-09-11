@@ -2,7 +2,6 @@ import { TagIcon } from "@primer/octicons-react";
 import { Link } from "@tanstack/react-router";
 import { LogOut, Settings, User } from "lucide-react";
 
-import { SignInButtons } from "@/components/auth/SignInButtons";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { ModeToggle } from "@/components/core/ModeToggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -34,6 +33,8 @@ export interface HeaderProps {
 	version: string;
 	environmentName: string;
 	isProduction: boolean;
+	/** The pull request a preview deployment is of; absent on every other environment. */
+	pullRequest?: number;
 	isAuthenticated: boolean;
 	isLoading: boolean;
 	name?: string;
@@ -41,7 +42,7 @@ export interface HeaderProps {
 	avatarUrl?: string;
 	workspaceSlug?: string;
 	feedbackDialog?: React.ReactNode;
-	onLogin: (idpHint?: string) => void;
+	onLogin: () => void;
 	onLogout: () => void;
 }
 
@@ -50,6 +51,7 @@ export default function Header({
 	version,
 	environmentName,
 	isProduction,
+	pullRequest,
 	isAuthenticated,
 	isLoading,
 	name,
@@ -62,7 +64,7 @@ export default function Header({
 }: HeaderProps) {
 	const hasWorkspace = Boolean(workspaceSlug);
 	const hasUsername = Boolean(username);
-	const badge = resolveHeaderBadge(version, environmentName, isProduction);
+	const badge = resolveHeaderBadge(version, environmentName, isProduction, pullRequest);
 	const logo = (
 		<span className="inline-flex">
 			<HephaestusLogo
@@ -121,13 +123,18 @@ export default function Header({
 									<Badge
 										variant="outline"
 										className="hidden gap-1.5 font-normal text-muted-foreground sm:inline-flex"
+										render={
+											badge.href ? (
+												<a href={badge.href} target="_blank" rel="noopener noreferrer" />
+											) : undefined
+										}
 									/>
 								}
 							>
 								<span className={cn("size-1.5 rounded-full", ENV_DOT[badge.tone])} />
 								{badge.label}
 							</TooltipTrigger>
-							<TooltipContent>{badge.label} environment</TooltipContent>
+							<TooltipContent>{badge.tooltip}</TooltipContent>
 						</Tooltip>
 					)}
 				</div>
@@ -137,7 +144,9 @@ export default function Header({
 				<ModeToggle />
 				<div className="flex items-center gap-2">
 					{!isAuthenticated ? (
-						<SignInButtons onSignIn={onLogin} disabled={isLoading} header />
+						<Button variant="outline" onClick={onLogin} disabled={isLoading}>
+							Sign in
+						</Button>
 					) : (
 						<div className="flex items-center gap-2">
 							<DropdownMenu>

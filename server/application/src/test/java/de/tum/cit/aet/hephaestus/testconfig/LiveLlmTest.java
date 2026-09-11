@@ -15,9 +15,8 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
  * so the test never reaches the runtime credential check. Pair with {@link LiveDockerTest} when
  * the test also requires a Docker daemon.
  *
- * <p>Tagged {@code live}: the default {@code surefire.excludedGroups=live} hides it from
- * {@code mvn test} / {@code mvn verify}. {@code mvn test -Plive-tests} switches to
- * {@code includedGroups=live} to opt in.
+ * <p>Tagged {@code live}: excluded from every non-live tier. Run
+ * {@code ./gradlew :application:liveTest} to opt in.
  *
  * <p>Pinned to {@link ExecutionMode#SAME_THREAD} so two live tests in the same module never run
  * in parallel — keeps LLM rate limits, log interleaving, and shared temp dirs sane.

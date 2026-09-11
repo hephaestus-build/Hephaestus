@@ -28,9 +28,9 @@ consists of:
 - **Application server** (Spring Boot; also hosts the interactive mentor sandboxes and the LLM proxy)
 - **Webhook server** (same Spring Boot artifact, `webhook` profile → NATS JetStream)
 - **React webapp** (served via nginx)
-- **PostgreSQL 17–18** is supported; the release Compose stack qualifies and ships **PostgreSQL 18**
+- **PostgreSQL 18** is the only supported major version; the release Compose stack ships it
   with `pg_partman` (see [ADR 0038](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0038-postgresql-18-release-baseline.md)).
-  Vanilla PostgreSQL is not a drop-in for the bundled stack. PostgreSQL 17 remains the minimum.
+  Vanilla PostgreSQL is not a drop-in for the bundled stack.
 - **Hephaestus-native auth** (Spring Security `oauth2Login` federating to GitHub + optional GitLab — gitlab.com or self-hosted — issuing cookie-session JWTs — [ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md))
 
 ## Base environment variables
@@ -49,6 +49,7 @@ These variables exist only in the reference deployment, so they live here:
 | Variable | Purpose |
 | --- | --- |
 | `LEGAL_PROFILE` | Selects a bundled imprint/privacy profile. Use `tumaet` only for the canonical AET deployment; self-hosters leave empty and mount `/legal-overrides/`. See [Legal Pages](./legal-pages). |
+| `HEPHAESTUS_RESEARCH_ORGANIZATION` | Names the organisation running an optional academic-research study. Set it and first-login setup asks each account whether to take part, showing this name; leave it empty — the default — and the question is never asked. See [Legal Pages](./legal-pages#the-optional-research-question). |
 | `HEPHAESTUS_INTEGRATION_OAUTH_SUCCESS_REDIRECT` / `HEPHAESTUS_INTEGRATION_OAUTH_FAILURE_REDIRECT` | Post-callback landing URLs for integration OAuth. Success defaults to `/integrations?status=success`, failure to the success base + `?status=error`. Set absolute URLs when the SPA host differs from the API host. |
 | `SPRINGDOC_API_DOCS_ENABLED` / `SPRINGDOC_SWAGGER_UI_ENABLED` | Publish the OpenAPI description at `/v3/api-docs` and the interactive Swagger UI. Both default to `false`. |
 

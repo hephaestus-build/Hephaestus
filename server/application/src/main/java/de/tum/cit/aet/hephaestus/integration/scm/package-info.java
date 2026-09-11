@@ -1,8 +1,6 @@
 /**
- * Vendor-neutral SCM family root. Shared kernel in {@code scm/domain}; vendor adapters
- * in {@code scm/github} and {@code scm/gitlab}; family-shared orchestrator in
- * {@code scm/sync}. Cross-module coupling goes through {@code integration.core.spi}
- * and {@code integration.core.events}.
+ * SCM domain and persistence shared by the GitHub and GitLab adapters. Provider-neutral synchronization
+ * lives in {@code scm.sync}; provider-specific behavior belongs in {@code scm.github} or {@code scm.gitlab}.
  */
 @org.springframework.modulith.ApplicationModule(
         displayName = "SCM",

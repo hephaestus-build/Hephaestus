@@ -13,7 +13,7 @@ const slackProvider: LoginProviderView = {
 	scopes: "openid profile email",
 	enabled: true,
 	seededFromEnv: true,
-	redirectUri: "https://hephaestus-test.felixdietrich.com/api/login/oauth2/code/slack",
+	redirectUri: "https://hephaestus.example.com/api/login/oauth2/code/slack",
 	createdAt: new Date("2026-05-02T00:00:00Z"),
 	updatedAt: new Date("2026-05-02T00:00:00Z"),
 };
@@ -26,7 +26,7 @@ const outlineProvider: LoginProviderView = {
 	scopes: "read",
 	enabled: true,
 	seededFromEnv: false,
-	redirectUri: "https://hephaestus-test.felixdietrich.com/api/login/oauth2/code/outline-acme",
+	redirectUri: "https://hephaestus.example.com/api/login/oauth2/code/outline-acme",
 	createdAt: new Date("2026-07-02T00:00:00Z"),
 	updatedAt: new Date("2026-07-02T00:00:00Z"),
 };

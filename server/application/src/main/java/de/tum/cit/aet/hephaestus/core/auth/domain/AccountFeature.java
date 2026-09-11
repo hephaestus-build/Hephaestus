@@ -5,6 +5,7 @@ import jakarta.persistence.Embeddable;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import java.io.Serial;
 import java.io.Serializable;
 import java.time.Instant;
 import lombok.AllArgsConstructor;
@@ -49,6 +50,9 @@ public class AccountFeature {
     @AllArgsConstructor
     @EqualsAndHashCode
     public static class Id implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         @Column(name = "account_id", nullable = false)
         private Long accountId;

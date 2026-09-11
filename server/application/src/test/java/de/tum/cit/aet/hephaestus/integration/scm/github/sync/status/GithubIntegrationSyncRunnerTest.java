@@ -134,8 +134,10 @@ class GithubIntegrationSyncRunnerTest extends BaseUnitTest {
             // (to fold in the checkpoints that batch just persisted): 1 + 2 reads for the first pass,
             // then an empty scope so the second pass finds nothing pending and stops.
             when(syncTargetProvider.getSyncTargetsForScope(WORKSPACE_ID))
-                    .thenReturn(
-                            List.of(targetA, targetB), List.of(targetA, targetB), List.of(targetA, targetB), List.of());
+                    .thenReturn(List.of(targetA, targetB))
+                    .thenReturn(List.of(targetA, targetB))
+                    .thenReturn(List.of(targetA, targetB))
+                    .thenReturn(List.of());
             when(handle.isCancellationRequested()).thenReturn(false);
             when(backfillService.runBackfillBatch(any(), anyInt(), any())).thenReturn(true);
 
@@ -157,7 +159,11 @@ class GithubIntegrationSyncRunnerTest extends BaseUnitTest {
                     .thenReturn(List.of(targetA, targetB, targetC));
             // outer-check(false) -> inner: targetA(false, processed) -> targetB(true, cancel: break) ->
             // outer-check(true, stop)
-            when(handle.isCancellationRequested()).thenReturn(false, false, true, true);
+            when(handle.isCancellationRequested())
+                    .thenReturn(false)
+                    .thenReturn(false)
+                    .thenReturn(true)
+                    .thenReturn(true);
             when(backfillService.runBackfillBatch(any(), anyInt(), any())).thenReturn(true);
 
             runner.backfill(ref, handle);
@@ -237,7 +243,9 @@ class GithubIntegrationSyncRunnerTest extends BaseUnitTest {
         @Test
         void reportsOncePerVendorPageRatherThanOncePerBatch() {
             SyncTarget target = initializedTarget(1L, "acme/repo", 100, 100);
-            when(syncTargetProvider.getSyncTargetsForScope(WORKSPACE_ID)).thenReturn(List.of(target), List.of());
+            when(syncTargetProvider.getSyncTargetsForScope(WORKSPACE_ID))
+                    .thenReturn(List.of(target))
+                    .thenReturn(List.of());
             answerWithPages(target, 80, 60, 40);
 
             runner.backfill(ref, handle);
@@ -250,7 +258,9 @@ class GithubIntegrationSyncRunnerTest extends BaseUnitTest {
         @Test
         void reportsDeterminateTotalsFromThePersistedHighWaterMarks() {
             SyncTarget target = initializedTarget(1L, "acme/repo", 100, 100);
-            when(syncTargetProvider.getSyncTargetsForScope(WORKSPACE_ID)).thenReturn(List.of(target), List.of());
+            when(syncTargetProvider.getSyncTargetsForScope(WORKSPACE_ID))
+                    .thenReturn(List.of(target))
+                    .thenReturn(List.of());
             answerWithPages(target, 60);
 
             runner.backfill(ref, handle);
@@ -268,7 +278,9 @@ class GithubIntegrationSyncRunnerTest extends BaseUnitTest {
         @Test
         void reportsAHumanNarrativeNamingTheRepositoryAndTheNumberRange() {
             SyncTarget target = initializedTarget(1L, "ls1intum/Artemis", 4812, 4812);
-            when(syncTargetProvider.getSyncTargetsForScope(WORKSPACE_ID)).thenReturn(List.of(target), List.of());
+            when(syncTargetProvider.getSyncTargetsForScope(WORKSPACE_ID))
+                    .thenReturn(List.of(target))
+                    .thenReturn(List.of());
             answerWithPages(target, 3200);
 
             runner.backfill(ref, handle);
@@ -286,7 +298,9 @@ class GithubIntegrationSyncRunnerTest extends BaseUnitTest {
         @Test
         void uninitializedTarget_reportsNullTotalRatherThanFakingADenominator() {
             SyncTarget target = pendingTarget(1L, "acme/repo");
-            when(syncTargetProvider.getSyncTargetsForScope(WORKSPACE_ID)).thenReturn(List.of(target), List.of());
+            when(syncTargetProvider.getSyncTargetsForScope(WORKSPACE_ID))
+                    .thenReturn(List.of(target))
+                    .thenReturn(List.of());
             answerWithPages(target, 60);
 
             runner.backfill(ref, handle);

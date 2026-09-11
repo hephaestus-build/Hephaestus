@@ -79,7 +79,8 @@ class PracticeReviewSettingsControllerIntegrationTest extends AbstractWorkspaceI
                 .bodyValue(Map.of("cooldownMinutes", 5000))
                 .exchange()
                 .expectStatus()
-                .isBadRequest();
+                .isBadRequest()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -95,7 +96,8 @@ class PracticeReviewSettingsControllerIntegrationTest extends AbstractWorkspaceI
                 .bodyValue(Map.of("personMode", "SELECTED", "repositories", List.of(), "personUserIds", List.of()))
                 .exchange()
                 .expectStatus()
-                .isBadRequest();
+                .isBadRequest()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -131,7 +133,8 @@ class PracticeReviewSettingsControllerIntegrationTest extends AbstractWorkspaceI
 
         patch(workspace.getWorkspaceSlug(), null, Map.of("deliverToMerged", true))
                 .expectStatus()
-                .isEqualTo(HttpStatus.PRECONDITION_REQUIRED);
+                .isEqualTo(HttpStatus.PRECONDITION_REQUIRED)
+                .expectBody(Void.class);
     }
 
     @Test
@@ -194,7 +197,7 @@ class PracticeReviewSettingsControllerIntegrationTest extends AbstractWorkspaceI
                 .exchange()
                 .expectStatus()
                 .isOk()
-                .returnResult(PracticeReviewSettingsDTO.class)
+                .returnResult(Void.class)
                 .getResponseHeaders()
                 .getETag();
         return java.util.Objects.requireNonNull(version, "the settings endpoint always answers with an ETag");
@@ -229,7 +232,8 @@ class PracticeReviewSettingsControllerIntegrationTest extends AbstractWorkspaceI
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         webTestClient
                 .patch()
@@ -239,7 +243,8 @@ class PracticeReviewSettingsControllerIntegrationTest extends AbstractWorkspaceI
                 .bodyValue(Map.of("skipDrafts", false))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -262,7 +267,8 @@ class PracticeReviewSettingsControllerIntegrationTest extends AbstractWorkspaceI
                 .bodyValue(Map.of("skipDrafts", false))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -270,6 +276,7 @@ class PracticeReviewSettingsControllerIntegrationTest extends AbstractWorkspaceI
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
     }
 }

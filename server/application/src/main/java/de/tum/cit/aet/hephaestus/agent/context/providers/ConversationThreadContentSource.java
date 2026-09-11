@@ -130,8 +130,8 @@ public class ConversationThreadContentSource implements EvidenceSource, ReviewCo
         Map<SourceKind, SourceCaptureState> stateOverrides = messageCount == 0
                 ? absenceOf(projection.threadReadability(
                         job.getWorkspace().getId(),
-                        metadata.path("slack_channel_id").asText(),
-                        metadata.path("slack_thread_ts").asText()))
+                        metadata.path("slack_channel_id").asString(),
+                        metadata.path("slack_thread_ts").asString()))
                 : Map.of();
         return new EvidenceContribution(
                 captured.files(),

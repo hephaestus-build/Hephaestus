@@ -117,7 +117,7 @@ await test("uses XML structure rather than matching tag-like text", () => {
 	]);
 });
 
-await test("extracts process and Spring context metrics", () => {
+await test("extracts wall and context metrics without claiming daemon CPU or memory", () => {
 	const performance = parsePerformance(
 		"Started FirstTest in 4.25 seconds\nDefaultContextCache@abc missCount = 1\nStarted SecondTest in 5.75 seconds\nDefaultContextCache@abc missCount = 2",
 		`User time (seconds): 12.5
@@ -127,31 +127,14 @@ Maximum resident set size (kbytes): 524288`,
 	);
 	assert.deepEqual(performance, {
 		wallTimeSeconds: 63.5,
-		cpuTimeSeconds: 15,
-		maxRssKilobytes: 524288,
 		contextStarts: 2,
 		contextStartupSeconds: 10,
 		contextCacheMisses: 2,
 	});
 });
 
-await test("does not turn missing resource measurements into zeroes", () => {
-	const resources = [
-		"User time (seconds): 12.5",
-		"System time (seconds): 2.5",
-		"Elapsed (wall clock) time (h:mm:ss or m:ss): 1:03.50",
-		"Maximum resident set size (kbytes): 524288",
-	];
-	for (let missing = 0; missing < resources.length; missing++) {
-		assert.throws(
-			() => parsePerformance("", resources.filter((_, index) => index !== missing).join("\n")),
-			/Missing or invalid/,
-		);
-	}
-	assert.throws(
-		() => parsePerformance("", resources.join("\n").replace("12.5", "-12.5")),
-		/Missing or invalid/,
-	);
+await test("does not turn missing wall time into zero", () => {
+	assert.throws(() => parsePerformance("", ""), /Missing or invalid elapsed/);
 });
 
 await test("profile CLI preserves diagnostics and fails when no tests were reported", async (context) => {
@@ -180,4 +163,40 @@ await test("profile CLI preserves diagnostics and fails when no tests were repor
 		env: { ...process.env, GITHUB_STEP_SUMMARY: join(directory, "step-summary.md") },
 	});
 	assert.equal(ordinary.status, 0);
+});
+
+await test("verification profiles allow no Spring contexts but still require successful executed tests", async (context) => {
+	const directory = await mkdtemp(join(tmpdir(), "verification-profile-"));
+	context.after(() => rm(directory, { recursive: true, force: true }));
+	const reports = join(directory, "reports");
+	await mkdir(reports);
+	const log = join(directory, "run.log");
+	const resources = join(directory, "resources.txt");
+	await writeFile(log, "");
+	await writeFile(
+		resources,
+		"User time (seconds): 1\nSystem time (seconds): 1\nElapsed (wall clock) time (h:mm:ss or m:ss): 0:02\nMaximum resident set size (kbytes): 100",
+	);
+	const script = fileURLToPath(new URL("./summarize-test-results.ts", import.meta.url));
+	for (const [kind, body, valid] of [
+		["verification", "", true],
+		["integration", "", false],
+		["verification", "<skipped/>", false],
+		["verification", "<failure/>", false],
+		["unknown", "", false],
+	] as const) {
+		await writeFile(
+			join(reports, "TEST-example.xml"),
+			`<testsuite><testcase classname="Example" name="test" time="1">${body}</testcase></testsuite>`,
+		);
+		const result = spawnSync(
+			process.execPath,
+			[script, "profile", reports, join(directory, "summary.json"), log, resources, kind],
+			{
+				encoding: "utf8",
+				env: { ...process.env, GITHUB_STEP_SUMMARY: join(directory, "step-summary.md") },
+			},
+		);
+		assert.equal(result.status, valid ? 0 : 1, `${kind} ${body}: ${result.stderr}`);
+	}
 });

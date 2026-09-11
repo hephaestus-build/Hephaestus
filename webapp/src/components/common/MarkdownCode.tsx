@@ -61,7 +61,7 @@ export function MarkdownCode({
 
 	return (
 		<CodeBlock
-			className={className}
+			className={cn("[&_pre]:text-foreground", className)}
 			code={code}
 			isIncomplete={isIncomplete}
 			language={language}

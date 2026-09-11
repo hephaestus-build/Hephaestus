@@ -47,6 +47,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
+import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.JwsHeader;
@@ -55,12 +56,9 @@ import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationProvider;
 
-/**
- * Security regression suite for {@link RevocationAwareJwtDecoder}. Each test pins one verification
- * control; if the control is removed the test fails. Real ES256 keys are minted in-process; only the
- * true boundaries (key source, revocation store, clock) are stubbed.
- */
 class RevocationAwareJwtDecoderTest extends BaseUnitTest {
 
     private static final URI ISSUER = URI.create("https://auth.example.test");
@@ -276,16 +274,23 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
         IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
         when(repo.findActive(eq(jti), any())).thenThrow(new RuntimeException("db down"));
 
-        // Fail CLOSED: a DB outage must reject the token, never accept a signature-valid one — and as a
-        // BadJwtException so the unverifiable token is answered 401 (fail-closed), not 500. A bare
-        // JwtException here would turn every request during a DB blip into a 500 instead of a clean 401.
         assertThatThrownBy(() -> decoder(repo, cacheManager()).decode(validToken(jti)))
-                .isInstanceOf(BadJwtException.class)
+                .isExactlyInstanceOf(JwtException.class)
                 .hasMessageContaining("revocation check failed");
 
-        // …and the fail-closed rejection is observable (a DB-outage mass-401 must not be silent).
         assertThat(meterRegistry.counter("auth.revocation.check_failed").count())
                 .isEqualTo(1.0);
+    }
+
+    @Test
+    void shouldReportAuthenticationServiceFailureWhenRevocationStoreIsUnavailable() {
+        UUID jti = UUID.randomUUID();
+        IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
+        when(repo.findActive(eq(jti), any())).thenThrow(new RuntimeException("db down"));
+        var provider = new JwtAuthenticationProvider(decoder(repo, cacheManager()));
+
+        assertThatThrownBy(() -> provider.authenticate(new BearerTokenAuthenticationToken(validToken(jti))))
+                .isInstanceOf(AuthenticationServiceException.class);
     }
 
     @Test

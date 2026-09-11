@@ -70,7 +70,7 @@ do, its home is the Admin Guide (`docs/admin/`) and the runbook links to it.
 | [0029](0029-measurement-intervention-seam-and-channel-levels.md) | Separate measurement from intervention and derive level from channel | Accepted |
 | [0030](0030-agent-runtime-is-typescript-on-bun.md) | The agent runtime is TypeScript on Bun, with no Node in the sandbox | Superseded by [0036](0036-agent-runtime-runs-on-node-24.md) |
 | [0031](0031-agent-image-follows-the-deployments-own-tag.md) | The agent image reference follows the deployment's own image tag | Superseded by [0034](0034-signed-release-image-lock.md) |
-| [0032](0032-generated-clients-build-boundary.md) | Generated clients are a Maven build boundary | Accepted |
+| [0032](0032-generated-clients-build-boundary.md) | Generated clients have an independent build boundary | Accepted |
 | [0033](0033-bun-is-the-javascript-runtime-and-package-manager.md) | Bun is the JavaScript runtime and package manager | Superseded by [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) |
 | [0034](0034-signed-release-image-lock.md) | Production consumes one signed release image lock | Accepted (amended 2026-09-03 #1719 — [0041](0041-compose-1x-kubernetes-2.md) adds the 2.0 chart and CRD inventory; 2026-09-05 — the operator toolchain follows [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md)) |
 | [0035](0035-pull-request-previews-are-label-gated.md) | Pull request previews are label-gated and driven from the default branch | Accepted (amended 2026-09-03 #1719 — agent execution host superseded by [0041](0041-compose-1x-kubernetes-2.md)) |
@@ -81,5 +81,6 @@ do, its home is the Admin Guide (`docs/admin/`) and the runbook links to it.
 | [0040](0040-vite-plus-is-the-command-surface.md) | Vite+ is the command surface; pnpm stays the package manager | Accepted |
 | [0041](0041-compose-1x-kubernetes-2.md) | Compose for 1.x; Kubernetes only for 2.0 | Accepted |
 | [0042](0042-hosts-pull-their-own-releases.md) | Hosts pull their own releases | Accepted |
+| [0043](0043-gradle-java-build.md) | Gradle owns the Java build | Accepted |
 
 Template: [0000-template.md](0000-template.md).

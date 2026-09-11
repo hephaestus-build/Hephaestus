@@ -105,10 +105,10 @@ class CodeQualityTest extends HephaestusArchitectureTest {
 
         @Test
         void methodsHaveLimitedParameters() {
-            // Methods that have command-object overloads but need many params for internal processing
-            Set<String> allowedOverloads = Set.of(
-                    "ActivityEventService.record", // Has RecordActivityCommand overload for cleaner API
-                    "ActivityRecorder.record", // SPI mirror of ActivityEventService.record — same shape by design
+            Set<String> allowedMethods = Set.of(
+                    // Activity writes carry the event identity, context and XP through the SPI.
+                    "ActivityEventService.record",
+                    "ActivityRecorder.record",
                     // @Bean factory wiring Spring dependencies — not business logic complexity
                     "DockerSandboxConfiguration.dockerSandboxAdapter",
                     "DockerSandboxConfiguration.dockerInteractiveSandboxAdapter");
@@ -171,7 +171,7 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                                                     || m.getName().equals("of")
                                                     || m.getName().equals("from"))))
                                     .filter(m ->
-                                            !allowedOverloads.contains(javaClass.getSimpleName() + "." + m.getName()))
+                                            !allowedMethods.contains(javaClass.getSimpleName() + "." + m.getName()))
                                     // Native SQL methods require @Param per column and cannot use parameter objects
                                     .filter(m -> !nativeSqlRepositoryMethods.contains(
                                             javaClass.getSimpleName() + "." + m.getName()))

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.web;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthAuditService;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
@@ -98,7 +99,7 @@ public class AuthAuditController {
 
     @GetMapping
     @Operation(summary = "List auth audit events (paged, newest first)", operationId = "adminListAuthEvents")
-    public ResponseEntity<Page<AuthEventViewDTO>> list(
+    public ResponseEntity<PageResponseDTO<AuthEventViewDTO>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size,
             @ParameterObject AuditFilterParams filter) {
@@ -108,7 +109,7 @@ public class AuthAuditController {
         Pageable pageable = PageRequest.of(safePage, safeSize);
         AuthAuditService.AuditPage result0 = authAuditService.list(filter.toFilter(), pageable);
         Page<AuthEventViewDTO> events = result0.events().map(e -> toView(e, result0.identities()));
-        return ResponseEntity.ok(events);
+        return ResponseEntity.ok(PageResponseDTO.from(events));
     }
 
     @GetMapping(value = "/export", produces = "text/csv")

@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Gated behind {@code @Tag("live")} and skipped unless {@code SLACK_BOT_TOKEN} +
  * {@code SLACK_E2E_CHANNEL} are present, so it never runs in normal CI. Run with:
- * {@code SLACK_BOT_TOKEN=xoxb-… SLACK_E2E_CHANNEL=C… mvn test -Plive-tests -Dtest=SlackMessageServiceLiveTest}.
+ * {@code SLACK_BOT_TOKEN=xoxb-… SLACK_E2E_CHANNEL=C… ./gradlew :application:liveTest --tests SlackMessageServiceLiveTest}.
  */
 @Tag("live")
 class SlackMessageServiceLiveTest {
@@ -52,7 +52,7 @@ class SlackMessageServiceLiveTest {
         workspace.setId(workspaceId);
 
         // Real per-row AES-GCM encryption (same converter the app wires), AAD-bound to this row.
-        CredentialBundleConverter converter = new CredentialBundleConverter("a".repeat(32), "live");
+        CredentialBundleConverter converter = new CredentialBundleConverter("a".repeat(32), false);
         Connection connection = new Connection(
                 workspace,
                 IntegrationKind.SLACK,

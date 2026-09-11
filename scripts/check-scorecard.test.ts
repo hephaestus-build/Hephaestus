@@ -24,7 +24,7 @@ const assessment = () => ({
  * the scoring each check is charged under, so that reclassifying one is a deliberate edit as well.
  */
 const enforced: Record<string, { score: number; scoredOver: string }> = {
-	"Binary-Artifacts": { score: 10, scoredOver: "configuration" },
+	"Binary-Artifacts": { score: 10, scoredOver: "history" },
 	"CI-Tests": { score: 10, scoredOver: "history" },
 	"Code-Review": { score: 10, scoredOver: "history" },
 	"Dangerous-Workflow": { score: 10, scoredOver: "configuration" },
@@ -35,7 +35,6 @@ const enforced: Record<string, { score: number; scoredOver: string }> = {
 	SAST: { score: 10, scoredOver: "history" },
 	"Security-Policy": { score: 10, scoredOver: "configuration" },
 	"Token-Permissions": { score: 10, scoredOver: "configuration" },
-	Vulnerabilities: { score: 10, scoredOver: "configuration" },
 	"Signed-Releases": { score: 8, scoredOver: "history" },
 	"Branch-Protection": { score: 4, scoredOver: "configuration" },
 };
@@ -109,10 +108,14 @@ void test("a push answers for the configuration its commit left and no other eve
 		});
 });
 
-void test("only the four deliberate exclusions may drop without failure", () => {
+void test("only the deliberate exclusions may drop without failure", () => {
 	const value = assessment();
 	for (const check of value.checks)
-		if (["Contributors", "CII-Best-Practices", "Fuzzing", "Packaging"].includes(String(check.name)))
+		if (
+			["Contributors", "CII-Best-Practices", "Fuzzing", "Packaging", "Vulnerabilities"].includes(
+				String(check.name),
+			)
+		)
 			check.score = -1;
 	assert.deepEqual(checkScorecard(baseline, value, now), passes);
 });

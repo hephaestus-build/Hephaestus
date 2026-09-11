@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { parseSummary, regressions } from "./check-ci-performance.ts";
 import type { TestSummary } from "./summarize-test-results.ts";
 
 const summary = (startup: number, wall = 200): TestSummary => ({
-	schemaVersion: 2,
+	schemaVersion: 3,
 	name: "profile",
 	files: 1,
 	tests: 1,
@@ -16,8 +21,6 @@ const summary = (startup: number, wall = 200): TestSummary => ({
 	slowest: [],
 	performance: {
 		wallTimeSeconds: wall,
-		cpuTimeSeconds: 150,
-		maxRssKilobytes: 500_000,
 		contextStarts: 10,
 		contextStartupSeconds: startup,
 		contextCacheMisses: 10,
@@ -82,4 +85,46 @@ await test("missing Spring logs cannot appear as a faster profile", () => {
 		current.performance[key] = 0;
 		assert.throws(() => regressions(current, []), /no Spring context measurements/);
 	}
+});
+
+await test("CLI warns on sustained regressions but fails for corrupt or failed-test evidence", async (context) => {
+	const directory = await mkdtemp(path.join(tmpdir(), "profile-advisory-"));
+	context.after(() => rm(directory, { recursive: true, force: true }));
+	const history = path.join(directory, "history");
+	const current = path.join(directory, "current.json");
+	const output = path.join(directory, "summary.md");
+	await mkdir(history);
+	for (let i = 0; i < 7; i++)
+		await writeFile(
+			path.join(history, `${i}.json`),
+			JSON.stringify(summary(100, i < 5 ? 200 : 300)),
+		);
+	const run = () =>
+		spawnSync(
+			process.execPath,
+			[fileURLToPath(new URL("./check-ci-performance.ts", import.meta.url)), current, history],
+			{
+				env: { ...process.env, GITHUB_STEP_SUMMARY: output },
+				encoding: "utf8",
+			},
+		);
+	await writeFile(current, JSON.stringify(summary(100, 300)));
+	const exceeded = run();
+	assert.equal(exceeded.status, 0, exceeded.stderr);
+	assert.match(exceeded.stdout, /::warning title=Integration profile regression::wall time/);
+	assert.match(await readFile(output, "utf8"), /Status: \*\*regression\*\*/);
+	await writeFile(current, JSON.stringify({ ...summary(100), failures: 1 }));
+	assert.notEqual(run().status, 0);
+	await writeFile(current, "not json");
+	assert.notEqual(run().status, 0);
+	await writeFile(current, JSON.stringify(summary(100)));
+	await writeFile(path.join(history, "0.json"), "not json");
+	assert.notEqual(run().status, 0);
+});
+
+await test("rejects profiles from the old process-accounting schema", () => {
+	assert.throws(
+		() => parseSummary(JSON.stringify({ ...summary(10), schemaVersion: 2 })),
+		/Invalid CI metrics summary/,
+	);
 });

@@ -4,12 +4,12 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntryViewDTO;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditFilterParams;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springdoc.core.annotations.ParameterObject;
-import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,12 +35,12 @@ public class AdminConfigAuditController {
     @Operation(
             summary = "List admin configuration changes across workspaces (paged, newest first)",
             operationId = "adminListConfigAuditEvents")
-    public ResponseEntity<Page<ConfigAuditEntryViewDTO>> list(
+    public ResponseEntity<PageResponseDTO<ConfigAuditEntryViewDTO>> list(
             @RequestParam(required = false) @Nullable Long workspaceId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size,
             @ParameterObject ConfigAuditFilterParams filter) {
-        return ResponseEntity.ok(configAuditQuery.listForAdmin(
-                workspaceId, filter.toFilter(), ConfigAuditFilterParams.pageable(page, size)));
+        return ResponseEntity.ok(PageResponseDTO.from(configAuditQuery.listForAdmin(
+                workspaceId, filter.toFilter(), ConfigAuditFilterParams.pageable(page, size))));
     }
 }

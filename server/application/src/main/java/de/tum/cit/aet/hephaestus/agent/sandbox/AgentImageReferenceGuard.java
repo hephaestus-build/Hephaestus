@@ -6,12 +6,13 @@ import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
  * Refuses agent image references that cannot name a build matching this server.
  *
- * <p>Unconditional, unlike {@link AgentImagePinGuard}: a digest is a production requirement, but a
+ * <p>Applies in every runtime profile, unlike {@link AgentImagePinGuard}: a digest is a production requirement, but a
  * <em>channel tag</em> — one that moves from build to build rather than naming one — is wrong in
  * every environment. It comes in two spellings, a name and a partial version, and both move. The
  * server stages its runners into whatever this resolves to, so an unmatched image is a runtime
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Component;
  * all. Both reach the daemon rather than this guard unless the tag is read out and judged.
  */
 @Component
+@Profile("!specs & !cds-training")
 public class AgentImageReferenceGuard {
 
     private static final Logger log = LoggerFactory.getLogger(AgentImageReferenceGuard.class);

@@ -45,16 +45,7 @@ public class InAppFeedbackPreparer {
 
     private static final Logger log = LoggerFactory.getLogger(InAppFeedbackPreparer.class);
 
-    /**
-     * Cap on in-app units per recipient per cycle. Two, not the chat lane's three: a
-     * process-level message asks the developer to change a habit, and being handed three habits at once
-     * is how none of them get changed.
-     *
-     * <p>The composer is told the same number
-     * ({@link de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs}) and its tool refuses
-     * a call past it, so in a normal run nothing arrives here to cap. The bound is kept as the last one
-     * standing: a runaway turn must not be able to fill a recipient's page.
-     */
+    /** Maximum prepared IN_APP feedback units per recipient in one preparation cycle. */
     public static final int TOP_N_PER_RECIPIENT = 2;
 
     private final FeedbackRepository feedbackRepository;

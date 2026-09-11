@@ -35,8 +35,7 @@ export const handlers = [
 	http.get("*/user/consent", () =>
 		HttpResponse.json({
 			completed: true,
-			noticeText: "Current transparency notice",
-			noticeVersion: "2026-08-30",
+			noticeVersion: "2026-09-11",
 			participateInResearch: false,
 		}),
 	),

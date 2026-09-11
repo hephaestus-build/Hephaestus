@@ -26,6 +26,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 @WorkspaceAgnostic("Reviews scoped through pull_request_id -> repository.workspace_id")
 public interface PullRequestReviewRepository extends JpaRepository<PullRequestReview, Long> {
+    boolean existsByIdAndPullRequest_IdAndAuthor_Id(long id, long pullRequestId, long authorId);
+
     Optional<PullRequestReview> findByIdAndPullRequestId(Long id, Long pullRequestId);
 
     Optional<PullRequestReview> findByNativeIdAndProviderId(Long nativeId, Long providerId);
@@ -98,23 +100,6 @@ public interface PullRequestReviewRepository extends JpaRepository<PullRequestRe
         WHERE prr.id IN :ids
         """)
     List<PullRequestReview> findAllByIdWithRelations(@Param("ids") Collection<Long> ids);
-
-    /**
-     * Fetch a single review with its pull request and PR author eagerly loaded.
-     *
-     * <p>Used by the achievement evaluator to check PR authorship without N+1 lazy loads.
-     *
-     * @param id the review ID
-     * @return review with pullRequest and pullRequest.author eagerly loaded
-     */
-    @Query("""
-        SELECT prr
-        FROM PullRequestReview prr
-        LEFT JOIN FETCH prr.pullRequest pr
-        LEFT JOIN FETCH pr.author
-        WHERE prr.id = :id
-        """)
-    Optional<PullRequestReview> findByIdWithPullRequestAuthor(@Param("id") Long id);
 
     /**
      * Find all reviews by a specific author within a time range, scoped to a workspace.

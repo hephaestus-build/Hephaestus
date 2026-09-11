@@ -393,7 +393,8 @@ public final class ConfigurationReadinessEvaluator {
         try {
             URI uri = URI.create(value);
             int port = uri.getPort();
-            return Set.of("nats", "tls").contains(uri.getScheme())
+            String scheme = uri.getScheme();
+            return ("nats".equalsIgnoreCase(scheme) || "tls".equalsIgnoreCase(scheme))
                     && uri.getHost() != null
                     && (port == -1 || port > 0 && port <= 65535)
                     && (uri.getPath().isEmpty() || "/".equals(uri.getPath()))

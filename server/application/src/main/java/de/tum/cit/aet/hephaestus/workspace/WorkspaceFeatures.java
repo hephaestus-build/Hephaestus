@@ -33,11 +33,6 @@ public class WorkspaceFeatures {
 
     @NotNull
     @ColumnDefault("false")
-    @Column(name = "achievements_enabled", nullable = false)
-    private Boolean achievementsEnabled = false;
-
-    @NotNull
-    @ColumnDefault("false")
     @Column(name = "leaderboard_enabled", nullable = false)
     private Boolean leaderboardEnabled = false;
 
@@ -65,7 +60,6 @@ public class WorkspaceFeatures {
     public void applyPatch(UpdateWorkspaceFeaturesRequestDTO request) {
         if (request.practicesEnabled() != null) this.practicesEnabled = request.practicesEnabled();
         if (request.mentorEnabled() != null) this.mentorEnabled = request.mentorEnabled();
-        if (request.achievementsEnabled() != null) this.achievementsEnabled = request.achievementsEnabled();
         if (request.leaderboardEnabled() != null) this.leaderboardEnabled = request.leaderboardEnabled();
         if (request.progressionEnabled() != null) this.progressionEnabled = request.progressionEnabled();
         if (request.leaguesEnabled() != null) this.leaguesEnabled = request.leaguesEnabled();

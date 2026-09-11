@@ -46,20 +46,24 @@ class SecurityHeadersIntegrationTest extends RealAuthIntegrationTest {
                 .expectHeader()
                 .value(
                         "Content-Security-Policy",
-                        allOf(
-                                containsString("default-src 'self'"),
-                                containsString("script-src 'self';"),
-                                containsString("img-src 'self' data: https:"),
-                                containsString("form-action 'self'"),
-                                containsString("frame-ancestors 'none'"),
-                                containsString("base-uri 'self'"),
-                                // Regression guards: no instance-specific host, and no plaintext-HTTP image downgrade
-                                // ('http:' is not a substring of 'https:').
-                                not(containsString("gitlab")),
-                                not(containsString("github")),
-                                not(containsString("http:"))))
+                        value -> org.hamcrest.MatcherAssert.assertThat(
+                                value,
+                                allOf(
+                                        containsString("default-src 'self'"),
+                                        containsString("script-src 'self';"),
+                                        containsString("img-src 'self' data: https:"),
+                                        containsString("form-action 'self'"),
+                                        containsString("frame-ancestors 'none'"),
+                                        containsString("base-uri 'self'"),
+                                        // Regression guards: no instance-specific host, and no plaintext-HTTP image
+                                        // downgrade
+                                        // ('http:' is not a substring of 'https:').
+                                        not(containsString("gitlab")),
+                                        not(containsString("github")),
+                                        not(containsString("http:")))))
                 // A future accidental re-introduction of reportOnly() must fail this test.
                 .expectHeader()
-                .doesNotExist("Content-Security-Policy-Report-Only");
+                .doesNotExist("Content-Security-Policy-Report-Only")
+                .expectBody(Void.class);
     }
 }

@@ -1,14 +1,11 @@
+import { HttpResponse, http } from "msw";
 import { afterEach, assert, describe, expect, it } from "vitest";
 
-import {
-	applyStateChangingHeaders,
-	authClient,
-	type CurrentUser,
-	toUserProfile,
-} from "./auth-client";
+import type { CurrentUserView } from "@/api/types.gen";
+import { server } from "@/mocks/server";
 
-// Object-mother for a CurrentUser (server CurrentUserView). Tests override only what they assert.
-function makeCurrentUser(overrides: Partial<CurrentUser> = {}): CurrentUser {
+import { applyStateChangingHeaders, authClient, toUserProfile } from "./auth-client";
+function makeCurrentUser(overrides: CurrentUserView = {}): CurrentUserView {
 	return {
 		id: 7,
 		displayName: "Ada Lovelace",
@@ -20,10 +17,6 @@ function makeCurrentUser(overrides: Partial<CurrentUser> = {}): CurrentUser {
 		...overrides,
 	};
 }
-
-// `toUserProfile` adapts the server CurrentUserView into the legacy UserProfile shape the
-// useAuth() consumers still read. The name-splitting and provider-id branches are the parts
-// most likely to regress.
 describe("toUserProfile", () => {
 	it("maps the core CurrentUserView fields onto UserProfile", () => {
 		const profile = toUserProfile(
@@ -65,8 +58,6 @@ describe("toUserProfile", () => {
 	});
 
 	it("falls back to username for the name when displayName is missing, and defaults missing fields", () => {
-		// `displayName` is typed required on CurrentUser, but the server CurrentUserView types it
-		// optional; exercise the `?? username` fallback by omitting it as the server can.
 		const profile = toUserProfile(
 			makeCurrentUser({
 				displayName: undefined,
@@ -99,9 +90,6 @@ describe("authClient.login — returnTo forwarding (safeReturnTo guard)", () => 
 	afterEach(() => {
 		Object.defineProperty(window, "location", { configurable: true, value: realLocation });
 	});
-
-	// jsdom's window.location is not assignable directly; replace it with a stub exposing
-	// `assign` so we can capture the redirect target without a real navigation.
 	function stubLocation(): { assigned: string[] } {
 		const assigned: string[] = [];
 		const stub = { assign: (url: string) => assigned.push(url) };
@@ -142,8 +130,6 @@ describe("authClient.login — returnTo forwarding (safeReturnTo guard)", () => 
 });
 
 describe("applyStateChangingHeaders (app-wide CSRF + impersonation guard)", () => {
-	// jsdom over http refuses to store a __Host- (Secure) cookie, so stub document.cookie's getter —
-	// the helper only reads it via csrfHeaders().
 	function setCookie(raw: string) {
 		Object.defineProperty(document, "cookie", { configurable: true, get: () => raw });
 	}
@@ -182,5 +168,48 @@ describe("applyStateChangingHeaders (app-wide CSRF + impersonation guard)", () =
 	it("omits the CSRF header (fail-safe) when the token cookie is absent", () => {
 		setCookie("");
 		expect(applyStateChangingHeaders(req("POST"), false).headers.get("X-XSRF-TOKEN")).toBeNull();
+	});
+});
+
+describe("authClient.logout", () => {
+	const realLocation = window.location;
+	afterEach(() => {
+		Object.defineProperty(window, "location", { configurable: true, value: realLocation });
+	});
+
+	function captureNavigation() {
+		const assigned: string[] = [];
+		Object.defineProperty(window, "location", {
+			configurable: true,
+			value: { assign: (url: string) => assigned.push(url) },
+		});
+		return assigned;
+	}
+
+	it.each([204, 401])(
+		"returns home when HTTP %i confirms the session has ended",
+		async (status) => {
+			server.use(http.post("*/auth/logout", () => new HttpResponse(null, { status })));
+			const assigned = captureNavigation();
+			await authClient.logout();
+			expect(assigned).toStrictEqual(["/"]);
+		},
+	);
+
+	it.each([403, 503])("does not disguise HTTP %i as a successful sign-out", async (status) => {
+		server.use(http.post("*/auth/logout", () => new HttpResponse(null, { status })));
+		const assigned = captureNavigation();
+		await expect(authClient.logout()).rejects.toBeDefined();
+		expect(assigned).toStrictEqual([]);
+	});
+
+	it("keeps sign-out retryable when the connection fails", async () => {
+		server.use(http.post("*/auth/logout", () => HttpResponse.error(), { once: true }));
+		const assigned = captureNavigation();
+		await expect(authClient.logout()).rejects.toBeDefined();
+		expect(assigned).toStrictEqual([]);
+		server.use(http.post("*/auth/logout", () => new HttpResponse(null, { status: 204 })));
+		await authClient.logout();
+		expect(assigned).toStrictEqual(["/"]);
 	});
 });

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="baseline_v0_77_4" author="hephaestus-release">
+        <preConditions onFail="HALT" onError="HALT"
+                       onFailMessage="Existing databases must complete the baseline synchronization runbook before deployment.">
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
+                  AND c.relname NOT IN ('databasechangelog', 'databasechangeloglock')
+                  AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_class'::regclass
+                                  AND d.objid = c.oid AND d.deptype = 'e')
+            ]]></sqlCheck>
+        </preConditions>
+        <sqlFile path="0000000000000_baseline_v0_77_4.sql" relativeToChangelogFile="true" splitStatements="false"/>
+    </changeSet>
+    <changeSet id="baseline_v0_77_4-audit" author="hephaestus-release" context="prod">
+        <sqlFile path="0000000000000_baseline_v0_77_4_audit.sql" relativeToChangelogFile="true" splitStatements="false"/>
+    </changeSet>
+    <changeSet id="baseline_v0_77_4-seed" author="hephaestus-release">
+        <sql><![CDATA[
+            INSERT INTO public.identity_provider (type, server_url)
+            VALUES ('GITHUB', 'https://github.com'), ('GITLAB', 'https://gitlab.com'), ('SLACK', 'https://slack.com');
+            INSERT INTO public.instance_settings (id, silent_mode_engaged) VALUES (1, TRUE);
+            INSERT INTO public.instance_llm_settings (id, allowed_egress_hosts, allow_workspace_connections)
+            VALUES (1, NULL, TRUE);
+            SELECT partman.create_parent(p_parent_table := 'public.auth_event', p_control := 'occurred_at',
+                                         p_interval := '1 month', p_premake := 2);
+            UPDATE partman.part_config SET retention = '12 months', retention_keep_table = false,
+                retention_keep_index = false, infinite_time_partitions = true
+            WHERE parent_table = 'public.auth_event';
+        ]]></sql>
+        <insert tableName="consent_notice">
+            <column name="version" value="2026-08-30"/>
+            <column name="notice_text" value="Hephaestus is operated by the Technical University of Munich (TUM), Research Group for Applied Education Technologies (AET).&#10;&#10;Hephaestus analyzes your GitHub, GitLab, Slack and Outline activity against your team's engineering practices to provide practice feedback. Platform operation uses the public-task basis described in the privacy notice; accepting the terms is not consent to research.&#10;&#10;Terms of use: use Hephaestus lawfully and only for workspaces and data you are authorized to access. Feedback is advisory, may be inaccurate, and must not be used as the sole basis for grading, employment, or access decisions.&#10;&#10;You may access, rectify or erase your data, restrict or object to processing, complain to a supervisory authority, and withdraw any research consent at any time without affecting your use of Hephaestus. Read the full privacy notice for recipients, retention periods and contact details.&#10;&#10;Separately, you may choose to let AET use your Hephaestus usage and feedback data for academic research and invite you to occasional surveys. This is optional, starts only if you opt in, and declining has no effect on the service.&#10;"/>
+            <column name="sha256" value="037a674668d981d7ef421bb5d47bb39728e8a493b37e41987ef88299356f1d0b"/>
+            <column name="published_at" valueComputed="TIMESTAMPTZ '2026-08-30 00:00:00+00'"/>
+        </insert>
+    </changeSet>
+    <changeSet id="baseline_v0_77_4-tag" author="hephaestus-release">
+        <tagDatabase tag="baseline_v0_77_4"/>
+    </changeSet>
+</databaseChangeLog>

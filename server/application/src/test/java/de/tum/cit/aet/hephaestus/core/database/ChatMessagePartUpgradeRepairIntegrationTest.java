@@ -16,7 +16,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.datasource.SimpleDriverDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * The shape this repairs no longer exists in the schema, so the fixture builds the legacy tables the
@@ -33,7 +33,7 @@ class ChatMessagePartUpgradeRepairIntegrationTest {
     private final ChatMessagePartUpgradeRepair repair = new ChatMessagePartUpgradeRepair();
 
     @SuppressWarnings("resource")
-    private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18")
+    private static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:18")
             .withDatabaseName("chat_parts_repair")
             .withUsername("test")
             .withPassword("test");

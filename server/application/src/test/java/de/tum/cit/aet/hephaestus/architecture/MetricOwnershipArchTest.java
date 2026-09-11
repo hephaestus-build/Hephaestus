@@ -81,7 +81,7 @@ class MetricOwnershipArchTest {
     @Test
     void shouldRejectInlineNamesAndForeignCatalogReferences() throws IOException {
         assertThat(PRODUCTION_SOURCES)
-                .as("production sources, relative to the server/application working directory Surefire sets")
+                .as("production sources, relative to the server/application working directory Gradle sets")
                 .isDirectory();
         var modules = ModulithVerificationTest.applicationModules();
         var compiler = ToolProvider.getSystemJavaCompiler();

@@ -34,7 +34,6 @@ import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,9 +41,6 @@ import org.springframework.transaction.annotation.Transactional;
  * End-to-end coverage of the config audit trail: that producers actually write rows, that the rows
  * say the right thing, and that a workspace admin can never read another workspace's history.
  */
-// Without the sequence, every auth_event write is swallowed and the elevation assertions below pass
-// vacuously — see the script's own comment.
-@Sql("/db/auth-event-sequence.sql")
 class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
@@ -145,7 +141,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .bodyValue(Map.of("mentorEnabled", true))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         ConfigAuditEvent row = configAuditEventRepository.findAll().stream()
                 .filter(e -> e.getEntityType() == ConfigAuditEntityType.WORKSPACE_FEATURES)
@@ -199,7 +196,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         "return { hints: ['updated'] };"))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         webTestClient
                 .delete()
@@ -207,7 +205,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         List<ConfigAuditEvent> rows = configAuditEventRepository.findAll().stream()
                 .filter(row -> java.util.Objects.equals(row.getWorkspaceId(), workspace.getId()))
@@ -363,7 +362,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -375,7 +375,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     /**
@@ -471,9 +472,11 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isOk()
                 .expectBody()
                 .jsonPath("$.content[0].newValue")
-                .value(org.hamcrest.Matchers.containsString("46"))
+                .value((String value) ->
+                        org.hamcrest.MatcherAssert.assertThat(value, org.hamcrest.Matchers.containsString("46")))
                 .jsonPath("$.content[1].newValue")
-                .value(org.hamcrest.Matchers.containsString("45"));
+                .value((String value) ->
+                        org.hamcrest.MatcherAssert.assertThat(value, org.hamcrest.Matchers.containsString("45")));
     }
 
     @Test
@@ -490,7 +493,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isBadRequest();
+                .isBadRequest()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -543,7 +547,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .exchange()
                 .expectStatus()
                 .isOk()
-                .returnResult(String.class)
+                .returnResult(Void.class)
                 .getResponseHeaders()
                 .getETag();
         String etag = Objects.requireNonNull(version, "the settings endpoint always answers with an ETag");
@@ -559,7 +563,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .bodyValue(body)
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
     }
 
     /** Authenticates as one specific account id — the JWT subject the native-auth filters read. */
@@ -623,6 +628,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         true))
                 .exchange()
                 .expectStatus()
-                .isCreated();
+                .isCreated()
+                .expectBody(Void.class);
     }
 }

@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.core.settings;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsAdminController.InstanceSettingsDTO;
 import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
@@ -38,6 +40,9 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
     @Autowired
     private InstanceSettingsRepository instanceSettingsRepository;
 
+    @Autowired
+    private AuthEventRepository authEventRepository;
+
     @BeforeEach
     void shouldStartReleasedWhenExplicitSettingExists() {
         releaseDirectly();
@@ -57,7 +62,8 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         webTestClient
                 .patch()
@@ -67,12 +73,19 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
                 .bodyValue(Map.of("engaged", true))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
     void anonymousIsRejected() {
-        webTestClient.get().uri("/admin/settings").exchange().expectStatus().isUnauthorized();
+        webTestClient
+                .get()
+                .uri("/admin/settings")
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -81,9 +94,16 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
         InstanceSettingsDTO initial = getSettings();
         assertThat(initial.silentModeEngaged()).isFalse();
 
-        InstanceSettingsDTO engaged = patchSilentMode(Map.of("engaged", true, "reason", "incident #42"), null);
+        String reason = "audit-proof-" + java.util.UUID.randomUUID();
+        InstanceSettingsDTO engaged = patchSilentMode(Map.of("engaged", true, "reason", reason), null);
         assertThat(engaged.silentModeEngaged()).isTrue();
-        assertThat(engaged.silentModeReason()).isEqualTo("incident #42");
+        assertThat(engaged.silentModeReason()).isEqualTo(reason);
+        assertThat(authEventRepository.findAll())
+                .filteredOn(event -> event.getEventType() == AuthEvent.EventType.SILENT_MODE_CHANGED
+                        && event.getDetails() != null
+                        && event.getDetails().contains(reason))
+                .singleElement()
+                .satisfies(event -> assertThat(event.getResult()).isEqualTo(AuthEvent.Result.SUCCESS));
         assertThat(engaged.silentModeChangedAt()).isNotNull();
         assertThat(engaged.silentModeChangedBy()).isNotBlank();
 
@@ -113,7 +133,8 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
                 .bodyValue(Map.of("engaged", false))
                 .exchange()
                 .expectStatus()
-                .isEqualTo(412);
+                .isEqualTo(412)
+                .expectBody(Void.class);
 
         assertThat(getSettings().silentModeEngaged()).isTrue();
         assertThat(getSettings().etag()).isEqualTo(engaged.etag());
@@ -130,7 +151,8 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
                 .bodyValue(Map.of("engaged", false))
                 .exchange()
                 .expectStatus()
-                .isEqualTo(428);
+                .isEqualTo(428)
+                .expectBody(Void.class);
     }
 
     @Test
@@ -189,7 +211,8 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
                 .bodyValue(Map.of("reason", "no engaged flag"))
                 .exchange()
                 .expectStatus()
-                .isBadRequest();
+                .isBadRequest()
+                .expectBody(Void.class);
     }
 
     private InstanceSettingsDTO getSettings() {

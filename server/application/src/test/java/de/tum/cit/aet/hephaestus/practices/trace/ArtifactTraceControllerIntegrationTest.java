@@ -108,7 +108,8 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .uri(TRACE, workspace.getWorkspaceSlug(), ArtifactKinds.PULL_REQUEST.value(), ARTIFACT_ID)
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -146,7 +147,8 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
 
             get(TRACE, workspace.getWorkspaceSlug(), ArtifactKinds.PULL_REQUEST.value(), ARTIFACT_ID)
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -154,7 +156,8 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
         void refusesAnUnknownArtifactKind() {
             get(TRACE, workspace.getWorkspaceSlug(), "NotAKind", ARTIFACT_ID)
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
     }
 
@@ -203,8 +206,12 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .jsonPath("$.practices[?(@.practiceSlug=='dormant')].outcome")
                     .isEqualTo("DORMANT")
                     .jsonPath("$.practices[?(@.practiceSlug=='dormant')].explanation")
-                    .value(org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.containsString(
-                            "No connected integration raises scm.pull_request.merged; connect GITHUB or GITLAB")));
+                    .value(
+                            (java.util.List<String> value) -> org.hamcrest.MatcherAssert.assertThat(
+                                    value,
+                                    org.hamcrest.Matchers.hasItem(
+                                            org.hamcrest.Matchers.containsString(
+                                                    "No connected integration raises scm.pull_request.merged; connect GITHUB or GITLAB"))));
         }
 
         @Test
@@ -225,7 +232,10 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .jsonPath("$.practices[0].outcome")
                     .isEqualTo("PENDING")
                     .jsonPath("$.practices[0].explanation")
-                    .value(String.class, org.hamcrest.Matchers.containsString("budget refills"))
+                    .value(
+                            String.class,
+                            value -> org.hamcrest.MatcherAssert.assertThat(
+                                    value, org.hamcrest.Matchers.containsString("budget refills")))
                     .jsonPath("$.signals[0].stateReason")
                     .isEqualTo("BUDGET_EXHAUSTED");
         }
@@ -237,7 +247,8 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
 
             get(TRACE, workspace.getWorkspaceSlug(), ArtifactKinds.PULL_REQUEST.value(), ARTIFACT_ID)
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
     }
 

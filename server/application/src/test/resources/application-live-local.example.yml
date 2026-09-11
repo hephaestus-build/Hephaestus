@@ -5,7 +5,7 @@
 # override the defaults from application-live.yml when the `live` profile is active.
 #
 # To run live tests:
-#   ./mvnw test -Plive-tests
+#   ./gradlew :application:liveTest
 #
 # Alternatively, use environment variables instead of this file:
 #   export GH_APP_ID=2250297
@@ -13,7 +13,7 @@
 #   export GH_APP_PRIVATE_KEY="$(cat path/to/private-key.pem)"
 #   export GH_APP_PAT=github_pat_xxx
 #   export GH_APP_ORGANIZATION=HephaestusTest
-#   ./mvnw test -Plive-tests
+#   ./gradlew :application:liveTest
 
 github:
   app:

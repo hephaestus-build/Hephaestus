@@ -1,7 +1,7 @@
 /** Configure the Vite+ dispatcher during install without changing local hook preferences. */
 import { execFileSync, spawnSync } from "node:child_process";
 
-import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
+import { CAPTURE_LIMIT_BYTES, repositoryCli } from "./lib/process.ts";
 
 const HOOKS_DIR = ".vite-hooks";
 
@@ -33,9 +33,11 @@ function git(...args: string[]): string {
 
 // An image build or a source tarball has no work tree, and no hooks to enable.
 if (git("rev-parse", "--is-inside-work-tree") === "true") {
-	const enabled = spawnSync("vp", ["config", "--no-agent", "--hooks-dir", HOOKS_DIR], {
-		stdio: "inherit",
-	});
+	const enabled = spawnSync(
+		process.execPath,
+		[repositoryCli(), "config", "--no-agent", "--hooks-dir", HOOKS_DIR],
+		{ stdio: "inherit" },
+	);
 	process.exitCode = enabled.status ?? 1;
 
 	// Signing remains a warning so a checkout without a key can still build.

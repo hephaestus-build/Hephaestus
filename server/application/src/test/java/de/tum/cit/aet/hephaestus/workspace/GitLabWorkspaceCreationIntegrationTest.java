@@ -250,7 +250,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
         assertNotNull(problem.getProperties());
         assertThat(problem.getProperties().get("errors"))
                 .asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class))
-                .containsKey("serverUrlSafe");
+                .containsKey("serverUrl");
 
         assertThat(workspaceRepository.findByWorkspaceSlug("gitlab-http")).isEmpty();
     }
@@ -350,7 +350,8 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 .bodyValue(gitlabRequest)
                 .exchange()
                 .expectStatus()
-                .isCreated();
+                .isCreated()
+                .expectBody(Void.class);
 
         List<WorkspaceListItemDTO> workspaces = webTestClient
                 .get()

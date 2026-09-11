@@ -99,9 +99,6 @@ function selectWorkspaceFeatures(
 	request: UpdateWorkspaceFeaturesRequest = source,
 ): UpdateWorkspaceFeaturesRequest {
 	return {
-		...("achievementsEnabled" in request
-			? { achievementsEnabled: source.achievementsEnabled }
-			: {}),
 		...("leaderboardEnabled" in request ? { leaderboardEnabled: source.leaderboardEnabled } : {}),
 		...("leaguesEnabled" in request ? { leaguesEnabled: source.leaguesEnabled } : {}),
 		...("mentorEnabled" in request ? { mentorEnabled: source.mentorEnabled } : {}),
@@ -121,9 +118,6 @@ function selectWorkspaceListFeatures(
 	request: UpdateWorkspaceFeaturesRequest = source,
 ): Partial<WorkspaceListItem> {
 	return {
-		...("achievementsEnabled" in request
-			? { achievementsEnabled: source.achievementsEnabled }
-			: {}),
 		...("leaderboardEnabled" in request ? { leaderboardEnabled: source.leaderboardEnabled } : {}),
 		...("leaguesEnabled" in request ? { leaguesEnabled: source.leaguesEnabled } : {}),
 		...("mentorEnabled" in request ? { mentorEnabled: source.mentorEnabled } : {}),

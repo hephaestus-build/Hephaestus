@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-/** Execute injected practice precomputations and publish their JSON and Markdown results. */
+import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
 import { globFilesSync } from "./lib/files.ts";
@@ -45,8 +45,7 @@ if (!timeoutIsUsable) {
 	console.error(`Ignoring unusable --timeout ${values.timeout}; using ${DEFAULT_TIMEOUT_MS}ms`);
 }
 const timeoutMs = timeoutIsUsable ? requestedTimeoutMs : DEFAULT_TIMEOUT_MS;
-const contextDir =
-	values.context ?? (values.metadata ? values.metadata.replace(/\/[^/]*$/, "") : "");
+const contextDir = values.context ?? "";
 
 let diffFiles = new Map<string, DiffFile>();
 if (values.diff) {
@@ -136,7 +135,7 @@ const results = await Promise.allSettled(
 	practiceModules.map(async ([slug, modulePath]) => {
 		const start = Date.now();
 		try {
-			const mod: unknown = await import(modulePath);
+			const mod: unknown = await import(pathToFileURL(modulePath).href);
 			if (!isPracticeModule(mod)) {
 				throw new Error(`Script ${slug} must export a default function`);
 			}

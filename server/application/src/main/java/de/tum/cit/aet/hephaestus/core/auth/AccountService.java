@@ -150,7 +150,7 @@ public class AccountService {
             try {
                 role = Account.AppRole.valueOf(appRole);
             } catch (IllegalArgumentException e) {
-                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "unknown app role: " + appRole, e);
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "unknown app role: " + appRole, e);
             }
             // Last-admin lockout guard: demoting the only remaining APP_ADMIN — or yourself —
             // would lock everyone out of /admin with no recovery.
