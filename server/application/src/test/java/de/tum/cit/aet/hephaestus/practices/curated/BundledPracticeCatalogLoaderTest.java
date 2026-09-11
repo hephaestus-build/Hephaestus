@@ -23,6 +23,23 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
             new PracticeEvidenceDefaults(catalogs, PracticeSignalOptionsFixture.catalog()));
 
     @Test
+    void everyPracticeDeclaresOneFixedTarget() {
+        assertThat(loader.catalog().practices()).allSatisfy(practice -> {
+            var criteria = practice.definition().criteria();
+            assertThat(criteria).contains("TARGET BEHAVIOUR:");
+            assertThat(de.tum.cit.aet.hephaestus.practices.model.Practice.declaredTargetAssessment(criteria))
+                    .isNotNull();
+            if (criteria.contains("TARGET ASSESSMENT: BAD")) {
+                assertThat(practice.definition().bindings())
+                        .allSatisfy(binding -> assertThat(binding.needs())
+                                .anyMatch(need -> need.stance()
+                                        == de.tum.cit.aet.hephaestus.practices.EvidenceStance.EXHAUSTIVE));
+            }
+            assertThat(criteria).doesNotContain("PRESENT with NEGATIVE", "PRESENT + NEGATIVE");
+        });
+    }
+
+    @Test
     void shouldKeepCaptureFailuresOutOfObservationStatuses() {
         assertThat(loader.catalog().practices())
                 .allSatisfy(practice -> assertThat(practice.definition().criteria())
@@ -46,7 +63,7 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                         || practice.slug().equals("posts-clear-status-and-blocker-updates"))
                 .hasSize(2)
                 .allSatisfy(practice ->
-                        assertThat(practice.definition().criteria()).contains("PRESENT/GOOD, not NOT_APPLICABLE"));
+                        assertThat(practice.definition().criteria()).contains("PRESENT/GOOD", "not NOT_APPLICABLE"));
     }
 
     @Test

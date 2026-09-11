@@ -119,24 +119,32 @@ those terms expose implementation or depend on who is reading.
 
 ## Observation assessment axes
 
-An observation records `assessmentStatus` independently of its result:
+An observation first records whether the practice could be assessed. For assessed observations,
+`presence` says whether the practice's fixed target behaviour meets its criterion; `assessment` says
+whether that target is desirable (`GOOD`) or undesirable (`BAD`). Assessment is not the verdict on the
+work. The outcome is derived, never separately annotated:
 
-| Status | Presence | Assessment | Severity |
-| --- | --- | --- | --- |
-| ASSESSED | PRESENT or ABSENT | GOOD | null |
-| ASSESSED | PRESENT or ABSENT | BAD | required |
-| NOT_APPLICABLE | null | null | null |
-| UNDETERMINED | null | null | null |
+| Status | Presence | Assessment | Derived outcome | Severity |
+| --- | --- | --- | --- | --- |
+| ASSESSED | PRESENT | GOOD | POSITIVE | null |
+| ASSESSED | ABSENT | GOOD | NEGATIVE | required |
+| ASSESSED | PRESENT | BAD | NEGATIVE | required |
+| ASSESSED | ABSENT | BAD | POSITIVE | null |
+| NOT_APPLICABLE | null | null | null | null |
+| UNDETERMINED | null | null | null | null |
 
-Presence describes the practice's fixed target, not its desirability. Partial guidance can be
-PRESENT/BAD; missing required guidance is ABSENT/BAD. Avoiding a harmful target within an applicable,
-fully searched corpus is ABSENT/GOOD, not NOT_APPLICABLE.
+Keep the target and its assessment fixed across observations of the same practice revision. For the
+GOOD target “usable verification guidance,” inadequate partial guidance is ABSENT/GOOD: acknowledge
+what exists in the rationale and explain which required part is missing. Do not switch to a BAD target
+mid-review. For a BAD target such as swallowed exceptions, bounded, evidenced absence is
+ABSENT/BAD, a positive outcome—not NOT_APPLICABLE and not proof of general correctness.
 
 NOT_APPLICABLE needs an evidenced fact ruling out the prerequisite occasion. UNDETERMINED needs an
 unresolved question after the relevant evidence was captured and read. Neither is a judgment of the
-developer, and neither contributes to assessed-result trends. Missing or failed capture belongs to
-the review's readiness/coverage record, not either observation status.
+developer, and neither contributes to assessed-outcome trends. Missing, truncated or failed required
+capture belongs to the review's readiness/coverage record; it creates no observation.
 
-The server, sandbox tool contract and database reject contradictory axes. They never manufacture a
+Severity, feedback routing and result counts use the derived outcome, not assessment alone. The
+server, sandbox tool contract and database reject contradictory axes. They never manufacture a
 judgment by defaulting status, presence, assessment or severity. See the
 [review pipeline](./practice-review-pipeline.mdx) for capture and delivery boundaries.

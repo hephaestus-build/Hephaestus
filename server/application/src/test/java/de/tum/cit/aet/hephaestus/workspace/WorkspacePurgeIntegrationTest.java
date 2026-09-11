@@ -747,7 +747,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     "Observation title",
                     "ASSESSED",
                     "ABSENT",
-                    "BAD",
+                    "GOOD",
                     "MAJOR",
                     null,
                     null,

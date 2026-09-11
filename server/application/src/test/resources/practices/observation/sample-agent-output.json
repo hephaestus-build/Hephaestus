@@ -20,7 +20,7 @@
       "summary": "Missing error handling in Main.java",
       "assessmentStatus": "ASSESSED",
       "presence": "ABSENT",
-      "assessment": "BAD",
+      "assessment": "GOOD",
       "severity": "MAJOR",
       "evidence": {
         "locations": [
@@ -61,7 +61,7 @@
       "summary": "Insufficient test coverage for new feature",
       "assessmentStatus": "ASSESSED",
       "presence": "ABSENT",
-      "assessment": "BAD",
+      "assessment": "GOOD",
       "severity": "MINOR",
       "evidence": {},
       "evidenceRationale": "New utility class has no unit tests, but the change is small and well-understood."

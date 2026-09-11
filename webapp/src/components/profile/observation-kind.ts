@@ -11,28 +11,28 @@ import {
 import type { Assessment } from "@/components/practice-vocabulary/assessment-defs";
 import type { AssessmentStatus } from "@/components/practice-vocabulary/assessment-status-defs";
 import type { Presence } from "@/components/practice-vocabulary/presence-defs";
-export interface ObservationOutcomeInput {
+export interface ObservationKindInput {
 	assessmentStatus: AssessmentStatus;
 	presence?: Presence | null;
 	assessment?: Assessment | null;
 }
 
-export type ObservationOutcome =
+export type ObservationKind =
 	| "PRESENT_GOOD"
-	| "ABSENT_GOOD"
-	| "PRESENT_BAD"
 	| "ABSENT_BAD"
+	| "PRESENT_BAD"
+	| "ABSENT_GOOD"
 	| "NOT_APPLICABLE"
 	| "UNDETERMINED";
 
-export const OBSERVATION_OUTCOME_PRESENTATION = {
+export const OBSERVATION_KIND_PRESENTATION = {
 	PRESENT_GOOD: {
 		label: "Strength shown",
 		icon: CircleCheckIcon,
 		className: "text-success",
 	},
-	ABSENT_GOOD: {
-		label: "Risk avoided",
+	ABSENT_BAD: {
+		label: "Undesirable behaviour absent",
 		icon: ShieldCheckIcon,
 		className: "text-success",
 	},
@@ -41,8 +41,8 @@ export const OBSERVATION_OUTCOME_PRESENTATION = {
 		icon: CircleAlertIcon,
 		className: "text-destructive",
 	},
-	ABSENT_BAD: {
-		label: "Expected practice missing",
+	ABSENT_GOOD: {
+		label: "Desirable behaviour missing",
 		icon: CircleXIcon,
 		className: "text-destructive",
 	},
@@ -57,10 +57,10 @@ export const OBSERVATION_OUTCOME_PRESENTATION = {
 		className: "text-muted-foreground",
 	},
 } as const satisfies Record<
-	ObservationOutcome,
+	ObservationKind,
 	{ label: string; icon: LucideIcon; className: string }
 >;
-export function observationOutcome(observation: ObservationOutcomeInput): ObservationOutcome {
+export function observationKind(observation: ObservationKindInput): ObservationKind {
 	if (observation.assessmentStatus !== "ASSESSED") return observation.assessmentStatus;
 	if (!observation.presence || !observation.assessment)
 		throw new Error("Assessed observations require presence and assessment");

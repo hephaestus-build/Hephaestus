@@ -433,10 +433,14 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
 
     private Observation problem(@Nullable ObjectNode evidence, @Nullable String recurrenceKey, UUID id) {
         Observation o = mock(Observation.class);
+        lenient()
+                .when(o.getOutcome())
+                .thenAnswer(invocation ->
+                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(o.getPresence(), o.getAssessment()));
         lenient().when(o.getId()).thenReturn(id);
         lenient().when(o.getPresence()).thenReturn(Presence.ABSENT);
         org.mockito.Mockito.lenient().when(o.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
-        lenient().when(o.getAssessment()).thenReturn(Assessment.BAD);
+        lenient().when(o.getAssessment()).thenReturn(Assessment.GOOD);
         lenient().when(o.getSeverity()).thenReturn(Severity.MAJOR);
         lenient().when(o.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
         lenient().when(o.getArtifactId()).thenReturn(100L);
@@ -449,6 +453,10 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
 
     private Observation strength() {
         Observation o = mock(Observation.class);
+        lenient()
+                .when(o.getOutcome())
+                .thenAnswer(invocation ->
+                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(o.getPresence(), o.getAssessment()));
         lenient().when(o.getId()).thenReturn(UUID.randomUUID());
         lenient().when(o.getPresence()).thenReturn(Presence.PRESENT);
         org.mockito.Mockito.lenient().when(o.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
@@ -461,6 +469,10 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
 
     private Observation notApplicable() {
         Observation o = mock(Observation.class);
+        lenient()
+                .when(o.getOutcome())
+                .thenAnswer(invocation ->
+                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(o.getPresence(), o.getAssessment()));
         lenient().when(o.getId()).thenReturn(UUID.randomUUID());
         lenient().when(o.getAssessmentStatus()).thenReturn(AssessmentStatus.NOT_APPLICABLE);
         lenient().when(o.getAssessment()).thenReturn(null);

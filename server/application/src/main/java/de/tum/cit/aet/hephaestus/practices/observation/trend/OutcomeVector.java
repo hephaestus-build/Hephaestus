@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationOutcome;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import org.jspecify.annotations.Nullable;
 
@@ -30,11 +30,11 @@ public record OutcomeVector(
     /** The one-hot vector for a single observation's two measurement axes. */
     public static OutcomeVector of(
             AssessmentStatus status, @Nullable Presence presence, @Nullable Assessment assessment) {
-        return of(ObservationOutcome.of(status, presence, assessment));
+        return of(ObservationKind.of(status, presence, assessment));
     }
 
     /** Count both unassessed statuses separately; neither changes the assessed denominator. */
-    public static OutcomeVector of(ObservationOutcome outcome) {
+    public static OutcomeVector of(ObservationKind outcome) {
         return switch (outcome) {
             case DEMONSTRATED_STRENGTH -> new OutcomeVector(1, 0, 0, 0, 0, 0);
             case SAFE_AVOIDANCE -> new OutcomeVector(0, 1, 0, 0, 0, 0);

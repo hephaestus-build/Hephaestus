@@ -171,7 +171,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @DisplayName("returns a review run whole, with every observation that explains it")
     void shouldReturnCompleteRun() {
         insertObservation("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
-        insertObservation("No testing notes", "ABSENT", "BAD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
+        insertObservation("No testing notes", "ABSENT", "GOOD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
 
         getHistory()
                 .jsonPath("$.content.length()")
@@ -205,7 +205,8 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("an unfiltered request is not silently narrowed to pull requests")
     void shouldNotDefaultToPullRequestsWhenNoKindFilterIsGiven() {
-        insertObservation("Issue lacks acceptance criteria", "ABSENT", "BAD", "MINOR", ArtifactKinds.ISSUE.value(), 7L);
+        insertObservation(
+                "Issue lacks acceptance criteria", "ABSENT", "GOOD", "MINOR", ArtifactKinds.ISSUE.value(), 7L);
 
         getHistory()
                 .jsonPath("$.content.length()")

@@ -13,6 +13,9 @@ import { join } from "node:path";
 import { mock, test } from "node:test";
 
 const admittedObservation = {
+	assessmentStatus: "ASSESSED",
+	presence: "PRESENT",
+	outcome: "NEGATIVE",
 	id: "observation-1",
 	practiceSlug: "test-practice",
 	assessment: "BAD",

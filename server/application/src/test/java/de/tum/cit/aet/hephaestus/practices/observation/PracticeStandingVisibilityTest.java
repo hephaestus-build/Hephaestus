@@ -108,7 +108,7 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
                 .summary("a problem")
                 .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.ABSENT)
-                .assessment(Assessment.BAD)
+                .assessment(Assessment.GOOD)
                 .severity(severity)
                 .build();
     }
@@ -184,7 +184,7 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
                 .summary("nothing swallowed on the paths you added")
                 .assessmentStatus(presence == null ? AssessmentStatus.NOT_APPLICABLE : AssessmentStatus.ASSESSED)
                 .presence(presence)
-                .assessment(Assessment.GOOD)
+                .assessment(presence == null ? null : presence == Presence.PRESENT ? Assessment.GOOD : Assessment.BAD)
                 .build();
     }
 

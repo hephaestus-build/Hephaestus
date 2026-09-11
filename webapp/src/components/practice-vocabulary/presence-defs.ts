@@ -17,13 +17,14 @@ export const PRESENCE_DEFS: StatusDefs<Presence> = {
 		label: "Present",
 		icon: EyeIcon,
 		badgeVariant: "secondary",
-		description: "The target behavior is present. Its assessment says whether that is good or bad.",
+		description:
+			"The target behavior is present. Combine presence with the target’s GOOD/BAD assessment to derive the outcome.",
 	},
 	ABSENT: {
 		label: "Absent",
 		icon: CircleSlashIcon,
 		badgeVariant: "outline",
 		description:
-			"The target behavior could have occurred but is absent. Its absence may be good or bad.",
+			"The applicable target criterion was not found in the searched evidence. Absence is negative for GOOD targets and positive for BAD targets.",
 	},
 };

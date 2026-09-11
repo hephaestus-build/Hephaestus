@@ -141,6 +141,7 @@ public class ObservationHistoryContentSource implements ContentSource {
             node.put("summary", o.getSummary());
             node.put("practiceSlug", o.getPractice().getSlug());
             node.put("assessmentStatus", o.getAssessmentStatus().name());
+            node.put("outcome", o.getOutcome() == null ? null : o.getOutcome().name());
             node.put(
                     "presence", o.getPresence() == null ? null : o.getPresence().name());
             Assessment assessment = o.getAssessment();

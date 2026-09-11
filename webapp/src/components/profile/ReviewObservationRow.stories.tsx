@@ -25,7 +25,7 @@ const observations: PracticeGroupReviewObservation[] = [
 		title: "The boundary does not fall back to an unsafe value",
 		assessmentStatus: "ASSESSED",
 		presence: "ABSENT",
-		assessment: "GOOD",
+		assessment: "BAD",
 	},
 	{
 		observationId: "00000000-0000-0000-0000-000000000301",
@@ -44,7 +44,7 @@ const observations: PracticeGroupReviewObservation[] = [
 		title: "The new branch has no test exercising it",
 		assessmentStatus: "ASSESSED",
 		presence: "ABSENT",
-		assessment: "BAD",
+		assessment: "GOOD",
 		severity: "CRITICAL",
 	},
 	{

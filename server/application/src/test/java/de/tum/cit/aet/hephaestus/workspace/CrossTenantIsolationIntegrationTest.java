@@ -457,7 +457,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                 "In-app evidence in " + ws.getWorkspaceSlug(),
                 "ASSESSED",
                 "ABSENT",
-                "BAD",
+                "GOOD",
                 "MAJOR",
                 DIFF_EVIDENCE_JSON,
                 "reasoning",

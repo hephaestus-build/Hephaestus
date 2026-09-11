@@ -53,9 +53,9 @@ class ObservationAssessmentMigrationTest {
                         "SELECT assessment_status, presence, assessment, severity, evidence FROM observation ORDER BY id")) {
             String[][] expected = {
                 {"ASSESSED", "PRESENT", "GOOD", null, "strength"},
-                {"ASSESSED", "ABSENT", "GOOD", null, "avoidance"},
+                {"ASSESSED", "ABSENT", "BAD", null, "avoidance"},
                 {"ASSESSED", "PRESENT", "BAD", "MAJOR", "problem"},
-                {"ASSESSED", "ABSENT", "BAD", "MINOR", "gap"},
+                {"ASSESSED", "ABSENT", "GOOD", "MINOR", "gap"},
                 {"NOT_APPLICABLE", null, null, null, "no occasion"},
                 {"UNDETERMINED", null, null, null, "ambiguous"}
             };
@@ -76,8 +76,10 @@ class ObservationAssessmentMigrationTest {
                         boolean unassessed = (status.equals("NOT_APPLICABLE") || status.equals("UNDETERMINED"))
                                 && presence.equals("NULL")
                                 && assessment.equals("NULL");
-                        boolean valid =
-                                (assessed || unassessed) && (assessment.equals("BAD") != severity.equals("NULL"));
+                        boolean valid = (assessed || unassessed)
+                                && (((presence.equals("PRESENT") && assessment.equals("BAD"))
+                                                || (presence.equals("ABSENT") && assessment.equals("GOOD")))
+                                        != severity.equals("NULL"));
                         String sql = "INSERT INTO observation (assessment_status,presence,assessment,severity) VALUES ("
                                 + literal(status) + "," + literal(presence) + "," + literal(assessment) + ","
                                 + literal(severity) + ")";

@@ -147,7 +147,7 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
                 "Observation title",
                 "ASSESSED",
                 "ABSENT",
-                "BAD",
+                "GOOD",
                 "MAJOR",
                 evidence(artifactKind),
                 null,

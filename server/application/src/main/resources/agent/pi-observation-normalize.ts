@@ -87,25 +87,23 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 // Tool descriptions distinguish status, target presence and judgment at the point of annotation.
 export const ASSESSMENT_STATUS_DESCRIPTIONS: Record<AssessmentStatus, string> = {
 	ASSESSED:
-		"The evidence settles the result. Supply presence and assessment; severity only for BAD.",
+		"The evidence settles the result. Supply presence and assessment; severity only for a NEGATIVE outcome.",
 	NOT_APPLICABLE:
-		"A concrete fact rules out the practice's prerequisite occasion. Name it in evidence.inapplicability. Not a missing target: avoiding a harmful target in an applicable corpus is ASSESSED/ABSENT/GOOD.",
+		"A concrete fact rules out the practice's prerequisite occasion. Name it in evidence.inapplicability. Not a missing target: avoiding a harmful target in an applicable corpus is ASSESSED/ABSENT/BAD.",
 	UNDETERMINED:
 		"Relevant evidence was captured and read but does not settle the question. Record the open question and what would settle it in evidence.undecidability. Missing or failed capture is a review readiness failure, not an observation.",
 };
 export const PRESENCE_DESCRIPTIONS: Record<Presence, string> = {
 	PRESENT:
-		"The fixed target occurs in this work. Partial or poor execution is still PRESENT; judge its quality with assessment.",
+		"The practice’s fixed target criterion is satisfied. For a desirable target such as usable guidance, inadequate partial guidance does not satisfy it; explain what exists and what is missing.",
 	ABSENT:
-		"The practice applies, the bounded corpus was searched, and the fixed target is absent. Record evidence.search. Missing useful behaviour is BAD; avoiding harmful behaviour is GOOD.",
+		"The practice applies, the bounded corpus was searched, and the fixed target is absent. Record evidence.search. A missing GOOD target yields NEGATIVE; an absent BAD target yields POSITIVE. Assessment stays fixed.",
 };
 
-/** Valence, and only valence: whether what presence recorded reflects well or badly on the work. */
+/** Desirability of the fixed target, independent of its presence. */
 export const ASSESSMENT_DESCRIPTIONS: Record<Assessment, string> = {
-	GOOD:
-		"What you saw reflects well and is worth acknowledging. With PRESENT: the good behaviour the practice " +
-		"names is there. With ABSENT: a harmful behaviour that could have appeared did not.",
-	BAD: "What you saw is a problem the developer should act on. With PRESENT: the target occurs but is harmful or inadequately carried out. With ABSENT: a good behaviour that belonged here is missing (omission).",
+	GOOD: "The practice’s defined target is desirable. PRESENT yields POSITIVE; ABSENT yields NEGATIVE. Do not change this assessment when the criterion is missing.",
+	BAD: "The practice’s defined target is undesirable. PRESENT yields NEGATIVE; ABSENT yields POSITIVE. Do not mistake absent harmful behaviour for a negative outcome.",
 };
 
 /**
@@ -123,7 +121,7 @@ export const SEVERITY_DESCRIPTIONS: Record<Severity, string> = {
 	MINOR:
 		"A craft-level improvement worth making that nobody would block a merge on. Differs from INFO by " +
 		"whether there is a specific edit to make.",
-	INFO: "An advisory, low-impact problem. Still a BAD assessment; strengths and unassessed observations require null severity.",
+	INFO: "An advisory, low-impact problem. Still a NEGATIVE outcome; strengths and unassessed observations require null severity.",
 };
 
 /**
@@ -311,9 +309,25 @@ function parseVocabulary<T extends string>(values: readonly T[], value: unknown,
 	return admitted;
 }
 
+export type Outcome = "POSITIVE" | "NEGATIVE";
+
+export function deriveOutcome(
+	presence: Presence | null,
+	assessment: Assessment | null,
+): Outcome | null {
+	if (presence === null && assessment === null) return null;
+	if (presence === null || assessment === null)
+		throw new Error("Presence and assessment must agree on whether the observation is assessed");
+	return (presence === "PRESENT") === (assessment === "GOOD") ? "POSITIVE" : "NEGATIVE";
+}
+
 type ObservationAssessment =
-	| { assessmentStatus: "ASSESSED"; presence: Presence; assessment: "GOOD"; severity: null }
-	| { assessmentStatus: "ASSESSED"; presence: Presence; assessment: "BAD"; severity: Severity }
+	| {
+			assessmentStatus: "ASSESSED";
+			presence: Presence;
+			assessment: Assessment;
+			severity: Severity | null;
+	  }
 	| {
 			assessmentStatus: "NOT_APPLICABLE" | "UNDETERMINED";
 			presence: null;
@@ -336,8 +350,8 @@ function parseAssessment(fields: Record<string, unknown>): ObservationAssessment
 	}
 	const presence = parseVocabulary(PRESENCE_VALUES, fields.presence, "presence");
 	const assessment = parseVocabulary(ASSESSMENT_VALUES, fields.assessment, "assessment");
-	if (assessment === "GOOD") {
-		if (fields.severity !== null) throw new Error("GOOD requires null severity");
+	if (deriveOutcome(presence, assessment) === "POSITIVE") {
+		if (fields.severity !== null) throw new Error("POSITIVE outcome requires null severity");
 		return { assessmentStatus, presence, assessment, severity: null };
 	}
 	const severity = parseVocabulary(SEVERITY_VALUES, fields.severity, "severity");
@@ -466,7 +480,7 @@ function describeAvailableSources(sourceKinds: ReadonlySet<string>): string {
  * <p>The two directions of an absence do not need the same proof, and the difference is what lets a
  * clean surface be recorded as a strength at all. An ABSENT/BAD says a good behaviour is missing from
  * the place the citation points at — the claim is anchored to that locus, so the search only has to
- * reach as far as the locus does. An ABSENT/GOOD says a harmful behaviour is nowhere in the work, which
+ * reach as far as the locus does. An ABSENT/BAD says a harmful behaviour is nowhere in the work, which
  * ranges over the WHOLE corpus and is provable only if that corpus is closed and was covered whole.
  * A practice that has not declared an exhaustive stance has not closed a corpus, so it cannot make that
  * claim, and UNDETERMINED is the honest answer; one that has, can. This is what the eight defect
@@ -483,9 +497,12 @@ export function validateSearchScope(
 	if (observation.presence !== "ABSENT") return;
 	const search = observation.evidence.search;
 	if (!search) throw new Error("an ABSENT observation must record its search");
-	if (observation.assessment === "GOOD" && exhaustiveSourceKinds.size === 0) {
+	if (
+		deriveOutcome(observation.presence, observation.assessment) === "POSITIVE" &&
+		exhaustiveSourceKinds.size === 0
+	) {
 		throw new Error(
-			`cannot conclude ABSENT + GOOD for '${observation.practiceSlug}': it declares no source it searches ` +
+			`cannot conclude ABSENT + BAD for '${observation.practiceSlug}': it declares no source it searches ` +
 				`exhaustively, so "this is not anywhere in the work" ranges over a corpus it has not bounded — ` +
 				`say UNDETERMINED instead`,
 		);

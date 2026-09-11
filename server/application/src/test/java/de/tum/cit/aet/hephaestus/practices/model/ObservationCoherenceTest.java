@@ -24,7 +24,9 @@ class ObservationCoherenceTest extends BaseUnitTest {
                         boolean valid = (status == AssessmentStatus.ASSESSED
                                         ? presence != null && assessment != null
                                         : presence == null && assessment == null)
-                                && ((assessment == Assessment.BAD) == (severity != null));
+                                && (((presence == Presence.PRESENT && assessment == Assessment.BAD)
+                                                || (presence == Presence.ABSENT && assessment == Assessment.GOOD))
+                                        == (severity != null));
                         if (valid) assertThatCode(observation::onCreate).doesNotThrowAnyException();
                         else assertThatThrownBy(observation::onCreate).isInstanceOf(IllegalArgumentException.class);
                     }

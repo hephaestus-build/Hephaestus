@@ -151,7 +151,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                 "Review observation",
                 "ASSESSED",
                 "ABSENT",
-                "BAD",
+                "GOOD",
                 "MAJOR",
                 null,
                 null,
@@ -252,7 +252,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "Should not insert",
                     "ASSESSED",
                     "ABSENT",
-                    "BAD",
+                    "GOOD",
                     "MAJOR",
                     null,
                     null,
@@ -283,7 +283,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "Missing error handling in Main.java",
                     "ASSESSED",
                     "ABSENT",
-                    "BAD",
+                    "GOOD",
                     "MAJOR",
                     evidence,
                     "Missing error handling",
@@ -294,7 +294,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             assertThat(result).isEqualTo(1);
 
             Observation found = observationRepository.findById(id).orElseThrow();
-            assertThat(found.getAssessment()).isEqualTo(Assessment.BAD);
+            assertThat(found.getAssessment()).isEqualTo(Assessment.GOOD);
             assertThat(found.getEvidence()).isNotNull();
             assertThat(found.getEvidence().get("files").get(0).asString()).isEqualTo("src/Main.java");
             assertThat(found.getEvidence().get("diff_lines").asInt()).isEqualTo(42);
@@ -391,7 +391,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "WS-B finding",
                     "ASSESSED",
                     "ABSENT",
-                    "BAD",
+                    "GOOD",
                     "MINOR",
                     null,
                     null,
@@ -437,7 +437,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "Cascade test 1",
                     "ASSESSED",
                     "ABSENT",
-                    "BAD",
+                    "GOOD",
                     "MAJOR",
                     null,
                     null,
@@ -492,8 +492,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
 
         private void insertForJob(String key, UUID jobId, long artifactId, String presence, Instant observedAt) {
             boolean notApplicable = "NOT_APPLICABLE".equals(presence);
-            String assessment = notApplicable ? null : ("PRESENT".equals(presence) ? "GOOD" : "BAD");
-            String severity = "BAD".equals(assessment) ? "MINOR" : null;
+            String assessment = notApplicable ? null : "GOOD";
+            String severity = "ABSENT".equals(presence) ? "MINOR" : null;
             observationRepository.insertIfAbsent(
                     UUID.randomUUID(),
                     key,
@@ -530,8 +530,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             DeveloperPracticeSummaryProjection row = result.get(0);
             assertThat(row.getPracticeSlug()).isEqualTo("test-practice");
             assertThat(row.getTotalObservations()).isEqualTo(1L);
-            assertThat(row.getGoodCount()).isEqualTo(1L);
-            assertThat(row.getBadCount()).isEqualTo(0L);
+            assertThat(row.getPositiveCount()).isEqualTo(1L);
+            assertThat(row.getNegativeCount()).isEqualTo(0L);
             assertThat(row.getLastObservedAt()).isEqualTo(Instant.parse("2026-03-20T10:00:00Z"));
         }
 
@@ -549,8 +549,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             assertThat(result).hasSize(1);
             DeveloperPracticeSummaryProjection row = result.get(0);
             assertThat(row.getTotalObservations()).isEqualTo(2L);
-            assertThat(row.getGoodCount()).isEqualTo(1L);
-            assertThat(row.getBadCount()).isEqualTo(1L);
+            assertThat(row.getPositiveCount()).isEqualTo(1L);
+            assertThat(row.getNegativeCount()).isEqualTo(1L);
         }
 
         @Test
@@ -565,8 +565,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             assertThat(summary).hasSize(1);
             DeveloperPracticeSummaryProjection row = summary.get(0);
             assertThat(row.getTotalObservations()).isEqualTo(2L);
-            assertThat(row.getGoodCount()).isEqualTo(0L);
-            assertThat(row.getBadCount()).isEqualTo(1L);
+            assertThat(row.getPositiveCount()).isEqualTo(0L);
+            assertThat(row.getNegativeCount()).isEqualTo(1L);
 
             List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
                     aboutUser.getId(),
@@ -643,8 +643,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "Tiebreak observation",
                     "ASSESSED",
                     presence,
-                    "PRESENT".equals(presence) ? "GOOD" : "BAD",
-                    "INFO",
+                    "GOOD",
+                    "ABSENT".equals(presence) ? "INFO" : null,
                     null,
                     null,
                     null,
@@ -675,8 +675,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     observationRepository.findSummaryByDeveloperAndWorkspace(aboutUser.getId(), workspace.getId());
             assertThat(summary).hasSize(1);
             assertThat(summary.get(0).getTotalObservations()).isEqualTo(1L);
-            assertThat(summary.get(0).getGoodCount()).isEqualTo(1L);
-            assertThat(summary.get(0).getBadCount()).isEqualTo(0L);
+            assertThat(summary.get(0).getPositiveCount()).isEqualTo(1L);
+            assertThat(summary.get(0).getNegativeCount()).isEqualTo(0L);
 
             List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
                     aboutUser.getId(),
@@ -688,8 +688,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
 
             List<SeverityCount> severities = observationRepository.countBySeverityForDeveloper(
                     aboutUser.getId(), workspace.getId(), Instant.parse("2026-01-01T00:00:00Z"));
-            assertThat(severities).hasSize(1);
-            assertThat(severities.get(0).getCount()).isEqualTo(1L);
+            assertThat(severities).isEmpty();
 
             List<PresenceCount> presences = observationRepository.countByPresenceForDeveloper(
                     aboutUser.getId(), workspace.getId(), Instant.parse("2026-01-01T00:00:00Z"));
@@ -732,8 +731,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     observationRepository.findSummaryByDeveloperAndWorkspace(aboutUser.getId(), workspace.getId());
 
             assertThat(summary).hasSize(1);
-            assertThat(summary.get(0).getGoodCount()).isEqualTo(1L);
-            assertThat(summary.get(0).getBadCount()).isZero();
+            assertThat(summary.get(0).getPositiveCount()).isEqualTo(1L);
+            assertThat(summary.get(0).getNegativeCount()).isZero();
         }
     }
 
@@ -794,7 +793,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "Hidden-repo exclusion observation",
                     "ASSESSED",
                     "ABSENT",
-                    "BAD",
+                    "GOOD",
                     "MAJOR",
                     null,
                     null,
@@ -872,7 +871,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "Backfill visibility observation",
                     "ASSESSED",
                     "ABSENT",
-                    "BAD",
+                    "GOOD",
                     "MAJOR",
                     null,
                     null,

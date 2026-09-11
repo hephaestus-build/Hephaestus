@@ -109,7 +109,7 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .summary("Missing error handling")
                 .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.ABSENT)
-                .assessment(Assessment.BAD)
+                .assessment(Assessment.GOOD)
                 .severity(Severity.MAJOR)
                 .observedAt(Instant.now())
                 .build();

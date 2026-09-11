@@ -483,7 +483,7 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 				group: "documentation",
 				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "BAD",
+				assessment: "GOOD",
 				severity: "INFO",
 				observedAt: "2026-07-28T13:37:00Z",
 				evidence: [
@@ -626,7 +626,7 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 				group: "collaboration",
 				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "BAD",
+				assessment: "GOOD",
 				severity: "MINOR",
 				claimCurrentness: "UNVERIFIABLE",
 				observedAt: "2026-07-26T16:02:00Z",

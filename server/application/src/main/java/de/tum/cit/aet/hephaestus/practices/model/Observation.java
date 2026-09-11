@@ -180,7 +180,7 @@ public class Observation {
     private ObservationOrigin origin = ObservationOrigin.LIVE;
 
     /**
-     * Impact band — meaningful only for an {@link Assessment#BAD} observation; NULL on a GOOD or
+     * Impact band — required for a {@link Outcome#NEGATIVE} outcome; NULL on a positive or
      * unassessed row. The database and {@link AssessmentStatus#validate} enforce the same invariant.
      */
     @Enumerated(EnumType.STRING)
@@ -197,6 +197,12 @@ public class Observation {
     @NotNull
     @Column(name = "observed_at", nullable = false)
     private Instant observedAt;
+
+    /** The result is derived, never persisted separately from its axes. */
+    @jakarta.persistence.Transient
+    public @org.jspecify.annotations.Nullable Outcome getOutcome() {
+        return Outcome.of(presence, assessment);
+    }
 
     /**
      * JPA-path safety net only: the production write path is the native

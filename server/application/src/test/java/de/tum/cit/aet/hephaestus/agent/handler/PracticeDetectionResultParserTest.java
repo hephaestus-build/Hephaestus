@@ -260,14 +260,14 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
             ObjectNode observation = validFindingNode();
             observation.put("assessmentStatus", "ASSESSED");
             observation.put("presence", "ABSENT");
-            observation.put("assessment", "BAD");
+            observation.put("assessment", "GOOD");
             observation.put("severity", "MAJOR");
 
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
 
             assertThat(result.validObservations()).hasSize(1);
             assertThat(result.validObservations().get(0).presence()).isEqualTo(Presence.ABSENT);
-            assertThat(result.validObservations().get(0).assessment()).isEqualTo(Assessment.BAD);
+            assertThat(result.validObservations().get(0).assessment()).isEqualTo(Assessment.GOOD);
         }
 
         @Test
@@ -338,7 +338,7 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
                 ObjectNode observation = validFindingNode();
                 observation.put("presence", v.name());
                 // Non-NA presence requires a valence; pair PRESENT->GOOD, ABSENT->BAD for a coherent observation.
-                observation.put("assessment", v == Presence.PRESENT ? "GOOD" : "BAD");
+                observation.put("assessment", "GOOD");
                 if (v == Presence.ABSENT) observation.put("severity", "MINOR");
 
                 ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
@@ -610,7 +610,7 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
             // Simulate agent output with Swift \(error) in code snippets
             // Jackson would fail on \( because it's not a valid JSON escape
             String rawWithSwiftEscapes = """
-                {"observations":[{"practiceSlug":"silent-failure","summary":"Empty catch","assessmentStatus": "ASSESSED", "presence": "ABSENT","assessment":"BAD","severity":"MAJOR","evidence":{},"evidenceRationale":"```swift\\nprint(\\"Error: \\(error)\\")\\n```"}]}
+                {"observations":[{"practiceSlug":"silent-failure","summary":"Empty catch","assessmentStatus": "ASSESSED", "presence": "ABSENT","assessment":"GOOD","severity":"MAJOR","evidence":{},"evidenceRationale":"```swift\\nprint(\\"Error: \\(error)\\")\\n```"}]}
                 """;
 
             ParseResult result = parser.parse(wrapRawOutput(rawWithSwiftEscapes));
@@ -676,8 +676,7 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
         private ValidatedObservation observation(@Nullable Presence presence, Severity severity) {
             // Derive the valence from presence for these structural cases: PRESENT->GOOD (a strength a
             // defect-detector must not emit), ABSENT->BAD (a gap that carries a band), NA->null.
-            Assessment assessment =
-                    presence == null ? null : presence == Presence.PRESENT ? Assessment.GOOD : Assessment.BAD;
+            Assessment assessment = presence == null ? null : Assessment.GOOD;
             return new ValidatedObservation(
                     "p",
                     "t",
@@ -696,7 +695,7 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
             assertThatThrownBy(() -> original.coerceCoherence(true, false))
                     .isInstanceOfSatisfying(ObservationsRefusedException.class, e -> {
                         assertThat(e.reasonCode()).isEqualTo("incoherent_assessment");
-                        assertThat(e.reason()).contains("Practice p", "PRESENT/GOOD", "original evidence");
+                        assertThat(e.reason()).contains("Practice p", "assessment must be BAD", "original evidence");
                     });
             assertThat(original.presence()).isEqualTo(Presence.PRESENT);
             assertThat(original.assessment()).isEqualTo(Assessment.GOOD);
@@ -736,9 +735,9 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
         @Test
         @DisplayName("defect-detector ABSENT defect is preserved with its band")
         void defectDetectorNotObservedPreserved() {
-            var out = observation(Presence.ABSENT, Severity.MAJOR).coerceCoherence(true, false);
-            assertThat(out.presence()).isEqualTo(Presence.ABSENT);
-            assertThat(out.severity()).isEqualTo(Severity.MAJOR);
+            assertThatThrownBy(
+                            () -> observation(Presence.ABSENT, Severity.MAJOR).coerceCoherence(true, false))
+                    .isInstanceOf(ObservationsRefusedException.class);
         }
 
         @Test
@@ -752,13 +751,13 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
                     "t",
                     AssessmentStatus.ASSESSED,
                     Presence.ABSENT,
-                    Assessment.GOOD,
+                    Assessment.BAD,
                     null,
                     null,
                     "evidenceRationale");
             var out = strength.coerceCoherence(false, false);
             assertThat(out.presence()).isEqualTo(Presence.ABSENT);
-            assertThat(out.assessment()).isEqualTo(Assessment.GOOD);
+            assertThat(out.assessment()).isEqualTo(Assessment.BAD);
             assertThat(out.severity()).isNull();
         }
 
@@ -777,13 +776,13 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
                     "t",
                     AssessmentStatus.ASSESSED,
                     Presence.ABSENT,
-                    Assessment.GOOD,
+                    Assessment.BAD,
                     null,
                     null,
                     "evidenceRationale");
             var out = strength.coerceCoherence(true, false);
             assertThat(out.presence()).isEqualTo(Presence.ABSENT);
-            assertThat(out.assessment()).isEqualTo(Assessment.GOOD);
+            assertThat(out.assessment()).isEqualTo(Assessment.BAD);
             // Severity is a coaching band for a problem only, so a strength carries none whatever was emitted.
             assertThat(out.severity()).isNull();
             assertThat(out.evidenceRationale()).isEqualTo("evidenceRationale");
@@ -838,7 +837,7 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
                     "t",
                     AssessmentStatus.ASSESSED,
                     Presence.ABSENT,
-                    Assessment.BAD,
+                    Assessment.GOOD,
                     Severity.MAJOR,
                     null,
                     "r");
@@ -847,7 +846,7 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
                     "t",
                     AssessmentStatus.ASSESSED,
                     Presence.ABSENT,
-                    Assessment.BAD,
+                    Assessment.GOOD,
                     Severity.MAJOR,
                     null,
                     "r");
@@ -866,14 +865,14 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
                     "describe-what-and-why",
                     "t",
                     AssessmentStatus.ASSESSED,
-                    Presence.ABSENT,
+                    Presence.PRESENT,
                     Assessment.BAD,
                     Severity.MAJOR,
                     null,
                     "r");
             var out =
                     PracticeDetectionResultParser.coerceCoherence(List.of(ddAdvisory), Set.of("describe-what-and-why"));
-            assertThat(out.get(0).presence()).isEqualTo(Presence.ABSENT);
+            assertThat(out.get(0).presence()).isEqualTo(Presence.PRESENT);
             assertThat(out.get(0).assessment()).isEqualTo(Assessment.BAD);
             assertThat(out.get(0).severity())
                     .as("advisory cap applies even when the slug is a defect-detector")

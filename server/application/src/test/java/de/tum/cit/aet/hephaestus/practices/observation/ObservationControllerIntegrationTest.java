@@ -136,7 +136,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 "NOT_APPLICABLE".equals(presence) ? "NOT_APPLICABLE" : "ASSESSED",
                 "NOT_APPLICABLE".equals(presence) ? null : presence,
                 assessmentFor(presence),
-                "BAD".equals(assessmentFor(presence)) ? severity : null,
+                "ABSENT".equals(presence) ? severity : null,
                 DIFF_EVIDENCE_JSON,
                 "Test reasoning for " + title,
                 null,
@@ -150,7 +150,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         if ("NOT_APPLICABLE".equals(presence)) {
             return null;
         }
-        return "PRESENT".equals(presence) ? "GOOD" : "BAD";
+        return "GOOD";
     }
 
     /** Binds delivered guidance because observations do not own advice. */
@@ -689,7 +689,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     "Other WS finding",
                     "ASSESSED",
                     "ABSENT",
-                    "BAD",
+                    "GOOD",
                     "MAJOR",
                     null,
                     "reasoning",
@@ -780,9 +780,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("Code Review Thoroughness")
                     .jsonPath("$[0].totalObservations")
                     .isEqualTo(1)
-                    .jsonPath("$[0].goodCount")
+                    .jsonPath("$[0].positiveCount")
                     .isEqualTo(0)
-                    .jsonPath("$[0].badCount")
+                    .jsonPath("$[0].negativeCount")
                     .isEqualTo(1)
                     .jsonPath("$[0].lastObservedAt")
                     .isNotEmpty()
@@ -792,9 +792,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("PR Description Quality")
                     .jsonPath("$[1].totalObservations")
                     .isEqualTo(3)
-                    .jsonPath("$[1].goodCount")
+                    .jsonPath("$[1].positiveCount")
                     .isEqualTo(2)
-                    .jsonPath("$[1].badCount")
+                    .jsonPath("$[1].negativeCount")
                     .isEqualTo(1)
                     .jsonPath("$[1].lastObservedAt")
                     .isNotEmpty();
@@ -832,7 +832,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo(1)
                     .jsonPath("$[0].totalObservations")
                     .isEqualTo(1)
-                    .jsonPath("$[0].goodCount")
+                    .jsonPath("$[0].positiveCount")
                     .isEqualTo(1);
         }
     }
@@ -949,7 +949,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     "Evidence finding",
                     "ASSESSED",
                     "ABSENT",
-                    "BAD",
+                    "GOOD",
                     "MAJOR",
                     evidenceJson,
                     "reasoning",
@@ -995,7 +995,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     "Array evidence finding",
                     "ASSESSED",
                     "ABSENT",
-                    "BAD",
+                    "GOOD",
                     "MAJOR",
                     arrayEvidenceJson,
                     "reasoning",
@@ -1229,7 +1229,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     "WS2 PR finding",
                     "ASSESSED",
                     "ABSENT",
-                    "BAD",
+                    "GOOD",
                     "MAJOR",
                     null,
                     "reasoning",

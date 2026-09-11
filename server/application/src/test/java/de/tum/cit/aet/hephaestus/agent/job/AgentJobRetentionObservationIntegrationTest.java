@@ -71,7 +71,7 @@ class AgentJobRetentionObservationIntegrationTest extends AbstractWorkspaceInteg
                 "Stored finding",
                 "ASSESSED",
                 "ABSENT",
-                "BAD",
+                "GOOD",
                 "MAJOR",
                 "{}",
                 "Reasoning",

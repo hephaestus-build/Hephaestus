@@ -149,6 +149,11 @@ public class ObservationAdmissionService {
         out.put("summary", observation.getSummary());
         out.put("assessmentStatus", observation.getAssessmentStatus().name());
         out.put(
+                "outcome",
+                observation.getOutcome() == null
+                        ? null
+                        : observation.getOutcome().name());
+        out.put(
                 "presence",
                 observation.getPresence() == null
                         ? null

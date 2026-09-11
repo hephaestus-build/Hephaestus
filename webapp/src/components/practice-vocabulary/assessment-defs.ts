@@ -6,23 +6,20 @@ import type { StatusDefs } from "./status-def";
 
 export type Assessment = NonNullable<ReviewObservation["assessment"]>;
 
-/**
- * How the practice was followed, once `presence-defs` has established that it was in play.
- *
- * `BAD` wears a wrench rather than an alert icon because the severity badge, which does wear one,
- * sits directly beside it on every row that has one.
- */
+/** Desirability of the fixed target, not the outcome of reviewing the work. */
 export const ASSESSMENT_DEFS: StatusDefs<Assessment> = {
 	GOOD: {
-		label: "Strength",
+		label: "Good behaviour",
 		icon: CircleCheckIcon,
-		badgeVariant: "success",
-		description: "The work does this well and the author is told so.",
+		badgeVariant: "secondary",
+		description:
+			"The defined target behaviour is desirable. Its presence is positive; its absence is negative.",
 	},
 	BAD: {
-		label: "Needs improvement",
+		label: "Bad behaviour",
 		icon: WrenchIcon,
-		badgeVariant: "destructive",
-		description: "The work falls short of the practice; the severity says by how much.",
+		badgeVariant: "secondary",
+		description:
+			"The defined target behaviour is undesirable. Its presence is negative; its absence is positive.",
 	},
 };

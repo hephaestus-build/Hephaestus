@@ -1352,17 +1352,17 @@ export type DeliveryPolicyTraceCheck = {
  */
 export type DeveloperPracticeSummary = {
   /**
-   * Number of BAD (problem) observations
-   */
-  badCount: number;
-  /**
-   * Number of GOOD (strength) observations
-   */
-  goodCount: number;
-  /**
    * Timestamp of most recent observation
    */
   lastObservedAt?: Date;
+  /**
+   * Number of negative outcomes
+   */
+  negativeCount: number;
+  /**
+   * Number of positive outcomes
+   */
+  positiveCount: number;
   /**
    * Practice name
    */
@@ -2238,7 +2238,7 @@ export type ObservationDetail = {
    */
   artifactUrl?: string;
   /**
-   * Assessment: GOOD or BAD; null unless assessmentStatus is ASSESSED
+   * Target desirability: GOOD or BAD; null unless assessmentStatus is ASSESSED
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
@@ -2268,6 +2268,10 @@ export type ObservationDetail = {
    */
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
   /**
+   * Derived from presence and target assessment; null unless assessed
+   */
+  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
+  /**
    * Practice name
    */
   practiceName: string;
@@ -2280,7 +2284,7 @@ export type ObservationDetail = {
    */
   presence?: 'PRESENT' | 'ABSENT';
   /**
-   * Severity level (null unless assessment is BAD)
+   * Severity level (null unless outcome is NEGATIVE)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   /**
@@ -2310,7 +2314,7 @@ export type ObservationList = {
    */
   artifactKind: string;
   /**
-   * Assessment: GOOD or BAD; null unless assessmentStatus is ASSESSED
+   * Target desirability: GOOD or BAD; null unless assessmentStatus is ASSESSED
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
@@ -2331,6 +2335,10 @@ export type ObservationList = {
    */
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
   /**
+   * Derived from presence and target assessment; null unless assessed
+   */
+  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
+  /**
    * Practice name
    */
   practiceName: string;
@@ -2343,7 +2351,7 @@ export type ObservationList = {
    */
   presence?: 'PRESENT' | 'ABSENT';
   /**
-   * Severity level (null unless assessment is BAD)
+   * Severity level (null unless outcome is NEGATIVE)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   /**
@@ -2971,6 +2979,10 @@ export type PracticeGroupReviewObservation = {
   feedbackResponseComment?: string;
   feedbackUsefulness?: 'HELPFUL' | 'UNHELPFUL';
   observationId: string;
+  /**
+   * Derived from presence and target assessment; null unless assessed
+   */
+  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
   practiceName: string;
   practiceSlug: string;
   presence?: 'PRESENT' | 'ABSENT';
@@ -3233,6 +3245,10 @@ export type PracticeStandingObservation = {
    */
   deliveredFeedback?: string;
   /**
+   * What this observation says about the developer: a behaviour demonstrated, a trap avoided, something harmful done, or something needed left out. The lists only separate positive from negative, so this is what tells the two kinds of each apart.
+   */
+  kind: 'DEMONSTRATED_STRENGTH' | 'SAFE_AVOIDANCE' | 'COMMISSION_PROBLEM' | 'OMISSION_GAP';
+  /**
    * Where in the work, e.g. "FrameRecorder.swift:212", when known
    */
   locator?: string;
@@ -3245,9 +3261,9 @@ export type PracticeStandingObservation = {
    */
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
   /**
-   * What this observation says about the developer: a behaviour demonstrated, a trap avoided, something harmful done, or something needed left out. The lists only separate positive from negative, so this is what tells the two kinds of each apart.
+   * Positive or negative consequence of this assessed observation
    */
-  outcome: 'DEMONSTRATED_STRENGTH' | 'SAFE_AVOIDANCE' | 'COMMISSION_PROBLEM' | 'OMISSION_GAP';
+  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
   /**
    * Identifier of the reviewed work
    */
@@ -3966,7 +3982,7 @@ export type ReviewBoundFeedback = {
  */
 export type ReviewBoundObservation = {
   /**
-   * Assessment: GOOD or BAD (null unless ASSESSED)
+   * Target behaviour: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
@@ -3984,6 +4000,10 @@ export type ReviewBoundObservation = {
    * Render order within the feedback (lower renders earlier)
    */
   ordinal: number;
+  /**
+   * Derived from presence and target assessment; null unless assessed
+   */
+  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
   practiceName: string;
   practiceSlug: string;
   presence?: 'PRESENT' | 'ABSENT';
@@ -3992,7 +4012,7 @@ export type ReviewBoundObservation = {
    */
   role: 'PRIMARY' | 'SUPPORTING';
   /**
-   * Severity band (null unless assessment is BAD)
+   * Severity band (null unless outcome is NEGATIVE)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   summary: string;
@@ -4150,7 +4170,7 @@ export type ReviewObservation = {
   agentJobId: string;
   artifact: ReviewArtifact;
   /**
-   * Assessment: GOOD or BAD (null unless ASSESSED)
+   * Target behaviour: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
@@ -4172,6 +4192,10 @@ export type ReviewObservation = {
    * What occasioned the measurement. BACKFILL came from a confirmed campaign over work that already existed, so it is not a point on the live trend line.
    */
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
+  /**
+   * Derived from presence and target assessment; null unless assessed
+   */
+  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
   practiceName: string;
   practiceSlug: string;
   presence?: 'PRESENT' | 'ABSENT';
@@ -4180,7 +4204,7 @@ export type ReviewObservation = {
    */
   recurrenceKey?: string;
   /**
-   * Severity band (null unless assessment is BAD)
+   * Severity band (null unless outcome is NEGATIVE)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   /**
@@ -4213,7 +4237,7 @@ export type ReviewObservationDetail = {
   agentJobId: string;
   artifact: ReviewArtifact;
   /**
-   * Assessment: GOOD or BAD (null unless ASSESSED)
+   * Target behaviour: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
@@ -4233,6 +4257,10 @@ export type ReviewObservationDetail = {
   group?: ReviewPracticeGroup;
   id: string;
   observedAt: Date;
+  /**
+   * Derived from presence and target assessment; null unless assessed
+   */
+  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
   practiceName: string;
   /**
    * Criteria revision selected as of job start, when available
@@ -4245,7 +4273,7 @@ export type ReviewObservationDetail = {
    */
   recurrenceKey?: string;
   /**
-   * Severity band (null unless assessment is BAD)
+   * Severity band (null unless outcome is NEGATIVE)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   /**
@@ -6081,6 +6109,537 @@ export type WorkspaceTeamSettings = {
    * The workspace ID these settings belong to
    */
   workspaceId: number;
+};
+
+/**
+ * Full practice observation detail including delivered feedback and evidence
+ */
+export type ObservationDetailWritable = {
+  /**
+   * Artifact entity ID
+   */
+  artifactId: number;
+  /**
+   * Artifact type (e.g. PULL_REQUEST)
+   */
+  artifactKind: string;
+  /**
+   * Link to the reviewed artifact on its platform (null when it cannot be resolved)
+   */
+  artifactUrl?: string;
+  /**
+   * Target desirability: GOOD or BAD; null unless assessmentStatus is ASSESSED
+   */
+  assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * Whether an observation was produced using the current review rules
+   */
+  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * What to do — the delivered feedback for this observation (null if nothing was delivered)
+   */
+  deliveredFeedback?: string;
+  evidence?: ObservationEvidence;
+  /**
+   * Evidence-based rationale for the observation
+   */
+  evidenceRationale?: string;
+  /**
+   * Observation ID
+   */
+  id: string;
+  /**
+   * When the observation was made
+   */
+  observedAt: Date;
+  /**
+   * What occasioned the measurement; never mix origins in one trend line
+   */
+  origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
+  /**
+   * Practice name
+   */
+  practiceName: string;
+  /**
+   * Practice slug
+   */
+  practiceSlug: string;
+  /**
+   * PRESENT or ABSENT only when ASSESSED
+   */
+  presence?: 'PRESENT' | 'ABSENT';
+  /**
+   * Severity level (null unless outcome is NEGATIVE)
+   */
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  /**
+   * Observation summary
+   */
+  summary: string;
+};
+
+/**
+ * Practice observation summary for list views
+ */
+export type ObservationListWritable = {
+  /**
+   * Artifact entity ID
+   */
+  artifactId: number;
+  /**
+   * Artifact type (e.g. PULL_REQUEST)
+   */
+  artifactKind: string;
+  /**
+   * Target desirability: GOOD or BAD; null unless assessmentStatus is ASSESSED
+   */
+  assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * Whether an observation was produced using the current review rules
+   */
+  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * Observation ID
+   */
+  id: string;
+  /**
+   * When the observation was made
+   */
+  observedAt: Date;
+  /**
+   * What occasioned the measurement; never mix origins in one trend line
+   */
+  origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
+  /**
+   * Practice name
+   */
+  practiceName: string;
+  /**
+   * Practice slug
+   */
+  practiceSlug: string;
+  /**
+   * PRESENT or ABSENT only when ASSESSED
+   */
+  presence?: 'PRESENT' | 'ABSENT';
+  /**
+   * Severity level (null unless outcome is NEGATIVE)
+   */
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  /**
+   * Observation summary
+   */
+  summary: string;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoObservationListWritable = {
+  content?: Array<ObservationListWritable>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+export type PagedModelReviewObservationWritable = {
+  content?: Array<ReviewObservationWritable>;
+  page?: PageMetadata;
+};
+
+/**
+ * One concrete, evidence-backed observation from a review run
+ */
+export type PracticeGroupReviewObservationWritable = {
+  /**
+   * Good or bad for the developer; null unless assessmentStatus is ASSESSED
+   */
+  assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  feedbackId?: string;
+  feedbackResolution?: 'ADDRESSED' | 'DISPUTED' | 'NOT_APPLICABLE';
+  feedbackResponseComment?: string;
+  feedbackUsefulness?: 'HELPFUL' | 'UNHELPFUL';
+  observationId: string;
+  practiceName: string;
+  practiceSlug: string;
+  presence?: 'PRESENT' | 'ABSENT';
+  recurrenceKey?: string;
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  title: string;
+};
+
+/**
+ * A complete review run in a developer's practice-group history
+ */
+export type PracticeGroupReviewRunWritable = {
+  observations: Array<PracticeGroupReviewObservationWritable>;
+  reviewId: string;
+  reviewedAt: Date;
+  reviewedWork: PracticeGroupReviewedWork;
+};
+
+/**
+ * A page of visible review runs
+ */
+export type PracticeGroupReviewRunsPageWritable = {
+  content: Array<PracticeGroupReviewRunWritable>;
+  hasNext?: boolean;
+  page?: number;
+  size?: number;
+};
+
+/**
+ * A developer's derived qualitative standing for one Group including 1<=n<many practices
+ */
+export type PracticeGroupStandingWritable = {
+  /**
+   * Evidence-weighted, opportunity-indexed direction across the group's practices
+   */
+  direction?: 'IMPROVING' | 'DECLINING' | 'UNCERTAIN' | 'INSUFFICIENT_EVIDENCE';
+  /**
+   * Oldest contributing observation, for provenance only (null without a verdict)
+   */
+  feedbackSince?: Date;
+  /**
+   * Calendar span covered by the feedback, for provenance only; never a trend-analysis unit
+   */
+  feedbackSpanDays?: number;
+  /**
+   * Group name
+   */
+  groupName: string;
+  /**
+   * Group slug
+   */
+  groupSlug: string;
+  /**
+   * Developer guidance aggregated from the group's feedback (null unless the standing is a verdict). The deterministic summary combines standing, next focus, and developer-facing catalog guidance.
+   */
+  guidance?: string;
+  /**
+   * How the guidance text was produced (null when there is no guidance)
+   */
+  guidanceSource?: 'RULE_BASED';
+  /**
+   * Supporting observations the standing derives from (problems first); empty without a verdict
+   */
+  observations: Array<PracticeStandingObservationWritable>;
+  /**
+   * Distinct pieces of reviewed work the observations come from, per kind (provenance, not a score); empty without a verdict
+   */
+  sources: Array<FeedbackSourceCount>;
+  /**
+   * Derived qualitative standing across the group's practices
+   */
+  standing: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
+  /**
+   * Evidence support and provenance for the direction
+   */
+  trendSupport?: TrendSupport;
+};
+
+/**
+ * A developer's readable feedback for one practice
+ */
+export type PracticeStandingWritable = {
+  /**
+   * Opportunity-indexed direction of this practice's recent evidence
+   */
+  direction?: 'IMPROVING' | 'DECLINING' | 'UNCERTAIN' | 'INSUFFICIENT_EVIDENCE';
+  /**
+   * Group name this practice belongs to, if any
+   */
+  groupName?: string;
+  /**
+   * Group slug this practice belongs to, if any
+   */
+  groupSlug?: string;
+  /**
+   * Practice name
+   */
+  name: string;
+  /**
+   * Practice slug
+   */
+  slug: string;
+  /**
+   * Where the developer stands on this practice, or why no standing could be formed
+   */
+  standing: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
+  /**
+   * What the developer already does well here
+   */
+  strengths: Array<PracticeStandingObservationWritable>;
+  /**
+   * Specific feedback to act on (highest-impact first)
+   */
+  toWorkOn: Array<PracticeStandingObservationWritable>;
+  /**
+   * Evidence support and provenance for the direction
+   */
+  trendSupport?: TrendSupport;
+  /**
+   * A concrete picture of doing this well
+   */
+  whatGoodLooksLike?: string;
+  /**
+   * Why this practice matters, in plain language
+   */
+  whyItMatters?: string;
+};
+
+/**
+ * A single piece of practice feedback to read and act on
+ */
+export type PracticeStandingObservationWritable = {
+  /**
+   * What to do — the delivered feedback for this observation (null if nothing was delivered)
+   */
+  deliveredFeedback?: string;
+  /**
+   * What this observation says about the developer: a behaviour demonstrated, a trap avoided, something harmful done, or something needed left out. The lists only separate positive from negative, so this is what tells the two kinds of each apart.
+   */
+  kind: 'DEMONSTRATED_STRENGTH' | 'SAFE_AVOIDANCE' | 'COMMISSION_PROBLEM' | 'OMISSION_GAP';
+  /**
+   * Where in the work, e.g. "FrameRecorder.swift:212", when known
+   */
+  locator?: string;
+  /**
+   * Observation id — handle to open the full detail
+   */
+  observationId: string;
+  /**
+   * Why this observation was recorded. BACKFILL means it came from a review of past work rather than from something that just happened, and nothing was posted anywhere at the time.
+   */
+  origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
+  /**
+   * Identifier of the reviewed work
+   */
+  reviewedWorkId: number;
+  /**
+   * Impact level (null unless assessed BAD)
+   */
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  /**
+   * The headline of the feedback
+   */
+  title: string;
+  /**
+   * The kind of reviewed work this is about
+   */
+  workKind: string;
+};
+
+/**
+ * An observation that contributed to a piece of feedback
+ */
+export type ReviewBoundObservationWritable = {
+  /**
+   * Target behaviour: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
+   */
+  assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * Whether an observation was produced using the current review rules
+   */
+  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * Practice group; null when the practice is Unassigned
+   */
+  group?: ReviewPracticeGroup;
+  observationId: string;
+  observedAt: Date;
+  /**
+   * Render order within the feedback (lower renders earlier)
+   */
+  ordinal: number;
+  practiceName: string;
+  practiceSlug: string;
+  presence?: 'PRESENT' | 'ABSENT';
+  /**
+   * Whether the observation leads the feedback or reinforces it
+   */
+  role: 'PRIMARY' | 'SUPPORTING';
+  /**
+   * Severity band (null unless outcome is NEGATIVE)
+   */
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  summary: string;
+};
+
+/**
+ * Full feedback detail including the stored composed body
+ */
+export type ReviewFeedbackDetailWritable = {
+  agentJobId: string;
+  /**
+   * Immutable human decision for this proposal, when one has been made
+   */
+  approval?: FeedbackApproval;
+  /**
+   * Work item the feedback targets; null when it is unanchored
+   */
+  artifact?: ReviewArtifact;
+  /**
+   * Stored composed body; null when none was produced, and always null on the IN_APP and IN_CHAT channels — neither the developer's practice pages nor the mentor's prepared context is readable by an operator
+   */
+  body?: string;
+  channel: 'IN_CONTEXT' | 'IN_CHAT' | 'IN_APP';
+  createdAt: Date;
+  /**
+   * When the feedback was placed; null if it was not delivered
+   */
+  deliveredAt?: Date;
+  /**
+   * Ordered delivery-policy evaluations for this feedback's review
+   */
+  deliveryPolicy: Array<DeliveryPolicyTrace>;
+  deliveryState: 'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED';
+  id: string;
+  /**
+   * Source observations in render order
+   */
+  observations: Array<ReviewBoundObservationWritable>;
+  /**
+   * Recorded placements; empty when none
+   */
+  placements: Array<ReviewPlacement>;
+  /**
+   * Exact ordered summary and inline messages covered by the approval decision
+   */
+  proposedPlacements: Array<ReviewProposedPlacement>;
+  /**
+   * Who the feedback is addressed to; null when the identity is no longer resolvable
+   */
+  recipient?: ReviewSubject;
+  /**
+   * The feedback this one replaced; null on a first delivery
+   */
+  replacesId?: string;
+  /**
+   * Reviewed source revision for an immutable approval package
+   */
+  reviewedRevision?: string;
+  /**
+   * Whose work the feedback addresses; may equal the recipient
+   */
+  subject?: ReviewSubject;
+  /**
+   * Why delivery stopped; set on withheld or terminally partial feedback
+   */
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  /**
+   * Cross-run continuity key tying successive deliveries together
+   */
+  threadKey?: string;
+};
+
+/**
+ * A practice review observation with its linked feedback outcomes
+ */
+export type ReviewObservationWritable = {
+  agentJobId: string;
+  artifact: ReviewArtifact;
+  /**
+   * Target behaviour: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
+   */
+  assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * Whether an observation was produced using the current review rules
+   */
+  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * Counts of linked feedback by delivery state
+   */
+  feedbackDisposition: ReviewFeedbackDisposition;
+  /**
+   * Practice group; null when the practice is Unassigned
+   */
+  group?: ReviewPracticeGroup;
+  id: string;
+  observedAt: Date;
+  /**
+   * What occasioned the measurement. BACKFILL came from a confirmed campaign over work that already existed, so it is not a point on the live trend line.
+   */
+  origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
+  practiceName: string;
+  practiceSlug: string;
+  presence?: 'PRESENT' | 'ABSENT';
+  /**
+   * Cross-run locus key; null when continuity is unavailable
+   */
+  recurrenceKey?: string;
+  /**
+   * Severity band (null unless outcome is NEGATIVE)
+   */
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  /**
+   * Whose work the observation is about; null when the identity is no longer resolvable
+   */
+  subject?: ReviewSubject;
+  summary: string;
+};
+
+/**
+ * An observation with evidence and linked feedback
+ */
+export type ReviewObservationDetailWritable = {
+  agentJobId: string;
+  artifact: ReviewArtifact;
+  /**
+   * Target behaviour: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
+   */
+  assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * Whether an observation was produced using the current review rules
+   */
+  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  evidence?: ObservationEvidence;
+  evidenceRationale?: string;
+  /**
+   * Linked feedback, newest first
+   */
+  feedback: Array<ReviewBoundFeedback>;
+  /**
+   * Practice group; null when the practice is Unassigned
+   */
+  group?: ReviewPracticeGroup;
+  id: string;
+  observedAt: Date;
+  practiceName: string;
+  /**
+   * Criteria revision selected as of job start, when available
+   */
+  practiceRevisionId?: number;
+  practiceSlug: string;
+  presence?: 'PRESENT' | 'ABSENT';
+  /**
+   * Cross-run locus key; null when continuity is unavailable
+   */
+  recurrenceKey?: string;
+  /**
+   * Severity band (null unless outcome is NEGATIVE)
+   */
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  /**
+   * Whose work the observation is about; null when the identity is no longer resolvable
+   */
+  subject?: ReviewSubject;
+  summary: string;
 };
 
 export type GetJwksData = {

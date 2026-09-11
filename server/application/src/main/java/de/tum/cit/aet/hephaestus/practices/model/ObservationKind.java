@@ -11,7 +11,7 @@ import org.jspecify.annotations.Nullable;
  * <p>The four applicable outcomes are categories, not ordered levels: a safe avoidance is not worth less than
  * a demonstrated strength. What the distinction selects is the mentoring response.
  */
-public enum ObservationOutcome {
+public enum ObservationKind {
     /** The behaviour was there and it was right. Reinforce it against the concrete evidence. */
     DEMONSTRATED_STRENGTH,
     /** A harmful behaviour could have appeared and did not. Acknowledge without claiming mastery. */
@@ -23,7 +23,7 @@ public enum ObservationOutcome {
     NOT_APPLICABLE,
     UNDETERMINED;
 
-    public static ObservationOutcome of(
+    public static ObservationKind of(
             AssessmentStatus status, @Nullable Presence presence, @Nullable Assessment assessment) {
         if (status != AssessmentStatus.ASSESSED) {
             if (presence != null || assessment != null)
@@ -33,11 +33,11 @@ public enum ObservationOutcome {
         if (presence == null || assessment == null) throw new IllegalArgumentException("Assessed axes are required");
         return switch (presence) {
             case PRESENT -> assessment == Assessment.GOOD ? DEMONSTRATED_STRENGTH : COMMISSION_PROBLEM;
-            case ABSENT -> assessment == Assessment.GOOD ? SAFE_AVOIDANCE : OMISSION_GAP;
+            case ABSENT -> assessment == Assessment.BAD ? SAFE_AVOIDANCE : OMISSION_GAP;
         };
     }
 
-    public static ObservationOutcome of(Observation observation) {
+    public static ObservationKind of(Observation observation) {
         return of(observation.getAssessmentStatus(), observation.getPresence(), observation.getAssessment());
     }
 

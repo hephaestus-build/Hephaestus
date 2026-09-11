@@ -193,7 +193,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         Assessment assessment =
                 switch (presence) {
                     case PRESENT -> Assessment.GOOD;
-                    case ABSENT -> Assessment.BAD;
+                    case ABSENT -> Assessment.GOOD;
                     case null -> null;
                 };
         ObjectNode evidence = objectMapper.createObjectNode();
@@ -227,9 +227,20 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 presence == null ? AssessmentStatus.NOT_APPLICABLE : AssessmentStatus.ASSESSED,
                 presence,
                 assessment,
-                assessment == Assessment.BAD ? Severity.MINOR : null,
+                presence == Presence.ABSENT ? Severity.MINOR : null,
                 evidence,
                 null);
+    }
+
+    @Test
+    void shouldRefuseChangingTheTargetOfThePinnedPractice() {
+        PracticeRevision revision = practiceRevisionRepository.findById(11L).orElseThrow();
+        org.mockito.Mockito.when(revision.getCriteria()).thenReturn("TARGET ASSESSMENT: BAD");
+        var observation = validObservation("pr-description-quality", Presence.PRESENT);
+        assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+                .isInstanceOf(JobDeliveryException.class)
+                .hasMessageContaining("fixed target assessment");
+        verifyNoInteractions(observationRepository);
     }
 
     @Test
@@ -702,7 +713,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                     gap.summary(),
                     AssessmentStatus.ASSESSED,
                     Presence.ABSENT,
-                    Assessment.GOOD,
+                    Assessment.BAD,
                     null,
                     gap.evidence(),
                     gap.evidenceRationale());
@@ -1298,7 +1309,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                             anyString(),
                             anyString(), // title
                             eq("ABSENT"), // presence
-                            eq("BAD"), // assessment
+                            eq("GOOD"), // assessment
                             anyString(),
                             any(),
                             any(),

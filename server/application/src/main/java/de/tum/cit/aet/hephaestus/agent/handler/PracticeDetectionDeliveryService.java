@@ -21,9 +21,9 @@ import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
@@ -172,13 +172,21 @@ public class PracticeDetectionDeliveryService {
                                 + ", jobId="
                                 + job.getId());
             }
+            var targetAssessment = Practice.declaredTargetAssessment(revision.getCriteria());
+            if (observation.assessmentStatus() == AssessmentStatus.ASSESSED
+                    && targetAssessment != null
+                    && observation.assessment() != targetAssessment) {
+                throw new JobDeliveryException(
+                        "Observation changes the fixed target assessment for practice " + observation.practiceSlug());
+            }
+
             enforceAttribution(observation, revision, job);
             try {
                 enforceEvidenceBoundary(observation, revision, evidenceBoundary, job);
                 admittedIndexes.add(submittedIndex);
                 admittedObservations.add(observation);
             } catch (EvidenceQuoteUnverifiedException ex) {
-                withheldNegative |= observation.assessment() == Assessment.BAD;
+                withheldNegative |= observation.outcome() == Outcome.NEGATIVE;
                 withheldObservations.add(observation.practiceSlug() + ": " + ex.getMessage());
             }
         }
@@ -193,7 +201,7 @@ public class PracticeDetectionDeliveryService {
                     withheldObservations);
             // Withholding the only fault leaves an all-clear standing over a defect the model did find,
             // which is a different statement to the reader than an incomplete review.
-            if (withheldNegative && admittedObservations.stream().noneMatch(o -> o.assessment() == Assessment.BAD)) {
+            if (withheldNegative && admittedObservations.stream().noneMatch(o -> o.outcome() == Outcome.NEGATIVE)) {
                 log.error(
                         "Withheld every negative observation; the remaining claims read as an all-clear: jobId={}",
                         job.getId());
@@ -263,7 +271,7 @@ public class PracticeDetectionDeliveryService {
 
             // Enforced here because the native insertIfAbsent path bypasses Observation's @PrePersist
             // (ADR-0022): severity is an impact band for a BAD observation only.
-            String severityName = observation.assessment() == Assessment.BAD && observation.severity() != null
+            String severityName = observation.outcome() == Outcome.NEGATIVE && observation.severity() != null
                     ? observation.severity().name()
                     : null;
 
@@ -299,7 +307,7 @@ public class PracticeDetectionDeliveryService {
             }
             // Gate on the assessment, not the insert result: a retry's insertIfAbsent returns 0 for an
             // already-persisted observation, yet hasNegative must still reflect it for the delivery gate.
-            if (observation.assessment() == Assessment.BAD) {
+            if (observation.outcome() == Outcome.NEGATIVE) {
                 hasNegative = true;
             }
         }
@@ -557,9 +565,9 @@ public class PracticeDetectionDeliveryService {
         if (observation.presence() != Presence.ABSENT) {
             return;
         }
-        if (observation.assessment() == Assessment.GOOD && exhaustive.isEmpty()) {
+        if (observation.outcome() == Outcome.POSITIVE && exhaustive.isEmpty()) {
             throw new JobDeliveryException(
-                    "An ABSENT, GOOD observation needs a practice that bounds the corpus it searches, and this one "
+                    "An ABSENT, BAD observation needs a practice that bounds the corpus it searches, and this one "
                             + "declares no EXHAUSTIVE evidence source: slug="
                             + observation.practiceSlug()
                             + ", jobId="

@@ -110,8 +110,10 @@ function filterFeedback(rows: ReviewFeedback[], url: URL) {
 const ACTIONABILITY_RANK: Record<string, number> = { CRITICAL: 0, MAJOR: 1, MINOR: 2, INFO: 3 };
 
 function actionability(row: ReviewObservation): number {
-	if (row.assessment === "BAD") return ACTIONABILITY_RANK[row.severity ?? "INFO"] ?? 4;
-	return row.assessment === "GOOD" ? 5 : 6;
+	if (row.assessmentStatus !== "ASSESSED" || !row.presence || !row.assessment) return 6;
+	if ((row.presence === "PRESENT") !== (row.assessment === "GOOD"))
+		return ACTIONABILITY_RANK[row.severity ?? "INFO"] ?? 4;
+	return 5;
 }
 
 function sortObservations(rows: ReviewObservation[], url: URL) {

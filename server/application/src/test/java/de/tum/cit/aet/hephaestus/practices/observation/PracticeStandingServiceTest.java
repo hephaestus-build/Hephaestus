@@ -115,7 +115,7 @@ class PracticeStandingServiceTest extends BaseUnitTest {
                 .summary("a problem")
                 .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.ABSENT)
-                .assessment(Assessment.BAD)
+                .assessment(Assessment.GOOD)
                 .severity(severity)
                 .recurrenceKey(recurrenceKey)
                 .build();

@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import java.io.Serial;
@@ -347,6 +348,10 @@ public class PracticeDetectionResultParser {
                     keys);
         }
 
+        public @Nullable Outcome outcome() {
+            return Outcome.of(presence, assessment);
+        }
+
         public @Nullable String recurrenceKey() {
             return keys == null ? null : keys.recurrenceKey();
         }
@@ -359,16 +364,16 @@ public class PracticeDetectionResultParser {
         public ValidatedObservation coerceCoherence(boolean isDefectDetector, boolean advisoryOnly) {
             Presence p = presence;
             Assessment a = assessment;
-            if (isDefectDetector && a == Assessment.GOOD && p == Presence.PRESENT) {
+            if (isDefectDetector && a == Assessment.GOOD) {
                 throw new ObservationsRefusedException(
                         "incoherent_assessment",
                         "Practice " + practiceSlug
-                                + " targets harmful behaviour: PRESENT/GOOD is inconsistent. Reassess the original"
+                                + " targets harmful behaviour: assessment must be BAD for both presence values. Reassess the original"
                                 + " evidence; inconsistency does not establish that the practice is inapplicable.");
             }
             assessmentStatus.validate(p, a, severity);
-            Severity s = a == Assessment.BAD ? severity : null;
-            if (advisoryOnly && a == Assessment.BAD && (s == Severity.CRITICAL || s == Severity.MAJOR)) {
+            Severity s = severity;
+            if (advisoryOnly && outcome() == Outcome.NEGATIVE && (s == Severity.CRITICAL || s == Severity.MAJOR)) {
                 s = Severity.MINOR;
             }
             if ("avoids-insecure-defaults-and-over-broad-permissions".equals(practiceSlug) && s == Severity.CRITICAL) {

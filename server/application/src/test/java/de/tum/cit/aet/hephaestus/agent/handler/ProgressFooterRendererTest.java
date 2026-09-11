@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.TrendDelta;
 import de.tum.cit.aet.hephaestus.practices.observation.TrendDelta.LocusTransition;
@@ -49,17 +49,23 @@ class ProgressFooterRendererTest extends BaseUnitTest {
 
     @Test
     void render_newPlusBadToGoodPersisted_doesNotCountSatisfiedLocusAsStillOpen() {
-        // A BAD→GOOD improvement is PERSISTED with currentAssessment=GOOD (satisfied, not open); only
+        // A BAD→GOOD improvement is PERSISTED with currentOutcome=GOOD (satisfied, not open); only
         // genuinely-open (BAD) persisted loci count as "still open".
         LocusTransition newProblem = new LocusTransition(
-                "k-new", TransitionStatus.NEW, "control-flow", "New dead branch", null, Assessment.BAD, Severity.MAJOR);
+                "k-new",
+                TransitionStatus.NEW,
+                "control-flow",
+                "New dead branch",
+                null,
+                Outcome.NEGATIVE,
+                Severity.MAJOR);
         LocusTransition nowSatisfied = new LocusTransition(
                 "k-fixed",
                 TransitionStatus.PERSISTED,
                 "naming",
                 "Name now clear",
-                Assessment.BAD,
-                Assessment.GOOD,
+                Outcome.NEGATIVE,
+                Outcome.POSITIVE,
                 Severity.MINOR);
         TrendDelta d = delta(List.of(newProblem, nowSatisfied));
 
@@ -112,9 +118,9 @@ class ProgressFooterRendererTest extends BaseUnitTest {
 
     private static LocusTransition transition(String key, TransitionStatus status, String title, String slug) {
         // For a former-GOOD practice (code-hygiene, control-flow, naming, ships-tests) an ABSENT
-        // locus is a gap → Assessment.BAD. NEW has no prior; RESOLVED has no current.
-        Assessment prior = status == TransitionStatus.NEW ? null : Assessment.BAD;
-        Assessment curr = status == TransitionStatus.RESOLVED ? null : Assessment.BAD;
+        // locus is a gap → Outcome.NEGATIVE. NEW has no prior; RESOLVED has no current.
+        Outcome prior = status == TransitionStatus.NEW ? null : Outcome.NEGATIVE;
+        Outcome curr = status == TransitionStatus.RESOLVED ? null : Outcome.NEGATIVE;
         return new LocusTransition(key, status, slug, title, prior, curr, Severity.MAJOR);
     }
 }

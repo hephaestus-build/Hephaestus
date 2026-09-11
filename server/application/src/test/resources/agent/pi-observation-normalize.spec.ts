@@ -347,7 +347,7 @@ function absentObservation(
 	return {
 		...baseObservation(),
 		presence: "ABSENT",
-		assessment: "BAD",
+		assessment: "GOOD",
 		evidence: { ...baseObservation().evidence, ...(search === undefined ? {} : { search }) },
 		...overrides,
 	};
@@ -413,9 +413,9 @@ void test("ABSENT is refused unless the search covered every source the practice
 	);
 });
 
-void test("ABSENT + GOOD needs a practice that bounded its corpus; ABSENT + BAD does not", () => {
+void test("Positive absence needs a bounded corpus; missing desirable behaviour does not", () => {
 	const strength = normalizeObservation(
-		absentObservation(goodSearch, { assessment: "GOOD", severity: null }),
+		absentObservation(goodSearch, { assessment: "BAD", severity: null }),
 	);
 	const gap = normalizeObservation(absentObservation(goodSearch));
 	const available = new Set(["scm.review-threads"]);
@@ -423,14 +423,14 @@ void test("ABSENT + GOOD needs a practice that bounded its corpus; ABSENT + BAD 
 	assert.doesNotThrow(() =>
 		validateSearchScope(strength, new Set(["scm.review-threads"]), available),
 	);
-	assert.throws(() => validateSearchScope(strength, new Set(), available), /ABSENT \+ GOOD/);
+	assert.throws(() => validateSearchScope(strength, new Set(), available), /ABSENT \+ BAD/);
 	assert.throws(() => validateSearchScope(strength, new Set(), available), /UNDETERMINED/);
 	assert.doesNotThrow(() => validateSearchScope(gap, new Set(), available));
 });
 
 void test("a bounded corpus does not excuse a partial search, in either direction", () => {
 	const strength = normalizeObservation(
-		absentObservation(goodSearch, { assessment: "GOOD", severity: null }),
+		absentObservation(goodSearch, { assessment: "BAD", severity: null }),
 	);
 	const available = new Set(["scm.review-threads", "scm.linked-work-items"]);
 	assert.throws(
@@ -600,7 +600,7 @@ void test("removed measurement fields are rejected rather than silently accepted
 void test("all assessed combinations preserve the fixed target and judgment", () => {
 	for (const presence of PRESENCE_VALUES) {
 		for (const assessment of ASSESSMENT_VALUES) {
-			const severity = assessment === "BAD" ? "MAJOR" : null;
+			const severity = (presence === "PRESENT") !== (assessment === "GOOD") ? "MAJOR" : null;
 			const observation = baseObservation({ presence, assessment, severity });
 			const evidence = {
 				...observation.evidence,

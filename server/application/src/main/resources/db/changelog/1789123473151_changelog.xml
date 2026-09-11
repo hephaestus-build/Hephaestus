@@ -20,7 +20,8 @@
                     WHEN 'INCONCLUSIVE' THEN 'UNDETERMINED'
                 END,
                 presence = CASE WHEN presence IN ('PRESENT', 'ABSENT') THEN presence ELSE NULL END,
-                severity = CASE WHEN assessment = 'BAD' THEN severity ELSE NULL END;
+                severity = CASE WHEN assessment = 'BAD' THEN severity ELSE NULL END,
+                assessment = CASE WHEN presence = 'ABSENT' THEN CASE assessment WHEN 'GOOD' THEN 'BAD' WHEN 'BAD' THEN 'GOOD' END ELSE assessment END;
             ALTER TABLE observation ADD CONSTRAINT chk_observation_assessment_status
                 CHECK (assessment_status IN ('ASSESSED', 'NOT_APPLICABLE', 'UNDETERMINED'));
             ALTER TABLE observation ADD CONSTRAINT chk_observation_presence
@@ -30,7 +31,7 @@
                 OR (assessment_status IN ('NOT_APPLICABLE', 'UNDETERMINED') AND presence IS NULL AND assessment IS NULL)
             );
             ALTER TABLE observation ADD CONSTRAINT chk_observation_assessment_severity CHECK (
-                (assessment IS NOT DISTINCT FROM 'BAD') = (severity IS NOT NULL)
+                (COALESCE((presence = 'PRESENT') <> (assessment = 'GOOD'), FALSE)) = (severity IS NOT NULL)
             );
         ]]></sql>
         <addNotNullConstraint columnDataType="varchar(16)" columnName="assessment_status" tableName="observation"/>

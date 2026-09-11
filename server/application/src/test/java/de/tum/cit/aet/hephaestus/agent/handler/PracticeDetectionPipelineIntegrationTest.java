@@ -406,7 +406,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                   "practiceSlug": "error-handling",
                   "summary": "Missing null check",
                   "assessmentStatus": "ASSESSED", "presence": "ABSENT",
-                  "assessment": "BAD",
+                  "assessment": "GOOD",
                   "severity": "MAJOR",
                   "evidenceRationale": "The method does not check for null input."
                 }
@@ -581,7 +581,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                       "practiceSlug": "error-handling",
                       "summary": "Good handling",
                       "assessmentStatus": "ASSESSED", "presence": "ABSENT",
-                      "assessment": "BAD",
+                      "assessment": "GOOD",
                       "severity": "MINOR",
                       "evidenceRationale": "The implementation omits the required check."
                     }

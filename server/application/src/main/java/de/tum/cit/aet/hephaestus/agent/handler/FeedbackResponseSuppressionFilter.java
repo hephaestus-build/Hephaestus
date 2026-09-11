@@ -4,8 +4,8 @@ import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.Val
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
@@ -96,7 +96,7 @@ class FeedbackResponseSuppressionFilter {
                 continue;
             }
             FeedbackResolution action = actionByKey.get(key);
-            boolean unsuppressableSecret = vf.assessment() == Assessment.BAD
+            boolean unsuppressableSecret = vf.outcome() == Outcome.NEGATIVE
                     && vf.evidence() != null
                     && SECRET_SCANNER.equals(vf.evidence().path("detector").asString());
             if (!unsuppressableSecret && action != null && SUPPRESS_ACTIONS.contains(action)) {
@@ -111,7 +111,7 @@ class FeedbackResponseSuppressionFilter {
                 suppressed++;
                 continue;
             }
-            if (action == FeedbackResolution.ADDRESSED && vf.assessment() == Assessment.BAD) {
+            if (action == FeedbackResolution.ADDRESSED && vf.outcome() == Outcome.NEGATIVE) {
                 deliverable.add(withEscalatedReasoning(vf));
                 continue;
             }

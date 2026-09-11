@@ -11,7 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.DeveloperTextSanitizer;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import java.text.BreakIterator;
 import java.util.ArrayList;
@@ -50,11 +50,11 @@ class DeliveryComposer {
 
     /** Package-private: {@link ReviewCoverage} reads it so the two cannot disagree on what a problem is. */
     static boolean isProblem(ValidatedObservation f) {
-        return f.assessment() == Assessment.BAD;
+        return f.outcome() == Outcome.NEGATIVE;
     }
 
     private static boolean isStrength(ValidatedObservation f) {
-        return f.assessment() == Assessment.GOOD;
+        return f.outcome() == Outcome.POSITIVE;
     }
 
     @Nullable

@@ -142,7 +142,7 @@ class PullRequestReviewHandlerStaticMethodsTest extends BaseUnitTest {
                     "Test Title",
                     AssessmentStatus.ASSESSED,
                     Presence.ABSENT,
-                    Assessment.BAD,
+                    Assessment.GOOD,
                     Severity.MINOR,
                     evidence,
                     "reasoning");

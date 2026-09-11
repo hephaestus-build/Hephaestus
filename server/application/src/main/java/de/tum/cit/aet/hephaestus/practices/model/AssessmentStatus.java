@@ -19,8 +19,8 @@ public enum AssessmentStatus {
         } else if (presence != null || assessment != null) {
             throw new IllegalArgumentException("Unassessed observations require null presence and assessment");
         }
-        if ((assessment == Assessment.BAD) != (severity != null)) {
-            throw new IllegalArgumentException("Severity is required exactly for BAD assessments");
+        if ((Outcome.of(presence, assessment) == Outcome.NEGATIVE) != (severity != null)) {
+            throw new IllegalArgumentException("Severity is required exactly for NEGATIVE outcomes");
         }
     }
 }

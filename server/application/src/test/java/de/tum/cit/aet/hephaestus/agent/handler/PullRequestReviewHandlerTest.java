@@ -517,7 +517,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     .thenReturn(de.tum.cit.aet.hephaestus.practices.model.Presence.ABSENT);
             lenient()
                     .when(observation.getAssessment())
-                    .thenReturn(de.tum.cit.aet.hephaestus.practices.model.Assessment.BAD);
+                    .thenReturn(de.tum.cit.aet.hephaestus.practices.model.Assessment.GOOD);
             lenient().when(observation.getSeverity()).thenReturn(severity);
             lenient().when(observation.getEvidenceRationale()).thenReturn("Reasoning for " + practice.getSlug() + ".");
             lenient().when(observation.getOccurrenceKey()).thenReturn("occ-" + practice.getSlug());
@@ -629,10 +629,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             lenient()
                     .when(observation.getPresence())
                     .thenReturn(assessment == Assessment.BAD ? Presence.ABSENT : Presence.PRESENT);
-            lenient().when(observation.getAssessment()).thenReturn(assessment);
-            lenient()
-                    .when(observation.getSeverity())
-                    .thenReturn(assessment == Assessment.BAD ? Severity.MAJOR : Severity.INFO);
+            lenient().when(observation.getAssessment()).thenReturn(Assessment.GOOD);
+            lenient().when(observation.getSeverity()).thenReturn(assessment == Assessment.BAD ? Severity.MAJOR : null);
             lenient().when(observation.getEvidenceRationale()).thenReturn("The evidence warrants it.");
             lenient().when(observation.getOccurrenceKey()).thenReturn("occ-" + practice.getSlug());
             lenient().when(observation.getRecurrenceKey()).thenReturn("rk-" + practice.getSlug());
@@ -797,7 +795,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     "practiceSlug": "error-handling",
                     "summary": "Unhandled error path",
                     "assessmentStatus": "ASSESSED", "presence": "ABSENT",
-                    "assessment": "BAD",
+                    "assessment": "GOOD",
                     "severity": "MAJOR",
                     "evidenceRationale": "The error branch is swallowed.",
                     "evidence": { "citations": [{ "path": "Sources/NotInDiff.swift", "startLine": 3 }] }

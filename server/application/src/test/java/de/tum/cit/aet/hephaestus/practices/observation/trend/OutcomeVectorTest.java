@@ -15,11 +15,11 @@ class OutcomeVectorTest {
     void shouldMapAllPresenceAssessmentCellsToTheSharedUiContract() {
         assertThat(OutcomeVector.of(AssessmentStatus.ASSESSED, Presence.PRESENT, Assessment.GOOD))
                 .isEqualTo(new OutcomeVector(1, 0, 0, 0, 0, 0));
-        assertThat(OutcomeVector.of(AssessmentStatus.ASSESSED, Presence.ABSENT, Assessment.GOOD))
+        assertThat(OutcomeVector.of(AssessmentStatus.ASSESSED, Presence.ABSENT, Assessment.BAD))
                 .isEqualTo(new OutcomeVector(0, 1, 0, 0, 0, 0));
         assertThat(OutcomeVector.of(AssessmentStatus.ASSESSED, Presence.PRESENT, Assessment.BAD))
                 .isEqualTo(new OutcomeVector(0, 0, 1, 0, 0, 0));
-        assertThat(OutcomeVector.of(AssessmentStatus.ASSESSED, Presence.ABSENT, Assessment.BAD))
+        assertThat(OutcomeVector.of(AssessmentStatus.ASSESSED, Presence.ABSENT, Assessment.GOOD))
                 .isEqualTo(new OutcomeVector(0, 0, 0, 1, 0, 0));
         assertThat(OutcomeVector.of(AssessmentStatus.NOT_APPLICABLE, null, null))
                 .isEqualTo(new OutcomeVector(0, 0, 0, 0, 1, 0));

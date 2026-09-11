@@ -27,6 +27,7 @@ import {
 	PRESENCE_DESCRIPTIONS,
 	ASSESSMENT_VALUES,
 	SEVERITY_VALUES,
+	deriveOutcome,
 	describeCitationMismatch,
 	dedupeKeyForObservation,
 	describeVocabulary,
@@ -534,7 +535,7 @@ function appendObservations(observations: unknown[]): {
 	const seen = new Set(reviewState.observationKeys);
 	for (const rawObservation of observations) {
 		const observation = normalizeAndValidateObservation(rawObservation);
-		if (observation.assessment === "BAD") negatives++;
+		if (deriveOutcome(observation.presence, observation.assessment) === "NEGATIVE") negatives++;
 		const key = dedupeKeyForObservation(observation);
 		if (seen.has(key)) {
 			duplicates++;
@@ -954,6 +955,7 @@ interface LeanObservation {
 	id: string;
 	practiceSlug: string;
 	assessment: unknown;
+	outcome: unknown;
 	severity: unknown;
 	anchorable: unknown;
 	citations: LeanCitation[];
@@ -1063,6 +1065,7 @@ function leanObservations(observations: readonly AdmittedObservation[]): LeanObs
 		presence: observation.presence,
 		practiceSlug: observation.practiceSlug,
 		assessment: observation.assessment,
+		outcome: observation.outcome,
 		severity: observation.severity,
 		anchorable: observation.anchorable,
 		citations: observation.citations.map((citation): LeanCitation => ({

@@ -344,7 +344,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                                 "summary",
                                 AssessmentStatus.ASSESSED,
                                 Presence.ABSENT,
-                                Assessment.BAD,
+                                Assessment.GOOD,
                                 Severity.MAJOR,
                                 null,
                                 "reasoning",
@@ -799,6 +799,10 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
     private Observation strength() {
         Observation pf = mock(Observation.class);
+        lenient()
+                .when(pf.getOutcome())
+                .thenAnswer(invocation ->
+                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(pf.getPresence(), pf.getAssessment()));
         lenient().when(pf.getId()).thenReturn(UUID.randomUUID());
         lenient().when(pf.getPresence()).thenReturn(Presence.PRESENT);
         org.mockito.Mockito.lenient().when(pf.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
@@ -812,6 +816,10 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
     private Observation notApplicable() {
         Observation pf = mock(Observation.class);
+        lenient()
+                .when(pf.getOutcome())
+                .thenAnswer(invocation ->
+                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(pf.getPresence(), pf.getAssessment()));
         lenient().when(pf.getId()).thenReturn(UUID.randomUUID());
         lenient().when(pf.getAssessmentStatus()).thenReturn(AssessmentStatus.NOT_APPLICABLE);
         lenient().when(pf.getAssessment()).thenReturn(null); // NA carries no valence (ADR 0022)
@@ -824,12 +832,16 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
     private Observation problem() {
         Observation pf = mock(Observation.class);
+        lenient()
+                .when(pf.getOutcome())
+                .thenAnswer(invocation ->
+                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(pf.getPresence(), pf.getAssessment()));
         UUID id = UUID.randomUUID();
         lenient().when(pf.getId()).thenReturn(id);
         lenient().when(pf.getOccurrenceKey()).thenReturn("occ-" + id);
         lenient().when(pf.getPresence()).thenReturn(Presence.ABSENT);
         org.mockito.Mockito.lenient().when(pf.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
-        lenient().when(pf.getAssessment()).thenReturn(Assessment.BAD);
+        lenient().when(pf.getAssessment()).thenReturn(Assessment.GOOD);
         lenient().when(pf.getSeverity()).thenReturn(Severity.MINOR);
         lenient().when(pf.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
         lenient().when(pf.getArtifactId()).thenReturn(100L);

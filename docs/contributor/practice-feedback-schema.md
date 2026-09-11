@@ -62,7 +62,7 @@ even when it reports a recurring locus.
 `report_observation`, normalized runtime output, server admission, persistence and read DTOs use the
 same `assessmentStatus`, `presence`, `assessment` and `severity` axes. The
 [product vocabulary](./practice-feedback-language.md#observation-assessment-axes) defines their valid
-combinations and meaning. There is no fused outcome enum or translation to different presence labels.
+combinations and meaning. `outcome` is a read-only POSITIVE/NEGATIVE projection of the matrix, not another stored or model-authored axis. The descriptive standing `kind` is separate from this outcome. There is no fused input enum or translation to different presence labels.
 The runtime requires every axis explicitly, including nulls. Contradictory axes are rejected by the
 normalizer and server and constrained by the database; no judgment or severity is silently invented.
 
@@ -80,7 +80,7 @@ Every observation cites exact staged text. Exactly one additional warrant is req
 A missing, errored, redacted or inadequate required source is a readiness failure, not UNDETERMINED.
 No observation is created for that practice. Read available evidence before claiming ambiguity.
 
-Every source declared `EXHAUSTIVE` must appear in `search.consulted`. ABSENT / GOOD additionally
+Every source declared `EXHAUSTIVE` must appear in `search.consulted`. ABSENT / BAD additionally
 requires at least one exhaustive source: avoiding a harmful target is provable only over an applicable,
 bounded corpus searched completely. It does not prove correctness beyond the recorded boundary.
 Both the sandbox and server admission enforce evidence requirements.

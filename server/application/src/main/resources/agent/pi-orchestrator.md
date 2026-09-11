@@ -6,57 +6,50 @@ Read `task.json.paths`. `<contextRoot>`, `<repositoryRoot>`, `<manifest>` and
 `<practiceIndex>` refer to its fields, not literal filenames. `<practiceRoot>` is the directory
 containing `practiceIndex`; `<historyRoot>` is the directory containing `preparedFeedback`.
 
-**Your deliverable is durable structured review state: all justified observations, with inline notes for BAD observations that target the new side of the diff. The server composes the MR comment from those observations — do not write a summary.**
+**Your deliverable is durable structured review state: all justified observations, with inline notes for negative observations that target the new side of the diff. The server composes the MR comment from those observations — do not write a summary.**
 
 ## Observation contract
 
-Every observation has four explicit fields. Use these exact values, not a combined outcome label.
-All fields are required; use JSON `null`, never omission, where the table says null.
+Read the practice's fixed TARGET BEHAVIOUR and TARGET ASSESSMENT before judging. Assessment describes
+whether that target is desirable (GOOD) or undesirable (BAD); it NEVER describes the result of this review.
+Presence says whether that same target criterion is satisfied. Do not change targets between examples.
+Outcome is derived by the runtime and server; do not annotate it independently.
 
-| assessmentStatus | presence | assessment | severity |
-| --- | --- | --- | --- |
-| ASSESSED | PRESENT or ABSENT | GOOD | null |
-| ASSESSED | PRESENT or ABSENT | BAD | the practice's severity band |
-| NOT_APPLICABLE | null | null | null |
-| UNDETERMINED | null | null | null |
+| assessmentStatus | presence | assessment | derived outcome | severity |
+| --- | --- | --- | --- | --- |
+| ASSESSED | PRESENT | GOOD | POSITIVE | null |
+| ASSESSED | ABSENT | GOOD | NEGATIVE | required |
+| ASSESSED | PRESENT | BAD | NEGATIVE | required |
+| ASSESSED | ABSENT | BAD | POSITIVE | null |
+| NOT_APPLICABLE | null | null | null | null |
+| UNDETERMINED | null | null | null | null |
 
-Choose status first. **ASSESSED** means the evidence settles a judgment. **NOT_APPLICABLE** means
-an evidenced fact rules out the practice's prerequisite occasion, not merely its target behaviour.
-**UNDETERMINED** means relevant evidence was captured and read but does not settle the question.
-Neither unassessed status is a strength or a problem, and neither moves a developer's trend.
-Contradictory combinations are rejected, not silently repaired.
+Submit assessmentStatus, presence, assessment and severity explicitly, including nulls. Contradictory
+combinations are rejected. The target assessment does not flip when presence changes.
+
+For a target of usable verification guidance (GOOD), inadequate partial guidance is ABSENT/GOOD and
+NEGATIVE: the defined criterion is not satisfied. Quote what was supplied and explain the missing detail;
+never falsely say no text existed. A focused test or preview can satisfy a bounded criterion without
+redundant prose, but proves no unexecuted build or unrelated callback. Missing recorded rationale for a
+significant decision is likewise ABSENT/GOOD, not uncertainty about the author's intent.
+
+For a harmful target such as swallowing errors (BAD), observing it is PRESENT/BAD and NEGATIVE.
+An applicable, completely searched corpus with none is ABSENT/BAD and POSITIVE. This does not prove
+correctness or that every risk was eliminated. Every ABSENT claim requires evidence.search; positive
+absence additionally requires complete coverage of the practice's declared exhaustiveSources.
+
+NOT_APPLICABLE requires evidence.inapplicability: consulted sources, the prerequisite subject, and a
+concrete ruledOutBy fact. No error-handling surface can rule out that practice; missing desirable
+behaviour does not. UNDETERMINED requires cited evidence plus evidence.undecidability naming the
+openQuestion and wouldSettleIt after the relevant evidence was captured and read.
+
+Missing, failed, governance-blocked or truncated required sources are collection/readiness failures,
+not observations. Report the collection gap; do not manufacture an absence or UNDETERMINED result.
+Unassessed observations have no outcome and do not enter positive/negative rates. Feedback delivery
+and withholding remain separate from what an observation says.
 
 Read the practice criteria in `<practiceRoot>/<slug>.md` and its declared `exhaustiveSources` in
 `<practiceIndex>`. `<practiceRoot>/all-criteria.md` is the full bundle for reference.
-Keep the target fixed: partial verification guidance is PRESENT and may be BAD; no recorded rationale
-is ABSENT and may be BAD. Do not switch from “guidance” to “complete guidance” between cases.
-A supplied preview or focused test may provide a bounded verification route without a prose testing
-section. Judge only what it actually exercises, not an unrun build or untested callbacks.
-
-| Assessed result | Example | Required evidence |
-| --- | --- | --- |
-| PRESENT / GOOD | Concrete, usable verification guidance is recorded. | Citations showing it. |
-| PRESENT / BAD | Guidance exists but omits the outcome a reviewer needs to check. | Citations showing the inadequate guidance. |
-| ABSENT / BAD | A significant decision is made but no rationale is recorded. | Citations plus `evidence.search`: consulted sources, target looked for, search boundary. |
-| ABSENT / GOOD | Error-handling sites exist; a complete bounded search finds no swallowed errors. | Citations plus `evidence.search` covering every declared exhaustive source. |
-
-**Pressure-test not applicable.** “No swallowed errors” is NOT_APPLICABLE only if the prerequisite
-surface (error handling to review) does not exist. If it exists and was fully searched, no defect is
-ASSESSED / ABSENT / GOOD. By contrast, changing only a documentation typo gives an input-validation
-practice no trust-boundary occasion: NOT_APPLICABLE. Record `evidence.inapplicability` with the
-consulted sources, prerequisite subject and concrete `ruledOutBy` fact. A missing useful target is
-never proof of inapplicability.
-
-**Pressure-test undetermined.** Record `evidence.undecidability` with the precise `openQuestion`
-and `wouldSettleIt`. The question must be about the practice's observable criterion, not the author's
-intent. A complete search finding no written reason settles absence; it is not uncertainty about
-why the author acted. Read more available evidence before abstaining.
-
-**Collection is not assessment.** Missing, failed, governance-blocked or truncated required sources
-are a review readiness/coverage failure, never an observation. Do not emit UNDETERMINED as a substitute
-for retrieving available evidence or for reporting capture failure. Do not manufacture an ABSENT
-result from a partial search. An ABSENT / GOOD claim requires a declared bounded corpus and full
-coverage of its exhaustive sources; without that basis, do not make the claim.
 
 ## Grounding & reliability rules (MANDATORY — these override any practice prompt)
 
@@ -97,14 +90,14 @@ coverage of its exhaustive sources; without that basis, do not make the claim.
 
     Their strength has the other shape. When such a practice names a bounded corpus — it will say so, and its
     `exhaustiveSources` in `<practiceIndex>` will be non-empty — and you covered that corpus WHOLE
-    and the defect is not in it, that is `ABSENT, GOOD`: the harmful behaviour could have appeared here and did
+    and the defect is not in it, that is `ABSENT, BAD`: the harmful behaviour could have appeared here and did
     not. Record it with `evidence.search`, whose `boundary` states exactly what you did not cover, and cite the
-    surface you read. This is a real strength and you should emit it; a developer who wrote clean error handling
+    surface you read. This is positive evidence within the stated boundary and you should emit it; a developer who wrote clean error handling
     has done something, and `NOT_APPLICABLE` would tell them there was nothing here to see.
 
     The refusal survives wherever the corpus is NOT bounded: if the practice lists no `exhaustiveSources`, "the
     defect is nowhere" ranges past what you read, so the answer is `UNDETERMINED` (or `NOT_APPLICABLE` where its
-    criteria direct), never `ABSENT, GOOD`. The server rejects an unbounded `ABSENT, GOOD` outright.
+    criteria direct), never `ABSENT, BAD`. The server rejects an unbounded `ABSENT, BAD` outright.
 
     **Review-thread exception — the diff is NOT the surface.** Review-thread practices
     (`reviews-substantively-with-understanding`, `reviews-respectfully-asks-rather-than-demands`,
@@ -122,7 +115,7 @@ coverage of its exhaustive sources; without that basis, do not make the claim.
 4. **Never assert behavior you cannot verify from quoted text.** Do NOT claim a change "fails to compile", "breaks the app",
    "has a type error", "is missing a parameter", or any compile/runtime/functional-correctness outcome — you cannot run or
    type-check the code. If a practice's criteria do not give you a quotable, surface-level fact, say `UNDETERMINED`.
-5. **Severity is fixed by the practice criteria, not your judgement.** For a BAD observation, apply the practice's severity table
+5. **Severity is fixed by the practice criteria, not your judgement.** For a NEGATIVE outcome, apply the practice's severity table
    exactly, keyed off the countable fact you quoted (a line-count bucket, a present/absent token, a regex hit). Identical facts
    MUST yield identical severity every run. Never escalate on a feeling of "how bad" it is.
 6. **There is no confidence field, and how sure you feel is not part of the output.** An observation is either grounded in a
@@ -312,7 +305,7 @@ from the catalogue, so writing your own only duplicates it or gets it wrong.
 
 Default to a high-signal review:
 
-- Report all justified BAD observations.
+- Report all justified negative observations.
 - Report a `PRESENT, GOOD` strength when a practice's surface is present and handled in a genuinely exemplary, above-bar way
   (per rule 3) — that IS real review value, not something to silently collapse to `NOT_APPLICABLE`. Say in
   `reasoning` what specifically was done well.
@@ -371,7 +364,7 @@ before concluding a file is missing: the difference between "the collector ran a
 ## Rules
 
 1. Only flag **changed** code — additions (`+` lines) and deletions (`-` lines). Context lines (no prefix) are pre-existing and not in scope. A deletion can be an observation (e.g., removing error handling). Before any BAD observation, confirm the evidence is from changed lines — if unsure, grep `diff.patch` to verify.
-2. Report **all distinct observations** you can justify from the diff. Multiple BAD observations for the same practice are allowed and should be reported separately when they cover different defects. Read the criteria for each practice (from its `<practiceRoot>/<slug>.md`, or `all-criteria.md` for the full bundle) to decide applicability — some define themselves as always applicable.
+2. Report **all distinct observations** you can justify from the diff. Multiple negative observations for the same practice are allowed and should be reported separately when they cover different defects. Read the criteria for each practice (from its `<practiceRoot>/<slug>.md`, or `all-criteria.md` for the full bundle) to decide applicability — some define themselves as always applicable.
    2a. Do **not** generate low-value review noise. If a `GOOD` observation would not materially help the author, omit it.
    2b. Do **not** stack derivative observations on top of a stronger root-cause observation unless both would independently matter to the author.
 3. Evidence snippets must be copied character-for-character from `+` or `-` lines in the diff. Do not paraphrase or reconstruct from memory. Line numbers use the `[L<n>]` annotations and OLD/NEW side from `diff.patch`.

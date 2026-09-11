@@ -112,7 +112,7 @@ class DeliveryComposerTest extends BaseUnitTest {
                 title,
                 AssessmentStatus.ASSESSED,
                 Presence.ABSENT,
-                Assessment.BAD,
+                Assessment.GOOD,
                 severity,
                 buildEvidence(locations, snippets),
                 reasoning);
@@ -282,7 +282,7 @@ class DeliveryComposerTest extends BaseUnitTest {
             "PR description lacks a rationale sentence",
             AssessmentStatus.ASSESSED,
             Presence.ABSENT,
-            Assessment.BAD,
+            Assessment.GOOD,
             Severity.MINOR,
             null,
             "The body lists what changed but not why."));
@@ -299,7 +299,7 @@ class DeliveryComposerTest extends BaseUnitTest {
                 "The change does not explain the problem it solves",
                 AssessmentStatus.ASSESSED,
                 Presence.ABSENT,
-                Assessment.BAD,
+                Assessment.GOOD,
                 Severity.MINOR,
                 null,
                 "I scanned the project inventory for an artifact (e.g. #21 covers deferred steps). "
@@ -1064,7 +1064,7 @@ class DeliveryComposerTest extends BaseUnitTest {
                 title,
                 AssessmentStatus.ASSESSED,
                 Presence.ABSENT,
-                Assessment.BAD,
+                Assessment.GOOD,
                 severity,
                 buildEvidence(List.of(new LocationSpec(slug + ".swift", 10)), null),
                 title + " reasoning.");
@@ -1873,7 +1873,7 @@ class DeliveryComposerTest extends BaseUnitTest {
                 "New branch ships without a test",
                 AssessmentStatus.ASSESSED,
                 Presence.ABSENT,
-                Assessment.BAD,
+                Assessment.GOOD,
                 Severity.MAJOR,
                 buildEvidence(
                         List.of(new LocationSpec("Billing/Invoice.java", 42)),

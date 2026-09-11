@@ -76,8 +76,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
 
     @Query(value = """
         SELECT o.agent_job_id AS "jobId",
-               COUNT(*) FILTER (WHERE o.assessment = 'GOOD') AS "strengths",
-               COUNT(*) FILTER (WHERE o.assessment = 'BAD') AS "problems",
+               COUNT(*) FILTER (WHERE ((o.presence = 'PRESENT') = (o.assessment = 'GOOD'))) AS "strengths",
+               COUNT(*) FILTER (WHERE ((o.presence = 'PRESENT') <> (o.assessment = 'GOOD'))) AS "problems",
                COUNT(*) FILTER (WHERE o.assessment_status = 'NOT_APPLICABLE') AS "notApplicable",
                COUNT(*) FILTER (WHERE o.assessment_status = 'UNDETERMINED') AS "undetermined"
         FROM observation o
@@ -457,15 +457,15 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * <p>Native (not JPQL) because the latest-run-per-target selection needs {@code ORDER BY ... LIMIT 1} in a
      * correlated subquery, which JPQL cannot express. Aliases are quoted so the JDBC column labels match the
      * {@link DeveloperPracticeSummaryProjection} getters exactly (Postgres folds unquoted identifiers to
-     * lower-case). Enum columns compare against their {@code STRING} storage form. {@code goodCount} is
-     * the strengths ({@code assessment='GOOD'}); {@code badCount} is the problems ({@code assessment='BAD'}).
+     * lower-case). Enum columns compare against their {@code STRING} storage form. {@code positiveCount} is
+     * the positive outcomes; {@code negativeCount} is the negative outcomes.
      */
     @Query(value = """
                     SELECT p.slug AS "practiceSlug",
                            p.name AS "practiceName",
                            COUNT(f.id) AS "totalObservations",
-                           SUM(CASE WHEN f.assessment = 'GOOD' THEN 1 ELSE 0 END) AS "goodCount",
-                           SUM(CASE WHEN f.assessment = 'BAD' THEN 1 ELSE 0 END) AS "badCount",
+                           SUM(CASE WHEN ((f.presence = 'PRESENT') = (f.assessment = 'GOOD')) THEN 1 ELSE 0 END) AS "positiveCount",
+                           SUM(CASE WHEN ((f.presence = 'PRESENT') <> (f.assessment = 'GOOD')) THEN 1 ELSE 0 END) AS "negativeCount",
                            MAX(f.observed_at) AS "lastObservedAt"
                     FROM observation f
                     JOIN practice p ON p.id = f.practice_id
@@ -585,7 +585,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      *
      * <p>Re-review deduped to each target's latest run (see {@link #findRecentByDeveloperAndWorkspace}) so
      * the mentor's "how am I doing" histogram reflects current state, not the re-push multiplier. Only
-     * {@code BAD} observations carry a non-null severity, so the histogram is over problems.
+     * Negative outcomes carry a non-null severity, so the histogram is over problems.
      */
     @Query(value = """
                     SELECT f.severity AS severity, COUNT(f.id) AS count
@@ -785,9 +785,9 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             """ + OPERATOR_PREDICATES + """
              ORDER BY
                CASE WHEN :prioritizeActionable THEN
-                 CASE o.assessment WHEN 'BAD' THEN 0 WHEN 'GOOD' THEN 1 ELSE 2 END
+                 CASE WHEN ((o.presence = 'PRESENT') <> (o.assessment = 'GOOD')) THEN 0 WHEN o.assessment_status = 'ASSESSED' THEN 1 ELSE 2 END
                ELSE 0 END,
-               CASE WHEN :prioritizeActionable AND o.assessment = 'BAD' THEN
+               CASE WHEN :prioritizeActionable AND ((o.presence = 'PRESENT') <> (o.assessment = 'GOOD')) THEN
                  CASE o.severity
                    WHEN 'CRITICAL' THEN 0
                    WHEN 'MAJOR' THEN 1

@@ -242,7 +242,7 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
         Assessment assessment =
                 switch (presence) {
                     case PRESENT -> Assessment.GOOD;
-                    case ABSENT -> Assessment.BAD;
+                    case ABSENT -> Assessment.GOOD;
                     case null -> null;
                 };
         return new ValidatedObservation(
@@ -251,7 +251,7 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
                 presence == null ? AssessmentStatus.NOT_APPLICABLE : AssessmentStatus.ASSESSED,
                 presence,
                 assessment,
-                assessment == Assessment.BAD ? Severity.MINOR : null,
+                presence == Presence.ABSENT ? Severity.MINOR : null,
                 evidence(presence),
                 null);
     }
@@ -391,7 +391,7 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
                         "Negative observation " + i,
                         AssessmentStatus.ASSESSED,
                         Presence.ABSENT,
-                        Assessment.BAD,
+                        Assessment.GOOD,
                         Severity.MINOR,
                         evidence(Presence.ABSENT),
                         null));

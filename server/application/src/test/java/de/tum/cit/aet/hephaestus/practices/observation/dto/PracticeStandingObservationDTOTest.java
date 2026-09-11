@@ -27,7 +27,7 @@ class PracticeStandingObservationDTOTest extends BaseUnitTest {
                 .severity(Severity.MAJOR)
                 .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.ABSENT)
-                .assessment(Assessment.BAD)
+                .assessment(Assessment.GOOD)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(575L)
                 .evidence(evidenceJson == null ? null : MAPPER.readTree(evidenceJson))

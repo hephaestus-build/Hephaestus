@@ -3,10 +3,10 @@ package de.tum.cit.aet.hephaestus.agent.handler.inapp;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomyPolicy;
 import java.time.Duration;
@@ -95,7 +95,7 @@ public final class InAppFeedbackRouter {
     public static List<Observation> problemsIn(List<Observation> evidence) {
         return evidence.stream()
                 .filter(o -> o.getAssessmentStatus() == AssessmentStatus.ASSESSED)
-                .filter(o -> o.getAssessment() == Assessment.BAD)
+                .filter(o -> o.getOutcome() == Outcome.NEGATIVE)
                 .toList();
     }
 

@@ -257,8 +257,7 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
     }
 
     private static ValidatedObservation vf(String slug, @Nullable Presence presence, @Nullable String recurrenceKey) {
-        Assessment assessment =
-                presence == null ? null : presence == Presence.PRESENT ? Assessment.GOOD : Assessment.BAD;
+        Assessment assessment = presence == null ? null : Assessment.GOOD;
         // The handler stamps the persisted recurrence_key onto each observation before the filter runs; the filter
         // matches reactions on that stamped key (never a recompute), so the test feeds it the same way.
         return new ValidatedObservation(

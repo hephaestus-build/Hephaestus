@@ -230,15 +230,18 @@ public class Practice {
         this.updatedAt = Instant.now();
     }
 
-    /**
-     * Whether this practice is a defect-detector — its criteria declare {@code DEFECT-DETECTOR DISCIPLINE}, so a
-     * bounded, applicable clean surface is {@code (ABSENT, GOOD)}, never a {@code (PRESENT, GOOD)} strength.
-     *
-     * <p>The marker is matched verbatim and is LOAD-BEARING: an admin who edits {@link #criteria} and drops or
-     * reformats it (lowercasing, hyphen→space, wrapping across a line) silently turns this back into an
-     * ordinary practice.
-     */
+    /** Whether the criteria declare an undesirable target; its bounded absence is a positive outcome. */
     public boolean isDefectDetector() {
-        return criteria != null && criteria.contains("DEFECT-DETECTOR DISCIPLINE");
+        return declaredTargetAssessment(criteria) == Assessment.BAD;
+    }
+    /** The target declared by a criteria revision, independent of whether it was observed. */
+    public static @Nullable Assessment declaredTargetAssessment(@Nullable String criteria) {
+        if (criteria == null) return null;
+        boolean good = criteria.contains("TARGET ASSESSMENT: GOOD");
+        boolean bad = criteria.contains("TARGET ASSESSMENT: BAD");
+        if (good && bad) throw new IllegalArgumentException("A practice must declare one fixed target assessment");
+        if (good) return Assessment.GOOD;
+        if (bad || criteria.contains("DEFECT-DETECTOR DISCIPLINE")) return Assessment.BAD;
+        return null;
     }
 }
