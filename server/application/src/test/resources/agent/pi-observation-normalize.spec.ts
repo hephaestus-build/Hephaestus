@@ -740,16 +740,25 @@ await test("historical citations preserve a full revision for trusted admission"
 		quote: "historical text",
 	};
 	assert.equal(
-		normalizeEvidence({ citations: [citation] }, "PRESENT").citations[0]?.revision,
+		normalizeEvidence({ citations: [citation] }, "ASSESSED", "PRESENT").citations[0]?.revision,
 		citation.revision,
 	);
 	assert.throws(
-		() => normalizeEvidence({ citations: [{ ...citation, revision: "HEAD~1" }] }, "PRESENT"),
+		() =>
+			normalizeEvidence(
+				{ citations: [{ ...citation, revision: "HEAD~1" }] },
+				"ASSESSED",
+				"PRESENT",
+			),
 		/full commit SHA/,
 	);
 	assert.throws(
 		() =>
-			normalizeEvidence({ citations: [{ ...citation, sourceKind: "scm.issue.core" }] }, "PRESENT"),
+			normalizeEvidence(
+				{ citations: [{ ...citation, sourceKind: "scm.issue.core" }] },
+				"ASSESSED",
+				"PRESENT",
+			),
 		/scm.repository.tree/,
 	);
 });

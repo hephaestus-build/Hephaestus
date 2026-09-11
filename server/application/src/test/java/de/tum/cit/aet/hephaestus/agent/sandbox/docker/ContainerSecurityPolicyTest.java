@@ -34,7 +34,7 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
             DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
                     SecurityProfile.DEFAULT, ResourceLimits.DEFAULT, new NetworkPolicy(false, null, null));
 
-            assertThat(config.readonlyRootfs()).isFalse();
+            assertThat(config.readonlyRootfs()).isTrue();
             assertThat(config.privileged()).isFalse();
             assertThat(config.capDrop()).containsExactly("ALL");
             assertThat(config.securityOpts()).contains("no-new-privileges");

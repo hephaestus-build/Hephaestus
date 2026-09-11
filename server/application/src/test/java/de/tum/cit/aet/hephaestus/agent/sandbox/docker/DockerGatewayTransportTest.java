@@ -77,7 +77,7 @@ class DockerGatewayTransportTest extends BaseUnitTest {
                         1024,
                         1,
                         100,
-                        false,
+                        true,
                         false,
                         List.of("ALL"),
                         List.of("no-new-privileges"),

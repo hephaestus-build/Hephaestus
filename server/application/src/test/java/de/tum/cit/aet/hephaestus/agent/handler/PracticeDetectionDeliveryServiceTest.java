@@ -241,7 +241,8 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
     @Test
     void shouldRefuseChangingTheTargetOfThePinnedPractice() {
-        PracticeRevision revision = practiceRevisionRepository.findById(11L).orElseThrow();
+        PracticeRevision revision =
+                practiceRevisionRepository.findByIdAndWorkspaceId(11L, 1L).orElseThrow();
         org.mockito.Mockito.when(revision.getCriteria()).thenReturn("TARGET ASSESSMENT: BAD");
         var observation = validObservation("pr-description-quality", Presence.PRESENT);
         assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
