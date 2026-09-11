@@ -94,8 +94,6 @@ const DELIBERATELY_OMITTED = new Set([
 	"SIGNAL_LEDGER_SWEEP_BATCH_SIZE",
 	// A preview seeds no admin out of band; HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS covers it.
 	"HEPHAESTUS_AUTH_BOOTSTRAP_TOKEN",
-	// A preview runs no study, and naming an organisation is what makes setup ask about one.
-	"HEPHAESTUS_RESEARCH_ORGANIZATION",
 ]);
 
 export function findEnvDrift(referenceText: string, previewText: string): string[] {
