@@ -8,11 +8,13 @@ import {
 	useLocation,
 	useMatches,
 	useNavigate,
+	useRouter,
 } from "@tanstack/react-router";
 import { lazy, Suspense, type ReactNode } from "react";
 
 import { getIntegrationCatalogOptions, listThreadsOptions } from "@/api/@tanstack/react-query.gen";
 import { ImpersonationBanner } from "@/components/auth/ImpersonationBanner";
+import { LoginDialog } from "@/components/auth/LoginDialog";
 import { CookieConsentBanner } from "@/components/consent/CookieConsentBanner";
 import Footer from "@/components/core/Footer";
 import Header from "@/components/core/Header";
@@ -25,10 +27,13 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { Toaster } from "@/components/ui/sonner";
 import environment from "@/environment";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
+import { useLoginNavigation } from "@/hooks/use-login-navigation";
 import { useActiveSurvey, useSubmitProductFeedback } from "@/hooks/use-product-feedback";
+import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
 import { type AuthContextType, useAuth } from "@/integrations/auth/AuthContext";
+import { safeReturnTo } from "@/integrations/auth/guard";
 import { FeatureFlagDevTools, useFeatureFlag } from "@/integrations/feature-flags";
 import { isCopilotExcludedRoute } from "@/lib/copilot-route";
 import { getProviderSlug } from "@/lib/provider";
@@ -47,6 +52,7 @@ declare module "@tanstack/react-router" {
 }
 
 function RootLayout() {
+	const { login: loginOpen } = Route.useSearch();
 	const { pathname } = useLocation();
 	const surface = useMatches({
 		select: (matches) => {
@@ -67,12 +73,9 @@ function RootLayout() {
 			<>
 				<HeadContent />
 				<SkipToContent />
-				<CookieConsentBanner />
-				<ProviderColorScope>
-					<main id="main-content" tabIndex={-1}>
-						<Outlet />
-					</main>
-				</ProviderColorScope>
+				<main id="main-content" tabIndex={-1}>
+					<Outlet />
+				</main>
 				<Toaster />
 			</>
 		);
@@ -82,8 +85,7 @@ function RootLayout() {
 		<>
 			<HeadContent />
 			<SkipToContent />
-			{/* Rendered early so keyboard/AT users reach the consent region before the app chrome. */}
-			<CookieConsentBanner />
+			{!loginOpen && <CookieConsentBanner />}
 			<ImpersonationBanner />
 			<ProviderColorScope>
 				<SidebarProvider>
@@ -118,6 +120,7 @@ function RootLayout() {
 				</SidebarProvider>
 			</ProviderColorScope>
 			<Toaster />
+			<PublicLoginOverlay />
 			{showCopilot && (
 				<ErrorBoundary fallback={<></>} handled>
 					<Suspense fallback={null}>
@@ -147,6 +150,9 @@ function GlobalSurvey() {
 }
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
+	validateSearch: (search): { login?: boolean } => ({
+		login: search.login === true || search.login === "true" ? true : undefined,
+	}),
 	// Fallback tab title; the deepest match that sets its own `head` wins.
 	head: () => ({ meta: [{ title: "Hephaestus" }] }),
 	component: RootLayout,
@@ -164,15 +170,9 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 });
 
 function HeaderContainer() {
-	const {
-		isAuthenticated,
-		isLoading,
-		username,
-		userProfile,
-		login,
-		logout,
-		getUserProfilePictureUrl,
-	} = useAuth();
+	const openLogin = useLoginNavigation();
+	const { isAuthenticated, isLoading, username, userProfile, logout, getUserProfilePictureUrl } =
+		useAuth();
 	const {
 		chromeWorkspaceSlug,
 		userLogin: workspaceUserLogin,
@@ -182,9 +182,7 @@ function HeaderContainer() {
 	const effectiveUsername = workspaceUserLogin ?? username;
 	const effectiveName =
 		workspaceUserName ?? (userProfile && `${userProfile.firstName} ${userProfile.lastName}`);
-	// Feedback about the product reaches instance administrators either way; carrying the chrome's
-	// workspace lets them answer a member in context, and the instance-only path is for an account
-	// that belongs to no workspace at all.
+	// Accounts without a workspace still need to reach instance administrators.
 	const feedback = useSubmitProductFeedback(chromeWorkspaceSlug);
 
 	return (
@@ -208,7 +206,7 @@ function HeaderContainer() {
 					}
 				/>
 			}
-			onLogin={(idpHint) => login(idpHint)}
+			onLogin={openLogin}
 			onLogout={() => void logout()}
 		/>
 	);
@@ -295,6 +293,41 @@ function AppSidebarContainer() {
 			mentorThreadsError={
 				sidebarContext === "mentor" && mentorThreadsError ? "Failed to load threads" : undefined
 			}
+		/>
+	);
+}
+
+function PublicLoginOverlay() {
+	const { login: open } = Route.useSearch();
+	const { isAuthenticated, login } = useAuth();
+	const location = useLocation();
+	const router = useRouter();
+	const providers = useSignInProviders(Boolean(open) && !isAuthenticated);
+	const returnTo = safeReturnTo(
+		location.maskedLocation?.search.returnTo ??
+			router.buildLocation({
+				to: ".",
+				search: (previous) => ({ ...previous, login: undefined }),
+				hash: true,
+			}).href,
+	);
+	return (
+		<LoginDialog
+			open={Boolean(open) && !isAuthenticated}
+			options={providers}
+			onSignIn={(registrationId) => login(registrationId, returnTo)}
+			devReturnTo={returnTo}
+			onClose={() => {
+				if (location.maskedLocation) router.history.back();
+				else
+					void router.navigate({
+						to: ".",
+						search: (previous) => ({ ...previous, login: undefined }),
+						hash: true,
+						replace: true,
+						resetScroll: false,
+					});
+			}}
 		/>
 	);
 }

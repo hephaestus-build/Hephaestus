@@ -56,7 +56,6 @@ class PersonalDataMapArchTest {
             "commit_pull_request",
             "connection",
             "connection_activity",
-            "consent_notice",
             "curated_group_override",
             "curated_practice_override",
             "discussion_category",

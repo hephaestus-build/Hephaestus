@@ -12,13 +12,8 @@ import { routeTree } from "@/routeTree.gen";
 // `router.load()` lazily imports each matched route's module, so a case pays its transform cost.
 vi.setConfig({ testTimeout: 15_000 });
 
-const DEEP_LINK = "/w/acme/mentor/thread-1?message=hi";
+const DEEP_LINK = "/w/acme/mentor/thread-1?message=hi#reply";
 
-/**
- * The gate every authenticated route consults before anything below it loads. Everything else about
- * the notice is covered by the dialog's stories; what matters here is which way the gate errs,
- * because the server refuses every gated call until the notice is answered.
- */
 describe("consent gate", () => {
 	function newClient() {
 		return new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -39,7 +34,6 @@ describe("consent gate", () => {
 	});
 
 	it("never asks on behalf of a signed-out visitor", async () => {
-		// The landing page waits on this, and the only answer it could get is 401.
 		let asked = false;
 		server.use(
 			unauthenticatedUser,
@@ -53,17 +47,13 @@ describe("consent gate", () => {
 		expect(asked).toBe(false);
 	});
 
-	it("lets the application load when it cannot tell, rather than blocking everyone", async () => {
-		// Blocking here would put an undismissable notice in front of every reader whenever this one
-		// call failed, with no way out but a reload — and it would not be protective either, because
-		// the server refuses the gated calls itself. A reader who owes the notice still meets that.
+	it("holds protected loaders back when the notice cannot be verified", async () => {
 		server.use(http.get("*/user/consent", () => HttpResponse.error()));
 
-		await expect(consentIsPending(newClient())).resolves.toBe(false);
+		await expect(consentIsPending(newClient())).resolves.toBe(true);
 	});
 });
 
-/** The same gate as the authenticated subtree runs it, driven through the generated tree. */
 describe("authenticated route gate", () => {
 	async function land(url: string) {
 		server.use(http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])));
@@ -76,20 +66,21 @@ describe("authenticated route gate", () => {
 		return router.state.location;
 	}
 
-	it("puts the outstanding notice over the page the reader asked for", async () => {
+	it("masks the outstanding notice with the requested destination", async () => {
 		server.use(http.get("*/user/consent", () => HttpResponse.json({ completed: false })));
 
 		const location = await land(DEEP_LINK);
 
 		expect(location.pathname).toBe("/consent");
 		expect(location.search).toMatchObject({ returnTo: DEEP_LINK });
-		// The address bar stays on the page, so the notice reads as that page pausing.
 		expect(location.maskedLocation?.href).toBe(DEEP_LINK);
 	});
 
-	it("opens the page anyway when the notice cannot be loaded", async () => {
+	it("keeps the recoverable notice and destination when it cannot be loaded", async () => {
 		server.use(http.get("*/user/consent", () => HttpResponse.error()));
 
-		expect((await land(DEEP_LINK)).href).toBe(DEEP_LINK);
+		const location = await land(DEEP_LINK);
+		expect(location.pathname).toBe("/consent");
+		expect(location.maskedLocation?.href).toBe(DEEP_LINK);
 	});
 });

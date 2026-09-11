@@ -162,6 +162,9 @@ services:
       # + docker/compose.core.yaml). Disable it here so the receiver beans don't load
       # in application-server (saves RAM; prevents accidental localhost traffic).
       HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED: "false"
+      # Names the organisation running the optional research study, and its presence is what makes
+      # first-login setup ask about it at all. Unset means this deployment runs none.
+      HEPHAESTUS_RESEARCH_ORGANIZATION: ${HEPHAESTUS_RESEARCH_ORGANIZATION:-}
       # Internal, trusted docker-network DB: skip TLS. pgJDBC doesn't validate Postgres' self-signed cert
       # so it adds no authentication, only the SSL handshake's NIO direct buffers that OOM the JVM off-heap
       # default; confidentiality is fine to drop here (creds already sit in plaintext compose env).

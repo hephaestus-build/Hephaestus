@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.80.0
+
+### Minor Changes
+
+- Signing in no longer takes you off the page you were reading: public pages open a sign-in dialog you can dismiss, and shared links and reloads still get the full sign-in page. Every sign-in and setup screen links to the instance's privacy notice and imprint, which had no footer to reach them from before. The sign-in page also loads when the server is slow to answer whether you are already signed in.
+
+  First-time setup is now one short page. Heph introduces itself and marks off each decision as you make it, and the five paragraphs of notice text became three plain points — what Hephaestus reads, that its feedback is written by an AI model and can be wrong, and where your instance's privacy notice is. The terms you accept are one sentence beside the box: keep to the work you are entitled to see, and treat feedback as guidance for the person it is addressed to rather than an assessment to pass on. Accepting the terms and answering the research question stay separate decisions, both visible before either is answered, neither preselected, and nothing is recorded until you press **Continue**. You can change the research answer later in user settings.
+
+  The setup screen no longer carries operator-specific text, so it reads correctly on any deployment rather than only on the one it was written for. Because the wording changed, everyone accepts it once more.
+
+  **Operators:** the optional research question is now asked only where `HEPHAESTUS_RESEARCH_ORGANIZATION` names the organisation running the study, and that name is shown beside the choice and in account settings. Set it if you run one; leave it unset and setup is the terms alone. Configure `/imprint` and `/privacy` before upgrading — the setup screen now points at them for everything operator-specific. No data is dropped: `consent_decision.notice_sha256` only loses its `NOT NULL`, `research_organization` is added beside it, and each decision identifies its wording by notice version. Changing the organisation later asks everyone the research question again, and leaves terms acceptance alone.
+
+- Operators can export practice-review execution and model-request traces to an OpenTelemetry collector using the optional `TRACING_OTLP_ENABLED`, `TRACING_OTLP_ENDPOINT` and `TRACING_SAMPLING_PROBABILITY` settings. Export and sampling remain off by default. Private execution archives link native request bodies to the actual requests forwarded upstream, without putting prompts, conversations or credentials in telemetry attributes.
+
+  Timed-out review sessions now retain Pi’s final aborted response and settlement events before disposal, so an interrupted model call remains inspectable in its native transcript.
+
+- Operators can set the optional `PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED=true` to opt in to private practice-review execution archives for evaluation and diagnosis. Archives retain staged inputs, collected outputs, native Pi session transcripts and final provider request bodies, as operator-owned files rather than downloadable product API resources. Benchmark observers use a dedicated evaluation database role and read-only Context Fabric access; workspace-administrator credentials do not grant transcript downloads. Capture is off by default, follows Context Fabric retention, and distinguishes missing or interrupted evidence from complete capture.
+
+  Oversized native sessions are omitted with an explicit incomplete-capture status instead of preventing review results from being collected.
+
+- Sandbox cleanup and capacity accounting are now scoped to an installation. **Operators:** Set a distinct `SANDBOX_DOCKER_OWNER` for installations sharing a Docker daemon, and use the same value across roles sharing a database. Drain active reviews and conversations before upgrading; legacy sandbox resources are not automatically adopted.
+
+### Patch Changes
+
+- The instance overview's “View audit log” link now retains native link semantics for keyboard and assistive-technology users.
+- Building the API contract or container class archive no longer starts server background scheduling or attempts sync-job recovery and signing-key seeding against an unavailable database. Production still validates sealed signing keys and seeds the active key at startup.
+- Production profile groups now reject missing encryption keys just like the production profile itself. System-key validation is consistent for encrypted fields and JWT signing keys, including non-ASCII key lengths. Build-only profiles no longer supply placeholder secrets or run container-image bootstrap, and cannot be combined with production profiles.
+- Stopping a streamed model request now cancels the upstream connection and releases queued network buffers instead of retaining a replay of the abandoned response. Practice reviews and conversations keep streaming usage accounting without retaining the whole response in memory.
+
+  Provider stream failures and client disconnects now mark the model operation as failed in exported traces even when HTTP 200 headers were already sent. The trace preserves the committed HTTP status separately from the stream outcome.
+
+- Server builds no longer emit avoidable serialization warnings. Request-local and managed service state remain in-process rather than being silently discarded for serialization.
+- Silent mode no longer causes an exception while evaluating issue and pull-request feedback for developers’ practice pages. Recipient preferences and the remaining delivery checks still apply; external feedback remains blocked by silent mode.
+
+  Reviews awaiting human approval now also trigger the separate checks for practice-page and conversational feedback, rather than leaving them to scheduled recovery. Those channels still enforce their own delivery policies.
+
+- Loads optional mentor chat only for eligible signed-in users, reducing the initial application download. The rest of the application remains usable if optional mentor chat cannot load. Landing-page animations follow changes to your reduced-motion preference without reporting it as a warning.
+- Container class-archive training identifies PostgreSQL without a database connection or an unnecessary explicit-dialect warning. Production database configuration is unchanged.
+- Practice definitions retain validation of nested evidence and review settings without deprecated validation warnings.
+- Practice reviews now record a refusal when an observation praises the harmful behaviour a practice checks for, instead of incorrectly declaring the practice inapplicable and retrying a failed review.
+- Reviews whose observations all fail quoted-evidence verification are now recorded as refused instead of being retried as an unavailable server. Unverified claims remain blocked.
+
+  Final result processing now respects that recorded refusal instead of attempting to deliver feedback that was never composed.
+
+- HTTP request metrics cover all supported routes without accepting unbounded request paths. Starting a mentor conversation no longer produces misleading database insert-ordering warnings, and competing turns still roll back without leaving partial messages.
+- Shared HTTP error diagnostics no longer repeat full upstream URLs, SQL error text, or rejected row values; structured exception types, HTTP status, and valid SQLSTATE codes remain available for troubleshooting. GitLab webhook and Outline request diagnostics no longer include raw provider responses or transport error text. Startup records expose the enabled runtime roles as queryable fields. Credential masking also covers more common provider tokens and authentication fields without replacing source-level privacy controls.
+- Local evaluation instances can connect to an explicitly configured loopback SCM simulator under the E2E profile. Production endpoint restrictions remain unchanged.
+- Opening a page no longer fails when the shared session check is still running as the interface remounts. Signing out still discards pending identity results, and server outages remain visible rather than being treated as a signed-out session.
+- Paginated audit, observation, sync-job, and review-job responses retain their existing JSON format across framework updates.
+- Server startup initializes sync subscriptions only after their service is fully constructed. Server builds use supported library APIs and type-safe provider fixtures, reducing avoidable compiler diagnostics without disabling checks.
+- Practice-review guidance now distinguishes missing automated test files from evidence that a developer did not test their change. Feedback keeps internal review reasoning out of fallback comments and preserves complete sentences around abbreviations when filtering internal terminology.
+
+  Issue-review guidance now calls for an observable triage need before recommending classification metadata, rather than treating every unlabelled task as a workflow problem.
+
 ## 0.79.0
 
 ### Minor Changes
