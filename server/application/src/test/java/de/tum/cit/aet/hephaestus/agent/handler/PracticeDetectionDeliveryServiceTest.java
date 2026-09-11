@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
@@ -40,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -183,6 +185,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                         anyLong(),
                         any(),
                         anyString(),
+                        any(),
                         any(), // assessment — null for NOT_APPLICABLE, so any() (anyString() would not match null)
                         any(),
                         any(),
@@ -193,12 +196,12 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 .thenReturn(1);
     }
 
-    private ValidatedObservation validObservation(String slug, Presence presence) {
+    private ValidatedObservation validObservation(String slug, @Nullable Presence presence) {
         Assessment assessment =
                 switch (presence) {
                     case PRESENT -> Assessment.GOOD;
-                    case ABSENT -> Assessment.BAD;
-                    case NOT_APPLICABLE, INCONCLUSIVE -> null;
+                    case ABSENT -> Assessment.GOOD;
+                    case null -> null;
                 };
         ObjectNode evidence = objectMapper.createObjectNode();
         evidence.putArray("citations")
@@ -219,13 +222,55 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         }
         // A NOT_APPLICABLE observation asserts something about the work too — that this practice has no
         // subject in it — so delivery requires it to name what the practice looks for and what rules it out.
-        if (presence == Presence.NOT_APPLICABLE) {
+        if (presence == null) {
             ObjectNode inapplicability = evidence.putObject("inapplicability");
             inapplicability.putArray("consulted").add("scm.pull-request.diff");
             inapplicability.put("subject", "a described rationale for the change");
             inapplicability.put("ruledOutBy", "the change is a generated lockfile update with no prose to judge");
         }
-        return new ValidatedObservation(slug, "Test observation", presence, assessment, Severity.INFO, evidence, null);
+        return new ValidatedObservation(
+                slug,
+                "Test observation",
+                presence == null ? AssessmentStatus.NOT_APPLICABLE : AssessmentStatus.ASSESSED,
+                presence,
+                assessment,
+                presence == Presence.ABSENT ? Severity.MINOR : null,
+                evidence,
+                null);
+    }
+
+    @Test
+    void shouldRefuseChangingTheTargetOfThePinnedPractice() {
+        PracticeRevision revision = practiceRevisionRepository.findById(11L).orElseThrow();
+        org.mockito.Mockito.when(revision.getCriteria()).thenReturn("TARGET ASSESSMENT: BAD");
+        var observation = validObservation("pr-description-quality", Presence.PRESENT);
+        assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                .isInstanceOf(JobDeliveryException.class)
+                .hasMessageContaining("fixed target assessment");
+        verifyNoInteractions(observationRepository);
+    }
+
+    @Test
+    void shouldRequireAnUnresolvedQuestionForUndeterminedObservations() {
+        var base = validObservation("pr-description-quality", null);
+        ObjectNode evidence = (ObjectNode) evidenceOf(base);
+        evidence.remove("inapplicability");
+        var observation = new ValidatedObservation(
+                base.practiceSlug(),
+                base.summary(),
+                AssessmentStatus.UNDETERMINED,
+                null,
+                null,
+                null,
+                evidence,
+                "The captured evidence does not settle the criterion.");
+        assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                .isInstanceOf(JobDeliveryException.class)
+                .hasMessageContaining("open question");
+        evidence.putObject("undecidability")
+                .put("openQuestion", "Does the criterion include this compatibility-only change?")
+                .put("wouldSettleIt", "Clarification of the practice's scope.");
+        assertThat(publishVerified(testJob, List.of(observation)).hasNegative()).isFalse();
     }
 
     private static JsonNode evidenceOf(ValidatedObservation observation) {
@@ -536,6 +581,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                             anyString(),
                             any(),
                             any(),
+                            any(),
                             persistedEvidence.capture(),
                             any(),
                             anyString(),
@@ -760,8 +806,9 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             return new ValidatedObservation(
                     gap.practiceSlug(),
                     gap.summary(),
+                    AssessmentStatus.ASSESSED,
                     Presence.ABSENT,
-                    Assessment.GOOD,
+                    Assessment.BAD,
                     null,
                     gap.evidence(),
                     gap.evidenceRationale());
@@ -790,14 +837,14 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @DisplayName("a NOT_APPLICABLE observation with no stated ground is refused")
         void rejectsAnUnjustifiedNotApplicable() {
             // Sandbox output is untrusted even when its normalizer enforces the same rule.
-            ValidatedObservation observation = validObservation("pr-description-quality", Presence.NOT_APPLICABLE);
+            ValidatedObservation observation = validObservation("pr-description-quality", null);
             ((ObjectNode) evidenceOf(observation)).remove("inapplicability");
 
             assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("must name what the practice looks for")
                     // Direct the model to uncertainty rather than an invented justification.
-                    .hasMessageContaining("INCONCLUSIVE");
+                    .hasMessageContaining("UNDETERMINED");
             verifyNoInteractions(observationRepository);
         }
 
@@ -805,7 +852,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @DisplayName("a stated inapplicability missing any of its three parts is refused")
         void rejectsAnIncompleteInapplicability() {
             for (String field : new String[] {"consulted", "subject", "ruledOutBy"}) {
-                ValidatedObservation observation = validObservation("pr-description-quality", Presence.NOT_APPLICABLE);
+                ValidatedObservation observation = validObservation("pr-description-quality", null);
                 ((ObjectNode) evidenceOf(observation).get("inapplicability")).remove(field);
 
                 assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
@@ -819,7 +866,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("a stated inapplicability claiming a source this run never staged is refused")
         void rejectsAnInapplicabilityOutsideTheBoundary() {
-            ValidatedObservation observation = validObservation("pr-description-quality", Presence.NOT_APPLICABLE);
+            ValidatedObservation observation = validObservation("pr-description-quality", null);
             ObjectNode inapplicability = (ObjectNode) evidenceOf(observation).get("inapplicability");
             inapplicability.putArray("consulted").add("scm.repository.tree");
 
@@ -833,7 +880,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @DisplayName("a ground is asked of NOT_APPLICABLE alone — INCONCLUSIVE claims nothing about the work")
         void doesNotAskForAGroundOnOtherPresences() {
             for (Presence presence : Presence.values()) {
-                if (presence == Presence.NOT_APPLICABLE) {
+                if (presence == null) {
                     continue;
                 }
                 ValidatedObservation observation = validObservation("pr-description-quality", presence);
@@ -950,6 +997,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                             eq(456L),
                             eq(789L), // aboutUserId
                             eq("Test observation"),
+                            anyString(),
                             eq("PRESENT"), // presence
                             eq("GOOD"), // assessment
                             isNull(), // severity
@@ -1159,7 +1207,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("persists NOT_APPLICABLE observation without counting as negative")
         void notApplicablePersisted() {
-            var observations = List.of(validObservation("pr-description-quality", Presence.NOT_APPLICABLE));
+            var observations = List.of(validObservation("pr-description-quality", null));
 
             var result = publishVerified(testJob, observations);
 
@@ -1171,7 +1219,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         void persistsManyNotApplicableObservations() {
             var observations = new java.util.ArrayList<ValidatedObservation>();
             for (int i = 0; i < 10; i++) {
-                observations.add(validObservation("pr-description-quality", Presence.NOT_APPLICABLE));
+                observations.add(validObservation("pr-description-quality", null));
             }
 
             var result = publishVerified(testJob, observations);
@@ -1199,6 +1247,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                             anyLong(),
                             any(),
                             anyString(),
+                            any(),
                             any(), // assessment (null for NOT_APPLICABLE)
                             severityCaptor.capture(),
                             any(),
@@ -1214,7 +1263,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         void badFindingKeepsSeverity() {
             // ABSENT → BAD with Severity.INFO from the fixture helper.
             assertThat(capturedSeverityFor(validObservation("pr-description-quality", Presence.ABSENT)))
-                    .isEqualTo("INFO");
+                    .isEqualTo("MINOR");
         }
 
         @Test
@@ -1228,7 +1277,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("a NOT_APPLICABLE observation's severity is coerced to null")
         void notApplicableFindingSeverityCoercedToNull() {
-            assertThat(capturedSeverityFor(validObservation("pr-description-quality", Presence.NOT_APPLICABLE)))
+            assertThat(capturedSeverityFor(validObservation("pr-description-quality", null)))
                     .isNull();
         }
     }
@@ -1249,7 +1298,8 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                             anyLong(),
                             anyLong(),
                             any(),
-                            anyString(),
+                            eq("ASSESSED"),
+                            any(),
                             anyString(),
                             any(),
                             any(),
@@ -1287,6 +1337,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                             anyLong(),
                             any(),
                             anyString(),
+                            any(),
                             anyString(),
                             isNull(),
                             any(),
@@ -1360,9 +1411,10 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                             eq("scm.issue"),
                             eq(999L),
                             eq(789L), // aboutUserId
+                            anyString(),
                             anyString(), // title
                             eq("ABSENT"), // presence
-                            eq("BAD"), // assessment
+                            eq("GOOD"), // assessment
                             anyString(),
                             any(),
                             any(),

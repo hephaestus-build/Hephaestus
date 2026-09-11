@@ -34,3 +34,17 @@ maintained platform or ecosystem replacements.
 
 `husky` is no longer a dependency: ADR 0040 moved Git hooks to the Vite+ dispatcher, and the project
 hooks live in `.vite-hooks/`. The 2026-08-30 dispositions above stand as recorded.
+
+## Update — 2026-09-11
+
+The SPA now imports [`cn`](https://github.com/shadcn-ui/cn) directly instead of maintaining a
+`clsx` + `tailwind-merge` wrapper. The shadcn registry configuration also targets the package directly. The docs package's unused direct
+`clsx` dependency is also removed: no docs source imports it, and no direct dependency requires it as
+a peer. The earlier disposition remains the historical audit result, not the current dependency map.
+
+`clsx` remains a supported transitive dependency of Class Variance Authority, Streamdown and the
+Docusaurus theme, search and syntax-highlighting packages. Streamdown also requires `tailwind-merge`.
+These belong to their consumers; they are not replaced with global aliases or package overrides.
+[`cn`'s aliasing limitations](https://github.com/shadcn-ui/cn/blob/main/docs/aliasing.md) include default
+imports and configuration APIs, so removing the old names from the bundle would not by itself prove a
+safe migration of those consumers.

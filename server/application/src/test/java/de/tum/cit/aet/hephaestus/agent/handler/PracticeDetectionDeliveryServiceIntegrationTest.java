@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
@@ -43,6 +44,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -261,18 +263,25 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
      * Build an observation whose valence follows the former-GOOD practice convention used by these
      * fixtures (pr-description-quality, error-handling): PRESENT→GOOD, ABSENT→BAD, NOT_APPLICABLE→null.
      */
-    private ValidatedObservation observation(String slug, Presence presence) {
+    private ValidatedObservation observation(String slug, @Nullable Presence presence) {
         Assessment assessment =
                 switch (presence) {
                     case PRESENT -> Assessment.GOOD;
-                    case ABSENT -> Assessment.BAD;
-                    case NOT_APPLICABLE, INCONCLUSIVE -> null;
+                    case ABSENT -> Assessment.GOOD;
+                    case null -> null;
                 };
         return new ValidatedObservation(
-                slug, "Test: " + slug, presence, assessment, Severity.INFO, evidence(presence), null);
+                slug,
+                "Test: " + slug,
+                presence == null ? AssessmentStatus.NOT_APPLICABLE : AssessmentStatus.ASSESSED,
+                presence,
+                assessment,
+                presence == Presence.ABSENT ? Severity.MINOR : null,
+                evidence(presence),
+                null);
     }
 
-    private static ObjectNode evidence(Presence presence) {
+    private static ObjectNode evidence(@Nullable Presence presence) {
         ObjectNode evidence = OBJECT_MAPPER.createObjectNode();
         evidence.putArray("citations")
                 .addObject()
@@ -339,6 +348,7 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
             var admitted = new ValidatedObservation(
                     persisted.getPractice().getSlug(),
                     persisted.getSummary(),
+                    persisted.getAssessmentStatus(),
                     persisted.getPresence(),
                     persisted.getAssessment(),
                     persisted.getSeverity(),
@@ -444,8 +454,9 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
                 observations.add(new ValidatedObservation(
                         "pr-description-quality",
                         "Negative observation " + i,
+                        AssessmentStatus.ASSESSED,
                         Presence.ABSENT,
-                        Assessment.BAD,
+                        Assessment.GOOD,
                         Severity.MINOR,
                         evidence(Presence.ABSENT),
                         null));

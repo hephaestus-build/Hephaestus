@@ -1,12 +1,12 @@
+import { cn } from "cn";
 import { CircleDot, GitMerge, GitPullRequest, type LucideIcon, Sparkle } from "lucide-react";
 import { motion } from "motion/react";
 import type { CSSProperties, ReactNode } from "react";
 import { useMediaQuery } from "usehooks-ts";
 import { getGroupVisual } from "@/components/admin/practice-catalog/group-visuals";
 import { HephIcon } from "@/components/brand/HephIcon";
-import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
+import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 import styles from "./LandingVisuals.module.css";
 
 type StyleWithCustomProperties = CSSProperties & Record<`--${string}`, string>;
@@ -187,7 +187,7 @@ export function LandingFeedbackCard({
 	rotate = 0,
 }: LandingFeedbackCardProps) {
 	const { Icon: GroupIcon, pill } = getGroupVisual(group.icon, group.color);
-	const assessment = ASSESSMENT_DEFS[stance === "strength" ? "GOOD" : "BAD"];
+	const assessment = OUTCOME_DEFS[stance === "strength" ? "POSITIVE" : "NEGATIVE"];
 	const StanceIcon = assessment.icon;
 	return (
 		<div className={cn(styles.atom, styles.slip)} style={rotation(rotate)}>

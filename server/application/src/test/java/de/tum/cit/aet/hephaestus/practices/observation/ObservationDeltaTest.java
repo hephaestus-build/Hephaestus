@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.observation;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationDelta.Locus;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationDelta.LocusChange;
@@ -35,7 +35,7 @@ class ObservationDeltaTest {
     @Test
     void aLocusMeasuredOnlyByTheNewestRunIsNew() {
         ObservationDelta delta =
-                ObservationDelta.classify(List.of(locus("k1", SECOND_RUN, NEWER, Assessment.BAD, Severity.MAJOR)));
+                ObservationDelta.classify(List.of(locus("k1", SECOND_RUN, NEWER, Outcome.NEGATIVE, Severity.MAJOR)));
 
         assertThat(statusOf(delta, "k1")).contains(Status.NEW);
         assertThat(changeOf(delta, "k1"))
@@ -47,8 +47,8 @@ class ObservationDeltaTest {
     @Test
     void aProblemStillPresentButAtADifferentSeverityIsRecurring() {
         ObservationDelta delta = ObservationDelta.classify(List.of(
-                locus("k1", FIRST_RUN, OLDER, Assessment.BAD, Severity.MINOR),
-                locus("k1", SECOND_RUN, NEWER, Assessment.BAD, Severity.CRITICAL)));
+                locus("k1", FIRST_RUN, OLDER, Outcome.NEGATIVE, Severity.MINOR),
+                locus("k1", SECOND_RUN, NEWER, Outcome.NEGATIVE, Severity.CRITICAL)));
 
         assertThat(statusOf(delta, "k1")).contains(Status.RECURRING);
         assertThat(changeOf(delta, "k1"))
@@ -60,8 +60,8 @@ class ObservationDeltaTest {
     @Test
     void aProblemStillPresentAndUnmovedIsUnchanged() {
         ObservationDelta delta = ObservationDelta.classify(List.of(
-                locus("k1", FIRST_RUN, OLDER, Assessment.BAD, Severity.MAJOR),
-                locus("k1", SECOND_RUN, NEWER, Assessment.BAD, Severity.MAJOR)));
+                locus("k1", FIRST_RUN, OLDER, Outcome.NEGATIVE, Severity.MAJOR),
+                locus("k1", SECOND_RUN, NEWER, Outcome.NEGATIVE, Severity.MAJOR)));
 
         assertThat(statusOf(delta, "k1")).contains(Status.UNCHANGED);
     }
@@ -69,24 +69,24 @@ class ObservationDeltaTest {
     @Test
     void aProblemAbsentFromTheNewestRunOfItsArtifactIsResolved() {
         ObservationDelta delta = ObservationDelta.classify(List.of(
-                locus("gone", FIRST_RUN, OLDER, Assessment.BAD, Severity.MAJOR),
-                locus("still-here", FIRST_RUN, OLDER, Assessment.BAD, Severity.MINOR),
-                locus("still-here", SECOND_RUN, NEWER, Assessment.BAD, Severity.MINOR)));
+                locus("gone", FIRST_RUN, OLDER, Outcome.NEGATIVE, Severity.MAJOR),
+                locus("still-here", FIRST_RUN, OLDER, Outcome.NEGATIVE, Severity.MINOR),
+                locus("still-here", SECOND_RUN, NEWER, Outcome.NEGATIVE, Severity.MINOR)));
 
         assertThat(statusOf(delta, "gone")).contains(Status.RESOLVED);
         assertThat(changeOf(delta, "gone"))
                 .get()
-                .extracting(LocusChange::latestAssessment)
-                .isEqualTo(Assessment.BAD);
+                .extracting(LocusChange::latestOutcome)
+                .isEqualTo(Outcome.NEGATIVE);
     }
 
     /** Crediting somebody with fixing what was already right is the one wrong answer this must not give. */
     @Test
     void aStrengthThatWasNotReObservedIsNotResolved() {
         ObservationDelta delta = ObservationDelta.classify(List.of(
-                locus("praise", FIRST_RUN, OLDER, Assessment.GOOD, null),
-                locus("problem", FIRST_RUN, OLDER, Assessment.BAD, Severity.MINOR),
-                locus("problem", SECOND_RUN, NEWER, Assessment.BAD, Severity.MINOR)));
+                locus("praise", FIRST_RUN, OLDER, Outcome.POSITIVE, null),
+                locus("problem", FIRST_RUN, OLDER, Outcome.NEGATIVE, Severity.MINOR),
+                locus("problem", SECOND_RUN, NEWER, Outcome.NEGATIVE, Severity.MINOR)));
 
         assertThat(changeOf(delta, "praise")).isEmpty();
     }
@@ -105,7 +105,7 @@ class ObservationDeltaTest {
                         18L,
                         FIRST_RUN,
                         OLDER,
-                        Assessment.BAD,
+                        Outcome.NEGATIVE,
                         Severity.MAJOR),
                 new Locus(
                         "mr-22",
@@ -114,7 +114,7 @@ class ObservationDeltaTest {
                         22L,
                         SECOND_RUN,
                         NEWER,
-                        Assessment.BAD,
+                        Outcome.NEGATIVE,
                         Severity.MAJOR)));
 
         assertThat(statusOf(delta, "mr-18")).contains(Status.NEW);
@@ -131,9 +131,9 @@ class ObservationDeltaTest {
                         22L,
                         SECOND_RUN,
                         NEWER,
-                        Assessment.BAD,
+                        Outcome.NEGATIVE,
                         Severity.MAJOR),
-                locus("k1", SECOND_RUN, NEWER, Assessment.BAD, Severity.MAJOR)));
+                locus("k1", SECOND_RUN, NEWER, Outcome.NEGATIVE, Severity.MAJOR)));
 
         assertThat(delta.loci()).extracting(LocusChange::recurrenceKey).containsExactly("k1");
     }
@@ -142,12 +142,12 @@ class ObservationDeltaTest {
     @Test
     void whatMovedIsOrderedAheadOfWhatDidNot() {
         ObservationDelta delta = ObservationDelta.classify(List.of(
-                locus("unmoved", FIRST_RUN, OLDER, Assessment.BAD, Severity.MAJOR),
-                locus("unmoved", SECOND_RUN, NEWER, Assessment.BAD, Severity.MAJOR),
-                locus("fresh", SECOND_RUN, NEWER, Assessment.BAD, Severity.MAJOR),
-                locus("worse", FIRST_RUN, OLDER, Assessment.BAD, Severity.MINOR),
-                locus("worse", SECOND_RUN, NEWER, Assessment.BAD, Severity.CRITICAL),
-                locus("fixed", FIRST_RUN, OLDER, Assessment.BAD, Severity.MAJOR)));
+                locus("unmoved", FIRST_RUN, OLDER, Outcome.NEGATIVE, Severity.MAJOR),
+                locus("unmoved", SECOND_RUN, NEWER, Outcome.NEGATIVE, Severity.MAJOR),
+                locus("fresh", SECOND_RUN, NEWER, Outcome.NEGATIVE, Severity.MAJOR),
+                locus("worse", FIRST_RUN, OLDER, Outcome.NEGATIVE, Severity.MINOR),
+                locus("worse", SECOND_RUN, NEWER, Outcome.NEGATIVE, Severity.CRITICAL),
+                locus("fixed", FIRST_RUN, OLDER, Outcome.NEGATIVE, Severity.MAJOR)));
 
         assertThat(delta.loci())
                 .extracting(LocusChange::recurrenceKey)
@@ -159,8 +159,8 @@ class ObservationDeltaTest {
         assertThat(ObservationDelta.classify(List.of()).loci()).isEmpty();
     }
 
-    private static Locus locus(String key, UUID runId, Instant at, Assessment assessment, @Nullable Severity severity) {
-        return new Locus(key, "ships-tests", ArtifactKinds.PULL_REQUEST, 22L, runId, at, assessment, severity);
+    private static Locus locus(String key, UUID runId, Instant at, Outcome outcome, @Nullable Severity severity) {
+        return new Locus(key, "ships-tests", ArtifactKinds.PULL_REQUEST, 22L, runId, at, outcome, severity);
     }
 
     private static Optional<Status> statusOf(ObservationDelta delta, String key) {

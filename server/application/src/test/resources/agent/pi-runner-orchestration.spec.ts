@@ -13,6 +13,9 @@ import { join } from "node:path";
 import { mock, test } from "node:test";
 
 const admittedObservation = {
+	assessmentStatus: "ASSESSED",
+	presence: "PRESENT",
+	outcome: "NEGATIVE",
 	id: "observation-1",
 	practiceSlug: "test-practice",
 	assessment: "BAD",
@@ -119,7 +122,10 @@ if (scenario) {
 								await tool.execute("report-1", {
 									practiceSlug: "test-practice",
 									summary: "Unsafe authentication call",
-									outcome: "BEHAVIOR_PRESENT_BAD_MAJOR",
+									assessmentStatus: "ASSESSED",
+									presence: "PRESENT",
+									assessment: "BAD",
+									severity: "MAJOR",
 									evidenceRationale: "The changed authentication code calls insecure().",
 									evidence: {
 										citations: [

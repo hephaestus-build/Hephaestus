@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -33,9 +34,10 @@ class PullRequestReviewHandlerStaticMethodsTest extends BaseUnitTest {
             return new PracticeDetectionResultParser.ValidatedObservation(
                     "ships-tests-with-the-change",
                     "Nothing to say here",
-                    Presence.NOT_APPLICABLE,
+                    AssessmentStatus.NOT_APPLICABLE,
                     null,
-                    Severity.INFO,
+                    null,
+                    null,
                     evidence,
                     "The practice has no subject in this change.");
         }
@@ -72,9 +74,10 @@ class PullRequestReviewHandlerStaticMethodsTest extends BaseUnitTest {
             var observation = new PracticeDetectionResultParser.ValidatedObservation(
                     "describe-what-and-why",
                     "The change explains itself",
-                    Presence.NOT_APPLICABLE,
+                    AssessmentStatus.NOT_APPLICABLE,
                     null,
-                    Severity.INFO,
+                    null,
+                    null,
                     evidence,
                     "The practice has no subject in this change.");
 
@@ -92,9 +95,10 @@ class PullRequestReviewHandlerStaticMethodsTest extends BaseUnitTest {
             var withoutEvidence = new PracticeDetectionResultParser.ValidatedObservation(
                     "ships-tests-with-the-change",
                     "Nothing to say here",
-                    Presence.NOT_APPLICABLE,
+                    AssessmentStatus.NOT_APPLICABLE,
                     null,
-                    Severity.INFO,
+                    null,
+                    null,
                     null,
                     "The practice has no subject in this change.");
 
@@ -134,12 +138,26 @@ class PullRequestReviewHandlerStaticMethodsTest extends BaseUnitTest {
             }
             evidence.set("citations", citations);
             return new PracticeDetectionResultParser.ValidatedObservation(
-                    slug, "Test Title", Presence.ABSENT, Assessment.BAD, Severity.MINOR, evidence, "reasoning");
+                    slug,
+                    "Test Title",
+                    AssessmentStatus.ASSESSED,
+                    Presence.ABSENT,
+                    Assessment.GOOD,
+                    Severity.MINOR,
+                    evidence,
+                    "reasoning");
         }
 
         private PracticeDetectionResultParser.ValidatedObservation makeFindingNoEvidence(String slug) {
             return new PracticeDetectionResultParser.ValidatedObservation(
-                    slug, "Test Title", Presence.PRESENT, Assessment.GOOD, Severity.INFO, null, "reasoning");
+                    slug,
+                    "Test Title",
+                    AssessmentStatus.ASSESSED,
+                    Presence.PRESENT,
+                    Assessment.GOOD,
+                    null,
+                    null,
+                    "reasoning");
         }
 
         @Test

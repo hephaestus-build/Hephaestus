@@ -1,5 +1,6 @@
 import { Pencil } from "lucide-react";
 
+import { cn } from "cn";
 import type { Practice, PracticeDefinitionOptions } from "@/api/types.gen";
 import { PracticeDefinitionPreview } from "@/components/admin/practice-adoption/PracticeDefinitionPreview";
 import { GroupPill } from "@/components/admin/practice-catalog/GroupPill";
@@ -19,7 +20,6 @@ import { DrawerBody, DrawerDescription, DrawerFooter, DrawerTitle } from "@/comp
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import { autonomySourceOf } from "@/lib/practice-autonomy";
-import { cn } from "@/lib/utils";
 
 export type WorkspacePracticeState = PanelState<{
 	practice: Practice;

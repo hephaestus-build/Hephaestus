@@ -1,6 +1,7 @@
 import { ExternalLinkIcon } from "lucide-react";
 import type { ComponentType } from "react";
 
+import { cn } from "cn";
 import type { ReviewArtifact as ReviewArtifactData, ReviewRunTarget } from "@/api/types.gen";
 import { GithubIcon, GitlabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
 import {
@@ -12,7 +13,6 @@ import {
 	isKnownArtifactKind,
 	type KnownArtifactKind,
 } from "@/lib/artifact-kinds";
-import { cn } from "@/lib/utils";
 
 export type ReviewArtifactDisplay = ReviewArtifactData | ReviewRunTarget;
 

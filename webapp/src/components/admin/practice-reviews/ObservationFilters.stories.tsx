@@ -67,6 +67,7 @@ const meta = {
 					}}
 					onReset={() => {
 						patch({
+							assessmentStatus: undefined,
 							groupSlug: undefined,
 							practiceSlug: undefined,
 							presence: undefined,
@@ -187,5 +188,23 @@ export const Mobile: Story = {
 	parameters: { chromatic: { viewports: [320] }, viewport: { defaultViewport: "reflow" } },
 	play: async ({ canvas }) => {
 		await canvas.findByTitle("Severity: Major");
+	},
+};
+
+export const UnassessedStatuses: Story = {
+	args: {
+		search: {
+			assessmentStatus: ["NOT_APPLICABLE", "UNDETERMINED"],
+			presence: undefined,
+			assessment: undefined,
+			severity: undefined,
+		},
+	},
+	play: async ({ canvas, userEvent }) => {
+		await expect(canvas.getByRole("combobox", { name: /Assessment status/ })).toHaveTextContent(
+			"2",
+		);
+		await userEvent.click(canvas.getByRole("button", { name: "Reset" }));
+		await expect(canvas.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
 	},
 };

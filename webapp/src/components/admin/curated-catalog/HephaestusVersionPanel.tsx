@@ -1,6 +1,7 @@
 import { RotateCcw } from "lucide-react";
 import { useId } from "react";
 
+import { cn } from "cn";
 import type {
 	CatalogEntryStatus,
 	CuratedGroupRequest,
@@ -13,7 +14,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Spinner } from "@/components/ui/spinner";
 import { artifactKindLabel } from "@/lib/artifact-kinds";
 import { humanizeToken } from "@/lib/humanize";
-import { cn } from "@/lib/utils";
 
 import {
 	canKeepCurrentDefinition,

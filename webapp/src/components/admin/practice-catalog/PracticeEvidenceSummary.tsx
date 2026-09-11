@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
 
+import { cn } from "cn";
 import type {
 	PracticeAutomatedReviewPolicy,
 	PracticeAutomatedReviewValidation,
@@ -9,7 +10,6 @@ import type {
 } from "@/api/types.gen";
 import { momentDef } from "@/components/admin/practice-catalog/occasion-moments";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
 import { evidenceSourceLabel, mentoringSupportLabel } from "./evidence-presentation";
 

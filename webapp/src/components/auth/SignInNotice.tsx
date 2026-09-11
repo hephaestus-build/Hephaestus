@@ -1,5 +1,5 @@
+import { cn } from "cn";
 import { LegalLink } from "@/components/auth/LegalLinks";
-import { cn } from "@/lib/utils";
 
 export function SignInNotice({ className }: { className?: string }) {
 	return (

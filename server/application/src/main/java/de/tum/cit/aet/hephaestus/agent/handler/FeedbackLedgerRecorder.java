@@ -28,8 +28,9 @@ import de.tum.cit.aet.hephaestus.practices.feedback.PlacementAnchorSide;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.feedback.ProposedPlacement;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.time.Instant;
 import java.util.HashSet;
@@ -269,7 +270,7 @@ public class FeedbackLedgerRecorder {
         // Severity is null for a GOOD strength (ADR 0022) — sort it after any problem (least severe).
         Set<String> deliveredInlineKeys = deliveredKeys(inlineSignals);
         List<Observation> assessed = observations.stream()
-                .filter(f -> f.getPresence().carriesValence())
+                .filter(f -> (f.getAssessmentStatus() == AssessmentStatus.ASSESSED))
                 .filter(f -> !excludedIds.contains(f.getId()))
                 .filter(f -> summaryDelivered || deliveredInlineKeys.contains(f.getRecurrenceKey()))
                 // Stable order matching the composer's prioritisation, and the same ObservationOrder it uses:
@@ -280,7 +281,7 @@ public class FeedbackLedgerRecorder {
                 .toList();
         int ordinal = 0;
         for (Observation f : assessed) {
-            EvidenceRole role = f.getAssessment() == Assessment.BAD ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
+            EvidenceRole role = f.getOutcome() == Outcome.NEGATIVE ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
             feedbackObservationRepository.insertIfAbsent(feedback.getId(), f.getId(), role.name(), ordinal++);
         }
 
@@ -481,11 +482,11 @@ public class FeedbackLedgerRecorder {
                 .build());
         int ordinal = 0;
         List<Observation> assessed = evidence.stream()
-                .filter(f -> f.getPresence().carriesValence())
+                .filter(f -> (f.getAssessmentStatus() == AssessmentStatus.ASSESSED))
                 .sorted(ObservationOrder.worstFirst())
                 .toList();
         for (Observation f : assessed) {
-            EvidenceRole role = f.getAssessment() == Assessment.BAD ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
+            EvidenceRole role = f.getOutcome() == Outcome.NEGATIVE ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
             feedbackObservationRepository.insertIfAbsent(feedback.getId(), f.getId(), role.name(), ordinal++);
         }
         log.info(
@@ -701,11 +702,11 @@ public class FeedbackLedgerRecorder {
         // observations.
         int ordinal = 0;
         List<Observation> assessed = observations.stream()
-                .filter(f -> f.getPresence().carriesValence())
+                .filter(f -> (f.getAssessmentStatus() == AssessmentStatus.ASSESSED))
                 .sorted(ObservationOrder.worstFirst())
                 .toList();
         for (Observation f : assessed) {
-            EvidenceRole role = f.getAssessment() == Assessment.BAD ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
+            EvidenceRole role = f.getOutcome() == Outcome.NEGATIVE ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
             feedbackObservationRepository.insertIfAbsent(feedback.getId(), f.getId(), role.name(), ordinal++);
         }
         log.info(

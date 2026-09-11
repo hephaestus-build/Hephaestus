@@ -1,7 +1,7 @@
+import { cn } from "cn";
 import { XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group";
-import { cn } from "@/lib/utils";
 
 export interface RemovableTokenProps {
 	label: string;

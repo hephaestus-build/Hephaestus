@@ -1,8 +1,8 @@
+import { cn } from "cn";
 import type { PracticeTrend, TrendSupport } from "@/api/types.gen";
 import { PRACTICE_TREND_DEFS } from "@/components/practice-vocabulary/practice-trend-defs";
 import { statusToneClass } from "@/components/practice-vocabulary/status-def";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 import { formatTrendProvenance, type TrendScope } from "./practice-trend-presentation";
 
 export interface PracticeTrendChipProps {

@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -234,8 +235,9 @@ class InContextDeliveryGateTest extends BaseUnitTest {
         return new ValidatedObservation(
                 slug,
                 "title",
+                AssessmentStatus.ASSESSED,
                 Presence.ABSENT,
-                Assessment.BAD,
+                Assessment.GOOD,
                 Severity.MAJOR,
                 null,
                 "reasoning",

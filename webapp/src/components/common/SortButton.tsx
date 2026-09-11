@@ -1,7 +1,7 @@
 import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 export interface SortButtonProps {
 	/** `false` when this column is not the sorted one. */

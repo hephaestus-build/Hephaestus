@@ -116,3 +116,35 @@ being discussed is an **override**, and one a parent supplied is **inherited**.
 For whether an instance entry is copied into new workspaces, use **include / exclude** (see the table
 above). Do not use *shipped*, *offered*, *retired*, *ours*, *yours*, or *here* in catalog UI copy;
 those terms expose implementation or depend on who is reading.
+
+## Observation assessment axes
+
+An observation first records whether the practice could be assessed. For assessed observations,
+`presence` says whether the practice's fixed target behaviour meets its criterion; `assessment` says
+whether that target is desirable (`GOOD`) or undesirable (`BAD`). Assessment is not the verdict on the
+work. The outcome is derived, never separately annotated:
+
+| Status | Presence | Assessment | Derived outcome | Severity |
+| --- | --- | --- | --- | --- |
+| ASSESSED | PRESENT | GOOD | POSITIVE | null |
+| ASSESSED | ABSENT | GOOD | NEGATIVE | required |
+| ASSESSED | PRESENT | BAD | NEGATIVE | required |
+| ASSESSED | ABSENT | BAD | POSITIVE | null |
+| NOT_APPLICABLE | null | null | null | null |
+| UNDETERMINED | null | null | null | null |
+
+Keep the target and its assessment fixed across observations of the same practice revision. For the
+GOOD target “usable verification guidance,” inadequate partial guidance is ABSENT/GOOD: acknowledge
+what exists in the rationale and explain which required part is missing. Do not switch to a BAD target
+mid-review. For a BAD target such as swallowed exceptions, bounded, evidenced absence is
+ABSENT/BAD, a positive outcome—not NOT_APPLICABLE and not proof of general correctness.
+
+NOT_APPLICABLE needs an evidenced fact ruling out the prerequisite occasion. UNDETERMINED needs an
+unresolved question after the relevant evidence was captured and read. Neither is a judgment of the
+developer, and neither contributes to assessed-outcome trends. Missing, truncated or failed required
+capture belongs to the review's readiness/coverage record; it creates no observation.
+
+Severity, feedback routing and result counts use the derived outcome, not assessment alone. The
+server, sandbox tool contract and database reject contradictory axes. They never manufacture a
+judgment by defaulting status, presence, assessment or severity. See the
+[review pipeline](./practice-review-pipeline.mdx) for capture and delivery boundaries.

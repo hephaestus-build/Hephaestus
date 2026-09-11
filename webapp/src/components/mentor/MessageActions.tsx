@@ -1,9 +1,9 @@
 import { Copy, PencilIcon, ThumbsDown, ThumbsUp } from "lucide-react";
 
+import { cn } from "cn";
 import type { ChatMessageVote } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 
 interface MessageActionsProps {
 	/** Optional CSS class name */

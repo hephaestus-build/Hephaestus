@@ -297,6 +297,7 @@ public class IssueReviewHandler implements JobTypeHandler {
         return new PracticeDetectionResultParser.ValidatedObservation(
                 observation.getPractice().getSlug(),
                 observation.getSummary(),
+                observation.getAssessmentStatus(),
                 observation.getPresence(),
                 observation.getAssessment(),
                 observation.getSeverity(),

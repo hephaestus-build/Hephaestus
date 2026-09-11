@@ -401,8 +401,9 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
                 artifactId,
                 recipient.getId(),
                 "Observation title",
+                "ASSESSED",
                 "ABSENT",
-                "BAD",
+                "GOOD",
                 "MAJOR",
                 (artifactKind.equals("chat.conversation_thread")
                                 ? AdmittedObservationFixtures.evidence(

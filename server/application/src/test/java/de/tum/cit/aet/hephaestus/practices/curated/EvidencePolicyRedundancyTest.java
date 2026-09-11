@@ -93,7 +93,10 @@ class EvidencePolicyRedundancyTest extends BaseUnitTest {
                         "engaging-with-inline-review-comments",
                         "issue-closed-with-unmet-outcome",
                         "ready-and-traceable-handoff",
-                        // Clean-shaped absences over the diff: the eight defect detectors.
+                        // Positive absence claims over the complete changed-file diff.
+                        "keeps-the-test-suite-honest",
+                        "change-keeps-linked-docs-consistent",
+                        "excludes-generated-and-build-artifacts",
                         "removes-duplication-instead-of-copy-pasting",
                         "keeps-functions-small-and-single-purpose",
                         "leaves-the-code-clean-with-intent-revealing-comments",

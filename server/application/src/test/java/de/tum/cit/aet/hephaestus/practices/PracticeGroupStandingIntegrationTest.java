@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepositor
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
@@ -188,9 +189,10 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                 artifactId,
                 user.getId(),
                 title,
+                "ASSESSED",
                 presence,
-                "PRESENT".equals(presence) ? "GOOD" : "BAD",
-                severity,
+                "GOOD",
+                "ABSENT".equals(presence) ? severity : null,
                 DIFF_EVIDENCE_JSON,
                 "Test reasoning for " + title,
                 null,
@@ -199,7 +201,8 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         return id;
     }
 
-    private void insertInapplicableObservation(Practice targetPractice, String presence, Long artifactId) {
+    private void insertInapplicableObservation(
+            Practice targetPractice, AssessmentStatus assessmentStatus, Long artifactId) {
         UUID id = UUID.randomUUID();
         observationRepository.insertIfAbsent(
                 id,
@@ -212,7 +215,8 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                 artifactId,
                 developer.getId(),
                 "Nothing to judge here",
-                presence,
+                assessmentStatus.name(),
+                null,
                 null,
                 null,
                 DIFF_EVIDENCE_JSON,
@@ -394,7 +398,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         @DisplayName("returns NO_OPPORTUNITY when every practice ran but produced no verdict")
         void shouldReturnNoOpportunityWhenEveryRunWasInapplicable() {
-            insertInapplicableObservation(practice, "NOT_APPLICABLE", 1L);
+            insertInapplicableObservation(practice, AssessmentStatus.NOT_APPLICABLE, 1L);
 
             webTestClient
                     .get()
@@ -418,7 +422,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         @DisplayName("an INCONCLUSIVE run counts as an opportunity that produced no verdict")
         void shouldReturnNoOpportunityForInconclusiveRun() {
-            insertInapplicableObservation(practice, "INCONCLUSIVE", 2L);
+            insertInapplicableObservation(practice, AssessmentStatus.UNDETERMINED, 2L);
 
             webTestClient
                     .get()
@@ -437,7 +441,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("an inapplicable run never displaces the verdict a real observation supports")
         void shouldPreferVerdictOverInapplicableRuns() {
             insertObservation(agentJob, practice, developer, "Coin-flip hunch", "ABSENT", "MINOR", 1L);
-            insertInapplicableObservation(practice, "NOT_APPLICABLE", 2L);
+            insertInapplicableObservation(practice, AssessmentStatus.NOT_APPLICABLE, 2L);
 
             webTestClient
                     .get()

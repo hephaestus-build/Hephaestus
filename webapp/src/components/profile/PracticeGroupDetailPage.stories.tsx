@@ -61,6 +61,7 @@ const observation: PracticeGroupReviewObservation = {
 	practiceSlug: "small-changes",
 	practiceName: "Keep changes focused",
 	title: "The refactor and the fix arrived together",
+	assessmentStatus: "ASSESSED",
 	presence: "PRESENT",
 	assessment: "BAD",
 	severity: "MAJOR",

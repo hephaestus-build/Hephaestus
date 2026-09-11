@@ -12,7 +12,7 @@ logical source catalog, its capture states, and how well each source must be cap
 what was supplied to one run; it does not prove that a practice is empirically observable.
 
 > If any required evidence clause is unsatisfied, refuse the review and create no observation.
-> A source failure is never `NO_REVIEW_OCCASION`, a strength, or evidence that desired behaviour is absent.
+> A source failure is never `NOT_APPLICABLE`, a strength, or evidence that desired behaviour is absent.
 
 ## Contract boundary
 
@@ -232,7 +232,7 @@ Each entry in `needs` names a source and the stance the practice takes towards i
 review threads is consistent both with "nobody resolved this one" and with "the resolution was in the part we
 did not fetch", and a review that cannot tell those apart still tells a developer they merged past an
 unresolved thread. Where the corpus was not whole, the honest answer is `INSUFFICIENT_EVIDENCE`, never a
-quiet `NO_REVIEW_OCCASION`.
+quiet `NOT_APPLICABLE`.
 
 ```json
 {
@@ -310,7 +310,7 @@ edited. The [glossary](./practice-review-glossary.mdx#machine-names) maps each p
 an author sees. A skipped practice is omitted from that review request. Source readiness checks contain only
 source-quality reasons — `SOURCE_NOT_AVAILABLE`, `SOURCE_INCOMPLETE`, `SOURCE_EMPTY` — so review-mode
 limitations are never misreported as defective sources. Missing evidence never becomes a fabricated
-`NO_REVIEW_OCCASION` observation.
+`NOT_APPLICABLE` observation.
 
 Human review is outside this contract. A self-review, peer-review, or human-mentor channel carries its own
 review target, reviewer relationship, rubric, evidence provenance, consent, access, retention, result
@@ -349,7 +349,7 @@ concern — they decide whether evidence is collected at all.
 binding requires `scm.pull-request.core` and `scm.pull-request.diff` and reads `scm.repository.tree`
 contextually. The diff's contract demands a complete, non-empty capture. If the diff cannot be read, or the
 pinned commit is gone from the mirror, readiness refuses the practice and no observation is created. The
-runtime makes no claim that the change is focused, sprawling, or `NO_REVIEW_OCCASION`. No stance can demand
+runtime makes no claim that the change is focused, sprawling, or `NOT_APPLICABLE`. No stance can demand
 a currentness the pull-request record cannot demonstrate; nothing available could substantiate one.
 
 ### Empty evidence is valid

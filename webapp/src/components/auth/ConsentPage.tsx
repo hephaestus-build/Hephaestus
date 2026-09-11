@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, type SubmitEvent, useId, useState } from "react";
 
+import { cn } from "cn";
 import type { ConsentStatus } from "@/api/types.gen";
 import { LegalLink, LegalLinks } from "@/components/auth/LegalLinks";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
@@ -33,7 +34,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { cn } from "@/lib/utils";
 
 /**
  * The version of the wording below. This bundle is the archive: what an account accepted is whichever

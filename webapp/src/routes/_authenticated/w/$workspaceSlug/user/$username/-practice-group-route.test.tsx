@@ -119,7 +119,10 @@ describe("practice-group routes", () => {
 			),
 		);
 		const { router } = renderRouteAtWithRouter(path);
-		await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/user/ada"));
+		await waitFor(
+			() => expect(router.state.location.pathname).toBe("/w/acme/user/ada"),
+			ROUTE_RENDER_WAIT,
+		);
 		expect(practiceReads).toBe(0);
 	});
 	it("waits for features without redirecting, then loads the enabled surface", async () => {
@@ -222,6 +225,7 @@ it("refreshes every cached filter of the group after responding to feedback", as
 								practiceSlug: "small-changes",
 								practiceName: "Keep changes focused",
 								title: "Two concerns in one change",
+								assessmentStatus: "ASSESSED",
 								presence: "PRESENT",
 								assessment: "BAD",
 								feedbackUsefulness: usefulness,

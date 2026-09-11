@@ -15,11 +15,11 @@ public interface DeveloperPracticeSummaryProjection {
 
     Long getTotalObservations();
 
-    /** Count of present-or-absent observations the detector judged GOOD (a strength). */
-    Long getGoodCount();
+    /** Count of positive outcomes derived from presence and assessment. */
+    Long getPositiveCount();
 
-    /** Count of observations the detector judged BAD (a problem). */
-    Long getBadCount();
+    /** Count of negative outcomes derived from presence and assessment. */
+    Long getNegativeCount();
 
     Instant getLastObservedAt();
 }

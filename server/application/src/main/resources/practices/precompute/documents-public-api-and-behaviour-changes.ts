@@ -5,7 +5,7 @@
 // surface) or merely internal/private? An app-only repo with no library product has no public API to document,
 // and a modifier-less Swift declaration is INTERNAL — not public. We surface {hasPublicProduct,
 // changedPublicSymbols, changedInternalSymbols} and let the model decide whether documentation was owed.
-// Treating modifier-less Swift as public on an app-only repo yields false assessment=BAD findings, so the
+// Treating modifier-less Swift as public on an app-only repo yields false negative observations, so the
 // export-status table classifies it as internal. The table is keyed off file extension: adding a language =
 // one row, no engine change.
 import { findFiles, readFileLines } from "../lib/grep.ts";

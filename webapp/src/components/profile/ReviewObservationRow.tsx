@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 import type { PracticeGroupReviewObservation } from "@/api/types.gen";
@@ -20,11 +21,10 @@ import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import { toEvidenceLocations } from "./evidence";
 import { EvidenceFileBlock } from "./EvidenceFileBlock";
 import { FeedbackComment } from "./FeedbackComment";
-import { OBSERVATION_OUTCOME_PRESENTATION, observationOutcome } from "./observation-outcome";
+import { OBSERVATION_KIND_PRESENTATION, observationKind } from "./observation-kind";
 import {
 	type FeedbackResponse,
 	feedbackResponseOf,
@@ -92,8 +92,8 @@ export function ReviewObservationRow({
 	isFeedbackResponsePending = false,
 }: ReviewObservationRowProps) {
 	const [pendingResolution, setPendingResolution] = useState<FeedbackResolution>();
-	const outcome = observationOutcome(observation);
-	const status = OBSERVATION_OUTCOME_PRESENTATION[outcome];
+	const kind = observationKind(observation);
+	const status = OBSERVATION_KIND_PRESENTATION[kind];
 	const StatusIcon = status.icon;
 	const canRespond = Boolean(observation.feedbackId && onRespond);
 	const canOpen = onToggle !== undefined || canRespond;
@@ -153,9 +153,7 @@ export function ReviewObservationRow({
 						)}
 					</div>
 					<div className="flex flex-wrap items-center gap-2 sm:justify-end">
-						{observation.assessment === "BAD" && observation.severity && (
-							<StatusBadge def={SEVERITY_DEFS[observation.severity]} />
-						)}
+						{observation.severity && <StatusBadge def={SEVERITY_DEFS[observation.severity]} />}
 						<span
 							className={cn("inline-flex items-center gap-1 text-xs font-medium", status.className)}
 						>

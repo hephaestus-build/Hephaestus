@@ -423,20 +423,13 @@ that a capture is *stale* — there is no such state, and the contract says why.
 
 ## Outcome states
 
-Three distinctions carry the whole weight of reading the observation table as behaviour. Do not conflate them.
+The [product vocabulary](./practice-feedback-language.md#observation-assessment-axes) owns observation
+status and result labels. The same axes are used by the generation tool, persisted observation and
+read DTOs; the [feedback schema](./practice-feedback-schema.md#evidence-warrants) owns their warrants.
 
-| Generation outcome      | Meaning                                                                                                    | Result                                                                                              |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `NO_REVIEW_OCCASION`    | The practice's prerequisite situation did not occur in this work.                                          | An observation, normalized to durable `Presence.NOT_APPLICABLE`; requires `evidence.exclusion`.     |
-| `INSUFFICIENT_EVIDENCE` | The situation occurred and available evidence was read, but it did not decide the question.                | An observation, normalized to durable `Presence.INCONCLUSIVE`; requires `evidence.missingEvidence`. |
-| Readiness refusal       | A required source was unavailable, stale, partial, redacted, errored, or empty where content was required. | A readiness decision on the review; **no observation**.                                             |
-
-The generation values are the only choices offered by `report_observation`; the `Presence` values are
-storage and read-projection vocabulary. `NO_REVIEW_OCCASION` is not a fallback for uncertainty: its
-`exclusion` must name the subject and the fact about this work that rules it out. Likewise,
-`INSUFFICIENT_EVIDENCE` cannot hide collection failure: `missingEvidence` names the open question and
-the existing evidence that would settle it. Both shapes are enforced in the sandbox and again during
-server admission.
+A readiness refusal belongs to the capture stage and creates no observation. It is not an assessment
+status. NOT_APPLICABLE and UNDETERMINED describe distinct facts established by reading available
+evidence, and neither contributes to the assessed-result denominator.
 
 ## Lifecycle
 

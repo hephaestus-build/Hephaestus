@@ -3,8 +3,10 @@ package de.tum.cit.aet.hephaestus.practices.observation.dto;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -34,16 +36,15 @@ public record ObservationDetailDTO(
         @NonNull @Schema(description = "Observation summary")
         String summary,
 
-        @NonNull @Schema(description = "Presence: PRESENT, ABSENT, NOT_APPLICABLE, or INCONCLUSIVE")
+        @NonNull AssessmentStatus assessmentStatus,
+
+        @Nullable @Schema(description = "PRESENT or ABSENT only when ASSESSED")
         Presence presence,
 
-        @Nullable
-        @Schema(
-                description =
-                        "Assessment: GOOD or BAD; null when the presence carries no direction (NOT_APPLICABLE, INCONCLUSIVE)")
+        @Nullable @Schema(description = "Target desirability: GOOD or BAD; null unless assessmentStatus is ASSESSED")
         Assessment assessment,
 
-        @Nullable @Schema(description = "Severity level (null unless assessment is BAD)")
+        @Nullable @Schema(description = "Severity level (null unless outcome is NEGATIVE)")
         Severity severity,
 
         @Nullable ObservationEvidenceDTO evidence,
@@ -68,6 +69,14 @@ public record ObservationDetailDTO(
 
         @NonNull @Schema(description = "When the observation was made")
         Instant observedAt) {
+    @com.fasterxml.jackson.annotation.JsonProperty("outcome")
+    @Schema(
+            description = "Derived from presence and target assessment; null unless assessed",
+            accessMode = Schema.AccessMode.READ_ONLY)
+    public @Nullable Outcome getOutcome() {
+        return Outcome.of(presence, assessment);
+    }
+
     public static ObservationDetailDTO from(
             Observation observation,
             @Nullable String deliveredFeedback,
@@ -81,6 +90,7 @@ public record ObservationDetailDTO(
                 observation.getArtifactKind(),
                 observation.getArtifactId(),
                 observation.getSummary(),
+                observation.getAssessmentStatus(),
                 observation.getPresence(),
                 observation.getAssessment(),
                 observation.getSeverity(),

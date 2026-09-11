@@ -90,3 +90,26 @@ describe("practice review search", () => {
 		expect(query.artifactId).toBeUndefined();
 	});
 });
+
+describe("observation assessment status filter", () => {
+	it("sends status independently of presence and assessment", () => {
+		const unassessed = observationsSearchSchema.parse({
+			assessmentStatus: ["NOT_APPLICABLE", "UNDETERMINED"],
+		});
+		expect(observationsQuery(unassessed, 25)).toMatchObject({
+			assessmentStatus: ["NOT_APPLICABLE", "UNDETERMINED"],
+			presence: undefined,
+			assessment: undefined,
+		});
+		const assessed = observationsSearchSchema.parse({
+			assessmentStatus: ["ASSESSED"],
+			presence: ["ABSENT"],
+			assessment: ["GOOD"],
+		});
+		expect(observationsQuery(assessed, 25)).toMatchObject({
+			assessmentStatus: ["ASSESSED"],
+			presence: ["ABSENT"],
+			assessment: ["GOOD"],
+		});
+	});
+});

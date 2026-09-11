@@ -1,12 +1,12 @@
 import { format } from "date-fns";
 
+import { cn } from "cn";
 import type { LabelInfo } from "@/api/types.gen";
 import { FormattedTitle } from "@/components/shared/FormattedTitle";
 import { LabelBadge } from "@/components/shared/LabelBadge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getPullRequestStateIcon, type ProviderType } from "@/lib/provider";
-import { cn } from "@/lib/utils";
 
 export interface IssueCardProps {
 	isLoading: boolean;

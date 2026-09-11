@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
@@ -142,7 +143,8 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
                 .id(UUID.randomUUID())
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(3L)
-                .presence(Presence.NOT_APPLICABLE)
+                .assessmentStatus(AssessmentStatus.NOT_APPLICABLE)
+                .presence(null)
                 .origin(ObservationOrigin.LIVE)
                 .observedAt(NOW)
                 .build();
@@ -181,6 +183,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
                 .id(UUID.randomUUID())
                 .artifactKind(kind)
                 .artifactId(artifactId)
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.PRESENT)
                 .assessment(assessment)
                 .origin(origin)

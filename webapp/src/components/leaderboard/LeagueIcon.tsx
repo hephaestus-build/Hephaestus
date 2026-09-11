@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import {
 	LeagueBronzeIcon,
 	LeagueDiamondIcon,
@@ -7,7 +8,6 @@ import {
 	LeagueSilverIcon,
 } from "@/components/leaderboard/LeagueIcons";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 
 import { getLeagueLabel, getLeagueTier } from "./utils";
 

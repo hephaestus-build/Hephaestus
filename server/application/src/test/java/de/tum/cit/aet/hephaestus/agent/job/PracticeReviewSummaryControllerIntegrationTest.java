@@ -110,7 +110,7 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
         otherJob.setStatus(AgentJobStatus.COMPLETED);
         jobRepository.save(otherJob);
 
-        insertObservation("Problem", "ABSENT", "BAD", "MAJOR");
+        insertObservation("Problem", "ABSENT", "GOOD", "MAJOR");
         insertObservation("Strength", "PRESENT", "GOOD", "INFO");
         insertObservation("Not applicable", "NOT_APPLICABLE", null, null);
         persistFeedback(0, FeedbackDeliveryState.DELIVERED, null, "Delivered");
@@ -367,7 +367,8 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 7L,
                 subject.getId(),
                 title,
-                presence,
+                assessment == null ? presence : "ASSESSED",
+                assessment == null ? null : presence,
                 assessment,
                 severity,
                 "{}",
