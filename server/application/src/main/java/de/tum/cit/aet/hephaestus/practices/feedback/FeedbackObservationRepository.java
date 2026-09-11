@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -215,7 +216,7 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
         SELECT fo.observation.id AS observationId, fo.role AS role, fo.ordinal AS ordinal,
                p.slug AS practiceSlug, p.name AS practiceName, o.summary AS summary,
                pa.slug AS groupSlug, pa.name AS groupName, pa.icon AS groupIcon, pa.color AS groupColor,
-               o.presence AS presence, o.assessment AS assessment, o.severity AS severity,
+               o.assessmentStatus AS assessmentStatus, o.presence AS presence, o.assessment AS assessment, o.severity AS severity,
                evaluatedRevision.id AS practiceRevisionId,
                evaluatedRevision.reviewRuleFingerprint AS practiceRevisionFingerprint,
                currentRevision.reviewRuleFingerprint AS currentPracticeRevisionFingerprint,
@@ -271,6 +272,9 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
 
         String getSummary();
 
+        AssessmentStatus getAssessmentStatus();
+
+        @Nullable
         Presence getPresence();
 
         @Nullable

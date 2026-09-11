@@ -149,7 +149,7 @@ Before you write a pattern claim, satisfy yourself of all of these:
 
 1. There are entries for it on **at least as many distinct pieces of work** as `minDistinctArtifacts` in
    `<compositionRequest>` says.
-2. They are problems (`assessment: "BAD"`), not strengths and not `NOT_APPLICABLE`.
+2. They are problems (`outcome: "NEGATIVE"`), not strengths and not `NOT_APPLICABLE`.
 3. You can name what the occurrences have **in common as a way of working** — an ordering, a habit, a
    default the person falls back on. If the only thing they share is the practice's name, you have a
    list, not a pattern, and a list is not worth a message.

@@ -251,6 +251,8 @@ jobs:
           fi
 
           NOTES=$(mktemp)
+          # Invisible in GitHub's rendering; the server's update check reads it (core/release/ReleaseCheckClient).
+          echo "<!-- hephaestus:schema-migrations=$MIGRATIONS -->" >> "$NOTES"
           if [ "$MIGRATIONS" = true ]; then
             {
               echo "> [!WARNING]"

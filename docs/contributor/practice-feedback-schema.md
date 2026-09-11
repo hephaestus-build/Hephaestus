@@ -57,46 +57,33 @@ timestamp, or suppression reason.
 correlates the same evidence locus across review jobs. A new review therefore creates a new observation
 even when it reports a recurring locus.
 
-### The generation tool uses one outcome
+### One contract from generation to storage
 
-`report_observation` asks the model for one `outcome`, rather than three fields whose valid combinations
-the model must reconstruct. Behaviour outcomes encode occurrence, assessment, and—only for a bad
-assessment—severity:
+`report_observation`, normalized runtime output, server admission, persistence and read DTOs use the
+same `assessmentStatus`, `presence`, `assessment` and `severity` axes. The
+[product vocabulary](./practice-feedback-language.md#observation-assessment-axes) defines their valid
+combinations and meaning. `outcome` is a read-only POSITIVE/NEGATIVE projection of the matrix, not another stored or model-authored axis. The descriptive standing `kind` is separate from this outcome. There is no fused input enum or translation to different presence labels.
+The runtime requires every axis explicitly, including nulls. Contradictory axes are rejected by the
+normalizer and server and constrained by the database; no judgment or severity is silently invented.
 
-- `BEHAVIOR_PRESENT_GOOD`
-- `BEHAVIOR_PRESENT_BAD_MINOR|MAJOR|CRITICAL`
-- `BEHAVIOR_ABSENT_GOOD`
-- `BEHAVIOR_ABSENT_BAD_MINOR|MAJOR|CRITICAL`
-- `NO_REVIEW_OCCASION`: a prerequisite situation named by the practice did not occur
-- `INSUFFICIENT_EVIDENCE`: the situation occurred, but the evidence read did not decide it
+### Evidence warrants
 
-This is the model-facing contract. The normalizer maps it to the durable `presence`, `assessment`, and
-`severity` columns so existing projections can query each dimension. `NO_REVIEW_OCCASION` maps to
-`NOT_APPLICABLE`; `INSUFFICIENT_EVIDENCE` maps to `INCONCLUSIVE`. Do not expose the persistence names
-in practice criteria or generation prompts: they are storage vocabulary, not choices the model makes.
+Every observation cites exact staged text. Exactly one additional warrant is required where specified:
 
-### Each non-positive claim carries its proof shape
+| Claim | Required branch | What it records |
+| --- | --- | --- |
+| ASSESSED / ABSENT | `evidence.search` | sources searched, fixed target and search boundary |
+| NOT_APPLICABLE | `evidence.inapplicability` | sources read, prerequisite subject and the fact ruling it out |
+| UNDETERMINED | `evidence.undecidability` | open question and what would settle it |
+| ASSESSED / PRESENT | none beyond citations | the cited target itself |
 
-Every observation cites exact staged text. Outcomes that claim more than their citations also require
-exactly one structured evidence branch:
+A missing, errored, redacted or inadequate required source is a readiness failure, not UNDETERMINED.
+No observation is created for that practice. Read available evidence before claiming ambiguity.
 
-| Outcome                 | Required branch             | What it records                                                     |
-| ----------------------- | --------------------------- | ------------------------------------------------------------------- |
-| `BEHAVIOR_ABSENT_*`     | `evidence.exhaustiveSearch` | sources searched, the concrete target, and the boundary not covered |
-| `NO_REVIEW_OCCASION`    | `evidence.exclusion`        | sources read, the practice subject, and the fact that rules it out  |
-| `INSUFFICIENT_EVIDENCE` | `evidence.missingEvidence`  | the open question and the existing evidence that would settle it    |
-| `BEHAVIOR_PRESENT_*`    | none beyond citations       | the cited behaviour is the proof                                    |
-
-A missing, errored, redacted, or inadequate **required source never becomes
-`INSUFFICIENT_EVIDENCE`**. Readiness refuses that practice before generation, so no observation is
-created. `INSUFFICIENT_EVIDENCE` is only for available evidence that was read and remained
-non-dispositive.
-
-An absent behaviour is a claim about a corpus. Every source a practice declares `EXHAUSTIVE` must appear
-in `exhaustiveSearch.consulted`. `BEHAVIOR_ABSENT_GOOD` additionally requires at least one exhaustive
-source, because “the harmful behaviour is nowhere here” is sound only over a bounded corpus covered
-whole. The claim reaches no further than the recorded boundary; it is not a clean bill of health for the
-repository or runtime. Both the sandbox normalizer and server admission enforce these rules.
+Every source declared `EXHAUSTIVE` must appear in `search.consulted`. ABSENT / BAD additionally
+requires at least one exhaustive source: avoiding a harmful target is provable only over an applicable,
+bounded corpus searched completely. It does not prove correctness beyond the recorded boundary.
+Both the sandbox and server admission enforce evidence requirements.
 
 ### Ordering uses observable properties
 

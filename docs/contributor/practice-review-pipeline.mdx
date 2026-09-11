@@ -17,8 +17,8 @@ flowchart TB
     Occasion -->|yes| Capture{Capture: can we look?}
     Capture -->|no| Unready[agent_job.review_readiness]
     Capture -->|yes| Observe{Observation: what do we see?}
-    Observe -->|no practice subject| NotApplicable[observation.presence NOT_APPLICABLE]
-    Observe -->|cannot tell| Inconclusive[observation.presence INCONCLUSIVE]
+    Observe -->|no practice subject| NotApplicable[observation.assessment_status NOT_APPLICABLE]
+    Observe -->|cannot tell| Undetermined[observation.assessment_status UNDETERMINED]
     Observe -->|behaviour claim| Deliver{Delivery: do we say it?}
     Deliver -->|no| Quiet[feedback.suppression_reason]
     Deliver -->|yes| Said[Feedback recorded and routed to an eligible surface]
@@ -54,7 +54,7 @@ from one stage in another stage's words is the failure this table exists to prev
 | ----------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------- |
 | Occasion    | `SignalStateReason`                                                          | `artifact_signal.state_reason`                                             | We chose not to look, or not yet |
 | Capture     | `SourceAbsenceReason` per source, `SourceReadinessReason` per practice check | `agent_job.evidence_snapshot` (the manifest), `agent_job.review_readiness` | We could not look                |
-| Observation | `Presence.INCONCLUSIVE`                                                      | `observation.presence`                                                     | We looked and could not tell     |
+| Observation | `AssessmentStatus.UNDETERMINED`                                                      | `observation.assessment_status`                                                     | We looked and could not tell     |
 | Delivery    | `FeedbackSuppressionReason`                                                  | `feedback.suppression_reason`                                              | We know, and chose to stay quiet |
 
 The four are not ranked and do not substitute for one another. "We could not look" is deliberately not
@@ -194,21 +194,18 @@ carries one entry per staged file and a TOASTed `jsonb` has no partial read.
 
 ## Observation
 
-An observation is one practice's answer about one piece of work, written once and immutable. It carries a
-`Presence` — `PRESENT`, `ABSENT`, `NOT_APPLICABLE` or `INCONCLUSIVE` — and, only when the presence carries
-valence, an assessment. Admission removes assessment from an `INCONCLUSIVE` observation, so a measurement that
-hedges cannot attach an unearned strength to the series. For a practice targeting harmful behaviour,
-`PRESENT/GOOD` is inconsistent and admission records an `incoherent_assessment` refusal. It does not rewrite
-the observation as `NOT_APPLICABLE`: an inconsistent assessment establishes nothing about applicability.
-The callback answers a refusal with HTTP 422, not a retryable server failure.
+An observation is one practice's answer about one piece of work, written once and immutable. Its
+[assessment axes](./practice-feedback-language.md#observation-assessment-axes) remain unchanged from
+the sandbox tool through server admission, persistence and read projections. Contradictory fields
+are rejected, never silently removed or converted to a different judgment.
 
-The glossary defines what each presence claims and what `NOT_APPLICABLE` has to carry to be allowed to claim
-it — see [Outcome states](./practice-review-glossary.mdx#outcome-states). Two facts belong to this stage
-rather than to that vocabulary. `INCONCLUSIVE` is not "we could not look": a missing, errored or
-governance-blocked source produces a readiness decision in the Capture stage and **no observation at all**.
-And the `NOT_APPLICABLE` grounding rule is enforced twice, in the in-sandbox normalizer and again at
-server-side delivery, for the same reason the citation and recorded-search rules are — the sandbox guard runs
-inside the thing it is checking.
+For a practice targeting harmful behaviour, PRESENT/GOOD is inconsistent and admission records an
+`incoherent_assessment` refusal. It does not rewrite this to NOT_APPLICABLE: inconsistency proves
+nothing about applicability. The callback answers a refusal with HTTP 422, not a retryable failure.
+
+Status-specific warrants and citations are enforced both inside the sandbox and by the server.
+Capture failure remains a readiness decision and creates no observation. Unassessed statuses do not
+create positive or negative feedback and do not move the assessed-result trend denominator.
 
 Identity is assigned at persistence, not in the sandbox: an occurrence key dedupes within a run
 (`insertIfAbsent`, `ON CONFLICT DO NOTHING`), and a recurrence key hashes the locus so the same observation

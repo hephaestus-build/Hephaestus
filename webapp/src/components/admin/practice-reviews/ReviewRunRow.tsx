@@ -57,8 +57,8 @@ export function ReviewRunRow({ workspaceSlug, review, search }: ReviewRunRowProp
 }
 
 function hasObservationOutput(review: ReviewRunSummary) {
-	const { strengths, problems, notApplicable, inconclusive } = review.observations;
-	return strengths + problems + notApplicable + inconclusive > 0;
+	const { strengths, problems, notApplicable, undetermined } = review.observations;
+	return strengths + problems + notApplicable + undetermined > 0;
 }
 
 function hasFeedbackOutput(review: ReviewRunSummary) {

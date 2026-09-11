@@ -138,7 +138,8 @@ public final class PracticeTrend {
                                             opportunity.outcomes().safeAvoidances(),
                                             opportunity.outcomes().commissionProblems(),
                                             opportunity.outcomes().omissionGaps(),
-                                            opportunity.outcomes().notApplicable()),
+                                            opportunity.outcomes().notApplicable(),
+                                            opportunity.outcomes().undetermined()),
                                     opportunity.bundle());
                         })
                         .toList());

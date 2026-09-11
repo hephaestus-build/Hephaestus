@@ -110,3 +110,18 @@ as triggers, partitioning and partial-index predicates; verify those through dat
 ## Resources
 
 - [Liquibase documentation](https://docs.liquibase.com/) for change set syntax.
+
+## Observation outcome transition before 1.0
+
+The observation-axis migration introduces `assessment_status` and permits null presence for unassessed
+observations. Assessment now describes the fixed target, while outcome is derived from the
+[presence × assessment matrix](./practice-feedback-language.md#observation-assessment-axes).
+The migration swaps GOOD/BAD on historical ABSENT rows to preserve their previous positive/negative
+outcome, retains severity for historical negative outcomes and clears it otherwise. It does not relabel
+old evidence against the new catalogue. A historical negative row without severity blocks migration
+rather than receiving an invented impact band.
+
+Back up the database, resolve any reported inconsistent historical rows explicitly, and upgrade the
+server, sandbox runtime, webapp and custom API consumers together. Consumers must read the derived
+`outcome` for verdicts and metrics, not interpret `assessment = BAD` as a negative outcome. Preserve
+schema versions on exported evaluation data; frozen legacy reports must not be silently reinterpreted.

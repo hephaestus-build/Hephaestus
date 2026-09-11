@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect } from "storybook/test";
-import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
+import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { LandingFeedbackCard, LandingStatePill } from "./LandingVisuals";
 
 const meta = {
@@ -24,7 +24,7 @@ type Story = StoryObj<typeof meta>;
  */
 export const Gap: Story = {
 	play: async ({ canvas }) => {
-		await expect(canvas.getByLabelText(ASSESSMENT_DEFS.BAD.label)).toBeVisible();
+		await expect(canvas.getByLabelText(OUTCOME_DEFS.NEGATIVE.label)).toBeVisible();
 	},
 };
 
@@ -37,7 +37,7 @@ export const Strength: Story = {
 		stance: "strength",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByLabelText(ASSESSMENT_DEFS.GOOD.label)).toBeVisible();
+		await expect(canvas.getByLabelText(OUTCOME_DEFS.POSITIVE.label)).toBeVisible();
 	},
 };
 

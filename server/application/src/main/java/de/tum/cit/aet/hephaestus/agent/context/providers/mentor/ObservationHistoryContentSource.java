@@ -117,7 +117,9 @@ public class ObservationHistoryContentSource implements ContentSource {
             presenceSummary.put(v.name(), 0L);
         }
         for (Observation observation : visible) {
-            String presence = observation.getPresence().name();
+            String presence = observation.getPresence() == null
+                    ? observation.getAssessmentStatus().name()
+                    : observation.getPresence().name();
             presenceSummary.put(presence, presenceSummary.path(presence).asLong() + 1);
         }
 
@@ -138,7 +140,10 @@ public class ObservationHistoryContentSource implements ContentSource {
             node.put("id", o.getId().toString());
             node.put("summary", o.getSummary());
             node.put("practiceSlug", o.getPractice().getSlug());
-            node.put("presence", o.getPresence().name());
+            node.put("assessmentStatus", o.getAssessmentStatus().name());
+            node.put("outcome", o.getOutcome() == null ? null : o.getOutcome().name());
+            node.put(
+                    "presence", o.getPresence() == null ? null : o.getPresence().name());
             Assessment assessment = o.getAssessment();
             node.put("assessment", assessment == null ? null : assessment.name());
             Severity severity = o.getSeverity();

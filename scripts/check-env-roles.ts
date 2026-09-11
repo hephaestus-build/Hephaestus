@@ -66,6 +66,11 @@ interface RoleScope {
  */
 const ROLE_SCOPES: readonly RoleScope[] = [
 	{
+		path: "hephaestus.release.check-enabled",
+		role: "server",
+		why: "ReleaseCheckService and ReleaseCheckClient are @ConditionalOnServerRole; RunningRelease, which reads the rest of hephaestus.release, is ungated",
+	},
+	{
 		path: "hephaestus.sandbox.docker",
 		role: "worker",
 		why: "DockerSandboxConfiguration registers Docker connection, network and runtime settings only when hephaestus.runtime.worker.enabled is active",

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
@@ -106,8 +107,9 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .artifactId(42L)
                 .aboutUserId(adminUser.getId())
                 .summary("Missing error handling")
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.ABSENT)
-                .assessment(Assessment.BAD)
+                .assessment(Assessment.GOOD)
                 .severity(Severity.MAJOR)
                 .observedAt(Instant.now())
                 .build();

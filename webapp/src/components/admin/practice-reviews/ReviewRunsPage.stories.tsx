@@ -109,12 +109,7 @@ export const WhatEachReviewProduced: Story = {
 		const feedback = canvas.getAllByRole("list", { name: "Feedback" })[0];
 
 		// A count and its word are two elements, so each pair is asserted on the strip, not per cell.
-		for (const pair of [
-			"1 strength",
-			"2 improvements",
-			"0 not applicable",
-			"0 could not be determined",
-		]) {
+		for (const pair of ["1 strength", "2 improvements", "0 not applicable", "0 undetermined"]) {
 			await expect(observations).toHaveTextContent(pair);
 		}
 		for (const pair of [

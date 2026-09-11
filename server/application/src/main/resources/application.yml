@@ -209,6 +209,12 @@ springdoc:
     writer-with-order-by-keys: true
 
 hephaestus:
+    # What the verified release lock handed this container (docs/admin/release-image-lock.md).
+    # The check asks GitHub for the newest published release; disable it on an air-gapped host.
+    release:
+        commit: ${HEPHAESTUS_RELEASE_COMMIT:}
+        image: ${HEPHAESTUS_IMAGE_APPLICATION_SERVER:}
+        check-enabled: ${HEPHAESTUS_RELEASE_CHECK_ENABLED:true}
     database:
         allow-insecure-remote: ${HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE:false}
     consent:

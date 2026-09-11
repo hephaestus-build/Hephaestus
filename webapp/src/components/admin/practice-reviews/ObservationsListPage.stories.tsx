@@ -98,12 +98,12 @@ function observationPage(
 
 /** Shortfalls worst-first, then strengths, then the observations that judged nothing. */
 const ACTIONABILITY_RANK: Record<string, number> = { CRITICAL: 0, MAJOR: 1, MINOR: 2, INFO: 3 };
-const actionability = (row: ReviewObservation) =>
-	row.assessment === "BAD"
-		? (ACTIONABILITY_RANK[row.severity ?? "INFO"] ?? 4)
-		: row.assessment === "GOOD"
-			? 5
-			: 6;
+function actionability(row: ReviewObservation): number {
+	if (row.assessmentStatus !== "ASSESSED" || !row.presence || !row.assessment) return 6;
+	if ((row.presence === "PRESENT") !== (row.assessment === "GOOD"))
+		return ACTIONABILITY_RANK[row.severity ?? "INFO"] ?? 4;
+	return 5;
+}
 const byActionability = (a: ReviewObservation, b: ReviewObservation) =>
 	actionability(a) - actionability(b) || b.observedAt.getTime() - a.observedAt.getTime();
 
@@ -173,7 +173,14 @@ async function pickFacet(
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("12 observations.");
-		for (const name of ["Group", "Practice", "Result", "Severity", "Practice status"]) {
+		for (const name of [
+			"Group",
+			"Practice",
+			"Result",
+			"Severity",
+			"Assessment status",
+			"Presence",
+		]) {
 			canvas.getByRole("combobox", { name });
 		}
 		canvas.getByRole("combobox", { name: "Developer" });
@@ -246,9 +253,13 @@ export const SortByActionability: Story = {
 		await expect(rows[0]).toHaveTextContent("Critical");
 		const titles = rows.map((row) => row.textContent);
 		const problems = titles.flatMap((text, index) =>
-			text.includes("Needs improvement") ? [index] : [],
+			text.includes("Negative outcome") ? [index] : [],
 		);
-		const strengths = titles.flatMap((text, index) => (text.includes("Strength") ? [index] : []));
+		const strengths = titles.flatMap((text, index) =>
+			text.includes("Positive outcome") ? [index] : [],
+		);
+		await expect(problems.length).toBeGreaterThan(0);
+		await expect(strengths.length).toBeGreaterThan(0);
 		await expect(Math.min(...strengths)).toBeGreaterThan(Math.max(...problems));
 	},
 };

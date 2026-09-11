@@ -144,7 +144,8 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
                 artifactId,
                 developer.getId(),
                 title,
-                presence,
+                assessment == null ? presence : "ASSESSED",
+                assessment == null ? null : presence,
                 assessment,
                 severity,
                 DIFF_EVIDENCE_JSON,
@@ -170,7 +171,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @DisplayName("returns a review run whole, with every observation that explains it")
     void shouldReturnCompleteRun() {
         insertObservation("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
-        insertObservation("No testing notes", "ABSENT", "BAD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
+        insertObservation("No testing notes", "ABSENT", "GOOD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
 
         getHistory()
                 .jsonPath("$.content.length()")
@@ -185,15 +186,17 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("carries an undecided observation with a null assessment rather than dropping it")
     void shouldCarryInconclusiveObservationWithoutAnAssessment() {
-        insertObservation("Could not tell from the diff", "INCONCLUSIVE", null, null, "scm.pull_request", 1L);
+        insertObservation("Could not tell from the diff", "UNDETERMINED", null, null, "scm.pull_request", 1L);
 
         getHistory()
                 .jsonPath("$.content.length()")
                 .isEqualTo(1)
                 .jsonPath("$.content[0].observations.length()")
                 .isEqualTo(1)
+                .jsonPath("$.content[0].observations[0].assessmentStatus")
+                .isEqualTo("UNDETERMINED")
                 .jsonPath("$.content[0].observations[0].presence")
-                .isEqualTo("INCONCLUSIVE")
+                .doesNotExist()
                 .jsonPath("$.content[0].observations[0].assessment")
                 .doesNotExist();
     }
@@ -202,7 +205,8 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("an unfiltered request is not silently narrowed to pull requests")
     void shouldNotDefaultToPullRequestsWhenNoKindFilterIsGiven() {
-        insertObservation("Issue lacks acceptance criteria", "ABSENT", "BAD", "MINOR", ArtifactKinds.ISSUE.value(), 7L);
+        insertObservation(
+                "Issue lacks acceptance criteria", "ABSENT", "GOOD", "MINOR", ArtifactKinds.ISSUE.value(), 7L);
 
         getHistory()
                 .jsonPath("$.content.length()")

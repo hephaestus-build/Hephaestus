@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -20,6 +21,7 @@ class ReviewCoverageTest extends BaseUnitTest {
         return new PracticeDetectionResultParser.ValidatedObservation(
                 "ships-tests-with-the-change",
                 "A summary of what was seen",
+                AssessmentStatus.ASSESSED,
                 Presence.PRESENT,
                 assessment,
                 assessment == Assessment.BAD ? Severity.MINOR : Severity.INFO,

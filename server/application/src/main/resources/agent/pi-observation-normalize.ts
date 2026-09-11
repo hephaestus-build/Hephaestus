@@ -1,25 +1,19 @@
 // ── Vocabularies shared with Java ────────────────────────────────────────────
 // Each list mirrors an enum on the server. They are hand-maintained on both sides, so
 // AgentVocabularySyncTest parses these literals and asserts equality with the Java enum's
-// values(); it exists because presence drifted once and silently laundered INCONCLUSIVE into
-// NOT_APPLICABLE. Add a value here and to the Java enum in the same change, or the test fails.
-export const PRESENCE_VALUES = ["PRESENT", "ABSENT", "NOT_APPLICABLE", "INCONCLUSIVE"] as const;
+// values(), preventing the runtime and persistence contracts from accepting different labels.
+export const ASSESSMENT_STATUS_VALUES = ["ASSESSED", "NOT_APPLICABLE", "UNDETERMINED"] as const;
+export const PRESENCE_VALUES = ["PRESENT", "ABSENT"] as const;
 export const ASSESSMENT_VALUES = ["GOOD", "BAD"] as const;
 export const SEVERITY_VALUES = ["CRITICAL", "MAJOR", "MINOR", "INFO"] as const;
 
 // The vocabularies above are the values; these are the types every consumer spells them with. They are
 // derived from the arrays rather than written twice, so the arrays stay the single thing Java is synced
 // against and a value cannot be added to one without being added to the other.
+export type AssessmentStatus = (typeof ASSESSMENT_STATUS_VALUES)[number];
 export type Presence = (typeof PRESENCE_VALUES)[number];
 export type Assessment = (typeof ASSESSMENT_VALUES)[number];
 export type Severity = (typeof SEVERITY_VALUES)[number];
-
-/**
- * The presences that carry a good/bad direction. Naming it as a type is what lets the observation
- * shape below say, structurally, what the DB CHECK chk_observation_presence_assessment says: a
- * valenced presence always carries an assessment and a valence-free one never does.
- */
-export type ValencedPresence = Extract<Presence, "PRESENT" | "ABSENT">;
 
 /** Which side of a diff hunk a citation quotes; absent on every non-diff source. */
 export type DiffSide = "OLD" | "NEW";
@@ -54,15 +48,15 @@ export interface RecordedInapplicability {
 	ruledOutBy: string;
 }
 
-/** What the evidence left open — the warrant an INCONCLUSIVE observation owes. */
+/** What the evidence left open — the warrant an UNDETERMINED observation owes. */
 export interface RecordedUndecidability {
 	openQuestion: string;
 	wouldSettleIt: string;
 }
 
 /**
- * Citations plus, at most, the one extra warrant this observation's presence requires. Which branch is
- * present is decided by presence and enforced in {@link normalizeEvidence}; the optionality here is the
+ * Citations plus, at most, the one extra warrant this observation requires. Which branch is
+ * present is decided by assessment status and presence and enforced in {@link normalizeEvidence}; the optionality here is the
  * shape, not the rule.
  */
 export interface NormalizedEvidence {
@@ -73,15 +67,12 @@ export interface NormalizedEvidence {
 }
 
 /** One measurement, checked. This is what reaches result.json and, from there, Java. */
-export interface NormalizedObservation {
+export type NormalizedObservation = ObservationAssessment & {
 	practiceSlug: string;
 	summary: string;
-	presence: Presence;
-	severity: Severity;
 	evidence: NormalizedEvidence;
 	evidenceRationale: string;
-	assessment?: Assessment;
-}
+};
 
 /**
  * The narrowing every reader of model-authored or file-authored JSON in this runtime starts from.
@@ -93,59 +84,26 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
 
-// ── What each value MEANS, at the moment of choosing between two of them ─────
-//
-// A bare enum hands the model four words and no way to tell them apart, and it will then reach for
-// whichever one reads as the safe default — which for a four-valued presence is always the one that
-// looks like N/A on a form. So each value is described by its DISCRIMINATOR against its nearest
-// neighbour rather than by a definition that stands alone: the choice is only ever made in a pair.
-//
-// These are the text the tool schema carries (pi-runner.ts builds `description` from them), so they
-// are the last thing the model reads before it fills the field in.
-
-/**
- * Presence answers ONE question for every practice in the catalogue: is the behaviour this practice
- * names in the work? That framing is what makes the four values decidable without knowing which
- * practice is being scored — a missing good behaviour is an ABSENT good behaviour, not a PRESENT bad
- * one, whatever the practice happens to be about.
- */
+// Tool descriptions distinguish status, target presence and judgment at the point of annotation.
+export const ASSESSMENT_STATUS_DESCRIPTIONS: Record<AssessmentStatus, string> = {
+	ASSESSED:
+		"The evidence settles the result. Supply presence and assessment; severity only for a NEGATIVE outcome.",
+	NOT_APPLICABLE:
+		"A concrete fact rules out the practice's prerequisite occasion. Name it in evidence.inapplicability. Not a missing target: avoiding a harmful target in an applicable corpus is ASSESSED/ABSENT/BAD.",
+	UNDETERMINED:
+		"Relevant evidence was captured and read but does not settle the question. Record the open question and what would settle it in evidence.undecidability. Missing or failed capture is a review readiness failure, not an observation.",
+};
 export const PRESENCE_DESCRIPTIONS: Record<Presence, string> = {
 	PRESENT:
-		"The behaviour this practice names is in the work and you can point at it — your citation shows the " +
-		"thing itself. Pick this over ABSENT when the behaviour occurred, and over INCONCLUSIVE when the " +
-		"evidence settles the question.",
+		"The practice’s fixed target criterion is satisfied. For a desirable target such as usable guidance, inadequate partial guidance does not satisfy it; explain what exists and what is missing.",
 	ABSENT:
-		"The occasion for the behaviour arose in this work and the behaviour is not there. Pick this over " +
-		"NOT_APPLICABLE when there WAS a place the behaviour belonged — NOT_APPLICABLE says no such place " +
-		"existed. A missing good behaviour is ABSENT (a gap), never PRESENT with a BAD assessment. It is " +
-		"equally the value for a harmful behaviour that could have appeared and did not, which is a strength " +
-		"(assessment=GOOD) and not a gap — but only where the practice bounds the corpus it searches, because " +
-		"a clean surface is provable only over a corpus you covered whole. Requires evidence.search: an " +
-		"absence is a claim about a corpus, and it holds only over the corpus you searched.",
-	NOT_APPLICABLE:
-		"This work has no subject for this practice: the occasion for the behaviour never arose, so there was " +
-		"nothing here to judge. Pick this over INCONCLUSIVE only when you can name the fact about THIS work " +
-		"that rules the subject out (evidence.inapplicability.ruledOutBy); if the honest answer to 'why does " +
-		"it not apply' is 'I could not tell', the presence is INCONCLUSIVE. This value enters the developer's " +
-		"long-running record as 'there was nothing to see here', so it is an assertion about their work and " +
-		"never a way to abstain.",
-	INCONCLUSIVE:
-		"There IS a subject here, you read the evidence this practice needs, and it does not settle the " +
-		"question either way. Pick this over NOT_APPLICABLE whenever the practice's subject does occur in the " +
-		"work but the evidence is not dispositive, and over a speculative ABSENT whenever you could not search " +
-		"far enough to say the behaviour is really missing. It carries no assessment. It does require " +
-		"evidence.undecidability — the question left open, and the evidence that would have settled it — " +
-		"because uncertainty is a measurement only when it says what it could not measure.",
+		"The practice applies, the bounded corpus was searched, and the fixed target is absent. Record evidence.search. A missing GOOD target yields NEGATIVE; an absent BAD target yields POSITIVE. Assessment stays fixed.",
 };
 
-/** Valence, and only valence: whether what presence recorded reflects well or badly on the work. */
+/** Desirability of the fixed target, independent of its presence. */
 export const ASSESSMENT_DESCRIPTIONS: Record<Assessment, string> = {
-	GOOD:
-		"What you saw reflects well and is worth acknowledging. With PRESENT: the good behaviour the practice " +
-		"names is there. With ABSENT: a harmful behaviour that could have appeared did not.",
-	BAD:
-		"What you saw is a problem the developer should act on. With PRESENT: a harmful behaviour is in the " +
-		"work (commission). With ABSENT: a good behaviour that belonged here is missing (omission).",
+	GOOD: "The practice’s defined target is desirable. PRESENT yields POSITIVE; ABSENT yields NEGATIVE. Do not change this assessment when the criterion is missing.",
+	BAD: "The practice’s defined target is undesirable. PRESENT yields NEGATIVE; ABSENT yields POSITIVE. Do not mistake absent harmful behaviour for a negative outcome.",
 };
 
 /**
@@ -163,7 +121,7 @@ export const SEVERITY_DESCRIPTIONS: Record<Severity, string> = {
 	MINOR:
 		"A craft-level improvement worth making that nobody would block a merge on. Differs from INFO by " +
 		"whether there is a specific edit to make.",
-	INFO: "An observation with no required edit. This is the band for anything that is not a defect.",
+	INFO: "An advisory, low-impact problem. Still a NEGATIVE outcome; strengths and unassessed observations require null severity.",
 };
 
 /**
@@ -184,16 +142,6 @@ export function describeVocabulary<T extends string>(
 			return `${value} — ${description}`;
 		})
 		.join("\n");
-}
-
-/**
- * Whether an observation with this presence carries a good/bad direction — the exact twin of
- * Presence.carriesValence() in Java and of the DB CHECK chk_observation_presence_assessment.
- * Asked rather than open-coding `!== "NOT_APPLICABLE"`, which silently demands an assessment on
- * INCONCLUSIVE and rejects the honest answer.
- */
-export function carriesValence(presence: string): presence is ValencedPresence {
-	return presence === "PRESENT" || presence === "ABSENT";
 }
 
 /**
@@ -241,21 +189,7 @@ export function normalizeSearch(search: unknown): RecordedSearch {
 	return { consulted: [...new Set(consulted)].toSorted(), lookedFor, boundary };
 }
 
-/**
- * The positive claim behind a NOT_APPLICABLE observation: what this practice looks for, and the fact about
- * this work that means it cannot be here.
- *
- * NOT_APPLICABLE is the one presence that costs nothing to say. A PRESENT observation is warranted by the
- * citation that shows the thing; an ABSENT one has to record the search that came up empty. NOT_APPLICABLE
- * needs a citation too, but any citation will do — quoting a line proves nothing about a practice having no
- * subject — so it is the cheapest answer available and it is where uncertainty drains to. Every form on
- * earth uses N/A for "no answer", and a model reaches for it the same way.
- *
- * That matters because NOT_APPLICABLE is not a shrug: it is a claim about the developer's work, entering a
- * long-running record of how a person works as "there was nothing here to see". The honest answer when you
- * cannot tell is INCONCLUSIVE. Naming the ground makes the difference visible to the model while it is
- * choosing, which is the only moment the choice can be made well.
- */
+/** A citation alone cannot establish inapplicability: require the prerequisite and its exclusion. */
 export function normalizeInapplicability(inapplicability: unknown): RecordedInapplicability {
 	if (!isRecord(inapplicability)) throw new Error("inapplicability is required");
 	const consulted = trimmedStrings(inapplicability.consulted);
@@ -270,12 +204,16 @@ export function normalizeInapplicability(inapplicability: unknown): RecordedInap
 	if (!ruledOutBy)
 		throw new Error(
 			"inapplicability.ruledOutBy is required: state the fact about THIS work that means the subject " +
-				"cannot occur in it. If you are merely unsure, the answer is INCONCLUSIVE, not NOT_APPLICABLE",
+				"cannot occur in it. If you are merely unsure, the answer is UNDETERMINED, not NOT_APPLICABLE",
 		);
 	return { consulted: [...new Set(consulted)].toSorted(), subject, ruledOutBy };
 }
 
-export function normalizeEvidence(evidence: unknown, presence: Presence): NormalizedEvidence {
+export function normalizeEvidence(
+	evidence: unknown,
+	assessmentStatus: AssessmentStatus,
+	presence: Presence | null,
+): NormalizedEvidence {
 	if (!isRecord(evidence) || !Array.isArray(evidence.citations) || evidence.citations.length === 0)
 		throw new Error("evidence citations are required");
 	const citations = evidence.citations.map((citation: unknown): NormalizedCitation => {
@@ -315,9 +253,7 @@ export function normalizeEvidence(evidence: unknown, presence: Presence): Normal
 			quote,
 		};
 	});
-	// Required for ABSENT and kept whenever it is offered: on a PRESENT observation the citations are
-	// already the warrant, but a model that recorded where it looked has said something true and there
-	// is no reason to discard it.
+	// Absence needs a bounded search, not just a citation to something else.
 	if (presence === "ABSENT") {
 		if (evidence.search == null) {
 			throw new Error(
@@ -326,25 +262,22 @@ export function normalizeEvidence(evidence: unknown, presence: Presence): Normal
 		}
 		return { citations, search: normalizeSearch(evidence.search) };
 	}
-	// The same shape one presence over: a claim that the practice has no subject here must say what the
-	// subject is and what rules it out, or it is an abstention wearing a measurement's clothes.
-	if (presence === "NOT_APPLICABLE") {
+	// Inapplicability is a positive claim about scope, not an uncertain assessment.
+	if (assessmentStatus === "NOT_APPLICABLE") {
 		if (evidence.inapplicability == null) {
 			throw new Error(
 				"a NOT_APPLICABLE observation must say why the practice does not apply: " +
 					"evidence.inapplicability with consulted, subject and ruledOutBy. If you looked and could " +
-					"not tell, say INCONCLUSIVE instead",
+					"not tell, say UNDETERMINED instead",
 			);
 		}
 		return { citations, inapplicability: normalizeInapplicability(evidence.inapplicability) };
 	}
-	// And the same shape once more, for the last presence that had no ground at all. "I could not tell" is
-	// only a measurement if it says what it could not tell and what would have told it; otherwise it is the
-	// cheapest thing to write, which is how it becomes the next place uncertainty drains to.
-	if (presence === "INCONCLUSIVE") {
+	// Make unresolved evidence explicit so uncertainty cannot silently become a verdict.
+	if (assessmentStatus === "UNDETERMINED") {
 		if (evidence.undecidability == null) {
 			throw new Error(
-				"an INCONCLUSIVE observation must say what it could not settle: evidence.undecidability with " +
+				"an UNDETERMINED observation must say what it could not settle: evidence.undecidability with " +
 					"openQuestion and wouldSettleIt",
 			);
 		}
@@ -368,70 +301,83 @@ export function normalizeUndecidability(undecidability: unknown): RecordedUndeci
 	return { openQuestion, wouldSettleIt };
 }
 
-/**
- * The three fields one `outcome` word encodes, and the rule that binds them: a presence that carries a
- * direction always names one, and a presence that carries none never does. Stating it as a union rather
- * than as three independent fields is what makes the DB CHECK chk_observation_presence_assessment
- * unbreakable here instead of merely tested.
- */
-type OutcomeVerdict =
-	| { presence: ValencedPresence; assessment: Assessment; severity: Severity }
-	| { presence: Exclude<Presence, ValencedPresence>; assessment: null; severity: "INFO" };
-
-/**
- * Narrow a word the model produced to a member of the vocabulary it belongs to, or throw.
- *
- * <p>The regex below already constrains what reaches this, so it never fires in practice. It is here so
- * that the value the record ends up holding is one the vocabulary arrays admit — the same arrays
- * AgentVocabularySyncTest holds against the Java enums — rather than one only the regex vouched for.
- *
- * <p>It takes the undefined a regex group can hand back rather than making each caller rule that out
- * first: an absent group is a word no vocabulary admits, which is the same rejection by a shorter path.
- */
-function parseVocabulary<T extends string>(
-	values: readonly T[],
-	value: string | undefined,
-	field: string,
-): T {
-	const admitted = values.find((candidate) => candidate === value);
-	if (!admitted) throw new Error(`invalid ${field} '${value}'`);
+function parseVocabulary<T extends string>(values: readonly T[], value: unknown, field: string): T {
+	const admitted = values.find(
+		(candidate) => candidate === (typeof value === "string" ? value.toUpperCase() : value),
+	);
+	if (!admitted) throw new Error(`invalid ${field} '${String(value)}'`);
 	return admitted;
 }
 
-/** Read the outcome word the tool schema offers back into presence, valence and cost. */
-function parseOutcome(outcome: string): OutcomeVerdict {
-	if (outcome === "NO_REVIEW_OCCASION")
-		return { presence: "NOT_APPLICABLE", assessment: null, severity: "INFO" };
-	if (outcome === "INSUFFICIENT_EVIDENCE")
-		return { presence: "INCONCLUSIVE", assessment: null, severity: "INFO" };
-	const match = /^BEHAVIOR_(PRESENT|ABSENT)_(GOOD|BAD)(?:_(MINOR|MAJOR|CRITICAL))?$/.exec(outcome);
-	if (!match) throw new Error(`invalid outcome '${outcome}'`);
-	const presence = parseVocabulary(PRESENCE_VALUES, match[1], "presence");
-	if (!carriesValence(presence)) throw new Error(`invalid outcome '${outcome}'`);
-	const assessment = parseVocabulary(ASSESSMENT_VALUES, match[2], "assessment");
-	if (assessment === "BAD") {
-		if (!match[3]) throw new Error("BAD outcome requires a severity suffix");
-		return {
-			presence,
-			assessment,
-			severity: parseVocabulary(SEVERITY_VALUES, match[3], "severity"),
-		};
+export type Outcome = "POSITIVE" | "NEGATIVE";
+
+export function deriveOutcome(
+	presence: Presence | null,
+	assessment: Assessment | null,
+): Outcome | null {
+	if (presence === null && assessment === null) return null;
+	if (presence === null || assessment === null)
+		throw new Error("Presence and assessment must agree on whether the observation is assessed");
+	return (presence === "PRESENT") === (assessment === "GOOD") ? "POSITIVE" : "NEGATIVE";
+}
+
+type ObservationAssessment =
+	| {
+			assessmentStatus: "ASSESSED";
+			presence: Presence;
+			assessment: Assessment;
+			severity: Severity | null;
+	  }
+	| {
+			assessmentStatus: "NOT_APPLICABLE" | "UNDETERMINED";
+			presence: null;
+			assessment: null;
+			severity: null;
+	  };
+
+function parseAssessment(fields: Record<string, unknown>): ObservationAssessment {
+	const assessmentStatus = parseVocabulary(
+		ASSESSMENT_STATUS_VALUES,
+		fields.assessmentStatus,
+		"assessmentStatus",
+	);
+	if (assessmentStatus !== "ASSESSED") {
+		if (fields.presence !== null || fields.assessment !== null || fields.severity !== null)
+			throw new Error(
+				"Unassessed observations require explicit null presence, assessment and severity",
+			);
+		return { assessmentStatus, presence: null, assessment: null, severity: null };
 	}
-	if (match[3]) throw new Error("GOOD outcome must not carry severity");
-	return { presence, assessment, severity: "INFO" };
+	const presence = parseVocabulary(PRESENCE_VALUES, fields.presence, "presence");
+	const assessment = parseVocabulary(ASSESSMENT_VALUES, fields.assessment, "assessment");
+	if (deriveOutcome(presence, assessment) === "POSITIVE") {
+		if (fields.severity !== null) throw new Error("POSITIVE outcome requires null severity");
+		return { assessmentStatus, presence, assessment, severity: null };
+	}
+	const severity = parseVocabulary(SEVERITY_VALUES, fields.severity, "severity");
+	return { assessmentStatus, presence, assessment, severity };
 }
 
 export function normalizeObservation(observation: unknown): NormalizedObservation {
 	if (!isRecord(observation)) throw new Error("observation must be an object");
-	const allowed = new Set(["practiceSlug", "summary", "outcome", "evidence", "evidenceRationale"]);
+	const allowed = new Set([
+		"practiceSlug",
+		"summary",
+		"assessmentStatus",
+		"presence",
+		"assessment",
+		"severity",
+		"evidence",
+		"evidenceRationale",
+	]);
 	const unknownFields = Object.keys(observation).filter((key) => !allowed.has(key));
 	if (unknownFields.length)
 		throw new Error(`unknown observation field(s): ${unknownFields.join(", ")}`);
 	const practiceSlug = trimmedText(observation.practiceSlug).toLowerCase().replace(/_/g, "-");
 	const title = trimmedText(observation.summary);
 	const reasoning = trimmedText(observation.evidenceRationale);
-	const outcome = trimmedText(observation.outcome).toUpperCase();
-	const { presence, assessment, severity } = parseOutcome(outcome);
+	const result = parseAssessment(observation);
+	const { assessmentStatus, presence } = result;
 	if (!practiceSlug) throw new Error("practiceSlug is required");
 	if (!title) throw new Error("summary is required");
 	// The summary is what the developer reads on their practice page, above the practice's own name and
@@ -445,20 +391,20 @@ export function normalizeObservation(observation: unknown): NormalizedObservatio
 	const externalEvidence: Record<string, unknown> = isRecord(observation.evidence)
 		? observation.evidence
 		: {};
-	const evidenceFields = new Set(["citations", "exhaustiveSearch", "exclusion", "missingEvidence"]);
+	const evidenceFields = new Set(["citations", "search", "inapplicability", "undecidability"]);
 	const unknownEvidence = Object.keys(externalEvidence).filter((key) => !evidenceFields.has(key));
 	if (unknownEvidence.length)
 		throw new Error(`unknown evidence field(s): ${unknownEvidence.join(", ")}`);
-	const branchCount = ["exhaustiveSearch", "exclusion", "missingEvidence"].filter(
+	const branchCount = ["search", "inapplicability", "undecidability"].filter(
 		(key) => externalEvidence[key] != null,
 	).length;
 	const expectedBranch: string | null =
 		presence === "ABSENT"
-			? "exhaustiveSearch"
-			: presence === "NOT_APPLICABLE"
-				? "exclusion"
-				: presence === "INCONCLUSIVE"
-					? "missingEvidence"
+			? "search"
+			: assessmentStatus === "NOT_APPLICABLE"
+				? "inapplicability"
+				: assessmentStatus === "UNDETERMINED"
+					? "undecidability"
 					: null;
 	if (
 		(expectedBranch == null && branchCount !== 0) ||
@@ -468,27 +414,14 @@ export function normalizeObservation(observation: unknown): NormalizedObservatio
 			`evidence must carry exactly ${expectedBranch ?? "citations"} for this outcome`,
 		);
 	}
-	const internalEvidence = {
-		citations: externalEvidence.citations,
-		...(externalEvidence.exhaustiveSearch == null
-			? {}
-			: { search: externalEvidence.exhaustiveSearch }),
-		...(externalEvidence.exclusion == null ? {} : { inapplicability: externalEvidence.exclusion }),
-		...(externalEvidence.missingEvidence == null
-			? {}
-			: { undecidability: externalEvidence.missingEvidence }),
-	};
-	const evidence = normalizeEvidence(internalEvidence, presence);
+	const evidence = normalizeEvidence(externalEvidence, assessmentStatus, presence);
 	const out: NormalizedObservation = {
 		practiceSlug,
 		summary: title,
-		presence,
-		severity,
+		...result,
 		evidence,
 		evidenceRationale: reasoning,
 	};
-	// Exactly the presences carriesValence() admits, because parseOutcome() is what decided both.
-	if (assessment !== null) out.assessment = assessment;
 	return out;
 }
 
@@ -542,15 +475,15 @@ function describeAvailableSources(sourceKinds: ReadonlySet<string>): string {
  * <p>`EXHAUSTIVE` is the practice saying "this claim asserts something is NOT in this source", which
  * is the only stance under which absence is assertable at all. So the sources held that way ARE the
  * domain: an ABSENT observation that did not consult one of them is asserting a universal over a
- * corpus it never opened, and the honest answer is INCONCLUSIVE instead.
+ * corpus it never opened, and the honest answer is UNDETERMINED instead.
  *
  * <p>The two directions of an absence do not need the same proof, and the difference is what lets a
  * clean surface be recorded as a strength at all. An ABSENT/BAD says a good behaviour is missing from
  * the place the citation points at — the claim is anchored to that locus, so the search only has to
- * reach as far as the locus does. An ABSENT/GOOD says a harmful behaviour is nowhere in the work, which
+ * reach as far as the locus does. An ABSENT/BAD says a harmful behaviour is nowhere in the work, which
  * ranges over the WHOLE corpus and is provable only if that corpus is closed and was covered whole.
  * A practice that has not declared an exhaustive stance has not closed a corpus, so it cannot make that
- * claim, and INCONCLUSIVE is the honest answer; one that has, can. This is what the eight defect
+ * claim, and UNDETERMINED is the honest answer; one that has, can. This is what the eight defect
  * detectors used to buy by refusing GOOD outright and paying for it in false NOT_APPLICABLEs.
  *
  * <p>Consulting something this run never staged is the same error the citation check already rejects —
@@ -564,11 +497,14 @@ export function validateSearchScope(
 	if (observation.presence !== "ABSENT") return;
 	const search = observation.evidence.search;
 	if (!search) throw new Error("an ABSENT observation must record its search");
-	if (observation.assessment === "GOOD" && exhaustiveSourceKinds.size === 0) {
+	if (
+		deriveOutcome(observation.presence, observation.assessment) === "POSITIVE" &&
+		exhaustiveSourceKinds.size === 0
+	) {
 		throw new Error(
-			`cannot conclude ABSENT + GOOD for '${observation.practiceSlug}': it declares no source it searches ` +
+			`cannot conclude ABSENT + BAD for '${observation.practiceSlug}': it declares no source it searches ` +
 				`exhaustively, so "this is not anywhere in the work" ranges over a corpus it has not bounded — ` +
-				`say INCONCLUSIVE instead`,
+				`say UNDETERMINED instead`,
 		);
 	}
 	const consulted = new Set(search.consulted);
@@ -586,7 +522,7 @@ export function validateSearchScope(
 	if (unsearched.length > 0) {
 		throw new Error(
 			`cannot conclude ABSENT for '${observation.practiceSlug}' without searching ${unsearched.join(", ")} — ` +
-				`say INCONCLUSIVE instead, or record the search`,
+				`say UNDETERMINED instead, or record the search`,
 		);
 	}
 }
@@ -602,7 +538,7 @@ export function validateInapplicabilityScope(
 	observation: NormalizedObservation,
 	availableSourceKinds: ReadonlySet<string>,
 ): void {
-	if (observation.presence !== "NOT_APPLICABLE") return;
+	if (observation.assessmentStatus !== "NOT_APPLICABLE") return;
 	const inapplicability = observation.evidence.inapplicability;
 	if (!inapplicability)
 		throw new Error("a NOT_APPLICABLE observation must say why the practice does not apply");

@@ -397,16 +397,16 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                 {
                   "practiceSlug": "pr-description-quality",
                   "summary": "Good PR description",
-                  "presence": "PRESENT",
+                  "assessmentStatus": "ASSESSED", "presence": "PRESENT",
                   "assessment": "GOOD",
-                  "severity": "INFO",
+                  "severity": null,
                   "evidenceRationale": "The description names what changed."
                 },
                 {
                   "practiceSlug": "error-handling",
                   "summary": "Missing null check",
-                  "presence": "ABSENT",
-                  "assessment": "BAD",
+                  "assessmentStatus": "ASSESSED", "presence": "ABSENT",
+                  "assessment": "GOOD",
                   "severity": "MAJOR",
                   "evidenceRationale": "The method does not check for null input."
                 }
@@ -486,17 +486,17 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                     {
                       "practiceSlug": "pr-description-quality",
                       "summary": "Good description",
-                      "presence": "PRESENT",
+                      "assessmentStatus": "ASSESSED", "presence": "PRESENT",
                       "assessment": "GOOD",
-                      "severity": "INFO",
+                      "severity": null,
                       "evidenceRationale": "The description explains the change."
                     },
                     {
                       "practiceSlug": "error-handling",
                       "summary": "Proper error handling",
-                      "presence": "PRESENT",
+                      "assessmentStatus": "ASSESSED", "presence": "PRESENT",
                       "assessment": "GOOD",
-                      "severity": "INFO",
+                      "severity": null,
                       "evidenceRationale": "The implementation handles errors explicitly."
                     }
                   ]
@@ -524,9 +524,9 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                     {
                       "practiceSlug": "pr-description-quality",
                       "summary": "Good description",
-                      "presence": "PRESENT",
+                      "assessmentStatus": "ASSESSED", "presence": "PRESENT",
                       "assessment": "GOOD",
-                      "severity": "INFO",
+                      "severity": null,
                       "evidenceRationale": "The description explains the change."
                     }
                   ]
@@ -564,24 +564,24 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                     {
                       "practiceSlug": "pr-description-quality",
                       "summary": "Good description",
-                      "presence": "PRESENT",
+                      "assessmentStatus": "ASSESSED", "presence": "PRESENT",
                       "assessment": "GOOD",
-                      "severity": "INFO",
+                      "severity": null,
                       "evidenceRationale": "The description explains the change."
                     },
                     {
                       "practiceSlug": "nonexistent-practice",
                       "summary": "Unknown practice",
-                      "presence": "PRESENT",
+                      "assessmentStatus": "ASSESSED", "presence": "PRESENT",
                       "assessment": "GOOD",
-                      "severity": "INFO",
+                      "severity": null,
                       "evidenceRationale": "The submitted practice does not exist."
                     },
                     {
                       "practiceSlug": "error-handling",
                       "summary": "Good handling",
-                      "presence": "ABSENT",
-                      "assessment": "BAD",
+                      "assessmentStatus": "ASSESSED", "presence": "ABSENT",
+                      "assessment": "GOOD",
                       "severity": "MINOR",
                       "evidenceRationale": "The implementation omits the required check."
                     }

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
@@ -112,6 +113,7 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
         when(practice.getSlug()).thenReturn("explains-why");
         when(observation.getSummary()).thenReturn("Explains the motivation");
         when(observation.getPresence()).thenReturn(Presence.PRESENT);
+        org.mockito.Mockito.lenient().when(observation.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
         when(observation.getEvidence()).thenReturn(evidence);
         when(observation.getEvidenceRationale()).thenReturn("The issue states why.");
         when(observations.findByAgentJobId(job.getId(), job.getWorkspace().getId()))

@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -15,12 +17,12 @@ import org.eclipse.jgit.diff.DiffFormatter;
 import org.eclipse.jgit.diff.Edit;
 import org.eclipse.jgit.diff.RawTextComparator;
 import org.eclipse.jgit.errors.MissingObjectException;
-import org.eclipse.jgit.lib.AbbreviatedObjectId;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.patch.FileHeader;
 import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevSort;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.revwalk.filter.RevFilter;
 import org.eclipse.jgit.treewalk.AbstractTreeIterator;
@@ -244,27 +246,77 @@ public class GitDiffOperations {
         });
     }
 
-    /** {@code <shortSha>\t<subject>}, one commit per line, newest first. */
+    public record CommitLog(List<CommitLogEntry> commits, boolean truncated) {}
+
+    /**
+     * {@code subject} is git's title paragraph and {@code body} the rest; {@code changedFiles} is the number of
+     * files changed against the sole parent, renames counted once, so it is null on a merge.
+     */
+    public record CommitLogEntry(
+            String sha,
+            String subject,
+            @Nullable String body,
+            Instant authoredAt,
+            Instant committedAt,
+            int parentCount,
+            @Nullable Integer changedFiles) {}
+
+    /**
+     * {@code git log --topo-order --reverse base..head}, cut after the oldest {@code limit} commits. Topological
+     * order keeps a merged branch's commits together where commit-time order would interleave the two lines
+     * of history.
+     */
     @Nullable
-    public String shortLog(Path repoPath, String baseRef, String headRef) {
-        return withRepo(repoPath, "shortLog", repo -> {
+    public CommitLog commitLog(Path repoPath, String baseRef, String headRef, int limit) {
+        return withRepo(repoPath, "commitLog", repo -> {
             ObjectId[] range = resolveRange(repo, baseRef, headRef);
             if (range == null) return null;
 
-            StringBuilder out = new StringBuilder();
-            try (RevWalk walk = new RevWalk(repo)) {
+            List<CommitLogEntry> entries = new ArrayList<>();
+            boolean truncated = false;
+            try (RevWalk walk = new RevWalk(repo);
+                    ObjectReader reader = repo.newObjectReader();
+                    DiffFormatter formatter = newDiffFormatter(repo, null)) {
+                walk.sort(RevSort.TOPO_KEEP_BRANCH_TOGETHER);
+                walk.sort(RevSort.REVERSE, true);
+                // A sorted walk buffers the whole range before yielding, so bodies are retained only for the
+                // commits the limit admits.
+                walk.setRetainBody(false);
                 walk.markStart(walk.parseCommit(range[1]));
                 walk.markUninteresting(walk.parseCommit(range[0]));
                 for (RevCommit commit : walk) {
-                    AbbreviatedObjectId abbreviated = commit.abbreviate(7);
-                    out.append(abbreviated.name())
-                            .append('\t')
-                            .append(commit.getShortMessage())
-                            .append('\n');
+                    if (entries.size() == limit) {
+                        truncated = true;
+                        break;
+                    }
+                    entries.add(toLogEntry(commit, walk, reader, formatter));
                 }
             }
-            return out.toString();
+            return new CommitLog(List.copyOf(entries), truncated);
         });
+    }
+
+    private static CommitLogEntry toLogEntry(
+            RevCommit commit, RevWalk walk, ObjectReader reader, DiffFormatter formatter) throws IOException {
+        walk.parseBody(commit);
+        String[] paragraphs = commit.getFullMessage().split("\\R\\R", 2);
+        String body = paragraphs.length == 2 ? paragraphs[1].strip() : "";
+
+        Integer changedFiles = null;
+        if (commit.getParentCount() == 1) {
+            // A file count with rename detection; line counts would content-diff every file of every commit.
+            changedFiles = formatter
+                    .scan(treeIterator(reader, walk, commit.getParent(0)), treeIterator(reader, walk, commit))
+                    .size();
+        }
+        return new CommitLogEntry(
+                commit.getName(),
+                commit.getShortMessage(),
+                body.isEmpty() ? null : body,
+                commit.getAuthorIdent().getWhenAsInstant(),
+                commit.getCommitterIdent().getWhenAsInstant(),
+                commit.getParentCount(),
+                changedFiles);
     }
 
     private static String statColumn(DiffFormatter formatter, DiffEntry entry) {

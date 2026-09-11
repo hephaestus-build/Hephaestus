@@ -2,7 +2,9 @@ package de.tum.cit.aet.hephaestus.practices.reviewoutput.dto;
 
 import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationEvidenceDTO;
@@ -33,12 +35,14 @@ public record ReviewObservationDetailDTO(
         ReviewSubjectDTO subject,
 
         @NonNull String summary,
-        @NonNull Presence presence,
+        @NonNull AssessmentStatus assessmentStatus,
+        @Nullable Presence presence,
 
-        @Schema(description = "Assessment: GOOD or BAD (null when NOT_APPLICABLE)") @Nullable
+        @Schema(description = "Target behaviour: GOOD means desirable, BAD means undesirable (null unless ASSESSED)")
+        @Nullable
         Assessment assessment,
 
-        @Schema(description = "Severity band (null unless assessment is BAD)") @Nullable
+        @Schema(description = "Severity band (null unless outcome is NEGATIVE)") @Nullable
         Severity severity,
 
         @Nullable ObservationEvidenceDTO evidence,
@@ -52,6 +56,14 @@ public record ReviewObservationDetailDTO(
 
         @NonNull @Schema(description = "Linked feedback, newest first")
         List<ReviewBoundFeedbackDTO> feedback) {
+    @com.fasterxml.jackson.annotation.JsonProperty("outcome")
+    @Schema(
+            description = "Derived from presence and target assessment; null unless assessed",
+            accessMode = Schema.AccessMode.READ_ONLY)
+    public @Nullable Outcome getOutcome() {
+        return Outcome.of(presence, assessment);
+    }
+
     public static ReviewObservationDetailDTO from(
             Observation observation,
             ReviewArtifactDTO artifact,
@@ -70,6 +82,7 @@ public record ReviewObservationDetailDTO(
                 artifact,
                 subject,
                 observation.getSummary(),
+                observation.getAssessmentStatus(),
                 observation.getPresence(),
                 observation.getAssessment(),
                 observation.getSeverity(),

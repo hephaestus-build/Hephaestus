@@ -1671,13 +1671,6 @@ void describe("CI contract", () => {
 		};
 		const passes = { failed: false, outputs: { status: "success" } };
 
-		for (const result of ["skipped", "failure", "cancelled"])
-			assert.equal(
-				(await verdict({ CodeQL: result }, false)).failed,
-				true,
-				`CodeQL ${result} must not release the merge queue ref`,
-			);
-
 		// An ordinary pull request legitimately skips the preflight, and blocking one would block
 		// every pull request in the repository.
 		assert.deepEqual(await verdict({ "Release-preflight": "skipped" }, false), passes);
@@ -2388,7 +2381,7 @@ const REPLACEABLE_MAIN_RUNS: Record<string, string> = {
 };
 
 // Every other run on `main` is the only one its commit will ever get, and something downstream reads
-// the record it leaves: a cancelled CodeQL analysis is a commit Scorecard counts as unscanned, and a
+// the record it leaves: a cancelled security scan is a commit Scorecard counts as unscanned, and a
 // cancelled ratchet is a merge nobody checked. Two merges a minute apart are enough to lose one.
 void test("a workflow triggered by main does not cancel the run main is judged by", async () => {
 	const sources = await workflowSources();
@@ -2630,77 +2623,6 @@ void test("Semgrep scans PRs, main and merge queues without a privileged trigger
 	);
 });
 
-void test("CodeQL runs advanced setup and excludes the Semgrep fixtures it would otherwise flag", async () => {
-	const source = await readFile(".github/workflows/codeql.yml", "utf8");
-	const workflow = parseDocument(source);
-	for (const trigger of ["workflow_call", "schedule"])
-		assert.ok(workflow.hasIn(["on", trigger]), `codeql.yml must run on ${trigger}`);
-	assert.equal(workflow.hasIn(["on", "pull_request_target"]), false);
-	const permissions = workflow.getIn(["jobs", "analyze", "permissions"]);
-	assert.ok(isMap(permissions));
-	assert.deepEqual(permissions.toJSON(), {
-		actions: "read",
-		contents: "read",
-		"security-events": "write",
-	});
-	for (const action of ["github/codeql-action/init", "github/codeql-action/analyze"])
-		for (const match of source.matchAll(new RegExp(`uses: ${action}@([\\w.-]+)`, "g")))
-			assert.match(match[1] ?? "", /^[a-f0-9]{40}$/, `${action} must be pinned by commit`);
-	const init = step(workflow, ["jobs", "analyze"], "github/codeql-action/init");
-	for (const input of ["debug", "debug-artifact-name", "debug-database-name"]) {
-		assert.equal(
-			init.has(input),
-			false,
-			"full debug databases are temporary evidence, not routine CI artifacts",
-		);
-	}
-	assert.match(
-		String(init.get("build-mode")),
-		/matrix\.language == 'java-kotlin' && 'manual' \|\| 'none'/,
-	);
-	const java = namedStep(workflow, ["jobs", "analyze"], "Set up Java build");
-	assert.equal(java.get("uses"), "./.github/actions/setup-caches");
-	assert.equal(java.get("if"), "matrix.language == 'java-kotlin'");
-	assert.equal(java.has("with"), false, "analysis consumes the default read-only Gradle cache");
-	const steps = workflow.getIn(["jobs", "analyze", "steps"]);
-	assert.ok(isSeq(steps));
-	assert.ok(
-		steps.items.indexOf(java) <
-			steps.items.indexOf(namedStep(workflow, ["jobs", "analyze"], "Initialize CodeQL")),
-		"provision dependencies before starting the extractor",
-	);
-	const compile = namedStep(workflow, ["jobs", "analyze"], "Compile Java for analysis");
-	assert.equal(compile.get("if"), "matrix.language == 'java-kotlin'");
-	assert.equal(compile.get("working-directory"), "server");
-	assert.equal(
-		compile.get("run"),
-		"./gradlew --no-daemon --no-build-cache --no-configuration-cache clean :application:testClasses",
-	);
-	const ci = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
-	assert.equal(ci.getIn(["jobs", "CodeQL", "uses"]), "./.github/workflows/codeql.yml");
-	const gate = ci.getIn(["jobs", "all-ci-passed", "needs"]);
-	assert.ok(isSeq(gate));
-	assert.ok(gate.toJSON().includes("CodeQL"));
-	assert.match(
-		String(namedStep(ci, ["jobs", "all-ci-passed"], "Evaluate CI results").get("run")),
-		/needs.CodeQL.result/,
-	);
-	for (const trigger of ["pull_request", "push", "merge_group"])
-		assert.ok(ci.hasIn(["on", trigger]));
-	assert.equal(workflow.hasIn(["on", "pull_request"]), false);
-	assert.equal(workflow.hasIn(["on", "merge_group"]), false);
-	assert.equal(workflow.hasIn(["on", "push"]), false);
-	assert.equal(init.get("config-file"), "./.github/codeql/codeql-config.yml");
-	assert.match(String(init.get("languages")), /^\$\{\{ *matrix\.language *\}\}$/);
-	const analyze = step(workflow, ["jobs", "analyze"], "github/codeql-action/analyze");
-	assert.match(String(analyze.get("category")), /^\/language:\$\{\{ *matrix\.language *\}\}$/);
-	const config = asRecord(
-		parseDocument(await readFile(".github/codeql/codeql-config.yml", "utf8")).toJSON(),
-		"codeql-config.yml",
-	);
-	assert.deepEqual(config["paths-ignore"], ["security/semgrep/**"]);
-});
-
 void test("every Semgrep rule ships a positive and a negative fixture", async () => {
 	const files = await posixGlob("security/semgrep/*");
 	const rulesets = files.filter((file) => file.endsWith(".yaml"));
@@ -2721,45 +2643,6 @@ void test("every Semgrep rule ships a positive and a negative fixture", async ()
 			assert.match(fixtures, new RegExp(`ok: ${id}$`, "m"), `${id} has no compliant example`);
 		}
 	}
-});
-
-void test("CodeQL selects languages with native change detection", async () => {
-	const workflow = parseDocument(await readFile(".github/workflows/codeql.yml", "utf8"));
-	assert.equal(workflow.getIn(["jobs", "analyze", "needs"]), "changes");
-	assert.equal(
-		workflow.getIn(["jobs", "analyze", "if"]),
-		"needs.changes.outputs.languages != '[]'",
-	);
-	assert.equal(
-		workflow.getIn(["jobs", "analyze", "strategy", "matrix", "language"]),
-		`\${{ fromJSON(needs.changes.outputs.languages) }}`,
-	);
-	assert.equal(
-		workflow.getIn(["jobs", "changes", "outputs", "languages"]),
-		`\${{ steps.filter.outputs.changes || '["actions","java-kotlin","javascript-typescript"]' }}`,
-	);
-	const steps = workflow.getIn(["jobs", "changes", "steps"]);
-	assert.ok(isSeq(steps));
-	const selection = steps.items.find((item) => isMap(item) && item.get("id") === "filter");
-	assert.ok(isMap(selection));
-	assert.equal(
-		selection.get("if"),
-		"github.event_name == 'pull_request' || github.event_name == 'merge_group'",
-	);
-	const filter = step(workflow, ["jobs", "changes"], "dorny/paths-filter");
-	const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CodeQL filters");
-	assert.deepEqual(Object.keys(filters), ["actions", "java-kotlin", "javascript-typescript"]);
-	for (const [language, patterns] of Object.entries(filters)) {
-		const paths = asArray(patterns, language);
-		assert.ok(
-			paths.some((pattern) => typeof pattern === "string" && pattern.startsWith(".github/")),
-		);
-	}
-	assert.ok(asArray(filters["java-kotlin"], "Java paths").includes("server/**"));
-	assert.ok(
-		asArray(filters["java-kotlin"], "Java paths").includes(".github/actions/setup-caches/**"),
-	);
-	assert.ok(asArray(filters["javascript-typescript"], "JS paths").includes("pnpm-lock.yaml"));
 });
 
 void test("Stories enforces visual evidence independently of preview publication", async () => {
@@ -2891,4 +2774,24 @@ void test("toolchain cache producers cover Linux and Windows without repeating q
 	assert.equal(setup.get("uses"), "./.github/actions/setup-toolchain");
 	assert.equal(setup.getIn(["with", "install"]), "frozen");
 	assert.equal(setup.has("if"), false);
+});
+
+void test("CI does not run CodeQL analysis or retain extraction-only compiler exceptions", async () => {
+	assert.equal(existsSync(".github/workflows/codeql.yml"), false);
+	assert.equal(existsSync(".github/codeql/codeql-config.yml"), false);
+	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	assert.equal(workflow.hasIn(["jobs", "CodeQL"]), false);
+	for (const file of await posixGlob(".github/workflows/*.yml")) {
+		const source = await readFile(file, "utf8");
+		assert.doesNotMatch(
+			source,
+			/github\/codeql-action\/(?:init|analyze)@|workflows\/codeql\.yml|needs\.CodeQL/,
+		);
+	}
+	for (const file of ["server/build.gradle.kts", "server/application/build.gradle.kts"]) {
+		assert.doesNotMatch(await readFile(file, "utf8"), /codeqlExtraction/);
+	}
+	const build = await readFile("server/application/build.gradle.kts", "utf8");
+	assert.match(build, /error\("NullAway", "RequireExplicitNullMarking"\)/);
+	assert.match(build, /"-Werror"/);
 });

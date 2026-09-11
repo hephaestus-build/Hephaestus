@@ -235,7 +235,9 @@ A changeset summary becomes the `CHANGELOG.md` entry **verbatim** — write it i
   it to an explained empty changeset instead of deleting or renaming it.
 - **Don't mention automatic migrations** — the release notes get an automatic "back up before
   upgrading" banner whenever a release touches `server/application/src/main/resources/db/changelog/`, so the
-  changeset stays user-facing. Only a migration that requires operator action belongs in the summary
+  changeset stays user-facing. The same fact is written into the notes as an invisible
+  `<!-- hephaestus:schema-migrations=… -->` comment, which a running instance's update check reads to
+  flag the newer release in the admin overview. Only a migration that requires operator action belongs in the summary
   (`**Operators:** …` plus a `.migration/<changeset-slug>.md` fragment).
 - **Bump = the operator's upgrade cost**, not code semantics:
   - `patch` — upgrade needs no action (bug fix, internal change, additive auto-applied migration).

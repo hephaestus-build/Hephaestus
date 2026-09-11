@@ -167,6 +167,7 @@ public final class SlackConversationTestSupport {
                 threadId,
                 aboutUserId,
                 "Observation title",
+                "ASSESSED",
                 "ABSENT",
                 "BAD",
                 "MAJOR",

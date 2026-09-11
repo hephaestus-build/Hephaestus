@@ -399,8 +399,9 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
                 artifactId,
                 recipient.getId(),
                 "Observation title",
+                "ASSESSED",
                 "ABSENT",
-                "BAD",
+                "GOOD",
                 "MAJOR",
                 artifactKind.equals("chat.conversation_thread")
                         ? "{\"citations\":[{\"sourceKind\":\"slack.conversation.thread\",\"artifactPath\":\"inputs/context/thread.json\",\"path\":\"Slack thread\",\"startLine\":1,\"endLine\":1,\"quote\":\"example\",\"quoteRedacted\":false}]}"

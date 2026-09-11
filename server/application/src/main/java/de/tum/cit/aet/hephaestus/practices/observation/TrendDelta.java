@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.observation;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import java.time.Instant;
 import java.util.List;
@@ -36,11 +36,11 @@ public record TrendDelta(
     public enum TransitionStatus {
         /** Present this run, absent the prior run. */
         NEW,
-        /** Present in both runs (still recurring — not necessarily unfixed; see {@link LocusTransition#currentAssessment}). */
+        /** Present in both runs (still recurring — not necessarily unfixed; see {@link LocusTransition#currentOutcome}). */
         PERSISTED,
         /** Present the prior run, absent this run — the concern is gone (positive reinforcement of the act of fixing). */
         RESOLVED,
-        /** Was a strength ({@code GOOD}) the prior run, now a problem ({@code BAD}) — a backslide (ADR 0022). */
+        /** Was a strength ({@code POSITIVE}) the prior run, now a problem ({@code NEGATIVE}) — a backslide (ADR 0022). */
         REGRESSED,
     }
 
@@ -48,7 +48,7 @@ public record TrendDelta(
      * One locus's movement. {@code summary}/{@code currentSeverity} come from the
      * CURRENT run for {@link TransitionStatus#NEW}/{@link TransitionStatus#PERSISTED}/{@link TransitionStatus#REGRESSED},
      * and from the PRIOR run for {@link TransitionStatus#RESOLVED} (the locus is absent now, so the prior
-     * prose is what the developer last saw). {@code currentAssessment} is null for RESOLVED; {@code priorAssessment}
+     * prose is what the developer last saw). {@code currentOutcome} is null for RESOLVED; {@code priorOutcome}
      * is null for NEW.
      */
     public record LocusTransition(
@@ -56,29 +56,29 @@ public record TrendDelta(
             TransitionStatus status,
             String practiceSlug,
             @Nullable String summary,
-            @Nullable Assessment priorAssessment,
-            @Nullable Assessment currentAssessment,
+            @Nullable Outcome priorOutcome,
+            @Nullable Outcome currentOutcome,
             @Nullable Severity currentSeverity) {}
 
     /**
-     * Count of NEW PROBLEMS — newly-appeared loci that are currently {@code BAD}. A newly-observed strength
-     * ({@code GOOD}) is not a "new problem" and must not inflate this count (C10); the footer renders it as
+     * Count of NEW PROBLEMS — newly-appeared loci that are currently {@code NEGATIVE}. A newly-observed strength
+     * ({@code POSITIVE}) is not a "new problem" and must not inflate this count (C10); the footer renders it as
      * "N new".
      */
     public int countNew() {
         return (int) transitions.stream()
-                .filter(t -> t.status() == TransitionStatus.NEW && t.currentAssessment() == Assessment.BAD)
+                .filter(t -> t.status() == TransitionStatus.NEW && t.currentOutcome() == Outcome.NEGATIVE)
                 .count();
     }
 
     /**
-     * Count of loci still open — present in both runs and currently {@code BAD}. A locus that recurred but is
-     * now satisfied (a BAD→GOOD improvement, carried as PERSISTED with {@code currentAssessment == GOOD}) is
+     * Count of loci still open — present in both runs and currently {@code NEGATIVE}. A locus that recurred but is
+     * now satisfied (a NEGATIVE→POSITIVE improvement, carried as PERSISTED with {@code currentOutcome == POSITIVE}) is
      * NOT "still open" and must not be counted here (C10).
      */
     public int countPersisted() {
         return (int) transitions.stream()
-                .filter(t -> t.status() == TransitionStatus.PERSISTED && t.currentAssessment() == Assessment.BAD)
+                .filter(t -> t.status() == TransitionStatus.PERSISTED && t.currentOutcome() == Outcome.NEGATIVE)
                 .count();
     }
 
