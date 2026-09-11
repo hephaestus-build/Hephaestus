@@ -88,6 +88,36 @@ const fixtures: Fixture[] = [
 		code: "typescript(no-unsafe-assignment)",
 		source: 'const unsafe: string = JSON.parse("null"); void unsafe;',
 	},
+	{
+		path: "src/lib/utils.ts",
+		code: "eslint(no-restricted-imports)",
+		source: 'export { clsx } from "clsx";',
+	},
+	{
+		path: "src/lib/lint-contract-classes.ts",
+		code: "eslint(no-restricted-imports)",
+		source: 'export { twMerge } from "tailwind-merge";',
+	},
+	{
+		path: "src/stores/lint-contract-classes.ts",
+		code: "eslint(no-restricted-imports)",
+		source: 'export { clsx } from "clsx";',
+	},
+	{
+		path: "src/components/ui/lint-contract-classes.ts",
+		code: "eslint(no-restricted-imports)",
+		source: 'export { twMerge } from "tailwind-merge";',
+	},
+	{
+		path: "src/components/lint-contract-classes.ts",
+		code: "eslint(no-restricted-imports)",
+		source: 'export { clsx } from "clsx";',
+	},
+	{
+		path: "src/lint-contract-classes.ts",
+		code: "eslint(no-restricted-imports)",
+		source: 'export { twMerge } from "tailwind-merge";',
+	},
 ];
 
 function scratchProject(): string {
@@ -102,7 +132,7 @@ function scratchProject(): string {
 		`${JSON.stringify({ name: "lint-contract", private: true, type: "module" }, null, "\t")}\n`,
 	);
 	writeFileSync(join(project, "pnpm-workspace.yaml"), "packages:\n  - .\n");
-	// The type-aware rules see the webapp's own compiler options; the fixtures import nothing.
+	// The type-aware rules see the webapp's own compiler options.
 	const compilerOptions = asRecord(
 		parse(readFileSync(join(WEBAPP, "tsconfig.json"), "utf8")),
 		"webapp/tsconfig.json",

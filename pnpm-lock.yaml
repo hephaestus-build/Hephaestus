@@ -290,9 +290,6 @@ importers:
       '@mermaid-js/layout-elk':
         specifier: 0.2.3
         version: 0.2.3(mermaid@11.17.2)
-      clsx:
-        specifier: 2.1.1
-        version: 2.1.1
       prism-react-renderer:
         specifier: 2.4.1
         version: 2.4.1(react@19.2.8)

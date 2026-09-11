@@ -274,11 +274,11 @@ Never re-invent `role === "ADMIN"`; use the shared pieces:
 
 ## Styling
 
-Tailwind utilities composed with `cn()` (`@/lib/utils`), which is the repo's one wrapper over `clsx`
-and `tailwind-merge` — the import line says why neither may be called directly. Prefer a semantic token
-from the `--color-*` block in `src/styles.css` over a hard-coded value; `text-muted-foreground`,
-`text-foreground`, `bg-background` and `border-border` carry most of the tree. Read that block rather
-than guessing a name.
+Tailwind utilities composed with `cn()` (`@/lib/utils`), a direct re-export from the `cn` package.
+Keep this registry-configured entry point for class composition; it owns no custom merge logic.
+Prefer a semantic token from the `--color-*` block in `src/styles.css` over a hard-coded value;
+`text-muted-foreground`, `text-foreground`, `bg-background` and `border-border` carry most of the tree.
+Read that block rather than guessing a name.
 
 **A `*.module.css` is for what a utility cannot express, and for nothing else.** There are two in the
 tree — `HephIcon` and the landing scene — and each holds `@keyframes`, a generated `::before`, a

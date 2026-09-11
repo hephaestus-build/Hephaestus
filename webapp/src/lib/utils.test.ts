@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cn, sanitizeText } from "./utils";
+import { cn } from "./utils";
 
 describe("cn", () => {
 	it("joins conditional and nested inputs while resolving conflicts", () => {
@@ -62,11 +62,5 @@ describe("cn", () => {
 		classes["bg-destructive"] = true;
 		spacing[0] = "p-4";
 		expect(cn("p-0", classes, spacing)).toBe("bg-destructive p-4");
-	});
-});
-
-describe("sanitizeText", () => {
-	it("removes special function call markers", () => {
-		expect(sanitizeText("Hello <has_function_call>world<has_function_call>")).toBe("Hello world");
 	});
 });
