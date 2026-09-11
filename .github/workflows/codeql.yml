@@ -88,9 +88,9 @@ jobs:
       - name: Compile Java for analysis
         if: matrix.language == 'java-kotlin'
         working-directory: server
-        # Extraction observes javac: restored classes and a reused Gradle daemon bypass it.
+        # Clean plus uncached JavaCompile tasks force javac; source generation can use the cache.
         # This produces analysis inputs, never the packaged server that CI tests and ships.
-        run: ./gradlew --no-daemon --no-build-cache --no-configuration-cache -PcodeqlExtraction=true clean :application:testClasses
+        run: ./gradlew --no-daemon --build-cache --no-configuration-cache -PcodeqlExtraction=true clean :application:testClasses
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9

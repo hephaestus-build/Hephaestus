@@ -60,6 +60,10 @@ subprojects {
         }
     }
     tasks.withType<JavaCompile>().configureEach {
+        // Extraction must observe javac, but generated source outputs remain safe to restore.
+        if (providers.gradleProperty("codeqlExtraction").orNull == "true") {
+            outputs.cacheIf { false }
+        }
         options.encoding = "UTF-8"
         options.isFork = true
         options.forkOptions.memoryMaximumSize = "4g"
