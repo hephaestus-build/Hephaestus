@@ -14,6 +14,8 @@ export interface QuestionDraft {
 	lowLabel: string;
 	highLabel: string;
 	required: boolean;
+	/** Only read for the choice types. */
+	allowOther: boolean;
 }
 
 export interface SurveyDraft {
@@ -56,6 +58,7 @@ export function newQuestionDraft(id: string): QuestionDraft {
 		lowLabel: "",
 		highLabel: "",
 		required: false,
+		allowOther: false,
 	};
 }
 
@@ -85,6 +88,7 @@ export function prepareQuestion(draft: QuestionDraft): Question {
 		type: draft.type,
 		options: isChoiceType(draft.type) ? parseChoices(draft.choices) : [],
 		required: draft.required,
+		allowOther: isChoiceType(draft.type) && draft.allowOther,
 	};
 	if (draft.type === "RATING") {
 		question.lowLabel = draft.lowLabel.trim();

@@ -13487,6 +13487,8 @@ components:
     Question:
       type: object
       properties:
+        allowOther:
+          type: boolean
         highLabel:
           type: string
           maxLength: 60
@@ -13523,6 +13525,7 @@ components:
           - RATING
           - NPS
       required:
+      - allowOther
       - id
       - options
       - prompt
@@ -13541,6 +13544,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OptionCount"
+        other:
+          type: integer
+          format: int64
         questionId:
           type: string
         score:

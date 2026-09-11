@@ -109,6 +109,7 @@ describe("toCreateSurvey", () => {
 						choices: "On the pull request\nOn my practice page",
 						lowLabel: "ignored",
 						highLabel: "ignored",
+						allowOther: true,
 					}),
 					question({
 						id: "rating",
@@ -117,19 +118,27 @@ describe("toCreateSurvey", () => {
 						highLabel: "Very useful",
 						required: true,
 					}),
-					question({ id: "nps", type: "NPS", choices: "ignored" }),
+					question({ id: "nps", type: "NPS", choices: "ignored", allowOther: true }),
 				],
 			}),
 			publishedAt,
 		);
 		expect(body.questions).toStrictEqual([
-			{ id: "text", prompt: "Anything else?", type: "TEXT", options: [], required: false },
+			{
+				id: "text",
+				prompt: "Anything else?",
+				type: "TEXT",
+				options: [],
+				required: false,
+				allowOther: false,
+			},
 			{
 				id: "choice",
 				prompt: "How is it going?",
 				type: "SINGLE_CHOICE",
 				options: ["On the pull request", "On my practice page"],
 				required: false,
+				allowOther: true,
 			},
 			{
 				id: "rating",
@@ -137,10 +146,18 @@ describe("toCreateSurvey", () => {
 				type: "RATING",
 				options: [],
 				required: true,
+				allowOther: false,
 				lowLabel: "Not useful",
 				highLabel: "Very useful",
 			},
-			{ id: "nps", prompt: "How is it going?", type: "NPS", options: [], required: false },
+			{
+				id: "nps",
+				prompt: "How is it going?",
+				type: "NPS",
+				options: [],
+				required: false,
+				allowOther: false,
+			},
 		]);
 	});
 

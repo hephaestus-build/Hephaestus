@@ -3747,6 +3747,7 @@ export type PullRequestInfo = {
 };
 
 export type Question = {
+  allowOther: boolean;
   highLabel?: string;
   id: string;
   lowLabel?: string;
@@ -3760,6 +3761,7 @@ export type QuestionSummary = {
   answered: number;
   average?: number;
   counts: Array<OptionCount>;
+  other?: number;
   questionId: string;
   score?: number;
 };

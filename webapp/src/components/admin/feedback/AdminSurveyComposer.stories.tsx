@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent } from "storybook/test";
+import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
 import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
@@ -69,8 +69,17 @@ export const ValidationErrors: Story = {
 
 export const ChoiceQuestion: Story = {
 	play: async () => {
+		// Only a choice question can take an answer outside its options.
+		await expect(screen.queryByRole("checkbox", { name: "Allow another answer" })).toBeNull();
 		await userEvent.click(await screen.findByRole("combobox", { name: "Answer type" }));
 		await userEvent.click(await screen.findByRole("option", { name: "Single choice" }));
+		const allowOther = await screen.findByRole("checkbox", { name: "Allow another answer" });
+		await expect(allowOther).not.toBeChecked();
+		await expect(allowOther).toHaveAccessibleDescription(
+			"Adds a free-text line under the choices for an answer you did not list.",
+		);
+		await userEvent.click(allowOther);
+		await expect(allowOther).toBeChecked();
 		const choices = await screen.findByRole("textbox", { name: "Choices (one per line)" });
 		await userEvent.type(choices, "Yes{enter}Yes");
 		await userEvent.click(screen.getByRole("button", { name: "Publish survey" }));
@@ -119,6 +128,7 @@ export const ManyQuestions: Story = {
 	},
 };
 
+/** Preview opens the dialog members get, on the draft as it stands, and sends nothing. */
 export const Preview: Story = {
 	play: async () => {
 		await userEvent.type(
@@ -129,10 +139,15 @@ export const Preview: Story = {
 			screen.getByRole("textbox", { name: "Prompt" }),
 			"What slowed you down in your first week?",
 		);
-		await userEvent.click(screen.getByRole("tab", { name: "Preview" }));
-		await expectSettledVisible(await screen.findByRole("heading", { name: "Onboarding check-in" }));
-		await expect(screen.getByText("1 question · under a minute")).toBeVisible();
-		await expect(screen.getByText(/What slowed you down in your first week\?/)).toBeVisible();
+		await userEvent.click(screen.getByRole("button", { name: "Preview" }));
+		const dialog = within(await screen.findByRole("dialog", { name: "Onboarding check-in" }));
+		await expectSettledVisible(dialog.getByText(/1 question · under a minute/));
+		await expect(dialog.getByRole("progressbar")).toHaveTextContent("Question 1 of 1");
+		await expect(dialog.getByText(/What slowed you down in your first week\?/)).toBeVisible();
+		await userEvent.keyboard("{Escape}");
+		await waitFor(() =>
+			expect(screen.queryByRole("dialog", { name: "Onboarding check-in" })).toBeNull(),
+		);
 	},
 };
 

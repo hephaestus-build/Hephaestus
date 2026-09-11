@@ -31,7 +31,11 @@ import {
 } from "@/components/feedback/ProductFeedbackDialog";
 import { ProductFeedbackMenu } from "@/components/feedback/ProductFeedbackMenu";
 import { ProductSurveyDialog } from "@/components/feedback/ProductSurveyDialog";
-import { type AnswerDraft, surveyEstimate } from "@/components/feedback/survey-questions";
+import {
+	EMPTY_SURVEY_RESPONSE_DRAFT,
+	type SurveyResponseDraft,
+	surveyEstimate,
+} from "@/components/feedback/survey-questions";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import environment from "@/environment";
@@ -150,7 +154,7 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 	const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>("FEEDBACK");
 	const [survey, setSurvey] = useState<SurveyInvitation>();
 	const [surveyOpen, setSurveyOpen] = useState(false);
-	const [drafts, setDrafts] = useState<Record<string, AnswerDraft>>({});
+	const [drafts, setDrafts] = useState<Record<string, SurveyResponseDraft>>({});
 	const nudged = useRef(false);
 	const invitations = surveys.query.data ?? [];
 	const openSurvey = (surveyId: string) => {
@@ -212,7 +216,7 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 					onOpenChange={(open) => {
 						if (!open) closeSurvey();
 					}}
-					draft={drafts[survey.id] ?? {}}
+					draft={drafts[survey.id] ?? EMPTY_SURVEY_RESPONSE_DRAFT}
 					onDraftChange={(draft) => setDrafts((current) => ({ ...current, [survey.id]: draft }))}
 					isSubmitting={surveys.isPending}
 					error={surveys.error}

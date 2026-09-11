@@ -29,11 +29,18 @@ class SurveyParticipationMigrationTest {
 
     private static final String CHANGELOG = "1789117764980_changelog.xml";
     private static final List<QuestionDTO> QUESTIONS = List.of(
-            new QuestionDTO("useful", "How useful?", QuestionType.RATING, List.of(), true, "Not", "Very"),
+            new QuestionDTO("useful", "How useful?", QuestionType.RATING, List.of(), true, false, "Not", "Very"),
             new QuestionDTO(
-                    "team", "Team?", QuestionType.SINGLE_CHOICE, List.of("Backend", "Frontend"), false, null, null),
-            new QuestionDTO("why", "Why?", QuestionType.TEXT, List.of(), false, null, null),
-            new QuestionDTO("skipped", "Skipped?", QuestionType.TEXT, List.of(), false, null, null));
+                    "team",
+                    "Team?",
+                    QuestionType.SINGLE_CHOICE,
+                    List.of("Backend", "Frontend"),
+                    false,
+                    false,
+                    null,
+                    null),
+            new QuestionDTO("why", "Why?", QuestionType.TEXT, List.of(), false, false, null, null),
+            new QuestionDTO("skipped", "Skipped?", QuestionType.TEXT, List.of(), false, false, null, null));
 
     @Test
     void shouldReshapeSubmittedAnswersByQuestionTypeWhenCopyingSubmissions() throws Exception {

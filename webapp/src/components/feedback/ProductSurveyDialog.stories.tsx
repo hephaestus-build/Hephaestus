@@ -6,6 +6,7 @@ import { expectSettledVisible } from "@/test/overlay";
 
 import { surveyInvitation } from "./product-survey-fixtures";
 import { ProductSurveyDialog } from "./ProductSurveyDialog";
+import { EMPTY_SURVEY_RESPONSE_DRAFT } from "./survey-questions";
 
 const meta = {
 	title: "Product feedback/Survey dialog",
@@ -14,7 +15,7 @@ const meta = {
 		survey: surveyInvitation,
 		open: true,
 		onOpenChange: fn(),
-		draft: {},
+		draft: EMPTY_SURVEY_RESPONSE_DRAFT,
 		onDraftChange: fn(),
 		isSubmitting: false,
 		onSubmit: fn(),
@@ -39,45 +40,60 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The estimate and the closing time sit under the purpose, so the ask is honest before the first question. */
+/** The ask is stated before the first question: how many, how long, and when it closes. */
 export const Default: Story = {
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expectSettledVisible(dialog.getByText(/4 questions · about 2 minutes/));
 		await expect(dialog.getByText(/Closes in 6 days/)).toBeVisible();
-		await expect(dialog.getByRole("button", { name: "Send answers" })).toBeDisabled();
+		await expect(dialog.getByRole("progressbar")).toHaveTextContent("Question 1 of 4");
+		await expect(dialog.getByRole("button", { name: "Decline survey" })).toBeVisible();
 	},
 };
 
-/** Sending is gated on the required questions only; the optional ones can stay empty. */
-export const AnswersTheRequiredQuestionAndSends: Story = {
+/** The whole survey, question by question, ends in one send with every answer in place. */
+export const AnswersAllQuestionsAndSends: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
-		const useful = within(dialog.getByRole("radiogroup", { name: /How useful/ }));
-		await userEvent.click(useful.getByRole("radio", { name: "5" }));
-		await userEvent.type(
-			dialog.getByRole("textbox", { name: /What would make it more useful/ }),
-			"Less noise ",
-		);
+		await userEvent.click(dialog.getByRole("radio", { name: "5" }));
+		await userEvent.click(dialog.getByRole("button", { name: "Next" }));
+		await userEvent.click(dialog.getByRole("radio", { name: /On the pull request/ }));
+		await userEvent.click(dialog.getByRole("button", { name: "Next" }));
+		await userEvent.click(dialog.getByRole("button", { name: "Skip" }));
+		await userEvent.type(dialog.getByRole("textbox", { name: "Your answer" }), "Less noise ");
 		await userEvent.click(dialog.getByRole("button", { name: "Send answers" }));
 		await expect(args.onSubmit).toHaveBeenCalledWith([
 			{ questionId: "useful", rating: 5 },
+			{ questionId: "channel", choices: ["On the pull request"] },
 			{ questionId: "improve", text: "Less noise" },
 		]);
 	},
 };
 
+export const ResumesADraft: Story = {
+	args: { draft: { answers: { useful: "2" }, item: "channel" } },
+	play: async () => {
+		const dialog = within(await screen.findByRole("dialog"));
+		await expectSettledVisible(dialog.getByRole("progressbar"));
+		await expect(dialog.getByRole("progressbar")).toHaveTextContent("Question 2 of 4");
+	},
+};
+
 export const Sending: Story = {
-	args: { isSubmitting: true, draft: { useful: 4 } },
+	args: { isSubmitting: true, draft: { answers: { useful: "4" }, item: "improve" } },
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expectSettledVisible(dialog.getByRole("button", { name: "Sending…" }));
+		await expect(dialog.getByRole("button", { name: "Sending…" })).toBeDisabled();
 		await expect(dialog.getByRole("button", { name: "Decline survey" })).toBeDisabled();
 	},
 };
 
 export const Error: Story = {
-	args: { draft: { useful: 4 }, error: "Couldn't send. Your draft is still here." },
+	args: {
+		draft: { answers: { useful: "4" }, item: "improve" },
+		error: "Couldn't send. Your draft is still here.",
+	},
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expectSettledVisible(dialog.getByRole("button", { name: "Send answers" }));
@@ -90,5 +106,24 @@ export const Declines: Story = {
 		const dialog = within(await screen.findByRole("dialog"));
 		await userEvent.click(dialog.getByRole("button", { name: "Decline survey" }));
 		await expect(args.onDecline).toHaveBeenCalledOnce();
+	},
+};
+
+export const NoClosingDate: Story = {
+	args: { survey: { ...surveyInvitation, endsAt: undefined } },
+	play: async () => {
+		const dialog = within(await screen.findByRole("dialog"));
+		await expectSettledVisible(dialog.getByText(/4 questions · about 2 minutes/));
+		await expect(dialog.queryByText(/Closes/)).toBeNull();
+	},
+};
+
+export const Mobile: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	args: { draft: { answers: {}, item: "recommend" } },
+	play: async () => {
+		const dialog = within(await screen.findByRole("dialog"));
+		await expectSettledVisible(dialog.getByRole("progressbar"));
+		await expect(dialog.getByRole("progressbar")).toHaveTextContent("Question 3 of 4");
 	},
 };

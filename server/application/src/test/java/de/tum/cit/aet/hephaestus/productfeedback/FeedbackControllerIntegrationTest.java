@@ -75,8 +75,15 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 member.workspace().getId(),
                 List.of(
                         new QuestionDTO(
-                                "useful", "How useful?", QuestionType.RATING, List.of(), true, "Not at all", "Very"),
-                        new QuestionDTO("why", "Why?", QuestionType.TEXT, List.of(), false, null, null)));
+                                "useful",
+                                "How useful?",
+                                QuestionType.RATING,
+                                List.of(),
+                                true,
+                                false,
+                                "Not at all",
+                                "Very"),
+                        new QuestionDTO("why", "Why?", QuestionType.TEXT, List.of(), false, false, null, null)));
 
         webTestClient
                 .get()
@@ -611,7 +618,8 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     private static List<QuestionDTO> textQuestion() {
-        return List.of(new QuestionDTO("q", "What should improve?", QuestionType.TEXT, List.of(), false, null, null));
+        return List.of(
+                new QuestionDTO("q", "What should improve?", QuestionType.TEXT, List.of(), false, false, null, null));
     }
 
     private SurveyDTO publish(Member admin, @Nullable Long workspaceId, List<QuestionDTO> questions) {

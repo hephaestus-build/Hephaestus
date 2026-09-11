@@ -17,6 +17,8 @@ final class SurveyQuestions {
     static final int RATING_MAX = 5;
     static final int NPS_MIN = 0;
     static final int NPS_MAX = 10;
+    /** A free-text choice answer fits the same limit as the option it stands beside. */
+    static final int OTHER_MAX_LENGTH = 200;
 
     private SurveyQuestions() {}
 
@@ -30,6 +32,7 @@ final class SurveyQuestions {
                             || new HashSet<>(q.options()).size() != q.options().size()))
                 throw bad("choice questions need at least two unique options");
             if (!choice && !q.options().isEmpty()) throw bad("only choice questions accept options");
+            if (!choice && q.allowOther()) throw bad("only choice questions accept another answer");
             boolean labelled = q.lowLabel() != null
                     && !q.lowLabel().isBlank()
                     && q.highLabel() != null
@@ -83,10 +86,22 @@ final class SurveyQuestions {
                 if (answer.choices().isEmpty()) yield null;
                 if (question.type() == QuestionType.SINGLE_CHOICE
                         && answer.choices().size() > 1) throw bad("a single-choice question takes one choice");
-                if (new HashSet<>(answer.choices()).size() != answer.choices().size()
-                        || !question.options().containsAll(answer.choices()))
-                    throw bad("a choice is not one of the question's options");
-                yield new AnswerDTO(question.id(), null, List.copyOf(answer.choices()), null);
+                List<String> choices = new ArrayList<>(answer.choices().size());
+                boolean hasOther = false;
+                for (String choice : answer.choices()) {
+                    if (question.options().contains(choice)) {
+                        choices.add(choice);
+                        continue;
+                    }
+                    if (!question.allowOther() || hasOther) throw bad("a choice is not one of the question's options");
+                    hasOther = true;
+                    String other = choice.strip();
+                    if (other.isEmpty() || other.length() > OTHER_MAX_LENGTH)
+                        throw bad("another answer must fit an option");
+                    choices.add(other);
+                }
+                if (new HashSet<>(choices).size() != choices.size()) throw bad("a choice was given twice");
+                yield new AnswerDTO(question.id(), null, List.copyOf(choices), null);
             }
             case RATING, NPS -> {
                 if (answer.rating() == null) {
@@ -113,14 +128,17 @@ final class SurveyQuestions {
                 .filter(answer -> answer.questionId().equals(question.id()))
                 .toList();
         return switch (question.type()) {
-            case TEXT -> new QuestionSummaryDTO(question.id(), answers.size(), List.of(), null, null);
+            case TEXT -> new QuestionSummaryDTO(question.id(), answers.size(), List.of(), null, null, null);
             case SINGLE_CHOICE, MULTIPLE_CHOICE -> {
                 Map<String, Long> counts = new LinkedHashMap<>();
                 question.options().forEach(option -> counts.put(option, 0L));
-                answers.stream()
-                        .flatMap(answer -> Objects.requireNonNullElse(answer.choices(), List.<String>of()).stream())
-                        .forEach(choice -> counts.merge(choice, 1L, Long::sum));
-                yield new QuestionSummaryDTO(question.id(), answers.size(), counts(counts), null, null);
+                long other = 0;
+                for (AnswerDTO answer : answers) {
+                    List<String> choices = Objects.requireNonNullElse(answer.choices(), List.of());
+                    choices.stream().filter(counts::containsKey).forEach(choice -> counts.merge(choice, 1L, Long::sum));
+                    if (!counts.keySet().containsAll(choices)) other++;
+                }
+                yield new QuestionSummaryDTO(question.id(), answers.size(), counts(counts), other, null, null);
             }
             case RATING, NPS -> {
                 int min = question.type() == QuestionType.NPS ? NPS_MIN : RATING_MIN;
@@ -136,7 +154,7 @@ final class SurveyQuestions {
                         ? null
                         : ratings.stream().mapToInt(Integer::intValue).average().orElseThrow();
                 Integer score = question.type() == QuestionType.NPS && !ratings.isEmpty() ? nps(ratings) : null;
-                yield new QuestionSummaryDTO(question.id(), answers.size(), counts(counts), average, score);
+                yield new QuestionSummaryDTO(question.id(), answers.size(), counts(counts), null, average, score);
             }
         };
     }

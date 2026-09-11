@@ -229,7 +229,11 @@ function QuestionResults({ headingId, number, question, summary }: QuestionResul
 				</p>
 			) : (
 				<>
-					<Distribution rows={counts} label={`Answers to question ${number}`} />
+					<Distribution
+						rows={counts}
+						other={summary?.other}
+						label={`Answers to question ${number}`}
+					/>
 					{question.type === "RATING" && question.lowLabel && question.highLabel && (
 						<p className="flex justify-between gap-4 text-xs text-muted-foreground">
 							<span>1 · {question.lowLabel}</span>
@@ -243,7 +247,19 @@ function QuestionResults({ headingId, number, question, summary }: QuestionResul
 	);
 }
 
-function Distribution({ rows, label }: { rows: QuestionSummary["counts"]; label: string }) {
+/**
+ * The option counts, then — set apart, without a bar — how many respondents typed an answer of
+ * their own. Those answers are read one by one in the responses below, not compared as a share.
+ */
+function Distribution({
+	rows,
+	other,
+	label,
+}: {
+	rows: QuestionSummary["counts"];
+	other: number | undefined;
+	label: string;
+}) {
 	return (
 		<ul className="flex flex-col gap-1.5" aria-label={label}>
 			{distributionRows(rows).map((row) => (
@@ -259,6 +275,12 @@ function Distribution({ rows, label }: { rows: QuestionSummary["counts"]; label:
 					</span>
 				</li>
 			))}
+			{other !== undefined && other > 0 && (
+				<li className="flex items-baseline justify-between gap-3 text-sm text-muted-foreground">
+					<span className="min-w-0 italic">Another answer</span>
+					<span className="shrink-0 tabular-nums">{other}</span>
+				</li>
+			)}
 		</ul>
 	);
 }

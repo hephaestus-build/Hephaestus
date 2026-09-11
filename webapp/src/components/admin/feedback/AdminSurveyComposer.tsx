@@ -5,12 +5,12 @@ import { type ReactNode, useId, useRef, useState } from "react";
 import type { CreateSurvey, Question } from "@/api/types.gen";
 import { type FormError, FormErrorSummary } from "@/components/common/FormErrorSummary";
 import { DetailDrawerHeader } from "@/components/core/detail-drawer/DetailDrawerHeader";
-import { ProductSurveyForm } from "@/components/feedback/ProductSurveyForm";
+import { ProductSurveyDialog } from "@/components/feedback/ProductSurveyDialog";
 import {
-	type AnswerDraft,
+	EMPTY_SURVEY_RESPONSE_DRAFT,
+	type SurveyResponseDraft,
 	NPS_LABELS,
 	QUESTION_TYPE_LABELS,
-	surveyEstimate,
 } from "@/components/feedback/survey-questions";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -34,7 +34,6 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 
@@ -109,8 +108,9 @@ function describedBy(...ids: (string | false | undefined)[]): string | undefined
 }
 
 /**
- * A guarded drawer level — `webapp/AGENTS.md` § Guarded levels — that writes one survey. The
- * preview tab renders the same form members will get.
+ * A guarded drawer level — `webapp/AGENTS.md` § Guarded levels — that writes one survey. Preview
+ * opens the very dialog members get, on the draft; the questionnaire is a native form, so it cannot
+ * sit inside this one.
  */
 export function AdminSurveyComposer({
 	nested,
@@ -128,8 +128,10 @@ export function AdminSurveyComposer({
 	// The instant of the last refused submit. Errors are read against it, not a ticking clock, so a
 	// draft that was fine when refused cannot turn wrong while the reader is still fixing it.
 	const [refusedAt, setRefusedAt] = useState<number>();
-	const [view, setView] = useState<"edit" | "preview">("edit");
-	const [previewDraft, setPreviewDraft] = useState<AnswerDraft>({});
+	const [previewOpen, setPreviewOpen] = useState(false);
+	const [previewDraft, setPreviewDraft] = useState<SurveyResponseDraft>(
+		EMPTY_SURVEY_RESPONSE_DRAFT,
+	);
 	const unsavedChanges = useUnsavedChanges({
 		isDirty: !deepEqual(draft, initial),
 		disabled: isPending,
@@ -178,7 +180,6 @@ export function AdminSurveyComposer({
 
 	const fieldId = (name: string) => `${id}-${name}`;
 	const questionFieldId = (index: number, name: string) => `${id}-q${index}-${name}`;
-	const showEditor = () => setView("edit");
 
 	const summary: FormError[] = [
 		errors.title && { fieldId: fieldId("title"), message: errors.title },
@@ -205,9 +206,7 @@ export function AdminSurveyComposer({
 				},
 			].filter((entry): entry is FormError => Boolean(entry)),
 		),
-	]
-		.filter((entry): entry is FormError => Boolean(entry))
-		.map((entry) => ({ ...entry, reveal: showEditor }));
+	].filter((entry): entry is FormError => Boolean(entry));
 
 	const submit = (event: React.SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
@@ -215,7 +214,6 @@ export function AdminSurveyComposer({
 		const publishedAt = new Date();
 		if (hasDraftErrors(validateSurveyDraft(draft, publishedAt.getTime()))) {
 			setRefusedAt(publishedAt.getTime());
-			setView("edit");
 			return;
 		}
 		unsavedChanges.track(onSubmit(toCreateSurvey(draft, publishedAt)));
@@ -224,214 +222,206 @@ export function AdminSurveyComposer({
 	return (
 		<>
 			{unsavedChanges.dialog}
-			<Tabs
-				value={view}
-				onValueChange={(next) => setView(next === "preview" ? "preview" : "edit")}
-				className="flex min-h-0 flex-1 flex-col gap-0"
-			>
-				<AdminSurveyComposerHeader nested={nested}>
-					<TabsList aria-label="Composer view">
-						<TabsTrigger value="edit">Edit</TabsTrigger>
-						<TabsTrigger value="preview">Preview</TabsTrigger>
-					</TabsList>
-				</AdminSurveyComposerHeader>
-				<form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
-					<DrawerBody className="flex flex-col gap-6">
-						<TabsContent value="edit" className="flex flex-col gap-8">
-							<FormErrorSummary key={refusedAt} errors={summary} />
-							<fieldset disabled={isPending} className="contents">
-								<FieldGroup className="gap-5">
-									<Field data-invalid={errors.title ? "true" : undefined}>
-										<FieldLabel htmlFor={fieldId("title")}>Title</FieldLabel>
-										<Input
-											id={fieldId("title")}
-											value={draft.title}
-											maxLength={TITLE_MAX_LENGTH}
-											required
-											aria-invalid={Boolean(errors.title)}
-											aria-describedby={describedBy(errors.title && fieldId("title-error"))}
-											onChange={(event) => patch({ title: event.target.value })}
-										/>
-										{errors.title && (
-											<FieldError id={fieldId("title-error")}>{errors.title}</FieldError>
-										)}
-									</Field>
-
-									<Field data-invalid={errors.description ? "true" : undefined}>
-										<FieldLabel htmlFor={fieldId("description")}>Purpose</FieldLabel>
-										<Textarea
-											id={fieldId("description")}
-											value={draft.description}
-											rows={3}
-											maxLength={DESCRIPTION_MAX_LENGTH}
-											required
-											aria-invalid={Boolean(errors.description)}
-											aria-describedby={describedBy(
-												fieldId("description-help"),
-												errors.description && fieldId("description-error"),
-											)}
-											onChange={(event) => patch({ description: event.target.value })}
-										/>
-										<FieldDescription id={fieldId("description-help")}>
-											What decision will these answers help you make? Members see this.
-										</FieldDescription>
-										{errors.description && (
-											<FieldError id={fieldId("description-error")}>
-												{errors.description}
-											</FieldError>
-										)}
-									</Field>
-
-									<Field orientation="responsive">
-										<FieldContent>
-											<FieldLabel id={fieldId("audience-label")} htmlFor={fieldId("audience")}>
-												Audience
-											</FieldLabel>
-										</FieldContent>
-										<Select
-											items={audiences}
-											value={draft.audience}
-											disabled={isPending}
-											onValueChange={(value) => value && patch({ audience: value })}
-										>
-											<SelectTrigger
-												id={fieldId("audience")}
-												className="w-full @md/field-group:w-56"
-											>
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent aria-labelledby={fieldId("audience-label")}>
-												{audiences.map((audience) => (
-													<SelectItem key={audience.value} value={audience.value}>
-														{audience.label}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</Field>
-
-									<FieldSet>
-										<FieldLegend variant="label">Schedule</FieldLegend>
-										<FieldDescription id={fieldId("schedule-help")}>
-											Times are in your device's timezone.
-										</FieldDescription>
-										<div className="grid gap-5 sm:grid-cols-2">
-											<Field>
-												<FieldLabel htmlFor={fieldId("start")}>Start</FieldLabel>
-												<Input
-													id={fieldId("start")}
-													type="datetime-local"
-													value={draft.startsAt}
-													aria-describedby={describedBy(
-														fieldId("schedule-help"),
-														fieldId("start-help"),
-													)}
-													onChange={(event) => patch({ startsAt: event.target.value })}
-												/>
-												<FieldDescription id={fieldId("start-help")}>
-													Leave blank to open when published.
-												</FieldDescription>
-											</Field>
-											<Field data-invalid={errors.endsAt ? "true" : undefined}>
-												<FieldLabel htmlFor={fieldId("end")}>End</FieldLabel>
-												<Input
-													id={fieldId("end")}
-													type="datetime-local"
-													value={draft.endsAt}
-													aria-invalid={Boolean(errors.endsAt)}
-													aria-describedby={describedBy(
-														fieldId("schedule-help"),
-														fieldId("end-help"),
-														errors.endsAt && fieldId("end-error"),
-													)}
-													onChange={(event) => patch({ endsAt: event.target.value })}
-												/>
-												<FieldDescription id={fieldId("end-help")}>
-													Set an end so invitations do not go stale.
-												</FieldDescription>
-												{errors.endsAt && (
-													<FieldError id={fieldId("end-error")}>{errors.endsAt}</FieldError>
-												)}
-											</Field>
-										</div>
-									</FieldSet>
-								</FieldGroup>
-
-								<section className="flex flex-col gap-4" aria-labelledby={fieldId("questions")}>
-									<div className="space-y-1">
-										<h2 id={fieldId("questions")} className="font-semibold text-lg">
-											Questions
-										</h2>
-										<p className="max-w-2xl text-muted-foreground text-sm">
-											Short surveys get answered: aim for 1–3 questions, closed questions first and
-											one optional free-text question last.
-										</p>
-									</div>
-									{draft.questions.map((question, index) => (
-										<QuestionCard
-											key={question.id}
-											index={index}
-											count={draft.questions.length}
-											question={question}
-											errors={errors.questionErrors[index] ?? {}}
-											fieldId={(name) => questionFieldId(index, name)}
-											disabled={isPending}
-											onChange={(change) => patchQuestion(index, change)}
-											onMove={(direction) => moveQuestion(index, direction)}
-											onRemove={() => removeQuestion(index)}
-										/>
-									))}
-									{draft.questions.length > RECOMMENDED_MAX_QUESTIONS && (
-										<FieldDescription className="text-warning">
-											This survey has {draft.questions.length} questions; response rates drop
-											sharply beyond {RECOMMENDED_MAX_QUESTIONS}.
-										</FieldDescription>
+			<AdminSurveyComposerHeader nested={nested} />
+			<ProductSurveyDialog
+				survey={{
+					id: "preview",
+					title: draft.title.trim() || "Untitled survey",
+					description: draft.description.trim(),
+					questions: prepared,
+					seen: true,
+				}}
+				open={previewOpen}
+				onOpenChange={setPreviewOpen}
+				draft={previewDraft}
+				onDraftChange={setPreviewDraft}
+				isSubmitting={false}
+				onSubmit={() => setPreviewOpen(false)}
+				onDecline={() => setPreviewOpen(false)}
+			/>
+			<form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
+				<DrawerBody className="flex flex-col gap-6">
+					<div className="flex flex-col gap-8">
+						<FormErrorSummary key={refusedAt} errors={summary} />
+						<fieldset disabled={isPending} className="contents">
+							<FieldGroup className="gap-5">
+								<Field data-invalid={errors.title ? "true" : undefined}>
+									<FieldLabel htmlFor={fieldId("title")}>Title</FieldLabel>
+									<Input
+										id={fieldId("title")}
+										value={draft.title}
+										maxLength={TITLE_MAX_LENGTH}
+										required
+										aria-invalid={Boolean(errors.title)}
+										aria-describedby={describedBy(errors.title && fieldId("title-error"))}
+										onChange={(event) => patch({ title: event.target.value })}
+									/>
+									{errors.title && (
+										<FieldError id={fieldId("title-error")}>{errors.title}</FieldError>
 									)}
-									{errors.questions && <FieldError>{errors.questions}</FieldError>}
-									<Button
-										id={fieldId("add-question")}
-										type="button"
-										variant="outline"
-										className="self-start"
-										disabled={draft.questions.length >= MAX_QUESTIONS}
-										onClick={addQuestion}
+								</Field>
+
+								<Field data-invalid={errors.description ? "true" : undefined}>
+									<FieldLabel htmlFor={fieldId("description")}>Purpose</FieldLabel>
+									<Textarea
+										id={fieldId("description")}
+										value={draft.description}
+										rows={3}
+										maxLength={DESCRIPTION_MAX_LENGTH}
+										required
+										aria-invalid={Boolean(errors.description)}
+										aria-describedby={describedBy(
+											fieldId("description-help"),
+											errors.description && fieldId("description-error"),
+										)}
+										onChange={(event) => patch({ description: event.target.value })}
+									/>
+									<FieldDescription id={fieldId("description-help")}>
+										What decision will these answers help you make? Members see this.
+									</FieldDescription>
+									{errors.description && (
+										<FieldError id={fieldId("description-error")}>{errors.description}</FieldError>
+									)}
+								</Field>
+
+								<Field orientation="responsive">
+									<FieldContent>
+										<FieldLabel id={fieldId("audience-label")} htmlFor={fieldId("audience")}>
+											Audience
+										</FieldLabel>
+									</FieldContent>
+									<Select
+										items={audiences}
+										value={draft.audience}
+										disabled={isPending}
+										onValueChange={(value) => value && patch({ audience: value })}
 									>
-										<Plus aria-hidden />
-										Add question
-									</Button>
-								</section>
-							</fieldset>
-						</TabsContent>
+										<SelectTrigger id={fieldId("audience")} className="w-full @md/field-group:w-56">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent aria-labelledby={fieldId("audience-label")}>
+											{audiences.map((audience) => (
+												<SelectItem key={audience.value} value={audience.value}>
+													{audience.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</Field>
 
-						<TabsContent value="preview" className="flex flex-col gap-6">
-							<div className="space-y-1">
-								<h2 className="font-semibold text-lg break-words">
-									{draft.title.trim() || "Untitled survey"}
-								</h2>
-								{draft.description.trim() && (
-									<p className="text-muted-foreground text-sm break-words whitespace-pre-wrap">
-										{draft.description.trim()}
+								<FieldSet>
+									<FieldLegend variant="label">Schedule</FieldLegend>
+									<FieldDescription id={fieldId("schedule-help")}>
+										Times are in your device's timezone.
+									</FieldDescription>
+									<div className="grid gap-5 sm:grid-cols-2">
+										<Field>
+											<FieldLabel htmlFor={fieldId("start")}>Start</FieldLabel>
+											<Input
+												id={fieldId("start")}
+												type="datetime-local"
+												value={draft.startsAt}
+												aria-describedby={describedBy(
+													fieldId("schedule-help"),
+													fieldId("start-help"),
+												)}
+												onChange={(event) => patch({ startsAt: event.target.value })}
+											/>
+											<FieldDescription id={fieldId("start-help")}>
+												Leave blank to open when published.
+											</FieldDescription>
+										</Field>
+										<Field data-invalid={errors.endsAt ? "true" : undefined}>
+											<FieldLabel htmlFor={fieldId("end")}>End</FieldLabel>
+											<Input
+												id={fieldId("end")}
+												type="datetime-local"
+												value={draft.endsAt}
+												aria-invalid={Boolean(errors.endsAt)}
+												aria-describedby={describedBy(
+													fieldId("schedule-help"),
+													fieldId("end-help"),
+													errors.endsAt && fieldId("end-error"),
+												)}
+												onChange={(event) => patch({ endsAt: event.target.value })}
+											/>
+											<FieldDescription id={fieldId("end-help")}>
+												Set an end so invitations do not go stale.
+											</FieldDescription>
+											{errors.endsAt && (
+												<FieldError id={fieldId("end-error")}>{errors.endsAt}</FieldError>
+											)}
+										</Field>
+									</div>
+								</FieldSet>
+							</FieldGroup>
+
+							<section className="flex flex-col gap-4" aria-labelledby={fieldId("questions")}>
+								<div className="space-y-1">
+									<h2 id={fieldId("questions")} className="font-semibold text-lg">
+										Questions
+									</h2>
+									<p className="max-w-2xl text-muted-foreground text-sm">
+										Short surveys get answered: aim for 1–3 questions, closed questions first and
+										one optional free-text question last.
 									</p>
+								</div>
+								{draft.questions.map((question, index) => (
+									<QuestionCard
+										key={question.id}
+										index={index}
+										count={draft.questions.length}
+										question={question}
+										errors={errors.questionErrors[index] ?? {}}
+										fieldId={(name) => questionFieldId(index, name)}
+										disabled={isPending}
+										onChange={(change) => patchQuestion(index, change)}
+										onMove={(direction) => moveQuestion(index, direction)}
+										onRemove={() => removeQuestion(index)}
+									/>
+								))}
+								{draft.questions.length > RECOMMENDED_MAX_QUESTIONS && (
+									<FieldDescription className="text-warning">
+										This survey has {draft.questions.length} questions; response rates drop sharply
+										beyond {RECOMMENDED_MAX_QUESTIONS}.
+									</FieldDescription>
 								)}
-								<p className="text-muted-foreground text-xs">{surveyEstimate(prepared)}</p>
-							</div>
-							<ProductSurveyForm
-								questions={prepared}
-								draft={previewDraft}
-								onDraftChange={setPreviewDraft}
-							/>
-						</TabsContent>
-					</DrawerBody>
+								{errors.questions && <FieldError>{errors.questions}</FieldError>}
+								<Button
+									id={fieldId("add-question")}
+									type="button"
+									variant="outline"
+									className="self-start"
+									disabled={draft.questions.length >= MAX_QUESTIONS}
+									onClick={addQuestion}
+								>
+									<Plus aria-hidden />
+									Add question
+								</Button>
+							</section>
+						</fieldset>
+					</div>
+				</DrawerBody>
 
-					<DrawerFooter>
-						{cancel}
-						<Button type="submit" disabled={isPending}>
-							{isPending && <Spinner className="size-4" />}
-							{isPending ? "Publishing…" : "Publish survey"}
-						</Button>
-					</DrawerFooter>
-				</form>
-			</Tabs>
+				<DrawerFooter>
+					{cancel}
+					<Button
+						type="button"
+						variant="outline"
+						disabled={prepared.length === 0}
+						onClick={() => {
+							setPreviewDraft(EMPTY_SURVEY_RESPONSE_DRAFT);
+							setPreviewOpen(true);
+						}}
+					>
+						Preview
+					</Button>
+					<Button type="submit" disabled={isPending}>
+						{isPending && <Spinner className="size-4" />}
+						{isPending ? "Publishing…" : "Publish survey"}
+					</Button>
+				</DrawerFooter>
+			</form>
 		</>
 	);
 }
@@ -520,6 +510,23 @@ function QuestionCard({
 						{errors.choices && (
 							<FieldError id={fieldId("choices-error")}>{errors.choices}</FieldError>
 						)}
+					</Field>
+				)}
+
+				{isChoiceType(question.type) && (
+					<Field orientation="horizontal">
+						<Checkbox
+							id={fieldId("allow-other")}
+							checked={question.allowOther}
+							aria-describedby={fieldId("allow-other-help")}
+							onCheckedChange={(checked) => onChange({ allowOther: checked })}
+						/>
+						<FieldContent>
+							<FieldLabel htmlFor={fieldId("allow-other")}>Allow another answer</FieldLabel>
+							<FieldDescription id={fieldId("allow-other-help")}>
+								Adds a free-text line under the choices for an answer you did not list.
+							</FieldDescription>
+						</FieldContent>
 					</Field>
 				)}
 

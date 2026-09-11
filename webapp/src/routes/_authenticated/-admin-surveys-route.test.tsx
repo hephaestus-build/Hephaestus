@@ -23,6 +23,7 @@ const survey = {
 			type: "TEXT",
 			options: [],
 			required: false,
+			allowOther: false,
 		},
 	],
 	startsAt: "2026-09-01T09:00:00.000Z",
@@ -235,7 +236,13 @@ describe("instance surveys route", () => {
 			title: "Help improve practice feedback",
 			description: "Three quick questions.",
 			questions: [
-				{ prompt: "What would make it more useful?", type: "TEXT", options: [], required: false },
+				{
+					prompt: "What would make it more useful?",
+					type: "TEXT",
+					options: [],
+					required: false,
+					allowOther: false,
+				},
 			],
 		});
 		// No audience and no end: neither key is sent, and the start is the publish instant.

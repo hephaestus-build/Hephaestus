@@ -8,6 +8,7 @@ export const surveyQuestions = [
 		type: "RATING",
 		options: [],
 		required: true,
+		allowOther: false,
 		lowLabel: "Not useful",
 		highLabel: "Very useful",
 	},
@@ -17,6 +18,7 @@ export const surveyQuestions = [
 		type: "SINGLE_CHOICE",
 		options: ["On the pull request", "On my practice page", "In conversation with Heph"],
 		required: false,
+		allowOther: true,
 	},
 	{
 		id: "recommend",
@@ -24,6 +26,7 @@ export const surveyQuestions = [
 		type: "NPS",
 		options: [],
 		required: false,
+		allowOther: false,
 	},
 	{
 		id: "improve",
@@ -31,6 +34,7 @@ export const surveyQuestions = [
 		type: "TEXT",
 		options: [],
 		required: false,
+		allowOther: false,
 	},
 ] satisfies Survey["questions"];
 

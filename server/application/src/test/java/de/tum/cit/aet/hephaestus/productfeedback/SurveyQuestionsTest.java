@@ -13,33 +13,42 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.ObjectMapper;
 
 @Tag("unit")
 class SurveyQuestionsTest {
     private static final QuestionDTO TEXT =
-            new QuestionDTO("text", "Why?", QuestionType.TEXT, List.of(), false, null, null);
-    private static final QuestionDTO SINGLE =
-            new QuestionDTO("single", "Pick one", QuestionType.SINGLE_CHOICE, List.of("A", "B"), true, null, null);
+            new QuestionDTO("text", "Why?", QuestionType.TEXT, List.of(), false, false, null, null);
+    private static final QuestionDTO SINGLE = new QuestionDTO(
+            "single", "Pick one", QuestionType.SINGLE_CHOICE, List.of("A", "B"), true, false, null, null);
     private static final QuestionDTO MULTI = new QuestionDTO(
-            "multi", "Pick any", QuestionType.MULTIPLE_CHOICE, List.of("X", "Y", "Z"), false, null, null);
+            "multi", "Pick any", QuestionType.MULTIPLE_CHOICE, List.of("X", "Y", "Z"), false, false, null, null);
     private static final QuestionDTO RATING =
-            new QuestionDTO("rating", "How useful?", QuestionType.RATING, List.of(), true, "Not at all", "Very");
+            new QuestionDTO("rating", "How useful?", QuestionType.RATING, List.of(), true, false, "Not at all", "Very");
     private static final QuestionDTO NPS =
-            new QuestionDTO("nps", "Recommend?", QuestionType.NPS, List.of(), false, null, null);
+            new QuestionDTO("nps", "Recommend?", QuestionType.NPS, List.of(), false, false, null, null);
     private static final List<QuestionDTO> ALL = List.of(TEXT, SINGLE, MULTI, RATING, NPS);
+    private static final QuestionDTO SINGLE_WITH_OTHER = new QuestionDTO(
+            "single", "Pick one", QuestionType.SINGLE_CHOICE, List.of("A", "B"), false, true, null, null);
+    private static final QuestionDTO MULTI_WITH_OTHER = new QuestionDTO(
+            "multi", "Pick any", QuestionType.MULTIPLE_CHOICE, List.of("X", "Y", "Z"), false, true, null, null);
 
     static List<List<QuestionDTO>> invalidDefinitions() {
         return List.of(
                 List.of(TEXT, TEXT),
                 List.of(new QuestionDTO(
-                        "q", "One option", QuestionType.SINGLE_CHOICE, List.of("A"), false, null, null)),
+                        "q", "One option", QuestionType.SINGLE_CHOICE, List.of("A"), false, false, null, null)),
                 List.of(new QuestionDTO(
-                        "q", "Duplicate", QuestionType.MULTIPLE_CHOICE, List.of("A", "A"), false, null, null)),
+                        "q", "Duplicate", QuestionType.MULTIPLE_CHOICE, List.of("A", "A"), false, false, null, null)),
                 List.of(new QuestionDTO(
-                        "q", "Options on text", QuestionType.TEXT, List.of("A", "B"), false, null, null)),
-                List.of(new QuestionDTO("q", "Unlabelled", QuestionType.RATING, List.of(), false, "Low", null)),
-                List.of(new QuestionDTO("q", "Blank label", QuestionType.RATING, List.of(), false, " ", "High")),
-                List.of(new QuestionDTO("q", "Labels on NPS", QuestionType.NPS, List.of(), false, "Low", "High")));
+                        "q", "Options on text", QuestionType.TEXT, List.of("A", "B"), false, false, null, null)),
+                List.of(new QuestionDTO("q", "Unlabelled", QuestionType.RATING, List.of(), false, false, "Low", null)),
+                List.of(new QuestionDTO("q", "Blank label", QuestionType.RATING, List.of(), false, false, " ", "High")),
+                List.of(new QuestionDTO(
+                        "q", "Labels on NPS", QuestionType.NPS, List.of(), false, false, "Low", "High")),
+                List.of(new QuestionDTO("q", "Other on text", QuestionType.TEXT, List.of(), false, true, null, null)),
+                List.of(new QuestionDTO(
+                        "q", "Other on rating", QuestionType.RATING, List.of(), false, true, "Low", "High")));
     }
 
     @ParameterizedTest
@@ -92,6 +101,60 @@ class SurveyQuestionsTest {
         assertThatThrownBy(() -> SurveyQuestions.validateAnswers(ALL, answers))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("400");
+    }
+
+    @Test
+    void shouldKeepOneTrimmedOtherAnswerBesideTheOptions() {
+        List<AnswerDTO> stored = SurveyQuestions.validateAnswers(
+                List.of(SINGLE_WITH_OTHER, MULTI_WITH_OTHER),
+                List.of(
+                        new AnswerDTO("single", null, List.of("  Neither  "), null),
+                        new AnswerDTO("multi", null, List.of("X", " something else ", "Z"), null)));
+
+        assertThat(stored.get(0).choices()).containsExactly("Neither");
+        assertThat(stored.get(1).choices()).containsExactly("X", "something else", "Z");
+    }
+
+    static List<List<AnswerDTO>> invalidOtherAnswers() {
+        return List.of(
+                List.of(new AnswerDTO("single", null, List.of("A", "C"), null)),
+                List.of(new AnswerDTO("multi", null, List.of("X", "one", "two"), null)),
+                List.of(new AnswerDTO("multi", null, List.of("   "), null)),
+                List.of(new AnswerDTO("multi", null, List.of("x".repeat(SurveyQuestions.OTHER_MAX_LENGTH + 1)), null)),
+                List.of(new AnswerDTO("multi", null, List.of("X", " X "), null)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidOtherAnswers")
+    void shouldRejectOtherAnswersThatAreNotOneFittingValue(List<AnswerDTO> answers) {
+        assertThatThrownBy(() -> SurveyQuestions.validateAnswers(List.of(SINGLE_WITH_OTHER, MULTI_WITH_OTHER), answers))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400");
+    }
+
+    @Test
+    void shouldCountOtherAnswersApartFromTheOptions() {
+        var summary = SurveyQuestions.summarize(
+                List.of(MULTI_WITH_OTHER, TEXT),
+                List.of(
+                        List.of(new AnswerDTO("multi", null, List.of("X", "custom"), null)),
+                        List.of(new AnswerDTO("multi", null, List.of("another"), null)),
+                        List.of(new AnswerDTO("multi", null, List.of("Y"), null))));
+
+        assertThat(summary.get(0).other()).isEqualTo(2);
+        assertThat(summary.get(0).counts())
+                .containsExactly(new OptionCountDTO("X", 1), new OptionCountDTO("Y", 1), new OptionCountDTO("Z", 0));
+        assertThat(summary.get(1).other()).isNull();
+    }
+
+    @Test
+    void shouldReadAStoredQuestionWithoutTheOtherFlagAsNotAllowingOne() {
+        QuestionDTO question = new ObjectMapper()
+                .readValue(
+                        "{\"id\":\"q\",\"prompt\":\"Why?\",\"type\":\"TEXT\",\"options\":[],\"required\":true}",
+                        QuestionDTO.class);
+        assertThat(question.allowOther()).isFalse();
+        assertThat(question.required()).isTrue();
     }
 
     @Test

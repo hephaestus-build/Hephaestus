@@ -1,4 +1,6 @@
 import { formatDistance } from "date-fns";
+import { useRef } from "react";
+
 import type { Answer, SurveyInvitation } from "@/api/types.gen";
 import { useNow } from "@/components/common/use-now";
 import { Button } from "@/components/ui/button";
@@ -8,21 +10,20 @@ import {
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
-	DialogForm,
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 
-import { ProductSurveyForm } from "./ProductSurveyForm";
-import { type AnswerDraft, isDraftComplete, surveyEstimate, toAnswers } from "./survey-questions";
+import { type SurveyResponseDraft, surveyEstimate } from "./survey-questions";
+import { SurveyQuestionnaire } from "./SurveyQuestionnaire";
 
 export interface ProductSurveyDialogProps {
 	survey: SurveyInvitation;
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	draft: AnswerDraft;
-	onDraftChange: (draft: AnswerDraft) => void;
+	draft: SurveyResponseDraft;
+	onDraftChange: (draft: SurveyResponseDraft) => void;
 	isSubmitting: boolean;
 	error?: string;
 	onSubmit: (answers: Answer[]) => void | Promise<void>;
@@ -42,40 +43,42 @@ export function ProductSurveyDialog({
 	onDecline,
 }: ProductSurveyDialogProps) {
 	const now = useNow();
-	const complete = isDraftComplete(survey.questions, draft);
+	const body = useRef<HTMLDivElement>(null);
 	const closes = survey.endsAt
 		? `Closes ${formatDistance(survey.endsAt, now, { addSuffix: true })}`
 		: undefined;
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-lg">
-				<DialogForm
-					aria-busy={isSubmitting}
-					onSubmit={(event) => {
-						event.preventDefault();
-						if (complete && !isSubmitting) void onSubmit(toAnswers(survey.questions, draft));
-					}}
+			<DialogContent
+				className="sm:max-w-lg"
+				// The scroll region is the first tabbable in the popup; the question's first answer is
+				// where a member expects to land.
+				initialFocus={() =>
+					body.current?.querySelector<HTMLElement>(
+						"fieldset:not([hidden]) :is(input, textarea):not([disabled])",
+					) ?? false
+				}
+			>
+				<SurveyQuestionnaire
+					className="contents"
+					questions={survey.questions}
+					draft={draft}
+					onDraftChange={onDraftChange}
+					onSubmit={(answers) => void onSubmit(answers)}
+					disabled={isSubmitting}
 				>
 					<DialogHeader>
 						<DialogTitle className="break-words">{survey.title}</DialogTitle>
 						<DialogDescription className="break-words">{survey.description}</DialogDescription>
 						<p className="text-xs text-muted-foreground">
 							{surveyEstimate(survey.questions)}
-							{closes ? ` · ${closes}` : ""}
+							{closes ? ` · ${closes}` : ""} · Answers are linked to your account and visible only
+							to this instance's administrators; they are not used for research.
 						</p>
 					</DialogHeader>
-					<DialogBody className="flex flex-col gap-5 py-1">
-						<ProductSurveyForm
-							questions={survey.questions}
-							draft={draft}
-							onDraftChange={onDraftChange}
-							disabled={isSubmitting}
-						/>
-						<p className="text-xs text-muted-foreground">
-							Your answers are linked to your account and visible only to this instance's
-							administrators. They are not anonymous and not used for research. Closing keeps your
-							draft until you reload, switch workspace, or sign out.
-						</p>
+					<DialogBody ref={body} className="flex flex-col gap-4 py-1">
+						<SurveyQuestionnaire.Progress />
+						<SurveyQuestionnaire.Items />
 						<p role="alert" className="text-sm text-destructive empty:hidden">
 							{error}
 						</p>
@@ -90,12 +93,21 @@ export function ProductSurveyDialog({
 						>
 							Decline survey
 						</Button>
-						<Button type="submit" disabled={!complete || isSubmitting}>
-							{isSubmitting && <Spinner />}
-							{isSubmitting ? "Sending…" : "Send answers"}
-						</Button>
+						<SurveyQuestionnaire.Actions
+							className="w-auto"
+							submitLabel={
+								isSubmitting ? (
+									<>
+										<Spinner />
+										Sending…
+									</>
+								) : (
+									"Send answers"
+								)
+							}
+						/>
 					</DialogFooter>
-				</DialogForm>
+				</SurveyQuestionnaire>
 			</DialogContent>
 		</Dialog>
 	);

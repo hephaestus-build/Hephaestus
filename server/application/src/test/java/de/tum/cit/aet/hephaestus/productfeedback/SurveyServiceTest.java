@@ -27,7 +27,7 @@ import tools.jackson.databind.ObjectMapper;
 class SurveyServiceTest {
     private static final Instant NOW = Instant.parse("2026-09-11T12:00:00Z");
     private static final QuestionDTO QUESTION =
-            new QuestionDTO("q", "Question?", QuestionType.TEXT, List.of(), false, null, null);
+            new QuestionDTO("q", "Question?", QuestionType.TEXT, List.of(), false, false, null, null);
 
     private SurveyParticipationRepository participations;
     private SurveyService service;

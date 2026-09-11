@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent } from "storybook/test";
+import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import type { Survey } from "@/api/types.gen";
 import { STORY_NOW } from "@/components/common/story-clock";
@@ -78,6 +78,37 @@ export const Default: Story = {
 		await expect(screen.getByText("Deleted account")).toBeVisible();
 		await expect(screen.getByText("Declined", { selector: "p" })).toBeVisible();
 		await expect(screen.getByText("Shorter feedback on small pull requests.")).toBeVisible();
+	},
+};
+
+export const OtherAnswers: Story = {
+	args: {
+		state: ready(
+			{
+				...adminSurvey,
+				questions: adminSurvey.questions.map((question) =>
+					question.id === "channel" ? { ...question, allowOther: true } : question,
+				),
+			},
+			{
+				summary: {
+					...surveySummary,
+					questions: surveySummary.questions.map((question) =>
+						question.questionId === "channel" ? { ...question, other: 3 } : question,
+					),
+				},
+			},
+		),
+	},
+	play: async () => {
+		await expectSettledVisible(await screen.findByRole("heading", { name: adminSurvey.title }));
+		// The typed answers are counted after the options and never as a share of them.
+		const rows = screen.getByRole("list", { name: "Answers to question 2" });
+		const items = within(rows).getAllByRole("listitem");
+		await expect(items).toHaveLength(4);
+		await expect(items[0]).toHaveTextContent("On the pull request9 · 60%");
+		await expect(items[3]).toHaveTextContent("Another answer3");
+		await expect(items[3]).not.toHaveTextContent("%");
 	},
 };
 

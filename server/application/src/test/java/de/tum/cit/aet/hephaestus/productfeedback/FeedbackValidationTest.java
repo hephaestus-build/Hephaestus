@@ -63,7 +63,7 @@ class FeedbackValidationTest {
     void shouldRejectAnEndBeforeTheStart() {
         Instant start = Instant.parse("2026-01-01T00:00:00Z");
         var questions = List.of(new FeedbackDTOs.QuestionDTO(
-                "q", "Question", FeedbackDTOs.QuestionType.TEXT, List.of(), false, null, null));
+                "q", "Question", FeedbackDTOs.QuestionType.TEXT, List.of(), false, false, null, null));
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             var validator = factory.getValidator();
             assertThat(validator.validate(new FeedbackDTOs.CreateSurveyDTO(
