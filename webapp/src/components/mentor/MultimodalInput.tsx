@@ -4,10 +4,10 @@ import { type ChangeEvent, type RefObject, useEffect, useRef, useState } from "r
 import { toast } from "sonner";
 import { useWindowSize } from "usehooks-ts";
 
+import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { Attachment } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 import { PreviewAttachment } from "./PreviewAttachment";
 

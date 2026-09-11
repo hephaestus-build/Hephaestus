@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { AlertCircle } from "lucide-react";
 import { useState } from "react";
 import type {
@@ -20,7 +21,6 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
 import {
 	PracticeReviewCoverageSettings,
 	type PracticeReviewCoverageSettingsProps,

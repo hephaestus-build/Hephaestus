@@ -1,5 +1,6 @@
 import { ChevronsUpDownIcon, type LucideIcon, PlusCircleIcon } from "lucide-react";
 
+import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +17,6 @@ import {
 	useComboboxFilter,
 } from "@/components/ui/combobox";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
 
 export interface FacetOption<TValue extends string | number = string> {
 	value: TValue;

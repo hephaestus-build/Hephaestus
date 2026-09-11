@@ -1,8 +1,8 @@
 import { type ChangeEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 
+import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 
 interface MessageEditorProps {
 	initialContent: string;

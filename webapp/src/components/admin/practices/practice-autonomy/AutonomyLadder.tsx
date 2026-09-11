@@ -1,5 +1,6 @@
 import { useId } from "react";
 
+import { cn } from "cn";
 import { AUTONOMY_DEFS } from "@/components/practice-vocabulary/autonomy-defs";
 import { FieldLabel } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -9,7 +10,6 @@ import {
 	PRACTICE_AUTONOMY_ORDER,
 	type PracticeAutonomy,
 } from "@/lib/practice-autonomy";
-import { cn } from "@/lib/utils";
 
 export interface AutonomyLadderProps {
 	label: string;

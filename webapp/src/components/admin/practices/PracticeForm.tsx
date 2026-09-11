@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
+import { cn } from "cn";
 import type {
 	CreatePracticeRequest,
 	Practice,
@@ -16,7 +17,6 @@ import {
 import { PracticeAutomatedReviewValidationSummary } from "@/components/admin/practice-catalog/PracticeEvidenceSummary";
 import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
 
 interface PracticeFormCreateProps {
 	mode: "create";

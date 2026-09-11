@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
 import type { PracticeGroup, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
@@ -10,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { artifactKindCountLabel, artifactKindIcon } from "@/lib/artifact-kinds";
-import { cn } from "@/lib/utils";
 import {
 	PracticeGroupStandingRing,
 	STANDING_LEGEND,

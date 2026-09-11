@@ -1,13 +1,13 @@
 import { CheckIcon, CopyIcon } from "@primer/octicons-react";
 import { useEffect, useRef, useState } from "react";
 
+import { cn } from "cn";
 import type { PullRequestBaseInfo, PullRequestInfo } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
 import { CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getProviderTerms, getPullRequestStateIcon, type ProviderType } from "@/lib/provider";
-import { cn } from "@/lib/utils";
 
 export type ReviewedPullRequest = PullRequestInfo | PullRequestBaseInfo;
 

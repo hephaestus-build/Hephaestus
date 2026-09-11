@@ -1,5 +1,5 @@
+import { cn } from "cn";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
 
 import { HephIcon } from "@/components/brand/HephIcon";
 

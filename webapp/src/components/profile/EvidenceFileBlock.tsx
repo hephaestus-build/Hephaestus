@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { ChevronDownIcon, ShieldAlertIcon } from "lucide-react";
 import { useId, useState } from "react";
 import {
@@ -5,7 +6,6 @@ import {
 	evidenceSourceDef,
 } from "@/components/practice-vocabulary/evidence-source-defs";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 import { type EvidenceLocation, evidenceLineRangeLabel, splitPath } from "./evidence";
 const SECRET_SCANNER = "secret-diff-scanner";
 

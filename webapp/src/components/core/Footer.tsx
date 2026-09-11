@@ -1,11 +1,11 @@
 import { ClockIcon, GitBranchIcon, GitCommitIcon } from "@primer/octicons-react";
 import { Link } from "@tanstack/react-router";
 
+import { cn } from "cn";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { optionalIntegrationsAvailable, requestConsentReopen } from "@/integrations/consent";
 import { hasText } from "@/lib/text";
-import { cn } from "@/lib/utils";
 
 export interface FooterProps {
 	className?: string;
