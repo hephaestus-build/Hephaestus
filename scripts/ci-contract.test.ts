@@ -2674,7 +2674,7 @@ void test("CodeQL runs advanced setup and excludes the Semgrep fixtures it would
 	assert.equal(compile.get("working-directory"), "server");
 	assert.equal(
 		compile.get("run"),
-		"./gradlew --no-daemon --no-build-cache --no-configuration-cache -PcodeqlExtraction=true clean :application:testClasses",
+		"./gradlew --no-daemon --build-cache --no-configuration-cache -PcodeqlExtraction=true clean :application:testClasses",
 	);
 	const ci = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 	assert.equal(ci.getIn(["jobs", "CodeQL", "uses"]), "./.github/workflows/codeql.yml");
@@ -2699,6 +2699,15 @@ void test("CodeQL runs advanced setup and excludes the Semgrep fixtures it would
 		"codeql-config.yml",
 	);
 	assert.deepEqual(config["paths-ignore"], ["security/semgrep/**"]);
+});
+
+void test("CodeQL caches generation but never Java compilation", async () => {
+	const build = await readFile("server/build.gradle.kts", "utf8");
+	assert.match(
+		build,
+		/tasks\.withType<JavaCompile>\(\)\.configureEach \{\s*\/\/[^\n]*\n\s*if \(providers\.gradleProperty\("codeqlExtraction"\)\.orNull == "true"\) \{\s*outputs\.cacheIf \{ false \}/,
+		"disable compilation cache only for explicit extraction; generation remains cacheable",
+	);
 });
 
 void test("only CodeQL extraction opts out of duplicate compiler analysis", async () => {

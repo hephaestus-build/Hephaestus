@@ -270,7 +270,10 @@ SARIF upload. A merge group therefore cannot pass the gate and lose its temporar
 is still publishing results. The weekly scan also runs directly from the same workflow.
 
 Java uses manual extraction with the JDK pinned in `.java-version` and a clean
-`:application:testClasses` compilation with build and configuration caches disabled. The shared
+`:application:testClasses` compilation with the Gradle build cache enabled, `JavaCompile` output
+caching disabled, and the configuration cache disabled.
+Source-generation tasks can restore their outputs from the build cache; every `JavaCompile` task
+still executes so the extractor sees both handwritten and generated Java. The shared
 `setup-caches` action restores Gradle dependencies read-only from the default-branch package
 producer through the Gradle action's OS-wide fallback; analysis never publishes a cache. The
 package job is the only writer, and a missing or expired entry falls back to a cold build.
