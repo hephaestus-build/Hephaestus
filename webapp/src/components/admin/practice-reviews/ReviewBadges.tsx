@@ -12,6 +12,7 @@ import {
 	type ObservationResultFacts,
 	observationResult,
 } from "@/components/practice-vocabulary/observation-result";
+import { derivedOutcome } from "@/components/practice-vocabulary/outcome-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 import type { StatusDef } from "@/components/practice-vocabulary/status-def";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
@@ -70,7 +71,11 @@ export function ObservationResultBadge({
 export function observationSeverity(
 	observation: ObservationResultFacts & Pick<ReviewObservation, "severity">,
 ): StatusDef | undefined {
-	return observation.assessment === "BAD" && observation.severity
+	return observation.assessmentStatus === "ASSESSED" &&
+		observation.presence &&
+		observation.assessment &&
+		derivedOutcome(observation.presence, observation.assessment) === "NEGATIVE" &&
+		observation.severity
 		? SEVERITY_DEFS[observation.severity]
 		: undefined;
 }

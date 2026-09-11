@@ -56,6 +56,8 @@ export const Default: Story = {
 		// Negative outcomes show severity; unassessed observations do not imply an outcome.
 		await expect(canvas.getAllByText("Negative outcome")).toHaveLength(7);
 		canvas.getByText("Critical");
+		canvas.getByText("Informational");
+		await expect(canvas.getAllByText("Minor")).toHaveLength(3);
 		canvas.getByText("Not applicable");
 		await expect(canvas.queryByText("Undetermined")).not.toBeInTheDocument();
 		await expect(canvas.getAllByText("From a review of past work")).toHaveLength(2);

@@ -976,8 +976,20 @@ export const reviewRuns: ReviewRunSummary[] = allRuns
 		target: run.work,
 		createdAt: new Date(run.startedAt),
 		observations: {
-			strengths: run.observations.filter((o) => o.assessment === "GOOD").length,
-			problems: run.observations.filter((o) => o.assessment === "BAD").length,
+			strengths: run.observations.filter(
+				(o) =>
+					o.assessmentStatus === "ASSESSED" &&
+					o.presence &&
+					o.assessment &&
+					(o.presence === "PRESENT") === (o.assessment === "GOOD"),
+			).length,
+			problems: run.observations.filter(
+				(o) =>
+					o.assessmentStatus === "ASSESSED" &&
+					o.presence &&
+					o.assessment &&
+					(o.presence === "PRESENT") !== (o.assessment === "GOOD"),
+			).length,
 			notApplicable: run.observations.filter((o) => o.assessmentStatus === "NOT_APPLICABLE").length,
 			undetermined: run.observations.filter((o) => o.assessmentStatus === "UNDETERMINED").length,
 		},

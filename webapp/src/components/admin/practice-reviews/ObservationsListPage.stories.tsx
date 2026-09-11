@@ -98,12 +98,12 @@ function observationPage(
 
 /** Shortfalls worst-first, then strengths, then the observations that judged nothing. */
 const ACTIONABILITY_RANK: Record<string, number> = { CRITICAL: 0, MAJOR: 1, MINOR: 2, INFO: 3 };
-const actionability = (row: ReviewObservation) =>
-	row.assessment === "BAD"
-		? (ACTIONABILITY_RANK[row.severity ?? "INFO"] ?? 4)
-		: row.assessment === "GOOD"
-			? 5
-			: 6;
+function actionability(row: ReviewObservation): number {
+	if (row.assessmentStatus !== "ASSESSED" || !row.presence || !row.assessment) return 6;
+	if ((row.presence === "PRESENT") !== (row.assessment === "GOOD"))
+		return ACTIONABILITY_RANK[row.severity ?? "INFO"] ?? 4;
+	return 5;
+}
 const byActionability = (a: ReviewObservation, b: ReviewObservation) =>
 	actionability(a) - actionability(b) || b.observedAt.getTime() - a.observedAt.getTime();
 
