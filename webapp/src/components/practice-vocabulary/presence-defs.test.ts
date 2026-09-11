@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { ASSESSMENT_STATUS_DEFS } from "./assessment-status-defs";
 import { PRESENCE_DEFS } from "./presence-defs";
 
 describe("presence vocabulary", () => {
@@ -12,6 +13,6 @@ describe("presence vocabulary", () => {
 
 	it("does not describe absence as inapplicability", () => {
 		expect(PRESENCE_DEFS.ABSENT.description).toContain("could have occurred");
-		expect(PRESENCE_DEFS.NOT_APPLICABLE.description).toContain("nothing to judge");
+		expect(ASSESSMENT_STATUS_DEFS.NOT_APPLICABLE.description).toContain("nothing to judge");
 	});
 });

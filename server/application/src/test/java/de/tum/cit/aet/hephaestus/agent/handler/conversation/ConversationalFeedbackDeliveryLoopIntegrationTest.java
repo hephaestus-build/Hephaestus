@@ -293,6 +293,7 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
                 42L,
                 recipient.getId(),
                 "Observation title",
+                "ASSESSED",
                 "ABSENT",
                 "BAD",
                 "MAJOR",

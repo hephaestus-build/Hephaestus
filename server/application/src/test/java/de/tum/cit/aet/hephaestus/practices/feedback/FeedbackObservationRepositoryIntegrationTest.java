@@ -273,6 +273,7 @@ class FeedbackObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                 42L,
                 recipient.getId(),
                 "Observation title",
+                "ASSESSED",
                 "ABSENT",
                 "BAD",
                 "MAJOR",

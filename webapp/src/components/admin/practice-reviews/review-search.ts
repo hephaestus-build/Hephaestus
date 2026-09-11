@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
+import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { FILTERABLE_PLACES } from "@/components/practice-vocabulary/delivery-place-defs";
 import { PRESENCE_DEFS } from "@/components/practice-vocabulary/presence-defs";
@@ -84,6 +85,7 @@ export const observationsSearchSchema = z
 		page,
 		groupSlug: multiValue,
 		practiceSlug: multiValue,
+		assessmentStatus: enumValues(statusValues(ASSESSMENT_STATUS_DEFS)).optional(),
 		presence: enumValues(statusValues(PRESENCE_DEFS)),
 		assessment: enumValues(statusValues(ASSESSMENT_DEFS)),
 		severity: enumValues(statusValues(SEVERITY_DEFS)),
@@ -184,6 +186,7 @@ export function observationsQuery(search: ObservationsSearch, size: number) {
 		size,
 		groupSlug: search.groupSlug?.length ? search.groupSlug : undefined,
 		practiceSlug: search.practiceSlug?.length ? search.practiceSlug : undefined,
+		assessmentStatus: search.assessmentStatus,
 		presence: search.presence,
 		assessment: search.assessment,
 		severity: search.severity,

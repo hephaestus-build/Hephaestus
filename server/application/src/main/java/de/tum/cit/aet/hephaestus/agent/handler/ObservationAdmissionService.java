@@ -147,11 +147,22 @@ public class ObservationAdmissionService {
         out.put("id", observation.getId().toString());
         out.put("practiceSlug", observation.getPractice().getSlug());
         out.put("summary", observation.getSummary());
-        out.put("presence", observation.getPresence().name());
-        if (observation.getAssessment() != null)
-            out.put("assessment", observation.getAssessment().name());
-        if (observation.getSeverity() != null)
-            out.put("severity", observation.getSeverity().name());
+        out.put("assessmentStatus", observation.getAssessmentStatus().name());
+        out.put(
+                "presence",
+                observation.getPresence() == null
+                        ? null
+                        : observation.getPresence().name());
+        out.put(
+                "assessment",
+                observation.getAssessment() == null
+                        ? null
+                        : observation.getAssessment().name());
+        out.put(
+                "severity",
+                observation.getSeverity() == null
+                        ? null
+                        : observation.getSeverity().name());
         out.put("evidenceRationale", observation.getEvidenceRationale());
         out.set("evidence", observation.getEvidence());
         ArrayNode citations = out.putArray("citations");

@@ -145,6 +145,7 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
                 artifactId,
                 recipient.getId(),
                 "Observation title",
+                "ASSESSED",
                 "ABSENT",
                 "BAD",
                 "MAJOR",

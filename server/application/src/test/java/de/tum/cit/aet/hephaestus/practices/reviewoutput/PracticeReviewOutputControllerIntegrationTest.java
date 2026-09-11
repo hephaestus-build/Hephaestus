@@ -183,9 +183,10 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                 artifactId,
                 about.getId(),
                 title,
-                presence,
+                assessment != null ? "ASSESSED" : "INCONCLUSIVE".equals(presence) ? "UNDETERMINED" : "NOT_APPLICABLE",
+                assessment == null ? null : presence,
                 assessment,
-                severity,
+                "BAD".equals(assessment) ? severity : null,
                 "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\",\"artifactPath\":\"inputs/context/diff.patch\",\"path\":\"src/Main.java\",\"side\":\"NEW\",\"startLine\":42,\"endLine\":50,\"quote\":\"example\",\"quoteRedacted\":false}]}",
                 "Reasoning for " + title,
                 "recurrence-" + title,
@@ -360,6 +361,41 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                     .expectStatus()
                     .isNotFound()
                     .expectBody(Void.class);
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldFilterAssessmentStatusIndependentlyFromPresenceAndAssessment() {
+            insertObservation(practiceA, job, alice, "Risk avoided", "ABSENT", "GOOD", null, 0.8f, 7L, Instant.now());
+            insertObservation(
+                    practiceA, job, alice, "No occasion", "NOT_APPLICABLE", null, null, 0.8f, 7L, Instant.now());
+            insertObservation(
+                    practiceA, job, alice, "Criterion unresolved", "INCONCLUSIVE", null, null, 0.8f, 7L, Instant.now());
+            for (String status : List.of("NOT_APPLICABLE", "UNDETERMINED")) {
+                getOk(
+                                OBSERVATIONS + "?agentJobId={id}&assessmentStatus={status}",
+                                workspace.getWorkspaceSlug(),
+                                job.getId(),
+                                status)
+                        .jsonPath("$.page.totalElements")
+                        .isEqualTo(1)
+                        .jsonPath("$.content[0].assessmentStatus")
+                        .isEqualTo(status)
+                        .jsonPath("$.content[0].presence")
+                        .doesNotExist()
+                        .jsonPath("$.content[0].assessment")
+                        .doesNotExist()
+                        .jsonPath("$.content[0].severity")
+                        .doesNotExist();
+            }
+            getOk(
+                            OBSERVATIONS + "?agentJobId={id}&assessmentStatus=ASSESSED&presence=ABSENT&assessment=GOOD",
+                            workspace.getWorkspaceSlug(),
+                            job.getId())
+                    .jsonPath("$.page.totalElements")
+                    .isEqualTo(1)
+                    .jsonPath("$.content[0].summary")
+                    .isEqualTo("Risk avoided");
         }
 
         @Test

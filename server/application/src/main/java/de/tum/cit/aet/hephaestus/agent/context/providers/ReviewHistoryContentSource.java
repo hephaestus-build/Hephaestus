@@ -398,6 +398,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                     o.getPractice() == null ? null : o.getPractice().getSlug());
             node.put("recurrenceKey", o.getRecurrenceKey());
             node.put("summary", o.getSummary());
+            node.put("assessmentStatus", o.getAssessmentStatus().name());
             node.put(
                     "presence", o.getPresence() == null ? null : o.getPresence().name());
             node.put(

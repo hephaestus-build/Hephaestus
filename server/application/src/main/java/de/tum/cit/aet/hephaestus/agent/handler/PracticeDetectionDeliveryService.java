@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
@@ -137,6 +138,33 @@ public class PracticeDetectionDeliveryService {
         boolean withheldNegative = false;
         for (int submittedIndex = 0; submittedIndex < validObservations.size(); submittedIndex++) {
             ValidatedObservation observation = validObservations.get(submittedIndex);
+            observation
+                    .assessmentStatus()
+                    .validate(observation.presence(), observation.assessment(), observation.severity());
+            String expectedWarrant =
+                    switch (observation.assessmentStatus()) {
+                        case NOT_APPLICABLE -> "inapplicability";
+                        case UNDETERMINED -> "undecidability";
+                        case ASSESSED -> observation.presence() == Presence.ABSENT ? "search" : "";
+                    };
+            for (String warrant : List.of("search", "inapplicability", "undecidability")) {
+                JsonNode evidence = observation.evidence();
+                if (!warrant.equals(expectedWarrant) && evidence != null && evidence.hasNonNull(warrant)) {
+                    throw new JobDeliveryException("Observation evidence warrant does not match status and presence");
+                }
+            }
+            if (observation.assessmentStatus() == AssessmentStatus.UNDETERMINED) {
+                JsonNode evidence = observation.evidence();
+                JsonNode warrant = evidence == null ? null : evidence.get("undecidability");
+                if (warrant == null
+                        || !warrant.isObject()
+                        || !warrant.path("openQuestion").isString()
+                        || warrant.path("openQuestion").asString().isBlank()
+                        || !warrant.path("wouldSettleIt").isString()
+                        || warrant.path("wouldSettleIt").asString().isBlank()) {
+                    throw new JobDeliveryException("UNDETERMINED requires an open question and what would settle it");
+                }
+            }
             PracticeRevision revision = revisionsBySlug.get(observation.practiceSlug());
             if (revision == null) {
                 throw new JobDeliveryException(
@@ -250,7 +278,10 @@ public class PracticeDetectionDeliveryService {
                     artifactId,
                     aboutUserId,
                     observation.summary(),
-                    observation.presence().name(),
+                    observation.assessmentStatus().name(),
+                    observation.presence() == null
+                            ? null
+                            : observation.presence().name(),
                     observation.assessment() == null
                             ? null
                             : observation.assessment().name(),
@@ -471,7 +502,7 @@ public class PracticeDetectionDeliveryService {
     /** Requires NOT_APPLICABLE claims to identify the subject, exclusion reason, and consulted sources. */
     private void enforceStatedInapplicability(
             ValidatedObservation observation, EvidenceBoundary boundary, AgentJob job) {
-        if (observation.presence() != Presence.NOT_APPLICABLE) {
+        if (observation.assessmentStatus() != AssessmentStatus.NOT_APPLICABLE) {
             return;
         }
         JsonNode inapplicability =
@@ -487,7 +518,7 @@ public class PracticeDetectionDeliveryService {
                 || inapplicability.path("ruledOutBy").asString().isBlank()) {
             throw new JobDeliveryException(
                     "A NOT_APPLICABLE observation must name what the practice looks for and what rules it out "
-                            + "here; if it could not be told either way the answer is INCONCLUSIVE: slug="
+                            + "here; if it could not be told either way the answer is UNDETERMINED: slug="
                             + observation.practiceSlug()
                             + ", jobId="
                             + job.getId());

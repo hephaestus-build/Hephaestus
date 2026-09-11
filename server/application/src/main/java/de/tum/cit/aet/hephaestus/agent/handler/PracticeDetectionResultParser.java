@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import java.io.Serial;
@@ -41,8 +42,15 @@ public class PracticeDetectionResultParser {
             "avoids-insecure-defaults-and-over-broad-permissions",
             "keeps-the-test-suite-honest");
 
-    private static final Set<String> OBSERVATION_FIELDS =
-            Set.of("practiceSlug", "summary", "presence", "assessment", "severity", "evidence", "evidenceRationale");
+    private static final Set<String> OBSERVATION_FIELDS = Set.of(
+            "practiceSlug",
+            "summary",
+            "assessmentStatus",
+            "presence",
+            "assessment",
+            "severity",
+            "evidence",
+            "evidenceRationale");
 
     static final int MAX_DELIVERY_DIFF_NOTES = 30;
 
@@ -141,10 +149,15 @@ public class PracticeDetectionResultParser {
             throw new EntryValidationException("summary exceeds " + MAX_SUMMARY_LENGTH + " characters");
         }
 
-        Presence presence = parseEnum(entry, "presence", Presence.class);
-
-        Assessment assessment = parseAssessment(entry, presence);
-        Severity severity = parseSeverityOrDefault(entry);
+        AssessmentStatus assessmentStatus = parseEnum(entry, "assessmentStatus", AssessmentStatus.class);
+        Presence presence = parseNullableEnum(entry, "presence", Presence.class);
+        Assessment assessment = parseNullableEnum(entry, "assessment", Assessment.class);
+        Severity severity = parseNullableEnum(entry, "severity", Severity.class);
+        try {
+            assessmentStatus.validate(presence, assessment, severity);
+        } catch (IllegalArgumentException e) {
+            throw new EntryValidationException("incoherent observation axes: " + e.getMessage(), e);
+        }
 
         JsonNode evidence = entry.get("evidence");
         if (evidence == null || !evidence.isObject()) {
@@ -168,15 +181,13 @@ public class PracticeDetectionResultParser {
         }
 
         return new ValidatedObservation(
-                practiceSlug, summary, presence, assessment, severity, evidence, evidenceRationale);
+                practiceSlug, summary, assessmentStatus, presence, assessment, severity, evidence, evidenceRationale);
     }
 
-    /** Assessment exists only for outcomes that carry valence. */
-    private static @Nullable Assessment parseAssessment(JsonNode entry, Presence presence) {
-        if (!presence.carriesValence()) {
-            return null;
-        }
-        return parseEnum(entry, "assessment", Assessment.class);
+    private static <E extends Enum<E>> @Nullable E parseNullableEnum(JsonNode entry, String field, Class<E> enumType) {
+        JsonNode node = entry.get(field);
+        if (node == null) throw new EntryValidationException("missing field: " + field);
+        return node.isNull() ? null : parseEnum(entry, field, enumType);
     }
 
     private static String textField(JsonNode entry, String field) {
@@ -185,19 +196,6 @@ public class PracticeDetectionResultParser {
             throw new EntryValidationException("missing or non-text field: " + field);
         }
         return node.asString();
-    }
-
-    /**
-     * A missing, null, or non-text value defaults to {@link Severity#INFO} rather than discarding the
-     * observation: {@link ValidatedObservation#coerceCoherence(boolean, boolean)} re-derives the real band anyway. A
-     * present but unrecognised value still fails the entry.
-     */
-    private static Severity parseSeverityOrDefault(JsonNode entry) {
-        JsonNode node = entry.get("severity");
-        if (node == null || node.isNull() || !node.isString()) {
-            return Severity.INFO;
-        }
-        return parseEnum(entry, "severity", Severity.class);
     }
 
     private static <E extends Enum<E>> E parseEnum(JsonNode entry, String field, Class<E> enumType) {
@@ -307,7 +305,8 @@ public class PracticeDetectionResultParser {
     public record ValidatedObservation(
             String practiceSlug,
             String summary,
-            Presence presence,
+            AssessmentStatus assessmentStatus,
+            @Nullable Presence presence,
             @Nullable Assessment assessment,
             @Nullable Severity severity,
             @Nullable JsonNode evidence,
@@ -317,17 +316,35 @@ public class PracticeDetectionResultParser {
         public ValidatedObservation(
                 String practiceSlug,
                 String summary,
-                Presence presence,
+                AssessmentStatus assessmentStatus,
+                @Nullable Presence presence,
                 @Nullable Assessment assessment,
                 @Nullable Severity severity,
                 @Nullable JsonNode evidence,
                 @Nullable String evidenceRationale) {
-            this(practiceSlug, summary, presence, assessment, severity, evidence, evidenceRationale, null);
+            this(
+                    practiceSlug,
+                    summary,
+                    assessmentStatus,
+                    presence,
+                    assessment,
+                    severity,
+                    evidence,
+                    evidenceRationale,
+                    null);
         }
 
         public ValidatedObservation withKeys(@Nullable ObservationKeys keys) {
             return new ValidatedObservation(
-                    practiceSlug, summary, presence, assessment, severity, evidence, evidenceRationale, keys);
+                    practiceSlug,
+                    summary,
+                    assessmentStatus,
+                    presence,
+                    assessment,
+                    severity,
+                    evidence,
+                    evidenceRationale,
+                    keys);
         }
 
         public @Nullable String recurrenceKey() {
@@ -349,12 +366,8 @@ public class PracticeDetectionResultParser {
                                 + " targets harmful behaviour: PRESENT/GOOD is inconsistent. Reassess the original"
                                 + " evidence; inconsistency does not establish that the practice is inapplicable.");
             }
-            if (!p.carriesValence()) {
-                a = null;
-            }
-            Severity s = a == Assessment.BAD
-                    ? (severity == null || severity == Severity.INFO ? Severity.MINOR : severity)
-                    : null;
+            assessmentStatus.validate(p, a, severity);
+            Severity s = a == Assessment.BAD ? severity : null;
             if (advisoryOnly && a == Assessment.BAD && (s == Severity.CRITICAL || s == Severity.MAJOR)) {
                 s = Severity.MINOR;
             }
@@ -364,7 +377,8 @@ public class PracticeDetectionResultParser {
             if (p == presence && a == assessment && s == severity) {
                 return this;
             }
-            return new ValidatedObservation(practiceSlug, summary, p, a, s, evidence, evidenceRationale);
+            return new ValidatedObservation(
+                    practiceSlug, summary, assessmentStatus, p, a, s, evidence, evidenceRationale, keys);
         }
     }
 

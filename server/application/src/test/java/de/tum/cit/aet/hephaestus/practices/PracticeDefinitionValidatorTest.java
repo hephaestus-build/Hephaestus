@@ -14,6 +14,8 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -171,15 +173,16 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                 .hasMessage("A practice Hephaestus cannot review cannot define a precompute script");
     }
 
-    @Test
-    void rejectsDetectorVocabularyInDeveloperFacingGuidance() {
+    @ParameterizedTest
+    @ValueSource(strings = {"PRESENT", "ABSENT", "GOOD", "BAD", "ASSESSED", "NOT_APPLICABLE", "UNDETERMINED"})
+    void rejectsDetectorVocabularyInDeveloperFacingGuidance(String label) {
         PracticeDefinition definition = new PracticeDefinition(
                 "Focused review",
                 List.of(PracticeBinding.on(ScmSignals.PULL_REQUEST_OPENED, List.of(need(DIFF)))),
                 "Assess the review",
                 null,
                 languageModel(),
-                "A description that is ABSENT tells a reviewer nothing.",
+                "A description that is " + label + " tells a reviewer nothing.",
                 null,
                 null);
 

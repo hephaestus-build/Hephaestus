@@ -246,6 +246,7 @@ class InAppFeedbackControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 artifactId,
                 subject.getId(),
                 title,
+                "ASSESSED",
                 "ABSENT",
                 "BAD",
                 "MAJOR",

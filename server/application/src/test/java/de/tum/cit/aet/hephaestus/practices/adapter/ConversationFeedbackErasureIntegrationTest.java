@@ -304,6 +304,7 @@ class ConversationFeedbackErasureIntegrationTest extends BaseIntegrationTest {
                 artifactId,
                 recipient.getId(),
                 "Observation title",
+                "ASSESSED",
                 "ABSENT",
                 "BAD",
                 "MAJOR",

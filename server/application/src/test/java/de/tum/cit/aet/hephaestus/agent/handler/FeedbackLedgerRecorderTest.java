@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -341,6 +342,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         List.of(new PracticeDetectionResultParser.ValidatedObservation(
                                 "practice",
                                 "summary",
+                                AssessmentStatus.ASSESSED,
                                 Presence.ABSENT,
                                 Assessment.BAD,
                                 Severity.MAJOR,
@@ -799,6 +801,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         Observation pf = mock(Observation.class);
         lenient().when(pf.getId()).thenReturn(UUID.randomUUID());
         lenient().when(pf.getPresence()).thenReturn(Presence.PRESENT);
+        org.mockito.Mockito.lenient().when(pf.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
         lenient().when(pf.getAssessment()).thenReturn(Assessment.GOOD);
         lenient().when(pf.getSeverity()).thenReturn(null); // GOOD strengths carry no severity (ADR 0022)
         lenient().when(pf.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
@@ -810,7 +813,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     private Observation notApplicable() {
         Observation pf = mock(Observation.class);
         lenient().when(pf.getId()).thenReturn(UUID.randomUUID());
-        lenient().when(pf.getPresence()).thenReturn(Presence.NOT_APPLICABLE);
+        lenient().when(pf.getAssessmentStatus()).thenReturn(AssessmentStatus.NOT_APPLICABLE);
         lenient().when(pf.getAssessment()).thenReturn(null); // NA carries no valence (ADR 0022)
         lenient().when(pf.getSeverity()).thenReturn(null);
         lenient().when(pf.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
@@ -825,6 +828,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         lenient().when(pf.getId()).thenReturn(id);
         lenient().when(pf.getOccurrenceKey()).thenReturn("occ-" + id);
         lenient().when(pf.getPresence()).thenReturn(Presence.ABSENT);
+        org.mockito.Mockito.lenient().when(pf.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
         lenient().when(pf.getAssessment()).thenReturn(Assessment.BAD);
         lenient().when(pf.getSeverity()).thenReturn(Severity.MINOR);
         lenient().when(pf.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);

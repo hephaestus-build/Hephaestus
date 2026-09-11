@@ -339,6 +339,7 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
                 artifactId,
                 aboutUserId,
                 "Observation title",
+                "ASSESSED",
                 "ABSENT",
                 "BAD",
                 "MAJOR",

@@ -152,21 +152,17 @@ public class Observation {
     @Column(name = "summary", nullable = false, length = 255)
     private String summary;
 
-    /**
-     * Whether the practice's target signal was seen, expected-but-absent, inapplicable, or undecidable
-     * from evidence that was present (ADR 0022). Measurement only — the good/bad valence lives on
-     * {@link #assessment}.
-     */
     @NotNull
     @Enumerated(EnumType.STRING)
-    @Column(name = "presence", length = 16, nullable = false)
+    @Column(name = "assessment_status", length = 16, nullable = false)
+    private AssessmentStatus assessmentStatus;
+
+    /** The fixed target's presence; null unless assessed. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "presence", length = 16)
     private Presence presence;
 
-    /**
-     * The good/bad valence of this observation, resolved per observation by the detector (ADR 0022).
-     * NULL exactly when {@link #presence} does not {@link Presence#carriesValence() carry valence} —
-     * enforced in the DB by {@code chk_observation_presence_assessment} and mirrored by {@link #onCreate}.
-     */
+    /** The judgment of the work; null unless assessed. */
     @Enumerated(EnumType.STRING)
     @Column(name = "assessment", length = 8)
     private Assessment assessment;
@@ -185,8 +181,7 @@ public class Observation {
 
     /**
      * Impact band — meaningful only for an {@link Assessment#BAD} observation; NULL on a GOOD or
-     * NOT_APPLICABLE row (ADR 0022). Unlike {@link #assessment}, this coupling has no DB CHECK — the
-     * detection parser's coherence coercion enforces it, with {@link #onCreate} as the JPA-path backstop.
+     * unassessed row. The database and {@link AssessmentStatus#validate} enforce the same invariant.
      */
     @Enumerated(EnumType.STRING)
     @Column(name = "severity", length = 16)
@@ -221,21 +216,9 @@ public class Observation {
         if (origin == null) {
             origin = ObservationOrigin.LIVE;
         }
-        if (presence.carriesValence() != (assessment != null)) {
-            throw new IllegalStateException(
-                    "Observation coherence violation: assessment is required exactly for a presence that carries valence (presence="
-                            + presence
-                            + ", assessment="
-                            + assessment
-                            + ")");
+        if (assessmentStatus == null) {
+            throw new IllegalStateException("Assessment status is required");
         }
-        if (assessment != Assessment.BAD && severity != null) {
-            throw new IllegalStateException(
-                    "Observation coherence violation: severity must be null unless assessment is BAD (assessment="
-                            + assessment
-                            + ", severity="
-                            + severity
-                            + ")");
-        }
+        assessmentStatus.validate(presence, assessment, severity);
     }
 }

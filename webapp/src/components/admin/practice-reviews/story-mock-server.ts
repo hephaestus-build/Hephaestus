@@ -81,6 +81,7 @@ function filterObservations(rows: ReviewObservation[], url: URL) {
 			withinDates(url, row.observedAt) &&
 			matches(values(url, "groupSlug"), row.group?.slug) &&
 			matches(values(url, "practiceSlug"), row.practiceSlug) &&
+			matches(values(url, "assessmentStatus"), row.assessmentStatus) &&
 			matches(values(url, "presence"), row.presence) &&
 			matches(values(url, "assessment"), row.assessment) &&
 			matches(values(url, "severity"), row.severity) &&

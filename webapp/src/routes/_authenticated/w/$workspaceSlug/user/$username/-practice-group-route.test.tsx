@@ -225,6 +225,7 @@ it("refreshes every cached filter of the group after responding to feedback", as
 								practiceSlug: "small-changes",
 								practiceName: "Keep changes focused",
 								title: "Two concerns in one change",
+								assessmentStatus: "ASSESSED",
 								presence: "PRESENT",
 								assessment: "BAD",
 								feedbackUsefulness: usefulness,

@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
@@ -327,6 +328,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         return new PracticeDetectionResultParser.ValidatedObservation(
                 observation.getPractice().getSlug(),
                 observation.getSummary(),
+                observation.getAssessmentStatus(),
                 observation.getPresence(),
                 observation.getAssessment(),
                 observation.getSeverity(),
@@ -376,10 +378,10 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         // A diff citation is the one thing that cannot be produced without the patch: the runner
         // re-reads every citation out of the artifact it names (citationMatchesArtifact in
         // pi-observation-normalize.ts) and rejects the observation when the quote is not there.
-        // Both valence-free presences count as deciding nothing — NOT_APPLICABLE and INCONCLUSIVE
+        // Both unassessed statuses count as deciding nothing — NOT_APPLICABLE and UNDETERMINED
         // differ in what the run could tell, not in whether it settled anything.
         boolean nothingDecided =
-                parsed.validObservations().stream().noneMatch(f -> f.presence().carriesValence());
+                parsed.validObservations().stream().noneMatch(f -> (f.assessmentStatus() == AssessmentStatus.ASSESSED));
         if (nothingDecided
                 && secretObservations.isEmpty()
                 && !diffFiles.isEmpty()
@@ -551,6 +553,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         return new PracticeDetectionResultParser.ValidatedObservation(
                 "avoids-insecure-defaults-and-over-broad-permissions",
                 "Hardcoded secret on a changed line",
+                AssessmentStatus.ASSESSED,
                 Presence.PRESENT,
                 Assessment.BAD,
                 severity,

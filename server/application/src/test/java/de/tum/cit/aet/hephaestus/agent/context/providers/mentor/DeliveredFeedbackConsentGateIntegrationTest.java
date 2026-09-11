@@ -155,6 +155,7 @@ class DeliveredFeedbackConsentGateIntegrationTest extends AbstractSlackConsentGa
                 artifactId,
                 recipient.getId(),
                 "Observation title",
+                "ASSESSED",
                 "ABSENT",
                 "BAD",
                 "MAJOR",

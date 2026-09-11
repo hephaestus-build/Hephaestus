@@ -144,7 +144,8 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
                 artifactId,
                 developer.getId(),
                 title,
-                presence,
+                assessment == null ? presence : "ASSESSED",
+                assessment == null ? null : presence,
                 assessment,
                 severity,
                 DIFF_EVIDENCE_JSON,
@@ -185,15 +186,17 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("carries an undecided observation with a null assessment rather than dropping it")
     void shouldCarryInconclusiveObservationWithoutAnAssessment() {
-        insertObservation("Could not tell from the diff", "INCONCLUSIVE", null, null, "scm.pull_request", 1L);
+        insertObservation("Could not tell from the diff", "UNDETERMINED", null, null, "scm.pull_request", 1L);
 
         getHistory()
                 .jsonPath("$.content.length()")
                 .isEqualTo(1)
                 .jsonPath("$.content[0].observations.length()")
                 .isEqualTo(1)
+                .jsonPath("$.content[0].observations[0].assessmentStatus")
+                .isEqualTo("UNDETERMINED")
                 .jsonPath("$.content[0].observations[0].presence")
-                .isEqualTo("INCONCLUSIVE")
+                .doesNotExist()
                 .jsonPath("$.content[0].observations[0].assessment")
                 .doesNotExist();
     }

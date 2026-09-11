@@ -116,3 +116,27 @@ being discussed is an **override**, and one a parent supplied is **inherited**.
 For whether an instance entry is copied into new workspaces, use **include / exclude** (see the table
 above). Do not use *shipped*, *offered*, *retired*, *ours*, *yours*, or *here* in catalog UI copy;
 those terms expose implementation or depend on who is reading.
+
+## Observation assessment axes
+
+An observation records `assessmentStatus` independently of its result:
+
+| Status | Presence | Assessment | Severity |
+| --- | --- | --- | --- |
+| ASSESSED | PRESENT or ABSENT | GOOD | null |
+| ASSESSED | PRESENT or ABSENT | BAD | required |
+| NOT_APPLICABLE | null | null | null |
+| UNDETERMINED | null | null | null |
+
+Presence describes the practice's fixed target, not its desirability. Partial guidance can be
+PRESENT/BAD; missing required guidance is ABSENT/BAD. Avoiding a harmful target within an applicable,
+fully searched corpus is ABSENT/GOOD, not NOT_APPLICABLE.
+
+NOT_APPLICABLE needs an evidenced fact ruling out the prerequisite occasion. UNDETERMINED needs an
+unresolved question after the relevant evidence was captured and read. Neither is a judgment of the
+developer, and neither contributes to assessed-result trends. Missing or failed capture belongs to
+the review's readiness/coverage record, not either observation status.
+
+The server, sandbox tool contract and database reject contradictory axes. They never manufacture a
+judgment by defaulting status, presence, assessment or severity. See the
+[review pipeline](./practice-review-pipeline.mdx) for capture and delivery boundaries.

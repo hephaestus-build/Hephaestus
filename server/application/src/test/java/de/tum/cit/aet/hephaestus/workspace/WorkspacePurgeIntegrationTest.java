@@ -745,6 +745,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     threadId,
                     owner.getId(),
                     "Observation title",
+                    "ASSESSED",
                     "ABSENT",
                     "BAD",
                     "MAJOR",

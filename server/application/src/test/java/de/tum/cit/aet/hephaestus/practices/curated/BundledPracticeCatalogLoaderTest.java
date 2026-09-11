@@ -23,6 +23,33 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
             new PracticeEvidenceDefaults(catalogs, PracticeSignalOptionsFixture.catalog()));
 
     @Test
+    void shouldKeepCaptureFailuresOutOfObservationStatuses() {
+        assertThat(loader.catalog().practices())
+                .allSatisfy(practice -> assertThat(practice.definition().criteria())
+                        .as("canonical observation vocabulary in %s", practice.slug())
+                        .doesNotContain("INCONCLUSIVE", "NO_REVIEW_OCCASION", "INSUFFICIENT_EVIDENCE"));
+        assertThat(loader.catalog().practices())
+                .filteredOn(practice -> java.util.Set.of(
+                                "describe-what-and-why", "merged-past-unresolved-review-threads",
+                                "records-significant-decisions-with-rationale", "asks-answerable-questions")
+                        .contains(practice.slug()))
+                .hasSize(4)
+                .allSatisfy(practice -> assertThat(practice.definition().criteria())
+                        .contains("collection gap")
+                        .doesNotContain("you could not read it: return UNDETERMINED"));
+    }
+
+    @Test
+    void shouldNotCallApplicableGoodWorkNotApplicable() {
+        assertThat(loader.catalog().practices())
+                .filteredOn(practice -> practice.slug().equals("asks-answerable-questions")
+                        || practice.slug().equals("posts-clear-status-and-blocker-updates"))
+                .hasSize(2)
+                .allSatisfy(practice ->
+                        assertThat(practice.definition().criteria()).contains("PRESENT/GOOD, not NOT_APPLICABLE"));
+    }
+
+    @Test
     void shouldLoadComposedDefinitionsAndScripts() {
         BundledPracticeCatalog catalog = loader.catalog();
 

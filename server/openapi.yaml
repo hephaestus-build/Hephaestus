@@ -5246,8 +5246,15 @@ paths:
           enum:
           - PRESENT
           - ABSENT
+      - in: query
+        name: assessmentStatus
+        required: false
+        schema:
+          type: string
+          enum:
+          - ASSESSED
           - NOT_APPLICABLE
-          - INCONCLUSIVE
+          - UNDETERMINED
       - description: "Only observations on these kinds of reviewed work, e.g. scm.pull_request\
           \ (repeatable)"
         in: query
@@ -5988,6 +5995,17 @@ paths:
           items:
             type: string
       - in: query
+        name: assessmentStatus
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - ASSESSED
+            - NOT_APPLICABLE
+            - UNDETERMINED
+      - in: query
         name: presence
         required: false
         schema:
@@ -5997,8 +6015,6 @@ paths:
             enum:
             - PRESENT
             - ABSENT
-            - NOT_APPLICABLE
-            - INCONCLUSIVE
       - in: query
         name: assessment
         required: false
@@ -11077,11 +11093,16 @@ components:
             cannot be resolved)
         assessment:
           type: string
-          description: "Assessment: GOOD or BAD; null when the presence carries no\
-            \ direction (NOT_APPLICABLE, INCONCLUSIVE)"
+          description: "Assessment: GOOD or BAD; null unless assessmentStatus is ASSESSED"
           enum:
           - GOOD
           - BAD
+        assessmentStatus:
+          type: string
+          enum:
+          - ASSESSED
+          - NOT_APPLICABLE
+          - UNDETERMINED
         claimCurrentness:
           type: string
           description: Whether an observation was produced using the current review
@@ -11123,12 +11144,10 @@ components:
           description: Practice slug
         presence:
           type: string
-          description: "Presence: PRESENT, ABSENT, NOT_APPLICABLE, or INCONCLUSIVE"
+          description: PRESENT or ABSENT only when ASSESSED
           enum:
           - PRESENT
           - ABSENT
-          - NOT_APPLICABLE
-          - INCONCLUSIVE
         severity:
           type: string
           description: Severity level (null unless assessment is BAD)
@@ -11143,13 +11162,13 @@ components:
       required:
       - artifactId
       - artifactKind
+      - assessmentStatus
       - claimCurrentness
       - id
       - observedAt
       - origin
       - practiceName
       - practiceSlug
-      - presence
       - summary
     ObservationEvidence:
       type: object
@@ -11176,11 +11195,16 @@ components:
           description: Artifact type (e.g. PULL_REQUEST)
         assessment:
           type: string
-          description: "Assessment: GOOD or BAD; null when the presence carries no\
-            \ direction (NOT_APPLICABLE, INCONCLUSIVE)"
+          description: "Assessment: GOOD or BAD; null unless assessmentStatus is ASSESSED"
           enum:
           - GOOD
           - BAD
+        assessmentStatus:
+          type: string
+          enum:
+          - ASSESSED
+          - NOT_APPLICABLE
+          - UNDETERMINED
         claimCurrentness:
           type: string
           description: Whether an observation was produced using the current review
@@ -11213,12 +11237,10 @@ components:
           description: Practice slug
         presence:
           type: string
-          description: "Presence: PRESENT, ABSENT, NOT_APPLICABLE, or INCONCLUSIVE"
+          description: PRESENT or ABSENT only when ASSESSED
           enum:
           - PRESENT
           - ABSENT
-          - NOT_APPLICABLE
-          - INCONCLUSIVE
         severity:
           type: string
           description: Severity level (null unless assessment is BAD)
@@ -11233,13 +11255,13 @@ components:
       required:
       - artifactId
       - artifactKind
+      - assessmentStatus
       - claimCurrentness
       - id
       - observedAt
       - origin
       - practiceName
       - practiceSlug
-      - presence
       - summary
     OutcomeVector:
       type: object
@@ -11259,12 +11281,16 @@ components:
         safeAvoidances:
           type: integer
           format: int32
+        undetermined:
+          type: integer
+          format: int32
       required:
       - commissionProblems
       - demonstratedStrengths
       - notApplicable
       - omissionGaps
       - safeAvoidances
+      - undetermined
     OutlineCollection:
       type: object
       description: A mirrored Outline collection with its sync state and live document
@@ -12089,11 +12115,17 @@ components:
       properties:
         assessment:
           type: string
-          description: Good or bad for the developer; null when the review could not
-            decide (INCONCLUSIVE)
+          description: Good or bad for the developer; null unless assessmentStatus
+            is ASSESSED
           enum:
           - GOOD
           - BAD
+        assessmentStatus:
+          type: string
+          enum:
+          - ASSESSED
+          - NOT_APPLICABLE
+          - UNDETERMINED
         feedbackId:
           type: string
           format: uuid
@@ -12122,8 +12154,6 @@ components:
           enum:
           - PRESENT
           - ABSENT
-          - NOT_APPLICABLE
-          - INCONCLUSIVE
         recurrenceKey:
           type: string
         severity:
@@ -12136,10 +12166,10 @@ components:
         title:
           type: string
       required:
+      - assessmentStatus
       - observationId
       - practiceName
       - practiceSlug
-      - presence
       - title
     PracticeGroupReviewRun:
       type: object
@@ -13628,10 +13658,16 @@ components:
       properties:
         assessment:
           type: string
-          description: "Assessment: GOOD or BAD (null when NOT_APPLICABLE)"
+          description: "Assessment: GOOD or BAD (null unless ASSESSED)"
           enum:
           - GOOD
           - BAD
+        assessmentStatus:
+          type: string
+          enum:
+          - ASSESSED
+          - NOT_APPLICABLE
+          - UNDETERMINED
         claimCurrentness:
           type: string
           description: Whether an observation was produced using the current review
@@ -13662,8 +13698,6 @@ components:
           enum:
           - PRESENT
           - ABSENT
-          - NOT_APPLICABLE
-          - INCONCLUSIVE
         role:
           type: string
           description: Whether the observation leads the feedback or reinforces it
@@ -13681,13 +13715,13 @@ components:
         summary:
           type: string
       required:
+      - assessmentStatus
       - claimCurrentness
       - observationId
       - observedAt
       - ordinal
       - practiceName
       - practiceSlug
-      - presence
       - role
       - summary
     ReviewFeedback:
@@ -13967,10 +14001,16 @@ components:
           $ref: "#/components/schemas/ReviewArtifact"
         assessment:
           type: string
-          description: "Assessment: GOOD or BAD (null when NOT_APPLICABLE)"
+          description: "Assessment: GOOD or BAD (null unless ASSESSED)"
           enum:
           - GOOD
           - BAD
+        assessmentStatus:
+          type: string
+          enum:
+          - ASSESSED
+          - NOT_APPLICABLE
+          - UNDETERMINED
         claimCurrentness:
           type: string
           description: Whether an observation was produced using the current review
@@ -14009,8 +14049,6 @@ components:
           enum:
           - PRESENT
           - ABSENT
-          - NOT_APPLICABLE
-          - INCONCLUSIVE
         recurrenceKey:
           type: string
           description: Cross-run locus key; null when continuity is unavailable
@@ -14031,6 +14069,7 @@ components:
       required:
       - agentJobId
       - artifact
+      - assessmentStatus
       - claimCurrentness
       - feedbackDisposition
       - id
@@ -14038,18 +14077,11 @@ components:
       - origin
       - practiceName
       - practiceSlug
-      - presence
       - summary
     ReviewObservationCounts:
       type: object
       description: Counts of observations by assessment
       properties:
-        inconclusive:
-          type: integer
-          format: int64
-          description: Practices that looked at the evidence and could not settle
-            the question either way; reported apart from notApplicable because one
-            says there was nothing here to judge and the other says we could not tell
         notApplicable:
           type: integer
           format: int64
@@ -14060,11 +14092,17 @@ components:
         strengths:
           type: integer
           format: int64
+        undetermined:
+          type: integer
+          format: int64
+          description: Practices that looked at the evidence and could not settle
+            the question either way; reported apart from notApplicable because one
+            says there was nothing here to judge and the other says we could not tell
       required:
-      - inconclusive
       - notApplicable
       - problems
       - strengths
+      - undetermined
     ReviewObservationDetail:
       type: object
       description: An observation with evidence and linked feedback
@@ -14076,10 +14114,16 @@ components:
           $ref: "#/components/schemas/ReviewArtifact"
         assessment:
           type: string
-          description: "Assessment: GOOD or BAD (null when NOT_APPLICABLE)"
+          description: "Assessment: GOOD or BAD (null unless ASSESSED)"
           enum:
           - GOOD
           - BAD
+        assessmentStatus:
+          type: string
+          enum:
+          - ASSESSED
+          - NOT_APPLICABLE
+          - UNDETERMINED
         claimCurrentness:
           type: string
           description: Whether an observation was produced using the current review
@@ -14119,8 +14163,6 @@ components:
           enum:
           - PRESENT
           - ABSENT
-          - NOT_APPLICABLE
-          - INCONCLUSIVE
         recurrenceKey:
           type: string
           description: Cross-run locus key; null when continuity is unavailable
@@ -14141,13 +14183,13 @@ components:
       required:
       - agentJobId
       - artifact
+      - assessmentStatus
       - claimCurrentness
       - feedback
       - id
       - observedAt
       - practiceName
       - practiceSlug
-      - presence
       - summary
     ReviewPlacement:
       type: object

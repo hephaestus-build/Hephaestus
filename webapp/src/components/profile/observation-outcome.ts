@@ -9,10 +9,12 @@ import {
 } from "lucide-react";
 
 import type { Assessment } from "@/components/practice-vocabulary/assessment-defs";
+import type { AssessmentStatus } from "@/components/practice-vocabulary/assessment-status-defs";
 import type { Presence } from "@/components/practice-vocabulary/presence-defs";
 export interface ObservationOutcomeInput {
-	presence: Presence;
-	assessment?: Assessment;
+	assessmentStatus: AssessmentStatus;
+	presence?: Presence | null;
+	assessment?: Assessment | null;
 }
 
 export type ObservationOutcome =
@@ -21,7 +23,7 @@ export type ObservationOutcome =
 	| "PRESENT_BAD"
 	| "ABSENT_BAD"
 	| "NOT_APPLICABLE"
-	| "INCONCLUSIVE";
+	| "UNDETERMINED";
 
 export const OBSERVATION_OUTCOME_PRESENTATION = {
 	PRESENT_GOOD: {
@@ -45,12 +47,12 @@ export const OBSERVATION_OUTCOME_PRESENTATION = {
 		className: "text-destructive",
 	},
 	NOT_APPLICABLE: {
-		label: "Not assessed",
+		label: "Not applicable",
 		icon: CircleDashedIcon,
 		className: "text-muted-foreground",
 	},
-	INCONCLUSIVE: {
-		label: "Not certain enough to say",
+	UNDETERMINED: {
+		label: "Undetermined",
 		icon: CircleHelpIcon,
 		className: "text-muted-foreground",
 	},
@@ -59,11 +61,8 @@ export const OBSERVATION_OUTCOME_PRESENTATION = {
 	{ label: string; icon: LucideIcon; className: string }
 >;
 export function observationOutcome(observation: ObservationOutcomeInput): ObservationOutcome {
-	if (observation.presence === "INCONCLUSIVE") {
-		return "INCONCLUSIVE";
-	}
-	if (observation.presence === "NOT_APPLICABLE" || !observation.assessment) {
-		return "NOT_APPLICABLE";
-	}
+	if (observation.assessmentStatus !== "ASSESSED") return observation.assessmentStatus;
+	if (!observation.presence || !observation.assessment)
+		throw new Error("Assessed observations require presence and assessment");
 	return `${observation.presence}_${observation.assessment}`;
 }

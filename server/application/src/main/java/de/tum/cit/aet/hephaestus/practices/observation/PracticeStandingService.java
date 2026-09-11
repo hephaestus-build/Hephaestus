@@ -313,7 +313,10 @@ public class PracticeStandingService {
                             : Stream.concat(demonstrated.stream(), avoided.stream())
                                     .toList(),
                     detectorStrengthIsIncoherent ? demonstrated.size() : 0,
-                    bucket(byOutcome, ObservationOutcome.NOT_APPLICABLE));
+                    Stream.concat(
+                                    bucket(byOutcome, ObservationOutcome.NOT_APPLICABLE).stream(),
+                                    bucket(byOutcome, ObservationOutcome.UNDETERMINED).stream())
+                            .toList());
         }
 
         private static List<Observation> bucket(

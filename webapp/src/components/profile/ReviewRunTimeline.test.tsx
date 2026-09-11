@@ -13,6 +13,7 @@ const baseObservation = {
 	practiceSlug: "records-decisions",
 	practiceName: "Record significant decisions and the reasoning",
 	title: "The workspace trade-off is documented",
+	assessmentStatus: "ASSESSED",
 	presence: "PRESENT",
 	assessment: "GOOD",
 } satisfies PracticeGroupReviewObservation;

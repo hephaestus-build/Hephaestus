@@ -11,6 +11,7 @@ const observation: PracticeGroupReviewObservation = {
 	practiceSlug: "explain-decisions",
 	practiceName: "Explain significant decisions",
 	title: "The reason for the timeout is missing",
+	assessmentStatus: "ASSESSED",
 	presence: "PRESENT",
 	assessment: "BAD",
 	severity: "MINOR",

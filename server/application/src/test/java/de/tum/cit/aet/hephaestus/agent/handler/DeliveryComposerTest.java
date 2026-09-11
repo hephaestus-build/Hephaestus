@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -91,9 +92,10 @@ class DeliveryComposerTest extends BaseUnitTest {
         return new ValidatedObservation(
                 slug,
                 humanizeTitle(slug) + " (positive)",
+                AssessmentStatus.ASSESSED,
                 Presence.PRESENT,
                 Assessment.GOOD,
-                Severity.INFO,
+                null,
                 null,
                 null);
     }
@@ -106,7 +108,14 @@ class DeliveryComposerTest extends BaseUnitTest {
             @Nullable List<String> snippets,
             @Nullable String reasoning) {
         return new ValidatedObservation(
-                slug, title, Presence.ABSENT, Assessment.BAD, severity, buildEvidence(locations, snippets), reasoning);
+                slug,
+                title,
+                AssessmentStatus.ASSESSED,
+                Presence.ABSENT,
+                Assessment.BAD,
+                severity,
+                buildEvidence(locations, snippets),
+                reasoning);
     }
 
     private static String humanizeTitle(String slug) {
@@ -271,6 +280,7 @@ class DeliveryComposerTest extends BaseUnitTest {
     private static final List<ValidatedObservation> ONE_MINOR = List.of(new ValidatedObservation(
             "describe-what-and-why",
             "PR description lacks a rationale sentence",
+            AssessmentStatus.ASSESSED,
             Presence.ABSENT,
             Assessment.BAD,
             Severity.MINOR,
@@ -287,6 +297,7 @@ class DeliveryComposerTest extends BaseUnitTest {
         ValidatedObservation observation = new ValidatedObservation(
                 "describe-what-and-why",
                 "The change does not explain the problem it solves",
+                AssessmentStatus.ASSESSED,
                 Presence.ABSENT,
                 Assessment.BAD,
                 Severity.MINOR,
@@ -379,9 +390,10 @@ class DeliveryComposerTest extends BaseUnitTest {
         ValidatedObservation strength = new ValidatedObservation(
                 "error-state-handling",
                 "Error state handling (positive)",
+                AssessmentStatus.ASSESSED,
                 Presence.PRESENT,
                 Assessment.GOOD,
-                Severity.INFO,
+                null,
                 null,
                 "Network errors are surfaced to the user via an alert.");
         String lead = "Small change, and it carries its own error handling.";
@@ -410,9 +422,10 @@ class DeliveryComposerTest extends BaseUnitTest {
         ValidatedObservation observed = new ValidatedObservation(
                 "error-state-handling",
                 "Network errors are surfaced to the user via an alert",
+                AssessmentStatus.ASSESSED,
                 Presence.PRESENT,
                 Assessment.GOOD,
-                Severity.INFO,
+                null,
                 null,
                 // The warrant is written for whoever audits the review: first person, about the search.
                 "I walked every added subscribe block and followed each error callback to its sink.");
@@ -810,17 +823,19 @@ class DeliveryComposerTest extends BaseUnitTest {
                 "issue-has-checkable-outcome",
                 // Grading vocabulary rather than an observation: scrubbed to nothing for a developer.
                 "The practice requires a checkable outcome for a POSITIVE observation",
+                AssessmentStatus.ASSESSED,
                 Presence.PRESENT,
                 Assessment.GOOD,
-                Severity.INFO,
+                null,
                 null,
                 "The practice requires a checkable outcome for a POSITIVE observation.");
         ValidatedObservation real = new ValidatedObservation(
                 "issue-scoped-to-single-concern",
                 "The issue describes one deliverable and stays within that single concern",
+                AssessmentStatus.ASSESSED,
                 Presence.PRESENT,
                 Assessment.GOOD,
-                Severity.INFO,
+                null,
                 null,
                 "Its body names one outcome and the diff touches only that area.");
 
@@ -838,9 +853,10 @@ class DeliveryComposerTest extends BaseUnitTest {
                 "issue-has-checkable-outcome",
                 // Grading vocabulary rather than an observation: scrubbed to nothing for a developer.
                 "The practice requires a checkable outcome for a POSITIVE observation",
+                AssessmentStatus.ASSESSED,
                 Presence.PRESENT,
                 Assessment.GOOD,
-                Severity.INFO,
+                null,
                 null,
                 "The practice requires a checkable outcome for a POSITIVE observation.");
 
@@ -854,9 +870,9 @@ class DeliveryComposerTest extends BaseUnitTest {
     @Test
     void compose_allObservationsNotApplicable_returnsNullNoSpuriousAllClear() {
         ValidatedObservation na1 = new ValidatedObservation(
-                "issue-scoped-to-single-concern", "n/a", Presence.NOT_APPLICABLE, null, Severity.INFO, null, "");
+                "issue-scoped-to-single-concern", "n/a", AssessmentStatus.NOT_APPLICABLE, null, null, null, null, "");
         ValidatedObservation na2 = new ValidatedObservation(
-                "issue-has-checkable-outcome", "n/a", Presence.NOT_APPLICABLE, null, Severity.INFO, null, "");
+                "issue-has-checkable-outcome", "n/a", AssessmentStatus.NOT_APPLICABLE, null, null, null, null, "");
 
         assertThat(DeliveryComposer.compose(List.of(na1, na2), ArtifactKinds.ISSUE))
                 .isNull();
@@ -1046,6 +1062,7 @@ class DeliveryComposerTest extends BaseUnitTest {
         return new ValidatedObservation(
                 slug,
                 title,
+                AssessmentStatus.ASSESSED,
                 Presence.ABSENT,
                 Assessment.BAD,
                 severity,
@@ -1153,6 +1170,7 @@ class DeliveryComposerTest extends BaseUnitTest {
         ValidatedObservation asProblemObservation = new ValidatedObservation(
                 "uses-force-unwrap",
                 "Force-unwrap present in changed code",
+                AssessmentStatus.ASSESSED,
                 Presence.PRESENT,
                 Assessment.BAD,
                 Severity.MAJOR,
@@ -1161,9 +1179,10 @@ class DeliveryComposerTest extends BaseUnitTest {
         ValidatedObservation asStrengthObservation = new ValidatedObservation(
                 "uses-force-unwrap",
                 "Force-unwrap present in changed code",
+                AssessmentStatus.ASSESSED,
                 Presence.PRESENT,
                 Assessment.GOOD,
-                Severity.MAJOR,
+                null,
                 evidence,
                 "Force-unwrapping crashes on nil.");
 
@@ -1334,9 +1353,10 @@ class DeliveryComposerTest extends BaseUnitTest {
         return new ValidatedObservation(
                 slug,
                 humanizeTitle(slug) + " (positive)",
+                AssessmentStatus.ASSESSED,
                 Presence.PRESENT,
                 Assessment.GOOD,
-                Severity.INFO,
+                null,
                 null,
                 reasoning);
     }
@@ -1851,6 +1871,7 @@ class DeliveryComposerTest extends BaseUnitTest {
         ValidatedObservation f = new ValidatedObservation(
                 "ships-tests-with-the-change",
                 "New branch ships without a test",
+                AssessmentStatus.ASSESSED,
                 Presence.ABSENT,
                 Assessment.BAD,
                 Severity.MAJOR,
@@ -1885,9 +1906,10 @@ class DeliveryComposerTest extends BaseUnitTest {
         ValidatedObservation good = new ValidatedObservation(
                 "ships-tests-with-the-change",
                 "Tests ship with the change",
+                AssessmentStatus.ASSESSED,
                 Presence.PRESENT,
                 Assessment.GOOD,
-                Severity.INFO,
+                null,
                 null,
                 "MEASURED REASONING: the new branch is covered.");
 

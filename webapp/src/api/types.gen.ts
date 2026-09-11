@@ -2238,9 +2238,10 @@ export type ObservationDetail = {
    */
   artifactUrl?: string;
   /**
-   * Assessment: GOOD or BAD; null when the presence carries no direction (NOT_APPLICABLE, INCONCLUSIVE)
+   * Assessment: GOOD or BAD; null unless assessmentStatus is ASSESSED
    */
   assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
    * Whether an observation was produced using the current review rules
    */
@@ -2275,9 +2276,9 @@ export type ObservationDetail = {
    */
   practiceSlug: string;
   /**
-   * Presence: PRESENT, ABSENT, NOT_APPLICABLE, or INCONCLUSIVE
+   * PRESENT or ABSENT only when ASSESSED
    */
-  presence: 'PRESENT' | 'ABSENT' | 'NOT_APPLICABLE' | 'INCONCLUSIVE';
+  presence?: 'PRESENT' | 'ABSENT';
   /**
    * Severity level (null unless assessment is BAD)
    */
@@ -2309,9 +2310,10 @@ export type ObservationList = {
    */
   artifactKind: string;
   /**
-   * Assessment: GOOD or BAD; null when the presence carries no direction (NOT_APPLICABLE, INCONCLUSIVE)
+   * Assessment: GOOD or BAD; null unless assessmentStatus is ASSESSED
    */
   assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
    * Whether an observation was produced using the current review rules
    */
@@ -2337,9 +2339,9 @@ export type ObservationList = {
    */
   practiceSlug: string;
   /**
-   * Presence: PRESENT, ABSENT, NOT_APPLICABLE, or INCONCLUSIVE
+   * PRESENT or ABSENT only when ASSESSED
    */
-  presence: 'PRESENT' | 'ABSENT' | 'NOT_APPLICABLE' | 'INCONCLUSIVE';
+  presence?: 'PRESENT' | 'ABSENT';
   /**
    * Severity level (null unless assessment is BAD)
    */
@@ -2356,6 +2358,7 @@ export type OutcomeVector = {
   notApplicable: number;
   omissionGaps: number;
   safeAvoidances: number;
+  undetermined: number;
 };
 
 /**
@@ -2959,9 +2962,10 @@ export type PracticeGroup = {
  */
 export type PracticeGroupReviewObservation = {
   /**
-   * Good or bad for the developer; null when the review could not decide (INCONCLUSIVE)
+   * Good or bad for the developer; null unless assessmentStatus is ASSESSED
    */
   assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   feedbackId?: string;
   feedbackResolution?: 'ADDRESSED' | 'DISPUTED' | 'NOT_APPLICABLE';
   feedbackResponseComment?: string;
@@ -2969,7 +2973,7 @@ export type PracticeGroupReviewObservation = {
   observationId: string;
   practiceName: string;
   practiceSlug: string;
-  presence: 'PRESENT' | 'ABSENT' | 'NOT_APPLICABLE' | 'INCONCLUSIVE';
+  presence?: 'PRESENT' | 'ABSENT';
   recurrenceKey?: string;
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   title: string;
@@ -3962,9 +3966,10 @@ export type ReviewBoundFeedback = {
  */
 export type ReviewBoundObservation = {
   /**
-   * Assessment: GOOD or BAD (null when NOT_APPLICABLE)
+   * Assessment: GOOD or BAD (null unless ASSESSED)
    */
   assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
    * Whether an observation was produced using the current review rules
    */
@@ -3981,7 +3986,7 @@ export type ReviewBoundObservation = {
   ordinal: number;
   practiceName: string;
   practiceSlug: string;
-  presence: 'PRESENT' | 'ABSENT' | 'NOT_APPLICABLE' | 'INCONCLUSIVE';
+  presence?: 'PRESENT' | 'ABSENT';
   /**
    * Whether the observation leads the feedback or reinforces it
    */
@@ -4145,9 +4150,10 @@ export type ReviewObservation = {
   agentJobId: string;
   artifact: ReviewArtifact;
   /**
-   * Assessment: GOOD or BAD (null when NOT_APPLICABLE)
+   * Assessment: GOOD or BAD (null unless ASSESSED)
    */
   assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
    * Whether an observation was produced using the current review rules
    */
@@ -4168,7 +4174,7 @@ export type ReviewObservation = {
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
   practiceName: string;
   practiceSlug: string;
-  presence: 'PRESENT' | 'ABSENT' | 'NOT_APPLICABLE' | 'INCONCLUSIVE';
+  presence?: 'PRESENT' | 'ABSENT';
   /**
    * Cross-run locus key; null when continuity is unavailable
    */
@@ -4189,15 +4195,15 @@ export type ReviewObservation = {
  */
 export type ReviewObservationCounts = {
   /**
-   * Practices that looked at the evidence and could not settle the question either way; reported apart from notApplicable because one says there was nothing here to judge and the other says we could not tell
-   */
-  inconclusive: number;
-  /**
    * Practices whose subject did not occur in this work
    */
   notApplicable: number;
   problems: number;
   strengths: number;
+  /**
+   * Practices that looked at the evidence and could not settle the question either way; reported apart from notApplicable because one says there was nothing here to judge and the other says we could not tell
+   */
+  undetermined: number;
 };
 
 /**
@@ -4207,9 +4213,10 @@ export type ReviewObservationDetail = {
   agentJobId: string;
   artifact: ReviewArtifact;
   /**
-   * Assessment: GOOD or BAD (null when NOT_APPLICABLE)
+   * Assessment: GOOD or BAD (null unless ASSESSED)
    */
   assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
    * Whether an observation was produced using the current review rules
    */
@@ -4232,7 +4239,7 @@ export type ReviewObservationDetail = {
    */
   practiceRevisionId?: number;
   practiceSlug: string;
-  presence: 'PRESENT' | 'ABSENT' | 'NOT_APPLICABLE' | 'INCONCLUSIVE';
+  presence?: 'PRESENT' | 'ABSENT';
   /**
    * Cross-run locus key; null when continuity is unavailable
    */
@@ -10386,7 +10393,8 @@ export type ListObservationsData = {
     /**
      * Filter by presence
      */
-    presence?: 'PRESENT' | 'ABSENT' | 'NOT_APPLICABLE' | 'INCONCLUSIVE';
+    presence?: 'PRESENT' | 'ABSENT';
+    assessmentStatus?: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
     /**
      * Only observations on these kinds of reviewed work, e.g. scm.pull_request (repeatable)
      */
@@ -10864,7 +10872,8 @@ export type ListPracticeReviewObservationsData = {
     sort?: 'NEWEST' | 'ACTIONABILITY';
     practiceSlug?: Array<string>;
     groupSlug?: Array<string>;
-    presence?: Array<'PRESENT' | 'ABSENT' | 'NOT_APPLICABLE' | 'INCONCLUSIVE'>;
+    assessmentStatus?: Array<'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED'>;
+    presence?: Array<'PRESENT' | 'ABSENT'>;
     assessment?: Array<'GOOD' | 'BAD'>;
     severity?: Array<'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO'>;
     agentJobId?: string;

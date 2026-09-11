@@ -232,7 +232,7 @@ public class Practice {
 
     /**
      * Whether this practice is a defect-detector — its criteria declare {@code DEFECT-DETECTOR DISCIPLINE}, so a
-     * clean surface is NOT_APPLICABLE, never a {@code (PRESENT, GOOD)} strength to endorse.
+     * bounded, applicable clean surface is {@code (ABSENT, GOOD)}, never a {@code (PRESENT, GOOD)} strength.
      *
      * <p>The marker is matched verbatim and is LOAD-BEARING: an admin who edits {@link #criteria} and drops or
      * reformats it (lowercasing, hyphen→space, wrapping across a line) silently turns this back into an

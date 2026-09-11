@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -175,6 +176,7 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
         return new ValidatedObservation(
                 "avoids-insecure-defaults-and-over-broad-permissions",
                 "Hardcoded secret on a changed line",
+                AssessmentStatus.ASSESSED,
                 Presence.PRESENT,
                 Assessment.BAD,
                 Severity.CRITICAL,
@@ -245,24 +247,24 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
         assertThat(ledgered.getAllValues()).containsExactlyInAnyOrder(first, second);
     }
 
-    private static ValidatedObservation vf(String slug, Presence presence) {
+    private static ValidatedObservation vf(String slug, @Nullable Presence presence) {
         return vf(slug, presence, CK);
     }
 
     private static ValidatedObservation vf(
-            String slug, Presence presence, @Nullable String recurrenceKey, String occurrenceKey) {
+            String slug, @Nullable Presence presence, @Nullable String recurrenceKey, String occurrenceKey) {
         return vf(slug, presence, recurrenceKey).withKeys(new ObservationKeys(occurrenceKey, recurrenceKey));
     }
 
-    private static ValidatedObservation vf(String slug, Presence presence, @Nullable String recurrenceKey) {
-        Assessment assessment = presence == Presence.NOT_APPLICABLE
-                ? null
-                : presence == Presence.PRESENT ? Assessment.GOOD : Assessment.BAD;
+    private static ValidatedObservation vf(String slug, @Nullable Presence presence, @Nullable String recurrenceKey) {
+        Assessment assessment =
+                presence == null ? null : presence == Presence.PRESENT ? Assessment.GOOD : Assessment.BAD;
         // The handler stamps the persisted recurrence_key onto each observation before the filter runs; the filter
         // matches reactions on that stamped key (never a recompute), so the test feeds it the same way.
         return new ValidatedObservation(
                 slug,
                 slug + " title",
+                AssessmentStatus.ASSESSED,
                 presence,
                 assessment,
                 Severity.MINOR,

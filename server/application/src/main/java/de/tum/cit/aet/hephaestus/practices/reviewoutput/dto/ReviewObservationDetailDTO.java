@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.reviewoutput.dto;
 
 import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -33,9 +34,10 @@ public record ReviewObservationDetailDTO(
         ReviewSubjectDTO subject,
 
         @NonNull String summary,
-        @NonNull Presence presence,
+        @NonNull AssessmentStatus assessmentStatus,
+        @Nullable Presence presence,
 
-        @Schema(description = "Assessment: GOOD or BAD (null when NOT_APPLICABLE)") @Nullable
+        @Schema(description = "Assessment: GOOD or BAD (null unless ASSESSED)") @Nullable
         Assessment assessment,
 
         @Schema(description = "Severity band (null unless assessment is BAD)") @Nullable
@@ -70,6 +72,7 @@ public record ReviewObservationDetailDTO(
                 artifact,
                 subject,
                 observation.getSummary(),
+                observation.getAssessmentStatus(),
                 observation.getPresence(),
                 observation.getAssessment(),
                 observation.getSeverity(),

@@ -14,7 +14,8 @@ import org.springframework.stereotype.Component;
 @Component
 public final class PracticeDefinitionValidator {
 
-    private static final Pattern DETECTOR_VOCAB = Pattern.compile("\\b(?:PRESENT|ABSENT|GOOD|BAD|NOT_APPLICABLE)\\b");
+    private static final Pattern DETECTOR_VOCAB =
+            Pattern.compile("\\b(?:PRESENT|ABSENT|GOOD|BAD|ASSESSED|NOT_APPLICABLE|UNDETERMINED)\\b");
 
     private final ArtifactSourceCatalogRegistry sourceCatalogs;
     private final PracticeSignalOptions signalOptions;

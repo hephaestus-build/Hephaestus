@@ -137,6 +137,7 @@ class FeedbackResponseSuppressionFilter {
         return new ValidatedObservation(
                 vf.practiceSlug(),
                 vf.summary(),
+                vf.assessmentStatus(),
                 vf.presence(),
                 vf.assessment(),
                 vf.severity(),

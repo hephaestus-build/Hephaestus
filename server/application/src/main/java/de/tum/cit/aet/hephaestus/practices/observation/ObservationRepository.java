@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.observation;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
@@ -77,8 +78,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         SELECT o.agent_job_id AS "jobId",
                COUNT(*) FILTER (WHERE o.assessment = 'GOOD') AS "strengths",
                COUNT(*) FILTER (WHERE o.assessment = 'BAD') AS "problems",
-               COUNT(*) FILTER (WHERE o.presence = 'NOT_APPLICABLE') AS "notApplicable",
-               COUNT(*) FILTER (WHERE o.presence = 'INCONCLUSIVE') AS "inconclusive"
+               COUNT(*) FILTER (WHERE o.assessment_status = 'NOT_APPLICABLE') AS "notApplicable",
+               COUNT(*) FILTER (WHERE o.assessment_status = 'UNDETERMINED') AS "undetermined"
         FROM observation o
         WHERE o.workspace_id = :workspaceId
           AND o.agent_job_id IN :jobIds
@@ -96,7 +97,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
 
         Long getNotApplicable();
 
-        Long getInconclusive();
+        Long getUndetermined();
     }
 
     /**
@@ -114,7 +115,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         INSERT INTO observation (
             id, occurrence_key, agent_job_id, workspace_id, practice_id, practice_revision_id,
             artifact_kind, artifact_id, about_user_id,
-            summary, presence, assessment, severity,
+            summary, assessment_status, presence, assessment, severity,
             evidence, evidence_rationale,
             recurrence_key, observed_at, origin
         )
@@ -122,7 +123,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             :id, :idempotencyKey, :agentJobId,
             p.workspace_id, p.id, COALESCE(:practiceRevisionId, p.current_revision_id),
             :artifactKind, :artifactId, :aboutUserId,
-            :summary, :presence, :assessment, :severity,
+            :summary, :assessmentStatus, :presence, :assessment, :severity,
             CAST(:evidence AS jsonb), :evidenceRationale,
             :recurrenceKey, :observedAt, :origin
         FROM practice p
@@ -140,7 +141,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("artifactId") Long artifactId,
             @Param("aboutUserId") @Nullable Long aboutUserId,
             @Param("summary") String summary,
-            @Param("presence") String presence,
+            @Param("assessmentStatus") String assessmentStatus,
+            @Param("presence") @Nullable String presence,
             @Param("assessment") @Nullable String assessment,
             @Param("severity") @Nullable String severity,
             @Param("evidence") @Nullable String evidence,
@@ -282,10 +284,11 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND f.workspaceId = :workspaceId
         AND (:practiceSlug IS NULL OR p.slug = :practiceSlug)
         AND (:groupSlug IS NULL OR a.slug = :groupSlug)
+        AND (:assessmentStatus IS NULL OR f.assessmentStatus = :assessmentStatus)
         AND (:presence IS NULL OR f.presence = :presence)
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
-        AND (:displayableOnly = FALSE OR f.presence <> de.tum.cit.aet.hephaestus.practices.model.Presence.NOT_APPLICABLE)
+        AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
         """, countQuery = """
         SELECT COUNT(f) FROM Observation f
         JOIN f.practice p
@@ -294,16 +297,18 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND f.workspaceId = :workspaceId
         AND (:practiceSlug IS NULL OR p.slug = :practiceSlug)
         AND (:groupSlug IS NULL OR a.slug = :groupSlug)
+        AND (:assessmentStatus IS NULL OR f.assessmentStatus = :assessmentStatus)
         AND (:presence IS NULL OR f.presence = :presence)
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
-        AND (:displayableOnly = FALSE OR f.presence <> de.tum.cit.aet.hephaestus.practices.model.Presence.NOT_APPLICABLE)
+        AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
         """)
     Page<Observation> findByAboutUserAndWorkspace(
             @Param("aboutUserId") Long aboutUserId,
             @Param("workspaceId") Long workspaceId,
             @Param("practiceSlug") @Nullable String practiceSlug,
             @Param("groupSlug") @Nullable String groupSlug,
+            @Param("assessmentStatus") @Nullable AssessmentStatus assessmentStatus,
             @Param("presence") @Nullable Presence presence,
             @Param("hasArtifactKinds") boolean hasArtifactKinds,
             @Param("artifactKinds") Collection<ArtifactKind> artifactKinds,
@@ -332,10 +337,11 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND f.workspaceId = :workspaceId
         AND (:practiceSlug IS NULL OR p.slug = :practiceSlug)
         AND (:groupSlug IS NULL OR a.slug = :groupSlug)
+        AND (:assessmentStatus IS NULL OR f.assessmentStatus = :assessmentStatus)
         AND (:presence IS NULL OR f.presence = :presence)
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
-        AND (:displayableOnly = FALSE OR f.presence <> de.tum.cit.aet.hephaestus.practices.model.Presence.NOT_APPLICABLE)
+        AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
         ORDER BY (CASE
             WHEN f.severity = de.tum.cit.aet.hephaestus.practices.model.Severity.CRITICAL THEN 0
             WHEN f.severity = de.tum.cit.aet.hephaestus.practices.model.Severity.MAJOR THEN 1
@@ -351,16 +357,18 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND f.workspaceId = :workspaceId
         AND (:practiceSlug IS NULL OR p.slug = :practiceSlug)
         AND (:groupSlug IS NULL OR a.slug = :groupSlug)
+        AND (:assessmentStatus IS NULL OR f.assessmentStatus = :assessmentStatus)
         AND (:presence IS NULL OR f.presence = :presence)
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
-        AND (:displayableOnly = FALSE OR f.presence <> de.tum.cit.aet.hephaestus.practices.model.Presence.NOT_APPLICABLE)
+        AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
         """)
     Page<Observation> findByAboutUserAndWorkspaceSeverityFirst(
             @Param("aboutUserId") Long aboutUserId,
             @Param("workspaceId") Long workspaceId,
             @Param("practiceSlug") @Nullable String practiceSlug,
             @Param("groupSlug") @Nullable String groupSlug,
+            @Param("assessmentStatus") @Nullable AssessmentStatus assessmentStatus,
             @Param("presence") @Nullable Presence presence,
             @Param("hasArtifactKinds") boolean hasArtifactKinds,
             @Param("artifactKinds") Collection<ArtifactKind> artifactKinds,
@@ -391,7 +399,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                       AND (:practiceSlug IS NULL OR p.slug = :practiceSlug)
                       AND (:artifactKinds IS NULL OR f.artifact_kind = ANY(string_to_array(:artifactKinds, ',')))
                       AND (:severities IS NULL OR f.severity = ANY(string_to_array(:severities, ',')))
-                      AND f.presence <> 'NOT_APPLICABLE'
+                      AND f.assessment_status <> 'NOT_APPLICABLE'
             """ + HIDDEN_REPOSITORY_GUARD + """
             GROUP BY f.agent_job_id
             ORDER BY MAX(f.observed_at) DESC, f.agent_job_id DESC
@@ -422,7 +430,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
           AND o.aboutUserId = :aboutUserId
           AND o.workspaceId = :workspaceId
           AND a.slug = :groupSlug
-          AND o.presence <> de.tum.cit.aet.hephaestus.practices.model.Presence.NOT_APPLICABLE
+          AND o.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE
         ORDER BY o.observedAt DESC, o.id ASC
         """)
     List<Observation> findPracticeGroupReviewRunObservations(
@@ -520,10 +528,9 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * needs {@code ORDER BY ... LIMIT 1} in a correlated subquery; the practice is loaded lazily per observation
      * rather than JOIN-fetched.
      *
-     * <p>{@code verdictsOnly} decides whether a presence that does not {@link Presence#carriesValence() carry
-     * valence} is listed, because the two kinds of caller need opposite answers. The context providers pass
+     * <p>{@code verdictsOnly} decides whether an observation that was not assessed is listed, because the two kinds of caller need opposite answers. The context providers pass
      * {@code true}: {@code NOT_APPLICABLE} would bury the actionable {@code BAD}/{@code GOOD} rows within their
-     * page budget, and coaching on {@code INCONCLUSIVE} would invite the mentor to invent a direction the
+     * page budget, and coaching on {@code UNDETERMINED} would invite the mentor to invent a direction the
      * measurement declined to take — both totals still reach it via the presence-count summary. The practice standing
      * surface passes {@code false}: it does not render those rows either, but it must COUNT them, because "the
      * practice ran and found nothing to judge" and "the practice was never looked at" are different answers and
@@ -665,7 +672,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
 
     /** All correlation-keyed observations for the given (already-resolved) run job-ids, with the trend fields. */
     @Query("""
-        SELECT f.agentJobId AS agentJobId, f.recurrenceKey AS recurrenceKey, f.presence AS presence,
+        SELECT f.agentJobId AS agentJobId, f.recurrenceKey AS recurrenceKey, f.assessmentStatus AS assessmentStatus, f.presence AS presence,
                f.assessment AS assessment, f.severity AS severity, p.slug AS practiceSlug,
                f.summary AS summary, f.observedAt AS observedAt
         FROM Observation f JOIN f.practice p
@@ -694,6 +701,9 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
 
         String getRecurrenceKey();
 
+        AssessmentStatus getAssessmentStatus();
+
+        @Nullable
         Presence getPresence();
 
         @Nullable
@@ -721,12 +731,14 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
 
     /** Projection: presence → count. */
     interface PresenceCount {
+        @Nullable
         Presence getPresence();
 
         Long getCount();
     }
 
     String OPERATOR_PREDICATES = """
+          AND (CAST(:#{#f.assessmentStatusNames()} AS text[]) IS NULL OR o.assessment_status = ANY(CAST(:#{#f.assessmentStatusNames()} AS text[])))
           AND (CAST(:#{#f.practiceSlugArray()} AS text[]) IS NULL OR p.slug = ANY(CAST(:#{#f.practiceSlugArray()} AS text[])))
           AND (CAST(:#{#f.groupSlugArray()} AS text[]) IS NULL OR pa.slug = ANY(CAST(:#{#f.groupSlugArray()} AS text[])))
           AND (CAST(:#{#f.presenceNames()} AS text[]) IS NULL OR o.presence = ANY(CAST(:#{#f.presenceNames()} AS text[])))
@@ -754,6 +766,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                    o.artifact_id AS "artifactId",
                    o.about_user_id AS "aboutUserId",
                    o.summary AS "summary",
+                   o.assessment_status AS "assessmentStatus",
                    o.presence AS "presence",
                    o.assessment AS "assessment",
                    o.severity AS "severity",
@@ -829,6 +842,9 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
 
         String getSummary();
 
+        AssessmentStatus getAssessmentStatus();
+
+        @Nullable
         Presence getPresence();
 
         @Nullable

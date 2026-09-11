@@ -153,7 +153,7 @@ class DeliveryComposer {
                     .sorted(ObservationOrder.bestAttestedFirst())
                     .toList();
             if (observed.isEmpty()) {
-                // Every observation NOT_APPLICABLE or INCONCLUSIVE: nothing was actually assessed, so deliver
+                // Every observation NOT_APPLICABLE or UNDETERMINED: nothing was actually assessed, so deliver
                 // nothing rather than a misleading "nothing to change here" all-clear.
                 return null;
             }

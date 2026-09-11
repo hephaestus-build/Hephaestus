@@ -399,6 +399,7 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
                 artifactId,
                 recipient.getId(),
                 "Observation title",
+                "ASSESSED",
                 "ABSENT",
                 "BAD",
                 "MAJOR",

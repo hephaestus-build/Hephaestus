@@ -38,6 +38,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
@@ -509,6 +510,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 Practice practice, String summary, de.tum.cit.aet.hephaestus.practices.model.Severity severity) {
             var observation = org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.model.Observation.class);
             lenient().when(observation.getPractice()).thenReturn(practice);
+            lenient().when(observation.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
             lenient().when(observation.getSummary()).thenReturn(summary);
             lenient()
                     .when(observation.getPresence())
@@ -529,8 +531,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     {"observations": [{
                       "practiceSlug": "avoids-insecure-defaults-and-over-broad-permissions",
                       "summary": "The harmful behaviour is good",
-                      "presence": "PRESENT",
-                      "assessment": "GOOD",
+                      "assessmentStatus": "ASSESSED", "presence": "PRESENT",
+                      "assessment": "GOOD", "severity": null,
                       "evidenceRationale": "Original evidence rationale",
                       "evidence": {}
                     }]}
@@ -587,9 +589,9 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                   "observations": [{
                     "practiceSlug": "pr-description-quality",
                     "summary": "Good PR description",
-                    "presence": "PRESENT",
+                    "assessmentStatus": "ASSESSED", "presence": "PRESENT",
                     "assessment": "GOOD",
-                    "severity": "INFO",
+                    "severity": null,
                     "evidenceRationale": "The description states the purpose.",
                     "evidence": {}
                   }]
@@ -622,6 +624,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(java.util.List.of(practice));
             var observation = org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.model.Observation.class);
             lenient().when(observation.getPractice()).thenReturn(practice);
+            lenient().when(observation.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
             lenient().when(observation.getSummary()).thenReturn("What the review saw");
             lenient()
                     .when(observation.getPresence())
@@ -691,7 +694,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                   "observations": [{
                     "practiceSlug": "avoids-insecure-defaults-and-over-broad-permissions",
                     "summary": "Hard-coded credential",
-                    "presence": "PRESENT",
+                    "assessmentStatus": "ASSESSED", "presence": "PRESENT",
                     "assessment": "BAD",
                     "severity": "CRITICAL",
                     "evidenceRationale": "A live API key is committed.",
@@ -729,7 +732,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                   "observations": [{
                     "practiceSlug": "pr-description-quality",
                     "summary": "Not applicable here",
-                    "presence": "NOT_APPLICABLE",
+                    "assessmentStatus": "NOT_APPLICABLE", "presence": null, "assessment": null, "severity": null,
                     "evidenceRationale": "The practice has no subject in this change.",
                     "evidence": { "citations": [], "inapplicability": { "reason": "No relevant subject exists." } }
                   }]
@@ -755,7 +758,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                   "observations": [{
                     "practiceSlug": "pr-description-quality",
                     "summary": "Not applicable here",
-                    "presence": "NOT_APPLICABLE",
+                    "assessmentStatus": "NOT_APPLICABLE", "presence": null, "assessment": null, "severity": null,
                     "evidenceRationale": "The practice has no subject in this change.",
                     "evidence": {
                       "citations": [{
@@ -793,7 +796,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                   "observations": [{
                     "practiceSlug": "error-handling",
                     "summary": "Unhandled error path",
-                    "presence": "ABSENT",
+                    "assessmentStatus": "ASSESSED", "presence": "ABSENT",
                     "assessment": "BAD",
                     "severity": "MAJOR",
                     "evidenceRationale": "The error branch is swallowed.",
@@ -822,9 +825,9 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                   "observations": [{
                     "practiceSlug": "pr-description-quality",
                     "summary": "Clear description",
-                    "presence": "PRESENT",
+                    "assessmentStatus": "ASSESSED", "presence": "PRESENT",
                     "assessment": "GOOD",
-                    "severity": "INFO",
+                    "severity": null,
                     "evidenceRationale": "The description states the purpose.",
                     "evidence": {}
                   }]

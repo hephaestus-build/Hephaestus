@@ -13,30 +13,33 @@ class ObservationOutcomeTest {
     @Test
     @DisplayName("maps every cell of the presence × assessment matrix")
     void shouldMapEveryMatrixCell() {
-        assertThat(ObservationOutcome.of(Presence.PRESENT, Assessment.GOOD))
+        assertThat(ObservationOutcome.of(AssessmentStatus.ASSESSED, Presence.PRESENT, Assessment.GOOD))
                 .isEqualTo(ObservationOutcome.DEMONSTRATED_STRENGTH);
-        assertThat(ObservationOutcome.of(Presence.PRESENT, Assessment.BAD))
+        assertThat(ObservationOutcome.of(AssessmentStatus.ASSESSED, Presence.PRESENT, Assessment.BAD))
                 .isEqualTo(ObservationOutcome.COMMISSION_PROBLEM);
-        assertThat(ObservationOutcome.of(Presence.ABSENT, Assessment.GOOD))
+        assertThat(ObservationOutcome.of(AssessmentStatus.ASSESSED, Presence.ABSENT, Assessment.GOOD))
                 .isEqualTo(ObservationOutcome.SAFE_AVOIDANCE);
-        assertThat(ObservationOutcome.of(Presence.ABSENT, Assessment.BAD)).isEqualTo(ObservationOutcome.OMISSION_GAP);
+        assertThat(ObservationOutcome.of(AssessmentStatus.ASSESSED, Presence.ABSENT, Assessment.BAD))
+                .isEqualTo(ObservationOutcome.OMISSION_GAP);
     }
 
     @Test
-    @DisplayName("collapses both no-verdict presences onto NOT_APPLICABLE")
-    void shouldCollapseBothNoVerdictPresences() {
-        assertThat(ObservationOutcome.of(Presence.NOT_APPLICABLE, null)).isEqualTo(ObservationOutcome.NOT_APPLICABLE);
-        assertThat(ObservationOutcome.of(Presence.INCONCLUSIVE, null)).isEqualTo(ObservationOutcome.NOT_APPLICABLE);
+    @DisplayName("keeps unassessed statuses distinct")
+    void shouldKeepUnassessedStatusesDistinct() {
+        assertThat(ObservationOutcome.of(AssessmentStatus.NOT_APPLICABLE, null, null))
+                .isEqualTo(ObservationOutcome.NOT_APPLICABLE);
+        assertThat(ObservationOutcome.of(AssessmentStatus.UNDETERMINED, null, null))
+                .isEqualTo(ObservationOutcome.UNDETERMINED);
     }
 
     @Test
     @DisplayName("rejects a pair the presence/assessment coherence CHECK would reject")
     void shouldRejectIncoherentPairs() {
-        assertThatThrownBy(() -> ObservationOutcome.of(Presence.PRESENT, null))
+        assertThatThrownBy(() -> ObservationOutcome.of(AssessmentStatus.ASSESSED, Presence.PRESENT, null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> ObservationOutcome.of(Presence.NOT_APPLICABLE, Assessment.GOOD))
+        assertThatThrownBy(() -> ObservationOutcome.of(AssessmentStatus.NOT_APPLICABLE, null, Assessment.GOOD))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> ObservationOutcome.of(Presence.INCONCLUSIVE, Assessment.BAD))
+        assertThatThrownBy(() -> ObservationOutcome.of(AssessmentStatus.UNDETERMINED, null, Assessment.BAD))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

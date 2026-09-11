@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.reviewoutput;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -21,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 public record ReviewObservationFilterParams(
         @RequestParam(required = false) @Nullable List<String> practiceSlug,
         @RequestParam(required = false) @Nullable List<String> groupSlug,
+        @RequestParam(required = false) @Nullable List<AssessmentStatus> assessmentStatus,
         @RequestParam(required = false) @Nullable List<Presence> presence,
         @RequestParam(required = false) @Nullable List<Assessment> assessment,
         @RequestParam(required = false) @Nullable List<Severity> severity,
@@ -73,6 +75,7 @@ public record ReviewObservationFilterParams(
         return new ObservationQueryFilter(
                 practiceSlug,
                 groupSlug,
+                assessmentStatus,
                 presence,
                 assessment,
                 severity,

@@ -5,7 +5,7 @@ package de.tum.cit.aet.hephaestus.practices.model;
  *
  * <p>{@link Presence} captures whether the signal was PRESENT/ABSENT and {@link Assessment} its GOOD/BAD
  * valence; severity captures <em>how important</em> a BAD observation is. It is set only when
- * {@code assessment = BAD} (null on a GOOD strength or a NOT_APPLICABLE observation): an {@code ABSENT, BAD}
+ * {@code assessment = BAD} (null on GOOD or unassessed observations): an {@code ABSENT, BAD}
  * gap can be MINOR (style nit) or CRITICAL (security vulnerability).
  */
 public enum Severity {

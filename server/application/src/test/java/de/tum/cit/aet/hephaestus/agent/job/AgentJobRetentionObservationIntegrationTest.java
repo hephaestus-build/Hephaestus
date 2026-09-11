@@ -69,6 +69,7 @@ class AgentJobRetentionObservationIntegrationTest extends AbstractWorkspaceInteg
                 7L,
                 owner.getId(),
                 "Stored finding",
+                "ASSESSED",
                 "ABSENT",
                 "BAD",
                 "MAJOR",

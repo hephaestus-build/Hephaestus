@@ -3,9 +3,10 @@
     {
       "practiceSlug": "pr-description-quality",
       "summary": "Well-structured PR description with context",
+      "assessmentStatus": "ASSESSED",
       "presence": "PRESENT",
       "assessment": "GOOD",
-      "severity": "INFO",
+      "severity": null,
       "evidence": {
         "locations": [],
         "snippets": [
@@ -17,6 +18,7 @@
     {
       "practiceSlug": "error-handling",
       "summary": "Missing error handling in Main.java",
+      "assessmentStatus": "ASSESSED",
       "presence": "ABSENT",
       "assessment": "BAD",
       "severity": "MAJOR",
@@ -37,24 +39,27 @@
     {
       "practiceSlug": "commit-message-quality",
       "summary": "Commit messages follow conventional format",
+      "assessmentStatus": "ASSESSED",
       "presence": "PRESENT",
       "assessment": "GOOD",
-      "severity": "INFO",
+      "severity": null,
       "evidence": {},
       "evidenceRationale": "All commits follow the conventional commit format (feat:, fix:, etc.)."
     },
     {
       "practiceSlug": "pr-scope",
       "summary": "PR scope is appropriately sized",
+      "assessmentStatus": "ASSESSED",
       "presence": "PRESENT",
       "assessment": "GOOD",
-      "severity": "INFO",
+      "severity": null,
       "evidence": {},
       "evidenceRationale": "Single-file documentation change is well-scoped and focused."
     },
     {
       "practiceSlug": "review-thoroughness",
       "summary": "Insufficient test coverage for new feature",
+      "assessmentStatus": "ASSESSED",
       "presence": "ABSENT",
       "assessment": "BAD",
       "severity": "MINOR",

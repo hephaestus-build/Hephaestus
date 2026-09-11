@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -24,6 +25,7 @@ class PracticeStandingObservationDTOTest extends BaseUnitTest {
                 .id(UUID.randomUUID())
                 .summary("Distance-warning logic ships with no test")
                 .severity(Severity.MAJOR)
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.ABSENT)
                 .assessment(Assessment.BAD)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)

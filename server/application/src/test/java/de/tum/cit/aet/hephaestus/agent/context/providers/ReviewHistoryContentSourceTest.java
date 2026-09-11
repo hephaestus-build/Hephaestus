@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
@@ -470,6 +471,7 @@ class ReviewHistoryContentSourceTest {
                 .practice(practice)
                 .recurrenceKey(recurrenceKey)
                 .summary(title)
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.PRESENT)
                 .assessment(Assessment.BAD)
                 .artifactKind(artifactKind)

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.LocusObservation;
@@ -305,7 +306,7 @@ class ObservationTrendServiceTest extends BaseUnitTest {
                 switch (v) {
                     case PRESENT -> Assessment.GOOD;
                     case ABSENT -> Assessment.BAD;
-                    case NOT_APPLICABLE, INCONCLUSIVE -> null;
+                    case null -> null;
                 };
         return locusFull(job, key, v, assessment, sev, conf, slug, title);
     }
@@ -324,6 +325,11 @@ class ObservationTrendServiceTest extends BaseUnitTest {
             String slug,
             String title) {
         return new LocusObservation() {
+            @Override
+            public AssessmentStatus getAssessmentStatus() {
+                return AssessmentStatus.ASSESSED;
+            }
+
             @Override
             public UUID getAgentJobId() {
                 return job;

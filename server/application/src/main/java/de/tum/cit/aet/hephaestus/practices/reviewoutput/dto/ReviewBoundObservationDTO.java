@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.BoundObservation;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -29,9 +30,10 @@ public record ReviewBoundObservationDTO(
         ReviewPracticeGroupDTO group,
 
         @NonNull String summary,
-        @NonNull Presence presence,
+        @NonNull AssessmentStatus assessmentStatus,
+        @Nullable Presence presence,
 
-        @Schema(description = "Assessment: GOOD or BAD (null when NOT_APPLICABLE)") @Nullable
+        @Schema(description = "Assessment: GOOD or BAD (null unless ASSESSED)") @Nullable
         Assessment assessment,
 
         @Schema(description = "Severity band (null unless assessment is BAD)") @Nullable
@@ -49,6 +51,7 @@ public record ReviewBoundObservationDTO(
                 ReviewPracticeGroupDTO.from(
                         row.getGroupSlug(), row.getGroupName(), row.getGroupIcon(), row.getGroupColor()),
                 row.getSummary(),
+                row.getAssessmentStatus(),
                 row.getPresence(),
                 row.getAssessment(),
                 row.getSeverity(),

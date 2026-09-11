@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.groupdetail.dto;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackUsefulness;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -21,10 +22,10 @@ public record PracticeGroupReviewObservationDTO(
         @NonNull String practiceSlug,
         @NonNull String practiceName,
         @NonNull String title,
-        @NonNull Presence presence,
+        @NonNull AssessmentStatus assessmentStatus,
+        @Nullable Presence presence,
 
-        @Nullable
-        @Schema(description = "Good or bad for the developer; null when the review could not decide (INCONCLUSIVE)")
+        @Nullable @Schema(description = "Good or bad for the developer; null unless assessmentStatus is ASSESSED")
         Assessment assessment,
 
         @Nullable Severity severity,
@@ -44,6 +45,7 @@ public record PracticeGroupReviewObservationDTO(
                 observation.getPractice().getSlug(),
                 observation.getPractice().getName(),
                 observation.getSummary(),
+                observation.getAssessmentStatus(),
                 observation.getPresence(),
                 observation.getAssessment(),
                 observation.getSeverity(),

@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
@@ -112,6 +113,7 @@ class PracticeStandingServiceTest extends BaseUnitTest {
                 .agentJobId(runOf(artifactId))
                 .observedAt(observedAtOf(artifactId))
                 .summary("a problem")
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.ABSENT)
                 .assessment(Assessment.BAD)
                 .severity(severity)
@@ -129,6 +131,7 @@ class PracticeStandingServiceTest extends BaseUnitTest {
                 .agentJobId(runOf(artifactId))
                 .observedAt(observedAtOf(artifactId))
                 .summary("a strength")
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.PRESENT)
                 .assessment(Assessment.GOOD)
                 .build();

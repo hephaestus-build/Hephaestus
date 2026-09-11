@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomyPolicy;
@@ -72,7 +73,8 @@ public class FeedbackChannelRouter {
         if (context.recipientRole() != RecipientRole.AUTHOR) {
             return ConversationRoutingDecision.REVIEWER_DEFERRED;
         }
-        if (!observation.getPresence().carriesValence() || observation.getAssessment() != Assessment.BAD) {
+        if (!(observation.getAssessmentStatus() == AssessmentStatus.ASSESSED)
+                || observation.getAssessment() != Assessment.BAD) {
             return ConversationRoutingDecision.NOT_DELIVERABLE;
         }
         if (hasNaturalInlineAnchor(observation)) {
