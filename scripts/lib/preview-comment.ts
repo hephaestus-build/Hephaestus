@@ -41,7 +41,8 @@ export function renderPreviewComments(
 		let block = heading;
 		for (const entry of entries) {
 			const link = `[${markdown(entry.title)}](<${entry.url.replaceAll("&", "&amp;")}>)`;
-			const separator = block === heading ? "" : " ·\n";
+			// GitHub comments turn soft newlines into hard breaks; let inline links wrap naturally.
+			const separator = block === heading ? "" : " · ";
 			if (heading.length + link.length > budget) {
 				throw new Error(`A preview link in ${group} exceeds GitHub's comment limit.`);
 			}

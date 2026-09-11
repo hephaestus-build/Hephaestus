@@ -282,9 +282,51 @@ void test("uses stable, disambiguated groups with complete headings and atomic l
 		assert.match(comment, /#### components\/(admin|workspace)\/Button \(\d+\)/);
 		assert.ok(comment.endsWith("Build provenance\n"));
 		assert.doesNotMatch(comment, /<details|<summary/);
+		assertInlineParagraphs(comment);
 	}
 	const combined = comments.join("\n");
 	for (const { url } of links) assert.equal(combined.split(`](<${url}>)`).length - 1, 1);
+});
+
+/** CommonMark leaves soft newlines in text nodes; GitHub comments render those as <br>. */
+function assertInlineParagraphs(comment: string): void {
+	for (const node of fromMarkdown(comment).children) {
+		if (node.type !== "paragraph") continue;
+		assert.equal(node.position?.start.line, node.position?.end.line);
+	}
+}
+
+void test("keeps links inline within groups and blank lines between blocks in GitHub comments", () => {
+	const [comment] = renderPreviewComments(
+		"## Preview\n\n[Open full preview](<https://preview.example/>)\n\n### Changed content (3)",
+		[
+			{ group: "First", title: "Default", url: "https://preview.example/default" },
+			{ group: "First", title: "Loading\r\nstate", url: "https://preview.example/loading" },
+			{ group: "Second", title: "Narrow\tview", url: "https://preview.example/narrow" },
+		],
+		"Empty",
+		"Build provenance",
+	);
+	assert.ok(comment);
+	assertInlineParagraphs(comment);
+	assert.deepEqual(
+		fromMarkdown(comment).children.map((node) => node.type),
+		[
+			"heading",
+			"paragraph",
+			"heading",
+			"heading",
+			"paragraph",
+			"heading",
+			"paragraph",
+			"paragraph",
+		],
+	);
+	assert.ok(
+		comment.includes(
+			"[Default](<https://preview.example/default>) · [Loading  state](<https://preview.example/loading>)\n\n#### Second (1)\n\n[Narrow view](<https://preview.example/narrow>)",
+		),
+	);
 });
 
 void test("renders metadata as literal text rather than Markdown or HTML", () => {
