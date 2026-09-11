@@ -29,7 +29,8 @@ public class PracticePiAdapter {
                 request.maxOutputTokens(),
                 request.supportsReasoning(),
                 request.jobToken(),
-                request.allowInternet(),
+                // Native shell access must not provide a route to push or fetch uncaptured evidence.
+                false,
                 request.timeoutSeconds(),
                 PROFILE,
                 Map.of(),

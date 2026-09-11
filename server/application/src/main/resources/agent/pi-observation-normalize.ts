@@ -35,6 +35,7 @@ export interface NormalizedCitation {
 	artifactPath: string;
 	path: string;
 	side?: DiffSide;
+	revision?: string;
 	startLine: number;
 	endLine: number;
 	quote: string;
@@ -286,11 +287,21 @@ export function normalizeEvidence(evidence: unknown, presence: Presence): Normal
 		const artifactPath = trimmedText(fields.artifactPath);
 		const path = trimmedText(fields.path);
 		const declaredSide = fields.side == null ? null : trimmedText(fields.side).toUpperCase();
+		const revision = fields.revision == null ? null : trimmedText(fields.revision);
+		if (
+			revision !== null &&
+			(sourceKind !== "scm.repository.tree" || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(revision))
+		)
+			throw new Error("historical citations require scm.repository.tree and a full commit SHA");
 		const startLine = Number(fields.startLine);
 		const endLine = fields.endLine == null ? startLine : Number(fields.endLine);
 		const quote = trimmedText(fields.quote);
 		if (!sourceKind) throw new Error("evidence citation sourceKind is required");
 		if (!artifactPath) throw new Error("evidence citation artifactPath is required");
+		if (sourceKind === "scm.repository.tree" && !artifactPath.endsWith("/.git/HEAD"))
+			throw new Error(
+				"repository citations must use the captured .git/HEAD artifact and a repository-relative path",
+			);
 		if (!path) throw new Error("evidence citation path is required");
 		if (sourceKind === "scm.pull-request.diff" && declaredSide !== "OLD" && declaredSide !== "NEW")
 			throw new Error("diff evidence citation side must be OLD or NEW");
@@ -310,6 +321,7 @@ export function normalizeEvidence(evidence: unknown, presence: Presence): Normal
 			artifactPath,
 			path,
 			...(side == null ? {} : { side }),
+			...(revision == null ? {} : { revision }),
 			startLine,
 			endLine,
 			quote,
@@ -494,7 +506,10 @@ export function normalizeObservation(observation: unknown): NormalizedObservatio
 
 export function dedupeKeyForObservation(observation: NormalizedObservation): string {
 	const citations = observation.evidence.citations
-		.map((citation) => `${citation.path}:${citation.startLine}-${citation.endLine}`)
+		.map(
+			(citation) =>
+				`${citation.revision ?? ""}:${citation.path}:${citation.startLine}-${citation.endLine}`,
+		)
 		.join(",");
 	return `${observation.practiceSlug}|${observation.summary}|${citations}`;
 }

@@ -7,6 +7,8 @@ import java.util.Set;
 import java.util.UUID;
 
 public interface EvidenceAuthorization {
+    Set<UUID> permitsForNewDelivery(long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose);
+
     boolean permits(long workspaceId, Observation observation, SourceUsePurpose purpose);
 
     /**

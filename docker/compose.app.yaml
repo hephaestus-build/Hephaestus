@@ -4,7 +4,6 @@
 # does not receive it falls back to the built-in default and the operator's setting does nothing.
 x-practice-review-env:
   &practice-review-env # Auto-trigger is a per-workspace setting; this is the instance gate above it.
-  PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED: ${PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED:-false}
   PRACTICE_REVIEW_DELIVER_TO_MERGED: ${PRACTICE_REVIEW_DELIVER_TO_MERGED:-false}
   PRACTICE_REVIEW_COOLDOWN_MINUTES: ${PRACTICE_REVIEW_COOLDOWN_MINUTES:-15}
   # Feature visibility, separate from the review gate above.
@@ -32,6 +31,7 @@ x-scm-access-env: &scm-access-env
   GH_APP_PRIVATE_KEY_LOCATION: ${GH_APP_PRIVATE_KEY_LOCATION:-}
   GH_AUTH_TOKEN: ${GH_AUTH_TOKEN}
   GIT_CHECKOUT_ENABLED: ${GIT_CHECKOUT_ENABLED:-false}
+  GIT_MAX_CONCURRENT_INGESTIONS: ${GIT_MAX_CONCURRENT_INGESTIONS:-2}
 
 x-observability-env: &observability-env
   TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-0.0}
@@ -134,9 +134,10 @@ services:
     command:
       - sh
       - -c
-      - "chown -Rh 1002:1001 /data/git-repos && chmod 0755 /data/git-repos"
+      - "chown -Rh 1002:1001 /data/git-repos /data/worker-git-repos && chmod 0755 /data/git-repos /data/worker-git-repos"
     volumes:
       - git-repos:/data/git-repos
+      - worker-git-repos:/data/worker-git-repos
     restart: "no"
     network_mode: none
     logging:
@@ -263,11 +264,11 @@ services:
       # (hephaestus.runtime.worker.enabled), then gated per-workspace via WorkspaceFeatures.
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: ${HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST:-true}
       HEPHAESTUS_AGENT_IMAGE_REFERENCE: ${HEPHAESTUS_IMAGE_AGENT_PI:?verified release lock required}
+      HEPHAESTUS_IMAGE_GIT_PREPARATION: ${HEPHAESTUS_IMAGE_GIT_PREPARATION:?verified release lock required}
       SANDBOX_DOCKER_HOST: ${SANDBOX_DOCKER_HOST:-unix:///var/run/docker.sock}
       SANDBOX_DOCKER_TLS_VERIFY: ${SANDBOX_DOCKER_TLS_VERIFY:-false}
       SANDBOX_DOCKER_CERT_PATH: ${SANDBOX_DOCKER_CERT_PATH:-}
       SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID: ${SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID:-}
-      SANDBOX_DOCKER_CLI: ${SANDBOX_DOCKER_CLI:-docker}
       SANDBOX_DOCKER_OWNER: ${SANDBOX_DOCKER_OWNER:-default}
       SANDBOX_API_PORT: ${SANDBOX_API_PORT:-8081}
       SANDBOX_API_MAX_REQUEST_BYTES: ${SANDBOX_API_MAX_REQUEST_BYTES:-4194304}
@@ -280,7 +281,6 @@ services:
       # stays required elsewhere on this pod for webhook-driven sync consumption (NATS_ENABLED above).
       AGENT_ENABLED: ${AGENT_ENABLED:-false}
       HEPHAESTUS_FABRIC_ROOT: /data/git-repos
-      HEPHAESTUS_FABRIC_GC_RETENTION_DAYS: ${HEPHAESTUS_FABRIC_GC_RETENTION_DAYS:-30}
       # Instance-wide LLM knobs. Providers, models, prices and credentials are NOT here — they are
       # runtime catalog data an instance admin registers in the UI. These three are the deploy-time
       # facts that cannot be.
@@ -396,18 +396,17 @@ services:
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: ${HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST:-true}
       # Valueless, as on application-server above; this is the pod that actually opens sandboxes.
       HEPHAESTUS_AGENT_IMAGE_REFERENCE: ${HEPHAESTUS_IMAGE_AGENT_PI:?verified release lock required}
+      HEPHAESTUS_IMAGE_GIT_PREPARATION: ${HEPHAESTUS_IMAGE_GIT_PREPARATION:?verified release lock required}
       HEPHAESTUS_HUB_URL: ws://application-server:8080/api/workers/connect
       HEPHAESTUS_WORKER_REGISTRATION_TOKEN: ${HEPHAESTUS_WORKER_REGISTRATION_TOKEN:-}
       # Agent job queue (practice review). The queue runs on PostgreSQL — this pod needs no NATS at
       # all (it runs no sync/webhook role), so no NATS_SERVER is set here.
       AGENT_ENABLED: ${AGENT_ENABLED:-false}
       HEPHAESTUS_FABRIC_ROOT: /data/git-repos
-      HEPHAESTUS_FABRIC_GC_RETENTION_DAYS: ${HEPHAESTUS_FABRIC_GC_RETENTION_DAYS:-30}
       SANDBOX_DOCKER_HOST: ${SANDBOX_DOCKER_HOST:-unix:///var/run/docker.sock}
       SANDBOX_DOCKER_TLS_VERIFY: ${SANDBOX_DOCKER_TLS_VERIFY:-false}
       SANDBOX_DOCKER_CERT_PATH: ${SANDBOX_DOCKER_CERT_PATH:-}
       SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID: ${SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID:-}
-      SANDBOX_DOCKER_CLI: ${SANDBOX_DOCKER_CLI:-docker}
       SANDBOX_DOCKER_OWNER: ${SANDBOX_DOCKER_OWNER:-default}
       SANDBOX_API_PORT: ${SANDBOX_API_PORT:-8081}
       SANDBOX_API_MAX_REQUEST_BYTES: ${SANDBOX_API_MAX_REQUEST_BYTES:-4194304}
@@ -476,7 +475,7 @@ services:
       - "${DOCKER_GROUP_ID:-999}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - git-repos:/data/git-repos
+      - worker-git-repos:/data/git-repos
     networks:
       - shared-network
     # 5m drain budget + 1m headroom; matches spring.lifecycle.timeout-per-shutdown-phase.
@@ -534,3 +533,4 @@ networks:
 volumes:
   postgresql-data:
   git-repos:
+  worker-git-repos:

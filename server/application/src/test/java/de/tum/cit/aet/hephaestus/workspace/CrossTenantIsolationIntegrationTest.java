@@ -439,7 +439,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         job.setWorkspace(ws);
         job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         job.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
-        job.setEvidenceSnapshot(OBJECT_MAPPER.valueToTree(Map.of("manifest", Map.of("contractVersion", "1.0.0"))));
+        job.setEvidenceSnapshot(OBJECT_MAPPER.valueToTree(Map.of("manifest", Map.of("contractVersion", "1.1.0"))));
         job = agentJobRepository.save(job);
 
         UUID observationId = UUID.randomUUID();

@@ -118,7 +118,10 @@ sandbox *is* the worker capability, so it follows `hephaestus.runtime.worker.ena
 worker row down the **Server** column: a server pod carries the worker role too, so it opens the
 sandbox gateway on the same port and needs the same firewall treatment as a split-out worker. The
 webhook role turns the worker role off, so it opens no gateway — the three `sandbox.gateway` rows
-read `—` in that column.
+read `—` in that column. Native Git follows the same rule: a pod with the worker role runs Git
+preparation and commit ingestion in its own `git-preparation` containers, a server pod whose worker
+role is turned off dispatches each Git operation over the control channel to a connected worker, and
+the webhook role has no Git at all.
 
 Sandbox maintenance follows the worker role in both split-out and single-container deployments.
 Idle mentor sessions and orphaned resources are cleaned periodically without enabling server-wide

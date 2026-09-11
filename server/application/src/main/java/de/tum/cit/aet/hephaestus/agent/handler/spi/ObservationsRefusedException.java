@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.handler.spi;
 
 import java.io.Serial;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 /**
  * A review whose observations the server will not record: the run finished, and what it submitted
@@ -18,11 +20,21 @@ public class ObservationsRefusedException extends JobDeliveryException {
 
     private final String reasonCode;
     private final String reason;
+    private final transient JsonNode verificationFailures;
 
     public ObservationsRefusedException(String reasonCode, String reason) {
+        this(reasonCode, reason, JsonNodeFactory.instance.arrayNode());
+    }
+
+    public ObservationsRefusedException(String reasonCode, String reason, JsonNode verificationFailures) {
         super(reason);
+        this.verificationFailures = verificationFailures.deepCopy();
         this.reasonCode = reasonCode;
         this.reason = reason;
+    }
+
+    public JsonNode verificationFailures() {
+        return verificationFailures.deepCopy();
     }
 
     public String reasonCode() {

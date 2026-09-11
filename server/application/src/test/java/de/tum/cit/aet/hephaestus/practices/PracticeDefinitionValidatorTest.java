@@ -22,7 +22,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 class PracticeDefinitionValidatorTest extends BaseUnitTest {
 
-    private static final SourceContractVersion VERSION = new SourceContractVersion("1.0.0");
+    private static final SourceContractVersion VERSION = new SourceContractVersion("1.1.0");
     private static final SourceKind DIFF = new SourceKind("scm.pull-request.diff");
     private static final SourceKind FOR_ANOTHER_KIND = new SourceKind("scm.issue.core");
 

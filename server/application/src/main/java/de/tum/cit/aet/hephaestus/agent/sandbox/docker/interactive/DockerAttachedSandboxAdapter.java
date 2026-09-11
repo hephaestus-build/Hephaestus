@@ -30,7 +30,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Per-session adapter: owns the docker-exec subprocess, JSONL pump + writer, ring buffer, and
+ * Per-session adapter: owns the gateway channel, JSONL pump + writer, ring buffer, and
  * subscriber fan-out. State transitions {@code ATTACHED → CLOSING → CLOSED} are CAS-guarded.
  */
 public final class DockerAttachedSandboxAdapter implements AttachedSandbox, StdinWriteWatchdog.StallTarget {
@@ -346,11 +346,10 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
                 log.warn("stopContainer failed during close: {}", e.getMessage());
             }
 
-            // destroyForcibly if docker stop didn't propagate to the exec subprocess — prevents
-            // the close virtual thread from waiting forever on a hung docker daemon.
+            // A lost close frame must not leave the pumps waiting after container shutdown.
             Duration waitBudget = graceTimeout.plusSeconds(5);
             if (!process.waitFor(waitBudget)) {
-                log.warn("Exec subprocess still alive after stop + grace; destroyForcibly");
+                log.warn("Gateway channel still open after container shutdown");
                 process.destroyForcibly();
             }
 

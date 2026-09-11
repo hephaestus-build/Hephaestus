@@ -11,6 +11,7 @@ import {
 	describeVocabulary,
 	type NormalizedCitation,
 	normalizeObservation as normalizeFinalObservation,
+	normalizeEvidence,
 	PRESENCE_DESCRIPTIONS,
 	PRESENCE_VALUES,
 	type Presence,
@@ -814,4 +815,28 @@ void test("an INCONCLUSIVE observation must say what it could not settle", () =>
 	assert.equal(ok.presence, "INCONCLUSIVE");
 	assert.equal(ok.assessment, undefined);
 	assert.equal(ok.evidence.undecidability?.wouldSettleIt, "The linked issue's body");
+});
+
+await test("historical citations preserve a full revision for trusted admission", () => {
+	const citation = {
+		sourceKind: "scm.repository.tree",
+		artifactPath: "inputs/scm/repo/.git/HEAD",
+		path: "deleted.ts",
+		revision: "a".repeat(40),
+		startLine: 3,
+		quote: "historical text",
+	};
+	assert.equal(
+		normalizeEvidence({ citations: [citation] }, "PRESENT").citations[0]?.revision,
+		citation.revision,
+	);
+	assert.throws(
+		() => normalizeEvidence({ citations: [{ ...citation, revision: "HEAD~1" }] }, "PRESENT"),
+		/full commit SHA/,
+	);
+	assert.throws(
+		() =>
+			normalizeEvidence({ citations: [{ ...citation, sourceKind: "scm.issue.core" }] }, "PRESENT"),
+		/scm.repository.tree/,
+	);
 });

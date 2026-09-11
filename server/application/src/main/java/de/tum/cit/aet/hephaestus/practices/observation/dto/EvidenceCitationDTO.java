@@ -11,6 +11,7 @@ public record EvidenceCitationDTO(
         @NonNull String artifactPath,
         @NonNull String path,
         @Nullable EvidenceCitationSide side,
+        @Nullable String revision,
         @NonNull Integer startLine,
         @NonNull Integer endLine,
         @Nullable String quote,
@@ -19,6 +20,9 @@ public record EvidenceCitationDTO(
         if (sourceKind.isBlank()
                 || artifactPath.isBlank()
                 || path.isBlank()
+                || (revision != null
+                        && (!sourceKind.equals("scm.repository.tree")
+                                || !revision.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")))
                 || startLine < 1
                 || endLine < startLine
                 || (sourceKind.equals("scm.pull-request.diff") != (side != null))
@@ -35,6 +39,7 @@ public record EvidenceCitationDTO(
                 citation.path("artifactPath").asString(),
                 citation.path("path").asString(),
                 parseSide(citation.path("side").asString(null)),
+                citation.path("revision").asString(null),
                 citation.path("startLine").asInt(),
                 citation.path("endLine").asInt(citation.path("startLine").asInt()),
                 quote,

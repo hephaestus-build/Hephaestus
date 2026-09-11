@@ -263,3 +263,14 @@ export const Mobile: Story = {
 		await expectNoPageOverflow();
 	},
 };
+
+export const HistoricalSource: Story = {
+	args: {
+		evidence: {
+			citations: [citation("scm.repository.tree", { revision: "b".repeat(40) })],
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("b".repeat(40))).toBeVisible();
+	},
+};

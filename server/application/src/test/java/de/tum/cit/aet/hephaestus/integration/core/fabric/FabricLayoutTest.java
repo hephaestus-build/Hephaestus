@@ -11,12 +11,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-/**
- * Locks in the traversal contract of {@link FabricLayout#source}/{@link FabricLayout#jobDir}: the
- * path-segment guard is the only safety-load-bearing logic in the layout (it gates every connector-
- * supplied id before it is resolved under the cache root), so its rejection branch must be exercised
- * directly rather than only via the GC/manifest happy paths.
- */
 class FabricLayoutTest extends BaseUnitTest {
 
     @TempDir
@@ -38,13 +32,6 @@ class FabricLayoutTest extends BaseUnitTest {
     @ValueSource(strings = {"", "  ", "..", ".", "a/b", "a\\b"})
     void source_rejectsUnsafeExternalId(String unsafe) {
         assertThatThrownBy(() -> layout().source("scm", unsafe)).isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @ParameterizedTest
-    @NullSource
-    @ValueSource(strings = {"", "..", "a/b", "a\\b"})
-    void jobDir_rejectsUnsafeJobId(String unsafe) {
-        assertThatThrownBy(() -> layout().jobDir(unsafe)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

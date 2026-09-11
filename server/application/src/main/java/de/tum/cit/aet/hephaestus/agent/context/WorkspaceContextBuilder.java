@@ -23,16 +23,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.stereotype.Service;
-import tools.jackson.databind.JsonNode;
 
 /**
- * Materialises workspace inputs, serialising concurrent reads of the same local repository. Planned
+ * Materialises attempt-local workspace inputs. Planned
  * evidence builds record collection failures for readiness refusal; programming failures, undeclared paths,
  * and duplicate outputs remain fatal.
  */
@@ -41,15 +39,10 @@ public class WorkspaceContextBuilder {
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceContextBuilder.class);
 
-    /** Bounded stripes avoid retaining repository identifiers indefinitely. */
-    private static final int LOCK_STRIPES = 64;
-
     private final List<ContentSource> providers;
     private final MeterRegistry meterRegistry;
 
     private final @Nullable ContextManifestBuilder manifestBuilder;
-
-    private final ReentrantLock[] repoLockStripes;
 
     public WorkspaceContextBuilder(
             List<ContentSource> providers,
@@ -63,10 +56,6 @@ public class WorkspaceContextBuilder {
         if (manifestBuilder != null) {
             manifestBuilder.validateEvidenceSources(this.providers);
         }
-        this.repoLockStripes = new ReentrantLock[LOCK_STRIPES];
-        for (int i = 0; i < LOCK_STRIPES; i++) {
-            repoLockStripes[i] = new ReentrantLock();
-        }
         log.info(
                 "WorkspaceContextBuilder registered {} provider(s): {}",
                 this.providers.size(),
@@ -78,22 +67,15 @@ public class WorkspaceContextBuilder {
     }
 
     public PreparedEvidence prepare(ContextRequest request, EvidencePlan evidencePlan) {
-        Long repoKey = repoKey(request);
-        ReentrantLock lock = repoKey == null ? null : stripeFor(repoKey);
         long startNs = System.nanoTime();
-        if (lock != null) {
-            lock.lock();
-        }
         try {
-            BuildResult result = buildLocked(request, evidencePlan);
+            BuildResult result = buildInputs(request, evidencePlan);
             if (result.manifest() == null) {
                 throw new IllegalStateException("Detector evidence was prepared without a source manifest");
             }
-            return new PreparedEvidence(result.files(), result.filesOnDisk(), result.cleanups(), result.manifest());
+            return new PreparedEvidence(
+                    result.files(), result.filesOnDisk(), result.cleanups(), result.manifest(), result.directories());
         } finally {
-            if (lock != null) {
-                lock.unlock();
-            }
             meterRegistry
                     .timer(
                             AgentMetrics.AGENT_CONTEXT_BUILD_DURATION,
@@ -121,14 +103,10 @@ public class WorkspaceContextBuilder {
     }
 
     private Map<String, byte[]> buildWithoutManifest(ContextRequest request) {
-        Long repoKey = repoKey(request);
-        ReentrantLock lock = repoKey == null ? null : stripeFor(repoKey);
         long startNs = System.nanoTime();
-        if (lock != null) lock.lock();
         try {
-            return buildLocked(request, null).files();
+            return buildInputs(request, null).files();
         } finally {
-            if (lock != null) lock.unlock();
             meterRegistry
                     .timer(
                             AgentMetrics.AGENT_CONTEXT_BUILD_DURATION,
@@ -137,18 +115,14 @@ public class WorkspaceContextBuilder {
         }
     }
 
-    private ReentrantLock stripeFor(Long repoKey) {
-        int idx = Math.floorMod(repoKey.hashCode(), LOCK_STRIPES);
-        return repoLockStripes[idx];
-    }
-
     private record BuildResult(
             Map<String, byte[]> files,
             Map<String, java.nio.file.Path> filesOnDisk,
+            List<EvidenceDirectory> directories,
             List<AutoCloseable> cleanups,
             @Nullable ArtifactSourceManifest manifest) {}
 
-    private BuildResult buildLocked(ContextRequest request, @Nullable EvidencePlan evidencePlan) {
+    private BuildResult buildInputs(ContextRequest request, @Nullable EvidencePlan evidencePlan) {
         // Every source the contract says applies to this artifact kind — not a subset chosen for the
         // practices in scope. What a practice needs before it may be reviewed is asked later, by the
         // readiness check; this one is only "what can the model see".
@@ -171,6 +145,7 @@ public class WorkspaceContextBuilder {
         Map<SourceKind, List<String>> captureLimitations = new HashMap<>();
         Set<SourceKind> attemptedKinds = new HashSet<>();
         Map<String, java.nio.file.Path> filesOnDisk = new LinkedHashMap<>();
+        List<EvidenceDirectory> directories = new ArrayList<>();
         List<AutoCloseable> cleanups = new ArrayList<>();
         int contributed = 0;
         for (ContentSource provider : providers) {
@@ -205,6 +180,7 @@ public class WorkspaceContextBuilder {
                         captureLimitations,
                         attemptedKinds,
                         filesOnDisk,
+                        directories,
                         cleanups);
             } else {
                 try {
@@ -295,7 +271,7 @@ public class WorkspaceContextBuilder {
                 files.size() + filesOnDisk.size(),
                 filesOnDisk.size(),
                 contributed);
-        return new BuildResult(files, filesOnDisk, cleanups, manifest);
+        return new BuildResult(files, filesOnDisk, directories, cleanups, manifest);
     }
 
     private Map<String, byte[]> captureIndependently(
@@ -313,6 +289,7 @@ public class WorkspaceContextBuilder {
             Map<SourceKind, List<String>> captureLimitations,
             Set<SourceKind> attemptedKinds,
             Map<String, java.nio.file.Path> filesOnDisk,
+            List<EvidenceDirectory> directories,
             List<AutoCloseable> cleanups) {
         Map<String, byte[]> files = new LinkedHashMap<>();
         Set<SourceKind> selectedKinds = new HashSet<>(source.sourceKinds());
@@ -326,7 +303,6 @@ public class WorkspaceContextBuilder {
                 }
             }
         }
-        source.prepareCapture(request, selectedKinds);
         for (SourceKind kind : source.sourceKinds()) {
             if (!selectedKinds.contains(kind)) continue;
             attemptedKinds.add(kind);
@@ -361,6 +337,14 @@ public class WorkspaceContextBuilder {
                     throw new IllegalStateException(providerName + " emitted duplicate file " + path);
                 }
             });
+            for (EvidenceDirectory directory : contribution.directories()) {
+                if (!source.ownsPath(directory.target())
+                        || directories.stream()
+                                .anyMatch(existing -> existing.target().startsWith(directory.target())
+                                        || directory.target().startsWith(existing.target())))
+                    throw new IllegalStateException(providerName + " emitted an overlapping or unauthorized directory");
+                directories.add(directory);
+            }
             if (contribution.cleanup() != null) {
                 cleanups.add(contribution.cleanup());
             }
@@ -410,24 +394,5 @@ public class WorkspaceContextBuilder {
             // type must be a compile error here rather than a silent null.
             case ContextRequest.MentorChatRequest ignored -> null;
         };
-    }
-
-    /**
-     * Repository id for single-flight locking, or {@code null} for requests that don't touch git.
-     * Both PR- and issue-review jobs carry {@code repository_id} in metadata; reading it for both
-     * spreads concurrent issue builds across the stripes by repo instead of all colliding on stripe 0.
-     */
-    private static @Nullable Long repoKey(ContextRequest request) {
-        AgentJob job = reviewJob(request);
-        if (job == null) {
-            return null;
-        }
-        JsonNode meta = job.getMetadata();
-        if (meta != null
-                && meta.has("repository_id")
-                && meta.get("repository_id").isNumber()) {
-            return meta.get("repository_id").asLong();
-        }
-        return null;
     }
 }

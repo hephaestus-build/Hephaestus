@@ -425,6 +425,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         pullRequest.setNumber(17);
         pullRequest.setState(Issue.State.OPEN);
         pullRequest.setBaseRefName("main");
+        pullRequest.setBaseRefOid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         Repository repository = new Repository();
         repository.setId(REPOSITORY_ID);
         repository.setNameWithOwner("owner/repo");

@@ -101,6 +101,7 @@ for (const file of [
 	"docs/package.json",
 	"webapp/package.json",
 	"docker/agents/pi/package.json",
+	"docker/agents/precompute/package.json",
 ]) {
 	const workspaceManifest = readJson(file);
 	const workspaceScripts = workspaceManifest.scripts;
@@ -159,16 +160,19 @@ expectConfig("publicHoistPattern", [
 ]);
 const releaseAge = 4320;
 expectConfig("minimumReleaseAge", releaseAge);
-// The agent image is its own pnpm project: nothing the root pins reaches it unless it is restated.
-const imageWorkspace = asRecord(
-	parse(readFileSync("docker/agents/pi/pnpm-workspace.yaml", "utf8")),
-	"docker/agents/pi/pnpm-workspace.yaml",
-);
-if (imageWorkspace.minimumReleaseAge !== releaseAge)
-	throw new Error(`docker/agents/pi/pnpm-workspace.yaml must set minimumReleaseAge ${releaseAge}`);
-const imageEngines = readJson("docker/agents/pi/package.json").engines;
-if (!isRecord(imageEngines) || imageEngines.pnpm !== version)
-	throw new Error(`docker/agents/pi/package.json must pin pnpm ${version} through engines`);
+// Image dependencies are isolated pnpm projects; root policy does not reach them.
+for (const project of ["pi", "precompute"]) {
+	const prefix = `docker/agents/${project}`;
+	const imageWorkspace = asRecord(
+		parse(readFileSync(`${prefix}/pnpm-workspace.yaml`, "utf8")),
+		`${prefix}/pnpm-workspace.yaml`,
+	);
+	if (imageWorkspace.minimumReleaseAge !== releaseAge)
+		throw new Error(`${prefix}/pnpm-workspace.yaml must set minimumReleaseAge ${releaseAge}`);
+	const imageEngines = readJson(`${prefix}/package.json`).engines;
+	if (!isRecord(imageEngines) || imageEngines.pnpm !== version)
+		throw new Error(`${prefix}/package.json must pin pnpm ${version} through engines`);
+}
 expectConfig("allowBuilds", {
 	"@nestjs/core": false,
 	protobufjs: false,

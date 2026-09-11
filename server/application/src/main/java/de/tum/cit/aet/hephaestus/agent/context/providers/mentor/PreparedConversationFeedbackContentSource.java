@@ -90,7 +90,7 @@ public class PreparedConversationFeedbackContentSource implements ContentSource 
 
         Set<Long> activeThreadIds = consentGate.activeThreadIds(workspaceId, conversationThreadIds(prepared));
         Map<UUID, Observation> observations = observationsById(workspaceId, prepared);
-        Set<UUID> visible = visibilityPolicy.permitsAll(
+        Set<UUID> visible = visibilityPolicy.permitsForNewDelivery(
                 workspaceId, observations.values(), SourceUsePurpose.CONVERSATIONAL_MENTORING);
 
         ObjectNode root = objectMapper.createObjectNode();

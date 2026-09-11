@@ -15,8 +15,6 @@ import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -202,7 +200,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             ContextManifestBuilder manifests = mock(ContextManifestBuilder.class);
             when(manifests.stagedSources(any())).thenReturn(Set.of(new SourceKind("scm.pull-request.core")));
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.0.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.PULL_REQUEST);
 
             assertThatThrownBy(() -> builder.prepare(reviewRequest(), plan))
                     .isInstanceOf(IllegalStateException.class)
@@ -252,16 +250,13 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                 }
             };
             JsonMapper mapper = JsonMapper.builder().build();
-            FabricLayout layout = new FabricLayout(root.toString());
             ContextManifestBuilder manifestBuilder = new ContextManifestBuilder(
-                    new ContentAddressedStore(layout),
-                    layout,
                     mapper,
                     new ClasspathArtifactSourceCatalogRegistry(mapper, java.time.Clock.systemUTC()),
                     new PracticeSubjectEvaluator(mapper),
                     Clock.systemUTC());
             var builder = new WorkspaceContextBuilder(List.of(bad), new SimpleMeterRegistry(), manifestBuilder);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.0.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.PULL_REQUEST);
             ContextRequest.PracticeReviewRequest request = reviewRequest();
 
             PreparedEvidence prepared = builder.prepare(request, plan);
@@ -272,8 +267,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                     .orElseThrow();
             assertThat(capture.state())
                     .isEqualTo(new SourceCaptureState.CollectionError(SourceAbsenceReason.PROVIDER_FAILURE));
-            assertThat(layout.jobDir(String.valueOf(request.job().getId())).resolve("artifact-source-manifest.json"))
-                    .exists();
+            assertThat(prepared.files()).containsKey("inputs/manifest.json");
         }
 
         @Test
@@ -310,16 +304,13 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                 public void contribute(ContextRequest request, Map<String, byte[]> files) {}
             };
             JsonMapper mapper = JsonMapper.builder().build();
-            FabricLayout layout = new FabricLayout(root.toString());
             ContextManifestBuilder manifests = new ContextManifestBuilder(
-                    new ContentAddressedStore(layout),
-                    layout,
                     mapper,
                     new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
                     new PracticeSubjectEvaluator(mapper),
                     Clock.systemUTC());
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.0.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.PULL_REQUEST);
 
             var capture = builder.prepare(reviewRequest(), plan).manifest().sources().stream()
                     .filter(source -> source.kind().equals(diff))
@@ -366,7 +357,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             when(manifests.isSourceUsePermitted(any(), any())).thenReturn(true);
             when(manifests.stagedSources(any())).thenReturn(Set.of(comments, core));
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.0.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.PULL_REQUEST);
 
             assertThatThrownBy(() -> builder.prepare(reviewRequest(), plan))
                     .isInstanceOf(IllegalStateException.class)
@@ -411,7 +402,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             when(manifests.isSourceUsePermitted(any(), any())).thenReturn(true);
             when(manifests.stagedSources(any())).thenReturn(Set.of(comments, core));
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.0.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.PULL_REQUEST);
 
             assertThatThrownBy(() -> builder.prepare(reviewRequest(), plan))
                     .isInstanceOf(IllegalStateException.class)
@@ -541,48 +532,10 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
     }
 
     @Nested
-    class SingleFlight {
+    class ConcurrentPreparation {
 
         @Test
-        @DisplayName("a second build against the same repo blocks while the first is in-flight")
-        void serialisesOnRepoId() throws Exception {
-            CountDownLatch firstInside = new CountDownLatch(1);
-            CountDownLatch firstMayFinish = new CountDownLatch(1);
-            ContentSource gatedFirst = new LatchedProvider(firstInside, firstMayFinish);
-            ContentSource unboundedSecond = new LatchedProvider(null, null);
-            var builder =
-                    new WorkspaceContextBuilder(List.of(gatedFirst, unboundedSecond), new SimpleMeterRegistry(), null);
-
-            ObjectMapper mapper = new ObjectMapper();
-            AgentJob jobA = new AgentJob();
-            jobA.setId(UUID.randomUUID());
-            jobA.setMetadata(mapper.createObjectNode().put("repository_id", 7L));
-            AgentJob jobB = new AgentJob();
-            jobB.setId(UUID.randomUUID());
-            jobB.setMetadata(mapper.createObjectNode().put("repository_id", 7L));
-
-            Thread t1 = new Thread(() -> builder.build(new ContextRequest.PracticeReviewRequest(jobA)), "t1");
-            Thread t2 = new Thread(() -> builder.build(new ContextRequest.PracticeReviewRequest(jobB)), "t2");
-            t1.start();
-            assertThat(firstInside.await(2, TimeUnit.SECONDS))
-                    .as("t1 should enter the critical section quickly")
-                    .isTrue();
-            t2.start();
-            // Spin (with timeout) until t2 has parked on the lock. unboundedSecond's `entered`
-            // latch is null, so if t2 ran ahead it would already be past the latch — but it
-            // can't, because gatedFirst still holds the stripe lock. We assert t2 reaches a
-            // wait/block state without a fixed sleep.
-            awaitState(t2, Set.of(Thread.State.WAITING, Thread.State.TIMED_WAITING, Thread.State.BLOCKED), 2_000);
-            firstMayFinish.countDown();
-            t1.join(2_000);
-            t2.join(2_000);
-            assertThat(t1.isAlive()).isFalse();
-            assertThat(t2.isAlive()).isFalse();
-        }
-
-        @Test
-        @DisplayName("null repoKey requests do not serialise globally")
-        void nullRepoKeyRequestsCanRunConcurrently() throws Exception {
+        void shouldPrepareIndependentAttemptsForTheSameRepositoryConcurrently() throws Exception {
             CountDownLatch bothInside = new CountDownLatch(2);
             @Nullable CountDownLatch mayFinish = new CountDownLatch(1);
             AtomicInteger inFlight = new AtomicInteger();
@@ -590,12 +543,12 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             ContentSource concurrentProbe = new ConcurrentProbeProvider(bothInside, mayFinish, inFlight, maxInFlight);
             var builder = new WorkspaceContextBuilder(List.of(concurrentProbe), new SimpleMeterRegistry(), null);
 
-            // IssueReviewRequest jobs without repository_id metadata have no git worktree to protect.
-            // Serialising all such requests behind stripe 0 would throttle Slack/web mentor context builds.
             AgentJob jobA = new AgentJob();
             jobA.setId(UUID.randomUUID());
+            jobA.setMetadata(new ObjectMapper().createObjectNode().put("repository_id", 7L));
             AgentJob jobB = new AgentJob();
             jobB.setId(UUID.randomUUID());
+            jobB.setMetadata(new ObjectMapper().createObjectNode().put("repository_id", 7L));
 
             Thread t1 = new Thread(() -> builder.build(new ContextRequest.IssueReviewRequest(jobA)), "t1-null");
             Thread t2 = new Thread(() -> builder.build(new ContextRequest.IssueReviewRequest(jobB)), "t2-null");
@@ -603,7 +556,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             t2.start();
             try {
                 assertThat(bothInside.await(2, TimeUnit.SECONDS))
-                        .as("both null-repo builds should enter the provider concurrently")
+                        .as("independent attempt captures must not serialize behind a JVM repository lock")
                         .isTrue();
             } finally {
                 mayFinish.countDown();
@@ -613,51 +566,6 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             assertThat(t1.isAlive()).isFalse();
             assertThat(t2.isAlive()).isFalse();
             assertThat(maxInFlight.get()).isEqualTo(2);
-        }
-    }
-
-    private static void awaitState(Thread thread, Set<Thread.State> wanted, long timeoutMillis)
-            throws InterruptedException {
-        long deadline = System.nanoTime() + timeoutMillis * 1_000_000L;
-        while (System.nanoTime() < deadline) {
-            if (wanted.contains(thread.getState())) {
-                return;
-            }
-            Thread.onSpinWait();
-            Thread.sleep(1);
-        }
-        throw new AssertionError(
-                "Thread " + thread.getName() + " never reached " + wanted + " (current=" + thread.getState() + ")");
-    }
-
-    private static final class LatchedProvider implements ContentSource {
-
-        private final @Nullable CountDownLatch entered;
-        private final @Nullable CountDownLatch mayFinish;
-
-        LatchedProvider(@Nullable CountDownLatch entered, @Nullable CountDownLatch mayFinish) {
-            this.entered = entered;
-            this.mayFinish = mayFinish;
-        }
-
-        @Override
-        public boolean supports(ContextRequest request) {
-            return true;
-        }
-
-        @Override
-        public void contribute(ContextRequest request, Map<String, byte[]> files) {
-            if (entered != null) {
-                entered.countDown();
-            }
-            if (mayFinish != null) {
-                try {
-                    mayFinish.await();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-            files.put(OUTPUT_PREFIX + "marker-" + System.nanoTime() + ".txt", new byte[0]);
         }
     }
 

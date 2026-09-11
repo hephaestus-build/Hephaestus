@@ -117,8 +117,8 @@ public class ConversationalDeliveryReconciler {
         for (Observation observation : rows) {
             byId.put(observation.getId(), observation);
         }
-        Set<UUID> visible =
-                visibilityPolicy.permitsAll(workspaceId, byId.values(), SourceUsePurpose.CONVERSATIONAL_MENTORING);
+        Set<UUID> visible = visibilityPolicy.permitsForNewDelivery(
+                workspaceId, byId.values(), SourceUsePurpose.CONVERSATIONAL_MENTORING);
         Map<UUID, Observation> admitted = new LinkedHashMap<>();
         for (UUID observationId : observationIds) {
             Observation observation = byId.get(observationId);

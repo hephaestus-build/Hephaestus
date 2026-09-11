@@ -264,6 +264,10 @@ public class Commit {
         updatedAt = Instant.now();
     }
 
+    /** Set only after complete Git details and file changes have been persisted together. */
+    @Column(name = "git_details_captured_at")
+    private @Nullable Instant gitDetailsCapturedAt;
+
     // Relationships
 
     /**

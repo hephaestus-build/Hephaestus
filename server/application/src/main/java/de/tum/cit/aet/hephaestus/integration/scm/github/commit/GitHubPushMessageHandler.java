@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.util.CommitUtils;
@@ -21,10 +22,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeseri
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import java.time.Instant;
-import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
@@ -59,6 +61,7 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
     private final ApplicationEventPublisher eventPublisher;
     private final ScopeIdResolver scopeIdResolver;
     private final SyncTargetProvider syncTargetProvider;
+    private final TransactionTemplate transactions;
 
     public GitHubPushMessageHandler(
             GitRepositoryManager gitRepositoryManager,
@@ -85,6 +88,12 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
         this.eventPublisher = eventPublisher;
         this.scopeIdResolver = scopeIdResolver;
         this.syncTargetProvider = syncTargetProvider;
+        this.transactions = transactionTemplate;
+    }
+
+    @Override
+    protected void dispatchEvent(GitHubPushEventDTO event) {
+        handleEvent(event);
     }
 
     @Override
@@ -144,7 +153,7 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
 
         // Process commits
         if (gitRepositoryManager.isEnabled() && scopeActive) {
-            processCommitsViaLocalGit(event, repository);
+            processCommitsViaLocalGit(event, repository, Objects.requireNonNull(scopeId));
         } else {
             if (gitRepositoryManager.isEnabled() && !scopeActive) {
                 log.debug(
@@ -156,19 +165,8 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
         }
     }
 
-    /**
-     * Process commits using local git clone/fetch.
-     * Provides complete file-level change information.
-     * <p>
-     * KNOWN LIMITATION: {@code ensureRepository()} (which may clone a repo
-     * from scratch — potentially minutes for large repos) runs inside the
-     * {@link AbstractIntegrationMessageHandler}'s {@code TransactionTemplate}
-     * block, holding a DB connection for the entire duration. Under high push
-     * event volume with many uncached repos, this could exhaust the HikariCP
-     * connection pool. In practice, repos are cloned once and then only
-     * fetched (fast), limiting the impact.
-     */
-    private void processCommitsViaLocalGit(GitHubPushEventDTO event, Repository repository) {
+    private void processCommitsViaLocalGit(GitHubPushEventDTO event, Repository repository, Long scopeId) {
+        RepositoryKey key = new RepositoryKey(scopeId, repository.getId());
         String repoName = sanitizeForLog(repository.getNameWithOwner());
         String beforeSha = event.before();
         String afterSha = event.after();
@@ -182,25 +180,15 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
             }
 
             // Ensure repository is cloned/fetched
-            gitRepositoryManager.ensureRepository(repository.getId(), cloneUrl, token);
+            gitRepositoryManager.ensureRepository(key, cloneUrl, token);
 
-            // Walk commits from before to after
-            List<GitRepositoryManager.CommitInfo> commitInfos = gitRepositoryManager.walkCommits(
-                    repository.getId(), isInitialPush(beforeSha) ? null : beforeSha, afterSha);
+            gitRepositoryManager.forEachCommitInRange(
+                    key,
+                    isInitialPush(beforeSha) ? null : beforeSha,
+                    afterSha,
+                    info -> transactions.execute(status -> processCommitInfo(info, repository)));
 
-            int processed = 0;
-            for (GitRepositoryManager.CommitInfo info : commitInfos) {
-                if (processCommitInfo(info, repository)) {
-                    processed++;
-                }
-            }
-
-            log.info(
-                    "Processed push commits via local git: processed={}, total={}, branch={}, repoName={}",
-                    processed,
-                    commitInfos.size(),
-                    getBranchName(event.ref()),
-                    repoName);
+            log.info("Processed push commits via local git: repoName={}", repoName);
         } catch (Exception e) {
             log.error(
                     "Failed to process commits via local git, falling back to webhook: repoName={}, error={}",
@@ -226,6 +214,10 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
      *                   which uses null for stats to preserve existing richer data
      */
     private void processCommitsViaWebhook(GitHubPushEventDTO event, Repository repository, boolean asFallback) {
+        transactions.executeWithoutResult(status -> persistWebhookCommits(event, repository, asFallback));
+    }
+
+    private void persistWebhookCommits(GitHubPushEventDTO event, Repository repository, boolean asFallback) {
         String repoName = sanitizeForLog(repository.getNameWithOwner());
         int processed = 0;
 
@@ -302,11 +294,14 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
      * {@code DataIntegrityViolationException} that would poison the
      * enclosing Spring transaction on duplicate inserts.
      */
-    private boolean processCommitInfo(GitRepositoryManager.CommitInfo info, Repository repository) {
+    private boolean processCommitInfo(CommitDetails info, Repository repository) {
         // Fast-path: skip if already persisted (avoid building entity graph)
-        if (commitRepository.existsByShaAndRepositoryId(info.sha(), repository.getId())) {
+        if (commitRepository.existsByShaAndRepositoryIdAndGitDetailsCapturedAtIsNotNull(
+                info.sha(), repository.getId())) {
             return false;
         }
+
+        boolean newCommit = !commitRepository.existsByShaAndRepositoryId(info.sha(), repository.getId());
 
         // Resolve author/committer IDs by email (with noreply fallback)
         Long providerId = repository.getProvider().getId();
@@ -333,16 +328,19 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
                 info.authorEmail(),
                 info.committerEmail());
 
+        commitRepository.deleteFileChanges(repository.getId(), info.sha());
+
         // Attach file changes if present
         if (!info.fileChanges().isEmpty()) {
             Commit commit = commitRepository
                     .findByShaAndRepositoryId(info.sha(), repository.getId())
-                    .orElse(null);
+                    .orElseThrow(() -> new IllegalStateException("Commit missing after upsert"));
             if (commit != null) {
-                for (GitRepositoryManager.FileChange fc : info.fileChanges()) {
+                commit.getFileChanges().clear();
+                for (CommitDetails.FileChange fc : info.fileChanges()) {
                     CommitFileChange fileChange = new CommitFileChange();
                     fileChange.setFilename(fc.filename());
-                    fileChange.setChangeType(CommitFileChange.fromGitChangeType(fc.changeType()));
+                    fileChange.setChangeType(fc.changeType());
                     fileChange.setAdditions(fc.additions());
                     fileChange.setDeletions(fc.deletions());
                     fileChange.setChanges(fc.changes());
@@ -354,7 +352,8 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
         }
 
         // Publish CommitCreated event for new commits
-        publishCommitCreated(info.sha(), repository);
+        commitRepository.markGitDetailsCaptured(repository.getId(), info.sha(), Instant.now());
+        if (newCommit) publishCommitCreated(info.sha(), repository);
 
         return true;
     }

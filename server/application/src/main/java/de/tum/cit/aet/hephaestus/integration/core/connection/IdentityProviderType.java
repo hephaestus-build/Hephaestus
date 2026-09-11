@@ -33,4 +33,14 @@ public enum IdentityProviderType {
                         "IntegrationKind " + kind + " is not an SCM kind and has no IdentityProviderType");
         };
     }
+
+    /** The integration this provider is served by; the SPI vocabulary agent code dispatches on. */
+    public IntegrationKind kind() {
+        return switch (this) {
+            case GITHUB -> IntegrationKind.GITHUB;
+            case GITLAB -> IntegrationKind.GITLAB;
+            case SLACK -> IntegrationKind.SLACK;
+            case OUTLINE -> IntegrationKind.OUTLINE;
+        };
+    }
 }

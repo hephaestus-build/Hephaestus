@@ -184,6 +184,7 @@ public class IssueReviewHandler implements JobTypeHandler {
                     new PreparedJobInputs(
                             prepared.files(),
                             prepared.filesOnDisk(),
+                            prepared.directories(),
                             prepared.cleanups(),
                             artifactSourceManifest,
                             readiness.report()));
@@ -204,7 +205,12 @@ public class IssueReviewHandler implements JobTypeHandler {
                 metadata.path("issue_number").asInt(),
                 job.getId());
         return new PreparedJobInputs(
-                files, prepared.filesOnDisk(), prepared.cleanups(), artifactSourceManifest, readiness.report());
+                files,
+                prepared.filesOnDisk(),
+                prepared.directories(),
+                prepared.cleanups(),
+                artifactSourceManifest,
+                readiness.report());
     }
 
     private TaskEnvelope buildTaskEnvelope(AgentJob job, JsonNode metadata) {
@@ -236,14 +242,17 @@ public class IssueReviewHandler implements JobTypeHandler {
     @Override
     public void deliver(AgentJob job) {
         if (ObservationAdmissionService.observationsWereRefused(job)) return;
-        if (feedbackDeliveryService.recoverAutomaticPackageIfPresent(job)) return;
         ObservationAdmissionService.requireMatchingCompositionDigest(job);
         List<PracticeDetectionResultParser.ValidatedObservation> observations =
                 observationRepository
                         .findByAgentJobId(job.getId(), job.getWorkspace().getId())
                         .stream()
-                        .map(this::validated)
+                        .map(observation -> {
+                            CitationVerification.requireVerified(job, observation.getEvidence());
+                            return validated(observation);
+                        })
                         .toList();
+        if (feedbackDeliveryService.recoverAutomaticPackageIfPresent(job)) return;
         List<PracticeDetectionResultParser.ValidatedObservation> eligible =
                 feedbackResponseSuppressionFilter.evaluate(job, observations).deliverable();
         List<PracticeDetectionResultParser.ValidatedObservation> loudEnough =
@@ -297,6 +306,11 @@ public class IssueReviewHandler implements JobTypeHandler {
     }
 
     public void admitObservations(AgentJob job, JsonNode observations) {
+        deliveryService.publish(job, prepareObservations(job, observations));
+    }
+
+    public PracticeDetectionDeliveryService.PreparedObservations prepareObservations(
+            AgentJob job, JsonNode observations) {
         ObjectNode output = objectMapper.createObjectNode();
         ObjectNode raw = objectMapper.createObjectNode();
         raw.set("observations", observations);
@@ -308,7 +322,7 @@ public class IssueReviewHandler implements JobTypeHandler {
         }
         var admitted = new ArrayList<>(PracticeDetectionResultParser.coerceCoherence(
                 parsed.validObservations(), practiceCatalogInjector.defectDetectorSlugs(job)));
-        deliveryService.deliver(job, admitted);
+        return deliveryService.prepare(job, admitted);
     }
 
     @Override

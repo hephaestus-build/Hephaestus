@@ -4,15 +4,11 @@ import java.nio.file.Path;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-/**
- * Resolves Context Fabric paths below one configured root. Mutable connector materialisations, immutable CAS
- * blobs, and per-job replay metadata use separate lifecycle regions.
- */
+/** Worker-local repository caches and active attempt folders; neither is durable application state. */
 @Component
 public class FabricLayout {
 
     private static final String SOURCES = "sources";
-    private static final String CAS = "cas";
     private static final String JOBS = "jobs";
 
     private final Path root;
@@ -29,16 +25,8 @@ public class FabricLayout {
         return root.resolve(SOURCES).resolve(segment(connectorId)).resolve(segment(externalId));
     }
 
-    public Path casRoot() {
-        return root.resolve(CAS);
-    }
-
     public Path jobsRoot() {
         return root.resolve(JOBS);
-    }
-
-    public Path jobDir(String jobId) {
-        return jobsRoot().resolve(segment(jobId));
     }
 
     /**

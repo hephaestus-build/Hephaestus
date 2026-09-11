@@ -1,0 +1,725 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hephaestus.aet.cit.tum.de/contracts/artifact-source/1.1.0/automated-review-readiness-report.schema.json",
+  "title": "Practice review readiness report",
+  "description": "Per-practice decision to run or skip automated review for one captured evidence manifest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "catalogDigest",
+    "artifactKind",
+    "manifestCapturedAt",
+    "decidedAt",
+    "decisions"
+  ],
+  "properties": {
+    "contractVersion": {
+      "const": "1.1.0",
+      "description": "Source contract used to interpret the referenced manifest and source checks."
+    },
+    "catalogDigest": {
+      "const": "8fedbc81c4d5388197ada6365005c133f0cca25f583fc910cce2219ff1fe0c5a",
+      "description": "SHA-256 digest of the exact source catalog used by the runtime."
+    },
+    "artifactKind": {
+      "enum": [
+        "scm.pull_request",
+        "scm.issue",
+        "chat.conversation_thread",
+        "docs.document"
+      ],
+      "description": "Kind of work this invocation reviewed, which fixes the evidence sources that apply."
+    },
+    "manifestCapturedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Capture time of the evidence manifest checked by this report."
+    },
+    "decidedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Time at which all readiness decisions in this report were made."
+    },
+    "decisions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/decision"
+      },
+      "uniqueItems": true,
+      "description": "One run-or-skip decision for each practice considered by the invocation."
+    }
+  },
+  "$defs": {
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "practiceSlug",
+        "decidedAt",
+        "ready",
+        "reasonCodes",
+        "sourceChecks"
+      ],
+      "properties": {
+        "practiceSlug": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable identifier of the practice being considered."
+        },
+        "decidedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Time this automated-review readiness decision was made."
+        },
+        "ready": {
+          "type": "boolean",
+          "description": "Whether automated review may run for this practice."
+        },
+        "sourceChecks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sourceCheck"
+          },
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "sourceKind": {
+                    "const": "scm.pull-request.core",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "sourceKind"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "sourceKind": {
+                    "const": "scm.pull-request.diff",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "sourceKind"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "sourceKind": {
+                    "const": "scm.pull-request.comments",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "sourceKind"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "sourceKind": {
+                    "const": "scm.repository.tree",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "sourceKind"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "sourceKind": {
+                    "const": "scm.issue.core",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "sourceKind"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "sourceKind": {
+                    "const": "scm.issue.comments",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "sourceKind"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "sourceKind": {
+                    "const": "slack.conversation.thread",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "sourceKind"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "sourceKind": {
+                    "const": "scm.linked-work-items",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "sourceKind"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "sourceKind": {
+                    "const": "scm.review-threads",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "sourceKind"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "sourceKind": {
+                    "const": "scm.general-review-comments",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "sourceKind"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "sourceKind": {
+                    "const": "workspace.project-inventory",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "sourceKind"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "sourceKind": {
+                    "const": "outline.documents",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "sourceKind"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            }
+          ],
+          "description": "Checks for every required source; empty when a non-source prerequisite fails."
+        },
+        "reasonCodes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "NO_AUTOMATED_REVIEW",
+              "DECLARED_EVIDENCE_INSUFFICIENT"
+            ]
+          },
+          "description": "Non-source reasons the practice must be skipped."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "ready": {
+                "const": true
+              }
+            },
+            "required": [
+              "ready"
+            ]
+          },
+          "then": {
+            "properties": {
+              "sourceChecks": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/sourceCheck"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "meetsRequirements": {
+                          "const": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "else": {
+            "anyOf": [
+              {
+                "properties": {
+                  "reasonCodes": {
+                    "type": "array",
+                    "minItems": 1
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "sourceChecks": {
+                    "type": "array",
+                    "contains": {
+                      "type": "object",
+                      "properties": {
+                        "meetsRequirements": {
+                          "const": false
+                        }
+                      },
+                      "required": [
+                        "meetsRequirements"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "ready": {
+                "const": true
+              }
+            },
+            "required": [
+              "ready"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reasonCodes": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
+      "description": "Readiness decision for one exact practice revision."
+    },
+    "sourceCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceKind",
+        "sourceContractVersion",
+        "checkedAt",
+        "temporalAnchor",
+        "meetsRequirements",
+        "reasonCodes"
+      ],
+      "properties": {
+        "sourceKind": {
+          "enum": [
+            "scm.pull-request.core",
+            "scm.pull-request.diff",
+            "scm.pull-request.comments",
+            "scm.repository.tree",
+            "scm.issue.core",
+            "scm.issue.comments",
+            "docs.document.core",
+            "slack.conversation.thread",
+            "scm.linked-work-items",
+            "scm.review-threads",
+            "scm.general-review-comments",
+            "workspace.project-inventory",
+            "outline.documents",
+            "hephaestus.observation-history",
+            "hephaestus.feedback-history"
+          ],
+          "description": "Required logical source being checked."
+        },
+        "sourceContractVersion": {
+          "const": "1.1.0",
+          "description": "Source contract that defines the expected source semantics."
+        },
+        "checkedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Time this check was evaluated."
+        },
+        "temporalAnchor": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Review submission time against which freshness is evaluated."
+        },
+        "meetsRequirements": {
+          "type": "boolean",
+          "description": "Whether this source passes all requirements declared by the practice."
+        },
+        "reasonCodes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "SOURCE_NOT_AVAILABLE",
+              "SOURCE_INCOMPLETE"
+            ]
+          },
+          "description": "Stable reasons this required source did not pass."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "meetsRequirements": {
+                "const": true
+              }
+            },
+            "required": [
+              "meetsRequirements"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reasonCodes": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "reasonCodes": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ],
+      "description": "Result of checking one required source against the practice requirements."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "artifactKind": {
+            "const": "scm.pull_request"
+          }
+        },
+        "required": [
+          "artifactKind"
+        ]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "decisions": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/decision"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sourceChecks": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          {
+                            "$ref": "#/$defs/sourceCheck"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "sourceKind": {
+                                "enum": [
+                                  "scm.pull-request.core",
+                                  "scm.pull-request.diff",
+                                  "scm.pull-request.comments",
+                                  "scm.repository.tree",
+                                  "scm.linked-work-items",
+                                  "scm.review-threads",
+                                  "scm.general-review-comments",
+                                  "workspace.project-inventory",
+                                  "outline.documents",
+                                  "hephaestus.observation-history",
+                                  "hephaestus.feedback-history"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "sourceKind"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "artifactKind": {
+            "const": "scm.issue"
+          }
+        },
+        "required": [
+          "artifactKind"
+        ]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "decisions": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/decision"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sourceChecks": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          {
+                            "$ref": "#/$defs/sourceCheck"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "sourceKind": {
+                                "enum": [
+                                  "scm.issue.core",
+                                  "scm.issue.comments",
+                                  "workspace.project-inventory",
+                                  "outline.documents",
+                                  "hephaestus.observation-history",
+                                  "hephaestus.feedback-history"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "sourceKind"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "artifactKind": {
+            "const": "chat.conversation_thread"
+          }
+        },
+        "required": [
+          "artifactKind"
+        ]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "decisions": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/decision"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sourceChecks": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          {
+                            "$ref": "#/$defs/sourceCheck"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "sourceKind": {
+                                "enum": [
+                                  "slack.conversation.thread",
+                                  "workspace.project-inventory",
+                                  "hephaestus.observation-history",
+                                  "hephaestus.feedback-history"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "sourceKind"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "artifactKind": {
+            "const": "docs.document"
+          }
+        },
+        "required": [
+          "artifactKind"
+        ]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "decisions": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/decision"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sourceChecks": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          {
+                            "$ref": "#/$defs/sourceCheck"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "sourceKind": {
+                                "enum": [
+                                  "docs.document.core",
+                                  "hephaestus.observation-history",
+                                  "hephaestus.feedback-history"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "sourceKind"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

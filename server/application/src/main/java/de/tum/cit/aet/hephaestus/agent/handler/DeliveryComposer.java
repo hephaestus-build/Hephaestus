@@ -95,6 +95,22 @@ class DeliveryComposer {
     }
 
     @Nullable
+    static DeliveryContent composeAdmitted(
+            List<ValidatedObservation> observations,
+            ArtifactKind artifact,
+            Map<String, String> whyBySlug,
+            List<ComposedFeedbackUnit> composed,
+            @Nullable String lead) {
+        return compose(
+                observations,
+                artifact,
+                whyBySlug,
+                new GroundingContext(true, ArtifactKinds.ISSUE.equals(artifact), Map.of(), true),
+                composed,
+                lead);
+    }
+
+    @Nullable
     private static DeliveryContent compose(
             @Nullable List<ValidatedObservation> observations,
             ArtifactKind artifact,
@@ -684,7 +700,9 @@ class DeliveryComposer {
             }
 
             String snippet = citation.path("quote").asString(null);
-            if (!grounding.anchorIsGrounded(path, snippet)) {
+            if (grounding.admittedOnly()
+                    ? !verifiedAnchor(citation, path, startLine, selected)
+                    : !grounding.anchorIsGrounded(path, snippet)) {
                 unplaced.add(f);
                 continue;
             }
@@ -701,6 +719,18 @@ class DeliveryComposer {
         }
 
         return new PlacedNotes(notes, unplaced);
+    }
+
+    private static boolean verifiedAnchor(
+            JsonNode citation, String path, int line, ComposedFeedbackUnit.@Nullable ResolvedAnchor selected) {
+        return "VERIFIED".equals(citation.path("verification").path("status").asString())
+                && "scm.pull-request.diff".equals(citation.path("sourceKind").asString())
+                && "NEW".equals(citation.path("side").asString())
+                && repoRelative(path).equals(repoRelative(citation.path("path").asString()))
+                && line == citation.path("startLine").asInt()
+                && (selected == null
+                        || selected.endLine() == null
+                        || selected.endLine() == citation.path("endLine").asInt(line));
     }
 
     private static @Nullable Integer integerAtLeast(@Nullable JsonNode value, int minimum) {
@@ -790,19 +820,20 @@ class DeliveryComposer {
     }
 
     /** Server-derived diff content used to validate model-selected inline anchors. */
-    record GroundingContext(boolean active, boolean forceNoLocus, Map<String, String> hunkByFile) {
+    record GroundingContext(
+            boolean active, boolean forceNoLocus, Map<String, String> hunkByFile, boolean admittedOnly) {
         static GroundingContext none() {
-            return new GroundingContext(false, false, Map.of());
+            return new GroundingContext(false, false, Map.of(), false);
         }
 
         static GroundingContext fromDiff(ArtifactKind artifact, @Nullable String unifiedDiff) {
             if (ArtifactKinds.ISSUE.equals(artifact)) {
-                return new GroundingContext(true, true, Map.of());
+                return new GroundingContext(true, true, Map.of(), false);
             }
             if (unifiedDiff == null || unifiedDiff.isBlank()) {
                 return none();
             }
-            return new GroundingContext(true, false, parseHunksByFile(unifiedDiff));
+            return new GroundingContext(true, false, parseHunksByFile(unifiedDiff), false);
         }
 
         boolean anchorIsGrounded(@Nullable String path, @Nullable String snippet) {

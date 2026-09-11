@@ -30,7 +30,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
 
     private PracticeAgentRequest proxyRequest() {
         return new PracticeAgentRequest(
-                "azure-openai-responses", "gpt-5.4-mini", null, null, false, "job-token-123", false, 600);
+                "azure-openai-responses", "gpt-5.4-mini", null, null, false, "job-token-123", 600);
     }
 
     @Test
@@ -63,6 +63,15 @@ class PracticePiAdapterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldKeepPracticeNetworkIsolated() {
+        var request = new PracticeAgentRequest("openai-completions", "model", null, null, false, "job-token-123", 600);
+        var policy = adapter.buildSandboxSpec(request).networkPolicy();
+        org.junit.jupiter.api.Assertions.assertNotNull(policy);
+        assertThat(policy.internetAccess()).isFalse();
+        assertThat(policy.llmProxyToken()).isEqualTo("job-token-123");
+    }
+
+    @Test
     void outputPath() {
         assertThat(adapter.buildSandboxSpec(proxyRequest()).outputPath()).isEqualTo(SandboxLayout.OUTPUT_PATH);
     }
@@ -76,7 +85,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
     @Test
     void buildsWithCapabilityFields() {
         PracticeAgentRequest request = new PracticeAgentRequest(
-                "openai-completions", "gpt-oss-120b", 131072, 4096, true, "job-token-123", false, 600);
+                "openai-completions", "gpt-oss-120b", 131072, 4096, true, "job-token-123", 600);
 
         var spec = adapter.buildSandboxSpec(request);
 

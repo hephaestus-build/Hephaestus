@@ -9,6 +9,10 @@ import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.CapacityReport;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.ForceReconnect;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameCodec;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameEnvelope;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitAck;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitCancel;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOperation;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOutput;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.Heartbeat;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerControlFrame;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerHello;
@@ -141,8 +145,18 @@ public class WorkerControlWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    private java.util.function.BiConsumer<WorkerSession, GitOutput> gitOutputHandler = (session, output) -> {};
+
+    public void setGitOutputHandler(java.util.function.BiConsumer<WorkerSession, GitOutput> handler) {
+        this.gitOutputHandler = handler;
+    }
+
     private void dispatch(WorkerSession session, WorkerControlFrame frame) {
         switch (frame) {
+            case GitOutput output -> gitOutputHandler.accept(session, output);
+            case GitOperation operation -> warnUnexpectedFrame(session, operation);
+            case GitAck ack -> warnUnexpectedFrame(session, ack);
+            case GitCancel cancel -> warnUnexpectedFrame(session, cancel);
             case WorkerHello hello -> handleHello(session, hello);
             case CapacityReport capacity -> {
                 session.updateCapacity(capacity);

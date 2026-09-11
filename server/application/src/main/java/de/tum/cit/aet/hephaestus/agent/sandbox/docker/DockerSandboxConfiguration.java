@@ -5,10 +5,13 @@ import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
+import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.AgentImagePinGuard;
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.DockerInteractiveSandboxAdapter;
@@ -20,6 +23,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -31,6 +35,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -152,13 +157,8 @@ public class DockerSandboxConfiguration {
     }
 
     @Bean
-    public SandboxWorkspaceManager sandboxWorkspaceManager(DockerClientOperations ops, SandboxProperties properties) {
-        return new SandboxWorkspaceManager(
-                ops,
-                SandboxWorkspaceManager.MAX_OUTPUT_BYTES,
-                SandboxWorkspaceManager.MAX_SINGLE_FILE_BYTES,
-                properties.maxDirectoryBytes(),
-                properties.maxDirectoryEntries());
+    public SandboxWorkspaceManager sandboxWorkspaceManager() {
+        return new SandboxWorkspaceManager();
     }
 
     /**
@@ -205,14 +205,23 @@ public class DockerSandboxConfiguration {
             SandboxContainerManager containerManager,
             ContainerSecurityPolicy securityPolicy,
             SandboxGatewayProperties gatewayProperties,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            SandboxGatewaySessions gatewaySessions,
+            DockerClientOperations volumeOperations) {
         return new DockerSandboxAdapter(
                 networkManager,
                 workspaceManager,
                 containerManager,
                 securityPolicy,
                 gatewayProperties.port(),
-                meterRegistry);
+                meterRegistry,
+                gatewaySessions,
+                volumeOperations);
+    }
+
+    @Bean
+    public SandboxVolumeManager sandboxVolumeManager(DockerClientOperations ops, DockerSandboxProperties properties) {
+        return new SandboxVolumeManager(ops, properties);
     }
 
     @Bean
@@ -220,9 +229,11 @@ public class DockerSandboxConfiguration {
             AgentJobRepository jobRepository,
             SandboxContainerManager containerManager,
             SandboxNetworkManager networkManager,
+            SandboxVolumeManager volumeManager,
             MeterRegistry meterRegistry,
             Clock clock) {
-        return new SandboxReconciler(jobRepository, containerManager, networkManager, meterRegistry, clock);
+        return new SandboxReconciler(
+                jobRepository, containerManager, networkManager, volumeManager, meterRegistry, clock);
     }
 
     @Bean
@@ -270,7 +281,9 @@ public class DockerSandboxConfiguration {
             ExecutorService dockerWaitExecutor,
             DockerSandboxProperties dockerProperties,
             SandboxGatewayProperties gatewayProperties,
-            MentorProxyCredentialRegistry mentorProxyCredentialRegistry) {
+            MentorProxyCredentialRegistry mentorProxyCredentialRegistry,
+            SandboxGatewaySessions gatewaySessions,
+            DockerClientOperations volumeOperations) {
         return new DockerInteractiveSandboxAdapter(
                 interactiveProperties,
                 networkManager,
@@ -283,7 +296,9 @@ public class DockerSandboxConfiguration {
                 dockerWaitExecutor,
                 dockerProperties,
                 gatewayProperties.port(),
-                mentorProxyCredentialRegistry);
+                mentorProxyCredentialRegistry,
+                gatewaySessions,
+                volumeOperations);
     }
 
     /**
@@ -338,5 +353,31 @@ public class DockerSandboxConfiguration {
         } catch (IOException e) {
             throw new SandboxException("Failed to load seccomp profile: " + resourcePath, e);
         }
+    }
+
+    @Bean
+    public DockerNativeGitExecutor.Settings gitPreparationSettings(
+            GitRepositoryProperties git,
+            WorkerProperties worker,
+            SandboxProperties sandbox,
+            DockerSandboxProperties docker,
+            @Value("${hephaestus.agent.image.require-digest:false}") boolean requireDigest) {
+        if (requireDigest) AgentImagePinGuard.requireDigest(git.image(), "hephaestus.git.image");
+        return new DockerNativeGitExecutor.Settings(
+                git.image(),
+                worker.resolvedWorkerId(),
+                sandbox.maxConcurrentContainers(),
+                docker.owner(),
+                docker.containerRuntime());
+    }
+
+    @Bean
+    public DockerNativeGitExecutor dockerNativeGitExecutor(
+            DockerClientOperations docker,
+            SandboxContainerManager containers,
+            SandboxImageGuard images,
+            ObjectMapper mapper,
+            DockerNativeGitExecutor.Settings settings) {
+        return new DockerNativeGitExecutor(docker, containers, images, mapper, settings);
     }
 }

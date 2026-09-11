@@ -14,8 +14,6 @@ import static org.mockito.Mockito.when;
 
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.command.ConnectToNetworkCmd;
-import com.github.dockerjava.api.command.CopyArchiveFromContainerCmd;
-import com.github.dockerjava.api.command.CopyArchiveToContainerCmd;
 import com.github.dockerjava.api.command.CreateContainerCmd;
 import com.github.dockerjava.api.command.CreateContainerResponse;
 import com.github.dockerjava.api.command.CreateNetworkCmd;
@@ -37,10 +35,7 @@ import com.github.dockerjava.api.exception.NotModifiedException;
 import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.model.Network;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -97,6 +92,8 @@ class DockerClientOperationsTest extends BaseUnitTest {
             when(cmd.withName(anyString())).thenReturn(cmd);
             when(cmd.withDriver(anyString())).thenReturn(cmd);
             when(cmd.withInternal(true)).thenReturn(cmd);
+            when(cmd.withOptions(Map.of("com.docker.network.bridge.gateway_mode_ipv4", "isolated")))
+                    .thenReturn(cmd);
             when(cmd.withCheckDuplicate(true)).thenReturn(cmd);
             when(cmd.exec()).thenReturn(response);
             when(response.getId()).thenReturn("net-abc");
@@ -105,6 +102,7 @@ class DockerClientOperationsTest extends BaseUnitTest {
 
             assertThat(id).isEqualTo("net-abc");
             verify(cmd).withInternal(true);
+            verify(cmd).withOptions(Map.of("com.docker.network.bridge.gateway_mode_ipv4", "isolated"));
         }
 
         @Test
@@ -114,6 +112,7 @@ class DockerClientOperationsTest extends BaseUnitTest {
             when(cmd.withName(anyString())).thenReturn(cmd);
             when(cmd.withDriver(anyString())).thenReturn(cmd);
             when(cmd.withInternal(false)).thenReturn(cmd);
+            when(cmd.withOptions(Map.of())).thenReturn(cmd);
             when(cmd.withCheckDuplicate(true)).thenReturn(cmd);
             when(cmd.exec()).thenThrow(new DockerException("Network conflict", 409));
 
@@ -354,60 +353,6 @@ class DockerClientOperationsTest extends BaseUnitTest {
     }
 
     @Nested
-    class CopyArchive {
-
-        @Test
-        void shouldCopyToContainer() {
-            CopyArchiveToContainerCmd cmd = mock(CopyArchiveToContainerCmd.class);
-            when(dockerClient.copyArchiveToContainerCmd("ctr-1")).thenReturn(cmd);
-            when(cmd.withRemotePath("/workspace")).thenReturn(cmd);
-            when(cmd.withTarInputStream(any())).thenReturn(cmd);
-
-            InputStream tarStream = new ByteArrayInputStream(new byte[0]);
-            ops.copyArchiveToContainer("ctr-1", "/workspace", tarStream);
-
-            verify(cmd).exec();
-        }
-
-        @Test
-        void shouldThrowOnCopyToFailure() {
-            CopyArchiveToContainerCmd cmd = mock(CopyArchiveToContainerCmd.class);
-            when(dockerClient.copyArchiveToContainerCmd("ctr-1")).thenReturn(cmd);
-            when(cmd.withRemotePath("/workspace")).thenReturn(cmd);
-            when(cmd.withTarInputStream(any())).thenReturn(cmd);
-            when(cmd.exec()).thenThrow(new DockerException("container not running", 409));
-
-            InputStream tarStream = new ByteArrayInputStream(new byte[0]);
-            assertThatThrownBy(() -> ops.copyArchiveToContainer("ctr-1", "/workspace", tarStream))
-                    .isInstanceOf(SandboxException.class)
-                    .hasMessageContaining("ctr-1");
-        }
-
-        @Test
-        void shouldThrowRetryableWhenCopyFromFails() {
-            CopyArchiveFromContainerCmd cmd = mock(CopyArchiveFromContainerCmd.class);
-            when(dockerClient.copyArchiveFromContainerCmd("ctr-1", "/output")).thenReturn(cmd);
-            when(cmd.exec()).thenThrow(new DockerException("Connection reset", 500));
-
-            assertThatThrownBy(() -> ops.copyArchiveFromContainer("ctr-1", "/output"))
-                    .isInstanceOf(SandboxInfrastructureException.class)
-                    .hasMessageContaining("/output");
-        }
-
-        @Test
-        void shouldThrowWithoutRetryWhenTheCopiedPathDoesNotExist() {
-            CopyArchiveFromContainerCmd cmd = mock(CopyArchiveFromContainerCmd.class);
-            when(dockerClient.copyArchiveFromContainerCmd("ctr-1", "/output")).thenReturn(cmd);
-            when(cmd.exec()).thenThrow(new NotFoundException("No such path"));
-
-            assertThatThrownBy(() -> ops.copyArchiveFromContainer("ctr-1", "/output"))
-                    .as("a directory the container never wrote is missing again on every retry")
-                    .isExactlyInstanceOf(SandboxException.class)
-                    .hasMessageContaining("/output");
-        }
-    }
-
-    @Nested
     class CreateContainer {
 
         @Test
@@ -446,7 +391,8 @@ class DockerClientOperationsTest extends BaseUnitTest {
                             "private",
                             "none",
                             null,
-                            Map.of()),
+                            Map.of(),
+                            List.of()),
                     List.of());
 
             String id = ops.createContainer(spec);
@@ -492,7 +438,8 @@ class DockerClientOperationsTest extends BaseUnitTest {
                             null,
                             null,
                             null,
-                            Map.of()),
+                            Map.of(),
+                            List.of()),
                     List.of());
 
             ops.createContainer(spec);

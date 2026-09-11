@@ -51,21 +51,29 @@ public class ObservationAdmissionController {
         UUID jobId = routing.sourceId();
         if (jobId == null
                 || routing.attempt() == null
-                || routing.attempt().sourceType() != LlmUsageSourceType.AGENT_JOB) {
+                || routing.attempt().sourceType() != LlmUsageSourceType.AGENT_JOB
+                || routing.workspaceId() == null
+                || routing.attempt().workerId() == null) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Agent-job credential required");
         }
+        var identity = new ObservationAdmissionService.AdmissionIdentity(
+                jobId,
+                routing.workspaceId(),
+                routing.attempt().number(),
+                routing.attempt().workerId());
         try {
-            return admission.admit(jobId, request.path("observations"));
+            try {
+                return admission.admit(identity, request.path("observations"));
+            } catch (ObservationsRefusedException e) {
+                admission.recordRefusal(identity, e.reasonCode(), e.reason(), e.verificationFailures());
+                refusals.recordExecutionRefusal(e.reasonCode());
+                log.info("Refused this review's observations ({}): jobId={}, {}", e.reasonCode(), jobId, e.reason());
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, e.reason(), e);
+            }
+        } catch (ObservationAdmissionService.StaleAttemptException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Review attempt no longer owns this job", e);
         } catch (ObservationAdmissionService.AdmissionConflictException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Observations differ from the admitted payload", e);
-        } catch (ObservationsRefusedException e) {
-            // A decision, not a defect: the review ran and what it submitted does not support a claim
-            // about anyone's work. Answering 5xx would have the sandbox repeat a submission this server
-            // refuses for the same reason every time, and would file the refusal as an internal error.
-            refusals.recordExecutionRefusal(e.reasonCode());
-            admission.recordRefusal(jobId, e.reasonCode(), e.reason());
-            log.info("Refused this review's observations ({}): jobId={}, {}", e.reasonCode(), jobId, e.reason());
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, e.reason(), e);
         }
     }
 }

@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
+import de.tum.cit.aet.hephaestus.agent.handler.AdmittedObservationFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationalFeedbackPreparer;
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.FeedbackChannelRouter;
@@ -341,6 +342,7 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
         created.setTitle("Test work");
         created.setState(Issue.State.OPEN);
         created.setBaseRefName("main");
+        created.setBaseRefOid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         return pullRequestRepository.saveAndFlush(created);
     }
 
@@ -402,9 +404,20 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
                 "ABSENT",
                 "BAD",
                 "MAJOR",
-                artifactKind.equals("chat.conversation_thread")
-                        ? "{\"citations\":[{\"sourceKind\":\"slack.conversation.thread\",\"artifactPath\":\"inputs/context/thread.json\",\"path\":\"Slack thread\",\"startLine\":1,\"endLine\":1,\"quote\":\"example\",\"quoteRedacted\":false}]}"
-                        : "{\"citations\":[{\"sourceKind\":\"scm.pull-request.core\",\"artifactPath\":\"inputs/context/pull-request.json\",\"path\":\"pull-request.json\",\"startLine\":1,\"endLine\":1,\"quote\":\"example\",\"quoteRedacted\":false}]}",
+                (artifactKind.equals("chat.conversation_thread")
+                                ? AdmittedObservationFixtures.evidence(
+                                        job.getId(),
+                                        "slack.conversation.thread",
+                                        "inputs/context/thread.json",
+                                        "Slack thread",
+                                        "example")
+                                : AdmittedObservationFixtures.evidence(
+                                        job.getId(),
+                                        "scm.pull-request.core",
+                                        "inputs/context/pull-request.json",
+                                        "pull-request.json",
+                                        "example"))
+                        .toString(),
                 null,
                 null,
                 Instant.now(),

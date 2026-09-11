@@ -31,6 +31,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -72,7 +74,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void setUp() {
         SecurityContextHolder.clearContext();
         filter = new JobTokenAuthenticationFilter(
-                jobRepository, jwtVerifier, new MentorProxyCredentialRegistry(), objectMapper);
+                jobRepository, jwtVerifier, new MentorProxyCredentialRegistry(), objectMapper, "worker-1");
         User owner = persistUser("proxy-owner");
         workspace = createWorkspace("proxy-ws", "Proxy Workspace", "proxy-org", AccountType.ORG, owner);
     }
@@ -175,10 +177,32 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isNull();
     }
 
+    @ParameterizedTest
+    @CsvSource({"GET,''", "GET,/workspace", "GET,/frames", "POST,/result"})
+    void shouldAuthorizeRuntimeRoutesOnlyForThePersistedWorkerAndAttempt(String method, String suffix)
+            throws Exception {
+        AgentJob job = runningJob(true);
+        String token = tokenFor(job);
+        String path = "/internal/llm/runtime/" + java.util.UUID.randomUUID() + suffix;
+        assertThat(authenticate(method, path, token).status()).isEqualTo(200);
+
+        job.setWorkerId("another-worker");
+        jobRepository.save(job);
+        assertThat(authenticate(method, path, token).status()).isEqualTo(401);
+
+        job.setWorkerId("worker-1");
+        job.setRetryCount(job.getRetryCount() + 1);
+        jobRepository.save(job);
+        assertThat(authenticate(method, path, token).status()).isEqualTo(401);
+    }
+
     private AuthenticationResult authenticate(String token) throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest();
+        return authenticate("POST", "/internal/llm/chat/completions", token);
+    }
+
+    private AuthenticationResult authenticate(String method, String path, String token) throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest(method, path);
         request.setRemoteAddr("127.0.0.1");
-        request.setRequestURI("/internal/llm/chat/completions");
         request.addHeader("Authorization", "Bearer " + token);
         MockHttpServletResponse response = new MockHttpServletResponse();
         AtomicReference<Authentication> authentication = new AtomicReference<>();
@@ -240,6 +264,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         job.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         job.setStatus(AgentJobStatus.RUNNING);
+        job.setWorkerId("worker-1");
         job.setConfigSnapshot(snapshot);
         return jobRepository.save(job);
     }

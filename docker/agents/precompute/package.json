@@ -1,0 +1,12 @@
+{
+	"name": "hephaestus-precompute",
+	"private": true,
+	"type": "module",
+	"version": "0.0.0",
+	"dependencies": {
+		"minimatch": "10.2.5"
+	},
+	"engines": {
+		"pnpm": "12.3.4"
+	}
+}

@@ -7,7 +7,7 @@ description: Versioned evidence sources, explicit absence states, per-binding ev
 
 # Artifact-source contract
 
-Hephaestus may review work against a practice only from evidence with explicit semantics. Contract `1.0.0` defines the
+Hephaestus may review work against a practice only from evidence with explicit semantics. Contract `1.1.0` defines the
 logical source catalog, its capture states, and how well each source must be captured. A capture manifest records
 what was supplied to one run; it does not prove that a practice is empirically observable.
 
@@ -94,9 +94,9 @@ Each catalog source references separate source-use decisions whose purposes are 
 requires `OPERATOR_EVIDENCE_REVIEW`. Processor, region, transfer, and model-egress controls remain separate
 deployment obligations. A source allowed in an internal mirror is not thereby allowed in an external model request.
 
-## Source catalog (`1.0.0`)
+## Source catalog (`1.1.0`)
 
-The machine-readable [catalog](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/artifact-source/1.0.0/catalog.json),
+The machine-readable [catalog](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/artifact-source/1.1.0/catalog.json),
 its adjacent JSON Schemas, and the checks in
 [`gate:contracts`](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/validate-artifact-source-contracts.ts)
 jointly define conformance. Schema validation alone is insufficient because standard JSON Schema `uniqueItems`
@@ -119,7 +119,7 @@ The constraints with direct authoring consequences are:
   subject, so it cannot answer "is all of it here?" — which is exactly what an author asserting an absence is
   asking. Outline documents and linked work items are both retrieved by heuristics that cannot establish they
   found everything, and neither reports `COMPLETE`.
-- Three `1.0.0` sources cannot be logically empty — the pull-request, issue, and document core records.
+- Three `1.1.0` sources cannot be logically empty — the pull-request, issue, and document core records.
   Every other source may be validly empty.
 - Two cannot be partial: the pull-request diff and the document core record. An available diff is
   additionally pinned. It may be captured empty, but its `requiredQuality` is `COMPLETE_AND_NON_EMPTY`, so
@@ -137,8 +137,10 @@ default deployment reviews pull requests, issues and conversations without furth
 class does not gate collection — it records what treatment a source needs.
 
 Changing a source's meaning, selection scope, limit, mapping, identity policy, required capture quality,
-dependency, or normalization requires a new contract version. Repository history is not part of
-`scm.repository.tree` and requires its own source and governance decision.
+dependency, or normalization requires a new contract version. Contract `1.1.0` expands
+`scm.repository.tree` to include contextual access to reachable Git history under the source's governance
+and retention policies. The reviewed commit and tree identify the checkout; captured artifact digests
+additionally pin the exported refs and Git database, which can change between captures of the same commit.
 
 ## Capture state
 
@@ -245,7 +247,7 @@ quiet `NO_REVIEW_OCCASION`.
     }
   ],
   "automatedReviewPolicy": {
-    "sourceContractVersion": "1.0.0",
+    "sourceContractVersion": "1.1.0",
     "automatedReview": {
       "mode": "LANGUAGE_MODEL",
       "evidenceSufficiency": "SUFFICIENT_WHEN_REQUIREMENTS_MET"
@@ -376,6 +378,12 @@ observations are the deliberate exception: the transient secret quote is verifie
 location is persisted. Delivery fails atomically on any mismatch.
 This proves traceable grounding, not model causality; evaluations requiring non-interference must still run
 practices in isolated evidence views.
+
+Git history can guide exploration, but a quote from `git show <commit>:<path>` is not verified merely
+because the corresponding object is present in a captured pack file. Citations must name a captured
+artifact containing the quoted text, such as the reviewed-commit file or pull-request diff; shell output
+does not become a new evidence artifact. Historical quotations without such an artifact cannot ground
+delivered feedback.
 
 The internal readiness report records whether each practice is ready or skipped, and it is the one document
 that stays server-side: it is persisted to `agent_job.review_readiness` and never staged. The **manifest is

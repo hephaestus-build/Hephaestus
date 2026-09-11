@@ -20,7 +20,6 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -58,6 +57,7 @@ class RepositoryTreeStagingLiveTest {
     /** A tree large enough that any per-file ceiling would have to reject it. */
     private static final int TREE_FILE_COUNT = 25_000;
 
+    private LiveSandboxGateway gateway;
     private DockerSandboxAdapter sandboxAdapter;
     private SandboxContainerManager containerManager;
     private SandboxNetworkManager networkManager;
@@ -74,10 +74,11 @@ class RepositoryTreeStagingLiveTest {
     }
 
     @BeforeEach
-    void setUp() {
-        SandboxProperties properties = new SandboxProperties(5, 10, 300, 209_715_200L, 500_000, null);
+    void setUp() throws Exception {
+        gateway = new LiveSandboxGateway();
+        SandboxProperties properties = new SandboxProperties(5, 10, 300, null);
         var dockerProperties = new DockerSandboxProperties(
-                "unix:///var/run/docker.sock", false, null, null, null, "docker", "default");
+                "unix:///var/run/docker.sock", false, null, null, gateway.containerId(), "default");
         var dockerClient = DockerClientImpl.getInstance(
                 DefaultDockerClientConfig.createDefaultConfigBuilder().build(),
                 new ApacheDockerHttpClient.Builder()
@@ -90,15 +91,18 @@ class RepositoryTreeStagingLiveTest {
         networkManager = new SandboxNetworkManager(dockerOps, dockerProperties);
         sandboxAdapter = new DockerSandboxAdapter(
                 networkManager,
-                new SandboxWorkspaceManager(dockerOps),
+                new SandboxWorkspaceManager(),
                 containerManager,
                 new ContainerSecurityPolicy(dockerProperties, null),
-                8080,
-                new SimpleMeterRegistry());
+                gateway.port(),
+                new SimpleMeterRegistry(),
+                gateway.sessions(),
+                dockerOps);
     }
 
     @AfterEach
-    void cleanup() {
+    void cleanup() throws Exception {
+        if (gateway != null) gateway.close();
         if (dockerWaitExecutor != null) {
             dockerWaitExecutor.shutdownNow();
         }
@@ -125,7 +129,6 @@ class RepositoryTreeStagingLiveTest {
     @Test
     @DisplayName("a 64 MB file and a 25,000-file tree both arrive whole in the sandbox")
     void shouldStageATreeFarPastEveryRemovedLimit(@TempDir Path staging) throws Exception {
-        Map<String, Path> onDisk = new LinkedHashMap<>();
 
         Path large = staging.resolve("large.bin");
         byte[] chunk = new byte[1024 * 1024];
@@ -135,13 +138,11 @@ class RepositoryTreeStagingLiveTest {
                 out.write(chunk);
             }
         }
-        onDisk.put(SandboxLayout.REPO_MOUNT_RELATIVE + "large.bin", large);
 
         Path many = Files.createDirectories(staging.resolve("many"));
         for (int i = 0; i < TREE_FILE_COUNT; i++) {
             Path file = many.resolve("file" + i + ".txt");
             Files.writeString(file, "content " + i);
-            onDisk.put(SandboxLayout.REPO_MOUNT_RELATIVE + "many/file" + i + ".txt", file);
         }
 
         String script = "set -e\n" + "repo=/workspace/"
@@ -151,7 +152,7 @@ class RepositoryTreeStagingLiveTest {
                 + "files=$(find ${repo}many -type f | wc -l)\n"
                 + "sample=$(cat ${repo}many/file24999.txt)\n"
                 + "echo \"bytes=$bytes files=$files sample=$sample\" > /workspace/"
-                + SandboxLayout.ANALYSIS_PREFIX
+                + SandboxLayout.OUTPUT_PREFIX
                 + "seen.txt\n";
 
         SandboxSpec spec = new SandboxSpec(
@@ -159,14 +160,14 @@ class RepositoryTreeStagingLiveTest {
                 AGENT_IMAGE,
                 List.of("sh", "-c", script),
                 Map.of(),
-                new NetworkPolicy(true, null, null),
+                new NetworkPolicy(true, null, "live-gateway-token"),
                 new ResourceLimits(512L * 1024 * 1024, 1.0, 128, Duration.ofMinutes(5)),
                 new SecurityProfile(null, "private", List.of("ALL"), Map.of()),
-                // A staged work/ file makes the writable region exist as uid 1000, exactly as a real run does;
-                // /workspace itself stays root-owned, which is why the script cannot write outside work/.
-                Map.of(SandboxLayout.ANALYSIS_PREFIX + ".gitkeep", new byte[0]),
-                onDisk,
-                "/workspace/" + SandboxLayout.ANALYSIS_PREFIX,
+                Map.of(),
+                Map.of(),
+                List.of(new de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory(
+                        SandboxLayout.REPO_MOUNT_RELATIVE, staging)),
+                SandboxLayout.OUTPUT_PATH,
                 null);
 
         SandboxResult result = sandboxAdapter.execute(spec);

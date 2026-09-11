@@ -10,6 +10,7 @@ import {
 	type EvidenceSourceGroup,
 	groupCitationsBySource,
 } from "@/components/practice-vocabulary/evidence-source-defs";
+import { EvidenceRevision } from "@/components/practice-vocabulary/EvidenceRevision";
 import { Badge } from "@/components/ui/badge";
 
 export interface ObservationEvidenceProps {
@@ -25,17 +26,7 @@ export interface ObservationEvidenceProps {
 
 const SECRET_SCANNER = "secret-diff-scanner";
 
-/**
- * The source is named once per group, in words: the wire contract id means nothing to a reader who
- * has never seen the source catalog.
- *
- * <p>Line numbers are shown only for the source kinds whose locator is `code`. The server verifies a
- * diff citation against the annotated unified diff, so its range names a real span of a real file.
- * Everywhere else the range is an offset into the serialised context artifact the quote was pulled
- * from — a line of `conversation_thread.json`, not a message of the thread — asserted by the model
- * and checked only for the quote appearing somewhere in the file. Printing it would dress a
- * coordinate into a file the reader cannot open as a location in the work.
- */
+/** Non-code coordinates refer to serialized input, not a location a reader can open in the source. */
 export function ObservationEvidence({ evidence, detector }: ObservationEvidenceProps) {
 	const citations = evidence?.citations ?? [];
 	if (citations.length === 0) {
@@ -99,6 +90,7 @@ function EvidenceSourceSection({
 						className="overflow-hidden rounded-lg border"
 					>
 						<CitationHeader citation={citation} locator={def.locator} />
+						<EvidenceRevision revision={citation.revision} />
 						{citation.quoteRedacted ? (
 							<RedactedQuote fromSecretScanner={fromSecretScanner} />
 						) : (
@@ -160,6 +152,7 @@ function citationKey(citation: EvidenceCitation): string {
 		citation.sourceKind,
 		citation.artifactPath,
 		citation.path,
+		citation.revision,
 		citation.side,
 		citation.startLine,
 		citation.endLine,

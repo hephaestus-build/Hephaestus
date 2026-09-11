@@ -215,6 +215,9 @@ importers:
       micromark-extension-mdxjs:
         specifier: 3.0.0
         version: 3.0.0
+      minimatch:
+        specifier: 10.2.5
+        version: 10.2.5
       mprocs:
         specifier: 0.9.6
         version: 0.9.6

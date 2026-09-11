@@ -16,9 +16,10 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.ContextManifestBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionDeliveryService.DeliveryResult;
+import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionDeliveryService.PreparedObservations;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
@@ -32,7 +33,6 @@ import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -66,7 +66,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     private final JsonMapper objectMapper = JsonMapper.builder().build();
 
     @Mock
-    private ContentAddressedStore cas;
+    private JobEvidenceFiles cas;
 
     @Mock
     private PracticeRepository practiceRepository;
@@ -76,6 +76,11 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
 
     @Mock
     private PracticeDetectionDeliveryService deliveryService;
+
+    @Mock
+    private SecretDiffScanner secretScanner;
+
+    private String capturedPaths = "";
 
     @Mock
     private FeedbackDeliveryService feedbackService;
@@ -104,7 +109,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
                 deliveryService,
                 feedbackService,
-                new SecretDiffScanner(),
+                secretScanner,
                 new FeedbackResponseSuppressionFilter(
                         org.mockito.Mockito.mock(
                                 de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
@@ -119,7 +124,10 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                                 de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
                         org.mockito.Mockito.mock(FeedbackLedgerRecorder.class)),
                 observationRepository);
-        lenient().when(cas.get(anyString())).thenReturn(java.util.Optional.of(new byte[0]));
+        lenient().when(cas.inspect(any(), anyString(), anyString(), any())).thenAnswer(invocation -> {
+            JobEvidenceFiles.TextInspection<?> inspection = invocation.getArgument(3);
+            return java.util.Optional.of(inspection.inspect(new java.io.StringReader(capturedPaths)));
+        });
     }
 
     @Test
@@ -163,7 +171,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 null,
                 null,
                 null);
-        return new PullRequestReviewSubmissionRequest(pullRequestData, "feature/auth-fix", "abc123def456", "main");
+        return new PullRequestReviewSubmissionRequest(
+                pullRequestData, "feature/auth-fix", "abc123def456", "main", "a".repeat(40));
     }
 
     private ObjectNode sampleJobMetadata() {
@@ -209,7 +218,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         source.putObject("state").put("availability", "AVAILABLE").put("content", "NON_EMPTY");
         source.putArray("artifacts")
                 .addObject()
-                .put("path", "inputs/context/diff.patch")
+                .put("path", "inputs/context/diff_paths.nul")
                 .put("sha256", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         return snapshot;
     }
@@ -279,6 +288,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             assertThat(metadata.get("repository_full_name").asString()).isEqualTo("owner/repo");
             assertThat(metadata.get("pr_number").asInt()).isEqualTo(42);
             assertThat(metadata.get("commit_sha").asString()).isEqualTo("abc123def456");
+            assertThat(metadata.path("base_ref_oid").asString()).isEqualTo("a".repeat(40));
             assertThat(metadata.get("title").asString()).isEqualTo("Fix authentication bug");
             assertThat(metadata.get("body").asString()).isEqualTo("This PR fixes the login issue");
             assertThat(submission.idempotencyKey()).isEqualTo("pr_review:owner/repo:42:manual:abc123def456");
@@ -287,13 +297,14 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         @Test
         void preservesSubmittedReviewSubjectAndIdentity() {
             var base = sampleRequest();
-            var request = PullRequestReviewSubmissionRequest.forSubmittedReview(
-                    base.pullRequest(),
-                    base.headRefName(),
-                    base.headRefOid(),
-                    base.baseRefName(),
-                    de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals.PULL_REQUEST_REVIEWED,
-                    new ScmEventPayload.ReviewData(
+            var request = new PullRequestReviewSubmissionRequest(
+                            base.pullRequest(),
+                            base.headRefName(),
+                            base.headRefOid(),
+                            base.baseRefName(),
+                            base.baseRefOid(),
+                            de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals.PULL_REQUEST_REVIEWED)
+                    .forSubmittedReview(new ScmEventPayload.ReviewData(
                             100L,
                             "Review body",
                             de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview.State
@@ -506,9 +517,15 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         }
 
         private de.tum.cit.aet.hephaestus.practices.model.Observation persisted(
-                Practice practice, String summary, de.tum.cit.aet.hephaestus.practices.model.Severity severity) {
+                AgentJob job,
+                Practice practice,
+                String summary,
+                de.tum.cit.aet.hephaestus.practices.model.Severity severity) {
             var observation = org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.model.Observation.class);
             lenient().when(observation.getPractice()).thenReturn(practice);
+            lenient()
+                    .when(observation.getEvidence())
+                    .thenReturn(AdmittedObservationFixtures.evidence(job.getId(), "scm.pull-request.core"));
             lenient().when(observation.getSummary()).thenReturn(summary);
             lenient()
                     .when(observation.getPresence())
@@ -563,9 +580,12 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     .thenReturn(java.util.List.of(approvalGated, automatic));
             // Built before the stubbing call: persisted() stubs, and Mockito rejects a stub nested in when().
             var gated = persisted(
-                    approvalGated, "Unhandled error path", de.tum.cit.aet.hephaestus.practices.model.Severity.MAJOR);
+                    job,
+                    approvalGated,
+                    "Unhandled error path",
+                    de.tum.cit.aet.hephaestus.practices.model.Severity.MAJOR);
             var auto = persisted(
-                    automatic, "No rationale sentence", de.tum.cit.aet.hephaestus.practices.model.Severity.MINOR);
+                    job, automatic, "No rationale sentence", de.tum.cit.aet.hephaestus.practices.model.Severity.MINOR);
             when(observationRepository.findByAgentJobId(
                             job.getId(), job.getWorkspace().getId()))
                     .thenReturn(java.util.List.of(gated, auto));
@@ -596,12 +616,12 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 }
                 """;
             AgentJob job = jobWithOutput(rawOutput);
-            when(deliveryService.deliver(eq(job), any()))
-                    .thenAnswer(inv -> new DeliveryResult(1, 0, false, inv.getArgument(1)));
+            when(deliveryService.prepare(eq(job), any()))
+                    .thenReturn(org.mockito.Mockito.mock(PreparedObservations.class));
 
             admit(job, rawOutput);
 
-            verify(deliveryService).deliver(eq(job), any());
+            verify(deliveryService).prepare(eq(job), any());
         }
 
         /** A job past admission, carrying the coverage ledger its run wrote. */
@@ -622,6 +642,9 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(java.util.List.of(practice));
             var observation = org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.model.Observation.class);
             lenient().when(observation.getPractice()).thenReturn(practice);
+            lenient()
+                    .when(observation.getEvidence())
+                    .thenReturn(AdmittedObservationFixtures.evidence(job.getId(), "scm.pull-request.core"));
             lenient().when(observation.getSummary()).thenReturn("What the review saw");
             lenient()
                     .when(observation.getPresence())
@@ -702,8 +725,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             AgentJob job = jobWithOutput(rawOutput);
             ArgumentCaptor<List<PracticeDetectionResultParser.ValidatedObservation>> captor =
                     ArgumentCaptor.forClass(List.class);
-            when(deliveryService.deliver(eq(job), captor.capture()))
-                    .thenAnswer(inv -> new DeliveryResult(1, 0, false, inv.getArgument(1)));
+            when(deliveryService.prepare(eq(job), captor.capture()))
+                    .thenReturn(org.mockito.Mockito.mock(PreparedObservations.class));
 
             admit(job, rawOutput);
 
@@ -715,11 +738,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             assertThat(secret.severity()).isEqualTo(Severity.MAJOR);
         }
 
-        private void stubDiff(String diff) {
-            String annotated =
-                    de.tum.cit.aet.hephaestus.agent.context.providers.GitDiffOperations.annotateDiffWithLineNumbers(
-                            diff);
-            when(cas.get(anyString())).thenReturn(java.util.Optional.of(annotated.getBytes(StandardCharsets.UTF_8)));
+        private void stubDiff(String path) {
+            capturedPaths = path + "\0";
         }
 
         @Test
@@ -739,8 +759,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             ObjectNode output = objectMapper.createObjectNode();
             output.put("rawOutput", rawOutput);
             job.setOutput(output);
-            stubDiff(
-                    "diff --git a/Sources/Auth.swift b/Sources/Auth.swift\n+++ b/Sources/Auth.swift\n@@ -1 +1 @@\n+changed\n");
+            stubDiff("Sources/Auth.swift");
 
             assertThatThrownBy(() -> admit(job, rawOutput))
                     .isInstanceOf(JobDeliveryException.class)
@@ -776,14 +795,13 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             ObjectNode output = objectMapper.createObjectNode();
             output.put("rawOutput", rawOutput);
             job.setOutput(output);
-            stubDiff(
-                    "diff --git a/Sources/Auth.swift b/Sources/Auth.swift\n+++ b/Sources/Auth.swift\n@@ -1 +1 @@\n+changed\n");
-            when(deliveryService.deliver(eq(job), any()))
-                    .thenAnswer(inv -> new DeliveryResult(1, 0, false, inv.getArgument(1)));
+            stubDiff("Sources/Auth.swift");
+            when(deliveryService.prepare(eq(job), any()))
+                    .thenReturn(org.mockito.Mockito.mock(PreparedObservations.class));
 
             admit(job, rawOutput);
 
-            verify(deliveryService).deliver(eq(job), any());
+            verify(deliveryService).prepare(eq(job), any());
         }
 
         @Test
@@ -805,8 +823,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             ObjectNode output = objectMapper.createObjectNode();
             output.put("rawOutput", rawOutput);
             job.setOutput(output);
-            stubDiff(
-                    "diff --git a/Sources/Other.swift b/Sources/Other.swift\n+++ b/Sources/Other.swift\n@@ -1 +1 @@\n+x\n");
+            stubDiff("Sources/Other.swift");
 
             assertThatThrownBy(() -> admit(job, rawOutput))
                     .isInstanceOf(JobDeliveryException.class)
@@ -834,14 +851,18 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             ObjectNode output = objectMapper.createObjectNode();
             output.put("rawOutput", rawOutput);
             job.setOutput(output);
-            stubDiff("diff --git a/Sources/Config.swift b/Sources/Config.swift\n" + "+++ b/Sources/Config.swift\n"
-                    + "@@ -1 +1,2 @@\n"
-                    + "+let key = \"AKIA1234567890ABCDEF\"\n");
+            stubDiff("Sources/Config.swift");
 
+            when(secretScanner.scan(job))
+                    .thenReturn(List.of(new SecretDiffScanner.SecretHit(
+                            "Sources/Config.swift",
+                            1,
+                            "b2b88104bf5c02259227480b0eabe2f9b7d63501e03e788b7b82a499b818e12a",
+                            "aws-access-token")));
             ArgumentCaptor<List<PracticeDetectionResultParser.ValidatedObservation>> captor =
                     ArgumentCaptor.forClass(List.class);
-            when(deliveryService.deliver(eq(job), captor.capture()))
-                    .thenAnswer(inv -> new DeliveryResult(1, 0, false, inv.getArgument(1)));
+            when(deliveryService.prepare(eq(job), captor.capture()))
+                    .thenReturn(org.mockito.Mockito.mock(PreparedObservations.class));
 
             admit(job, rawOutput);
 

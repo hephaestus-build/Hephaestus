@@ -18,8 +18,8 @@ those inventories into another deployment manifest from this page.
 A working deployment must:
 
 - enable the agent runtime on both the submitting server and claiming worker;
-- make repository checkout and the shared fabric volume available to every worker that captures repository
-  evidence;
+- enable `GIT_CHECKOUT_ENABLED` for repository access and provide worker-local storage for complete
+  attempt inputs; enabling agent execution alone does not enable repository collection;
 - set campaign, request-rate, retry, and retention limits appropriate to its budget and governance policy.
 
 Who gets practice review is **not** among them. There is no instance-wide population flag: each workspace
@@ -30,12 +30,11 @@ See the
 and [reference Compose files](https://github.com/hephaestus-build/Hephaestus/tree/main/docker) before changing an
 environment variable. Unknown or unforwarded variables do not configure the application.
 
-Repository checkouts, replay metadata, and content-addressed evidence share the fabric root. A split
-or multi-host deployment must mount the same durable read-write filesystem on every server and worker, with
-cross-process locks, atomic rename, and access controls suitable for source content.
-
-[ADR 0039](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0039-git-and-postgresql-own-evidence.md)
-records the decision to replace this mount; current releases still require it.
+Repository mirrors and attempt folders are disposable worker-local storage, not a shared evidence store.
+Sandbox inputs and results travel through the authenticated worker gateway. PostgreSQL retains admitted
+observations and their citation verification results; delivery does not require the worker's source files.
+The storage and cleanup contract is defined in
+[ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md).
 
 Source authorization is not a deployment toggle. The shipped artifact-source contract fixes which governed
 sources each purpose may use; integrations only determine which authorized sources are available. See
@@ -139,8 +138,8 @@ fence, retry count, and lease together prevent duplicate provider writes.
 
 ## Limits you should know about
 
-Configuration metadata and the artifact-source catalog are the source of truth for current values. These
-behaviors matter independently of their exact defaults:
+Configuration metadata describes deployment settings; the artifact-source catalog defines capture semantics.
+These behaviors matter independently of configured capacity:
 
 - **Background task cadences are fixed in code.** Their thresholds may be configurable even when their
   polling schedules are not.
@@ -151,11 +150,18 @@ behaviors matter independently of their exact defaults:
   then go quiet when their deadline passes.
 - **Nothing is ever deleted from the occurrence ledger**, in any state, including retired rows. It is the
   record of what was *not* done, and it only grows. Size it accordingly on a busy instance.
-- **The repository-tree capture is bounded**, by file count, total size, and per-file size
-  (`GIT_TREE_MAX_FILES`, `GIT_TREE_MAX_TOTAL_SIZE`, `GIT_TREE_MAX_FILE_SIZE`). When a bound bites, the
-  capture reports itself **partial** and names which bound it hit rather than silently truncating. The
-  values in force are the ones declared in the artifact-source catalog's selection scope for that source —
-  read them there rather than from a copy. None of the three is forwarded by the shipped Compose files.
+- **Repository capture includes every regular and executable file at the reviewed commit**, including
+  binary content and large files, plus sanitized Git history reachable from the reviewed commit and
+  synchronized branches and tags. Native bash, Git, ripgrep, and file-discovery tools are available.
+  File count and content size do not truncate the tree. Symbolic links are materialized as regular
+  files containing the link target, without following it. Submodules are not hydrated; their presence,
+  unsupported file modes, or excluded unsafe paths are reported as a partial capture.
+  Git LFS pointers are captured as committed, not replaced by downloads. Provision storage for the
+  clone, captured content, and per-job staging; model-facing output limits do not bound capture storage.
+  The captured worktree and Git metadata are read-only, with no repository credentials or upstream
+  configuration. Reviews use an isolated internal Docker network; the authenticated worker gateway
+  must be reachable on that network. Native Git preparation and commit ingestion have bounded
+  concurrency and execution resources. Exhaustion fails the operation; it does not select a smaller tree.
 - **Linked Outline documents are retrieval-limited, and the mentor and review paths do not agree.** A
   review resolves documents *linked from* the work first and only tops up a small number by search; the
   mentor searches the whole corpus and truncates each document. Neither path can report that it found

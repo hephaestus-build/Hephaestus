@@ -9,13 +9,13 @@ import type {
 
 export const mockAuthorDeclaredEvidenceValidation = {
 	status: "AUTHOR_DECLARED",
-	sourceContractVersion: "1.0.0",
+	sourceContractVersion: "1.1.0",
 	policyDigest: "0".repeat(64),
 	reviewRuleFingerprint: `v2:${"0".repeat(64)}`,
 } satisfies PracticeAutomatedReviewValidation;
 
 export const mockPullRequestPolicy = {
-	sourceContractVersion: "1.0.0",
+	sourceContractVersion: "1.1.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -30,7 +30,7 @@ export const mockPullRequestPolicy = {
 } satisfies PracticeAutomatedReviewPolicy;
 
 const mockIssuePolicy = {
-	sourceContractVersion: "1.0.0",
+	sourceContractVersion: "1.1.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -46,7 +46,7 @@ const mockIssuePolicy = {
 } satisfies PracticeAutomatedReviewPolicy;
 
 const mockConversationPolicy = {
-	sourceContractVersion: "1.0.0",
+	sourceContractVersion: "1.1.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -62,7 +62,7 @@ const mockConversationPolicy = {
 } satisfies PracticeAutomatedReviewPolicy;
 
 const mockDocumentPolicy = {
-	sourceContractVersion: "1.0.0",
+	sourceContractVersion: "1.1.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -117,7 +117,7 @@ export const mockDocumentBinding = {
  * observations about this person" on a pull request and something differently worded on an issue.
  *
  * The wire ids are the server's; the operator-facing strings are `displayName`, `description` and
- * `selectionScope`, all copied verbatim from `contracts/artifact-source/1.0.0/catalog.json`.
+ * `selectionScope`, all copied verbatim from `contracts/artifact-source/1.1.0/catalog.json`.
  */
 const relatedWorkSource = {
 	sourceKind: "workspace.project-inventory",
@@ -167,7 +167,7 @@ const feedbackHistorySource = {
 } satisfies PracticeEvidenceSourceOption;
 
 export const mockPracticeDefinitionOptions = {
-	sourceContractVersion: "1.0.0",
+	sourceContractVersion: "1.1.0",
 	workTypes: [
 		{
 			artifactKind: "scm.pull_request",
@@ -257,11 +257,11 @@ export const mockPracticeDefinitionOptions = {
 				},
 				{
 					sourceKind: "scm.repository.tree",
-					displayName: "Repository files",
+					displayName: "Repository files and history",
 					description:
-						"Files from elsewhere in the repository, supplied as context for reading the change. Not reviewed on their own.",
+						"Repository files and reachable Git history, supplied as context for reading the change. Not reviewed on their own.",
 					selectionScope:
-						"The repository at the reviewed commit: up to 20,000 files and 32 MiB. Files above 10 MiB, symbolic links, submodules, and paths outside the tree are excluded, and the capture is reported as PARTIAL.",
+						"All regular and executable Git blobs at the reviewed commit, without file-count, total-size, per-file-size, or binary-content exclusions. A self-contained Git repository includes objects reachable from that commit and the local clone's captured branch, tag, and remote-tracking refs, with detached HEAD at the reviewed commit. Upstream configuration, credentials, hooks, replacement refs, and unreachable objects are not exported. History is available for contextual exploration; historical command output is not a separately citable artifact. Symbolic links, submodules, unsupported file modes, and unsafe paths are excluded from the worktree and reported as PARTIAL. Git LFS pointer files are captured as committed; external LFS objects are not fetched. Shallow clones cannot satisfy this capture.",
 					privacyClass: "INTERNAL",
 					requiredQuality: "ANY_CAPTURE",
 					supportsExhaustiveEvidence: true,

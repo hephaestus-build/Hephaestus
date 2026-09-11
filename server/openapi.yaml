@@ -9979,6 +9979,8 @@ components:
           type: string
         quoteRedacted:
           type: boolean
+        revision:
+          type: string
         side:
           type: string
           enum:

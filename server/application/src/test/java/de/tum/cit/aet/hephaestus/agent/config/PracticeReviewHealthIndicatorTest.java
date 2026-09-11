@@ -15,7 +15,6 @@ import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.health.contributor.Status;
-import org.springframework.util.unit.DataSize;
 
 class PracticeReviewHealthIndicatorTest extends BaseUnitTest {
 
@@ -73,6 +72,6 @@ class PracticeReviewHealthIndicatorTest extends BaseUnitTest {
     }
 
     private static GitRepositoryProperties git(boolean enabled) {
-        return new GitRepositoryProperties(enabled, 20_000, DataSize.ofMegabytes(32), DataSize.ofMegabytes(10));
+        return new GitRepositoryProperties(enabled, 2, "ghcr.io/hephaestus-build/git-preparation:test");
     }
 }

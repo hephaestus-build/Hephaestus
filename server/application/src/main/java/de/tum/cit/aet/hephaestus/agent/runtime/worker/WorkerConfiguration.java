@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameCodec;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Optional;
@@ -156,6 +157,12 @@ public class WorkerConfiguration {
     SmartInitializingSingleton workerCancelHandlerWiring(
             WorkerControlClient client, Optional<AgentJobExecutor> executor) {
         return () -> executor.ifPresent(e -> client.setCancelHandler(e::cancelLocalJob));
+    }
+
+    @Bean
+    WorkerGitOperationHandler workerGitOperationHandler(
+            WorkerControlClient client, NativeGitExecutor executor, ObjectMapper objectMapper) {
+        return new WorkerGitOperationHandler(client, executor, objectMapper);
     }
 
     @Bean

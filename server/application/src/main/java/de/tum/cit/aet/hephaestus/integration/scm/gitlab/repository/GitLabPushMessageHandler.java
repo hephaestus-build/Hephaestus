@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.util.CommitUtils;
@@ -25,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitMergeRequestLinker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
@@ -53,7 +55,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * entity exists before any commit processing.
  * <p>
  * When local git checkout is enabled ({@code hephaestus.git.enabled=true}), pushes to the
- * default branch trigger a local clone/fetch and JGit commit walk, providing line-level
+ * default branch trigger a local clone/fetch and native Git commit walk, providing line-level
  * diff statistics (additions/deletions per file). Falls back to webhook-only processing
  * on error or for non-default branches.
  * <p>
@@ -81,6 +83,8 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
     private final SyncTargetProvider syncTargetProvider;
     private final ApplicationEventPublisher eventPublisher;
     private final GitLabCommitMergeRequestLinker commitMergeRequestLinker;
+
+    private final TransactionTemplate transactions;
 
     GitLabPushMessageHandler(
             GitLabProjectProcessor projectProcessor,
@@ -117,6 +121,12 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
         this.syncTargetProvider = syncTargetProvider;
         this.eventPublisher = eventPublisher;
         this.commitMergeRequestLinker = commitMergeRequestLinker;
+        this.transactions = transactionTemplate;
+    }
+
+    @Override
+    protected void dispatchEvent(GitLabPushEventDTO event) {
+        handleEvent(event);
     }
 
     @Override
@@ -145,17 +155,21 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
                 safeRef,
                 event.totalCommitsCount());
 
-        // Upsert the project as a Repository entity from the webhook payload.
-        IdentityProvider provider = gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl())
-                .orElseThrow(() -> new IllegalStateException("IdentityProvider not found for type=GITLAB, serverUrl="
-                        + gitLabProperties.defaultServerUrl()));
-        var repository = projectProcessor.processPushEvent(event.project(), provider);
+        var repository = transactions.execute(status -> {
+            IdentityProvider provider = gitProviderRepository
+                    .findByTypeAndServerUrl(IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl())
+                    .orElseThrow(() -> new IllegalStateException("GitLab identity provider is unavailable"));
+            var prepared = projectProcessor.processPushEvent(event.project(), provider);
+            if (prepared == null) return null;
+            ensureOrganizationLinked(prepared, projectPath, provider);
+            return repositoryRepository
+                    .findByIdWithOrganization(prepared.getId())
+                    .orElseThrow();
+        });
 
         if (repository != null) {
             log.debug(
                     "Upserted project from push event: projectPath={}, repoId={}", safeProjectPath, repository.getId());
-            ensureOrganizationLinked(repository, projectPath, provider);
 
             Long scopeId = resolveScopeId(repository);
 
@@ -176,7 +190,9 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
             } else {
                 // Non-default branch push: still fetch if the repo is already cloned
                 // so practice reviews have fresh refs for diff computation.
-                if (gitRepositoryManager.isEnabled() && gitRepositoryManager.isRepositoryCloned(repository.getId())) {
+                if (scopeId != null
+                        && gitRepositoryManager.isEnabled()
+                        && gitRepositoryManager.isRepositoryCloned(new RepositoryKey(scopeId, repository.getId()))) {
                     fetchForNonDefaultBranch(event, repository);
                 }
                 processCommitsViaWebhook(event, repository, false);
@@ -219,7 +235,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
             String serverUrl = tokenService.resolveServerUrl(scopeId);
             String token = tokenService.getAccessToken(scopeId);
             String cloneUrl = serverUrl + "/" + repository.getNameWithOwner() + ".git";
-            gitRepositoryManager.ensureRepository(repository.getId(), cloneUrl, token);
+            gitRepositoryManager.ensureRepository(new RepositoryKey(scopeId, repository.getId()), cloneUrl, token);
             log.debug(
                     "Fetched non-default branch push: ref={}, repo={}",
                     sanitizeForLog(event.ref()),
@@ -235,7 +251,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
     // Local git path (enriched with line-level diff stats)
 
     /**
-     * Process commits using local git clone/fetch via JGit.
+     * Process commits using local git clone/fetch via isolated native Git.
      * Provides complete file-level change information including additions/deletions per file.
      * Falls back to webhook-only on error.
      */
@@ -253,24 +269,15 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
             String cloneUrl = serverUrl + "/" + repository.getNameWithOwner() + ".git";
 
             // Clone or fetch the repository locally
-            gitRepositoryManager.ensureRepository(repository.getId(), cloneUrl, token);
+            gitRepositoryManager.ensureRepository(new RepositoryKey(scopeId, repository.getId()), cloneUrl, token);
 
-            // Walk commits from before→after using JGit
-            List<GitRepositoryManager.CommitInfo> commitInfos = gitRepositoryManager.walkCommits(
-                    repository.getId(), isInitialPush(beforeSha) ? null : beforeSha, afterSha);
+            gitRepositoryManager.forEachCommitInRange(
+                    new RepositoryKey(scopeId, repository.getId()),
+                    isInitialPush(beforeSha) ? null : beforeSha,
+                    afterSha,
+                    info -> transactions.execute(status -> processLocalGitCommit(info, repository, serverUrl)));
 
-            int processed = 0;
-            for (GitRepositoryManager.CommitInfo info : commitInfos) {
-                if (processLocalGitCommit(info, repository, serverUrl)) {
-                    processed++;
-                }
-            }
-
-            log.info(
-                    "Processed push commits via local git: processed={}, total={}, repoName={}",
-                    processed,
-                    commitInfos.size(),
-                    repoName);
+            log.info("Processed push commits via local git: repoName={}", repoName);
         } catch (Exception e) {
             log.error(
                     "Failed to process commits via local git, falling back to webhook: repoName={}, error={}",
@@ -283,13 +290,14 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
     /**
      * Process a single commit from local git info with full diff statistics.
      */
-    private boolean processLocalGitCommit(
-            GitRepositoryManager.CommitInfo info, Repository repository, String serverUrl) {
+    private boolean processLocalGitCommit(CommitDetails info, Repository repository, String serverUrl) {
         // Fast-path: skip if already persisted
-        if (commitRepository.existsByShaAndRepositoryId(info.sha(), repository.getId())) {
+        if (commitRepository.existsByShaAndRepositoryIdAndGitDetailsCapturedAtIsNotNull(
+                info.sha(), repository.getId())) {
             return false;
         }
 
+        boolean newCommit = !commitRepository.existsByShaAndRepositoryId(info.sha(), repository.getId());
         Long providerId = Objects.requireNonNull(repository.getProvider().getId());
         Long authorId = authorResolver.resolveAndBackfillByEmail(info.authorEmail(), providerId);
         Long committerId = authorResolver.resolveAndBackfillByEmail(info.committerEmail(), providerId);
@@ -314,16 +322,19 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
                 info.authorEmail(),
                 info.committerEmail());
 
+        commitRepository.deleteFileChanges(repository.getId(), info.sha());
+
         // Attach file changes with line-level stats
         if (!info.fileChanges().isEmpty()) {
             Commit commit = commitRepository
                     .findByShaAndRepositoryId(info.sha(), repository.getId())
-                    .orElse(null);
+                    .orElseThrow(() -> new IllegalStateException("Commit missing after upsert"));
             if (commit != null) {
-                for (GitRepositoryManager.FileChange fc : info.fileChanges()) {
+                commit.getFileChanges().clear();
+                for (CommitDetails.FileChange fc : info.fileChanges()) {
                     CommitFileChange fileChange = new CommitFileChange();
                     fileChange.setFilename(truncate(fc.filename(), 1024));
-                    fileChange.setChangeType(CommitFileChange.fromGitChangeType(fc.changeType()));
+                    fileChange.setChangeType(fc.changeType());
                     fileChange.setAdditions(fc.additions());
                     fileChange.setDeletions(fc.deletions());
                     fileChange.setChanges(fc.changes());
@@ -334,7 +345,8 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
             }
         }
 
-        publishCommitCreated(info.sha(), repository);
+        commitRepository.markGitDetailsCaptured(repository.getId(), info.sha(), Instant.now());
+        if (newCommit) publishCommitCreated(info.sha(), repository);
         return true;
     }
 
@@ -349,6 +361,10 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
      * @param asFallback true when called after local-git failure
      */
     private void processCommitsViaWebhook(GitLabPushEventDTO event, Repository repository, boolean asFallback) {
+        transactions.executeWithoutResult(status -> persistWebhookCommits(event, repository, asFallback));
+    }
+
+    private void persistWebhookCommits(GitLabPushEventDTO event, Repository repository, boolean asFallback) {
         List<CommitInfo> commits = event.commits();
         if (commits == null || commits.isEmpty()) {
             return;

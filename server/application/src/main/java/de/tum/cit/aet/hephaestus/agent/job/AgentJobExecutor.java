@@ -5,7 +5,9 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -50,7 +52,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -146,11 +147,11 @@ public class AgentJobExecutor {
             .delay(Duration.ofMillis(200))
             .build();
 
-    private final ExecutionArchiveService executionArchive;
     private final AgentProperties agentProperties;
     private final AgentJobRepository jobRepository;
     private final WorkspaceAgentBindingRepository bindingRepository;
     private final JobTypeHandlerRegistry handlerRegistry;
+    private final JobEvidenceFiles evidenceFiles;
     private final PracticePiAdapter practiceAgent;
     private final WorkerJwtIssuer workerJwtIssuer;
 
@@ -188,11 +189,11 @@ public class AgentJobExecutor {
 
     @Autowired
     public AgentJobExecutor(
-            ExecutionArchiveService executionArchive,
             AgentProperties agentProperties,
             AgentJobRepository jobRepository,
             WorkspaceAgentBindingRepository bindingRepository,
             JobTypeHandlerRegistry handlerRegistry,
+            JobEvidenceFiles evidenceFiles,
             PracticePiAdapter practiceAgent,
             WorkerJwtIssuer workerJwtIssuer,
             SandboxManager sandboxManager,
@@ -207,11 +208,11 @@ public class AgentJobExecutor {
             @Nullable LlmAdmissionService llmAdmissionService,
             Optional<WorkerCapacityState> capacityState,
             Optional<WorkerProperties> workerProperties) {
-        this.executionArchive = executionArchive;
         this.agentProperties = agentProperties;
         this.jobRepository = jobRepository;
         this.bindingRepository = bindingRepository;
         this.handlerRegistry = handlerRegistry;
+        this.evidenceFiles = evidenceFiles;
         this.practiceAgent = practiceAgent;
         this.workerJwtIssuer = workerJwtIssuer;
         this.sandboxManager = sandboxManager;
@@ -616,23 +617,6 @@ public class AgentJobExecutor {
             PreparedSandbox preparedSandbox = prepareSandboxSpec(jobId, job, claim.snapshot);
             stagedInputs = preparedSandbox.stagedInputs();
             SandboxSpec sandboxSpec = preparedSandbox.spec();
-            if (executionArchive.isEnabled()) {
-                Map<String, String> environment = new HashMap<>(sandboxSpec.environment());
-                environment.put("PI_REVIEW_CAPTURE", "true");
-                sandboxSpec = new SandboxSpec(
-                        sandboxSpec.jobId(),
-                        sandboxSpec.image(),
-                        sandboxSpec.command(),
-                        environment,
-                        sandboxSpec.networkPolicy(),
-                        sandboxSpec.resourceLimits(),
-                        sandboxSpec.securityProfile(),
-                        sandboxSpec.inputFiles(),
-                        sandboxSpec.inputFilesOnDisk(),
-                        sandboxSpec.outputPath(),
-                        sandboxSpec.volumeMounts());
-            }
-            executionArchive.captureInputs(job, sandboxSpec);
             // Past this boundary provider usage may exist even if execute() throws, so it is persisted
             // for recovery on another process. A lost fence means the job was cancelled or requeued
             // while preparation ran, so its sandbox must not start.
@@ -643,7 +627,6 @@ public class AgentJobExecutor {
             }
             sandboxExecutionStarted = true;
             SandboxResult result = sandboxManager.execute(sandboxSpec);
-            executionArchive.captureOutputs(job, result);
             AgentResult agentResult = practiceAgent.parseResult(result);
 
             // Two exits say the run could not reach something it needed, rather than anything about the
@@ -759,8 +742,7 @@ public class AgentJobExecutor {
     }
 
     /**
-     * The staging directories must outlive {@code injectFiles} — which runs inside the sandbox
-     * execution — so the caller closes them once the run is over, whatever its outcome.
+     * Prepared inputs stay available through execution and admission; the caller releases them on every outcome.
      */
     private record PreparedSandbox(SandboxSpec spec, PreparedJobInputs stagedInputs) {}
 
@@ -768,43 +750,46 @@ public class AgentJobExecutor {
     private PreparedSandbox prepareSandboxSpec(UUID jobId, AgentJob job, ConfigSnapshot snapshot) {
         JobTypeHandler handler = handlerRegistry.getHandler(job.getJobType());
 
-        // The claim transaction is long gone, so the handler needs a transaction of its own here to
-        // resolve lazy JPA proxies, and a re-fetch that eagerly loads the workspace.
-        TransactionTemplate readOnlyTx =
-                new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
-        readOnlyTx.setReadOnly(true);
-        PreparedJobInputs preparedInputs = readOnlyTx.execute(status -> {
-            AgentJob managedJob = jobRepository.findByIdWithWorkspace(jobId).orElse(job);
-            return handler.prepareInputs(managedJob);
-        });
+        AgentJob preparedJob = jobRepository.findByIdWithWorkspace(jobId).orElse(job);
+        PreparedJobInputs preparedInputs = handler.prepareInputs(preparedJob);
 
-        // Sandboxes access providers through the LLM proxy with an attempt-scoped credential.
-        String jobToken = workerJwtIssuer.issueForJob(
-                jobId,
-                job.getWorkspace().getId(),
-                job.getRetryCount(),
-                Duration.ofSeconds(snapshot.timeoutSeconds()).plusMinutes(5));
-        PracticeAgentRequest adapterRequest = new PracticeAgentRequest(
-                snapshot.apiProtocol(),
-                snapshot.upstreamModelId(),
-                snapshot.contextWindow(),
-                snapshot.maxOutputTokens(),
-                snapshot.supportsReasoning(),
-                jobToken,
-                snapshot.allowInternet(),
-                snapshot.timeoutSeconds());
+        preparedInputs = evidenceFiles.prepare(job, preparedInputs);
+        try {
+            // Sandboxes access providers through the LLM proxy with an attempt-scoped credential.
+            String jobToken = workerJwtIssuer.issueForJob(
+                    jobId,
+                    job.getWorkspace().getId(),
+                    job.getRetryCount(),
+                    Duration.ofSeconds(snapshot.timeoutSeconds()).plusMinutes(5));
+            PracticeAgentRequest adapterRequest = new PracticeAgentRequest(
+                    snapshot.apiProtocol(),
+                    snapshot.upstreamModelId(),
+                    snapshot.contextWindow(),
+                    snapshot.maxOutputTokens(),
+                    snapshot.supportsReasoning(),
+                    jobToken,
+                    snapshot.timeoutSeconds());
 
-        PracticeSandboxSpec agentSpec = practiceAgent.buildSandboxSpec(adapterRequest);
-        SandboxSpec sandboxSpec =
-                buildSandboxSpec(jobId, preparedInputs.files(), preparedInputs.filesOnDisk(), agentSpec, snapshot);
-        persistProvenanceDigests(
-                jobId,
-                job.getJobType(),
-                agentSpec.promptDigest(),
-                sandboxSpec.inputFiles(),
-                job.getRetryCount(),
-                preparedInputs.automatedReviewReadinessReport());
-        return new PreparedSandbox(sandboxSpec, preparedInputs);
+            PracticeSandboxSpec agentSpec = practiceAgent.buildSandboxSpec(adapterRequest);
+            SandboxSpec sandboxSpec = buildSandboxSpec(
+                    jobId,
+                    preparedInputs.files(),
+                    preparedInputs.filesOnDisk(),
+                    preparedInputs.directories(),
+                    agentSpec,
+                    snapshot);
+            persistProvenanceDigests(
+                    jobId,
+                    job.getJobType(),
+                    agentSpec.promptDigest(),
+                    sandboxSpec.inputFiles(),
+                    job.getRetryCount(),
+                    preparedInputs.automatedReviewReadinessReport());
+            return new PreparedSandbox(sandboxSpec, preparedInputs);
+        } catch (RuntimeException exception) {
+            preparedInputs.close();
+            throw exception;
+        }
     }
 
     private void persistRefusedEvidence(
@@ -870,6 +855,7 @@ public class AgentJobExecutor {
             UUID jobId,
             Map<String, byte[]> handlerFiles,
             Map<String, java.nio.file.Path> handlerFilesOnDisk,
+            List<EvidenceDirectory> handlerDirectories,
             PracticeSandboxSpec agentSpec,
             ConfigSnapshot snapshot) {
         Map<String, byte[]> allInputFiles = new HashMap<>(handlerFiles);
@@ -891,6 +877,7 @@ public class AgentJobExecutor {
                 agentSpec.securityProfile(),
                 allInputFiles,
                 handlerFilesOnDisk,
+                handlerDirectories,
                 agentSpec.outputPath(),
                 agentSpec.volumeMounts());
     }

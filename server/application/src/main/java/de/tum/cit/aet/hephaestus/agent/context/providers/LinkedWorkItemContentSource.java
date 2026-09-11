@@ -58,8 +58,6 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
 
     static final int EXCERPT_CHARS = 2000;
 
-    private static final int MAX_COMMITS_SCANNED = 500;
-
     /**
      * Closing-keyword reference, e.g. {@code closes #42} / {@code Fixes #7}. Case-insensitive.
      * Group 2 captures the issue number.
@@ -90,18 +88,21 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
     private final IssueRepository issueRepository;
     private final GitRepositoryManager gitRepositoryManager;
     private final GitDiffOperations gitDiffOperations;
+    private final ReviewRepositoryPreparer repositoryPreparer;
 
     public LinkedWorkItemContentSource(
             ObjectMapper objectMapper,
             PullRequestRepository pullRequestRepository,
             IssueRepository issueRepository,
             GitRepositoryManager gitRepositoryManager,
-            GitDiffOperations gitDiffOperations) {
+            GitDiffOperations gitDiffOperations,
+            ReviewRepositoryPreparer repositoryPreparer) {
         this.objectMapper = objectMapper;
         this.pullRequestRepository = pullRequestRepository;
         this.issueRepository = issueRepository;
         this.gitRepositoryManager = gitRepositoryManager;
         this.gitDiffOperations = gitDiffOperations;
+        this.repositoryPreparer = repositoryPreparer;
     }
 
     @Override
@@ -129,6 +130,12 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         }
         try {
             AgentJob job = pr.job();
+            ReviewRepositoryPreparer.PreparedReview prepared = null;
+            if (gitRepositoryManager.isEnabled()) {
+                prepared = repositoryPreparer.prepare(job);
+            } else {
+                repositoryPreparer.authorize(job);
+            }
             JsonNode m = job.getMetadata();
             if (m == null || m.isNull() || m.isMissingNode()) {
                 throw new EvidenceCollectionException("Linked-work-item job metadata is missing", null);
@@ -154,7 +161,7 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
 
             collectFromText(body, refs, "body");
             collectFromBranch(sourceBranch, refs);
-            collectFromCommits(m, repositoryId, sourceBranch, refs);
+            collectFromCommits(prepared, refs);
 
             ArrayNode items = objectMapper.createArrayNode();
             List<Integer> unresolved = new ArrayList<>();
@@ -303,35 +310,12 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         }
     }
 
-    private void collectFromCommits(JsonNode metadata, long repositoryId, @Nullable String sourceBranch, Refs refs) {
-        if (!gitRepositoryManager.isEnabled() || !gitRepositoryManager.isRepositoryCloned(repositoryId)) {
-            return;
-        }
-        String targetBranch = MetaJson.optString(metadata, "target_branch");
-        String headSha = MetaJson.optString(metadata, "commit_sha");
-        if (sourceBranch == null || sourceBranch.isBlank() || targetBranch == null || headSha == null) {
-            return;
-        }
-
-        try {
-            var repoPath = gitRepositoryManager.getRepositoryPath(repositoryId);
-            String[] range = gitDiffOperations.resolveDiffRange(repoPath, targetBranch, sourceBranch, headSha);
-            if (range == null) {
-                return;
-            }
-            List<GitRepositoryManager.CommitInfo> ahead =
-                    gitRepositoryManager.walkCommits(repositoryId, range[0], range[1], MAX_COMMITS_SCANNED + 1);
-            for (GitRepositoryManager.CommitInfo commit :
-                    ahead.stream().limit(MAX_COMMITS_SCANNED).toList()) {
-                String subject = commit.message();
-                if (subject == null || subject.isBlank()) {
-                    continue;
-                }
-                collectFromText(subject, refs, "commits");
-            }
-        } catch (Exception e) {
-            log.debug("Commit-subject scan for linked work items skipped: {}", e.getMessage());
-        }
+    private void collectFromCommits(ReviewRepositoryPreparer.@Nullable PreparedReview prepared, Refs refs) {
+        if (prepared == null) return;
+        String[] range = gitDiffOperations.resolveDiffRange(prepared.key(), prepared.target(), prepared.head());
+        if (range == null) throw new EvidenceCollectionException("Linked-work-item commit range is unavailable", null);
+        gitRepositoryManager.forEachCommitSubject(
+                prepared.key(), range[0], range[1], subject -> collectFromText(subject, refs, "commits"));
     }
 
     private static @Nullable Integer parseNumber(String raw) {

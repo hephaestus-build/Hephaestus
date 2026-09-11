@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceContribution;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -11,6 +12,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -21,8 +23,8 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Materialises a pinned commit tree without exposing the host clone, {@code .git}, history, symlinks, or
- * submodules to the sandbox. Exclusions and size bounds make the reported capture partial.
+ * Materialises a pinned worktree and sanitized Git history without exposing the host clone or its
+ * credentials. Excluded worktree entries make the reported capture partial.
  */
 @Component
 @Order(1_000)
@@ -42,6 +44,7 @@ public class RepositoryTreeContentSource implements EvidenceSource {
     }
 
     private final GitRepositoryManager gitRepositoryManager;
+    private final ReviewRepositoryPreparer repositoryPreparer;
 
     @Override
     public boolean supports(ContextRequest request) {
@@ -64,16 +67,19 @@ public class RepositoryTreeContentSource implements EvidenceSource {
         if (!selectedKinds.contains(KIND)) {
             return new EvidenceContribution(Map.of(), Map.of());
         }
-        // No working copy is a supported deployment, not a fault — throwing would warn on every run of one.
+        if (gitRepositoryManager.isEnabled() && request instanceof ContextRequest.PracticeReviewRequest review)
+            repositoryPreparer.prepare(review.job());
         SourceCaptureState absence = absenceOrNull(request);
         if (absence != null) {
             return absent(absence);
         }
         GitRepositoryManager.GitTreeSnapshot snapshot = snapshot(request);
-        Map<String, java.nio.file.Path> onDisk = new java.util.LinkedHashMap<>();
-        snapshot.files().forEach((path, file) -> onDisk.put(SandboxLayout.REPO_MOUNT_RELATIVE + path, file));
-        // A truncated tree must report PARTIAL, not COMPLETE — otherwise a practice asserting something is
-        // absent from the repository gets answered from a fragment that merely doesn't happen to contain it.
+        Map<String, java.nio.file.Path> onDisk = Map.of(
+                SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD",
+                        snapshot.stagingDir().resolve(".git/HEAD"),
+                SandboxLayout.REPO_MOUNT_RELATIVE + ".git/hephaestus-captured-refs",
+                        snapshot.stagingDir().resolve(".git/hephaestus-captured-refs"));
+        // Excluded entries must not license an absence claim about the complete repository.
         SourceCompleteness completeness =
                 snapshot.complete() ? SourceCompleteness.COMPLETE : SourceCompleteness.PARTIAL;
         return new EvidenceContribution(
@@ -86,7 +92,8 @@ public class RepositoryTreeContentSource implements EvidenceSource {
                 Map.of(),
                 onDisk,
                 snapshot,
-                snapshot.limitations().isEmpty() ? Map.of() : Map.of(KIND, List.copyOf(snapshot.limitations())));
+                snapshot.limitations().isEmpty() ? Map.of() : Map.of(KIND, List.copyOf(snapshot.limitations())),
+                List.of(new EvidenceDirectory(SandboxLayout.REPO_MOUNT_RELATIVE, snapshot.stagingDir())));
     }
 
     private static EvidenceContribution absent(SourceCaptureState state) {
@@ -106,8 +113,9 @@ public class RepositoryTreeContentSource implements EvidenceSource {
         if (metadata == null || !metadata.path("repository_id").isNumber()) {
             return null;
         }
-        if (gitRepositoryManager.isRepositoryCloned(
-                metadata.path("repository_id").asLong())) {
+        if (gitRepositoryManager.isRepositoryCloned(new RepositoryKey(
+                review.job().getWorkspace().getId(),
+                metadata.path("repository_id").asLong()))) {
             return null;
         }
         return new SourceCaptureState.Unavailable(SourceAbsenceReason.NO_WORKING_COPY);
@@ -128,12 +136,14 @@ public class RepositoryTreeContentSource implements EvidenceSource {
                     "Pull request job has no commit_sha: jobId=" + review.job().getId());
         }
         long repositoryId = metadata.path("repository_id").asLong();
-        if (!gitRepositoryManager.isRepositoryCloned(repositoryId)) {
+        if (!gitRepositoryManager.isRepositoryCloned(
+                new RepositoryKey(review.job().getWorkspace().getId(), repositoryId))) {
             throw new JobPreparationException("Repository not cloned: repoId=" + repositoryId + ", jobId="
                     + review.job().getId());
         }
         try {
-            return gitRepositoryManager.readTreeSnapshot(repositoryId, commitSha);
+            return gitRepositoryManager.readTreeSnapshot(
+                    new RepositoryKey(review.job().getWorkspace().getId(), repositoryId), commitSha);
         } catch (GitRepositoryManager.GitOperationException e) {
             throw new EvidenceCollectionException("Could not capture repository tree at " + commitSha, e);
         }

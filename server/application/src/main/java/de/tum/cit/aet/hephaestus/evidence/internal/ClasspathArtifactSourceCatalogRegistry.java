@@ -47,13 +47,15 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
 
     private static final Logger log = LoggerFactory.getLogger(ClasspathArtifactSourceCatalogRegistry.class);
 
-    static final SourceContractVersion CURRENT_VERSION = new SourceContractVersion("1.0.0");
-    static final String CATALOG_RESOURCE = "contracts/artifact-source/1.0.0/catalog.json";
-    static final String USE_DECISIONS_RESOURCE = "contracts/artifact-source/1.0.0/source-use-decisions.json";
+    static final SourceContractVersion CURRENT_VERSION = new SourceContractVersion("1.1.0");
+    static final String CATALOG_RESOURCE = "contracts/artifact-source/1.1.0/catalog.json";
+    static final String USE_DECISIONS_RESOURCE = "contracts/artifact-source/1.1.0/source-use-decisions.json";
     private final ArtifactSourceCatalog catalog;
     private final String catalogDigest;
     private final Map<String, SourceUseDecision> useDecisions;
     private final Clock clock;
+    private final ArtifactSourceCatalog historicalCatalog;
+    private final Map<String, SourceUseDecision> historicalUseDecisions;
 
     public ClasspathArtifactSourceCatalogRegistry(JsonMapper objectMapper, Clock clock) {
         this.clock = clock;
@@ -62,6 +64,12 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
         this.catalogDigest = sha256(catalogBytes);
         this.useDecisions = parseUseDecisions(read(objectMapper, USE_DECISIONS_RESOURCE));
         validateUseDecisions(catalog, useDecisions);
+        SourceContractVersion historicalVersion = new SourceContractVersion("1.0.0");
+        this.historicalCatalog =
+                parse(read(objectMapper, "contracts/artifact-source/1.0.0/catalog.json"), historicalVersion);
+        this.historicalUseDecisions = parseUseDecisions(
+                read(objectMapper, "contracts/artifact-source/1.0.0/source-use-decisions.json"), historicalVersion);
+        validateUseDecisions(historicalCatalog, historicalUseDecisions);
         useDecisions.values().stream()
                 .map(SourceUseDecision::expiresAt)
                 .filter(java.util.Objects::nonNull)
@@ -89,8 +97,8 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
 
     @Override
     public ArtifactSourceContract requireSource(SourceContractVersion version, SourceKind kind) {
-        requireSupported(version);
-        ArtifactSourceContract contract = catalog.source(kind)
+        ArtifactSourceContract contract = readableCatalog(version)
+                .source(kind)
                 .orElseThrow(() ->
                         new IllegalArgumentException("Unknown source kind for contract " + version + ": " + kind));
         return contract;
@@ -131,8 +139,9 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
 
     @Override
     public SourceUseDecision requireUseDecision(SourceContractVersion version, String decisionId) {
-        requireSupported(version);
-        SourceUseDecision decision = useDecisions.get(decisionId);
+        readableCatalog(version);
+        SourceUseDecision decision =
+                (version.equals(catalog.version()) ? useDecisions : historicalUseDecisions).get(decisionId);
         if (decision == null) {
             throw new IllegalArgumentException(
                     "Unknown source-use decision for contract " + version + ": " + decisionId);
@@ -149,6 +158,16 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
                 .min(Instant::compareTo);
     }
 
+    private ArtifactSourceCatalog readableCatalog(SourceContractVersion version) {
+        if (catalog.version().equals(version)) {
+            return catalog;
+        }
+        if (historicalCatalog.version().equals(version)) {
+            return historicalCatalog;
+        }
+        throw new IllegalArgumentException("Unsupported source contract version: " + version);
+    }
+
     private void requireSupported(SourceContractVersion version) {
         if (!catalog.version().equals(version)) {
             throw new IllegalArgumentException("Unsupported source contract version: " + version);
@@ -156,10 +175,14 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
     }
 
     static ArtifactSourceCatalog parse(JsonNode root) {
+        return parse(root, CURRENT_VERSION);
+    }
+
+    private static ArtifactSourceCatalog parse(JsonNode root, SourceContractVersion expectedVersion) {
         requireObject(root, "catalog");
         rejectUnknown(root, Set.of("version", "sources"), "catalog");
         SourceContractVersion version = new SourceContractVersion(requiredText(root, "version", "catalog"));
-        if (!CURRENT_VERSION.equals(version)) {
+        if (!expectedVersion.equals(version)) {
             throw new IllegalStateException("Catalog resource has unexpected version: " + version);
         }
 
@@ -229,11 +252,16 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
     }
 
     static Map<String, SourceUseDecision> parseUseDecisions(JsonNode root) {
+        return parseUseDecisions(root, CURRENT_VERSION);
+    }
+
+    private static Map<String, SourceUseDecision> parseUseDecisions(
+            JsonNode root, SourceContractVersion expectedVersion) {
         requireObject(root, "source-use decisions");
         rejectUnknown(root, Set.of("contractVersion", "decisions"), "source-use decisions");
         SourceContractVersion version =
                 new SourceContractVersion(requiredText(root, "contractVersion", "source-use decisions"));
-        if (!CURRENT_VERSION.equals(version)) {
+        if (!expectedVersion.equals(version)) {
             throw new IllegalStateException("Source-use decisions have unexpected contract version: " + version);
         }
         Map<String, SourceUseDecision> decisions = new HashMap<>();

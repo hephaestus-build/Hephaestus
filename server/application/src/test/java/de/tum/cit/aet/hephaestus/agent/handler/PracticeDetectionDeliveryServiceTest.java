@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
@@ -20,7 +21,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
 import de.tum.cit.aet.hephaestus.integration.scm.ReviewTargetQuery;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
@@ -36,8 +36,8 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeDetectionCompletedEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -76,7 +76,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
     private ApplicationEventPublisher eventPublisher;
 
     @Mock
-    private ContentAddressedStore cas;
+    private JobEvidenceFiles cas;
 
     @Mock
     private de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry sourceCatalogs;
@@ -84,13 +84,20 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
     @Captor
     private ArgumentCaptor<PracticeDetectionCompletedEvent> eventCaptor;
 
+    private final de.tum.cit.aet.hephaestus.agent.context.HistoricalGitEvidence historicalGit =
+            org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.agent.context.HistoricalGitEvidence.class);
     private PracticeDetectionDeliveryService service;
+    private String capturedDiff = "";
 
     private Practice testPractice;
     private AgentJob testJob;
 
     @BeforeEach
     void setUp() {
+        lenient().when(cas.inspect(any(), anyString(), anyString(), any())).thenAnswer(invocation -> {
+            JobEvidenceFiles.TextInspection<?> inspection = invocation.getArgument(3);
+            return Optional.of(inspection.inspect(new java.io.StringReader(capturedDiff)));
+        });
         service = new PracticeDetectionDeliveryService(
                 practiceRevisionRepository,
                 observationRepository,
@@ -100,7 +107,8 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 eventPublisher,
                 objectMapper,
                 cas,
-                sourceCatalogs);
+                sourceCatalogs,
+                historicalGit);
 
         lenient().when(sourceCatalogs.isSourceUsePermitted(any(), any(), any())).thenReturn(true);
 
@@ -125,7 +133,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         testJob.setMetadata(metadata);
         ObjectNode snapshot = objectMapper.createObjectNode();
         var sources =
-                snapshot.putObject("manifest").put("contractVersion", "1.0.0").putArray("sources");
+                snapshot.putObject("manifest").put("contractVersion", "1.1.0").putArray("sources");
         var source = sources.addObject().put("kind", "scm.pull-request.diff");
         source.putObject("state").put("availability", "AVAILABLE").put("content", "NON_EMPTY");
         source.putArray("artifacts")
@@ -153,12 +161,11 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         // Bindings decide what this practice may assert an ABSENCE over; every source that applies to the
         // artifact is staged for citation regardless.
         lenient().when(revision.getBindings()).thenReturn(testPractice.getBindings());
-        lenient().when(practiceRevisionRepository.findById(11L)).thenReturn(Optional.of(revision));
         lenient()
-                .when(cas.get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-                .thenReturn(Optional.of(
-                        "diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] + insecure();\n"
-                                .getBytes(StandardCharsets.UTF_8)));
+                .when(practiceRevisionRepository.findByIdAndWorkspaceId(11L, 1L))
+                .thenReturn(Optional.of(revision));
+        capturedDiff =
+                "diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] + insecure();\n";
 
         lenient()
                 .when(reviewTargets.findPullRequest(456L))
@@ -240,7 +247,70 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         lenient().when(revision.getPractice()).thenReturn(practice);
         lenient().when(revision.getAutomatedReviewPolicy()).thenReturn(practice.getAutomatedReviewPolicy());
         lenient().when(revision.getBindings()).thenReturn(practice.getBindings());
-        lenient().when(practiceRevisionRepository.findById(revisionId)).thenReturn(Optional.of(revision));
+        lenient()
+                .when(practiceRevisionRepository.findByIdAndWorkspaceId(revisionId, 1L))
+                .thenReturn(Optional.of(revision));
+    }
+
+    private PracticeDetectionDeliveryService.DeliveryResult publishVerified(
+            AgentJob job, List<PracticeDetectionResultParser.ValidatedObservation> submitted) {
+        return service.publish(job, service.prepare(job, submitted));
+    }
+
+    @Test
+    void shouldRejectPreparedObservationsWhenSourceAuthorizationChangesBeforePublication() {
+        var prepared = service.prepare(testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT)));
+        when(sourceCatalogs.isSourceUsePermitted(any(), any(), any())).thenReturn(false);
+        assertThatThrownBy(() -> service.publish(testJob, prepared)).isInstanceOf(JobDeliveryException.class);
+        verifyNoInteractions(observationRepository);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void shouldAdmitRepositoryTextAgainstTheCapturedRepositoryIdentity(boolean historical) {
+        String head = "b".repeat(40);
+        String revision = historical ? "a".repeat(40) : head;
+        String headPath = de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD";
+        ObjectNode snapshot = (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot());
+        ObjectNode source = snapshot.withObject("manifest").withArray("sources").addObject();
+        source.put("kind", "scm.repository.tree");
+        source.putObject("state")
+                .put("availability", "AVAILABLE")
+                .putObject("facts")
+                .put("immutableIdentity", head + ":" + "c".repeat(40));
+        source.putArray("artifacts").addObject().put("path", headPath).put("sha256", "d".repeat(64));
+        source.withArray("artifacts")
+                .addObject()
+                .put(
+                        "path",
+                        de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout.REPO_MOUNT_RELATIVE
+                                + ".git/hephaestus-captured-refs")
+                .put("sha256", "f".repeat(64));
+        var observation = validObservation("pr-description-quality", Presence.PRESENT);
+        ObjectNode citation =
+                (ObjectNode) evidenceOf(observation).path("citations").get(0);
+        citation.put("sourceKind", "scm.repository.tree")
+                .put("artifactPath", headPath)
+                .put("path", "deleted.java")
+                .put("revision", revision)
+                .put("quote", "old source")
+                .put("startLine", 3)
+                .put("endLine", 3);
+        citation.remove("side");
+        if (!historical) citation.remove("revision");
+        var requested = new de.tum.cit.aet.hephaestus.agent.context.HistoricalGitEvidence.Citation(
+                revision, "deleted.java", "old source", 3, 3);
+        when(historicalGit.verifyAll(testJob, "d".repeat(64), "f".repeat(64), head, List.of(requested)))
+                .thenReturn(Map.of(requested, new JobEvidenceFiles.QuoteMatch(true, "e".repeat(64))));
+        var result = publishVerified(testJob, List.of(observation));
+        var stored = java.util.Objects.requireNonNull(
+                        result.delivered().getFirst().evidence())
+                .path("citations")
+                .get(0);
+        assertThat(stored.path("verification").path("artifactSha256").asString())
+                .isEqualTo("e".repeat(64));
+        assertThat(stored.path("revision").asString()).isEqualTo(revision);
+        verify(historicalGit).verifyAll(testJob, "d".repeat(64), "f".repeat(64), head, List.of(requested));
     }
 
     @Nested
@@ -251,7 +321,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
             ((ObjectNode) evidenceOf(observation)).remove("citations");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("no source-bound evidence citation");
             verifyNoInteractions(observationRepository);
@@ -262,7 +332,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
             ((ObjectNode) evidenceOf(observation).withArray("citations").get(0)).remove("side");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("invalid evidence citation");
             verifyNoInteractions(observationRepository);
@@ -277,7 +347,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             citation.put("artifactPath", "inputs/context/pull_request.json");
             citation.put("path", "pull_request.json");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("invalid evidence citation");
             verifyNoInteractions(observationRepository);
@@ -292,7 +362,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             citation.put("sourceKind", "scm.repository.tree");
             citation.remove("side");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("misattributed evidence source");
             verifyNoInteractions(observationRepository);
@@ -316,19 +386,26 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                     .addObject()
                     .put("path", "inputs/context/project_inventory.json")
                     .put("sha256", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
-            when(cas.get("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"))
-                    .thenReturn(Optional.of("{\"issues\":[{\"number\":7,\"title\":\"Same migration\"}]}"
-                            .getBytes(StandardCharsets.UTF_8)));
+            when(cas.containsUtf8AtLines(
+                            testJob,
+                            "inputs/context/project_inventory.json",
+                            "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                            "\"title\":\"Same migration\"",
+                            1,
+                            1))
+                    .thenReturn(Optional.of(true));
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
             ObjectNode citation =
                     (ObjectNode) evidenceOf(observation).withArray("citations").get(0);
             citation.put("sourceKind", "workspace.project-inventory");
             citation.put("artifactPath", "inputs/context/project_inventory.json");
             citation.put("path", "project_inventory.json");
+            citation.put("startLine", 1);
+            citation.put("endLine", 1);
             citation.put("quote", "\"title\":\"Same migration\"");
             citation.remove("side");
 
-            assertThat(service.deliver(testJob, List.of(observation)).inserted())
+            assertThat(publishVerified(testJob, List.of(observation)).inserted())
                     .isEqualTo(1);
         }
 
@@ -337,7 +414,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             when(sourceCatalogs.isSourceUsePermitted(any(), any(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
                     .thenReturn(false);
 
-            assertThatThrownBy(() -> service.deliver(
+            assertThatThrownBy(() -> publishVerified(
                             testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT))))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("authorization was withdrawn");
@@ -350,7 +427,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             when(sourceCatalogs.isSourceUsePermitted(any(), eq(new SourceKind("scm.pull-request.core")), any()))
                     .thenReturn(false);
 
-            assertThatThrownBy(() -> service.deliver(
+            assertThatThrownBy(() -> publishVerified(
                             testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT))))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("scm.pull-request.core");
@@ -365,7 +442,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                             .get(0))
                     .put("quote", "fabricated quote");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("does not match the cited diff location");
             verifyNoInteractions(observationRepository);
@@ -385,7 +462,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation misquoted = validObservation("pr-scope", Presence.PRESENT);
             ((ObjectNode) evidenceOf(misquoted).withArray("citations").get(0)).put("quote", "+ insecure();,");
 
-            var result = service.deliver(testJob, List.of(sound, misquoted));
+            var result = publishVerified(testJob, List.of(sound, misquoted));
 
             assertThat(result.delivered())
                     .as("the claim that verified is the one persisted, and it is the only one")
@@ -411,7 +488,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             citation.put("sourceKind", "scm.repository.tree");
             citation.remove("side");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(sound, unstaged)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(sound, unstaged)))
                     .as("an unstaged source impugns the run, not just the claim that cited it")
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("misattributed evidence source");
@@ -424,7 +501,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation misquoted = validObservation("pr-description-quality", Presence.PRESENT);
             ((ObjectNode) evidenceOf(misquoted).withArray("citations").get(0)).put("quote", "fabricated quote");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(misquoted)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(misquoted)))
                     .isInstanceOfSatisfying(
                             ObservationsRefusedException.class,
                             refusal -> assertThat(refusal.reasonCode()).isEqualTo("no_valid_observations"))
@@ -439,9 +516,9 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             evidence.put("detector", "secret-diff-scanner");
             ObjectNode citation = (ObjectNode) evidence.withArray("citations").get(0);
             citation.remove("quote");
-            citation.put("quoteSha256", "cbbe06955840924d2ccb449029560ae1eb92f5ec9866804f1a34be23b61dc488");
+            citation.put("quoteSha256", "cc8c484344d4e1f933f0020a76f6dc3f6fa1462dfc7c1ac7b42cae840404141f");
 
-            assertThat(service.deliver(testJob, List.of(observation)).inserted())
+            assertThat(publishVerified(testJob, List.of(observation)).inserted())
                     .isEqualTo(1);
             ArgumentCaptor<String> persistedEvidence = ArgumentCaptor.forClass(String.class);
             verify(observationRepository)
@@ -464,7 +541,30 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                             anyString(),
                             any(),
                             anyString());
-            assertThat(persistedEvidence.getValue()).doesNotContain("quoteSha256", "cbbe06955840924d");
+            JsonNode persisted = objectMapper.readTree(persistedEvidence.getValue());
+            assertThat(persisted.path("citations").get(0).has("quoteSha256")).isFalse();
+            assertThat(persisted
+                            .path("citations")
+                            .get(0)
+                            .path("verification")
+                            .path("quoteSha256")
+                            .asString())
+                    .isEqualTo("cc8c484344d4e1f933f0020a76f6dc3f6fa1462dfc7c1ac7b42cae840404141f");
+        }
+
+        @Test
+        void shouldRejectRedactedSecretCitationForANonDiffSource() {
+            var observation = validObservation("pr-description-quality", Presence.PRESENT);
+            ObjectNode evidence = (ObjectNode) evidenceOf(observation);
+            evidence.put("detector", "secret-diff-scanner");
+            ObjectNode citation = (ObjectNode) evidence.path("citations").get(0);
+            citation.put("sourceKind", "workspace.project-inventory");
+            citation.remove("side");
+            citation.remove("quote");
+            citation.put("quoteSha256", "a".repeat(64));
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessageContaining("invalid evidence citation");
         }
 
         @Test
@@ -476,7 +576,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             citation.remove("quote");
             citation.put("quoteSha256", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("does not match the cited diff location");
             verifyNoInteractions(observationRepository);
@@ -488,7 +588,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ((ObjectNode) evidenceOf(observation).withArray("citations").get(0)).put("startLine", 11);
             ((ObjectNode) evidenceOf(observation).withArray("citations").get(0)).put("endLine", 11);
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("does not match the cited diff location");
             verifyNoInteractions(observationRepository);
@@ -499,7 +599,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
             ((ObjectNode) evidenceOf(observation).withArray("citations").get(0)).put("path", "src/Other.java");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("does not match the cited diff location");
             verifyNoInteractions(observationRepository);
@@ -510,7 +610,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
             ((ObjectNode) evidenceOf(observation).withArray("citations").get(0)).put("endLine", 11);
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("does not match the cited diff location");
             verifyNoInteractions(observationRepository);
@@ -518,13 +618,8 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
         @Test
         void acceptsRemovedLineEvidenceOnTheOldSide() {
-            when(cas.get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-                    .thenReturn(Optional.of(("diff --git a/src/Auth.java b/src/Auth.java\n" + "--- a/src/Auth.java\n"
-                                    + "+++ b/src/Auth.java\n"
-                                    + "@@ -8 +8 @@\n"
-                                    + "[L8] - requireAdmin();\n"
-                                    + "[L8] + allowAll();\n")
-                            .getBytes(StandardCharsets.UTF_8)));
+            capturedDiff =
+                    "diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -8 +8 @@\n[L8] - requireAdmin();\n[L8] + allowAll();\n";
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
             ObjectNode citation =
                     (ObjectNode) evidenceOf(observation).withArray("citations").get(0);
@@ -533,7 +628,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             citation.put("endLine", 8);
             citation.put("quote", "- requireAdmin();");
 
-            assertThat(service.deliver(testJob, List.of(observation)).inserted())
+            assertThat(publishVerified(testJob, List.of(observation)).inserted())
                     .isEqualTo(1);
         }
 
@@ -546,7 +641,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                             .path("state"))
                     .put("availability", "UNAVAILABLE");
 
-            assertThatThrownBy(() -> service.deliver(
+            assertThatThrownBy(() -> publishVerified(
                             testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT))))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("misattributed evidence source");
@@ -567,7 +662,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.ABSENT);
             ((ObjectNode) evidenceOf(observation)).remove("search");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("must record where it searched");
             verifyNoInteractions(observationRepository);
@@ -580,7 +675,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 ValidatedObservation observation = validObservation("pr-description-quality", Presence.ABSENT);
                 ((ObjectNode) evidenceOf(observation).get("search")).remove(field);
 
-                assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+                assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                         .as("an ABSENT observation missing search.%s", field)
                         .isInstanceOf(JobDeliveryException.class)
                         .hasMessageContaining("must record where it searched");
@@ -597,7 +692,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ObjectNode search = (ObjectNode) evidenceOf(observation).get("search");
             search.putArray("consulted").add("scm.repository.tree");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("claims a source this run did not stage");
             verifyNoInteractions(observationRepository);
@@ -608,7 +703,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         void acceptsAnAbsentWithARecordedSearch() {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.ABSENT);
 
-            var result = service.deliver(testJob, List.of(observation));
+            var result = publishVerified(testJob, List.of(observation));
 
             assertThat(result.inserted()).isEqualTo(1);
         }
@@ -622,7 +717,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             // has not closed and therefore cannot assert. The default bindings here are all REQUIRED.
             ValidatedObservation observation = cleanStrength("pr-description-quality");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("declares no EXHAUSTIVE evidence source");
             verifyNoInteractions(observationRepository);
@@ -637,7 +732,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             exhaustiveOverTheDiff(testPractice);
             ValidatedObservation observation = cleanStrength("pr-description-quality");
 
-            var result = service.deliver(testJob, List.of(observation));
+            var result = publishVerified(testJob, List.of(observation));
 
             assertThat(result.inserted()).isEqualTo(1);
         }
@@ -653,7 +748,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                     .putArray("consulted")
                     .add("scm.pull-request.core");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("did not search the sources its practice asserts absence over");
             verifyNoInteractions(observationRepository);
@@ -686,7 +781,8 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                             binding.subject()))
                     .toList();
             practice.setBindings(bindings);
-            PracticeRevision revision = practiceRevisionRepository.findById(11L).orElseThrow();
+            PracticeRevision revision =
+                    practiceRevisionRepository.findByIdAndWorkspaceId(11L, 1L).orElseThrow();
             lenient().when(revision.getBindings()).thenReturn(bindings);
         }
 
@@ -697,7 +793,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.NOT_APPLICABLE);
             ((ObjectNode) evidenceOf(observation)).remove("inapplicability");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("must name what the practice looks for")
                     // Direct the model to uncertainty rather than an invented justification.
@@ -712,7 +808,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 ValidatedObservation observation = validObservation("pr-description-quality", Presence.NOT_APPLICABLE);
                 ((ObjectNode) evidenceOf(observation).get("inapplicability")).remove(field);
 
-                assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+                assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                         .as("a NOT_APPLICABLE observation missing inapplicability.%s", field)
                         .isInstanceOf(JobDeliveryException.class)
                         .hasMessageContaining("must name what the practice looks for");
@@ -727,7 +823,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ObjectNode inapplicability = (ObjectNode) evidenceOf(observation).get("inapplicability");
             inapplicability.putArray("consulted").add("scm.repository.tree");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("claims a source this run did not stage");
             verifyNoInteractions(observationRepository);
@@ -745,7 +841,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                         .as("%s carries no stated inapplicability", presence)
                         .isNull();
 
-                assertThatCode(() -> service.deliver(testJob, List.of(observation)))
+                assertThatCode(() -> publishVerified(testJob, List.of(observation)))
                         .as("%s is delivered without a stated inapplicability", presence)
                         .doesNotThrowAnyException();
             }
@@ -763,7 +859,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                         .as("%s carries no search", presence)
                         .isNull();
 
-                assertThatCode(() -> service.deliver(testJob, List.of(observation)))
+                assertThatCode(() -> publishVerified(testJob, List.of(observation)))
                         .as("%s is delivered without a recorded search", presence)
                         .doesNotThrowAnyException();
             }
@@ -775,7 +871,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             stageHistory("we raised this in the last review");
             ValidatedObservation observation = historyCiting("we raised this in the last review");
 
-            var result = service.deliver(testJob, List.of(observation));
+            var result = publishVerified(testJob, List.of(observation));
 
             assertThat(result.inserted()).isEqualTo(1);
         }
@@ -786,7 +882,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             stageHistory("we raised this in the last review");
             ValidatedObservation observation = historyCiting("we raised this three times before");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("quote");
             verifyNoInteractions(observationRepository);
@@ -804,7 +900,14 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                     .addObject()
                     .put("path", "inputs/history/observations.json")
                     .put("sha256", HISTORY_SHA);
-            when(cas.get(HISTORY_SHA)).thenReturn(Optional.of(body.getBytes(StandardCharsets.UTF_8)));
+            when(cas.containsUtf8AtLines(
+                            eq(testJob),
+                            eq("inputs/history/observations.json"),
+                            eq(HISTORY_SHA),
+                            anyString(),
+                            org.mockito.ArgumentMatchers.anyInt(),
+                            org.mockito.ArgumentMatchers.anyInt()))
+                    .thenAnswer(invocation -> Optional.of(body.contains(invocation.getArgument(3, String.class))));
         }
 
         private ValidatedObservation historyCiting(String quote) {
@@ -814,6 +917,8 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             citation.put("sourceKind", "hephaestus.observation-history");
             citation.put("artifactPath", "inputs/history/observations.json");
             citation.put("path", "inputs/history/observations.json");
+            citation.put("startLine", 1);
+            citation.put("endLine", 1);
             citation.remove("side");
             citation.put("quote", quote);
             return observation;
@@ -827,7 +932,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         void persistsValidObservation() {
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isEqualTo(1);
             assertThat(result.discardedDuplicate()).isZero();
@@ -881,7 +986,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         void unknownSlug() {
             var observations = List.of(validObservation("unknown-practice", Presence.PRESENT));
 
-            assertThatThrownBy(() -> service.deliver(testJob, observations))
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("not admitted");
             verifyNoInteractions(observationRepository);
@@ -900,7 +1005,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             metadata.put("about_user_id", 999L);
             metadata.put("subject_role", "REVIEWER");
 
-            service.deliver(testJob, List.of());
+            publishVerified(testJob, List.of());
 
             verify(eventPublisher).publishEvent(eventCaptor.capture());
             assertThat(eventCaptor.getValue().developerId()).isEqualTo(999L);
@@ -915,7 +1020,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             metadata.put("about_user_id", 999L);
             metadata.put("subject_role", "REVIEWER");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of()))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of()))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("no longer matches");
             verifyNoInteractions(observationRepository, eventPublisher);
@@ -927,7 +1032,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             when(reviewTargets.findPullRequest(456L)).thenReturn(Optional.empty());
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            assertThatThrownBy(() -> service.deliver(testJob, observations))
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("Pull request not found");
         }
@@ -939,7 +1044,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                     .thenReturn(Optional.of(new ReviewTargetQuery.Target(123L, "owner/repo", 42, null, false)));
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            assertThatThrownBy(() -> service.deliver(testJob, observations))
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("no author");
         }
@@ -951,7 +1056,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             metadata.put("repository_id", 999L);
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            assertThatThrownBy(() -> service.deliver(testJob, observations))
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("does not match the live target");
             verifyNoInteractions(observationRepository, eventPublisher);
@@ -982,7 +1087,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             testJob.setMetadata(null);
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            assertThatThrownBy(() -> service.deliver(testJob, observations))
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("Missing job metadata");
         }
@@ -992,7 +1097,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             testJob.setMetadata(objectMapper.createObjectNode());
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            assertThatThrownBy(() -> service.deliver(testJob, observations))
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("Missing pull_request_id");
         }
@@ -1008,7 +1113,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 observations.add(validObservation("pr-description-quality", Presence.ABSENT));
             }
 
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isEqualTo(7);
             assertThat(result.discardedDuplicate()).isZero();
@@ -1021,7 +1126,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 observations.add(validObservation("pr-description-quality", Presence.PRESENT));
             }
 
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isEqualTo(10);
             assertThat(result.discardedDuplicate()).isZero();
@@ -1042,7 +1147,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 observations.add(validObservation("error-handling", Presence.ABSENT));
             }
 
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isEqualTo(10);
         }
@@ -1056,7 +1161,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         void notApplicablePersisted() {
             var observations = List.of(validObservation("pr-description-quality", Presence.NOT_APPLICABLE));
 
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isEqualTo(1);
             assertThat(result.hasNegative()).isFalse();
@@ -1069,7 +1174,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 observations.add(validObservation("pr-description-quality", Presence.NOT_APPLICABLE));
             }
 
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isEqualTo(10);
         }
@@ -1079,7 +1184,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
     class SeverityCoherence {
 
         private String capturedSeverityFor(ValidatedObservation observation) {
-            service.deliver(testJob, List.of(observation));
+            publishVerified(testJob, List.of(observation));
             ArgumentCaptor<String> severityCaptor = ArgumentCaptor.forClass(String.class);
             verify(observationRepository)
                     .insertIfAbsent(
@@ -1156,7 +1261,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isZero();
             assertThat(result.discardedDuplicate()).isEqualTo(1);
@@ -1166,7 +1271,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         void keyFormat() {
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            service.deliver(testJob, observations);
+            publishVerified(testJob, observations);
 
             ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
             verify(observationRepository)
@@ -1211,7 +1316,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                     validObservation("pr-description-quality", Presence.PRESENT),
                     validObservation("error-handling", Presence.ABSENT));
 
-            service.deliver(testJob, observations);
+            publishVerified(testJob, observations);
 
             verify(eventPublisher).publishEvent(eventCaptor.capture());
             PracticeDetectionCompletedEvent event = eventCaptor.getValue();
@@ -1241,7 +1346,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             testJob.setMetadata(meta);
 
             var observations = List.of(validObservation("pr-description-quality", Presence.ABSENT));
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isEqualTo(1);
             verify(observationRepository)
@@ -1277,7 +1382,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
             var observations = List.of(validObservation("pr-description-quality", Presence.ABSENT));
 
-            assertThatThrownBy(() -> service.deliver(testJob, observations))
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("No delivery route for artifact kind: kind=wiki.page");
         }

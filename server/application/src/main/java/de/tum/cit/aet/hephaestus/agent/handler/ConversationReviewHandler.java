@@ -40,8 +40,7 @@ import tools.jackson.databind.node.ObjectNode;
  * turns ({@code inputs/context/conversation_thread.json}) plus the workspace-wide project inventory, since a
  * conversation isn't anchored to one repo.
  *
- * <p>Delivery persists observations via {@link PracticeDetectionDeliveryService} (artifact kind chat.conversation_thread,
- * {@code aboutUserId} carried explicitly in metadata) and then publishes {@link PracticeDetectionDeliveredEvent}
+ * <p>Admission persists verified observations. Delivery publishes {@link PracticeDetectionDeliveredEvent}
  * to drive the conversational-delivery loop: OBSERVED problems become PREPARED IN_CHAT units for the
  * judged author and surface in their next mentor DM turn. Nothing is posted back to Slack from here.
  */
@@ -159,6 +158,7 @@ public class ConversationReviewHandler implements JobTypeHandler {
                     new PreparedJobInputs(
                             prepared.files(),
                             prepared.filesOnDisk(),
+                            prepared.directories(),
                             prepared.cleanups(),
                             artifactSourceManifest,
                             readiness.report()));
@@ -168,7 +168,12 @@ public class ConversationReviewHandler implements JobTypeHandler {
         practiceCatalogInjector.inject(files, job, ArtifactKinds.CONVERSATION_THREAD, practices);
         log.info("Conversation context preparation complete: {} files, jobId={}", files.size(), job.getId());
         return new PreparedJobInputs(
-                files, prepared.filesOnDisk(), prepared.cleanups(), artifactSourceManifest, readiness.report());
+                files,
+                prepared.filesOnDisk(),
+                prepared.directories(),
+                prepared.cleanups(),
+                artifactSourceManifest,
+                readiness.report());
     }
 
     private TaskEnvelope buildTaskEnvelope(AgentJob job, JsonNode metadata) {
@@ -197,9 +202,16 @@ public class ConversationReviewHandler implements JobTypeHandler {
         return prompt;
     }
 
-    @Override
-    public void deliver(AgentJob job) {
-        var parsed = resultParser.parse(job.getOutput());
+    public PracticeDetectionDeliveryService.PreparedObservations prepareObservations(
+            AgentJob job, JsonNode observations) {
+        ObjectNode output = objectMapper.createObjectNode();
+        output.put(
+                "rawOutput",
+                objectMapper
+                        .createObjectNode()
+                        .set("observations", observations)
+                        .toString());
+        var parsed = resultParser.parse(output);
         if (!parsed.discarded().isEmpty()) {
             log.info(
                     "Discarded {} observations during parsing: jobId={}",
@@ -216,13 +228,14 @@ public class ConversationReviewHandler implements JobTypeHandler {
         List<PracticeDetectionResultParser.ValidatedObservation> coercedObservations =
                 PracticeDetectionResultParser.coerceCoherence(parsed.validObservations(), defectDetectorSlugs);
 
-        PracticeDetectionDeliveryService.DeliveryResult result = deliveryService.deliver(job, coercedObservations);
-        log.info(
-                "Conversation delivery complete: inserted={}, duplicate={}, jobId={}",
-                result.inserted(),
-                result.discardedDuplicate(),
-                job.getId());
+        return deliveryService.prepare(job, coercedObservations);
+    }
 
+    @Override
+    public void deliver(AgentJob job) {
+        if (ObservationAdmissionService.observationsWereRefused(job)) return;
+        ObservationAdmissionService.requireMatchingCompositionDigest(job);
+        deliveryService.requirePublished(job);
         // Publish INSIDE a transaction so the AFTER_COMMIT listener fires (deliver() runs outside a transaction
         // in the executor). Best-effort — a publish hiccup never fails the job; observations are already persisted.
         try {

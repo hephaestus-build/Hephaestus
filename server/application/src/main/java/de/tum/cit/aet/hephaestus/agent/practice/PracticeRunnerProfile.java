@@ -16,7 +16,6 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-precompute.ts",
             "pi-precompute.sh",
             "pi-error-text.ts",
-            "pi-grep-tool.ts",
             "pi-observation-normalize.ts",
             "pi-practice-coverage.ts",
             "pi-runner-output.ts",
@@ -28,7 +27,6 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-review-tree.ts",
             "pi-session-tree.ts",
             "pi-session-lifecycle.ts",
-            "pi-review-trace.ts",
             SandboxLayout.PROVIDER_HELPER_FILENAME);
 
     private static final List<String> PROMPTS = List.of(SandboxLayout.FEEDBACK_COMPOSER_PROMPT_FILENAME);
@@ -46,6 +44,12 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
     @Override
     public List<String> promptResources() {
         return PROMPTS;
+    }
+
+    @Override
+    public List<String> runtimeFlags() {
+        // Subprocesses bypass Node permissions; read-only mounts and container isolation protect evidence.
+        return List.of("--max-old-space-size=256");
     }
 
     @Override

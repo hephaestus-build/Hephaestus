@@ -19,7 +19,6 @@ import {
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
 } from "./pi-agent-sandbox.ts";
 import { errorText } from "./pi-error-text.ts";
-import { buildGrepTool } from "./pi-grep-tool.ts";
 import {
 	describeCitationMismatch,
 	dedupeKeyForObservation,
@@ -32,7 +31,6 @@ import {
 } from "./pi-observation-normalize.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { loadProviderConfig, registerHephaestusProvider } from "./pi-provider.ts";
-import { ReviewTrace } from "./pi-review-trace.ts";
 import {
 	buildReviewTree,
 	mapConcurrent,
@@ -159,10 +157,7 @@ function isAdmittedObservation(value: unknown): value is AdmittedObservation {
 }
 
 const WORKSPACE_ROOT = "/workspace";
-// The SDK's grep spawns ripgrep, which the sandbox forbids; the runner's own search tool takes its
-// place in every session under the same name. "grep" stays listed: the SDK filters custom tools
-// through this list too, and a listed custom definition replaces the built-in of that name.
-const EVIDENCE_TOOLS = ["read", "grep"] as const;
+const PRACTICE_TOOLS = ["read", "write", "edit", "bash", "grep", "find", "ls"] as const;
 const CWD = process.env.PI_RUNNER_CWD ?? WORKSPACE_ROOT;
 const ENVELOPE_MISMATCH_EXIT = 42;
 const SUPPORTED_KIND = "practice_review";
@@ -170,8 +165,6 @@ const TASK_PATH = `${CWD}/task.json`;
 const taskEnvelope = readTaskEnvelope();
 const INPUT_PATHS = resolveTaskPaths(CWD, taskEnvelope.paths);
 const OUTPUT = `${CWD}/out`;
-const reviewTrace = process.env.PI_REVIEW_CAPTURE === "true" ? new ReviewTrace(OUTPUT) : undefined;
-process.on("exit", (code) => reviewTrace?.finish(code));
 const RESULT_PATH = outputPath(OUTPUT, "result.json");
 const REVIEW_STATE_PATH = outputPath(OUTPUT, "review-state.json");
 const WATCHDOG_PATH = outputPath(OUTPUT, "watchdog-killed.json");
@@ -417,6 +410,12 @@ const evidenceSchema = {
 					artifactPath: { type: "string", enum: stagedArtifactPaths },
 					path: { type: "string", minLength: 1 },
 					side: { type: "string", enum: ["OLD", "NEW"] },
+					revision: {
+						type: "string",
+						pattern: "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+						description:
+							"For repository text: artifactPath names the captured .git/HEAD, path is repository-relative, and revision optionally selects a full commit SHA; omission means the captured HEAD.",
+					},
 					startLine: { type: "integer", minimum: 1 },
 					endLine: { type: "integer", minimum: 1 },
 					quote: { type: "string", minLength: 1 },
@@ -488,12 +487,6 @@ function persistReviewState() {
 	);
 }
 
-/**
- * Writes the collected result, and is the only thing that writes it: a review session is opened with
- * `read`, `grep` and `report_observation` and no tool that writes a file, so an observation reaches
- * this runner through the tool or not at all. What lands here is therefore already normalised and
- * already validated, by the same call that recorded it.
- */
 function maybeWriteResultFile(): boolean {
 	if (reviewState.observations.length === 0) return false;
 	writeFileSync(RESULT_PATH, JSON.stringify({ observations: reviewState.observations }, null, 2));
@@ -544,6 +537,8 @@ function normalizeAndValidateObservation(rawObservation: unknown): NormalizedObs
 	);
 	validateInapplicabilityScope(observation, availableSourceKinds);
 	for (const citation of observation.evidence.citations) {
+		// Repository blobs are verified against the immutable Git capture by trusted admission.
+		if (citation.sourceKind === "scm.repository.tree") continue;
 		const content = readFileSync(`${CWD}/${citation.artifactPath}`, "utf8");
 		const mismatch = describeCitationMismatch(citation, content);
 		if (mismatch !== null) {
@@ -1662,7 +1657,6 @@ async function main() {
 	// pi-agent-sandbox.ts has the rationale for running untrusted; both Pi runners in this image
 	// share it.
 	const settingsManager = SettingsManager.create(CWD, AGENT_DIR, SANDBOX_SETTINGS_MANAGER_OPTIONS);
-	const grepTool = buildGrepTool(CWD);
 	// The only instructions a session carries beyond its prompt are the orchestrator the server
 	// staged in the agent dir, handed over by name below; the SDK's own discovery is turned off
 	// (pi-agent-sandbox.ts) and is not the channel a run's instructions arrive on. A run without
@@ -1677,7 +1671,6 @@ async function main() {
 			agentDir: AGENT_DIR ?? getAgentDir(),
 			settingsManager,
 			...SANDBOX_RESOURCE_LOADER_OPTIONS,
-			extensionFactories: reviewTrace ? [reviewTrace.extension] : [],
 			agentsFilesOverride: () => ({
 				agentsFiles: [{ path: orchestratorPath, content: orchestrator }],
 			}),
@@ -1729,10 +1722,7 @@ async function main() {
 		label: string,
 		pace: RecordingPace | null = null,
 	) => {
-		const sessionId = trackedSession.sessionManager.getSessionId();
-		reviewTrace?.session(sessionId, label, trackedSession.sessionManager.getSessionFile());
 		return trackedSession.subscribe((event: AgentSessionEvent) => {
-			reviewTrace?.event(sessionId, event);
 			if (event.type === "tool_execution_start") {
 				console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
 			}
@@ -1815,11 +1805,9 @@ async function main() {
 			await createAgentSession({
 				cwd: CWD,
 				agentDir: AGENT_DIR,
-				tools: ["read", "grep", "report_feedback", "report_summary"],
-				customTools: [grepTool, feedbackTool, buildSummaryTool()],
-				sessionManager: reviewTrace
-					? SessionManager.create(CWD, reviewTrace.sessionDir)
-					: SessionManager.inMemory(),
+				tools: [...PRACTICE_TOOLS, "report_feedback", "report_summary"],
+				customTools: [feedbackTool, buildSummaryTool()],
+				sessionManager: SessionManager.inMemory(),
 				settingsManager,
 				resourceLoader: await loadResources(),
 				modelRuntime,
@@ -1896,7 +1884,7 @@ async function main() {
 		process.env.PI_REVIEW_CONCURRENCY,
 		tree.practiceCount,
 	);
-	const sessionDir = reviewTrace?.sessionDir ?? `${CWD}/.sessions`;
+	const sessionDir = `${CWD}/.sessions`;
 	console.error(
 		`[pi-runner] Review tree: ${tree.practiceCount} practices, ${tree.groups.length} evidence group(s), concurrency=${concurrency}`,
 	);
@@ -1909,8 +1897,8 @@ async function main() {
 			const { session: reconSession } = await createAgentSession({
 				cwd: CWD,
 				agentDir: AGENT_DIR,
-				tools: [...EVIDENCE_TOOLS],
-				customTools: [grepTool],
+				tools: [...PRACTICE_TOOLS],
+				customTools: [],
 				sessionManager: manager,
 				settingsManager,
 				resourceLoader: await loadResources(),
@@ -1979,8 +1967,8 @@ async function main() {
 					const { session: observerSession } = await createAgentSession({
 						cwd: CWD,
 						agentDir: AGENT_DIR,
-						tools: [...EVIDENCE_TOOLS, "report_observation"],
-						customTools: [grepTool, scopedTool],
+						tools: [...PRACTICE_TOOLS, "report_observation"],
+						customTools: [scopedTool],
 						sessionManager: manager,
 						settingsManager,
 						resourceLoader: await loadResources(),
@@ -2136,13 +2124,11 @@ async function main() {
 					const { session: retrySession } = await createAgentSession({
 						cwd: CWD,
 						agentDir: AGENT_DIR,
-						tools: [...EVIDENCE_TOOLS, "report_observation"],
-						customTools: [grepTool, retryTool],
+						tools: [...PRACTICE_TOOLS, "report_observation"],
+						customTools: [retryTool],
 						sessionManager: priorSessionFile
 							? SessionManager.open(priorSessionFile, sessionDir)
-							: reviewTrace
-								? SessionManager.create(CWD, reviewTrace.sessionDir)
-								: SessionManager.inMemory(),
+							: SessionManager.inMemory(),
 						settingsManager,
 						resourceLoader: await loadResources(),
 						modelRuntime,

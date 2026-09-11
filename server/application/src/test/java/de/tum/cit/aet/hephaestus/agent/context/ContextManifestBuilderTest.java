@@ -22,8 +22,6 @@ import de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReview;
@@ -66,20 +64,16 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     private static final SourceKind REPOSITORY_TREE = new SourceKind("scm.repository.tree");
     private static final SourceKind OUTLINE = new SourceKind("outline.documents");
     private static final SourceKind PROJECT_INVENTORY = new SourceKind("workspace.project-inventory");
-    private static final Instant NOW = Instant.parse("2026-08-03T10:00:00Z");
+    private static final Instant NOW = Instant.parse("2026-09-11T10:00:00Z");
 
     @TempDir
     Path root;
 
     private final JsonMapper mapper = JsonMapper.builder().build();
-    private FabricLayout layout;
-    private ContentAddressedStore cas;
     private ContextManifestBuilder builder;
 
     @BeforeEach
     void setUp() {
-        layout = new FabricLayout(root.toString());
-        cas = new ContentAddressedStore(layout);
         builder = builderAt(NOW);
     }
 
@@ -104,7 +98,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                         Set.of(DIFF)));
 
         JsonNode visible = mapper.readTree(files.get("inputs/manifest.json"));
-        assertThat(visible.path("contractVersion").asString()).isEqualTo("1.0.0");
+        assertThat(visible.path("contractVersion").asString()).isEqualTo("1.1.0");
         assertThat(visible.toString()).doesNotContain("job-42").doesNotContain("workspaceId");
         JsonNode diffSource = findSource(visible, DIFF.value());
         assertThat(diffSource.path("state").path("availability").asString()).isEqualTo("AVAILABLE");
@@ -112,15 +106,9 @@ class ContextManifestBuilderTest extends BaseUnitTest {
         assertThat(diffSource.path("artifacts").get(0).path("sha256").asString())
                 .matches("[0-9a-f]{64}");
 
-        Path internalPath = layout.jobDir("job-42").resolve("artifact-source-manifest.json");
-        assertThat(internalPath).exists();
-        JsonNode internal = mapper.readTree(internalPath.toFile());
-        String sha = findSource(internal, DIFF.value())
-                .path("artifacts")
-                .get(0)
-                .path("sha256")
-                .asString();
-        assertThat(cas.get(sha)).contains(diff);
+        assertThat(diffSource.path("artifacts").get(0).path("sha256").asString())
+                .isEqualTo(de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest.sha256Hex(diff));
+        assertThat(root.resolve("jobs/job-42")).doesNotExist();
     }
 
     @Test
@@ -147,9 +135,9 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     @Test
     void shouldAuthorizeCaptureForTheDetectionAudience() {
         ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
-        ContextManifestBuilder target = new ContextManifestBuilder(
-                cas, layout, mapper, catalogs, new PracticeSubjectEvaluator(mapper), Clock.systemUTC());
-        SourceContractVersion version = new SourceContractVersion("1.0.0");
+        ContextManifestBuilder target =
+                new ContextManifestBuilder(mapper, catalogs, new PracticeSubjectEvaluator(mapper), Clock.systemUTC());
+        SourceContractVersion version = new SourceContractVersion("1.1.0");
 
         target.isSourceUsePermitted(version, DIFF);
 
@@ -370,7 +358,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                         Map.of(),
                         Map.of(),
                         Map.of(),
-                        Map.of(REPOSITORY_TREE, List.of(GitRepositoryManager.TREE_LIMITATION_FILE_COUNT)),
+                        Map.of(REPOSITORY_TREE, List.of(GitRepositoryManager.TREE_LIMITATION_UNSAFE_PATH)),
                         Set.of(REPOSITORY_TREE)));
 
         // The manifest must say which bound stopped the walk, not merely that something is missing.
@@ -380,7 +368,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                 .orElseThrow()
                 .state();
         assertThat(tree.completeness()).isEqualTo(SourceCompleteness.PARTIAL);
-        assertThat(tree.limitations()).containsExactly(GitRepositoryManager.TREE_LIMITATION_FILE_COUNT);
+        assertThat(tree.limitations()).containsExactly(GitRepositoryManager.TREE_LIMITATION_UNSAFE_PATH);
 
         assertThat(builder.checkAutomatedReviewReadinessAsOfNow(
                                 manifest, List.of(practiceRequiring(REPOSITORY_TREE, "reads-the-tree")))
@@ -417,7 +405,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                                 Map.of(),
                                 Map.of(),
                                 Map.of(),
-                                Map.of(REPOSITORY_TREE, List.of(GitRepositoryManager.TREE_LIMITATION_TOTAL_SIZE)),
+                                Map.of(REPOSITORY_TREE, List.of(GitRepositoryManager.TREE_LIMITATION_SUBMODULE)),
                                 Set.of(REPOSITORY_TREE))))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("reported COMPLETE while naming what it omitted");
@@ -508,23 +496,13 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldPersistEvidenceRefusalsAsTypedDecisions() {
+    void shouldReturnEvidenceRefusalsAsTypedDecisions() {
         ArtifactSourceManifest manifest = coreManifest(builder, "job-refused", NOW);
 
-        assertThat(builder.prepareAutomatedReviewReadiness(
-                                manifest,
-                                // The manifest holds the pull-request record but not its comments, so this
-                                // practice's required source is demonstrably absent.
-                                List.of(practiceRequiringComments()),
-                                "job-refused",
-                                NOW,
-                                null,
-                                Map.of())
-                        .readyPractices())
-                .isEmpty();
-        JsonNode report = mapper.readTree(layout.jobDir("job-refused")
-                .resolve("automated-review-readiness-report.json")
-                .toFile());
+        var prepared = builder.prepareAutomatedReviewReadiness(
+                manifest, List.of(practiceRequiringComments()), "job-refused", NOW, null, Map.of());
+        assertThat(prepared.readyPractices()).isEmpty();
+        JsonNode report = mapper.valueToTree(prepared.report());
         JsonNode decision = report.path("decisions").get(0);
         assertThat(decision.path("ready").asBoolean()).isFalse();
         assertThat(decision.path("sourceChecks")
@@ -629,14 +607,10 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                 files, Map.of("inputs/context/metadata.json", CORE), "job-delayed", plan(), metadata(CORE, NOW));
         Practice practice = practiceRequiring(CORE, "pr-core");
 
-        assertThat(delayedBuilder
-                        .prepareAutomatedReviewReadiness(
-                                manifest, List.of(practice), "job-delayed", NOW, null, Map.of())
-                        .readyPractices())
-                .containsExactly(practice);
-        JsonNode sourceCheck = mapper.readTree(layout.jobDir("job-delayed")
-                        .resolve("automated-review-readiness-report.json")
-                        .toFile())
+        var prepared = delayedBuilder.prepareAutomatedReviewReadiness(
+                manifest, List.of(practice), "job-delayed", NOW, null, Map.of());
+        assertThat(prepared.readyPractices()).containsExactly(practice);
+        JsonNode sourceCheck = mapper.valueToTree(prepared.report())
                 .path("decisions")
                 .get(0)
                 .path("sourceChecks")
@@ -698,8 +672,8 @@ class ContextManifestBuilderTest extends BaseUnitTest {
             SourceKind kind = invocation.getArgument(1);
             return kind.equals(DIFF) ? restrictedDiff : realCatalogs.requireSource(invocation.getArgument(0), kind);
         });
-        ContextManifestBuilder restrictedBuilder = new ContextManifestBuilder(
-                cas, layout, mapper, catalogs, new PracticeSubjectEvaluator(mapper), Clock.systemUTC());
+        ContextManifestBuilder restrictedBuilder =
+                new ContextManifestBuilder(mapper, catalogs, new PracticeSubjectEvaluator(mapper), Clock.systemUTC());
 
         // The live NOT_COLLECTED path: governance refused the source, and this contract says the diff may
         // never be reported that way.
@@ -820,13 +794,11 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     }
 
     private static EvidencePlan plan() {
-        return new EvidencePlan(new SourceContractVersion("1.0.0"), ArtifactKinds.PULL_REQUEST);
+        return new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.PULL_REQUEST);
     }
 
     private ContextManifestBuilder builderAt(Instant instant) {
         return new ContextManifestBuilder(
-                cas,
-                layout,
                 mapper,
                 new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
                 new PracticeSubjectEvaluator(mapper),
@@ -841,7 +813,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     }
 
     private static EvidencePlan conversationPlan() {
-        return new EvidencePlan(new SourceContractVersion("1.0.0"), ArtifactKinds.CONVERSATION_THREAD);
+        return new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.CONVERSATION_THREAD);
     }
 
     private static ContextManifestBuilder.CaptureMetadata metadata(SourceKind kind, Instant observedAt) {
@@ -994,7 +966,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                         conversation ? ArtifactKinds.CONVERSATION_THREAD : ArtifactKinds.PULL_REQUEST),
                 List.of(new PracticeEvidenceRequirement(sourceKind, stance)))));
         practice.setAutomatedReviewPolicy(new PracticeAutomatedReviewPolicy(
-                new SourceContractVersion("1.0.0"),
+                new SourceContractVersion("1.1.0"),
                 new PracticeAutomatedReview(
                         PracticeAutomatedReviewMode.LANGUAGE_MODEL,
                         PracticeEvidenceSufficiency.SUFFICIENT_WHEN_REQUIREMENTS_MET),

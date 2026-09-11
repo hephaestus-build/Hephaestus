@@ -96,6 +96,12 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         transactionTemplate = mock(TransactionTemplate.class);
+        org.mockito.Mockito.lenient()
+                .when(transactionTemplate.execute(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> invocation
+                        .<org.springframework.transaction.support.TransactionCallback<?>>getArgument(0)
+                        .doInTransaction(new org.springframework.transaction.support.SimpleTransactionStatus()));
+
         // Lenient: not all tests trigger transactional execution (e.g., getEventType, nonPushSubject)
         lenient()
                 .doAnswer(invocation -> {
@@ -172,6 +178,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
         Repository repo = new Repository();
         repo.setId(246765L);
         when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
+        when(repositoryRepository.findByIdWithOrganization(repo.getId())).thenReturn(Optional.of(repo));
 
         // Org lookup — simulate existing org in DB
         Organization org = new Organization();
@@ -252,6 +259,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
         repo.setId(42L);
         repo.setNameWithOwner("org/proj");
         when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
+        when(repositoryRepository.findByIdWithOrganization(repo.getId())).thenReturn(Optional.of(repo));
         when(scopeIdResolver.findScopeIdByRepositoryName("org/proj")).thenReturn(Optional.of(7L));
 
         var pushEvent = new GitLabPushEventDTO(
@@ -299,6 +307,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
 
             var projectInfo = createProjectInfo(1L, "org/proj");
             when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
+            when(repositoryRepository.findByIdWithOrganization(repo.getId())).thenReturn(Optional.of(repo));
 
             Message msg = mockMessage("gitlab.org.proj.push", createPushEvent(projectInfo));
             handler.onMessage(msg);
@@ -314,6 +323,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
 
             var projectInfo = createProjectInfo(1L, "org/proj");
             when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
+            when(repositoryRepository.findByIdWithOrganization(repo.getId())).thenReturn(Optional.of(repo));
 
             Organization org = new Organization();
             org.setId(42L);
@@ -334,6 +344,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
 
             var projectInfo = createProjectInfo(1L, "org/proj");
             when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
+            when(repositoryRepository.findByIdWithOrganization(repo.getId())).thenReturn(Optional.of(repo));
             when(organizationRepository.findByLoginIgnoreCaseAndProviderId("org", PROVIDER_ID))
                     .thenReturn(Optional.empty());
 
@@ -353,6 +364,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
             // Project in nested group: org/team/subteam/project
             var projectInfo = createProjectInfo(1L, "org/team/subteam/project");
             when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
+            when(repositoryRepository.findByIdWithOrganization(repo.getId())).thenReturn(Optional.of(repo));
 
             Organization org = new Organization();
             org.setId(42L);
@@ -374,6 +386,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
             // User-owned project has no slash in path
             var projectInfo = createProjectInfo(1L, "myproject");
             when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
+            when(repositoryRepository.findByIdWithOrganization(repo.getId())).thenReturn(Optional.of(repo));
 
             Message msg = mockMessage("gitlab.myproject.push", createPushEvent(projectInfo));
             handler.onMessage(msg);

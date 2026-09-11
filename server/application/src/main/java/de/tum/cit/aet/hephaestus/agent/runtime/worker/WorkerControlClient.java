@@ -6,6 +6,10 @@ import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.CapacityReport;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.ForceReconnect;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameCodec;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameEnvelope;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitAck;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitCancel;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOperation;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOutput;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.Heartbeat;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerControlFrame;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerHello;
@@ -135,6 +139,8 @@ public class WorkerControlClient {
             // best-effort
         }
         connected.set(false);
+        outbound.removeIf(envelope -> envelope.payload() instanceof GitOutput);
+        gitDisconnect.run();
         interrupt(outboundThread);
         interrupt(inboundThread);
         interrupt(connectionThread);
@@ -146,6 +152,23 @@ public class WorkerControlClient {
             sendDropped.increment();
             log.warn("Outbound queue full; dropping frame {}", frame.getClass().getSimpleName());
         }
+    }
+
+    private volatile String controlSessionId = "";
+    private volatile java.util.function.Consumer<WorkerControlFrame> gitHandler = frame -> {};
+    private volatile Runnable gitDisconnect = () -> {};
+
+    public void setGitHandler(java.util.function.Consumer<WorkerControlFrame> handler, Runnable disconnect) {
+        this.gitHandler = handler;
+        this.gitDisconnect = disconnect;
+    }
+
+    public String controlSessionId() {
+        return controlSessionId;
+    }
+
+    public boolean sendRequired(WorkerControlFrame frame) {
+        return connected.get() && outbound.offer(FrameEnvelope.of(frame));
     }
 
     public boolean isConnected() {
@@ -216,6 +239,7 @@ public class WorkerControlClient {
                         forceReconnect("protocol-version-mismatch");
                         return;
                     }
+                    controlSessionId = welcome.sessionId();
                     connected.set(true);
                     CountDownLatch latch = welcomeLatch.get();
                     if (latch != null) latch.countDown();
@@ -225,6 +249,10 @@ public class WorkerControlClient {
                     log.info("Hub requested reconnect: {}", r.reason());
                     forceReconnect("server-requested:" + r.reason());
                 }
+                case GitOperation operation -> gitHandler.accept(operation);
+                case GitAck ack -> gitHandler.accept(ack);
+                case GitCancel cancel -> gitHandler.accept(cancel);
+                case GitOutput output -> warnSourceMismatch(output);
                 case CancelJob c -> handleCancelJob(c);
                 // Empty on purpose. Arrival is the whole signal — see Heartbeat — and the transport
                 // stamped lastInboundAt before dispatch, so there is nothing left to do here.
@@ -390,6 +418,8 @@ public class WorkerControlClient {
     private void forceReconnect(String reason) {
         WebSocket ws = webSocket.getAndSet(null);
         connected.set(false);
+        outbound.removeIf(envelope -> envelope.payload() instanceof GitOutput);
+        gitDisconnect.run();
         if (ws != null) {
             try {
                 ws.sendClose(WebSocket.NORMAL_CLOSURE, reason);
@@ -454,6 +484,8 @@ public class WorkerControlClient {
         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
             log.info("Worker control channel closed: code={}, reason={}", statusCode, reason);
             connected.set(false);
+            outbound.removeIf(envelope -> envelope.payload() instanceof GitOutput);
+            gitDisconnect.run();
             return CompletableFuture.completedFuture(null);
         }
 
@@ -461,6 +493,8 @@ public class WorkerControlClient {
         public void onError(WebSocket webSocket, Throwable error) {
             log.warn("Worker control channel error: {}", error.getClass().getSimpleName());
             connected.set(false);
+            outbound.removeIf(envelope -> envelope.payload() instanceof GitOutput);
+            gitDisconnect.run();
         }
     }
 }

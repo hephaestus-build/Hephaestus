@@ -161,7 +161,7 @@ public final class SandboxLayout {
     public static final String RUNTIME_CONTRACT_LABEL = "hephaestus.agent.runtime-contract";
 
     /** Runtime contract required by the staged runners. */
-    public static final int RUNTIME_CONTRACT_VERSION = 2;
+    public static final int RUNTIME_CONTRACT_VERSION = 3;
 
     /** Node major required by the staged runners. */
     public static final int NODE_MAJOR = 24;

@@ -685,7 +685,7 @@ public class GitlabDataSyncScheduler {
                 }
             }
 
-            // Commits — prefer JGit backfill (provides diff stats + file changes);
+            // Commits — prefer native Git backfill (provides diff stats + file changes);
             // fall back to REST API when git is not enabled
             if (commitBackfill != null) {
                 try {

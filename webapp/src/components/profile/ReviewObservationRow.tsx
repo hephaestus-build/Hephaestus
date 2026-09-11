@@ -202,7 +202,7 @@ export function ReviewObservationRow({
 										<p className="text-xs font-medium text-muted-foreground">Evidence</p>
 										{evidenceLocations.map((location, index) => (
 											<EvidenceFileBlock
-												key={`${location.path}-${location.startLine}`}
+												key={`${location.path}-${location.revision ?? ""}-${location.startLine}`}
 												location={location}
 												detector={detail?.evidence?.detector}
 												defaultOpen={index === 0}

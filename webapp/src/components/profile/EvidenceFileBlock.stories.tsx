@@ -155,3 +155,17 @@ export const QuotedFromBeforeTheChange: Story = {
 		},
 	},
 };
+
+export const HistoricalSource: Story = {
+	args: {
+		location: {
+			path: "src/service.ts",
+			startLine: 12,
+			endLine: 12,
+			sourceKind: "scm.repository.tree",
+			revision: "b".repeat(40),
+			snippet: "return previousValue;",
+			redacted: false,
+		},
+	},
+};

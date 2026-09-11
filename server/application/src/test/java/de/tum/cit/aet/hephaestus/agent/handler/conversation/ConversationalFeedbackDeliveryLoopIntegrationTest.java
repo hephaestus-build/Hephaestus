@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.handler.conversation;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.handler.AdmittedObservationFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
@@ -276,7 +277,7 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
         job.setWorkspace(workspace);
         job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         job.setConfigSnapshot(OM.valueToTree(Map.of("model", "test")));
-        job.setEvidenceSnapshot(OM.readTree("{\"manifest\":{\"contractVersion\":\"1.0.0\"}}"));
+        job.setEvidenceSnapshot(OM.readTree("{\"manifest\":{\"contractVersion\":\"1.1.0\"}}"));
         return agentJobRepository.save(job);
     }
 
@@ -296,7 +297,13 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
                 "ABSENT",
                 "BAD",
                 "MAJOR",
-                "{\"citations\":[{\"sourceKind\":\"scm.pull-request.core\",\"artifactPath\":\"inputs/context/metadata.json\",\"path\":\"metadata.json\",\"startLine\":1,\"endLine\":1,\"quote\":\"example\",\"quoteRedacted\":false}]}",
+                AdmittedObservationFixtures.evidence(
+                                job.getId(),
+                                "scm.pull-request.core",
+                                "inputs/context/metadata.json",
+                                "metadata.json",
+                                "example")
+                        .toString(),
                 null,
                 null,
                 Instant.now(),

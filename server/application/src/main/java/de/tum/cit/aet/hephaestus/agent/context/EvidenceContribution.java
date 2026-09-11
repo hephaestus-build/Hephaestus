@@ -41,7 +41,33 @@ public record EvidenceContribution(
          * only the collector knows the difference between a tree with nothing more in it and a tree whose
          * walk it stopped.
          */
-        Map<SourceKind, List<String>> captureLimitations) {
+        Map<SourceKind, List<String>> captureLimitations,
+        List<EvidenceDirectory> directories) {
+    public EvidenceContribution(
+            Map<String, byte[]> files,
+            Map<SourceKind, SourceCompleteness> completeness,
+            Map<SourceKind, String> immutableIdentities,
+            Map<SourceKind, Instant> observedAt,
+            Map<SourceKind, Instant> sourceEffectiveAt,
+            Map<SourceKind, SourceContentState> contentStates,
+            Map<SourceKind, SourceCaptureState> stateOverrides,
+            Map<String, java.nio.file.Path> filesOnDisk,
+            @org.jspecify.annotations.Nullable AutoCloseable cleanup,
+            Map<SourceKind, List<String>> captureLimitations) {
+        this(
+                files,
+                completeness,
+                immutableIdentities,
+                observedAt,
+                sourceEffectiveAt,
+                contentStates,
+                stateOverrides,
+                filesOnDisk,
+                cleanup,
+                captureLimitations,
+                List.of());
+    }
+
     public EvidenceContribution(
             Map<String, byte[]> files,
             Map<SourceKind, SourceCompleteness> completeness,
@@ -131,6 +157,7 @@ public record EvidenceContribution(
     }
 
     public EvidenceContribution {
+        directories = List.copyOf(directories);
         files = Map.copyOf(Objects.requireNonNull(files, "files"));
         completeness = Map.copyOf(Objects.requireNonNull(completeness, "completeness"));
         immutableIdentities = Map.copyOf(Objects.requireNonNull(immutableIdentities, "immutableIdentities"));

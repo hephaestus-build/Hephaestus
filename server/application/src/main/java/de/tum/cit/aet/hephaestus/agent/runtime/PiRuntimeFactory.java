@@ -80,7 +80,7 @@ public class PiRuntimeFactory {
         env.put("AGENT_BUDGET_MS", Long.toString(agentTimeoutMs));
 
         env.put("HOME", "/home/agent");
-        env.put("XDG_CONFIG_HOME", "/home/agent/.config");
+        env.put("XDG_CONFIG_HOME", "/home/agent/.local/config");
         env.put("TMPDIR", PiRunnerProfile.AGENT_TMPDIR);
         env.put("PI_CODING_AGENT_DIR", SandboxLayout.PI_AGENT_DIR);
 
@@ -96,13 +96,7 @@ public class PiRuntimeFactory {
         }
         // Every directory the runner may write exists before Node starts; PiRunnerProfile says why.
         String command = "mkdir -p " + String.join(" ", PiRunnerProfile.WRITABLE_DIRECTORIES)
-                + " /home/agent/.config && "
-                +
-                // The runner imports the Pi SDK by bare specifier, which resolves from <workspace>/node_modules,
-                // so the SDK the image exposes at /opt/pi-sdk must be symlinked into place.
-                "ln -sf /opt/pi-sdk/node_modules "
-                + workspaceRoot
-                + "/node_modules && "
+                + " /home/agent/.local/config && "
                 + precomputeStep
                 + runtimeEnvFragment
                 + "node "

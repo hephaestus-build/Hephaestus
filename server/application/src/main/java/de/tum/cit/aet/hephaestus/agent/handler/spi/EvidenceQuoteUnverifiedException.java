@@ -16,7 +16,14 @@ public class EvidenceQuoteUnverifiedException extends JobDeliveryException {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    public EvidenceQuoteUnverifiedException(String message) {
+    private final int citationIndex;
+
+    public EvidenceQuoteUnverifiedException(String message, int citationIndex) {
         super(message);
+        this.citationIndex = citationIndex;
+    }
+
+    public int citationIndex() {
+        return citationIndex;
     }
 }

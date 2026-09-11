@@ -42,6 +42,9 @@ class SandboxReconcilerTest extends BaseUnitTest {
     /** Older than the grace window, so a fixture is reapable unless it opts out. */
     private static final Instant LONG_AGO = NOW.minus(Duration.ofDays(1));
 
+    @Mock
+    private DockerVolumeOperations volumes;
+
     private SandboxReconciler reconciler;
     private SimpleMeterRegistry meterRegistry;
 
@@ -50,7 +53,54 @@ class SandboxReconcilerTest extends BaseUnitTest {
         lenient().when(networkManager.networkPrefix()).thenReturn("hephaestus-sandbox-default--");
         meterRegistry = new SimpleMeterRegistry();
         reconciler = new SandboxReconciler(
-                jobRepository, containerManager, networkManager, meterRegistry, Clock.fixed(NOW, ZoneOffset.UTC));
+                jobRepository,
+                containerManager,
+                networkManager,
+                new SandboxVolumeManager(
+                        volumes,
+                        new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "default")),
+                meterRegistry,
+                Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
+    @Test
+    void shouldRemoveOnlyAbandonedAttemptVolumesAfterTheCreationGrace() {
+        UUID active = UUID.randomUUID();
+        UUID orphan = UUID.randomUUID();
+        UUID starting = UUID.randomUUID();
+        var job = new AgentJob();
+        job.setId(active);
+        when(jobRepository.findByStatusIn(any())).thenReturn(List.of(job));
+        when(containerManager.listManagedContainers()).thenReturn(List.of());
+        when(volumes.listVolumes(any()))
+                .thenReturn(List.of(
+                        new DockerOperations.VolumeInfo(
+                                "active",
+                                Map.of(
+                                        SandboxLabels.JOB_ID,
+                                        active.toString(),
+                                        SandboxLabels.CREATED_AT,
+                                        LONG_AGO.toString())),
+                        new DockerOperations.VolumeInfo(
+                                "orphan",
+                                Map.of(
+                                        SandboxLabels.JOB_ID,
+                                        orphan.toString(),
+                                        SandboxLabels.CREATED_AT,
+                                        LONG_AGO.toString())),
+                        new DockerOperations.VolumeInfo(
+                                "starting",
+                                Map.of(
+                                        SandboxLabels.JOB_ID,
+                                        starting.toString(),
+                                        SandboxLabels.CREATED_AT,
+                                        NOW.toString()))));
+
+        reconciler.onStartup();
+
+        verify(volumes).removeVolume("orphan");
+        verify(volumes, never()).removeVolume("active");
+        verify(volumes, never()).removeVolume("starting");
     }
 
     private static DockerOperations.ContainerInfo container(String id, UUID jobId, @Nullable Instant createdAt) {

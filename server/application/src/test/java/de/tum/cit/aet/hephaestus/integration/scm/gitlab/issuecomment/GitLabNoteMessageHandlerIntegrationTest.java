@@ -373,6 +373,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
         pr.setCommits(0);
         pr.setHeadRefName("feature/oauth");
         pr.setBaseRefName("main");
+        pr.setBaseRefOid("a".repeat(40));
         pr.setCreatedAt(Instant.now());
         pr.setUpdatedAt(Instant.now());
         pr.setRepository(savedRepo);

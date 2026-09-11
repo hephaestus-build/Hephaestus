@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -38,16 +39,27 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
 
     boolean existsByShaAndRepositoryId(String sha, Long repositoryId);
 
-    long countByRepositoryId(Long repositoryId);
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM CommitFileChange f WHERE f.commit.repository.id = :repositoryId AND f.commit.sha = :sha")
+    void deleteFileChanges(@Param("repositoryId") Long repositoryId, @Param("sha") String sha);
 
-    /** Most recent commit for a repository by authored date. */
-    @Query("""
-        SELECT c FROM Commit c
-        WHERE c.repository.id = :repositoryId
-        ORDER BY c.authoredAt DESC
-        LIMIT 1
-        """)
-    Optional<Commit> findLatestByRepositoryId(@Param("repositoryId") Long repositoryId);
+    boolean existsByShaAndRepositoryIdAndGitDetailsCapturedAtIsNotNull(String sha, Long repositoryId);
+
+    @Modifying(flushAutomatically = true)
+    @Transactional
+    @Query(
+            "UPDATE Commit c SET c.gitDetailsCapturedAt = :capturedAt WHERE c.repository.id = :repositoryId AND c.sha = :sha")
+    void markGitDetailsCaptured(
+            @Param("repositoryId") Long repositoryId,
+            @Param("sha") String sha,
+            @Param("capturedAt") Instant capturedAt);
+
+    @Query(
+            "SELECT c.sha FROM Commit c WHERE c.repository.id = :repositoryId AND c.sha IN :shas AND c.gitDetailsCapturedAt IS NOT NULL")
+    Set<String> findGitDetailsCapturedShas(@Param("repositoryId") Long repositoryId, @Param("shas") List<String> shas);
+
+    long countByRepositoryId(Long repositoryId);
 
     void deleteByRepositoryId(Long repositoryId);
 
@@ -172,9 +184,12 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
             html_url = COALESCE(EXCLUDED.html_url, git_commit.html_url),
             authored_at = EXCLUDED.authored_at,
             committed_at = EXCLUDED.committed_at,
-            additions = COALESCE(EXCLUDED.additions, git_commit.additions),
-            deletions = COALESCE(EXCLUDED.deletions, git_commit.deletions),
-            changed_files = COALESCE(EXCLUDED.changed_files, git_commit.changed_files),
+            additions = CASE WHEN git_commit.git_details_captured_at IS NOT NULL THEN git_commit.additions
+                ELSE COALESCE(EXCLUDED.additions, git_commit.additions) END,
+            deletions = CASE WHEN git_commit.git_details_captured_at IS NOT NULL THEN git_commit.deletions
+                ELSE COALESCE(EXCLUDED.deletions, git_commit.deletions) END,
+            changed_files = CASE WHEN git_commit.git_details_captured_at IS NOT NULL THEN git_commit.changed_files
+                ELSE COALESCE(EXCLUDED.changed_files, git_commit.changed_files) END,
             last_sync_at = EXCLUDED.last_sync_at,
             updated_at = NOW(),
             author_id = COALESCE(EXCLUDED.author_id, git_commit.author_id),

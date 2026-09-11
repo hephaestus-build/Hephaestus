@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.commit;
 
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -131,24 +130,6 @@ public class CommitFileChange {
             case "copied" -> ChangeType.COPIED;
             case "changed" -> ChangeType.CHANGED;
             default -> ChangeType.UNKNOWN;
-        };
-    }
-
-    /**
-     * Convert from GitRepositoryManager.ChangeType to entity ChangeType.
-     */
-    public static ChangeType fromGitChangeType(GitRepositoryManager.ChangeType gitType) {
-        if (gitType == null) {
-            return ChangeType.UNKNOWN;
-        }
-        return switch (gitType) {
-            case ADDED -> ChangeType.ADDED;
-            case MODIFIED -> ChangeType.MODIFIED;
-            case REMOVED -> ChangeType.REMOVED;
-            case RENAMED -> ChangeType.RENAMED;
-            case COPIED -> ChangeType.COPIED;
-            case CHANGED -> ChangeType.CHANGED;
-            case UNKNOWN -> ChangeType.UNKNOWN;
         };
     }
 }

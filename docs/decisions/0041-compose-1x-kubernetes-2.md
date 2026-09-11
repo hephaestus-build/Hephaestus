@@ -145,8 +145,14 @@ per-job byte budget. Optional, permitted areas or repositories may use subsequen
 responses through the same endpoint and authorization check; every response counts toward that
 cumulative budget. This is one workspace-download capability, not a second transport or an
 unbounded sequence. Version 1.0 has no tool catalogue, MCP data plane, context-as-Git repository, or
-mounted context volume. Hints and provenance are never verdicts, and mentor conversation is not
+mount of worker or host context storage. Hints and provenance are never verdicts, and mentor conversation is not
 practice evidence.
+
+Downloaded inputs may use an attempt-local ephemeral volume prepared by a separate, trusted non-root
+initializer. The runtime mounts those inputs read-only, with separate writable scratch and output
+regions. This volume is local storage for the tar transport, not a second data plane: it never mounts
+the worker's repository cache or job folder, and is removed with the attempt. The same boundary uses
+managed Docker volumes in Compose and `emptyDir` with a non-root init container in Kubernetes.
 
 ### Sandbox Gateway and protocol v3
 

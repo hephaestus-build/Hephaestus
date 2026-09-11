@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
@@ -23,13 +24,11 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
-import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.Task;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -39,7 +38,6 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -47,8 +45,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeSet;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
@@ -65,7 +61,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     private static final Logger log = LoggerFactory.getLogger(PullRequestReviewHandler.class);
 
     private final JsonMapper objectMapper;
-    private final ContentAddressedStore cas;
+    private final JobEvidenceFiles evidenceFiles;
     private final PracticeCatalogInjector practiceCatalogInjector;
     private final WorkspaceContextBuilder workspaceContextBuilder;
     private final TaskEnvelopeWriter taskEnvelopeWriter;
@@ -80,7 +76,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
 
     PullRequestReviewHandler(
             JsonMapper objectMapper,
-            ContentAddressedStore cas,
+            JobEvidenceFiles evidenceFiles,
             PracticeCatalogInjector practiceCatalogInjector,
             WorkspaceContextBuilder workspaceContextBuilder,
             TaskEnvelopeWriter taskEnvelopeWriter,
@@ -93,7 +89,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             InContextDeliveryGate inContextDeliveryGate,
             ObservationRepository observationRepository) {
         this.objectMapper = objectMapper;
-        this.cas = cas;
+        this.evidenceFiles = evidenceFiles;
         this.practiceCatalogInjector = practiceCatalogInjector;
         this.workspaceContextBuilder = workspaceContextBuilder;
         this.taskEnvelopeWriter = taskEnvelopeWriter;
@@ -131,10 +127,11 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         metadata.put("pr_number", pullRequestData.number());
         metadata.put("pr_url", pullRequestData.htmlUrl());
         metadata.put("commit_sha", submissionRequest.headRefOid());
+        if (submissionRequest.baseRefOid() != null) {
+            metadata.put("base_ref_oid", submissionRequest.baseRefOid());
+        }
         metadata.put("source_branch", submissionRequest.headRefName());
         metadata.put("target_branch", submissionRequest.baseRefName());
-        // The sole inputs for the communication/process practices (describe-what-and-why,
-        // commit-subjects-explain-each-change) — their precompute scripts read metadata.title / .body.
         metadata.put("title", pullRequestData.title());
         metadata.put("body", pullRequestData.body());
         // When present, the catalog injector materialises ONLY the practices bound to this signal, so an
@@ -210,6 +207,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                     new PreparedJobInputs(
                             prepared.files(),
                             prepared.filesOnDisk(),
+                            prepared.directories(),
                             prepared.cleanups(),
                             artifactSourceManifest,
                             readiness.report()));
@@ -233,7 +231,12 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 repositoryId,
                 pullRequestId);
         return new PreparedJobInputs(
-                files, prepared.filesOnDisk(), prepared.cleanups(), artifactSourceManifest, readiness.report());
+                files,
+                prepared.filesOnDisk(),
+                prepared.directories(),
+                prepared.cleanups(),
+                artifactSourceManifest,
+                readiness.report());
     }
 
     private TaskEnvelope buildTaskEnvelope(AgentJob job, JsonNode metadata) {
@@ -269,7 +272,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     @Override
     public void deliver(AgentJob job) {
         if (ObservationAdmissionService.observationsWereRefused(job)) return;
-        if (feedbackService.recoverAutomaticPackageIfPresent(job)) return;
         ObservationAdmissionService.requireMatchingCompositionDigest(job);
         deliverAdmitted(job);
     }
@@ -279,10 +281,13 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 observationRepository
                         .findByAgentJobId(job.getId(), job.getWorkspace().getId())
                         .stream()
-                        .map(this::validated)
+                        .map(observation -> {
+                            CitationVerification.requireVerified(job, observation.getEvidence());
+                            return validated(observation);
+                        })
                         .toList();
         if (scopedObservations.isEmpty()) throw new JobDeliveryException("Admitted observation set is empty");
-        String unifiedDiff = capturedDiff(job);
+        if (feedbackService.recoverAutomaticPackageIfPresent(job)) return;
         List<PracticeDetectionResultParser.ValidatedObservation> eligible = feedbackResponseSuppressionFilter
                 .evaluate(job, scopedObservations)
                 .deliverable();
@@ -312,11 +317,11 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                     .toList();
             feedbackService.recordProposal(
                     job,
-                    DeliveryComposer.compose(reviewPackage, ArtifactKinds.PULL_REQUEST, why, unifiedDiff, units, lead),
+                    DeliveryComposer.composeAdmitted(reviewPackage, ArtifactKinds.PULL_REQUEST, why, units, lead),
                     reviewPackage);
             return;
         }
-        var content = DeliveryComposer.compose(deliverable, ArtifactKinds.PULL_REQUEST, why, unifiedDiff, units, lead);
+        var content = DeliveryComposer.composeAdmitted(deliverable, ArtifactKinds.PULL_REQUEST, why, units, lead);
         Set<String> contributingPracticeSlugs = deliverable.stream()
                 .map(PracticeDetectionResultParser.ValidatedObservation::practiceSlug)
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
@@ -336,14 +341,20 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     }
 
     public void admitObservations(AgentJob job, JsonNode observations) {
+        deliveryService.publish(job, prepareObservations(job, observations));
+    }
+
+    public PracticeDetectionDeliveryService.PreparedObservations prepareObservations(
+            AgentJob job, JsonNode observations) {
         ObjectNode output = objectMapper.createObjectNode();
         ObjectNode raw = objectMapper.createObjectNode();
         raw.set("observations", observations);
         output.put("rawOutput", raw.toString());
-        processObservations(job, output, true);
+        return prepareParsedObservations(job, output);
     }
 
-    private void processObservations(AgentJob job, JsonNode output, boolean admissionOnly) {
+    private PracticeDetectionDeliveryService.PreparedObservations prepareParsedObservations(
+            AgentJob job, JsonNode output) {
         var parsed = resultParser.parse(output);
         if (!parsed.discarded().isEmpty()) {
             log.info(
@@ -360,13 +371,11 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                             + parsed.discarded().size());
         }
 
-        String unifiedDiff = capturedDiff(job);
-        Set<String> diffFiles =
-                Set.copyOf(DiffHunkValidator.parseValidLines(unifiedDiff).keySet());
+        Set<String> diffFiles = capturedDiffPaths(job);
         Set<String> defectDetectorSlugs = practiceCatalogInjector.defectDetectorSlugs(job);
         List<PracticeDetectionResultParser.ValidatedObservation> secretObservations =
                 practiceCatalogInjector.isAdmitted(job, "avoids-insecure-defaults-and-over-broad-permissions")
-                        ? scanForSecrets(unifiedDiff)
+                        ? scanForSecrets(job)
                         : List.of();
 
         // What is left to catch is a review that answered without reading the change. The file count
@@ -446,56 +455,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         scopedObservations =
                 new ArrayList<>(PracticeDetectionResultParser.coerceCoherence(scopedObservations, defectDetectorSlugs));
 
-        PracticeDetectionDeliveryService.DeliveryResult result;
-        try {
-            result = deliveryService.deliver(job, scopedObservations);
-            log.info(
-                    "Delivery complete: inserted={}, duplicate={}, jobId={}",
-                    result.inserted(),
-                    result.discardedDuplicate(),
-                    job.getId());
-        } catch (JobDeliveryException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new JobDeliveryException("Delivery failed unexpectedly: jobId=" + job.getId(), e);
-        }
-
-        // What deliver() persisted, carrying the keys it stored them under, so a later stage addresses the
-        // stored observation rather than recomputing a key that could drift.
-        scopedObservations = new ArrayList<>(result.delivered());
-
-        if (admissionOnly) return;
-
-        List<PracticeDetectionResultParser.ValidatedObservation> admittedInContext =
-                inContextDeliveryGate.admitInContext(job, scopedObservations);
-        if (admittedInContext.isEmpty() && !scopedObservations.isEmpty()) {
-            log.info("All {} observations withheld by autonomy: jobId={}", scopedObservations.size(), job.getId());
-            return;
-        }
-
-        FeedbackResponseSuppressionFilter.SuppressionDecision suppression =
-                feedbackResponseSuppressionFilter.evaluate(job, admittedInContext);
-        List<PracticeDetectionResultParser.ValidatedObservation> deliverable = suppression.deliverable();
-        if (deliverable.isEmpty() && !scopedObservations.isEmpty()) {
-            log.info(
-                    "All {} observations suppressed by prior reactions: jobId={}",
-                    scopedObservations.size(),
-                    job.getId());
-            return;
-        }
-
-        // The NOT_APPLICABLE guard above only fires when EVERY observation is NA. A weak model that instead
-        // reads a stale/empty diff as "all clean" (only ABSENT/GOOD, no BAD) slips past it and composes an
-        // all-clear over an artifact that was effectively never diffed. Not thrown — a genuinely clean PR
-        // is legitimate strengths-only — but surfaced so the case is observable rather than silent.
-        boolean hasGap = deliverable.stream().anyMatch(f -> f.assessment() == Assessment.BAD);
-        if (!hasGap && diffFiles.isEmpty()) {
-            log.warn(
-                    "Composing a strengths-only delivery over an EMPTY diff ({} observation(s), no BAD): the diff may "
-                            + "be stale/unavailable, so this all-clear is not grounded in changed code. jobId={}",
-                    deliverable.size(),
-                    job.getId());
-        }
+        return deliveryService.prepare(job, scopedObservations);
     }
 
     @Override
@@ -508,8 +468,8 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         return true;
     }
 
-    private List<PracticeDetectionResultParser.ValidatedObservation> scanForSecrets(@Nullable String diff) {
-        List<SecretDiffScanner.SecretHit> hits = secretDiffScanner.scan(diff);
+    private List<PracticeDetectionResultParser.ValidatedObservation> scanForSecrets(AgentJob job) {
+        List<SecretDiffScanner.SecretHit> hits = secretDiffScanner.scan(job);
         if (hits.isEmpty()) return List.of();
 
         List<PracticeDetectionResultParser.ValidatedObservation> out = new ArrayList<>();
@@ -533,7 +493,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         citation.put("side", "NEW");
         citation.put("startLine", hit.newLine());
         citation.put("endLine", hit.newLine());
-        citation.put("quoteSha256", ProvenanceDigest.sha256Hex(hit.addedLine().getBytes(StandardCharsets.UTF_8)));
+        citation.put("quoteSha256", hit.lineHash());
         citation.put("quoteRedacted", true);
 
         boolean lowSignal = secretDiffScanner.isLowSignalPath(hit.path());
@@ -558,7 +518,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 reasoning);
     }
 
-    private @Nullable String capturedDiff(AgentJob job) {
+    private Set<String> capturedDiffPaths(AgentJob job) {
         JsonNode sources = job.getEvidenceSnapshot() == null
                 ? null
                 : job.getEvidenceSnapshot().path("manifest").path("sources");
@@ -572,22 +532,37 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 continue;
             }
             for (JsonNode artifact : source.path("artifacts")) {
-                if ((ContentSource.OUTPUT_PREFIX + "diff.patch")
+                if ((ContentSource.OUTPUT_PREFIX + "diff_paths.nul")
                         .equals(artifact.path("path").asString())) {
                     String sha = artifact.path("sha256").asString();
-                    byte[] bytes = cas.get(sha)
-                            .orElseThrow(() -> new JobDeliveryException(
-                                    "Captured diff is no longer available: jobId=" + job.getId()));
-                    return new String(bytes, StandardCharsets.UTF_8);
+                    return evidenceFiles
+                            .inspect(job, artifact.path("path").asString(), sha, reader -> {
+                                Set<String> paths = new HashSet<>();
+                                StringBuilder path = new StringBuilder();
+                                int value;
+                                while ((value = reader.read()) != -1) {
+                                    if (value == 0) {
+                                        if (path.isEmpty())
+                                            throw new JobDeliveryException("Captured diff contains an empty path");
+                                        paths.add(path.toString());
+                                        path.setLength(0);
+                                    } else {
+                                        if (path.length() >= 32_768)
+                                            throw new JobDeliveryException(
+                                                    "Captured diff path exceeds the filesystem path resource bound");
+                                        path.append((char) value);
+                                    }
+                                }
+                                if (!path.isEmpty())
+                                    throw new JobDeliveryException("Captured diff path is not NUL terminated");
+                                return Set.copyOf(paths);
+                            })
+                            .orElseThrow(() -> new JobDeliveryException("Captured diff is no longer available"));
                 }
             }
             throw new JobDeliveryException("Captured diff source has no diff artifact: jobId=" + job.getId());
         }
-        return null;
-    }
-
-    Map<String, TreeSet<Integer>> validDiffLines(AgentJob job) {
-        return DiffHunkValidator.parseValidLines(capturedDiff(job));
+        return Set.of();
     }
 
     /**

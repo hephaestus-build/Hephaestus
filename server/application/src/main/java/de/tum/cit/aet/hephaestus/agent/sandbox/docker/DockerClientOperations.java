@@ -11,11 +11,12 @@ import com.github.dockerjava.api.model.Capability;
 import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.model.Frame;
 import com.github.dockerjava.api.model.HostConfig;
+import com.github.dockerjava.api.model.Mount;
+import com.github.dockerjava.api.model.MountType;
 import com.github.dockerjava.api.model.Network;
 import com.github.dockerjava.api.model.Ulimit;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -33,7 +34,7 @@ import org.slf4j.LoggerFactory;
  * DockerClient}, translating {@link DockerException} to {@link SandboxException}.
  */
 public class DockerClientOperations
-        implements DockerContainerOperations, DockerNetworkOperations, DockerFileOperations, DockerImageOperations {
+        implements DockerContainerOperations, DockerNetworkOperations, DockerImageOperations, DockerVolumeOperations {
 
     private static final Logger log = LoggerFactory.getLogger(DockerClientOperations.class);
     private static final int LOG_COLLECTION_TIMEOUT_SECONDS = 30;
@@ -54,6 +55,16 @@ public class DockerClientOperations
 
     /** `docker wait` is silent until the container exits, so it needs a socket timeout no RPC call wants. */
     private final DockerClient streamingClient;
+
+    /** The request/response client, for commands the typed operations above do not cover. */
+    public DockerClient client() {
+        return dockerClient;
+    }
+
+    /** The client with no response timeout, for attached streams that outlive one request. */
+    public DockerClient streamingClient() {
+        return streamingClient;
+    }
 
     public DockerClientOperations(DockerClient dockerClient, DockerClient streamingClient) {
         this.dockerClient = dockerClient;
@@ -136,6 +147,9 @@ public class DockerClientOperations
                     .withName(name)
                     .withDriver("bridge")
                     .withInternal(internal)
+                    // Internal bridges otherwise expose host services through their gateway address.
+                    .withOptions(
+                            internal ? Map.of("com.docker.network.bridge.gateway_mode_ipv4", "isolated") : Map.of())
                     .withCheckDuplicate(true)
                     .exec();
             log.debug("Created Docker network: name={}, id={}, internal={}", name, response.getId(), internal);
@@ -337,51 +351,6 @@ public class DockerClientOperations
     }
 
     @Override
-    public void copyHostDirectoryToContainer(String containerId, String hostPath, String remotePath) {
-        try {
-            dockerClient
-                    .copyArchiveToContainerCmd(containerId)
-                    .withHostResource(hostPath)
-                    .withRemotePath(remotePath)
-                    .exec();
-            log.debug("Copied host directory to container {}: {} -> {}", containerId, hostPath, remotePath);
-        } catch (DockerException e) {
-            throw new SandboxInfrastructureException(
-                    "Failed to copy directory to container " + containerId + ": " + hostPath + " -> " + remotePath, e);
-        }
-    }
-
-    @Override
-    public void copyArchiveToContainer(String containerId, String remotePath, InputStream tarStream) {
-        try {
-            dockerClient
-                    .copyArchiveToContainerCmd(containerId)
-                    .withRemotePath(remotePath)
-                    .withTarInputStream(tarStream)
-                    .exec();
-            log.debug("Copied archive to container {} at {}", containerId, remotePath);
-        } catch (DockerException e) {
-            throw new SandboxInfrastructureException(
-                    "Failed to copy archive to container " + containerId + " at " + remotePath, e);
-        }
-    }
-
-    @Override
-    public InputStream copyArchiveFromContainer(String containerId, String remotePath) {
-        try {
-            return dockerClient
-                    .copyArchiveFromContainerCmd(containerId, remotePath)
-                    .exec();
-        } catch (NotFoundException e) {
-            // A path the container never wrote is absent on every retry, so this is not infrastructure.
-            throw new SandboxException("No archive at " + remotePath + " in container " + containerId, e);
-        } catch (DockerException e) {
-            throw new SandboxInfrastructureException(
-                    "Failed to copy archive from container " + containerId + " at " + remotePath, e);
-        }
-    }
-
-    @Override
     public void stopContainer(String containerId, int timeoutSeconds) {
         try {
             dockerClient
@@ -447,6 +416,39 @@ public class DockerClientOperations
         }
     }
 
+    @Override
+    public void createVolume(String name, Map<String, String> labels) {
+        dockerClient.createVolumeCmd().withName(name).withLabels(labels).exec();
+    }
+
+    @Override
+    public void removeVolume(String name) {
+        try {
+            dockerClient.removeVolumeCmd(name).exec();
+        } catch (NotFoundException ignored) {
+            // Cleanup converges after interrupted initialization.
+        }
+    }
+
+    @Override
+    public List<DockerOperations.VolumeInfo> listVolumes(Map<String, String> labels) {
+        var volumes = dockerClient
+                .listVolumesCmd()
+                .withFilter(
+                        "label",
+                        labels.entrySet().stream()
+                                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                                .toList())
+                .exec()
+                .getVolumes();
+        return volumes == null
+                ? List.of()
+                : volumes.stream()
+                        .map(volume -> new DockerOperations.VolumeInfo(
+                                volume.getName(), volume.getLabels() == null ? Map.of() : volume.getLabels()))
+                        .toList();
+    }
+
     // Internal helpers
 
     private HostConfig buildHostConfig(DockerOperations.HostConfigSpec spec) {
@@ -494,6 +496,15 @@ public class DockerClientOperations
                     .toArray(Ulimit[]::new));
         }
 
+        if (!spec.volumeMounts().isEmpty()) {
+            hostConfig.withMounts(spec.volumeMounts().stream()
+                    .map(volume -> new Mount()
+                            .withType(MountType.VOLUME)
+                            .withSource(volume.name())
+                            .withTarget(volume.target())
+                            .withReadOnly(volume.readOnly()))
+                    .toList());
+        }
         return hostConfig;
     }
 }

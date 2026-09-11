@@ -66,7 +66,6 @@ class LlmProxyServiceTest extends BaseUnitTest {
     void setUp() {
         controller = new LlmProxyService(
                 io.micrometer.tracing.Tracer.NOOP,
-                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.agent.job.ExecutionArchiveService.class),
                 WebClient.create(),
                 resolver,
                 egressPolicy,
@@ -404,7 +403,6 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     .build();
             var service = new LlmProxyService(
                     tracer,
-                    mock(de.tum.cit.aet.hephaestus.agent.job.ExecutionArchiveService.class),
                     client,
                     resolver,
                     egressPolicy,
@@ -478,7 +476,6 @@ class LlmProxyServiceTest extends BaseUnitTest {
             streamingMeterRegistry = new SimpleMeterRegistry();
             streamingController = new LlmProxyService(
                     io.micrometer.tracing.Tracer.NOOP,
-                    org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.agent.job.ExecutionArchiveService.class),
                     WebClient.builder().build(),
                     resolver,
                     egressPolicy,
@@ -704,7 +701,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
             de.tum.cit.aet.hephaestus.agent.usage.LlmUsageSourceType.AGENT_JOB,
             java.util.UUID.fromString("00000000-0000-0000-0000-0000000000aa"),
             0,
-            java.math.BigDecimal.ZERO);
+            java.math.BigDecimal.ZERO,
+            "worker-1");
 
     private static ProxyRouting routing(String protocol) {
         return new ProxyRouting(

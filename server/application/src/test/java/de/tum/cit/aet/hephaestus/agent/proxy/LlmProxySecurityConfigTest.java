@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
+import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobJwt;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
@@ -90,7 +91,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         new MentorProxyCredentialRegistry(),
                         resolver,
                         accounting,
-                        OBJECT_MAPPER),
+                        OBJECT_MAPPER,
+                        WorkerPropertiesFixtures.minimal("1", "1")),
                 config.hideNonGatewayCapabilities(httpSecurity(context), GATEWAY),
                 config.blockLlmProxyOnOtherConnectors(httpSecurity(context))));
     }
@@ -210,6 +212,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         job.setId(UUID.randomUUID());
         job.setWorkspace(workspace);
         job.setStatus(AgentJobStatus.RUNNING);
+        job.setWorkerId("test-worker");
         job.setRetryCount(attempt);
         job.setConfigSnapshot(new ConfigSnapshot(
                         ConfigSnapshot.SCHEMA_VERSION,

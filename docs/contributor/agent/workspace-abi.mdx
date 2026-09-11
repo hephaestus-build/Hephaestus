@@ -20,7 +20,7 @@ vs writable is decided by *where* a file lives, not by convention. Three top-lev
 ├── inputs/                          # READ-ONLY (enforced by directory ownership, not a path guard).
 │   ├── manifest.json                #   Versioned source, capture-state, and artifact index.
 │   ├── sources/                     #   Integration-namespaced source materialisations (ADR 0020).
-│   │   └── scm/repo/                #   Pinned, read-only SCM tree without Git metadata or history.
+│   │   └── scm/repo/                #   Pinned, read-only SCM checkout and sanitized Git history.
 │   ├── context/                     #   System-written, AI-readable. Populated by the ContentSource SPI.
 │   │                                #   Files: metadata.json, commits.json, comments.json, diff.patch, diff_summary.md,
 │   │                                #   diff_stat.txt, linked_work_items.json, review_threads.json,
@@ -86,9 +86,10 @@ covered by this ABI.
   source listed as anything other than `AVAILABLE` says why in a typed reason code (`NO_PROVIDER`,
   `GOVERNANCE_NOT_EFFECTIVE`, `COLLECTION_ERROR`, …); none of those reasons is "no practice asked for it".
   It indexes context files but is not itself a source artifact.
-- **`inputs/sources/scm/repo/`** — a read-only repository tree materialised at the manifest's
-  immutable commit identity. It intentionally excludes `.git`, history, submodules, and symlink
-  targets; `inputs/manifest.json` records whether the resulting source is complete or partial.
+- **`inputs/sources/scm/repo/`** — a read-only checkout at the manifest's immutable commit
+  identity, with Git history reachable from that commit and captured branch, tag, and remote-tracking
+  refs. Upstream configuration, credentials, hooks, and unreachable objects are not exported.
+  Submodules and symlink targets are not followed; `inputs/manifest.json` records exclusions.
 - **`work/`** — agent + precompute scratch. The Pi agent may write here; the server never
   collects it.
 - **`out/`** — the *only* directory the sandbox collects after the run.
@@ -99,31 +100,6 @@ covered by this ABI.
 - **`.pi*`** / `inputs/practices/` / `work/precompute*` / `work/analysis/` / `out/`
   — internal control surfaces. AI-readable as configured by the orchestrator, but
   *not* part of the public agent ABI; subject to change without a `schemaVersion` bump.
-
-## Private execution capture
-
-With `PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED=true`, the practice runner persists native Pi
-session trees in `out/trace/sessions/` instead of `.sessions/`, including composition and retry
-sessions. Pi's `before_provider_request` extension hook records the final provider-specific request
-body in `out/trace/requests/`, addressed by SHA-256; it does not rewrite that body. Native session
-JSONL retains messages, tool calls, tool results and branch/compaction structure. The separate
-`events-*.jsonl` journal records observed event times and session associations rather than inferring
-timings from the transcript.
-
-`capture.json` reports capture limits, dropped records and unfinished sessions. A nonzero exit,
-missing native session or truncated journal cannot claim complete capture. This is not a packet
-capture or a claim that all provider-internal processing is visible. Scratch files under `work/`
-are not independently archived; their contents are visible only when present in captured tool
-results or requests. Abrupt cancellation may prevent output collection entirely.
-
-The server retains staged input bytes and collected output bytes in the existing Context Fabric
-content-addressed store, with immutable manifests per job attempt. The image field is the declared image reference, not a
-resolved registry digest or a promise of deterministic replay. Archive state distinguishes
-`INPUTS_CAPTURED` from `OUTPUTS_CAPTURED`; neither means the review succeeded or the native capture
-is complete. An empty attempt list means no retained capture, never an empty complete transcript.
-Workspace-admin archive endpoints check job membership before allowing access to an individual
-blob, and responses disable caching. See [operator guidance](/admin/observability#private-execution-archives)
-for privacy and retention.
 
 ## Task envelope
 
@@ -216,7 +192,7 @@ The server creates the envelope and stages the runner and its sidecars from its 
 each attempt. They evolve together; there is no cross-version envelope compatibility layer.
 
 The agent image's `hephaestus.agent.runtime-contract` label versions its runtime dependencies and
-launch contract separately. Its value is `2`, independent of the envelope schema version. See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md)
+launch contract separately. Its value is `3`, independent of the envelope schema version. See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md)
 for the image contract.
 
 ## Precompute validation and limits
@@ -238,4 +214,21 @@ applies a **10 MiB per-file limit** in its subshell, including the diagnostic lo
 These are safeguards against broken scripts, not hostile-code isolation: a per-file limit is not a
 cumulative disk quota, Node child-process permission is not a security boundary, and a deliberately
 detached process can escape process-group cleanup. Container resource limits and teardown remain the
-outer boundary. Runtime contract v3's workspace budgets and gateway transport are separate work.
+outer boundary.
+
+## Practice review tools
+
+Practice sessions expose Pi's native `read`, `write`, `edit`, `bash`, `grep`, `find`, and `ls`, plus
+stage-specific reporting tools. The image provides Bash, Git, ripgrep, fd-find, and standard shell
+utilities. `PI_OFFLINE=1` disables tool downloads. Mentor sessions do not receive shell tools.
+
+Use `work/` or `$TMPDIR` for scratch files.
+Scratch files are not captured evidence. Native search honors ignore rules; use explicit paths and
+`rg --hidden --no-ignore` when those exclusions are inappropriate. Use streaming shell commands for
+lines too large for the read tool.
+
+The root filesystem and captured inputs are mounted read-only; scratch directories are separate
+writable mounts. Practice sessions rely on those operating-system controls, not Node permission flags. The
+[sandbox threat model](/admin/threat-model#boundary-2-llm-agent-sandbox) owns the isolation
+requirements. Deployment connectivity is covered in
+[practice-review operations](/admin/practice-review-operations).

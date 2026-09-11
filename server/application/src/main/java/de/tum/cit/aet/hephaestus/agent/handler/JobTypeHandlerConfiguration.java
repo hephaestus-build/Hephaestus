@@ -1,13 +1,14 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationTrendService;
@@ -32,7 +33,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class JobTypeHandlerConfiguration {
 
     private final JsonMapper objectMapper;
-    private final ContentAddressedStore contentAddressedStore;
+    private final JobEvidenceFiles jobEvidenceFiles;
     private final PracticeReviewProperties reviewProperties;
     private final WorkspaceContextBuilder workspaceContextBuilder;
     private final TaskEnvelopeWriter taskEnvelopeWriter;
@@ -40,13 +41,13 @@ public class JobTypeHandlerConfiguration {
 
     JobTypeHandlerConfiguration(
             JsonMapper objectMapper,
-            ContentAddressedStore contentAddressedStore,
+            JobEvidenceFiles jobEvidenceFiles,
             PracticeReviewProperties reviewProperties,
             WorkspaceContextBuilder workspaceContextBuilder,
             TaskEnvelopeWriter taskEnvelopeWriter,
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter) {
         this.objectMapper = objectMapper;
-        this.contentAddressedStore = contentAddressedStore;
+        this.jobEvidenceFiles = jobEvidenceFiles;
         this.reviewProperties = reviewProperties;
         this.workspaceContextBuilder = workspaceContextBuilder;
         this.taskEnvelopeWriter = taskEnvelopeWriter;
@@ -98,8 +99,8 @@ public class JobTypeHandlerConfiguration {
     }
 
     @Bean
-    SecretDiffScanner secretDiffScanner() {
-        return new SecretDiffScanner();
+    SecretDiffScanner secretDiffScanner(NativeGitExecutor git) {
+        return new SecretDiffScanner(jobEvidenceFiles, git, objectMapper);
     }
 
     @Bean
@@ -114,7 +115,7 @@ public class JobTypeHandlerConfiguration {
             ObservationRepository observationRepository) {
         return new PullRequestReviewHandler(
                 objectMapper,
-                contentAddressedStore,
+                jobEvidenceFiles,
                 practiceCatalogInjector,
                 workspaceContextBuilder,
                 taskEnvelopeWriter,

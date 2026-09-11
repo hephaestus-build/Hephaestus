@@ -6,6 +6,10 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 /** Sealed type of worker control-channel frames. Jackson keys on the {@code "type"} property. */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
 @JsonSubTypes({
+    @JsonSubTypes.Type(value = GitOperation.class, name = "GitOperation"),
+    @JsonSubTypes.Type(value = GitOutput.class, name = "GitOutput"),
+    @JsonSubTypes.Type(value = GitAck.class, name = "GitAck"),
+    @JsonSubTypes.Type(value = GitCancel.class, name = "GitCancel"),
     @JsonSubTypes.Type(value = WorkerHello.class, name = "WorkerHello"),
     @JsonSubTypes.Type(value = WorkerWelcome.class, name = "WorkerWelcome"),
     @JsonSubTypes.Type(value = Heartbeat.class, name = "Heartbeat"),
@@ -14,4 +18,13 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     @JsonSubTypes.Type(value = CancelJob.class, name = "CancelJob"),
 })
 public sealed interface WorkerControlFrame
-        permits WorkerHello, WorkerWelcome, Heartbeat, CapacityReport, ForceReconnect, CancelJob {}
+        permits GitOperation,
+                GitOutput,
+                GitAck,
+                GitCancel,
+                WorkerHello,
+                WorkerWelcome,
+                Heartbeat,
+                CapacityReport,
+                ForceReconnect,
+                CancelJob {}

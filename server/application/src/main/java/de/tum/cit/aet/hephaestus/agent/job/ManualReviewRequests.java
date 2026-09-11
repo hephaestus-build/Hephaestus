@@ -130,6 +130,7 @@ public class ManualReviewRequests {
                         pullRequest.getHeadRefName(),
                         headRefOid,
                         pullRequest.getBaseRefName(),
+                        pullRequest.getBaseRefOid(),
                         null,
                         ObservationOrigin.MANUAL));
     }

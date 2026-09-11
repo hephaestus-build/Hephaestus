@@ -11,15 +11,16 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.util.CommitUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,42 +29,11 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/**
- * Backfills commit history from local bare git repositories during the sync cycle.
- * <p>
- * Unlike webhook-based commit ingestion which only captures pushes going forward,
- * this service walks the full commit history from the local bare clone to ensure
- * all historical commits are persisted.
- * <p>
- * <b>How it works:</b>
- * <ol>
- *   <li>Clone or fetch the repository via {@link GitRepositoryManager}</li>
- *   <li>Resolve the HEAD SHA of the default branch</li>
- *   <li>If commits already exist for this repo, find the latest known SHA
- *       and walk only new commits (incremental)</li>
- *   <li>If no commits exist, walk the entire history (initial backfill)</li>
- *   <li>For each commit: upsert via native SQL, attach file changes, publish events</li>
- * </ol>
- * <p>
- * <b>Thread Safety:</b> This service is thread-safe. Multiple calls for different
- * repositories can run concurrently. {@link GitRepositoryManager} handles per-repo
- * locking internally.
- * <p>
- * <b>Transaction Boundary:</b> This service intentionally does NOT use
- * {@code @Transactional} at the class level. Git clone/fetch operations are I/O-heavy
- * and should not hold a database connection. Individual commit upserts use the
- * repository's own {@code @Transactional} methods.
- */
+/** Backfills missing commits across fetched branches without holding a transaction during Git I/O. */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class GitHubCommitBackfillService {
-
-    /**
-     * Maximum number of commits to process per repository per backfill cycle.
-     * Prevents OOM for repositories with very long histories (e.g. 100k+ commits).
-     */
-    private static final int MAX_COMMITS_PER_CYCLE = 5000;
 
     private final GitRepositoryManager gitRepositoryManager;
     private final GitHubAppTokenService tokenService;
@@ -92,6 +62,7 @@ public class GitHubCommitBackfillService {
         }
 
         Long repoId = repository.getId();
+        RepositoryKey key = new RepositoryKey(scopeId, repoId);
         String repoName = sanitizeForLog(repository.getNameWithOwner());
         String defaultBranch = repository.getDefaultBranch();
 
@@ -101,13 +72,11 @@ public class GitHubCommitBackfillService {
         }
 
         try {
-            // Phase 1: Clone/fetch (OUTSIDE transaction — may be slow for initial clones)
             String cloneUrl = "https://github.com/" + repository.getNameWithOwner() + ".git";
             String token = resolveToken(syncTarget);
-            gitRepositoryManager.ensureRepository(repoId, cloneUrl, token);
+            gitRepositoryManager.ensureRepository(key, cloneUrl, token);
 
-            // Phase 2: Resolve HEAD of default branch
-            String headSha = gitRepositoryManager.resolveDefaultBranchHead(repoId, defaultBranch);
+            String headSha = gitRepositoryManager.resolveBranchHead(key, defaultBranch);
             if (headSha == null) {
                 log.warn(
                         "Skipped commit backfill: reason=cannotResolveHead, repoId={}, repoName={}, branch={}",
@@ -117,63 +86,18 @@ public class GitHubCommitBackfillService {
                 return -1;
             }
 
-            // Phase 3: Determine walk range (incremental vs full)
-            String fromSha = findLatestKnownSha(repoId);
-            if (fromSha != null && fromSha.equals(headSha)) {
-                log.debug(
-                        "Skipped commit backfill: reason=alreadyUpToDate, repoId={}, repoName={}, headSha={}",
-                        repoId,
-                        repoName,
-                        abbreviateSha(headSha));
-                return 0;
-            }
-
-            // Phase 4: Walk commits
-            List<GitRepositoryManager.CommitInfo> commitInfos =
-                    gitRepositoryManager.walkCommits(repoId, fromSha, headSha);
-
-            if (commitInfos.isEmpty()) {
-                log.debug(
-                        "No new commits to backfill: repoId={}, repoName={}, fromSha={}, headSha={}",
-                        repoId,
-                        repoName,
-                        fromSha != null ? abbreviateSha(fromSha) : "null",
-                        abbreviateSha(headSha));
-                return 0;
-            }
-
-            // Phase 5: Process commits (with batch limit)
-            int total = commitInfos.size();
-            boolean truncated = total > MAX_COMMITS_PER_CYCLE;
-            List<GitRepositoryManager.CommitInfo> batch =
-                    truncated ? commitInfos.subList(0, MAX_COMMITS_PER_CYCLE) : commitInfos;
-
-            int processed = 0;
-            for (GitRepositoryManager.CommitInfo info : batch) {
-                if (processCommitInfo(info, repository, scopeId)) {
-                    processed++;
-                }
-            }
-
-            if (truncated) {
-                log.info(
-                        "Commit backfill batch limit reached: repoId={}, repoName={}, processed={}, total={}, remaining={}",
-                        repoId,
-                        repoName,
-                        processed,
-                        total,
-                        total - MAX_COMMITS_PER_CYCLE);
-            } else {
-                log.info(
-                        "Completed commit backfill: repoId={}, repoName={}, newCommits={}, totalWalked={}, mode={}",
-                        repoId,
-                        repoName,
-                        processed,
-                        total,
-                        fromSha != null ? "incremental" : "full");
-            }
-
-            return processed;
+            int[] processed = {0};
+            gitRepositoryManager.forEachMissingCommit(
+                    key, shas -> commitRepository.findGitDetailsCapturedShas(repoId, shas), info -> {
+                        if (processCommitInfo(info, repository, scopeId)) {
+                            processed[0]++;
+                        }
+                    });
+            log.info(
+                    "Completed commit backfill: repoId={}, capturedCommits={}, scope=all-branches",
+                    repoId,
+                    processed[0]);
+            return processed[0];
         } catch (GitRepositoryManager.GitOperationException e) {
             log.error(
                     "Commit backfill failed (git operation): repoId={}, repoName={}, error={}",
@@ -209,40 +133,15 @@ public class GitHubCommitBackfillService {
         return null;
     }
 
-    /**
-     * Finds the SHA of the latest known commit for a repository.
-     * Used to determine the starting point for incremental backfill.
-     *
-     * @param repositoryId the repository ID
-     * @return the latest commit SHA, or null if no commits exist
-     */
-    @Nullable
-    private String findLatestKnownSha(Long repositoryId) {
-        return commitRepository
-                .findLatestByRepositoryId(repositoryId)
-                .map(Commit::getSha)
-                .orElse(null);
-    }
-
-    /**
-     * Process a single commit from local git info.
-     * <p>
-     * Runs inside a {@link TransactionTemplate} to ensure the Hibernate session is active
-     * for lazy collection access (e.g., file changes). Uses the same upsert pattern as
-     * {@link GitHubPushMessageHandler#processCommitInfo}: native SQL INSERT...ON CONFLICT
-     * for the commit row, then entity-level attachment of file changes.
-     *
-     * @param info       the commit info from git walk
-     * @param repository the repository entity
-     * @param scopeId    the scope ID for event context
-     * @return true if this was a new commit, false if already existed
-     */
-    private boolean processCommitInfo(GitRepositoryManager.CommitInfo info, Repository repository, Long scopeId) {
+    private boolean processCommitInfo(CommitDetails info, Repository repository, Long scopeId) {
         Boolean result = transactionTemplate.execute(status -> {
             // Fast-path: skip if already persisted
-            if (commitRepository.existsByShaAndRepositoryId(info.sha(), repository.getId())) {
+            if (commitRepository.existsByShaAndRepositoryIdAndGitDetailsCapturedAtIsNotNull(
+                    info.sha(), repository.getId())) {
                 return false;
             }
+
+            boolean newCommit = !commitRepository.existsByShaAndRepositoryId(info.sha(), repository.getId());
 
             // Resolve author/committer IDs by email (with noreply fallback)
             Long providerId = repository.getProvider().getId();
@@ -269,16 +168,19 @@ public class GitHubCommitBackfillService {
                     info.authorEmail(),
                     info.committerEmail());
 
+            commitRepository.deleteFileChanges(repository.getId(), info.sha());
+
             // Attach file changes if present
             if (!info.fileChanges().isEmpty()) {
                 Commit commit = commitRepository
                         .findByShaAndRepositoryId(info.sha(), repository.getId())
-                        .orElse(null);
+                        .orElseThrow(() -> new IllegalStateException("Commit missing after upsert"));
                 if (commit != null) {
-                    for (GitRepositoryManager.FileChange fc : info.fileChanges()) {
+                    commit.getFileChanges().clear();
+                    for (CommitDetails.FileChange fc : info.fileChanges()) {
                         CommitFileChange fileChange = new CommitFileChange();
                         fileChange.setFilename(fc.filename());
-                        fileChange.setChangeType(CommitFileChange.fromGitChangeType(fc.changeType()));
+                        fileChange.setChangeType(fc.changeType());
                         fileChange.setAdditions(fc.additions());
                         fileChange.setDeletions(fc.deletions());
                         fileChange.setChanges(fc.changes());
@@ -290,7 +192,8 @@ public class GitHubCommitBackfillService {
             }
 
             // Publish CommitCreated event (fires after transaction commits)
-            publishCommitCreated(info.sha(), repository, scopeId);
+            commitRepository.markGitDetailsCaptured(repository.getId(), info.sha(), Instant.now());
+            if (newCommit) publishCommitCreated(info.sha(), repository, scopeId);
 
             return true;
         });
@@ -325,9 +228,5 @@ public class GitHubCommitBackfillService {
 
     private String buildCommitUrl(String nameWithOwner, String sha) {
         return CommitUtils.buildCommitUrl(nameWithOwner, sha);
-    }
-
-    private static String abbreviateSha(String sha) {
-        return sha.length() > 7 ? sha.substring(0, 7) : sha;
     }
 }

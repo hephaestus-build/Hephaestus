@@ -21,16 +21,7 @@ import type { EvidenceCitation } from "@/api/types.gen";
 
 import type { StatusDef } from "./status-def";
 
-/**
- * Where a citation's line numbers point, which decides whether a surface may show them.
- *
- * <p>`code` — a real span of a real file, verified by the server against the annotated unified diff.
- *
- * <p>`object` — an offset inside the serialised context artifact the quote was pulled from: a line
- * of `conversation_thread.json`, not a position in the Slack thread. The schema demands a number
- * ≥ 1 so one is always present, but nothing verifies it points at the quote, so these citations
- * render their `path` as a name and no numbers.
- */
+/** Code coordinates name source lines; object coordinates belong to serialized context, not the source UI. */
 export type EvidenceLocator = "code" | "object";
 
 export interface EvidenceSourceDef extends StatusDef {

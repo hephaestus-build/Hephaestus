@@ -48,7 +48,13 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
             .withBean(StdinWriteWatchdog.class, () -> watchdog)
             .withBean(
                     SandboxReconciler.class,
-                    () -> new SandboxReconciler(jobs, containers, networks, meters, Clock.systemUTC()))
+                    () -> new SandboxReconciler(
+                            jobs,
+                            containers,
+                            networks,
+                            org.mockito.Mockito.mock(SandboxVolumeManager.class),
+                            meters,
+                            Clock.systemUTC()))
             .withBean(
                     InteractiveSandboxRegistry.class,
                     () -> new InteractiveSandboxRegistry(

@@ -1,303 +1,83 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
-import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.util.LinkedHashSet;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import java.util.stream.Stream;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.apache.commons.io.IOUtils;
-import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-/**
- * Transfers sandbox files through the Docker archive API.
- *
- * <p>Every transfer goes through {@code docker cp} rather than a bind mount, so the same code path
- * serves a local and a remote daemon.
- */
+/** Creates the trusted workspace archive streamed through the runtime gateway. */
 public class SandboxWorkspaceManager {
-
-    private static final Logger log = LoggerFactory.getLogger(SandboxWorkspaceManager.class);
-
-    static final long MAX_OUTPUT_BYTES = SandboxOutputArchive.MAX_OUTPUT_BYTES;
-
-    static final long MAX_SINGLE_FILE_BYTES = SandboxOutputArchive.MAX_SINGLE_FILE_BYTES;
-
-    static final long MAX_DIRECTORY_BYTES = 1024L * 1024 * 1024;
-
-    static final int MAX_DIRECTORY_ENTRIES = 500_000;
-
-    static final int MAX_WALK_DEPTH = 50;
-
-    private final DockerFileOperations fileOps;
-    private final long maxOutputBytes;
-    private final long maxSingleFileBytes;
-    private final long maxDirectoryBytes;
-    private final int maxDirectoryEntries;
-
-    public SandboxWorkspaceManager(DockerFileOperations fileOps) {
-        this(fileOps, MAX_OUTPUT_BYTES, MAX_SINGLE_FILE_BYTES, MAX_DIRECTORY_BYTES, MAX_DIRECTORY_ENTRIES);
-    }
-
-    SandboxWorkspaceManager(
-            DockerFileOperations fileOps,
-            long maxOutputBytes,
-            long maxSingleFileBytes,
-            long maxDirectoryBytes,
-            int maxDirectoryEntries) {
-        this.fileOps = fileOps;
-        this.maxOutputBytes = maxOutputBytes;
-        this.maxSingleFileBytes = maxSingleFileBytes;
-        this.maxDirectoryBytes = maxDirectoryBytes;
-        this.maxDirectoryEntries = maxDirectoryEntries;
-    }
-
-    /**
-     * Inject files into a container via {@code docker cp}.
-     *
-     * @param containerId the target container (must be created but can be stopped)
-     * @param files map of relative paths to file contents
-     */
-    public void injectFiles(String containerId, @org.jspecify.annotations.Nullable Map<String, byte[]> files) {
-        injectFiles(containerId, files, Map.of());
-    }
-
-    /**
-     * Inject files into a container via {@code docker cp}, from memory and from disk.
-     *
-     * <p>Stages the archive on disk to avoid retaining on-disk file contents in heap.
-     *
-     * @param containerId the target container (must be created but can be stopped)
-     * @param files map of relative paths to file contents held in memory
-     * @param filesOnDisk map of relative paths to host files, streamed rather than read
-     * @implNote The archive stream is valid only for the duration of the {@code copyArchiveToContainer}
-     *     call; callers and test doubles must consume it eagerly rather than retain it.
-     */
-    public void injectFiles(
-            String containerId,
-            @org.jspecify.annotations.Nullable Map<String, byte[]> files,
-            @org.jspecify.annotations.Nullable Map<String, Path> filesOnDisk) {
-        Map<String, byte[]> inMemory = files == null ? Map.of() : files;
-        Map<String, Path> onDisk = filesOnDisk == null ? Map.of() : filesOnDisk;
-        if (inMemory.isEmpty() && onDisk.isEmpty()) {
-            return;
-        }
-
-        Path tarFile = null;
-        try {
-            tarFile = Files.createTempFile("sandbox-inputs-", ".tar");
-            writeInputTar(tarFile, inMemory, onDisk);
-            try (InputStream tarStream = Files.newInputStream(tarFile)) {
-                fileOps.copyArchiveToContainer(containerId, "/workspace", tarStream);
-            }
-            log.debug("Injected {} files into container {}", inMemory.size() + onDisk.size(), containerId);
-        } catch (IOException e) {
-            throw new SandboxInfrastructureException("Failed to inject files into container: " + containerId, e);
-        } finally {
-            deleteQuietly(tarFile);
-        }
-    }
-
-    private static void deleteQuietly(@Nullable Path path) {
-        if (path == null) {
-            return;
-        }
-        try {
-            Files.deleteIfExists(path);
-        } catch (IOException e) {
-            log.warn("Could not delete temporary archive {}", path, e);
-        }
-    }
-
-    /**
-     * Inject host directories into a container via {@code docker cp}.
-     *
-     * <p>The tar is built here rather than by docker-java, whose internal tar creation binds a
-     * commons-compress version that conflicts with this application's.
-     *
-     * @param containerId the target container (must be created but can be stopped)
-     * @param directoryMounts map of host path to container path
-     */
-    public void injectDirectories(
-            String containerId, @org.jspecify.annotations.Nullable Map<String, String> directoryMounts) {
-        if (directoryMounts == null || directoryMounts.isEmpty()) {
-            return;
-        }
-        for (var entry : directoryMounts.entrySet()) {
-            String hostPath = entry.getKey();
-            String containerPath = entry.getValue();
-            validateDirectoryMount(hostPath, containerPath);
-            injectDirectoryViaTar(containerId, hostPath, containerPath);
-            log.debug("Injected directory into container {}: {} -> {}", containerId, hostPath, containerPath);
-        }
-    }
-
-    /**
-     * Prefix entries with the destination basename so extraction at its parent preserves the layout.
-     *
-     * <p>The archive is staged on a temporary file rather than in a {@link java.io.ByteArrayOutputStream}
-     * so heap use stays independent of the directory's size; docker-java streams the file to the daemon
-     * with chunked transfer encoding and adds no buffering of its own.
-     */
-    private void injectDirectoryViaTar(String containerId, String hostPath, String containerPath) {
-        Path hostDir = Path.of(hostPath);
-        Path containerParent = Path.of(containerPath).getParent();
-        String dirName = Path.of(containerPath).getFileName().toString();
-        if (containerParent == null) {
-            containerParent = Path.of("/");
-        }
-
-        Path tempTar = null;
-        try {
-            tempTar = Files.createTempFile("hephaestus-inject-", ".tar");
-
-            writeTarToFile(tempTar, hostDir, dirName, hostPath);
-
-            try (InputStream tarStream = new BufferedInputStream(Files.newInputStream(tempTar))) {
-                fileOps.copyArchiveToContainer(containerId, containerParent.toString(), tarStream);
-            }
-        } catch (IOException e) {
-            throw new SandboxInfrastructureException(
-                    "Failed to inject directory " + hostPath + " into container " + containerId, e);
-        } finally {
-            if (tempTar != null) {
-                try {
-                    Files.deleteIfExists(tempTar);
-                } catch (IOException e) {
-                    log.warn("Failed to delete temp tar file {}: {}", tempTar, e.getMessage());
-                }
-            }
-        }
-    }
-
     private static final int COPY_BUFFER_SIZE = 64 * 1024;
 
-    private void writeTarToFile(Path tarFile, Path hostDir, String dirName, String hostPath) throws IOException {
-        long[] totalBytes = {0};
-        int[] entryCount = {0};
-
-        try (OutputStream fileOut = new BufferedOutputStream(Files.newOutputStream(tarFile), COPY_BUFFER_SIZE);
-                TarArchiveOutputStream tar = new TarArchiveOutputStream(fileOut);
-                Stream<Path> paths = Files.walk(hostDir, MAX_WALK_DEPTH)) {
-            tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
-            tar.setBigNumberMode(TarArchiveOutputStream.BIGNUMBER_POSIX);
-
-            paths.forEach(path -> {
-                try {
-                    entryCount[0]++;
-                    if (entryCount[0] > maxDirectoryEntries) {
-                        throw new SandboxException("Directory injection exceeds entry count limit ("
-                                + maxDirectoryEntries + "): " + hostPath);
-                    }
-
-                    String relativePath = hostDir.relativize(path).toString();
-                    String entryName = relativePath.isEmpty() ? dirName : dirName + "/" + relativePath;
-
-                    if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-                        TarArchiveEntry dirEntry = new TarArchiveEntry(entryName + "/");
-                        dirEntry.setModTime(Files.getLastModifiedTime(path).toMillis());
-                        dirEntry.setUserId(1000);
-                        dirEntry.setGroupId(1000);
-                        tar.putArchiveEntry(dirEntry);
-                        tar.closeArchiveEntry();
-                    } else if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
-                        long fileSize = Files.size(path);
-                        totalBytes[0] += fileSize;
-                        if (totalBytes[0] > maxDirectoryBytes) {
-                            throw new SandboxException("Directory injection exceeds size limit (" + maxDirectoryBytes
-                                    + " bytes): " + hostPath);
-                        }
-
-                        TarArchiveEntry fileEntry = new TarArchiveEntry(entryName);
-                        fileEntry.setSize(fileSize);
-                        fileEntry.setModTime(Files.getLastModifiedTime(path).toMillis());
-                        fileEntry.setUserId(1000);
-                        fileEntry.setGroupId(1000);
-                        tar.putArchiveEntry(fileEntry);
-
-                        long written = copyFilePrefix(path, tar, fileSize);
-                        if (written != fileSize) {
-                            throw new SandboxException("Source file changed during injection (declared " + fileSize
-                                    + " bytes, read "
-                                    + written
-                                    + "): "
-                                    + path);
-                        }
-                        tar.closeArchiveEntry();
-                    }
-                    // Anything else — a symlink, a device, a socket — is left out: both predicates above
-                    // answer false for it once links are not followed.
-                } catch (IOException e) {
-                    throw new SandboxInfrastructureException("Failed to add file to tar: " + path, e);
-                }
-            });
-
-            tar.finish();
-        }
-    }
-
-    /**
-     * Copy at most {@code limit} bytes from {@code source} into {@code out}, returning the number actually
-     * read. Bounding the copy to the size the caller stat'd means a file that grew since is truncated to
-     * the declared length, keeping the tar entry valid, and one that shrank returns fewer bytes, letting
-     * the caller raise a concurrent-modification error — where an open-ended copy would leave the entry's
-     * declared size wrong and fail opaquely at {@code finish()}.
-     */
     private static long copyFilePrefix(Path source, OutputStream out, long limit) throws IOException {
         try (InputStream in = Files.newInputStream(source, LinkOption.NOFOLLOW_LINKS)) {
             return IOUtils.copyLarge(in, out, 0, limit);
         }
     }
 
-    /**
-     * Collect output files from a container via {@code docker cp}.
-     *
-     * @param containerId the source container
-     * @param outputPath path inside the container (e.g. {@code /workspace/out})
-     * @return map of relative file paths to contents
-     */
-    public Map<String, byte[]> collectOutput(String containerId, String outputPath) {
-        var reader = new SandboxOutputArchive(
-                MAX_OUTPUT_BYTES, maxOutputBytes, maxSingleFileBytes, SandboxOutputArchive.MAX_ENTRIES);
-        try (InputStream tarStream = fileOps.copyArchiveFromContainer(containerId, outputPath)) {
-            return reader.read(tarStream, Path.of(outputPath).getFileName().toString());
-        } catch (SandboxInfrastructureException e) {
-            // A dropped transfer can self-heal, so the completed execution stays worth retrying.
-            throw e;
-        } catch (IOException | SandboxException e) {
-            // A rejected archive fails identically on every retry, so it must not be classified as one.
-            throw new SandboxException("Invalid or incomplete sandbox output archive", e);
+    public Path createInputTar(Map<String, byte[]> files, Map<String, Path> filesOnDisk) throws IOException {
+        return createInputTar(files, filesOnDisk, List.of());
+    }
+
+    public Path createInputTar(
+            Map<String, byte[]> files, Map<String, Path> filesOnDisk, List<EvidenceDirectory> directories)
+            throws IOException {
+        validateDirectories(directories);
+        Path path = Files.createTempFile("sandbox-inputs-", ".tar");
+        try {
+            writeInputTar(path, files, filesOnDisk, directories);
+            return path;
+        } catch (IOException | RuntimeException exception) {
+            Files.deleteIfExists(path);
+            throw exception;
         }
     }
 
-    private void writeInputTar(Path tarFile, Map<String, byte[]> files, Map<String, Path> filesOnDisk)
+    private void writeInputTar(
+            Path tarFile, Map<String, byte[]> files, Map<String, Path> filesOnDisk, List<EvidenceDirectory> directories)
             throws IOException {
         try (OutputStream fileOut = new BufferedOutputStream(Files.newOutputStream(tarFile), COPY_BUFFER_SIZE);
                 TarArchiveOutputStream tar = new TarArchiveOutputStream(fileOut)) {
             tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
             tar.setBigNumberMode(TarArchiveOutputStream.BIGNUMBER_POSIX);
 
-            Set<String> allPaths = new LinkedHashSet<>();
-            files.keySet().stream().map(SandboxWorkspaceManager::validatePath).forEach(allPaths::add);
-            filesOnDisk.keySet().stream()
-                    .map(SandboxWorkspaceManager::validatePath)
-                    .forEach(allPaths::add);
+            Set<String> allPaths = new TreeSet<>();
+            for (var path : files.keySet()) {
+                String safe = validatePath(path);
+                coveredByDirectory(safe, null, directories);
+                if (!allPaths.add(safe)) throw new SandboxException("Duplicate workspace input path");
+            }
+            for (var entry : filesOnDisk.entrySet()) {
+                String safe = validatePath(entry.getKey());
+                if (!coveredByDirectory(safe, entry.getValue(), directories) && !allPaths.add(safe)) {
+                    throw new SandboxException("Duplicate workspace input path");
+                }
+            }
+            for (var directory : directories)
+                allPaths.add(directory.target().substring(0, directory.target().length() - 1));
+            for (String path : allPaths) {
+                for (int slash = path.indexOf('/'); slash >= 0; slash = path.indexOf('/', slash + 1)) {
+                    if (allPaths.contains(path.substring(0, slash)))
+                        throw new SandboxException("Workspace input path collision");
+                }
+            }
             for (String dir : ancestorDirs(allPaths)) {
                 TarArchiveEntry dirEntry = new TarArchiveEntry(dir + "/");
                 dirEntry.setModTime(System.currentTimeMillis());
@@ -317,23 +97,85 @@ public class SandboxWorkspaceManager {
             }
 
             for (Map.Entry<String, Path> entry : filesOnDisk.entrySet()) {
-                Path source = entry.getValue();
-                long fileSize = Files.size(source);
-                TarArchiveEntry tarEntry = newInputEntry(validatePath(entry.getKey()), fileSize);
-                tar.putArchiveEntry(tarEntry);
-                long written = copyFilePrefix(source, tar, fileSize);
-                if (written != fileSize) {
-                    throw new SandboxException("Source file changed during injection (declared " + fileSize
-                            + " bytes, read "
-                            + written
-                            + "): "
-                            + source);
-                }
-                tar.closeArchiveEntry();
+                String safe = validatePath(entry.getKey());
+                if (!coveredByDirectory(safe, entry.getValue(), directories))
+                    writeDiskFile(tar, safe, entry.getValue());
+            }
+            for (var directory : directories) {
+                Files.walkFileTree(directory.source(), new SimpleFileVisitor<>() {
+                    private String target(Path path) {
+                        String suffix = directory.source().relativize(path).toString();
+                        return directory.target() + suffix;
+                    }
+
+                    @Override
+                    public FileVisitResult preVisitDirectory(Path path, BasicFileAttributes attributes)
+                            throws IOException {
+                        String target = target(path);
+                        var entry = new TarArchiveEntry(target.endsWith("/") ? target : target + "/");
+                        entry.setMode(isWritableRegion(target) ? 0755 : 0555);
+                        tar.putArchiveEntry(entry);
+                        tar.closeArchiveEntry();
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    @Override
+                    public FileVisitResult visitFile(Path path, BasicFileAttributes attributes) throws IOException {
+                        if (!attributes.isRegularFile())
+                            throw new SandboxException("Workspace directories may contain only regular files");
+                        writeDiskFile(tar, target(path), path);
+                        return FileVisitResult.CONTINUE;
+                    }
+                });
             }
 
             tar.finish();
         }
+    }
+
+    private static void validateDirectories(List<EvidenceDirectory> directories) {
+        for (int index = 0; index < directories.size(); index++) {
+            var directory = directories.get(index);
+            if (!Files.isDirectory(directory.source(), LinkOption.NOFOLLOW_LINKS)) {
+                throw new SandboxException("Workspace directory source must be a directory, not a link");
+            }
+            for (int other = 0; other < index; other++) {
+                String target = directories.get(other).target();
+                if (target.startsWith(directory.target()) || directory.target().startsWith(target)) {
+                    throw new SandboxException("Overlapping workspace directories");
+                }
+            }
+        }
+    }
+
+    private static boolean coveredByDirectory(
+            String path, @org.jspecify.annotations.Nullable Path source, List<EvidenceDirectory> directories) {
+        for (var directory : directories) {
+            if (path.startsWith(directory.target())) {
+                Path expected = directory
+                        .source()
+                        .resolve(path.substring(directory.target().length()));
+                if (source == null || !source.toAbsolutePath().normalize().equals(expected)) {
+                    throw new SandboxException("Workspace file conflicts with a captured directory");
+                }
+                return true;
+            }
+            if (directory.target().startsWith(path + "/"))
+                throw new SandboxException("Workspace file conflicts with a directory target");
+        }
+        return false;
+    }
+
+    private static void writeDiskFile(TarArchiveOutputStream tar, String target, Path source) throws IOException {
+        if (!Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS))
+            throw new SandboxException("Workspace input must be a regular file");
+        long size = Files.size(source);
+        var entry = newInputEntry(target, size);
+        if (Files.isExecutable(source)) entry.setMode(entry.getMode() | 0111);
+        tar.putArchiveEntry(entry);
+        if (copyFilePrefix(source, tar, size) != size)
+            throw new SandboxException("Workspace input changed while streaming");
+        tar.closeArchiveEntry();
     }
 
     private static TarArchiveEntry newInputEntry(String safePath, long size) {
@@ -364,33 +206,6 @@ public class SandboxWorkspaceManager {
         return dirs;
     }
 
-    /**
-     * Validate a directory mount path pair. A symlinked host path is refused because the daemon would
-     * resolve it and copy whatever it points at, which is a symlink escape out of the staged tree.
-     */
-    private static void validateDirectoryMount(String hostPath, String containerPath) {
-        if (hostPath == null || hostPath.isEmpty()) {
-            throw new SandboxException("Host path must not be empty");
-        }
-        if (containerPath == null || containerPath.isEmpty()) {
-            throw new SandboxException("Container path must not be empty");
-        }
-        Path host = Path.of(hostPath);
-        if (!host.isAbsolute()) {
-            throw new SandboxException("Host path must be absolute: " + hostPath);
-        }
-        if (!Files.exists(host)) {
-            throw new SandboxException("Host path does not exist: " + hostPath);
-        }
-        if (Files.isSymbolicLink(host)) {
-            throw new SandboxException("Host path must not be a symlink: " + hostPath);
-        }
-        Path container = Path.of(containerPath);
-        if (!container.isAbsolute()) {
-            throw new SandboxException("Container path must be absolute: " + containerPath);
-        }
-    }
-
     /** Returns a normalized relative path that does not escape the archive root (tar-slip). */
     private static String validatePath(String path) {
         if (path == null || path.isEmpty()) {
@@ -400,7 +215,7 @@ public class SandboxWorkspaceManager {
         if (normalized.isAbsolute()) {
             throw new SandboxException("Absolute paths are not allowed: " + path);
         }
-        if (normalized.startsWith("..")) {
+        if (normalized.toString().isEmpty() || normalized.toString().equals(".") || normalized.startsWith("..")) {
             throw new SandboxException("Path traversal detected: " + path);
         }
         return normalized.toString();

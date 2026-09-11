@@ -1,10 +1,13 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive;
 
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.ContainerSecurityPolicy;
+import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerAttemptWorkspace;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerOperations;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerVolumeOperations;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxContainerManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxEnvBlocklist;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxLabels;
@@ -19,14 +22,15 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.Timer;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,22 +46,6 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
     private static final String PROXY_URL_PLACEHOLDER = "{appServerIp}";
     private static final String MDC_SESSION_ID = "mentor.sessionId";
 
-    private static final List<String> SLEEPER_CMD = List.of("tail", "-f", "/dev/null");
-
-    // --cap-drop=ALL removes CAP_DAC_OVERRIDE, so root cannot bypass file permissions.
-    // /workspace is owned by 1000:1000 in the image; run mkdir as the container user.
-    private static final String PREP_MKDIR_CMD =
-            "mkdir -p /workspace/.runner /workspace/context/target /workspace/context/user /workspace/scratch && "
-                    + "chmod 1777 /workspace /workspace/.runner /workspace/context/user /workspace/scratch && "
-                    + "chmod 1755 /workspace/context /workspace/context/target";
-
-    // Per-dir, not -R: context/user must stay writable.
-    private static final String PREP_CHMOD_CMD = "chmod -R a-w /workspace/context/target 2>/dev/null || true; "
-            + "chmod a-w /workspace/context 2>/dev/null || true";
-
-    private static final int PREP_OUTPUT_PREVIEW_CAP = 512;
-    private static final Duration PREP_EXEC_TIMEOUT = Duration.ofSeconds(30);
-
     private final InteractiveSandboxProperties properties;
     private final SandboxNetworkManager networkManager;
     private final SandboxWorkspaceManager workspaceManager;
@@ -66,7 +54,9 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
     private final InteractiveSandboxRegistry registry;
     private final InteractiveSandboxMetrics metrics;
     private final ObjectMapper mapper;
-    private final DockerCli dockerCli;
+    private final SandboxGatewaySessions gatewaySessions;
+    private final DockerVolumeOperations volumeOperations;
+    private final Map<UUID, Resources> resources = new ConcurrentHashMap<>();
     private final String owner;
     private final int gatewayPort;
     private final Executor closeExecutor;
@@ -85,7 +75,9 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             Executor closeExecutor,
             DockerSandboxProperties dockerProperties,
             int gatewayPort,
-            MentorProxyCredentialRegistry mentorProxyCredentialRegistry) {
+            MentorProxyCredentialRegistry mentorProxyCredentialRegistry,
+            SandboxGatewaySessions gatewaySessions,
+            DockerVolumeOperations volumeOperations) {
         this.properties = properties;
         this.networkManager = networkManager;
         this.workspaceManager = workspaceManager;
@@ -95,7 +87,8 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
         this.metrics = metrics;
         this.mapper = mapper;
         this.closeExecutor = closeExecutor;
-        this.dockerCli = new DockerCli(dockerProperties);
+        this.gatewaySessions = gatewaySessions;
+        this.volumeOperations = volumeOperations;
         this.owner = dockerProperties.owner();
         this.gatewayPort = gatewayPort;
         this.mentorProxyCredentialRegistry = mentorProxyCredentialRegistry;
@@ -131,6 +124,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
         Timer.Sample sample = Timer.start();
         String networkId = null;
         String containerId = null;
+        String initializerId = null;
         PiProcessHandle process = null;
         DockerAttachedSandboxAdapter sandbox = null;
         boolean registered = false;
@@ -162,46 +156,63 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
                     spec.sessionId().toString());
             Map<String, String> runnerEnv = buildRunnerEnvironment(spec, appServerIp);
 
-            DockerOperations.ContainerSpec containerSpec = new DockerOperations.ContainerSpec(
+            if (!spec.volumeMounts().isEmpty()) {
+                throw new InteractiveSandboxException(
+                        "Prepare workspace files before attach; host-directory injection is unsupported");
+            }
+            String token =
+                    spec.networkPolicy() == null ? null : spec.networkPolicy().llmProxyToken();
+            if (token == null || token.isBlank()) {
+                throw new InteractiveSandboxException("Gateway credential required");
+            }
+            var gatewaySession = gatewaySessions.register(
+                    token, workspaceManager.createInputTar(spec.inputFiles(), Map.of()), "out");
+            DockerAttemptWorkspace workspace;
+            try {
+                workspace = new DockerAttemptWorkspace(volumeOperations, gatewaySession.id(), labels);
+            } catch (RuntimeException exception) {
+                gatewaySession.close();
+                throw exception;
+            }
+            resources.put(spec.sessionId(), new Resources(gatewaySession, workspace));
+            var channel =
+                    gatewaySession.enableInteractive(properties.maxFrameChars(), properties.stdinWriteTimeoutMs());
+            runnerEnv.put(
+                    "SANDBOX_RUNTIME_URL",
+                    "http://" + appServerIp + ":" + gatewayPort + "/internal/llm/runtime/" + gatewaySession.id());
+            initializerId = containerManager.createContainer(new DockerOperations.ContainerSpec(
                     spec.image(),
-                    SLEEPER_CMD,
-                    Map.of(),
+                    List.of("node", "/opt/pi-sdk/gateway-init.ts"),
+                    runnerEnv,
                     networkId,
                     CONTAINER_HOSTNAME,
                     CONTAINER_USER,
                     labels,
-                    hostConfig,
+                    workspace.configure(hostConfig, true),
+                    extraHosts));
+            containerManager.startContainer(initializerId);
+            var initialized = containerManager.waitForCompletion(
+                    initializerId, spec.resourceLimits().maxRuntime());
+            if (initialized.timedOut() || initialized.exitCode() != 0) {
+                throw new InteractiveSandboxException("Mentor workspace initialization failed");
+            }
+            containerManager.forceRemove(initializerId);
+            initializerId = null;
+            var command = new ArrayList<>(List.of("node", "/opt/pi-sdk/gateway-mentor.ts"));
+            command.addAll(spec.command());
+            DockerOperations.ContainerSpec containerSpec = new DockerOperations.ContainerSpec(
+                    spec.image(),
+                    command,
+                    runnerEnv,
+                    networkId,
+                    CONTAINER_HOSTNAME,
+                    CONTAINER_USER,
+                    labels,
+                    workspace.configure(hostConfig, false),
                     extraHosts);
-            try {
-                containerId = containerManager.createContainer(containerSpec);
-            } catch (Exception e) {
-                metrics.attachFailureImage.increment();
-                throw new InteractiveSandboxException("createContainer failed: " + e.getMessage(), e);
-            }
-            log.info("Mentor container created: containerId={}, image={}", containerId, LogSafe.sanitise(spec.image()));
-
-            try {
-                containerManager.startContainer(containerId);
-            } catch (Exception e) {
-                metrics.attachFailureStart.increment();
-                throw new InteractiveSandboxException("startContainer failed: " + e.getMessage(), e);
-            }
-
-            runExec(containerId, CONTAINER_USER, PREP_MKDIR_CMD, "workspace mkdir");
-            if (!spec.inputFiles().isEmpty()) {
-                workspaceManager.injectFiles(containerId, spec.inputFiles());
-            }
-            if (!spec.volumeMounts().isEmpty()) {
-                workspaceManager.injectDirectories(containerId, spec.volumeMounts());
-            }
-            runExec(containerId, CONTAINER_USER, PREP_CHMOD_CMD, "workspace chmod");
-
-            try {
-                process = PiProcessHandle.spawn(dockerCli, containerId, CONTAINER_USER, spec.command(), runnerEnv);
-            } catch (InteractiveSandboxException e) {
-                metrics.attachFailureStdin.increment();
-                throw e;
-            }
+            containerId = containerManager.createContainer(containerSpec);
+            process = new PiProcessHandle(channel);
+            containerManager.startContainer(containerId);
 
             // Build + await first frame BEFORE register: a stillborn runner never becomes visible.
             sandbox = buildSandbox(spec, runtimeKey, containerId, networkId, process);
@@ -262,6 +273,17 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             }
             throw new InteractiveSandboxException("attach() failed: " + e.getMessage(), e);
         } finally {
+            if (initializerId != null) {
+                try {
+                    containerManager.forceRemove(initializerId);
+                } catch (RuntimeException exception) {
+                    log.warn("Could not remove mentor initializer", exception);
+                }
+            }
+            if (!registered && sandbox == null) {
+                mentorProxyCredentialRegistry.revoke(spec.sessionId());
+                closeResources(spec.sessionId());
+            }
             MDC.remove(MDC_SESSION_ID);
         }
     }
@@ -363,63 +385,29 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
     private void onAttachedSandboxClosed(DockerAttachedSandboxAdapter sandbox) {
         registry.onSandboxClosed(sandbox);
         mentorProxyCredentialRegistry.revoke(sandbox.identity().sessionId());
+        closeResources(sandbox.identity().sessionId());
     }
 
-    private static final int PREP_DRAIN_CAP_BYTES = 16 * 1024;
-
-    private void runExec(String containerId, String user, String script, String description) {
-        ProcessBuilder pb =
-                dockerCli.configure(new ProcessBuilder("exec", "-u", user, containerId, "sh", "-c", script));
-        pb.redirectErrorStream(true);
-        Process p;
-        try {
-            p = pb.start();
-        } catch (IOException e) {
-            metrics.attachFailureOther.increment();
-            throw new InteractiveSandboxException(description + " failed: " + e.getMessage(), e);
+    private void closeResources(UUID sessionId) {
+        var completed = resources.remove(sessionId);
+        if (completed != null) {
+            try {
+                completed.close();
+            } catch (IOException | RuntimeException exception) {
+                log.warn("Could not clean mentor workspace", exception);
+            }
         }
-        // Bounded drain — a misbehaving exec emitting a megabyte of stdout would otherwise OOM
-        // the app-server. We only need a short preview for the error message.
-        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(PREP_DRAIN_CAP_BYTES);
-        Thread drainer = Thread.ofVirtual().start(() -> {
-            try (var in = p.getInputStream()) {
-                byte[] buf = new byte[1024];
-                int read;
-                while ((read = in.read(buf)) >= 0) {
-                    int room = PREP_DRAIN_CAP_BYTES - out.size();
-                    if (room <= 0) {
-                        // Capture is full; keep draining (discard) so the pipe doesn't back-pressure.
-                        continue;
-                    }
-                    out.write(buf, 0, Math.min(read, room));
-                }
-            } catch (IOException ignored) {
+    }
+
+    private record Resources(SandboxGatewaySessions.Session gateway, DockerAttemptWorkspace workspace)
+            implements AutoCloseable {
+        @Override
+        public void close() throws IOException {
+            try {
+                workspace.close();
+            } finally {
+                gateway.close();
             }
-        });
-        try {
-            boolean exited = p.waitFor(PREP_EXEC_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-            if (!exited) {
-                p.destroyForcibly();
-                drainer.join(500);
-                metrics.attachFailureOther.increment();
-                throw new InteractiveSandboxException(
-                        description + " timed out after " + PREP_EXEC_TIMEOUT.toSeconds() + "s");
-            }
-            drainer.join(500);
-            int exit = p.exitValue();
-            if (exit != 0) {
-                String preview = out.toString(StandardCharsets.UTF_8);
-                if (preview.length() > PREP_OUTPUT_PREVIEW_CAP) {
-                    preview = preview.substring(0, PREP_OUTPUT_PREVIEW_CAP) + "…";
-                }
-                metrics.attachFailureOther.increment();
-                throw new InteractiveSandboxException(description + " failed: exit=" + exit + ", output=" + preview);
-            }
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            p.destroyForcibly();
-            metrics.attachFailureOther.increment();
-            throw new InteractiveSandboxException(description + " failed: interrupted", ie);
         }
     }
 

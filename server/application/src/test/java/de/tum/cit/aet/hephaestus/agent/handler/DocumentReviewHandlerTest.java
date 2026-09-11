@@ -79,6 +79,28 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
                 ObservationOrigin.LIVE);
     }
 
+    @Test
+    void shouldRejectRawOutputThatNeverPassedAdmission() {
+        var job = new AgentJob();
+        job.setOutput(objectMapper.createObjectNode().put("rawOutput", "unadmitted output"));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> handler.deliver(job))
+                .isInstanceOf(de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException.class);
+        org.mockito.Mockito.verifyNoInteractions(deliveryService);
+    }
+
+    @Test
+    void shouldDeliverOnlyPersistedVerdictsWithoutParsingRawOutputAgain() {
+        var job = new AgentJob();
+        job.setMetadata(
+                objectMapper.createObjectNode().put(ObservationAdmissionService.DIGEST_METADATA_KEY, "admitted"));
+        var output = objectMapper.createObjectNode().put("rawOutput", "not an observation payload");
+        output.putObject("feedback").put("admissionDigest", "admitted");
+        job.setOutput(output);
+        handler.deliver(job);
+        org.mockito.Mockito.verify(deliveryService).requirePublished(job);
+        org.mockito.Mockito.verifyNoMoreInteractions(deliveryService);
+    }
+
     @Nested
     class CreateSubmission {
 

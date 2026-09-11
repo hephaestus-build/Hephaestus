@@ -646,7 +646,7 @@ public class GitLabWorkspaceInitializationService {
                             e);
                 }
             }
-            // Prefer JGit backfill (provides diff stats + file changes);
+            // Prefer native Git backfill (provides diff stats + file changes);
             // fall back to REST API when git is not enabled
             if (commitBackfillService != null) {
                 try {

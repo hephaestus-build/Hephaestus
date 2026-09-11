@@ -80,6 +80,9 @@ if (scenario) {
 					execute: (id: string, input: unknown) => Promise<unknown>;
 				}>;
 			}) {
+				for (const tool of ["read", "write", "edit", "bash", "grep", "find", "ls"]) {
+					assert.ok(options.tools.includes(tool), `Missing native tool: ${tool}`);
+				}
 				const lane = options.tools.includes("report_feedback")
 					? "composer"
 					: options.tools.includes("report_observation")

@@ -30,8 +30,8 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
     @Test
     @DisplayName("an unreadable 2xx body is counted, not silently dropped")
     void shouldCountUnparseableUpstreamBody() {
-        ProxyRouting.BilledAttempt attempt =
-                new ProxyRouting.BilledAttempt(LlmUsageSourceType.AGENT_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO);
+        ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
+                LlmUsageSourceType.AGENT_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, "worker-1");
         byte[] notJson = "<html>502 upstream</html>".getBytes(StandardCharsets.UTF_8);
 
         assertThatCode(() -> accounting.recordUsage(attempt, notJson, false))
@@ -49,8 +49,8 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
     @Test
     @DisplayName("a readable body still bills and leaves the counter alone")
     void shouldNotCountAParseableBody() {
-        ProxyRouting.BilledAttempt attempt =
-                new ProxyRouting.BilledAttempt(LlmUsageSourceType.AGENT_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO);
+        ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
+                LlmUsageSourceType.AGENT_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, "worker-1");
         byte[] body = ("""
             {"usage":{"prompt_tokens":10,"completion_tokens":5,\
             "prompt_tokens_details":{"cached_tokens":4},\
@@ -69,8 +69,8 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
 
     @Test
     void shouldCountInvalidTokenTotals() {
-        ProxyRouting.BilledAttempt attempt =
-                new ProxyRouting.BilledAttempt(LlmUsageSourceType.AGENT_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO);
+        ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
+                LlmUsageSourceType.AGENT_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, "worker-1");
         byte[] body = ("""
             {"usage":{"prompt_tokens":3,"prompt_tokens_details":{"cached_tokens":4}}}
             """).getBytes(StandardCharsets.UTF_8);

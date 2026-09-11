@@ -161,7 +161,8 @@ public class MentorProxyCredentialRegistry {
                                 turn.turnId(),
                                 // A turn never retries, so there is only ever attempt 0 of a given turn id.
                                 0,
-                                turn.spentUsd())));
+                                turn.spentUsd(),
+                                null)));
     }
 
     /**

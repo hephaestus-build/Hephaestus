@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -16,6 +17,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -76,6 +79,22 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient()
+                .when(transactionTemplate.execute(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> invocation
+                        .<org.springframework.transaction.support.TransactionCallback<?>>getArgument(0)
+                        .doInTransaction(new org.springframework.transaction.support.SimpleTransactionStatus()));
+        org.mockito.Mockito.lenient()
+                .doAnswer(invocation -> {
+                    invocation
+                            .<java.util.function.Consumer<org.springframework.transaction.TransactionStatus>>
+                                    getArgument(0)
+                            .accept(new org.springframework.transaction.support.SimpleTransactionStatus());
+                    return null;
+                })
+                .when(transactionTemplate)
+                .executeWithoutResult(org.mockito.ArgumentMatchers.any());
+
         handler = new GitHubPushMessageHandler(
                 gitRepositoryManager,
                 tokenService,
@@ -542,13 +561,13 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(gitRepositoryManager.isEnabled()).thenReturn(true);
             when(tokenService.isConfigured()).thenReturn(true);
             when(tokenService.getInstallationToken(42L)).thenReturn("test-token");
-            when(gitRepositoryManager.walkCommits(eq(100L), any(), any())).thenReturn(List.of());
 
             invokeHandleEvent(event);
 
-            verify(gitRepositoryManager)
-                    .ensureRepository(eq(100L), eq("https://github.com/owner/repo.git"), eq("test-token"));
-            verify(gitRepositoryManager).walkCommits(eq(100L), eq("abc123"), eq("def456"));
+            var key = new de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey(
+                    1, 100);
+            verify(gitRepositoryManager).ensureRepository(key, "https://github.com/owner/repo.git", "test-token");
+            verify(gitRepositoryManager).forEachCommitInRange(eq(key), eq("abc123"), eq("def456"), any());
         }
 
         @Test
@@ -562,8 +581,14 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             mockActiveScopeForRepo("owner/repo");
             when(gitRepositoryManager.isEnabled()).thenReturn(true);
             when(tokenService.isConfigured()).thenReturn(false);
-            when(gitRepositoryManager.ensureRepository(eq(100L), any(), any()))
-                    .thenThrow(new RuntimeException("Git clone failed"));
+            org.mockito.Mockito.doThrow(new RuntimeException("Git clone failed"))
+                    .when(gitRepositoryManager)
+                    .ensureRepository(
+                            any(
+                                    de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor
+                                            .RepositoryKey.class),
+                            any(),
+                            any());
 
             invokeHandleEvent(event);
 
@@ -599,9 +624,9 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(gitRepositoryManager.isEnabled()).thenReturn(true);
             when(tokenService.isConfigured()).thenReturn(false);
 
-            var fileChange = new GitRepositoryManager.FileChange(
-                    "src/main.java", GitRepositoryManager.ChangeType.ADDED, 10, 0, 10, null);
-            var commitInfo = new GitRepositoryManager.CommitInfo(
+            var fileChange =
+                    new CommitDetails.FileChange("src/main.java", CommitFileChange.ChangeType.ADDED, 10, 0, 10, null);
+            var commitInfo = new CommitDetails(
                     "sha1aabbccdd112233445566778899aabbccddeeff",
                     "msg",
                     null,
@@ -616,8 +641,15 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                     1,
                     List.of(fileChange),
                     List.of());
-            when(gitRepositoryManager.walkCommits(eq(100L), any(), any())).thenReturn(List.of(commitInfo));
-            when(commitRepository.existsByShaAndRepositoryId("sha1aabbccdd112233445566778899aabbccddeeff", 100L))
+            doAnswer(invocation -> {
+                        java.util.function.Consumer<CommitDetails> consumer = invocation.getArgument(3);
+                        consumer.accept(commitInfo);
+                        return null;
+                    })
+                    .when(gitRepositoryManager)
+                    .forEachCommitInRange(any(), any(), any(), any());
+            when(commitRepository.existsByShaAndRepositoryIdAndGitDetailsCapturedAtIsNotNull(
+                            "sha1aabbccdd112233445566778899aabbccddeeff", 100L))
                     .thenReturn(false);
 
             // After upsertCommit, findByShaAndRepositoryId must return a Commit entity for file changes
@@ -667,7 +699,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(gitRepositoryManager.isEnabled()).thenReturn(true);
             when(tokenService.isConfigured()).thenReturn(false);
 
-            var commitInfo = new GitRepositoryManager.CommitInfo(
+            var commitInfo = new CommitDetails(
                     "sha1aabbccdd112233445566778899aabbccddeeff",
                     "msg",
                     null,
@@ -682,8 +714,15 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                     0,
                     List.of(),
                     List.of());
-            when(gitRepositoryManager.walkCommits(eq(100L), any(), any())).thenReturn(List.of(commitInfo));
-            when(commitRepository.existsByShaAndRepositoryId("sha1aabbccdd112233445566778899aabbccddeeff", 100L))
+            doAnswer(invocation -> {
+                        java.util.function.Consumer<CommitDetails> consumer = invocation.getArgument(3);
+                        consumer.accept(commitInfo);
+                        return null;
+                    })
+                    .when(gitRepositoryManager)
+                    .forEachCommitInRange(any(), any(), any(), any());
+            when(commitRepository.existsByShaAndRepositoryIdAndGitDetailsCapturedAtIsNotNull(
+                            "sha1aabbccdd112233445566778899aabbccddeeff", 100L))
                     .thenReturn(true);
 
             invokeHandleEvent(event);
@@ -724,8 +763,21 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             invokeHandleEvent(event);
 
             // Should NOT use local git
-            verify(gitRepositoryManager, never()).ensureRepository(anyLong(), anyString(), any());
-            verify(gitRepositoryManager, never()).walkCommits(anyLong(), any(), any());
+            verify(gitRepositoryManager, never())
+                    .ensureRepository(
+                            any(
+                                    de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor
+                                            .RepositoryKey.class),
+                            anyString(),
+                            any());
+            verify(gitRepositoryManager, never())
+                    .forEachCommitInRange(
+                            any(
+                                    de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor
+                                            .RepositoryKey.class),
+                            any(),
+                            any(),
+                            any());
 
             // Should process via webhook instead (non-fallback: additions=0, not null)
             verify(commitRepository)

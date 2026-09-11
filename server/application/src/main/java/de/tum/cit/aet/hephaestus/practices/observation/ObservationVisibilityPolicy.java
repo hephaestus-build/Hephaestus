@@ -26,6 +26,16 @@ public class ObservationVisibilityPolicy {
      * remaining observations are authorized in one batch.
      */
     public Set<UUID> permitsAll(long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose) {
+        return permitted(workspaceId, observations, purpose, false);
+    }
+
+    public Set<UUID> permitsForNewDelivery(
+            long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose) {
+        return permitted(workspaceId, observations, purpose, true);
+    }
+
+    private Set<UUID> permitted(
+            long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose, boolean newDelivery) {
         List<Observation> current = new ArrayList<>(observations.size());
         for (Observation observation : observations) {
             if (ReviewClaimCurrentness.of(observation.getPracticeRevision(), observation.getPractice())
@@ -36,6 +46,8 @@ public class ObservationVisibilityPolicy {
         if (current.isEmpty()) {
             return Set.of();
         }
-        return evidenceAuthorization.permitsAll(workspaceId, current, purpose);
+        return newDelivery
+                ? evidenceAuthorization.permitsForNewDelivery(workspaceId, current, purpose)
+                : evidenceAuthorization.permitsAll(workspaceId, current, purpose);
     }
 }

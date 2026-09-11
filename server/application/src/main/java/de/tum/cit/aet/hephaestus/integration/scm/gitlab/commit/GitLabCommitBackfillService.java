@@ -12,12 +12,14 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitContributor;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitContributorRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.util.CommitUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -36,33 +38,12 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/**
- * Backfills commit history for GitLab repositories via local JGit clones.
- *
- * <p>Mirrors {@link de.tum.cit.aet.hephaestus.integration.scm.github.commit.GitHubCommitBackfillService}
- * to provide full diff statistics (additions, deletions, changedFiles) and file change
- * tracking — data that the GitLab REST API commit list endpoint does not provide.
- *
- * <p><b>How it works:</b>
- * <ol>
- *   <li>Clone or fetch the repository via {@link GitRepositoryManager}</li>
- *   <li>Resolve the HEAD SHA of the default branch</li>
- *   <li>Walk new commits since the last known SHA (or full history on first backfill)</li>
- *   <li>For each commit: upsert via native SQL, attach file changes, publish events</li>
- * </ol>
- *
- * <p>When {@code hephaestus.git.enabled=false}, {@link #backfillCommits} returns
- * {@link SyncResult#completed(int) SyncResult.completed(0)} so callers can fall
- * back to the REST-based {@link GitLabCommitSyncService}.
- *
- * @see GitLabCommitSyncService
- */
+/** Backfills missing commits across fetched branches without holding a transaction during Git I/O. */
 @Service
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true", matchIfMissing = false)
 public class GitLabCommitBackfillService {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabCommitBackfillService.class);
-    private static final int MAX_COMMITS_PER_CYCLE = 5000;
 
     /**
      * Matches a {@code Co-authored-by: Name <email>} trailer line. Case-insensitive
@@ -110,98 +91,52 @@ public class GitLabCommitBackfillService {
      */
     public SyncResult backfillCommits(Long scopeId, Repository repository) {
         if (!gitRepositoryManager.isEnabled()) {
-            // Returning ABORTED_ERROR (not COMPLETED(0)) so GitLabWorkspaceInitializationService's
-            // if/else branching falls through to the REST-based commitSyncService instead of
-            // claiming success and silently skipping. Live-run finding 2026-05-25: with
-            // hephaestus.git.enabled=false the framework wrote 0 commits across 69 repos
-            // because the JGit path returned completed(0), so the REST fallback was never
-            // reached.
+            // An error result lets the caller use REST when local Git is disabled.
             log.warn(
-                    "Skipped JGit commit backfill: reason=gitDisabled, repoId={}, repoName={} — caller should fall through to REST commit sync",
+                    "Skipped native Git commit backfill: reason=gitDisabled, repoId={}, repoName={} — caller should fall through to REST commit sync",
                     repository.getId(),
                     sanitizeForLog(repository.getNameWithOwner()));
             return SyncResult.abortedError(0);
         }
 
         Long repoId = repository.getId();
+        RepositoryKey key = new RepositoryKey(scopeId, repoId);
         String repoName = sanitizeForLog(repository.getNameWithOwner());
         String defaultBranch = repository.getDefaultBranch();
 
         if (defaultBranch == null || defaultBranch.isBlank()) {
             log.debug("Skipped commit backfill: reason=noDefaultBranch, repoId={}, repoName={}", repoId, repoName);
-            return SyncResult.completed(0);
+            return SyncResult.abortedError(0);
         }
 
         try {
-            // Phase 1: Clone/fetch (outside transaction — may be slow for initial clones)
             String serverUrl = tokenService.resolveServerUrl(scopeId);
             String token = tokenService.getAccessToken(scopeId);
             String cloneUrl = serverUrl + "/" + repository.getNameWithOwner() + ".git";
-            gitRepositoryManager.ensureRepository(repoId, cloneUrl, token);
+            gitRepositoryManager.ensureRepository(key, cloneUrl, token);
 
-            // Phase 2: Resolve HEAD of default branch
-            String headSha = gitRepositoryManager.resolveDefaultBranchHead(repoId, defaultBranch);
+            String headSha = gitRepositoryManager.resolveBranchHead(key, defaultBranch);
             if (headSha == null) {
                 log.warn(
                         "Skipped commit backfill: reason=cannotResolveHead, repoId={}, repoName={}, branch={}",
                         repoId,
                         repoName,
                         defaultBranch);
-                return SyncResult.completed(0);
+                return SyncResult.abortedError(0);
             }
 
-            // Phase 3: Determine walk range (incremental vs full)
-            String fromSha = findLatestKnownSha(repoId);
-            if (fromSha != null && fromSha.equals(headSha)) {
-                log.debug(
-                        "Skipped commit backfill: reason=alreadyUpToDate, repoId={}, repoName={}, headSha={}",
-                        repoId,
-                        repoName,
-                        abbreviateSha(headSha));
-                return SyncResult.completed(0);
-            }
-
-            // Phase 4: Walk commits reachable from ALL remote-tracking branches so
-            // commits living only on feature branches are also ingested (needed for
-            // complete commit→MR link coverage and cross-branch author attribution).
-            List<GitRepositoryManager.CommitInfo> commitInfos = gitRepositoryManager.walkAllBranches(repoId, fromSha);
-
-            if (commitInfos.isEmpty()) {
-                return SyncResult.completed(0);
-            }
-
-            // Phase 5: Process commits (with batch limit)
-            int total = commitInfos.size();
-            boolean truncated = total > MAX_COMMITS_PER_CYCLE;
-            List<GitRepositoryManager.CommitInfo> batch =
-                    truncated ? commitInfos.subList(0, MAX_COMMITS_PER_CYCLE) : commitInfos;
-
-            int processed = 0;
-            for (GitRepositoryManager.CommitInfo info : batch) {
-                if (processCommitInfo(info, repository, scopeId, serverUrl)) {
-                    processed++;
-                }
-            }
-
-            if (truncated) {
-                log.info(
-                        "Commit backfill batch limit reached: repoId={}, repoName={}, processed={}, total={}, remaining={}",
-                        repoId,
-                        repoName,
-                        processed,
-                        total,
-                        total - MAX_COMMITS_PER_CYCLE);
-            } else if (processed > 0) {
-                log.info(
-                        "Completed commit backfill: repoId={}, repoName={}, newCommits={}, totalWalked={}, mode={}, scope=all-branches",
-                        repoId,
-                        repoName,
-                        processed,
-                        total,
-                        fromSha != null ? "incremental" : "full");
-            }
-
-            return SyncResult.completed(processed);
+            int[] processed = {0};
+            gitRepositoryManager.forEachMissingCommit(
+                    key, shas -> commitRepository.findGitDetailsCapturedShas(repoId, shas), info -> {
+                        if (processCommitInfo(info, repository, scopeId, serverUrl)) {
+                            processed[0]++;
+                        }
+                    });
+            log.info(
+                    "Completed commit backfill: repoId={}, capturedCommits={}, scope=all-branches",
+                    repoId,
+                    processed[0]);
+            return SyncResult.completed(processed[0]);
         } catch (GitRepositoryManager.GitOperationException e) {
             log.error(
                     "Commit backfill failed (git operation): repoId={}, repoName={}, error={}",
@@ -215,20 +150,14 @@ public class GitLabCommitBackfillService {
         }
     }
 
-    @Nullable
-    private String findLatestKnownSha(Long repositoryId) {
-        return commitRepository
-                .findLatestByRepositoryId(repositoryId)
-                .map(Commit::getSha)
-                .orElse(null);
-    }
-
-    private boolean processCommitInfo(
-            GitRepositoryManager.CommitInfo info, Repository repository, Long scopeId, String serverUrl) {
+    private boolean processCommitInfo(CommitDetails info, Repository repository, Long scopeId, String serverUrl) {
         Boolean result = transactionTemplate.execute(status -> {
-            if (commitRepository.existsByShaAndRepositoryId(info.sha(), repository.getId())) {
+            if (commitRepository.existsByShaAndRepositoryIdAndGitDetailsCapturedAtIsNotNull(
+                    info.sha(), repository.getId())) {
                 return false;
             }
+
+            boolean newCommit = !commitRepository.existsByShaAndRepositoryId(info.sha(), repository.getId());
 
             Long providerId = Objects.requireNonNull(
                     repository.getProvider() != null
@@ -274,15 +203,15 @@ public class GitLabCommitBackfillService {
                     .findByShaAndRepositoryId(info.sha(), repository.getId())
                     .orElse(null);
             if (commit == null) {
-                // Upsert just ran — this should never happen. Defensive: skip downstream writes.
-                return true;
+                throw new IllegalStateException("Commit missing after upsert");
             }
 
+            commit.getFileChanges().clear();
             if (!info.fileChanges().isEmpty()) {
-                for (GitRepositoryManager.FileChange fc : info.fileChanges()) {
+                for (CommitDetails.FileChange fc : info.fileChanges()) {
                     CommitFileChange fileChange = new CommitFileChange();
                     fileChange.setFilename(fc.filename());
-                    fileChange.setChangeType(CommitFileChange.fromGitChangeType(fc.changeType()));
+                    fileChange.setChangeType(fc.changeType());
                     fileChange.setAdditions(fc.additions());
                     fileChange.setDeletions(fc.deletions());
                     fileChange.setChanges(fc.changes());
@@ -294,7 +223,8 @@ public class GitLabCommitBackfillService {
 
             upsertContributors(commit.getId(), info, authorId, committerId, providerId);
 
-            publishCommitCreated(commit, repository, scopeId);
+            commitRepository.markGitDetailsCaptured(repository.getId(), info.sha(), Instant.now());
+            if (newCommit) publishCommitCreated(commit, repository, scopeId);
             return true;
         });
         return Boolean.TRUE.equals(result);
@@ -316,7 +246,7 @@ public class GitLabCommitBackfillService {
      */
     private void upsertContributors(
             Long commitId,
-            GitRepositoryManager.CommitInfo info,
+            CommitDetails info,
             @Nullable Long authorId,
             @Nullable Long committerId,
             @Nullable Long providerId) {
@@ -392,9 +322,5 @@ public class GitLabCommitBackfillService {
                 IdentityProviderType.GITLAB);
 
         eventPublisher.publishEvent(new ScmDomainEvent.CommitCreated(commitData, context));
-    }
-
-    private static String abbreviateSha(String sha) {
-        return sha.length() > 7 ? sha.substring(0, 7) : sha;
     }
 }

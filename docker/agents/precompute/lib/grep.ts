@@ -118,13 +118,6 @@ async function collectMatchesForGlob(
 	return matches.slice(0, maxResults);
 }
 
-function shouldIncludeDiscoveredFile(path: string): boolean {
-	const segments = path.split("/");
-	return !segments.some(
-		(segment) => segment === "node_modules" || segment === ".build" || segment.startsWith("."),
-	);
-}
-
 /**
  * Run grep on a directory. Returns structured matches.
  *
@@ -190,10 +183,7 @@ export async function readFileLines(path: string): Promise<Map<number, string>> 
 }
 
 export function findFiles(dir: string, extension: string): string[] {
-	const pattern = `**/*.${extension}`;
-	return globFilesSync(pattern, dir)
-		.filter((path) => shouldIncludeDiscoveredFile(path))
-		.map((path) => join(dir, path));
+	return globFilesSync(`**/*.${extension}`, dir).map((path) => join(dir, path));
 }
 
 export function findSwiftFiles(dir: string): string[] {

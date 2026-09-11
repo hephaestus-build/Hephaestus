@@ -36,7 +36,7 @@ import tools.jackson.databind.node.ObjectNode;
  * no {@code inputs/sources/scm/} mount. The case context is one mirrored document — its prose, its
  * collection and its authorship — at {@code inputs/context/document.md}.
  *
- * <p><b>Delivery records observations and stops there.</b> {@code docs.document} has one lane,
+ * <p><b>Admission records observations; delivery has no provider side effect.</b> {@code docs.document} has one lane,
  * {@link de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackLane#IN_APP}, and no channel writes to
  * it, so publishing a delivery event would look like feedback and reach nobody; add a delivery step only
  * alongside a channel for that lane.
@@ -141,6 +141,7 @@ public class DocumentReviewHandler implements JobTypeHandler {
                     new PreparedJobInputs(
                             prepared.files(),
                             prepared.filesOnDisk(),
+                            prepared.directories(),
                             prepared.cleanups(),
                             artifactSourceManifest,
                             readiness.report()));
@@ -150,7 +151,12 @@ public class DocumentReviewHandler implements JobTypeHandler {
         practiceCatalogInjector.inject(files, job, ArtifactKinds.DOCUMENT, practices);
         log.info("Document context preparation complete: {} files, jobId={}", files.size(), job.getId());
         return new PreparedJobInputs(
-                files, prepared.filesOnDisk(), prepared.cleanups(), artifactSourceManifest, readiness.report());
+                files,
+                prepared.filesOnDisk(),
+                prepared.directories(),
+                prepared.cleanups(),
+                artifactSourceManifest,
+                readiness.report());
     }
 
     private TaskEnvelope buildTaskEnvelope(AgentJob job, JsonNode metadata) {
@@ -177,9 +183,16 @@ public class DocumentReviewHandler implements JobTypeHandler {
         return prompt;
     }
 
-    @Override
-    public void deliver(AgentJob job) {
-        var parsed = resultParser.parse(job.getOutput());
+    public PracticeDetectionDeliveryService.PreparedObservations prepareObservations(
+            AgentJob job, JsonNode observations) {
+        ObjectNode output = objectMapper.createObjectNode();
+        output.put(
+                "rawOutput",
+                objectMapper
+                        .createObjectNode()
+                        .set("observations", observations)
+                        .toString());
+        var parsed = resultParser.parse(output);
         if (!parsed.discarded().isEmpty()) {
             log.info(
                     "Discarded {} observations during parsing: jobId={}",
@@ -195,12 +208,14 @@ public class DocumentReviewHandler implements JobTypeHandler {
         List<PracticeDetectionResultParser.ValidatedObservation> coercedObservations =
                 PracticeDetectionResultParser.coerceCoherence(parsed.validObservations(), defectDetectorSlugs);
 
-        PracticeDetectionDeliveryService.DeliveryResult result = deliveryService.deliver(job, coercedObservations);
-        log.info(
-                "Document delivery complete: inserted={}, duplicate={}, jobId={}",
-                result.inserted(),
-                result.discardedDuplicate(),
-                job.getId());
+        return deliveryService.prepare(job, coercedObservations);
+    }
+
+    @Override
+    public void deliver(AgentJob job) {
+        if (ObservationAdmissionService.observationsWereRefused(job)) return;
+        ObservationAdmissionService.requireMatchingCompositionDigest(job);
+        deliveryService.requirePublished(job);
     }
 
     private static String lastSegmentOf(SignalName signal) {
