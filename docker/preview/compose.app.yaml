@@ -352,8 +352,13 @@ services:
     deploy:
       resources:
         limits:
+          # The buildpack derives the heap from this ceiling, and reserves metaspace, code cache and
+          # 250 thread stacks out of it first. At 2G that left ~1.14G of heap with no headroom, and
+          # the application exits on the first OutOfMemoryError, so the container restarted forever
+          # and the stack never came up. Startup peaks above what it then settles at: staging holds
+          # ~1.26G for the whole process once warm.
           cpus: "1.0"
-          memory: 2G
+          memory: 3G
           pids: 512
   webapp:
     image: ghcr.io/hephaestus-build/webapp:${SOURCE_COMMIT:?Coolify supplies the deployed commit}
