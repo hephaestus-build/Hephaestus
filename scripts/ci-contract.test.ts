@@ -2759,11 +2759,36 @@ void test("CodeQL selects languages with native change detection", async () => {
 	assert.ok(isSeq(steps));
 	const selection = steps.items.find((item) => isMap(item) && item.get("id") === "filter");
 	assert.ok(isMap(selection));
-	assert.equal(
-		selection.get("if"),
-		"github.event_name == 'pull_request' || github.event_name == 'merge_group'",
-	);
+	const parsed = new Parser(
+		new Lexer(String(selection.get("if"))).lex().tokens,
+		["github"],
+		[],
+	).parse();
+	for (const [event, before, expected] of [
+		["pull_request", "", true],
+		["merge_group", "", true],
+		["push", "a".repeat(40), true],
+		["push", "", false],
+		["push", "0".repeat(40), false],
+		["schedule", "a".repeat(40), false],
+		["workflow_dispatch", "a".repeat(40), false],
+	] as const) {
+		const context: unknown = JSON.parse(
+			JSON.stringify({ github: { event_name: event, event: { before } } }),
+			data.reviver,
+		);
+		assert.ok(context instanceof data.Dictionary);
+		assert.equal(
+			new Evaluator(parsed, context).evaluate().coerceString(),
+			String(expected),
+			`${event} ${before}`,
+		);
+	}
 	const filter = step(workflow, ["jobs", "changes"], "dorny/paths-filter");
+	assert.equal(
+		filter.get("base"),
+		`\${{ github.event_name == 'push' && github.event.before || '' }}`,
+	);
 	const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CodeQL filters");
 	assert.deepEqual(Object.keys(filters), ["actions", "java-kotlin", "javascript-typescript"]);
 	for (const [language, patterns] of Object.entries(filters)) {
