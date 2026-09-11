@@ -3,20 +3,20 @@ package de.tum.cit.aet.hephaestus;
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
-import de.tum.cit.aet.hephaestus.core.security.CsrfCookieFilter;
 import de.tum.cit.aet.hephaestus.core.security.ImpersonationGuard;
 import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
-import de.tum.cit.aet.hephaestus.core.security.SpaCsrfTokenRequestHandler;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
 import de.tum.cit.aet.hephaestus.feature.FeatureFlag;
 import de.tum.cit.aet.hephaestus.observability.ReplicaIdentityFilter;
 import de.tum.cit.aet.hephaestus.observability.RequestCorrelationFilter;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -28,10 +28,12 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.FactorGrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -40,7 +42,9 @@ import org.springframework.security.oauth2.server.resource.web.BearerTokenResolv
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.authentication.session.NullAuthenticatedSessionStrategy;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
@@ -91,12 +95,32 @@ public class SecurityConfig {
             // Flat `roles` claim on the Hephaestus-issued JWT (ADR 0017). The role strings
             // ("admin", "mentor_access", …) map 1:1 to granted authorities consumed by @PreAuthorize.
             final var roles = Optional.ofNullable((List<String>) claims.get("roles"));
-            return roles.map(List::stream)
+            Stream<GrantedAuthority> granted = roles.map(List::stream)
                     .orElse(Stream.empty())
                     .map(SimpleGrantedAuthority::new)
-                    .map(GrantedAuthority.class::cast)
+                    .map(GrantedAuthority.class::cast);
+            return Stream.concat(granted, signInFactor(claims.get("auth_time")).stream())
                     .toList();
         };
+    }
+
+    /**
+     * The session's {@code auth_time} as Spring Security's authorization-code factor, so a freshness
+     * requirement can be declared with the framework's own {@code requireFactor(…).validDuration(…)}
+     * rather than compared by hand. GitHub and GitLab authorization-code logins are the only factor this
+     * instance has; a token minted without {@code auth_time} carries no factor and is treated as stale.
+     */
+    private static Optional<GrantedAuthority> signInFactor(@Nullable Object authTime) {
+        Instant issuedAt =
+                switch (authTime) {
+                    case Instant instant -> instant;
+                    case Number epochSeconds -> Instant.ofEpochSecond(epochSeconds.longValue());
+                    case null, default -> null;
+                };
+        return Optional.ofNullable(issuedAt)
+                .map(at -> FactorGrantedAuthority.withAuthority(FactorGrantedAuthority.AUTHORIZATION_CODE_AUTHORITY)
+                        .issuedAt(at)
+                        .build());
     }
 
     @Bean
@@ -179,10 +203,7 @@ public class SecurityConfig {
             http.csrf(csrf -> csrf.disable());
             http.authorizeHttpRequests(requests -> {
                 requests.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
-                // OpenAPI / Swagger endpoints are public on the resource-server chain; they must
-                // also be public on the lockdown chain so spec generation works on no-JWT-decoder boots
-                // (the `specs` profile boots without a JwtDecoder and would otherwise 403 on
-                // `mvn verify -Dapp.profiles=specs`).
+                // The specs profile needs these endpoints without a JwtDecoder.
                 requests.requestMatchers("/v3/api-docs/**", "/v3/api-docs.yaml", "/swagger-ui/**", "/swagger-ui.html")
                         .permitAll();
                 if (devTriggerEnabled) {
@@ -211,37 +232,25 @@ public class SecurityConfig {
             });
         });
 
-        // Evict a stale access cookie BEFORE the bearer filter authenticates it: a logged-out browser
-        // still holding the cookie (expired, or signed by a rotated key) must not 401 a public endpoint
-        // like GET /identity-providers, or the login page can't load its sign-in options. The filter
-        // uses a local (no-DB) decode, so the authenticated hot path keeps its single revocation read.
         StaleAuthCookieFilter staleAuthCookieFilter = staleAuthCookieFilterProvider.getIfAvailable();
         if (staleAuthCookieFilter != null) {
             http.addFilterBefore(staleAuthCookieFilter, BearerTokenAuthenticationFilter.class);
         }
 
-        // Stateless double-submit CSRF (ADR 0017). The access-token cookie is sent automatically by
-        // the browser on same-site requests, so SameSite=Lax alone is the only forgery barrier — and
-        // Lax still permits top-level cross-site POST navigations. We close that gap with a
-        // double-submit token: the repository writes the raw token to a JS-readable
-        // `__Host-XSRF-TOKEN` cookie; the SPA echoes it in the `X-XSRF-TOKEN` header (see
-        // webapp/src/main.tsx). A cross-site attacker cannot read the cookie, so cannot supply the
-        // header. SpaCsrfTokenRequestHandler resolves the header value as the raw (unmasked) token to
-        // match what the SPA sends.
-        //
-        // CSRF is required ONLY for cookie-authenticated, state-changing requests
-        // ({@link #requiresCsrf}): safe methods (GET/HEAD/OPTIONS) are exempt, and so are requests
-        // carrying an `Authorization: Bearer` header — a bearer token is never auto-attached by the
-        // browser cross-site, so those requests are not CSRF-vulnerable (this also keeps API clients
-        // and bearer-token integration tests working). Webhooks, OAuth callbacks and the optional
-        // dev-trigger are additionally excluded — they are not browser cookie POSTs.
-        http.csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository())
-                .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler())
-                .requireCsrfProtectionMatcher(this::requiresCsrf));
-        // Force the deferred token to render the __Host-XSRF-TOKEN cookie on every response so the SPA
-        // always has a token to echo, even on a bare GET /user.
-        http.addFilterAfter(new CsrfCookieFilter(), AuthorizationFilter.class);
-
+        http.csrf(csrf -> csrf.spa()
+                .csrfTokenRepository(csrfTokenRepository())
+                // A JWT request validates an existing session; it is not a new sign-in. Resetting
+                // the CSRF cookie on every authentication races concurrent requests and other tabs.
+                .sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy())
+                .withObjectPostProcessor(new ObjectPostProcessor<CsrfFilter>() {
+                    @Override
+                    public <O extends CsrfFilter> O postProcess(O filter) {
+                        // Resource-server initialization exempts all resolved tokens, including cookies.
+                        // Set the matcher after initialization to retain CSRF checks for cookie auth.
+                        filter.setRequireCsrfProtectionMatcher(SecurityConfig.this::requiresCsrf);
+                        return filter;
+                    }
+                }));
         // Security headers (HSTS, CSP (enforced), COOP, COEP, Referrer-Policy,
         // X-Content-Type-Options) for the user-facing resource-server chain.
         SecurityHeaders.apply(http);
@@ -347,48 +356,30 @@ public class SecurityConfig {
 
     /**
      * Single canonical matcher for the optional passwordless dev sign-in, shared by the authorize rule
-     * and the CSRF predicate. The POST is pre-auth (no {@code __Host-} cookie yet), so it is not
-     * CSRF-vulnerable; the carve-out is scoped to exactly this path and only active when the flag is on.
+     * and the CSRF predicate. This development-only bypass is absent in production.
      */
     static final RequestMatcher DEV_LOGIN_MATCHER =
             PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/dev-login");
 
-    /**
-     * CSRF applies only to cookie-authenticated, state-changing browser requests. Returns
-     * {@code false} (skip CSRF) for safe methods, for any request bearing an
-     * {@code Authorization: Bearer} header (bearer auth is not CSRF-vulnerable; covers API clients +
-     * bearer-token tests), and for the non-browser-cookie POST paths (webhooks, OAuth callbacks, and
-     * the optional dev trigger). Everything else — i.e. a non-safe request relying on the
-     * {@code __Host-HEPHAESTUS_AT} cookie — must present the double-submit token.
-     */
+    /** Unsafe requests require CSRF unless they use only bearer auth or an enabled dev endpoint. */
     private boolean requiresCsrf(jakarta.servlet.http.HttpServletRequest request) {
         if (SAFE_METHODS.contains(request.getMethod())) {
             return false;
         }
-        // A bearer-token request is not CSRF-vulnerable (a browser never auto-attaches an Authorization
-        // header cross-site). But CookieBearerTokenResolver is cookie-FIRST: a request that ALSO carries
-        // the __Host- auth cookie is authenticated by the cookie regardless of the header, so it must
-        // still present the double-submit token. Skip CSRF only for a PURE bearer request (no auth cookie).
+        // The resolver prefers cookies, so adding a bearer header must not bypass their CSRF check.
         String authorization = request.getHeader("Authorization");
         if (authorization != null && authorization.regionMatches(true, 0, "Bearer ", 0, 7) && !hasAuthCookie(request)) {
             return false;
         }
-        // No path skips for /webhooks/, /oauth/callback/, or /login/oauth2/code/ here: those are owned
-        // by higher-precedence chains (worker-hub, oauth2Login) and never reach this chain, so a skip
-        // here would be dead. The only live carve-out is the optional dev trigger, matched by the SAME
-        // PathPatternRequestMatcher the authorize rule uses (DEV_TRIGGER_MATCHER) so the two cannot drift.
         if (devTriggerEnabled && DEV_TRIGGER_MATCHER.matches(request)) {
             return false;
         }
-        // The passwordless dev sign-in is a pre-auth POST with no auth cookie → not CSRF-vulnerable.
-        // Scoped to exactly /auth/dev-login and only when the flag is on (same matcher as the permit rule).
         if (devLoginEnabled && DEV_LOGIN_MATCHER.matches(request)) {
             return false;
         }
         return true;
     }
 
-    /** True if the request carries the {@code __Host-} access-token cookie (CookieBearerTokenResolver's primary source). */
     private boolean hasAuthCookie(jakarta.servlet.http.HttpServletRequest request) {
         jakarta.servlet.http.Cookie[] cookies = request.getCookies();
         if (cookies == null) {
@@ -409,21 +400,14 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(corsProperties.allowedOrigins());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
-        configuration.setAllowedHeaders(
-                // X-XSRF-TOKEN: the SPA is cross-origin in dev and echoes the double-submit CSRF token on
-                //   every state-changing request (see SpaCsrfTokenRequestHandler + webapp/src/main.tsx).
-                //   Without it the preflight Access-Control-Allow-Headers omits the header and the browser
-                //   blocks every cookie-auth write cross-origin.
-                // X-Impersonation-Allow-Writes: opt-in guardrail header for impersonation write requests
-                //   (see ImpersonationGuard) — must survive preflight for the same cross-origin reason.
-                List.of(
-                        "Authorization",
-                        "Content-Type",
-                        "Accept",
-                        "X-Requested-With",
-                        "Origin",
-                        "X-XSRF-TOKEN",
-                        "X-Impersonation-Allow-Writes"));
+        configuration.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "Accept",
+                "X-Requested-With",
+                "Origin",
+                "X-XSRF-TOKEN",
+                "X-Impersonation-Allow-Writes"));
         configuration.setExposedHeaders(
                 List.of(ReplicaIdentityFilter.HEADER_NAME, RequestCorrelationFilter.HEADER_NAME));
         configuration.setAllowCredentials(true);

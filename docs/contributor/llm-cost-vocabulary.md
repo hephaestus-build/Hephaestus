@@ -35,7 +35,7 @@ figure in user-facing copy; "cost" belongs to a single recorded item.
 
 Prices are frozen per event: the ledger (`llm_usage_event`) stores the rates that were applied, so a
 price change never rewrites history. See [ADR 0026 — one pricing
-authority](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0026-per-purpose-agent-bindings-and-llm-governance.md).
+authority](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0026-per-purpose-agent-bindings-and-llm-governance.md).
 
 ## Rule 2 — There are two caps, they are different people's money, and they are never summed
 
@@ -134,7 +134,7 @@ field. Meters print "X of Y" and derive the difference for display only.
 Where an effect is not immediate, copy states the bound the system actually keeps rather than hedging.
 Saving a cap says "New calls resume **within a minute**" because `ProxyBudgetGate` caches its verdict
 for 30 seconds — "resumes now" would be a small lie and "about a minute" a hedge. See
-[ADR 0027](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0027-dialog-lifetime-and-where-a-write-outcome-lands.md)
+[ADR 0027](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0027-dialog-lifetime-and-where-a-write-outcome-lands.md)
 for where the confirmation itself is allowed to appear.
 
 ## Rule 8 — A cap is monthly and it is not scoped to the month you are looking at
@@ -152,4 +152,4 @@ setting, so the editors are reachable on the current month only, and a past mont
 | Price wording (rules 1, 4) | `webapp/src/lib/llm-pricing.ts` |
 | USD rendering (rules 1, 5) | `webapp/src/lib/money.ts` |
 | Which purse, and whether it pauses (rules 2, 4) | `LlmBudgetVerdict`, `FundingSource`, `LlmBudgetService` |
-| The in-flight bound behind rule 7's "within a minute" | [ADR 0026](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0026-per-purpose-agent-bindings-and-llm-governance.md) |
+| The in-flight bound behind rule 7's "within a minute" | [ADR 0026](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0026-per-purpose-agent-bindings-and-llm-governance.md) |

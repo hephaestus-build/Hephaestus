@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
+import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -73,6 +75,7 @@ public class LlmConnectionAdminController {
             responseCode = "409",
             description = "An LLM connection with this slug already exists",
             content = @Content(schema = @Schema(hidden = true)))
+    @RequiresRecentSignIn
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "LLM_CONNECTION_CREATED")
     public ResponseEntity<LlmConnectionDTO> create(@Valid @RequestBody CreateLlmConnectionRequestDTO request) {
         LlmConnection created = connectionService.create(request);
@@ -93,6 +96,7 @@ public class LlmConnectionAdminController {
             responseCode = "404",
             description = "LLM connection not found",
             content = @Content(schema = @Schema(hidden = true)))
+    @RequiresRecentSignIn
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "LLM_CONNECTION_UPDATED")
     public ResponseEntity<LlmConnectionDTO> update(
             @PathVariable Long id, @Valid @RequestBody UpdateLlmConnectionRequestDTO request) {
@@ -110,12 +114,14 @@ public class LlmConnectionAdminController {
             responseCode = "409",
             description = "Cannot delete a connection still referenced by one or more models",
             content = @Content(schema = @Schema(hidden = true)))
+    @RequiresRecentSignIn
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "LLM_CONNECTION_DELETED")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         connectionService.delete(id);
         return ResponseEntity.noContent().build();
     }
 
+    @RecentSignInExempt(reason = "tests a stored credential; stores no configuration")
     @PostMapping("/{id}/probe")
     @Operation(summary = "Test a stored connection and fetch its models", operationId = "adminProbeLlmConnection")
     @AuditExempt(reason = "tests a stored credential; stores no configuration")
@@ -123,6 +129,7 @@ public class LlmConnectionAdminController {
         return ResponseEntity.ok(probeService.probeStored(id));
     }
 
+    @RecentSignInExempt(reason = "tests a draft credential the caller already holds; stores no configuration")
     @PostMapping("/probe")
     @Operation(summary = "Test a draft connection and fetch its models", operationId = "adminProbeLlmConnectionDraft")
     @AuditExempt(reason = "tests a draft connection before it is saved; stores no configuration")

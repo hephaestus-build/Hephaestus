@@ -26,6 +26,10 @@ import type {
 	CreateAgentSessionRuntimeFactory,
 } from "@earendil-works/pi-coding-agent";
 
+import {
+	SANDBOX_RESOURCE_LOADER_OPTIONS,
+	SANDBOX_SETTINGS_MANAGER_OPTIONS,
+} from "./pi-agent-sandbox.ts";
 import { errorText } from "./pi-error-text.ts";
 import {
 	MENTOR_ERROR_CODES as ERR,
@@ -358,11 +362,16 @@ async function createPiRuntime(sdk: PiSdk, agentDir: string): Promise<MentorRunt
 		createAgentSessionFromServices,
 		createAgentSessionServices,
 		SessionManager,
+		SettingsManager,
 		ModelRuntime,
 	} = sdk;
 
 	const fetchContextTool = defineFetchContextTool(sdk);
 	const linkObservationTool = defineLinkObservationTool(sdk);
+	// Same sandbox posture as the practice runner: this runner shares the image, the SDK and the
+	// working directory with it, so the SDK's ancestor-walking discovery hits the same denied read
+	// (pi-agent-sandbox.ts) unless a mentor session opts out of it too.
+	const settingsManager = SettingsManager.create(CWD, agentDir, SANDBOX_SETTINGS_MANAGER_OPTIONS);
 
 	const sharedModelRuntime = await ModelRuntime.create({
 		authPath: `${agentDir}/auth.json`,
@@ -395,7 +404,8 @@ async function createPiRuntime(sdk: PiSdk, agentDir: string): Promise<MentorRunt
 			cwd,
 			agentDir: sessionAgentDir,
 			modelRuntime: sharedModelRuntime,
-			resourceLoaderOptions,
+			settingsManager,
+			resourceLoaderOptions: { ...resourceLoaderOptions, ...SANDBOX_RESOURCE_LOADER_OPTIONS },
 		});
 		// Least-privilege mentor surface: context is exposed through fetch_context, not
 		// filesystem spelunking. This keeps the model on the typed context contract and

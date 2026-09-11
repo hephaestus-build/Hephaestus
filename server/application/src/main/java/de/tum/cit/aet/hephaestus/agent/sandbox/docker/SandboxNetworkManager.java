@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -21,16 +20,19 @@ import org.slf4j.LoggerFactory;
 public class SandboxNetworkManager {
 
     private static final Logger log = LoggerFactory.getLogger(SandboxNetworkManager.class);
-    static final String NETWORK_PREFIX = "agent-net-";
+
+    public String networkPrefix() {
+        return "hephaestus-sandbox-" + properties.owner() + "--";
+    }
 
     private final DockerNetworkOperations networkOps;
-    private final SandboxProperties properties;
+    private final DockerSandboxProperties properties;
     private final Supplier<String> hostnameSupplier;
 
     /** Resolved once at startup; cached for the lifetime of the bean. */
     private volatile @Nullable String appServerContainerId;
 
-    public SandboxNetworkManager(DockerNetworkOperations networkOps, SandboxProperties properties) {
+    public SandboxNetworkManager(DockerNetworkOperations networkOps, DockerSandboxProperties properties) {
         this(networkOps, properties, () -> System.getenv("HOSTNAME"));
     }
 
@@ -38,7 +40,7 @@ public class SandboxNetworkManager {
      * @param hostnameSupplier provides the container HOSTNAME fallback (testable seam)
      */
     SandboxNetworkManager(
-            DockerNetworkOperations networkOps, SandboxProperties properties, Supplier<String> hostnameSupplier) {
+            DockerNetworkOperations networkOps, DockerSandboxProperties properties, Supplier<String> hostnameSupplier) {
         this.networkOps = networkOps;
         this.properties = properties;
         this.hostnameSupplier = hostnameSupplier;
@@ -52,8 +54,9 @@ public class SandboxNetworkManager {
      * @return the Docker network ID
      */
     public String createJobNetwork(UUID jobId, boolean allowInternet) {
-        String networkName = NETWORK_PREFIX + jobId;
+        String networkName = networkPrefix() + jobId;
         boolean internal = !allowInternet;
+        removeLeftoverNetwork(networkName);
         String networkId = networkOps.createNetwork(networkName, internal);
         log.info("Created job network: name={}, internal={}, networkId={}", networkName, internal, networkId);
         return networkId;
@@ -72,12 +75,38 @@ public class SandboxNetworkManager {
         if (containerId == null || containerId.isBlank()) {
             log.warn("Cannot determine app-server container ID — app server is likely running on the host, "
                     + "not in Docker. Agent containers will use host.docker.internal to reach the LLM proxy. "
-                    + "Set hephaestus.sandbox.app-server-container-id to suppress this warning.");
+                    + "Set hephaestus.sandbox.docker.app-server-container-id to suppress this warning.");
             return null;
         }
         String ip = networkOps.connectToNetwork(networkId, containerId);
         log.info("Connected app-server to network {}: containerId={}, ip={}", networkId, containerId, ip);
         return ip;
+    }
+
+    /**
+     * A network under this job's own name is left from an earlier run of this same job, and nothing
+     * else reclaims it: Docker refuses the duplicate name, and the reconciler spares a network whose
+     * job is still queued — which a job retrying on that very conflict is. An attempt that was
+     * requeued as orphaned can still be running on a worker whose heartbeat only lapsed, but that
+     * attempt is superseded already, and Docker refuses to remove a network a running container
+     * holds, so this fails loudly rather than pulling the network out from under it.
+     */
+    private void removeLeftoverNetwork(String networkName) {
+        List<DockerOperations.NetworkInfo> candidates;
+        try {
+            candidates = networkOps.listNetworksByName(networkName);
+        } catch (RuntimeException e) {
+            // A probe that cannot answer is not a leftover, and createNetwork still refuses a duplicate name.
+            log.debug("Could not check for a leftover network {}: {}", networkName, e.getMessage());
+            return;
+        }
+        for (DockerOperations.NetworkInfo leftover : candidates) {
+            if (!networkName.equals(leftover.name())) {
+                continue; // the daemon's name filter is not exact; only this exact name is ours to remove
+            }
+            log.warn("Removing the network an interrupted run left behind: name={}, id={}", networkName, leftover.id());
+            forceRemoveNetwork(leftover.id(), networkName);
+        }
     }
 
     /** Disconnect the app-server from a job network. Idempotent — no-op if already disconnected. */
@@ -94,9 +123,29 @@ public class SandboxNetworkManager {
         networkOps.removeNetwork(networkId);
     }
 
-    /** List orphaned job networks (matching the agent-net-* prefix). */
+    /**
+     * Remove a job network whose app-server connection may have outlived its run: Docker refuses to
+     * remove a network a container is still attached to, and a run that never cleaned up left the
+     * app-server on it. A disconnect that fails is not worth stopping for — the removal reports what
+     * the daemon actually refuses.
+     *
+     * @param name the network name, for the log line only
+     */
+    public void forceRemoveNetwork(String networkId, String name) {
+        try {
+            disconnectAppServer(networkId);
+        } catch (RuntimeException e) {
+            log.debug("Could not disconnect app-server from {}: {}", name, e.getMessage());
+        }
+        networkOps.removeNetwork(networkId);
+    }
+
+    /** List candidate networks owned by this installation. */
     public List<DockerOperations.NetworkInfo> listOrphanedNetworks() {
-        return networkOps.listNetworksByName(NETWORK_PREFIX);
+        return networkOps.listNetworksByName(networkPrefix()).stream()
+                .filter(network -> network.name().startsWith(networkPrefix())
+                        && network.name().length() == networkPrefix().length() + 36)
+                .toList();
     }
 
     private String resolveAppServerContainerId() {

@@ -65,9 +65,9 @@ keep the default (CLOSED) and expose the narrow sub-package APIs via
   `practices::finding`
 - `activity` — `activity::scoring`
 
-Wire `ModulithVerificationTest` into the architecture surefire group; generate
-diagrams under `server/application/target/modulith-docs/` as CI artifacts (not committed to git —
-avoids review churn).
+The Gradle `architectureTest` tier runs the module-boundary verification. The
+[testing guide](../contributor/testing.mdx) owns the current commands;
+[ADR 0043](0043-gradle-java-build.md) supersedes the original Maven test wiring.
 
 ## Consequences
 

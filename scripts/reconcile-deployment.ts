@@ -19,8 +19,7 @@ export type Stack = "proxy" | "core" | "app";
 
 /**
  * The application server runs the Liquibase migration the webhook runtime in `core` reads, and the
- * edge comes last so it never routes to a stack that is still starting. The push deploy declares the
- * same order in `.github/workflows/deploy-locked-compose.yml`, and one test holds the two together.
+ * edge comes last so it never routes to a stack that is still starting.
  */
 const STACK_ORDER: readonly Stack[] = ["app", "core", "proxy"];
 
@@ -43,6 +42,19 @@ const FETCH_TIMEOUT_MS = 5 * 60_000;
 const UNIT_FILES = ["hephaestus-reconcile.service", "hephaestus-reconcile.timer"] as const;
 const SYSTEMD_UNITS = "/etc/systemd/system";
 
+/**
+ * A condition an operator resolves rather than a defect to diagnose — a host waiting for its first
+ * promotion is the one that reaches production. The entry point prints the message and exits
+ * non-zero; a stack trace would say a failure happened here, when what happened is that nothing has
+ * been promoted yet.
+ */
+export class OperatorActionRequired extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "OperatorActionRequired";
+	}
+}
+
 export interface Channel {
 	/** What this channel asks the host to run: a release tag, or the commit a build came from. */
 	release: string;
@@ -50,6 +62,8 @@ export interface Channel {
 	images?: Readonly<Record<string, string>>;
 	allowRollback?: boolean;
 	freeze?: boolean;
+	/** Take this channel's PostgreSQL pin now instead of the one the host carries. */
+	refreshDatabaseImage?: boolean;
 }
 
 export interface AppliedState {
@@ -99,6 +113,10 @@ export function parseChannel(value: unknown): Channel {
 	const record = asRecord(value, "channel");
 	const allowRollback = optionalBoolean(record.allowRollback, "channel.allowRollback");
 	const freeze = optionalBoolean(record.freeze, "channel.freeze");
+	const refreshDatabaseImage = optionalBoolean(
+		record.refreshDatabaseImage,
+		"channel.refreshDatabaseImage",
+	);
 
 	if (record.commit !== undefined) {
 		if (record.release !== undefined)
@@ -106,7 +124,13 @@ export function parseChannel(value: unknown): Channel {
 		const commit = asString(record.commit, "channel.commit");
 		if (!isCommit(commit))
 			throw new Error(`channel.commit must be a full 40-character commit, not ${commit}`);
-		return { release: commit, images: parseImages(record.images), allowRollback, freeze };
+		return {
+			release: commit,
+			images: parseImages(record.images),
+			allowRollback,
+			freeze,
+			refreshDatabaseImage,
+		};
 	}
 
 	const release = asString(record.release, "channel.release");
@@ -118,8 +142,15 @@ export function parseChannel(value: unknown): Channel {
 /** The channel file the promotion signs, in the shape `parseChannel` reads back. */
 export function serializeChannel(channel: Channel): string {
 	const { release, images, allowRollback = false, freeze = false } = channel;
+	// Only a commit channel carries an image pin, so only it can be asked to stop carrying one.
 	const record = images
-		? { commit: release, images, allowRollback, freeze }
+		? {
+				commit: release,
+				images,
+				allowRollback,
+				freeze,
+				refreshDatabaseImage: channel.refreshDatabaseImage ?? false,
+			}
 		: { release, allowRollback, freeze };
 	return `${JSON.stringify(record, null, "\t")}\n`;
 }
@@ -261,14 +292,54 @@ export function unlockedImages(rendered: readonly string[], lockEnv: string): st
 	return rendered.filter((image) => !locked.has(image));
 }
 
-export function lockedReleaseCommit(lockEnv: string): string {
-	const values = lockEnv
+function lockValues(lockEnv: string, key: string): string[] {
+	return lockEnv
 		.split("\n")
-		.filter((line) => line.startsWith("HEPHAESTUS_RELEASE_COMMIT="))
-		.map((line) => line.slice(line.indexOf("=") + 1));
+		.filter((line) => line.startsWith(`${key}=`))
+		.map((line) => line.slice(key.length + 1).trim());
+}
+
+export function lockedReleaseCommit(lockEnv: string): string {
+	const values = lockValues(lockEnv, "HEPHAESTUS_RELEASE_COMMIT");
 	if (values.length !== 1 || !isCommit(values[0] ?? ""))
 		throw new Error("release lock must contain one source commit");
 	return values[0] ?? "";
+}
+
+const POSTGRES_IMAGE = "HEPHAESTUS_IMAGE_POSTGRES";
+
+/**
+ * The paths whose change makes CI rebuild the PostgreSQL image, as `cicd.yml` names them; one test
+ * holds the two lists together. CI rebuilds on more than these — see `commitImages`.
+ */
+export const POSTGRES_IMAGE_INPUTS = [
+	"docker/postgres/**",
+	".github/workflows/ci-docker-build.yml",
+	".github/workflows/reusable-docker-build.yml",
+] as const;
+
+/**
+ * The images a commit channel runs on this host: the channel's, except that PostgreSQL stays at the
+ * pin the host last applied unless `rebuilt` says to take the channel's.
+ *
+ * A commit channel names a new PostgreSQL digest on every commit — `docker/postgres/Dockerfile` says
+ * why the image is rebuilt that often — and Compose recreates a container whose image changed, which
+ * drops every connection pool and kills the practice reviews in flight. A release is applied as
+ * signed: its lock is the artifact its evidence describes, so this never touches one.
+ */
+export function carryPostgresImage(
+	images: Readonly<Record<string, string>>,
+	appliedLockEnv: string | undefined,
+	rebuilt: boolean,
+): Readonly<Record<string, string>> {
+	const pinned = images[POSTGRES_IMAGE];
+	if (rebuilt || appliedLockEnv === undefined || pinned === undefined) return images;
+	const [kept, ...rest] = lockValues(appliedLockEnv, POSTGRES_IMAGE);
+	if (kept === undefined || rest.length > 0 || !IMAGE_DIGEST.test(kept)) return images;
+	// The digest is kept, never the repository it sits in: a channel naming the image somewhere else
+	// is naming a different image rather than a rebuild of this one.
+	if (kept.slice(0, kept.indexOf("@")) !== pinned.slice(0, pinned.indexOf("@"))) return images;
+	return { ...images, [POSTGRES_IMAGE]: kept };
 }
 
 function isStack(name: string): name is Stack {
@@ -355,7 +426,7 @@ function fetchOptions(config: HostConfig): { cwd: string; signal: AbortSignal } 
 	return { cwd: config.checkout, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) };
 }
 
-async function main(): Promise<void> {
+export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	const config = hostConfig(process.env);
 	const appliedFile = join(config.stateDirectory, "applied.json");
 	const applied = await readApplied(appliedFile);
@@ -384,7 +455,7 @@ async function main(): Promise<void> {
 				applied.release,
 				commit,
 			);
-			if (await followTooling(config, tree)) {
+			if (await followTooling(config, tree, unitsDirectory)) {
 				console.log(`Adopted the tooling of ${applied.release}; the next run uses it`);
 				return;
 			}
@@ -404,6 +475,18 @@ async function main(): Promise<void> {
 		})
 	).trim();
 	const channelPath = `channels/${config.channel}.json`;
+	// An environment nobody has promoted yet has no channel file. That is the first thing a new
+	// host meets, so say which channel is missing and what publishes it rather than letting git's
+	// "path does not exist" surface as an unhandled exec failure.
+	if (
+		!(await succeeds("git", ["cat-file", "-e", `${channelCommit}:${channelPath}`], {
+			cwd: config.checkout,
+		}))
+	)
+		throw new OperatorActionRequired(
+			`no ${channelPath} on deploy-state: the "${config.channel}" environment has not been ` +
+				"promoted yet. Run the Promote workflow for it and this host applies it on the next tick.",
+		);
 	const channelJson = await output("git", ["show", `${channelCommit}:${channelPath}`], {
 		cwd: config.checkout,
 	});
@@ -520,9 +603,15 @@ async function main(): Promise<void> {
 		// A commit channel carries its own digests, and the channel file they arrived in was
 		// signature-verified before this point, so there is no release to fetch or verify. The
 		// version the instance reports is the commit, which is what the environment is following.
-		await writeFile(lockFile, commitLockEnvironment(decision.release, channel.images), {
-			mode: 0o600,
-		});
+		const images = await commitImages(
+			config.checkout,
+			lockDirectory,
+			applied,
+			releaseCommit,
+			channel.images,
+			channel.refreshDatabaseImage,
+		);
+		await writeFile(lockFile, commitLockEnvironment(decision.release, images), { mode: 0o600 });
 	} else {
 		// The verifier is the tooling this tick runs, never the release's own copy of it.
 		await run(
@@ -622,7 +711,75 @@ async function main(): Promise<void> {
 		);
 	console.log(`Applied ${decision.release} to ${config.stacks.join(", ")}`);
 	// Only now, with the release verified and running, does the host run that release's tooling.
-	await followTooling(config, releaseTree);
+	await followTooling(config, releaseTree, unitsDirectory);
+}
+
+const DAY_SECONDS = 24 * 60 * 60;
+
+/**
+ * Whether the two commits carry committer dates in the same UTC day. Bucketing the commits rather
+ * than reading a clock keeps the answer the same on every tick and on every host, so a run that is
+ * retried does not decide differently from the one before it. A commit the checkout does not have
+ * answers no, which is the direction that applies the channel.
+ */
+async function sameDay(checkout: string, previous: string, target: string): Promise<boolean> {
+	let stamps: number[];
+	try {
+		stamps = (
+			await output("git", ["show", "--no-patch", "--format=%ct", previous, target], {
+				cwd: checkout,
+			})
+		)
+			.trim()
+			.split("\n")
+			.map(Number);
+	} catch {
+		return false;
+	}
+	const [before, after] = stamps;
+	if (stamps.length !== 2 || before === undefined || after === undefined) return false;
+	if (!Number.isSafeInteger(before) || !Number.isSafeInteger(after)) return false;
+	return Math.floor(before / DAY_SECONDS) === Math.floor(after / DAY_SECONDS);
+}
+
+/**
+ * `carryPostgresImage` with what this host knows: the lock it wrote for the applied release, which
+ * is its own record of the pins it verified and ran, and git's word on the two commits.
+ *
+ * CI rebuilds the PostgreSQL image whenever `POSTGRES_IMAGE_INPUTS` changed, and on top of that
+ * unconditionally for every push to the default branch. The host takes the first rebuild the commit
+ * it is applying earned, and the unconditional one once a day rather than on every apply — so the
+ * `apt-get upgrade` the image exists to run reaches a following host within a day of the push that
+ * built it, instead of the host freezing on one digest between changes to the image's own tree.
+ * `refresh` is the operator asking for the channel's pin before either of those says so.
+ */
+export async function commitImages(
+	checkout: string,
+	lockDirectory: string,
+	applied: AppliedState | undefined,
+	releaseCommit: string,
+	images: Readonly<Record<string, string>>,
+	refresh = false,
+): Promise<Readonly<Record<string, string>>> {
+	if (applied === undefined || refresh) return images;
+	const previous = appliedCommit(applied);
+	if (previous === undefined) return images;
+	let appliedLockEnv: string | undefined;
+	try {
+		appliedLockEnv = await readFile(join(lockDirectory, `${applied.release}.env`), "utf8");
+	} catch (error) {
+		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+	}
+	// `--quiet` exits 0 only when nothing under the paths differs. A commit the checkout does not have
+	// fails it too, and that reads as changed: when the host cannot tell, it runs what the channel
+	// names rather than keep an image on a guess.
+	const unchanged = await succeeds(
+		"git",
+		["diff", "--quiet", previous, releaseCommit, "--", ...POSTGRES_IMAGE_INPUTS],
+		{ cwd: checkout },
+	);
+	const rebuilt = !unchanged || !(await sameDay(checkout, previous, releaseCommit));
+	return carryPostgresImage(images, appliedLockEnv, rebuilt);
 }
 
 /**
@@ -631,13 +788,17 @@ async function main(): Promise<void> {
  * and its reconciler could not read a current channel — so a rollback to one keeps the tooling the
  * host has. Every step is idempotent, because a tick can stop between any two of them.
  */
-async function followTooling(config: HostConfig, tree: string): Promise<boolean> {
+async function followTooling(
+	config: HostConfig,
+	tree: string,
+	unitsDirectory: string,
+): Promise<boolean> {
 	if (!(await carriesToolingLink(tree))) {
 		console.log(`Keeping the current tooling: ${tree} predates the tooling link`);
 		return false;
 	}
 	const moved = await adoptTooling(config.tooling, tree);
-	const changed = await syncUnits(tree, SYSTEMD_UNITS);
+	const changed = await syncUnits(tree, unitsDirectory);
 	if (changed.length > 0) console.log(`Updated ${changed.join(", ")}`);
 	// systemd itself knows whether the units it loaded match the files, so a tick that stopped
 	// between writing a unit and reloading is finished by the next one.
@@ -782,6 +943,14 @@ if (import.meta.main) {
 	} catch (error) {
 		// An unwritable metric must not replace the error that caused the failure.
 		await reportFailure().catch(() => {});
-		throw error;
+		// A host waiting to be promoted is a state an operator resolves, not a defect: the journal
+		// gets the sentence that says what to do. Everything else keeps its stack, because a stack is
+		// what a defect is diagnosed from.
+		if (error instanceof OperatorActionRequired) {
+			console.error(error.message);
+			process.exitCode = 1;
+		} else {
+			throw error;
+		}
 	}
 }

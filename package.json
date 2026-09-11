@@ -1,41 +1,42 @@
 {
 	"name": "hephaestus",
-	"version": "0.76.0",
+	"version": "0.79.0",
 	"private": true,
 	"type": "module",
 	"scripts": {
 		"prepare": "node scripts/enable-hooks.ts"
 	},
 	"devDependencies": {
-		"@changesets/cli": "3.0.1",
-		"@commitlint/cli": "21.0.1",
-		"@commitlint/config-conventional": "21.0.1",
+		"@actions/expressions": "0.3.61",
+		"@changesets/cli": "3.0.2",
+		"@commitlint/cli": "21.2.2",
+		"@commitlint/config-conventional": "21.2.2",
 		"@earendil-works/pi-coding-agent": "0.84.4",
 		"@nats-io/jetstream": "3.4.0",
 		"@nats-io/transport-node": "3.4.0",
-		"@openapitools/openapi-generator-cli": "2.32.0",
-		"@types/node": "24.12.4",
+		"@openapitools/openapi-generator-cli": "2.41.0",
+		"@types/node": "24.13.3",
 		"@types/npm-package-arg": "6.1.4",
-		"@types/pg": "8.20.0",
+		"@types/pg": "8.23.1",
 		"ajv": "8.20.0",
 		"ajv-formats": "3.0.1",
-		"commander": "14.0.3",
-		"fast-xml-parser": "5.11.0",
+		"commander": "15.0.0",
+		"fast-xml-parser": "5.11.1",
 		"fast-xml-validator": "1.4.2",
 		"graphql": "17.0.2",
-		"jsdom": "29.1.1",
+		"jsdom": "30.0.1",
 		"jsonc-parser": "3.3.1",
 		"mdast-util-from-markdown": "2.0.3",
 		"mdast-util-mdx": "3.0.0",
-		"mermaid": "11.16.1",
+		"mermaid": "11.17.2",
 		"micromark-extension-mdxjs": "3.0.0",
-		"mprocs": "0.9.3",
-		"npm-package-arg": "13.0.2",
+		"mprocs": "0.9.6",
+		"npm-package-arg": "14.0.0",
 		"oxfmt": "catalog:",
 		"oxlint": "catalog:",
 		"oxlint-tsgolint": "catalog:",
-		"pg": "8.20.0",
-		"surge": "0.43.1",
+		"pg": "8.23.0",
+		"surge": "0.44.0",
 		"typescript": "7.0.2",
 		"vite-plus": "0.3.0",
 		"yaml": "2.9.0"
@@ -43,17 +44,17 @@
 	"devEngines": {
 		"packageManager": {
 			"name": "pnpm",
-			"version": "12.0.0",
+			"version": "12.3.4",
 			"onFail": "error"
 		},
 		"runtime": {
 			"name": "node",
-			"version": "24.19.0",
+			"version": "24.20.0",
 			"onFail": "error"
 		}
 	},
 	"engines": {
-		"node": "24.19.0"
+		"node": "24.20.0"
 	},
-	"packageManager": "pnpm@12.0.0"
+	"packageManager": "pnpm@12.3.4"
 }

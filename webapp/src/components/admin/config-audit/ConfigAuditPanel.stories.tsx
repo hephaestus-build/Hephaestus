@@ -8,6 +8,7 @@ import { AdminConfigAuditPanel, WorkspaceConfigAuditPanel } from "./ConfigAuditP
 
 const llmConnectionCreated: ConfigAuditEntryView = {
 	id: 2,
+	elevatedViaInstanceAdmin: false,
 	occurredAt: new Date("2026-07-23T14:02:00Z"),
 	action: "CREATED",
 	entityType: "WORKSPACE_LLM_CONNECTION",
@@ -22,6 +23,7 @@ const llmConnectionCreated: ConfigAuditEntryView = {
 const entries: ConfigAuditEntryView[] = [
 	{
 		id: 3,
+		elevatedViaInstanceAdmin: false,
 		occurredAt: new Date("2026-07-24T09:14:32Z"),
 		action: "UPDATED",
 		entityType: "AGENT_BINDING",
@@ -37,6 +39,7 @@ const entries: ConfigAuditEntryView[] = [
 	llmConnectionCreated,
 	{
 		id: 1,
+		elevatedViaInstanceAdmin: false,
 		occurredAt: new Date("2026-07-22T06:00:00Z"),
 		action: "UPDATED",
 		entityType: "WORKSPACE_STATUS",

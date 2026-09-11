@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.sync.api;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
+import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -15,7 +16,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -62,7 +62,7 @@ public class SyncController {
 
     @GetMapping("/{connectionId}/sync/jobs")
     @Operation(summary = "Paginated sync job history for one connection")
-    public ResponseEntity<Page<SyncJobDTO>> listConnectionSyncJobs(
+    public ResponseEntity<PageResponseDTO<SyncJobDTO>> listConnectionSyncJobs(
             WorkspaceContext workspace,
             @PathVariable Long connectionId,
             @RequestParam(defaultValue = "0") int page,
@@ -73,7 +73,8 @@ public class SyncController {
                 safePage,
                 pageSize,
                 Sort.by("createdAt").descending().and(Sort.by("id").descending()));
-        return ResponseEntity.ok(syncStatusService.getJobs(workspace.id(), connectionId, pageable));
+        return ResponseEntity.ok(
+                PageResponseDTO.from(syncStatusService.getJobs(workspace.id(), connectionId, pageable)));
     }
 
     /**

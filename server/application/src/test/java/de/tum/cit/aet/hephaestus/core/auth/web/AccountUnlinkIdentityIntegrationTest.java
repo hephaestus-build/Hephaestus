@@ -9,10 +9,12 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -68,7 +70,8 @@ class AccountUnlinkIdentityIntegrationTest extends RealAuthIntegrationTest {
                 .headers(h -> h.setBearerAuth(token))
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         // Hard delete: the unlinked row is gone (not soft-disabled), the other identity stays active.
         assertThat(identityLinkRepository.findById(persistedId(github.getId()))).isEmpty();
@@ -90,7 +93,8 @@ class AccountUnlinkIdentityIntegrationTest extends RealAuthIntegrationTest {
                 .headers(h -> h.setBearerAuth(token))
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         // The row is gone, so the global (provider, subject) uniqueness is freed and the SAME GitHub
         // identity can be linked again — the promise the disconnect dialog makes. A soft-delete
@@ -141,7 +145,8 @@ class AccountUnlinkIdentityIntegrationTest extends RealAuthIntegrationTest {
                 .headers(h -> h.setBearerAuth(myToken))
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
 
         assertThat(identityLinkRepository.findActiveByAccountId(persistedId(other.getId())))
                 .extracting(IdentityLink::getId)
@@ -161,7 +166,8 @@ class AccountUnlinkIdentityIntegrationTest extends RealAuthIntegrationTest {
                 .headers(h -> h.setBearerAuth(token))
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -225,7 +231,9 @@ class AccountUnlinkIdentityIntegrationTest extends RealAuthIntegrationTest {
     }
 
     private String tokenFor(Account account) {
-        return jwtIssuer.issue(principalFactory.forAccount(account), null, null).value();
+        return jwtIssuer
+                .issue(principalFactory.forAccount(account), TokenConstraints.session(null, Instant.now()), null)
+                .value();
     }
 
     private static long persistedId(@Nullable Long id) {

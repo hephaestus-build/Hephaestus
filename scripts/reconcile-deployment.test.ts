@@ -1,16 +1,30 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import { execFileSync, spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import {
+	copyFile,
+	mkdir,
+	mkdtemp,
+	readFile,
+	readlink,
+	rm,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { test } from "node:test";
 
+import { parseDocument } from "yaml";
+
 import { environmentForGitFixture, GIT_REPOSITORY_VARIABLES } from "./lib/git-environment.ts";
-import { parseJson } from "./lib/json.ts";
+import { at, parseJson } from "./lib/json.ts";
 import {
 	adoptTooling,
 	appliedCommit,
 	carriesToolingLink,
+	carryPostgresImage,
+	commitImages,
 	commitLockEnvironment,
 	ensureReleaseTree,
 	decide,
@@ -210,6 +224,7 @@ await test("a channel may follow the default branch by naming a commit and what 
 		images,
 		allowRollback: false,
 		freeze: false,
+		refreshDatabaseImage: false,
 	});
 });
 
@@ -273,6 +288,135 @@ await test("an environment following the branch reports the commit it runs", () 
 		rendered.indexOf("HEPHAESTUS_IMAGE_ALPINE") < rendered.indexOf("HEPHAESTUS_IMAGE_WEBAPP"),
 	);
 	assert.ok(rendered.endsWith("\n"));
+});
+
+const running = `ghcr.io/o/postgres@sha256:${"a".repeat(64)}`;
+const rebuilt = `ghcr.io/o/postgres@sha256:${"b".repeat(64)}`;
+
+await test("a host following commits keeps the database pin it applied until the image is rebuilt", () => {
+	const channel = { ...images, HEPHAESTUS_IMAGE_POSTGRES: rebuilt };
+	const appliedLock = commitLockEnvironment("d".repeat(40), {
+		...images,
+		HEPHAESTUS_IMAGE_POSTGRES: running,
+	});
+	const kept = carryPostgresImage(channel, appliedLock, false);
+	assert.deepEqual(kept, { ...images, HEPHAESTUS_IMAGE_POSTGRES: running });
+	// The lock the host then renders names what it keeps, so the app stack passes the lock guard
+	// with the same pin — and the same Compose configuration — as before.
+	assert.deepEqual(unlockedImages([running], commitLockEnvironment(commit, kept)), []);
+
+	assert.deepEqual(carryPostgresImage(channel, appliedLock, true), channel);
+	assert.deepEqual(carryPostgresImage(channel, undefined, false), channel);
+	assert.deepEqual(
+		carryPostgresImage(channel, "HEPHAESTUS_IMAGE_POSTGRES=ghcr.io/o/postgres:main\n", false),
+		channel,
+	);
+	assert.deepEqual(carryPostgresImage(images, appliedLock, false), images);
+	// A channel that moves the image to another repository is naming a different image.
+	assert.deepEqual(
+		carryPostgresImage(
+			{
+				...images,
+				HEPHAESTUS_IMAGE_POSTGRES: `ghcr.io/elsewhere/postgres@sha256:${"b".repeat(64)}`,
+			},
+			appliedLock,
+			false,
+		),
+		{ ...images, HEPHAESTUS_IMAGE_POSTGRES: `ghcr.io/elsewhere/postgres@sha256:${"b".repeat(64)}` },
+	);
+	// A lock a host wrote with CRLF line endings still names the pin it wrote.
+	assert.deepEqual(carryPostgresImage(channel, `HEPHAESTUS_IMAGE_POSTGRES=${running}\r\n`, false), {
+		...images,
+		HEPHAESTUS_IMAGE_POSTGRES: running,
+	});
+});
+
+await test("the `postgres` service takes the carried pin and nothing else the commit decides", () => {
+	// Carrying one lock value only leaves the container alone if that value is the whole of what the
+	// commit puts into the service; a label or an environment entry rendered from the lock would
+	// recreate it anyway.
+	const stack: unknown = parseDocument(readFileSync("docker/compose.app.yaml", "utf8")).toJS();
+	const service = at(stack, ["services", "postgres"], "docker/compose.app.yaml");
+	// `$$` is Compose's escape for a literal `$`, so only a single one interpolates.
+	const interpolated = new Set(
+		[...JSON.stringify(service).matchAll(/(?<!\$)\$\{(\w+)/g)].map(([, name]) => name),
+	);
+	assert.deepEqual([...interpolated], ["HEPHAESTUS_IMAGE_POSTGRES"]);
+});
+
+await test("the database image is kept while git says nothing rebuilt it that day", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "reconcile-images-"));
+	try {
+		const checkout = join(directory, "checkout");
+		await mkdir(join(checkout, "docker", "postgres"), { recursive: true });
+		await mkdir(join(checkout, ".github", "workflows"), { recursive: true });
+		const git = (date: string, ...args: string[]): string =>
+			execFileSync("git", args, {
+				cwd: checkout,
+				encoding: "utf8",
+				env: environmentForGitFixture({ GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date }),
+			}).trim();
+		const day = "2026-09-03T12:00:00+0000";
+		git(day, "init", "--quiet", "--initial-branch=main");
+		git(day, "config", "user.email", "host@example.invalid");
+		git(day, "config", "user.name", "host");
+		const commitAll = (message: string, date = day): string => {
+			git(date, "add", "--all");
+			git(date, "commit", "--quiet", "-m", message);
+			return git(date, "rev-parse", "HEAD");
+		};
+		const dockerfile = join(checkout, "docker", "postgres", "Dockerfile");
+		const buildWorkflow = join(checkout, ".github", "workflows", "reusable-docker-build.yml");
+		await writeFile(dockerfile, "FROM postgres:18\n");
+		await writeFile(buildWorkflow, "on: workflow_call\n");
+		await writeFile(join(checkout, "compose.yaml"), "services: {}\n");
+		const first = commitAll("first");
+		await writeFile(join(checkout, "compose.yaml"), "services: {app: {}}\n");
+		const unrelated = commitAll("a commit that leaves the image alone");
+		await writeFile(join(checkout, "compose.yaml"), "services: {app: {ports: []}}\n");
+		const nextDay = commitAll("the first commit of the next day", "2026-09-04T09:00:00+0000");
+		await writeFile(dockerfile, "FROM postgres:19\n");
+		const rebuild = commitAll("a commit that rebuilds the image");
+		await writeFile(buildWorkflow, "on: workflow_call\n# and a build argument\n");
+		const rebuiltByWorkflow = commitAll("a commit that changes how the image is built");
+
+		const channel = { ...images, HEPHAESTUS_IMAGE_POSTGRES: rebuilt };
+		const carried = { ...images, HEPHAESTUS_IMAGE_POSTGRES: running };
+		const lockDirectory = join(directory, "release-locks");
+		await mkdir(lockDirectory);
+		await writeFile(join(lockDirectory, `${first}.env`), commitLockEnvironment(first, carried));
+		const ran = { release: first, channelCommit: "e".repeat(40), appliedAt: applied.appliedAt };
+
+		assert.deepEqual(await commitImages(checkout, lockDirectory, ran, unrelated, channel), carried);
+		// CI rebuilds the image for either tree, so a host that watched only one would run neither
+		// rebuild; the day after, it takes the rebuild every push earns whatever the diff says.
+		assert.deepEqual(await commitImages(checkout, lockDirectory, ran, rebuild, channel), channel);
+		assert.deepEqual(
+			await commitImages(checkout, lockDirectory, ran, rebuiltByWorkflow, channel),
+			channel,
+		);
+		assert.deepEqual(await commitImages(checkout, lockDirectory, ran, nextDay, channel), channel);
+		// The operator asked for the channel's pin, so the day and the diff decide nothing.
+		assert.deepEqual(
+			await commitImages(checkout, lockDirectory, ran, unrelated, channel, true),
+			channel,
+		);
+		// The channel's pin is applied when the host cannot order the two commits at all, or has
+		// never applied anything.
+		assert.deepEqual(
+			await commitImages(checkout, lockDirectory, ran, "f".repeat(40), channel),
+			channel,
+		);
+		assert.deepEqual(
+			await commitImages(checkout, lockDirectory, undefined, unrelated, channel),
+			channel,
+		);
+		// A host whose lock for the applied release is gone has no record of what it runs.
+		await rm(join(lockDirectory, `${first}.env`));
+		assert.deepEqual(await commitImages(checkout, lockDirectory, ran, unrelated, channel), channel);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
 });
 
 await test("a build that finishes late cannot put staging back on an older commit", () => {
@@ -462,3 +606,322 @@ await test("only a record that kept its commit, or names one, says what tooling 
 		/hephaestus_deploy_tooling_pending 1\n/,
 	);
 });
+
+const reconcilerSubprocess = {
+	skip: process.platform === "win32" && "the systemd host uses POSIX executable stubs",
+};
+
+async function reconcilerFixture(directory: string) {
+	const checkout = join(directory, "checkout");
+	const bootstrap = join(directory, "bootstrap");
+	const units = join(directory, "units");
+	const bin = join(directory, "bin");
+	const callsFile = join(directory, "calls");
+	const metricsFile = join(directory, "deploy.prom");
+	const image = `example.invalid/app@sha256:${"a".repeat(64)}`;
+	const git = (...args: string[]) =>
+		execFileSync("git", args, {
+			cwd: checkout,
+			encoding: "utf8",
+			env: environmentForGitFixture(),
+		}).trim();
+	await Promise.all([checkout, units, bin].map((path) => mkdir(path, { recursive: true })));
+	for (const tree of [checkout, bootstrap]) {
+		await mkdir(join(tree, "scripts/lib"), { recursive: true });
+		await writeFile(join(tree, "package.json"), '{"type":"module"}\n');
+		for (const file of ["reconcile-deployment.ts", "lib/env.ts", "lib/json.ts", "lib/process.ts"])
+			await copyFile(join(import.meta.dirname, file), join(tree, "scripts", file));
+	}
+	const sourceUnits = join(checkout, "docker/self-host/systemd");
+	await mkdir(sourceUnits, { recursive: true });
+	await writeFile(
+		join(sourceUnits, "hephaestus-reconcile.service"),
+		"[Service]\nExecStart=/usr/bin/env node /var/lib/hephaestus/tooling/scripts/reconcile-deployment.ts\n",
+	);
+	await writeFile(
+		join(sourceUnits, "hephaestus-reconcile.timer"),
+		"[Timer]\nOnUnitActiveSec=1min\n",
+	);
+	await writeFile(
+		join(checkout, "scripts/prepare-release-lock.ts"),
+		'throw new Error("candidate release must not verify itself");\n',
+	);
+	git("init", "--quiet", "--initial-branch=main");
+	git("config", "user.email", "host@example.invalid");
+	git("config", "user.name", "host");
+	git("config", "core.autocrlf", "false");
+	git("add", ".");
+	git("commit", "--quiet", "-m", "release");
+	const releaseCommit = git("rev-parse", "HEAD");
+	git("tag", "v1.0.0");
+	git("checkout", "--quiet", "-b", "deploy-state");
+	await mkdir(join(checkout, "channels"));
+	await writeFile(join(checkout, "channels/test.json"), JSON.stringify({ release: "v1.0.0" }));
+	await writeFile(join(checkout, "channels/test.json.sigstore.json"), "{}\n");
+	git("add", "channels");
+	git("commit", "--quiet", "-m", "promotion");
+	const channelCommit = git("rev-parse", "HEAD");
+	const origin = join(directory, "origin.git");
+	git("clone", "--quiet", "--bare", checkout, origin);
+	git("remote", "add", "origin", origin);
+	git("checkout", "--quiet", "main");
+	await symlink(bootstrap, join(directory, "tooling"));
+	await writeFile(metricsFile, "previous metrics\n");
+	await writeFile(callsFile, "");
+	const realGit = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
+	const recordCall = `import { appendFileSync } from "node:fs";
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(callsFile)}, [NAME, ...args].join(" ") + "\\n");\n`;
+	// `--` keeps Node from interpreting Docker's --env-file as its own startup option.
+	for (const [name, body] of Object.entries({
+		git: `import { spawnSync } from "node:child_process";
+const result = spawnSync(${JSON.stringify(realGit)}, args, { stdio: "inherit" });
+process.exit(result.status ?? 1);`,
+		cosign: 'process.exit(process.env.FAIL_VERIFICATION === "1" ? 1 : 0);',
+		systemctl: 'if (args[0] === "show") console.log("yes");',
+		docker: `if (args.includes("config")) {
+const stack = args[args.indexOf("--project-name") + 1];
+const image = stack === process.env.UNLOCKED_STACK ? "example.invalid/unverified:latest" : ${JSON.stringify(image)};
+console.log(JSON.stringify({ services: { app: { image } } }));
+}`,
+	})) {
+		await writeFile(
+			join(bin, name),
+			`#!/usr/bin/env -S node --\n${recordCall.replace("NAME", JSON.stringify(name))}${body}\n`,
+			{
+				mode: 0o755,
+			},
+		);
+	}
+	await writeFile(
+		join(bootstrap, "scripts/prepare-release-lock.ts"),
+		`import { appendFileSync, writeFileSync } from "node:fs";
+appendFileSync(${JSON.stringify(callsFile)}, "trusted verifier\\n");
+writeFileSync(process.argv[3], ${JSON.stringify(`HEPHAESTUS_RELEASE_COMMIT=${releaseCommit}\nHEPHAESTUS_IMAGE_APP=${image}\n`)});\n`,
+	);
+	await writeFile(
+		join(directory, "run.mjs"),
+		`import { main } from "./tooling/scripts/reconcile-deployment.ts";
+await main(${JSON.stringify(units)});\n`,
+	);
+	const record = { release: "v1.0.0", channelCommit, appliedAt: applied.appliedAt };
+	return {
+		bootstrap,
+		units,
+		releaseCommit,
+		record,
+		metricsFile,
+		calls: () => readFile(callsFile, "utf8"),
+		run: ({
+			cli = false,
+			failVerification = false,
+			unlockedStack,
+			channel = "test",
+		}: {
+			cli?: boolean;
+			failVerification?: boolean;
+			channel?: string;
+			unlockedStack?: string;
+		} = {}) =>
+			spawnSync(
+				process.execPath,
+				[join(directory, cli ? "tooling/scripts/reconcile-deployment.ts" : "run.mjs")],
+				{
+					encoding: "utf8",
+					timeout: 30_000,
+					env: environmentForGitFixture({
+						PATH: `${bin}${delimiter}${process.env.PATH ?? ""}`,
+						STATE_DIRECTORY: directory,
+						HEPHAESTUS_CHANNEL: channel,
+						HEPHAESTUS_STACKS: "proxy core app",
+						HEPHAESTUS_PROMOTE_IDENTITY: "https://example.invalid/promote",
+						HEPHAESTUS_METRICS_FILE: metricsFile,
+						FAIL_VERIFICATION: failVerification ? "1" : "0",
+						UNLOCKED_STACK: unlockedStack,
+					}),
+				},
+			),
+	};
+}
+
+await test(
+	"a host waiting for its first promotion says so, without a stack trace",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(join(tmpdir(), "reconcile-unpromoted-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			// `cli: true` runs the real entry point, which is where the two failure classes part.
+			const result = fixture.run({ cli: true, channel: "production" });
+
+			assert.notEqual(result.status, 0, "an unpromoted host must not report success");
+			assert.match(result.stderr, /channels\/production\.json/);
+			assert.match(result.stderr, /has not been promoted yet/);
+			assert.match(result.stderr, /Run the Promote workflow/);
+			// The whole point: the journal gets the sentence, not a Node stack.
+			assert.doesNotMatch(result.stderr, /^\s+at /mu);
+			assert.doesNotMatch(result.stderr, /OperatorActionRequired:/u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"startup adopts the recorded release before attempting to read the channel",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(join(tmpdir(), "reconcile-startup-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const record = { ...fixture.record, commit: fixture.releaseCommit };
+			await writeFile(join(directory, "applied.json"), JSON.stringify(record));
+			const result = fixture.run();
+			assert.equal(result.status, 0, result.stderr);
+			const tree = join(directory, "releases", record.release);
+			assert.equal(await readlink(join(directory, "tooling")), tree);
+			assert.deepEqual(await readApplied(join(directory, "applied.json")), record);
+			assert.equal(await readFile(fixture.metricsFile, "utf8"), "previous metrics\n");
+			assert.equal(
+				await readFile(join(fixture.units, "hephaestus-reconcile.service"), "utf8"),
+				await readFile(join(tree, "docker/self-host/systemd/hephaestus-reconcile.service"), "utf8"),
+			);
+			const calls = await fixture.calls();
+			assert.match(calls, /git worktree add/);
+			assert.match(calls, /git status[\s\S]*systemctl show[\s\S]*systemctl daemon-reload/);
+			assert.doesNotMatch(calls, /git fetch|cosign|docker/);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"the symlinked CLI preserves pending tooling after a no-op and a failure",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(join(tmpdir(), "reconcile-cli-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			await writeFile(join(directory, "applied.json"), JSON.stringify(fixture.record));
+			const noop = fixture.run({ cli: true });
+			assert.equal(noop.status, 0, noop.stderr);
+			assert.match(noop.stdout, /No change: already running v1\.0\.0/);
+			assert.match(
+				await readFile(fixture.metricsFile, "utf8"),
+				/^hephaestus_deploy_reconcile_success 1$/m,
+			);
+			assert.match(
+				await readFile(fixture.metricsFile, "utf8"),
+				/^hephaestus_deploy_tooling_pending 1$/m,
+			);
+			const failed = fixture.run({ cli: true, failVerification: true });
+			assert.notEqual(failed.status, 0);
+			assert.match(failed.stderr, /cosign exited with code 1/);
+			assert.match(
+				await readFile(fixture.metricsFile, "utf8"),
+				/^hephaestus_deploy_reconcile_success 0$/m,
+			);
+			assert.match(
+				await readFile(fixture.metricsFile, "utf8"),
+				/^hephaestus_deploy_tooling_pending 1$/m,
+			);
+			assert.equal(await readlink(join(directory, "tooling")), fixture.bootstrap);
+			assert.deepEqual(await readApplied(join(directory, "applied.json")), fixture.record);
+			assert.doesNotMatch(await fixture.calls(), /docker|systemctl/);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"an apply verifies with the running tooling before starting stacks and adopting the release",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(join(tmpdir(), "reconcile-apply-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const result = fixture.run();
+			assert.equal(result.status, 0, result.stderr);
+			const record = await readApplied(join(directory, "applied.json"));
+			assert.equal(record?.release, fixture.record.release);
+			assert.equal(record.commit, fixture.releaseCommit);
+			assert.equal(record.channelCommit, fixture.record.channelCommit);
+			assert.equal(await readlink(join(directory, "tooling")), join(directory, "releases/v1.0.0"));
+			assert.match(
+				await readFile(fixture.metricsFile, "utf8"),
+				/^hephaestus_deploy_reconcile_success 1$/m,
+			);
+			const calls = (await fixture.calls())
+				.split("\n")
+				.filter((line) => /^(cosign|trusted verifier|docker|systemctl)/.test(line));
+			assert.match(calls[0] ?? "", /^cosign verify-blob/);
+			assert.equal(calls[1], "trusted verifier");
+			const docker = calls.filter((line) => line.startsWith("docker"));
+			assert.equal(docker.length, 7);
+			for (const [index, stack] of ["app", "core", "proxy"].entries())
+				assert.match(
+					docker[index] ?? "",
+					new RegExp(`--project-name ${stack} .* config --format json$`),
+				);
+			assert.match(docker[3] ?? "", /--project-name core .* up .* nats-server$/);
+			for (const [index, stack] of ["app", "core", "proxy"].entries())
+				assert.match(
+					docker[index + 4] ?? "",
+					new RegExp(`--project-name ${stack} .* up .* --remove-orphans$`),
+				);
+			assert.match(calls.at(-2) ?? "", /^systemctl show/);
+			assert.equal(calls.at(-1), "systemctl daemon-reload");
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"the CLI explains an unpromoted channel without starting any stack",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(join(tmpdir(), "reconcile-missing-channel-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const result = fixture.run({ cli: true, channel: "unpromoted" });
+			assert.notEqual(result.status, 0);
+			assert.match(result.stderr, /no channels\/unpromoted\.json on deploy-state/);
+			assert.match(result.stderr, /Run the Promote workflow/);
+			assert.equal(await readApplied(join(directory, "applied.json")), undefined);
+			assert.equal(await readlink(join(directory, "tooling")), fixture.bootstrap);
+			assert.match(
+				await readFile(fixture.metricsFile, "utf8"),
+				/^hephaestus_deploy_reconcile_success 0$/m,
+			);
+			assert.doesNotMatch(await fixture.calls(), /cosign|docker|systemctl/);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"an unlocked image in a later stack leaves the applied release and every container untouched",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(join(tmpdir(), "reconcile-unlocked-image-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const previous = { ...fixture.record, release: "v0.9.0" };
+			await writeFile(join(directory, "applied.json"), JSON.stringify(previous));
+
+			const result = fixture.run({ unlockedStack: "proxy" });
+
+			assert.notEqual(result.status, 0);
+			assert.match(result.stderr, /proxy renders images outside the release lock/);
+			assert.deepEqual(await readApplied(join(directory, "applied.json")), previous);
+			assert.equal(await readlink(join(directory, "tooling")), fixture.bootstrap);
+			assert.doesNotMatch(await fixture.calls(), / up |systemctl/);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);

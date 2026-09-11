@@ -16,12 +16,22 @@ void test("a native issue type supplies classification metadata without a label"
 	assert.match(result.directions[0] ?? "", /issueType="Bug"/);
 });
 
-void test("an unclassified issue reports the complete metadata gap", () => {
+void test("empty metadata is reported without prescribing triage work", () => {
 	const result = triagesTheIssueWithMetadata("owner/repository", new Map(), {});
 
 	assert.equal(result.metrics.hasIssueType, 0);
-	assert.equal(
-		result.directions.at(-1),
-		"No issue type, label, assignee, or milestone is present.",
-	);
+	assert.deepEqual(result.directions, [
+		"Classification metadata: issueType=none, labels=0 [], assignees=0, milestone=none, state=?.",
+	]);
+});
+
+void test("a stale label remains metadata rather than a judgment about ownership", () => {
+	const result = triagesTheIssueWithMetadata("owner/repository", new Map(), {
+		labels: ["stale"],
+		state: "OPEN",
+	});
+
+	assert.deepEqual(result.directions, [
+		"Classification metadata: issueType=none, labels=1 [stale], assignees=0, milestone=none, state=OPEN.",
+	]);
 });

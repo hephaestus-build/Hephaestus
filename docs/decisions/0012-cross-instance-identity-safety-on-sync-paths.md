@@ -1,4 +1,4 @@
-# ADR 0012: cross-instance identity safety on sync paths
+# ADR 0012: Cross-instance identity safety on sync paths
 
 **Status:** Accepted
 **Date:** 2026-05-25

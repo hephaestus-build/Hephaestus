@@ -13,8 +13,8 @@ jobs:
     timeout-minutes: 10
     runs-on: ubuntu-latest
     env:
-      PREVIEW_URL: ls1intum-hephaestus-docs-pr-${{ github.event.number }}.surge.sh
-      STORYBOOK_PREVIEW_URL: ls1intum-hephaestus-storybook-pr-${{ github.event.number }}.surge.sh
+      PREVIEW_URL: hephaestus-build-docs-pr-${{ github.event.number }}.surge.sh
+      STORYBOOK_PREVIEW_URL: hephaestus-build-storybook-pr-${{ github.event.number }}.surge.sh
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -33,19 +33,11 @@ jobs:
         run: ./node_modules/.bin/surge teardown "$STORYBOOK_PREVIEW_URL" --token "$SURGE_TOKEN"
         continue-on-error: true
 
-      - name: Update PR comment
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+      - name: Retire preview comments and their continuation parts
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
-          header: docs-preview
-          message: |
-            ## 📚 Documentation Preview
-
-            ~~Preview has been removed~~ (PR closed)
-      - name: Update Storybook PR comment
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
-        with:
-          header: storybook-preview
-          message: |
-            ## 🧩 Storybook Preview
-
-            ~~Preview has been removed~~ (PR closed)
+          script: |
+            const { publishPreviewComments } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/publish-preview-comments.ts`);
+            for (const kind of ["docs", "storybook"]) {
+              await publishPreviewComments({ github, context, kind });
+            }

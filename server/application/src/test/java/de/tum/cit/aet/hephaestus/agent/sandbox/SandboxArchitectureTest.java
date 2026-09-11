@@ -53,6 +53,18 @@ class SandboxArchitectureTest extends HephaestusArchitectureTest {
     class DockerBoundary {
 
         @Test
+        void neutralSandboxConfigurationDoesNotDependOnDocker() {
+            noClasses()
+                    .that()
+                    .resideInAPackage("..agent.sandbox")
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAPackage(SANDBOX_DOCKER)
+                    .because("backend-neutral sandbox settings must not own Docker adapter configuration")
+                    .check(classes);
+        }
+
+        @Test
         void dockerNotImportedOutsideSandbox() {
             ArchRule rule = noClasses()
                     .that()

@@ -139,6 +139,18 @@ class IssueReviewHandlerTest extends BaseUnitTest {
     class JobType {
 
         @Test
+        void shouldFinishWithoutComposingFeedbackWhenObservationsWereRefused() {
+            var refused = new de.tum.cit.aet.hephaestus.agent.job.AgentJob();
+            var metadata = objectMapper.createObjectNode();
+            metadata.putObject(ObservationAdmissionService.REFUSAL_METADATA_KEY)
+                    .put("reasonCode", "no_valid_observations");
+            refused.setMetadata(metadata);
+            org.assertj.core.api.Assertions.assertThatCode(() -> handler.deliver(refused))
+                    .doesNotThrowAnyException();
+            org.mockito.Mockito.verifyNoInteractions(dispatchService, feedbackLedgerRecorder, deliveryService);
+        }
+
+        @Test
         void returnsIssueReview() {
             assertThat(handler.jobType()).isEqualTo(AgentJobType.ISSUE_REVIEW);
         }

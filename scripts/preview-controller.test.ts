@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, it } from "node:test";
+
+import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
+import { isMap, isSeq, parseDocument } from "yaml";
 
 import {
 	assess,
@@ -9,6 +13,7 @@ import {
 	finalize,
 	inactivate,
 	PREVIEW_LABEL,
+	progress,
 	recheck,
 	type GitHubApi,
 	resolve,
@@ -45,6 +50,7 @@ const makeCore = () => {
 };
 
 const makeContext = () => ({
+	serverUrl: "https://github.com",
 	repo: { owner: "owner", repo: "repo" },
 	payload: { repository: { default_branch: "main" }, pull_request: { number: 7 } },
 });
@@ -57,14 +63,20 @@ interface GitHubOptions {
 	files?: { filename: string }[];
 	resolvedPull?: typeof pull;
 	statuses?: Record<number, Status[]>;
+	behindFiles?: { filename: string; sha?: string }[];
+	branchBlobs?: Record<string, string>;
 	defaultStatuses?: Status[];
 }
+
+const postedStatuses: Record<string, unknown>[] = [];
 
 const makeGitHub = ({
 	deployments = [{ environment: "preview/pr-7", id: 1, sha: "old-sha" }],
 	files = [],
 	resolvedPull = pull,
 	statuses = {},
+	behindFiles = [],
+	branchBlobs = {},
 	defaultStatuses = [],
 }: GitHubOptions = {}): GitHubApi => ({
 	paginate: async <T>(
@@ -77,13 +89,27 @@ const makeGitHub = ({
 		},
 		repos: {
 			compareCommitsWithBasehead: (params) => {
-				// The whole stack, not this layer's diff: always default branch to head SHA.
+				// Two directions, and they answer different questions. `main...head` is the whole
+				// stack this pull request would deploy, not just its own layer's diff. `head...main`
+				// is what the default branch has that this branch does not, which is what decides
+				// whether a restored staging schema still fits it.
+				if (params.basehead === `${resolvedPull.head.sha}...main`) {
+					return Promise.resolve({ data: { files: behindFiles } });
+				}
 				assert.equal(params.basehead, `main...${resolvedPull.head.sha}`);
 				return Promise.resolve({ data: { files } });
 			},
+			getContent: (params: Record<string, unknown>) => {
+				const sha = branchBlobs[String(params.path)];
+				if (sha === undefined) return Promise.reject(new Error("404"));
+				return Promise.resolve({ data: { sha } });
+			},
 			createDeployment: () =>
 				Promise.resolve({ data: { environment: "preview/pr-7", id: 2, sha: "head-sha" } }),
-			createDeploymentStatus: () => Promise.resolve({ data: {} }),
+			createDeploymentStatus: (params: Record<string, unknown>) => {
+				postedStatuses.push(params);
+				return Promise.resolve({ data: {} });
+			},
 			deleteDeployment: () => Promise.resolve({ data: {} }),
 			listDeployments: (params) =>
 				Promise.resolve({
@@ -147,7 +173,7 @@ void describe("preview controller admission", () => {
 		assert.match(core.outputs.get("reason") ?? "", /fork/);
 	});
 
-	void it("waits for a draft to be marked ready for review", async () => {
+	void it("deploys a draft, which is usually the point of asking for a preview", async () => {
 		const core = makeCore();
 		await resolve({
 			github: makeGitHub({ resolvedPull: { ...pull, draft: true } }),
@@ -155,8 +181,7 @@ void describe("preview controller admission", () => {
 			core,
 		});
 
-		assert.equal(core.outputs.get("eligible"), "false");
-		assert.match(core.outputs.get("reason") ?? "", /draft/);
+		assert.equal(core.outputs.get("eligible"), "true");
 	});
 
 	void it("refuses PR-controlled changes to any part of the deployment control plane", async () => {
@@ -343,10 +368,14 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 		ENVIRONMENT: "preview/pr-7",
 		PR_NUMBER: "7",
 		PREVIEW_URL: "https://pr7.example",
+		PR_TITLE: "feat(webapp): a readable title",
+		PR_URL: "https://github.example/pull/7",
 		SOURCE_RUN_URL: "https://github.example/runs/50",
 	});
 	let deploymentRef = "";
 	let initialState = "";
+	let description = "";
+	let payload: unknown;
 	const baseGitHub = makeGitHub();
 	const github: GitHubApi = {
 		...baseGitHub,
@@ -360,6 +389,8 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 				},
 				createDeployment: (params: Record<string, unknown>) => {
 					deploymentRef = String(params.ref);
+					description = String(params.description);
+					payload = params.payload;
 					assert.equal(params.task, "deploy:preview");
 					assert.equal(params.transient_environment, true);
 					return Promise.resolve({
@@ -376,6 +407,34 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 	assert.equal(deploymentRef, "head-sha");
 	assert.equal(initialState, "queued");
 	assert.equal(core.outputs.get("deployment_id"), "2");
+	// GitHub renders the environment name on the pull request and the description where every
+	// environment is listed together, so the description is what tells one preview from another.
+	assert.equal(description, "PR #7 · feat(webapp): a readable title");
+	assert.ok(typeof payload === "object" && payload !== null);
+	assert.equal(Reflect.get(payload, "pull_request_url"), "https://github.example/pull/7");
+	assert.equal(Reflect.get(payload, "title"), "feat(webapp): a readable title");
+});
+
+void it("refuses to open a deployment that would carry no title or pull request link", async () => {
+	// A deployment that describes itself as a bare number, or carries an empty link in the payload
+	// that rides on every status event, is worse than one that never opened: it reports success and
+	// identifies nothing.
+	for (const missing of ["PR_TITLE", "PR_URL"]) {
+		Object.assign(process.env, {
+			HEAD_SHA: "head-sha",
+			ENVIRONMENT: "preview/pr-7",
+			PR_NUMBER: "7",
+			PREVIEW_URL: "https://pr7.example",
+			PR_TITLE: "feat(webapp): a readable title",
+			PR_URL: "https://github.example/pull/7",
+			SOURCE_RUN_URL: "https://github.example/runs/50",
+		});
+		delete process.env[missing];
+		await assert.rejects(
+			() => create({ github: makeGitHub(), context: makeContext(), core: makeCore() }),
+			new RegExp(missing),
+		);
+	}
 });
 
 void it("stands down without failing when the head moved during preflight", async () => {
@@ -616,7 +675,7 @@ void describe("reconcile staleness", () => {
 		assert.equal(core.outputs.get("stale"), "true");
 	});
 
-	void it("reclaims a pull request that went back to draft", async () => {
+	void it("leaves a draft alone, since the label is what opts in", async () => {
 		const core = makeCore();
 		await assess({
 			github: makeGitHub({ resolvedPull: { ...pull, draft: true } }),
@@ -624,6 +683,338 @@ void describe("reconcile staleness", () => {
 			core,
 		});
 
+		// Reclaiming here would tear the preview down moments after the deploy that created it.
+		assert.equal(core.outputs.get("stale"), "false");
+	});
+});
+
+void describe("preview deployment lifecycle", () => {
+	beforeEach(() => {
+		postedStatuses.length = 0;
+	});
+
+	void it("moves the deployment while the run waits, so it is not silent for most of its life", async () => {
+		for (const [state, description] of [
+			["queued", "Waiting for CI to publish signed images for this commit."],
+			["in_progress", "Images are ready; Coolify is building the preview."],
+		] as const) {
+			process.env.DEPLOYMENT_ID = "42";
+			process.env.STATE = state;
+			process.env.DESCRIPTION = description;
+			process.env.ENVIRONMENT = "preview/pr-7";
+			process.env.PREVIEW_URL = "https://pr7.example/";
+			process.env.SOURCE_RUN_URL = "https://runs.example/1";
+
+			await progress({ github: makeGitHub({}), context: makeContext(), core: makeCore() });
+		}
+
+		assert.deepEqual(
+			postedStatuses.map((status) => status.state),
+			["queued", "in_progress"],
+		);
+		// The environment link is what makes GitHub render a destination rather than a bare record.
+		const [first] = postedStatuses;
+		assert.ok(first);
+		assert.equal(first.environment_url, "https://pr7.example/");
+		assert.equal(first.log_url, "https://runs.example/1");
+	});
+
+	void it("reports only states GitHub treats as still running", async () => {
+		process.env.DEPLOYMENT_ID = "42";
+		process.env.STATE = "success";
+		process.env.DESCRIPTION = "done";
+		process.env.ENVIRONMENT = "preview/pr-7";
+		process.env.PREVIEW_URL = "https://pr7.example/";
+		process.env.SOURCE_RUN_URL = "https://runs.example/1";
+
+		await assert.rejects(
+			() => progress({ github: makeGitHub({}), context: makeContext(), core: makeCore() }),
+			/queued or in_progress/,
+		);
+		assert.equal(postedStatuses.length, 0);
+	});
+});
+
+void describe("preview teardown reporting", () => {
+	void it("says a closed pull request is closed, which is what authorizes the delete", async () => {
+		process.env.PR_NUMBER = "2042";
+		const core = makeCore();
+		await assess({
+			github: makeGitHub({ resolvedPull: { ...pull, state: "closed" } }),
+			context: makeContext(),
+			core,
+		});
 		assert.equal(core.outputs.get("stale"), "true");
+		assert.equal(core.outputs.get("closed"), "true");
+	});
+
+	void it("keeps the environment of an open pull request that merely dropped the label", async () => {
+		process.env.PR_NUMBER = "2042";
+		const core = makeCore();
+		await assess({
+			github: makeGitHub({ resolvedPull: { ...pull, labels: [] } }),
+			context: makeContext(),
+			core,
+		});
+		assert.equal(core.outputs.get("stale"), "true");
+		assert.equal(core.outputs.get("closed"), "false");
+	});
+});
+
+void describe("preview schema drift", () => {
+	const migration = {
+		filename: "server/application/src/main/resources/db/changelog/0001_drop.xml",
+		sha: "blob-1",
+	};
+
+	void it("refuses a branch missing one of the default branch's migrations", async () => {
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({ behindFiles: [migration] }),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "false");
+		const reason = core.outputs.get("reason") ?? "";
+		// The three things the author needs: which file, what goes wrong, and what to do about it.
+		assert.match(reason, /0001_drop\.xml/);
+		assert.match(reason, /have failed to start against it/);
+		assert.match(reason, /Merge main in/);
+		// Both mechanisms were reproduced against a restored database, so the reason names them, and
+		// names the step each one stops at: neither branch reaches a started application.
+		assert.match(reason, /Liquibase re-runs migrations/);
+		assert.match(reason, /startup then fails on a column/);
+		// It reports what has gone wrong, never what this branch is guaranteed to hit: a migration
+		// that only adds a table this branch never queries breaks nothing. Two causes it may not
+		// claim are Hibernate validation, which `prod` disables, and a schema mismatch that a
+		// differing blob does not prove.
+		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot|Hibernate/);
+		assert.equal(core.outputs.get("announce"), "true");
+	});
+
+	void it("deploys a branch that already carries the migration under another commit", async () => {
+		// A cherry-pick satisfies the schema while its ancestry still reports the file, so the blob
+		// decides. Refusing here would ground a branch whose schema is fine.
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [migration],
+				branchBlobs: { [migration.filename]: "blob-1" },
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "true");
+	});
+
+	void it("refuses when the branch carries an older revision of that file", async () => {
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [migration],
+				branchBlobs: { [migration.filename]: "an-older-blob" },
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "false");
+	});
+
+	void it("refuses a branch too far behind to compare, naming the consequence not the tool", async () => {
+		// The response caps at COMPARE_FILE_LIMIT and flags no truncation, so a saturated answer is
+		// not evidence that no migration is missing.
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: Array.from({ length: 300 }, (_, index) => ({
+					filename: `webapp/src/file-${index}.tsx`,
+				})),
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "false");
+		const reason = core.outputs.get("reason") ?? "";
+		// At the comparison's limit, whether this branch carries every one of the default branch's
+		// migrations cannot be established — a saturated response does not even prove truncation. So
+		// the reason names the check that could not run, what branches behind on schema have run
+		// into, and how to clear it.
+		assert.match(reason, /behind main/);
+		assert.match(reason, /carries main's migrations/);
+		assert.match(reason, /cannot be checked/);
+		assert.match(reason, /have failed to start against it/);
+		assert.match(reason, /Merge main in/);
+		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot/);
+	});
+
+	void it("ignores prose under the schema directory", async () => {
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [{ filename: "server/application/src/main/resources/db/README.md" }],
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "true");
+	});
+
+	void it("leaves a live preview alone rather than replacing it with a refusal", async () => {
+		// Head H deploys, a migration then lands on the default branch, and something re-resolves H.
+		// No deployment is needed, so the working preview's comment must survive.
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [migration],
+				deployments: [{ environment: "preview/pr-7", id: 2, sha: pull.head.sha }],
+				statuses: { 2: [{ state: "success" }] },
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "false");
+		// Quiet: the reason is the live deployment, and it posts no comment.
+		assert.equal(core.outputs.get("announce"), "false");
+		assert.match(core.outputs.get("reason") ?? "", /already has a current preview/);
+	});
+
+	void it("deploys a branch that is merely behind on code, which is almost every branch", async () => {
+		// Matching Java too would refuse a preview after any merge at all.
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [
+					{ filename: "server/application/src/main/java/de/tum/cit/aet/hephaestus/Foo.java" },
+					{ filename: "webapp/src/routes/index.tsx" },
+					{ filename: "docs/contributor/ci-cd.mdx" },
+				],
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "true");
+	});
+});
+
+void describe("preview workflow reporting follows the finalized deployment", () => {
+	const workflow = parseDocument(readFileSync(".github/workflows/deploy-preview.yml", "utf8"));
+	function runs(name: string, outputs: Record<string, Record<string, string>>) {
+		const steps = workflow.getIn(["jobs", "deploy", "steps"]);
+		assert.ok(isSeq(steps));
+		const step = steps.items.find((item) => isMap(item) && item.get("name") === name);
+		assert.ok(isMap(step));
+		const condition = step.get("if");
+		assert.ok(typeof condition === "string");
+		const functions = new Map([
+			[
+				"always",
+				{ name: "always", minArgs: 0, maxArgs: 0, call: () => new data.BooleanData(true) },
+			],
+		]);
+		const expression = new Parser(
+			new Lexer(condition).lex().tokens,
+			["steps"],
+			[...functions.values()],
+		).parse();
+		const context: unknown = JSON.parse(
+			JSON.stringify({
+				steps: Object.fromEntries(
+					Object.entries(outputs).map(([id, values]) => [id, { outputs: values }]),
+				),
+			}),
+			data.reviver,
+		);
+		assert.ok(context instanceof data.Dictionary);
+		return new Evaluator(expression, context, functions).evaluate().coerceString() === "true";
+	}
+
+	for (const scenario of [
+		{ name: "ready preview", state: "success", pull, comment: false, fail: false, link: true },
+		{ name: "failed deployment", state: "failure", pull, comment: true, fail: true, link: false },
+		{ name: "deployment error", state: "error", pull, comment: true, fail: true, link: false },
+		{
+			name: "superseded preflight",
+			state: "inactive",
+			pull,
+			comment: false,
+			fail: false,
+			link: false,
+		},
+		{
+			name: "label removed before a failure",
+			state: "failure",
+			pull: unlabelled,
+			comment: false,
+			fail: false,
+			link: false,
+		},
+		{
+			name: "pull request closed before an error",
+			state: "error",
+			pull: { ...pull, state: "closed" },
+			comment: false,
+			fail: false,
+			link: false,
+		},
+	]) {
+		void it(scenario.name, async () => {
+			Object.assign(process.env, {
+				DEPLOYMENT_ID: "2",
+				DESCRIPTION: "Deployment finished",
+				ENVIRONMENT: "preview/pr-7",
+				FINAL_STATE: scenario.state,
+				LOG_URL: "https://coolify.example/logs/2",
+				PREVIEW_URL: "https://pr7.example",
+				PR_NUMBER: "7",
+				SOURCE_RUN_URL: "https://github.example/runs/50",
+			});
+			const core = makeCore();
+			await finalize({
+				github: makeGitHub({ resolvedPull: scenario.pull }),
+				context: makeContext(),
+				core,
+			});
+			const outputs = {
+				context: { eligible: "true" },
+				recheck: { proceed: scenario.state === "inactive" ? "false" : "true" },
+				queue: { deployment_uuid: scenario.state === "inactive" ? "" : "deployment" },
+				wait: { state: scenario.state === "inactive" ? "" : scenario.state },
+				finalize: Object.fromEntries(core.outputs),
+			};
+			assert.equal(runs("Report a failed preview", outputs), scenario.comment);
+			assert.equal(runs("Fail when the preview failed", outputs), scenario.fail);
+			assert.equal(runs("Publish the preview link", outputs), scenario.link);
+		});
+	}
+
+	void it("still reports a real failure before finalization or queueing completes", () => {
+		const outputs = {
+			context: { eligible: "true" },
+			recheck: {},
+			queue: {},
+			wait: {},
+			finalize: {},
+		};
+		assert.equal(runs("Report a failed preview", outputs), true);
+		assert.equal(runs("Publish the preview link", outputs), false);
+		assert.equal(runs("Fail when the preview failed", outputs), false);
+		assert.equal(
+			runs("Fail when the preview failed", {
+				...outputs,
+				queue: { deployment_uuid: "deployment" },
+			}),
+			true,
+		);
+		assert.equal(
+			runs("Report a failed preview", { ...outputs, context: { eligible: "false" } }),
+			false,
+		);
 	});
 });

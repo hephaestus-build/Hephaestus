@@ -6,15 +6,9 @@ import styles from "./LandingVisuals.module.css";
 
 interface LandingCtaSectionProps {
 	onSignIn: (idpHint: string) => void;
-	onGoToDashboard?: () => void;
-	isSignedIn: boolean;
 }
 
-export function LandingCtaSection({
-	onSignIn,
-	onGoToDashboard,
-	isSignedIn,
-}: LandingCtaSectionProps) {
+export function LandingCtaSection({ onSignIn }: LandingCtaSectionProps) {
 	return (
 		<section
 			aria-labelledby="landing-cta-heading"
@@ -40,18 +34,10 @@ export function LandingCtaSection({
 						Start with the work in front of you
 					</h2>
 					<p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-muted-foreground lg:mx-0">
-						{isSignedIn
-							? "Open your workspace to read your feedback or ask about recent work."
-							: "Sign in to see feedback on the work you are already doing, and ask it anything about it."}
+						Sign in to see feedback on the work you are already doing, and ask it anything about it.
 					</p>
 					<div className="mt-6 flex w-full flex-col justify-center gap-3 sm:flex-row lg:justify-start">
-						<LandingSignInCta
-							isSignedIn={isSignedIn}
-							onSignIn={onSignIn}
-							onGoToDashboard={onGoToDashboard}
-							size="lg"
-							className="w-full sm:w-auto"
-						/>
+						<LandingSignInCta onSignIn={onSignIn} size="lg" className="w-full sm:w-auto" />
 						<a
 							href="https://docs.hephaestus.build/user/overview"
 							target="_blank"
@@ -64,21 +50,19 @@ export function LandingCtaSection({
 							<ArrowRight aria-hidden="true" />
 						</a>
 					</div>
-					{!isSignedIn && (
-						<p className="mt-5 text-sm text-muted-foreground">
-							Running your own deployment?{" "}
-							<a
-								className="font-medium text-foreground underline underline-offset-4"
-								href="https://docs.hephaestus.build/admin/install"
-								target="_blank"
-								rel="noopener noreferrer"
-							>
-								Read the installation guide
-								<span className="sr-only"> (opens in a new tab)</span>
-							</a>
-							.
-						</p>
-					)}
+					<p className="mt-5 text-sm text-muted-foreground">
+						Running your own deployment?{" "}
+						<a
+							className="font-medium text-foreground underline underline-offset-4"
+							href="https://docs.hephaestus.build/admin/install"
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							Read the installation guide
+							<span className="sr-only"> (opens in a new tab)</span>
+						</a>
+						.
+					</p>
 				</div>
 			</div>
 		</section>

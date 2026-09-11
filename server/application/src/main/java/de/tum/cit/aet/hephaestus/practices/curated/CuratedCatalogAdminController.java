@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.CatalogDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
@@ -53,6 +54,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
 @RequestMapping("/admin/practice-catalog")
+@RecentSignInExempt(reason = "curates practice content and its order; grants no access and stores no credential")
 @PreAuthorize("hasAuthority('app_admin')")
 @ConditionalOnServerRole
 @Tag(name = "Admin Practice Catalog", description = "The starting catalog copied into new workspaces")

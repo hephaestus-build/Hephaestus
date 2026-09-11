@@ -4,11 +4,11 @@ title: Local verification
 
 # Local verification
 
-| Command | What success proves | Excludes |
-|---|---|---|
-| `vp run check:affected` | Selected gates passed, including any tests they contain | Unselected scopes, verification-only suites and builds, and CI-only checks |
-| `vp run check` | Every gate the `quality` task in `vite.config.ts` runs passed | Distributable builds, browser and live-service tests, images, mutation analysis, and release security |
-| `vp run verify` | The complete credential-free local CI inventory passed | Live-service integration and E2E tests, images, mutation analysis, and release security |
+| Command                 | What success proves                                           | Excludes                                                                                                                         |
+| ----------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `vp run check:affected` | Selected gates passed, including any tests they contain       | Unselected scopes, verification-only suites and builds, and CI-only checks                                                       |
+| `vp run check`          | Every gate the `quality` task in `vite.config.ts` runs passed | Distributable builds, browser and live-service tests, images, mutation analysis, and release security                            |
+| `vp run verify`         | The local verification suites and builds passed               | Server integration and database tests, full-application E2E, live-service tests, images, mutation analysis, and release security |
 
 Run `check:affected` while working, `check` before pushing, and `verify` before requesting review.
 `vp run` with no task name lists every task, and `vite.config.ts` is where each one is defined.
@@ -18,14 +18,14 @@ Run `check:affected` while working, `check` before pushing, and `verify` before 
 The command compares committed, staged, unstaged, untracked, and deleted paths with the merge base of
 `origin/main`. For another target, run `vp run check:affected --base <revision>`.
 
-| Changed path | Task |
-|---|---|
-| `webapp/**` | `affected:webapp` |
-| `server/**` outside the agent and precompute resources | `affected:server` |
-| `server/**/resources/{agent,practices/precompute}/**`, `docker/agents/**` | `affected:agents` |
-| `docs/**` | `affected:docs` |
-| `docs/images/readme/**` | `affected:docs` and `affected:webapp` |
-| `.github/**`, `.claude/**`, `.agents/**`, `.changeset/**`, `scripts/**`, `webapp/tools/oxlint/**`, root package and tsconfig files, generated artifacts, `AGENTS.md`, `CLAUDE.md`, or any other path | `quality` |
+| Changed path                                                                                                                                                                                         | Task                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `webapp/**`                                                                                                                                                                                          | `affected:webapp`                     |
+| `server/**` outside the agent and precompute resources                                                                                                                                               | `affected:server`                     |
+| `server/**/resources/{agent,practices/precompute}/**`, `docker/agents/**`                                                                                                                            | `affected:agents`                     |
+| `docs/**`                                                                                                                                                                                            | `affected:docs`                       |
+| `docs/images/readme/**`                                                                                                                                                                              | `affected:docs` and `affected:webapp` |
+| `.github/**`, `.claude/**`, `.agents/**`, `.changeset/**`, `scripts/**`, `webapp/tools/oxlint/**`, root package and tsconfig files, generated artifacts, `AGENTS.md`, `CLAUDE.md`, or any other path | `quality`                             |
 
 The tasks are defined in `vite.config.ts`. Selection uses `git diff --no-renames`, so both sides of a
 rename are evaluated. Git documents the underlying change statuses in
@@ -42,22 +42,74 @@ The pre-push hook runs `vp run check`; `git push --no-verify` skips it. With cus
 ## Complete local verification
 
 `vp run verify` runs `quality`, then the webapp unit tests, the Storybook browser tests,
-`test:server:verification` (unit and architecture with coverage), the webapp build with a
+`test:server:selection` followed by `test:server:verification` (unit and architecture with coverage), the webapp build with a
 `routeTree.gen.ts` comparison that restores the committed file before exiting, the Storybook build,
 and the docs build.
 
-Full-application E2E, live-service integration, image builds, mutation analysis and release security
-are outside `verify`; see [CI/CD](./ci-cd.mdx).
+Server integration and database tests, full-application E2E, live-service tests, image builds,
+mutation analysis and release security are outside `verify`; see [CI/CD](./ci-cd.mdx).
+Run affected server integration tests separately with `vp run test:server:integration`.
+
+### Application and Storybook bundles
+
+The application keeps Vite's 500 kB chunk warning limit. Optional mentor chat is loaded behind its
+feature boundary; React's shared renderer has a separate cacheable chunk.
+
+Storybook is a development tool, not the application bundle. Its build checks every JavaScript chunk:
+ordinary chunks must stay at or below 500,000 bytes. Two monolithic upstream modules have separate
+raw and gzip budgets in `webapp/.storybook/chunk-budgets.ts`:
+
+| Upstream module | Raw bytes | Gzip bytes |
+| --- | ---: | ---: |
+| [Storybook preview runtime](https://www.npmjs.com/package/storybook) | 1,350,000 | 375,000 |
+| [axe-core](https://www.npmjs.com/package/axe-core) | 600,000 | 165,000 |
+
+The build prints the actual sizes against these budgets. It fails on an unknown oversized chunk or
+when either limit is exceeded, rather than repeating Vite's undifferentiated size warning. Module
+identity, not a filename such as `iframe` or `axe`, selects the exception. An upstream upgrade that
+outgrows a budget needs fresh attribution before changing it; removing accessibility checks or
+collecting application code into a tool chunk is not a size fix.
 
 ## Vite+ task cache
 
 On Windows the runner's automatic input tracking misses a file you add, so run
 `vp run --no-cache check` there.
 
-`quality` is a group: its gates run in parallel, and a gate whose inputs are unchanged replays.
+`quality` is a group: its gates run in parallel, and a cacheable gate whose inputs are unchanged replays.
 `vite.config.ts` states which gates are uncached and which name their inputs. Run
 `vp run --last-details` to inspect the latest run and its miss reasons, or `vp cache clean` to
 discard the local cache. In CI the cache restores per [CI/CD](./ci-cd.mdx#caches).
+
+### Java checks and caching
+
+`gate:server` invokes Gradle once for build-script formatting, Java formatting and PMD. Gradle owns
+their inputs and cached outputs; Vite does not cache a second verdict over the Java build. The scoped
+commands `format:java:check` and `lint:java` use the same native tasks. Test execution remains uncached.
+
+Gradle reports individual deprecations through `org.gradle.warning.mode=all`. The pinned
+[GraphQL code-generation plugin](https://github.com/kobylynskyi/graphql-java-codegen/blob/v5.10.0/plugins/gradle/graphql-java-codegen-gradle-plugin/src/main/java/io/github/kobylynskyi/graphql/codegen/gradle/GraphQLCodegenGradleTask.java#L1022)
+still exposes nullable `Boolean isX()` properties that Gradle 10 will stop recognizing. This needs
+upstream `getX()` accessors preserving nullable semantics, not primitive defaults or disabled
+warnings. Cached generation can omit these diagnostics; a quiet warm run does not prove the
+dependency has been repaired.
+
+`vp run --no-cache check` disables Vite's cache, not Gradle's. To inspect a Java check without task-output
+or configuration-cache reuse, run:
+
+```sh
+./server/gradlew -p server :spotlessCheck :application:spotlessCheck :application:pmdMain \
+  --rerun-tasks --no-build-cache --no-configuration-cache --profile
+```
+
+The generated HTML report is `server/build/reports/profile/profile-*.html`. Keep clean, warm and cache-restored
+measurements separate; [Gradle's performance guide](https://docs.gradle.org/current/userguide/performance.html)
+explains why a baseline is needed before changing the build.
+
+PMD must analyze every selected source successfully: a report containing processing or configuration
+errors fails the task, even when it contains no rule violations. `vp run gate:pmd-canary` proves this
+with clean, rule-violating and unparseable sources in a temporary directory. It checks the production
+task's source coverage and annotation policy without editing or compiling the application's source
+files. CI runs it when its implementation or PMD wiring changes.
 
 The facts the graph relies on are gates of their own: `gate:runner-contract` proves how `vp run`
 executes commands, and `gate:lint-contract` proves every house rule still fires through `vp lint`.

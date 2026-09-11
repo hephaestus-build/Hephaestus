@@ -363,7 +363,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isBadRequest();
+                .isBadRequest()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -409,7 +410,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -417,7 +419,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -433,7 +436,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .bodyValue(Map.of("monthlyBudgetUsd", "25.00"))
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
         assertThat(workspaceRepository.findById(workspace.getId()).orElseThrow().getMonthlyByoLlmBudgetUsd())
                 .isEqualByComparingTo("25.00");
 
@@ -446,7 +450,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .bodyValue(Map.of())
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
         assertThat(workspaceRepository.findById(workspace.getId()).orElseThrow().getMonthlyByoLlmBudgetUsd())
                 .isNull();
     }
@@ -466,7 +471,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .bodyValue(Map.of("monthlyBudgetUsd", "0.00"))
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         Workspace reloaded = workspaceRepository.findById(workspace.getId()).orElseThrow();
         assertThat(reloaded.getMonthlyByoLlmBudgetUsd()).isEqualByComparingTo("0.00");
@@ -486,7 +492,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .bodyValue(Map.of("monthlyBudgetUsd", "12.50"))
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         ConfigAuditEvent row = configAuditEventRepository.findAll().stream()
                 .filter(e -> e.getEntityType() == ConfigAuditEntityType.WORKSPACE_OWN_PROVIDER_LLM_BUDGET)
@@ -511,7 +518,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .bodyValue(Map.of("monthlyBudgetUsd", cap))
                 .exchange()
                 .expectStatus()
-                .isBadRequest();
+                .isBadRequest()
+                .expectBody(Void.class);
         assertThat(workspaceRepository.findById(workspace.getId()).orElseThrow().getMonthlyByoLlmBudgetUsd())
                 .as(why)
                 .isNull();
@@ -532,7 +540,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .bodyValue(Map.of("monthlyBudgetUsd", "25.00"))
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
         assertThat(workspaceRepository.findById(workspace.getId()).orElseThrow().getMonthlyByoLlmBudgetUsd())
                 .isNull();
     }
@@ -557,7 +566,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .bodyValue(Map.of("monthlyBudgetUsd", "25.00"))
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         webTestClient
                 .put()
@@ -567,7 +577,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .bodyValue(Map.of("monthlyBudgetUsd", "999.00"))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
         assertThat(workspaceRepository.findById(workspace.getId()).orElseThrow().getMonthlyLlmBudgetUsd())
                 .isNull();
     }
@@ -634,7 +645,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .bodyValue(Map.of("monthlyBudgetUsd", "999.00"))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         assertThat(workspaceRepository
                         .findById(otherWorkspace.getId())
@@ -660,7 +672,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .bodyValue(Map.of("monthlyBudgetUsd", "1.00"))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         assertThat(workspaceRepository.findById(workspace.getId()).orElseThrow().getMonthlyByoLlmBudgetUsd())
                 .isNull();
@@ -681,6 +694,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 }

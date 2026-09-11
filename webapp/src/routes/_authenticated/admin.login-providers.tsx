@@ -18,12 +18,14 @@ import type {
 } from "@/api/types.gen";
 import { LoginProviderFormDialog } from "@/components/admin/login-providers/LoginProviderFormDialog";
 import { LoginProvidersTable } from "@/components/admin/login-providers/LoginProvidersTable";
+import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { PageHeader } from "@/components/core/PageHeader";
 import { PageLayout } from "@/components/core/PageLayout";
 import { Button } from "@/components/ui/button";
+import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { instanceAdminHead } from "@/lib/page-title";
-import { problemDetailOf } from "@/lib/problem-detail";
+import { problemDetailOf, type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
 
 export const Route = createFileRoute("/_authenticated/admin/login-providers")({
 	head: instanceAdminHead("Login providers"),
@@ -43,6 +45,24 @@ function AdminLoginProvidersPage() {
 	const invalidate = () =>
 		queryClient.invalidateQueries({ queryKey: adminListLoginProvidersQueryKey() });
 
+	const [challenge, setChallenge] = useState<StepUpChallenge | undefined>(undefined);
+	const confirmAccess = useConfirmAccess(challenge !== undefined);
+
+	/**
+	 * A refusal that asks for a fresh sign-in is not a failure the operator can read and act on, so
+	 * it opens the ask instead of a toast — and it replaces the form dialog rather than stacking a
+	 * second focus trap on top of it.
+	 */
+	const reportError = (error: unknown, fallback: string) => {
+		const stepUp = stepUpChallengeOf(error);
+		if (stepUp) {
+			setDialogOpen(false);
+			setChallenge(stepUp);
+			return;
+		}
+		toast.error(problemDetailOf(error, fallback));
+	};
+
 	const createMutation = useMutation({
 		...adminCreateLoginProviderMutation(),
 		onSuccess: () => {
@@ -50,7 +70,7 @@ function AdminLoginProvidersPage() {
 			setDialogOpen(false);
 			toast.success("Login provider added");
 		},
-		onError: (error) => toast.error(problemDetailOf(error, "Could not add the login provider")),
+		onError: (error) => reportError(error, "Could not add the login provider"),
 	});
 
 	const updateMutation = useMutation({
@@ -60,7 +80,7 @@ function AdminLoginProvidersPage() {
 			setDialogOpen(false);
 			toast.success("Login provider updated");
 		},
-		onError: (error) => toast.error(problemDetailOf(error, "Could not update the login provider")),
+		onError: (error) => reportError(error, "Could not update the login provider"),
 	});
 
 	const deleteMutation = useMutation({
@@ -69,7 +89,7 @@ function AdminLoginProvidersPage() {
 			void invalidate();
 			toast.success("Login provider deleted");
 		},
-		onError: (error) => toast.error(problemDetailOf(error, "Could not delete the login provider")),
+		onError: (error) => reportError(error, "Could not delete the login provider"),
 	});
 
 	const mutatingIds = usePendingMutationIds(PROVIDER_WRITE_MUTATION_KEY, (variables) =>
@@ -130,6 +150,19 @@ function AdminLoginProvidersPage() {
 				isSubmitting={createMutation.isPending || updateMutation.isPending}
 				onCreate={handleCreate}
 				onUpdate={handleUpdate}
+			/>
+
+			<ConfirmAccessDialog
+				open={challenge !== undefined}
+				onOpenChange={(open) => {
+					if (!open) setChallenge(undefined);
+				}}
+				maxAgeSeconds={challenge?.maxAgeSeconds}
+				providers={confirmAccess.providers}
+				loading={confirmAccess.loading}
+				error={confirmAccess.error}
+				onRetry={confirmAccess.retry}
+				onSignIn={confirmAccess.signIn}
 			/>
 		</PageLayout>
 	);

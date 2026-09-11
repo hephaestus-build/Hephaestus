@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.audit.spi;
 
 import java.time.Instant;
 import java.util.List;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -12,6 +13,7 @@ import org.jspecify.annotations.Nullable;
  *                     "a system did this" distinct from "we no longer know who did this".
  * @param actingActor  resolved impersonator, present only for {@link ConfigAuditActorKind#IMPERSONATED}
  * @param changedKeys  dot-paths that differ between {@code oldValue} and {@code newValue}
+ * @param elevatedViaInstanceAdmin whether the actor reached this workspace by instance-admin elevation
  */
 public record ConfigAuditEntryViewDTO(
         Long id,
@@ -21,6 +23,9 @@ public record ConfigAuditEntryViewDTO(
         String entityId,
         ConfigAuditAction action,
         ConfigAuditActorKind actorKind,
+        // @NonNull so springdoc marks it required and the client types it `boolean`: the column is NOT
+        // NULL, and an optional flag would make every reader guard on it forever.
+        @NonNull boolean elevatedViaInstanceAdmin,
         @Nullable Long actorAccountId,
         @Nullable Long actingAccountId,
         @Nullable ConfigAuditActorRefDTO actor,

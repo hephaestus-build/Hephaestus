@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
+import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
@@ -43,6 +44,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
+import java.io.Serial;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -109,7 +111,6 @@ public class AgentJobExecutor {
     private static final String MDC_JOB_ID = StructuredLogKeys.JOB_ID;
     private static final String MDC_JOB_TYPE = "agent.jobType";
     private static final int MAX_ERROR_MESSAGE_LENGTH = 4000;
-    private static final int MAX_CONTAINER_LOGS_CHARS = 65536; // 64KB
     // How long a claim-blocked job waits before the poll loop re-evaluates the cap.
     private static final Duration BUDGET_HOLD_INTERVAL = Duration.ofHours(1);
     // Measured from submission, not from when the hold started: what goes stale is the work the job
@@ -145,6 +146,7 @@ public class AgentJobExecutor {
             .delay(Duration.ofMillis(200))
             .build();
 
+    private final ExecutionArchiveService executionArchive;
     private final AgentProperties agentProperties;
     private final AgentJobRepository jobRepository;
     private final WorkspaceAgentBindingRepository bindingRepository;
@@ -186,6 +188,7 @@ public class AgentJobExecutor {
 
     @Autowired
     public AgentJobExecutor(
+            ExecutionArchiveService executionArchive,
             AgentProperties agentProperties,
             AgentJobRepository jobRepository,
             WorkspaceAgentBindingRepository bindingRepository,
@@ -204,6 +207,7 @@ public class AgentJobExecutor {
             @Nullable LlmAdmissionService llmAdmissionService,
             Optional<WorkerCapacityState> capacityState,
             Optional<WorkerProperties> workerProperties) {
+        this.executionArchive = executionArchive;
         this.agentProperties = agentProperties;
         this.jobRepository = jobRepository;
         this.bindingRepository = bindingRepository;
@@ -429,23 +433,25 @@ public class AgentJobExecutor {
     }
 
     /**
-     * The sandbox executor's free slots are the hard bound: worker capacity and pool size are separate
-     * knobs, so a capacity larger than the pool must not claim jobs the pool would then reject.
+     * The sandbox pool's size is the hard bound: worker capacity and pool size are separate knobs, so a
+     * capacity larger than the pool must not claim jobs the pool would then reject. What occupies a slot
+     * is a job this worker holds, not a thread the pool reports busy: the pool hands a task straight to
+     * a thread, so between submit and that thread entering the task it reports the slot idle, and a
+     * claim made on that reading is rejected on submit and requeued for nothing.
      */
     int computeCapacity() {
-        int poolCapacity = capacityState
-                .map(cs -> Math.max(0, cs.reviewMax() - localRunningJobs.size()))
-                .orElse(agentProperties.claimBatchSize());
-        int bounded = Math.min(poolCapacity, agentProperties.claimBatchSize());
-        return Math.min(bounded, sandboxExecutorFreeCapacity());
+        int concurrency = Math.min(
+                capacityState.map(WorkerCapacityState::reviewMax).orElse(Integer.MAX_VALUE),
+                sandboxExecutorConcurrency());
+        int free = concurrency == Integer.MAX_VALUE
+                ? agentProperties.claimBatchSize()
+                : Math.max(0, concurrency - localRunningJobs.size());
+        return Math.min(free, agentProperties.claimBatchSize());
     }
 
     /** Only ever narrows {@link #computeCapacity()}: an unknown executor type imposes no bound. */
-    private int sandboxExecutorFreeCapacity() {
-        if (sandboxExecutor instanceof ThreadPoolTaskExecutor pool) {
-            return Math.max(0, pool.getMaxPoolSize() - pool.getActiveCount());
-        }
-        return Integer.MAX_VALUE;
+    private int sandboxExecutorConcurrency() {
+        return sandboxExecutor instanceof ThreadPoolTaskExecutor pool ? pool.getMaxPoolSize() : Integer.MAX_VALUE;
     }
 
     /**
@@ -484,6 +490,11 @@ public class AgentJobExecutor {
         if (!(attempt instanceof ClaimResult claim)) {
             return false;
         }
+        // Counted after the claim commits, never inside its transaction: a failed commit rolls the row
+        // back to QUEUED and no execution then runs to release the count. Since the count is the hard
+        // claim bound, one leaked entry would retire a slot for this worker's lifetime.
+        localRunningJobs.add(jobId);
+        capacityState.ifPresent(WorkerCapacityState::claimReview);
         dispatchExecution(jobId, claim);
         return true;
     }
@@ -579,8 +590,13 @@ public class AgentJobExecutor {
     /** Runs on the sandbox executor, not the poll thread. */
     private void runClaimedJob(UUID jobId, ClaimResult claim) {
         AgentJob job = claim.job;
-        MDC.put(StructuredLogKeys.TRACE_ID, job.getTraceId());
-        MDC.put(StructuredLogKeys.SPAN_ID, randomSpanId());
+        var executionSpan = jobTelemetry.startExecution(job);
+        var executionScope = jobTelemetry.executionScope(executionSpan);
+        MDC.put(StructuredLogKeys.TRACE_ID, executionSpan.context().traceId());
+        MDC.put(StructuredLogKeys.SPAN_ID, executionSpan.context().spanId());
+        MDC.put(
+                StructuredLogKeys.TRACE_FLAGS,
+                Boolean.TRUE.equals(executionSpan.context().sampled()) ? "01" : "00");
         MDC.put(MDC_JOB_ID, jobId.toString());
         MDC.put(StructuredLogKeys.WORKSPACE_ID, job.getWorkspace().getId().toString());
         MDC.put(MDC_JOB_TYPE, job.getJobType().name());
@@ -600,6 +616,23 @@ public class AgentJobExecutor {
             PreparedSandbox preparedSandbox = prepareSandboxSpec(jobId, job, claim.snapshot);
             stagedInputs = preparedSandbox.stagedInputs();
             SandboxSpec sandboxSpec = preparedSandbox.spec();
+            if (executionArchive.isEnabled()) {
+                Map<String, String> environment = new HashMap<>(sandboxSpec.environment());
+                environment.put("PI_REVIEW_CAPTURE", "true");
+                sandboxSpec = new SandboxSpec(
+                        sandboxSpec.jobId(),
+                        sandboxSpec.image(),
+                        sandboxSpec.command(),
+                        environment,
+                        sandboxSpec.networkPolicy(),
+                        sandboxSpec.resourceLimits(),
+                        sandboxSpec.securityProfile(),
+                        sandboxSpec.inputFiles(),
+                        sandboxSpec.inputFilesOnDisk(),
+                        sandboxSpec.outputPath(),
+                        sandboxSpec.volumeMounts());
+            }
+            executionArchive.captureInputs(job, sandboxSpec);
             // Past this boundary provider usage may exist even if execute() throws, so it is persisted
             // for recovery on another process. A lost fence means the job was cancelled or requeued
             // while preparation ran, so its sandbox must not start.
@@ -610,7 +643,25 @@ public class AgentJobExecutor {
             }
             sandboxExecutionStarted = true;
             SandboxResult result = sandboxManager.execute(sandboxSpec);
+            executionArchive.captureOutputs(job, result);
             AgentResult agentResult = practiceAgent.parseResult(result);
+
+            // Two exits say the run could not reach something it needed, rather than anything about the
+            // reviewed work: the review finished and could not admit it, because the sandbox holds an
+            // address the server has since moved away from; or no practice was reached at all because
+            // every model call went unanswered. Neither leaves anything to deliver, and neither is a
+            // fact a second attempt would repeat. Past the retry cap both fall through and terminalize
+            // exactly as they did before.
+            String unreachable = unreachableReason(result.exitCode());
+            if (unreachable != null && requeueForAnotherAttempt(jobId, job, unreachable, true, result.logs())) {
+                metricOutcome = "REQUEUED";
+                log.warn(
+                        "Requeuing job {} ({}): nothing it measured can be delivered from here (attempt {})",
+                        jobId,
+                        unreachable,
+                        job.getRetryCount() + 1);
+                return;
+            }
 
             JobTypeHandler handler = handlerRegistry.getHandler(job.getJobType());
             AgentJobStatus terminalStatus = completeJob(jobId, agentResult, result, handler, job);
@@ -667,6 +718,10 @@ public class AgentJobExecutor {
             MDC.remove(MDC_JOB_TYPE);
             MDC.remove(StructuredLogKeys.TRACE_ID);
             MDC.remove(StructuredLogKeys.SPAN_ID);
+            MDC.remove(StructuredLogKeys.TRACE_FLAGS);
+            executionSpan.tag("hephaestus.job.outcome", metricOutcome);
+            executionScope.close();
+            executionSpan.end();
         }
     }
 
@@ -898,20 +953,7 @@ public class AgentJobExecutor {
 
         if (workerId != null && isRetryableInfraFailure(e)) {
             int currentRetryCount = job.getRetryCount();
-            Integer updated = transactionTemplate.execute(status -> {
-                // BEFORE requeuing: the requeue zeroes the accumulators, so a later read bills zero.
-                AgentJobLlmUsage retryCounts = sandboxExecutionStarted
-                        ? jobRepository.findLlmUsageById(jobId).orElse(null)
-                        : null;
-                int rows = requeueOrphanWithRotation(jobId, workerId, currentRetryCount);
-                if (rows > 0 && sandboxExecutionStarted) {
-                    billTerminatedJob(
-                            job, "infra-failure retry (attempt " + (currentRetryCount + 1) + ")", retryCounts);
-                }
-                return rows;
-            });
-            if (updated != null && updated > 0) {
-                infraRetryRequeued.increment();
+            if (requeueForAnotherAttempt(jobId, job, "infra-failure", sandboxExecutionStarted, null)) {
                 log.warn(
                         "Requeuing job {} after classified sandbox-infrastructure failure (attempt {}): {}",
                         jobId,
@@ -939,6 +981,86 @@ public class AgentJobExecutor {
      */
     static boolean isRetryableInfraFailure(Exception e) {
         return e instanceof SandboxInfrastructureException || e instanceof IOException;
+    }
+
+    /**
+     * Which unreachable service this exit names, or null when the exit says something about the work.
+     * The name is what the usage ledger records the attempt under.
+     */
+    private static @Nullable String unreachableReason(int exitCode) {
+        if (exitCode == SandboxLayout.EXIT_SERVER_UNREACHABLE) {
+            return "server-unreachable";
+        }
+        if (exitCode == SandboxLayout.EXIT_PROVIDER_UNREACHABLE) {
+            return "provider-unreachable";
+        }
+        return null;
+    }
+
+    /**
+     * Whether this job's observations reached the server after all — the admission committed and only
+     * its answer was lost. Repeating the review would submit a different payload against the digest the
+     * job already carries, which the admission refuses, so an attempt that got this far is finished
+     * even though its runner could not tell.
+     */
+    private static boolean observationsAdmitted(AgentJob job) {
+        JsonNode metadata = job.getMetadata();
+        return metadata != null
+                && !metadata.path(ObservationAdmissionService.DIGEST_METADATA_KEY)
+                        .asString("")
+                        .isBlank();
+    }
+
+    /**
+     * Hands the job back to the queue for another attempt, billing what this attempt already spent.
+     * The usage read happens inside the same transaction and before the requeue, which zeroes the
+     * accumulators — a later read would bill zero.
+     *
+     * @param transcript this attempt's container log, kept on the row so the next reader can still see
+     *     why the attempt was given up on; the following attempt's terminal write replaces it
+     * @param bill whether provider work happened at all — nothing accrues before the sandbox starts
+     * @return whether the job is queued again; false means the retry cap is spent or the fence is
+     *     lost, and the caller owns the terminal outcome
+     */
+    private boolean requeueForAnotherAttempt(
+            UUID jobId, AgentJob job, String reason, boolean bill, @Nullable String transcript) {
+        if (workerId == null) {
+            return false;
+        }
+        int currentRetryCount = job.getRetryCount();
+        Integer updated = transactionTemplate.execute(status -> {
+            // Under the same row lock the admission takes, so the two decisions serialize: a review
+            // whose observations reached the server is finished, whatever its sandbox went on to do.
+            // Running it again would submit a different payload against the digest the job already
+            // carries, which the admission refuses — a second attempt could only lose what the first
+            // recorded.
+            AgentJob locked =
+                    jobRepository.findByIdWithWorkspaceForUpdate(jobId).orElse(null);
+            if (locked != null && observationsAdmitted(locked)) {
+                log.info("Not requeuing job {}: its observations already reached this server", jobId);
+                return 0;
+            }
+            AgentJobLlmUsage retryCounts =
+                    bill ? jobRepository.findLlmUsageById(jobId).orElse(null) : null;
+            int rows = requeueOrphanWithRotation(jobId, workerId, currentRetryCount);
+            if (rows == 0) {
+                // The fence is lost: this row belongs to another attempt now, and nothing this one has
+                // to say about itself may be written over it.
+                return 0;
+            }
+            if (bill) {
+                billTerminatedJob(job, reason + " retry (attempt " + (currentRetryCount + 1) + ")", retryCounts);
+            }
+            if (transcript != null) {
+                jobRepository.findById(jobId).ifPresent(requeued -> requeued.setContainerLogs(transcript));
+            }
+            return rows;
+        });
+        if (updated == null || updated == 0) {
+            return false;
+        }
+        infraRetryRequeued.increment();
+        return true;
     }
 
     /**
@@ -1055,8 +1177,6 @@ public class AgentJobExecutor {
             job.setConfigSnapshot(snapshot.toJson(objectMapper));
             jobRepository.save(job);
 
-            localRunningJobs.add(jobId);
-            capacityState.ifPresent(WorkerCapacityState::claimReview);
             return new ClaimResult(job, snapshot);
         });
     }
@@ -1250,12 +1370,12 @@ public class AgentJobExecutor {
 
             freshJob.setOutput(objectMapper.valueToTree(agentResult.output()));
             freshJob.setExitCode(sandboxResult.exitCode());
+            // The whole transcript, not its ending. It is the only account of what a review did — which
+            // practices it settled, what it was refused and why, where its time went — and a review that
+            // is not doing what it should is diagnosed from the part that a tail drops. Collection has
+            // already bounded it, and the retention sweep clears it on its own schedule.
             if (sandboxResult.logs() != null && !sandboxResult.logs().isBlank()) {
-                String logs = sandboxResult.logs();
-                freshJob.setContainerLogs(
-                        logs.length() > MAX_CONTAINER_LOGS_CHARS
-                                ? logs.substring(logs.length() - MAX_CONTAINER_LOGS_CHARS)
-                                : logs);
+                freshJob.setContainerLogs(sandboxResult.logs());
             }
             if (terminalStatus == AgentJobStatus.COMPLETED) {
                 freshJob.setDeliveryStatus(DeliveryStatus.PENDING);
@@ -1287,6 +1407,9 @@ public class AgentJobExecutor {
     }
 
     private static final class TerminalPersistenceException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         private TerminalPersistenceException(Throwable cause) {
             super("Could not durably persist terminal job result and usage", cause);

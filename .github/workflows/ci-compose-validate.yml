@@ -118,8 +118,8 @@ jobs:
         run: |
           set -euo pipefail
           # One stack at a time, because that is how the reference deployment runs them:
-          # deploy-locked-compose.yml renders each file on its own and brings it up as its own
-          # Compose project under /opt/hephaestus/<stack>. Rendering the three merged instead made
+          # the reconciler renders each file on its own and brings it up as its own Compose
+          # project, one per stack. Rendering the three merged instead made
           # every cross-project reference look satisfiable, and hid a `depends_on` no stack could
           # honour until a release had already been published. The merged combination is still
           # covered — the single-host stack above includes all three. Values mirror what the deploy

@@ -1,3 +1,4 @@
+import { ErrorBoundary } from "@sentry/react";
 import { type QueryClient, useQuery } from "@tanstack/react-query";
 import {
 	createRootRouteWithContext,
@@ -7,10 +8,8 @@ import {
 	useLocation,
 	useMatches,
 	useNavigate,
-	useRouter,
 } from "@tanstack/react-router";
-import type React from "react";
-import { toast } from "sonner";
+import { lazy, Suspense, type ReactNode } from "react";
 
 import { getIntegrationCatalogOptions, listThreadsOptions } from "@/api/@tanstack/react-query.gen";
 import { ImpersonationBanner } from "@/components/auth/ImpersonationBanner";
@@ -22,22 +21,19 @@ import { SkipToContent } from "@/components/core/SkipToContent";
 import { StandardPageSurface } from "@/components/core/StandardPageSurface";
 import { ActiveSurveyDialog } from "@/components/feedback/ActiveSurveyDialog";
 import { ProductFeedbackDialog } from "@/components/feedback/ProductFeedbackDialog";
-import { Chat } from "@/components/mentor/Chat";
-import { Copilot } from "@/components/mentor/Copilot";
-import { defaultPartRenderers } from "@/components/mentor/renderers";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import environment from "@/environment";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
-import { useMentorChat } from "@/hooks/use-mentor-chat";
 import { useActiveSurvey, useSubmitProductFeedback } from "@/hooks/use-product-feedback";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
-import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
 import { type AuthContextType, useAuth } from "@/integrations/auth/AuthContext";
 import { FeatureFlagDevTools, useFeatureFlag } from "@/integrations/feature-flags";
 import { isCopilotExcludedRoute } from "@/lib/copilot-route";
 import { getProviderSlug } from "@/lib/provider";
+
+const GlobalCopilot = lazy(() => import("./-GlobalCopilot"));
 
 interface MyRouterContext {
 	queryClient: QueryClient;
@@ -122,7 +118,13 @@ function RootLayout() {
 				</SidebarProvider>
 			</ProviderColorScope>
 			<Toaster />
-			{showCopilot && <GlobalCopilot />}
+			{showCopilot && (
+				<ErrorBoundary fallback={<></>} handled>
+					<Suspense fallback={null}>
+						<GlobalCopilot />
+					</Suspense>
+				</ErrorBoundary>
+			)}
 			<FeatureFlagDevTools />
 			{!isLoading && isAuthenticated ? <GlobalSurvey /> : null}
 		</>
@@ -161,88 +163,6 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 	),
 });
 
-function GlobalCopilot() {
-	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader
-	// already is, rather than as a toast away from the conversation that failed.
-	const mentorChat = useMentorChat({});
-
-	const router = useRouter();
-	const { isAuthenticated, isLoading } = useAuth();
-	const { enabled: hasMentorAccess } = useFeatureFlag("MENTOR_ACCESS");
-	const { workspaceSlug } = useActiveWorkspaceSlug();
-	const { features, isLoading: featuresLoading } = useWorkspaceFeatures(workspaceSlug);
-
-	const handleMessageSubmit = ({ text }: { text: string }) => {
-		if (!text.trim()) return;
-		mentorChat.sendMessage(text);
-	};
-
-	const handleVote = (messageId: string, isUpvote: boolean) => {
-		mentorChat.voteMessage(messageId, isUpvote);
-	};
-
-	const handleMessageEdit = (messageId: string, content: string) => {
-		const messageIndex = mentorChat.messages.findIndex((message) => message.id === messageId);
-		if (messageIndex === -1) return;
-		mentorChat.setMessages(mentorChat.messages.slice(0, messageIndex));
-		mentorChat.sendMessage(content);
-	};
-
-	const handleCopy = (content: string) => {
-		navigator.clipboard.writeText(content).catch(() => {
-			toast.error("Couldn't copy that to the clipboard.");
-		});
-	};
-
-	if (
-		isLoading ||
-		featuresLoading ||
-		!isAuthenticated ||
-		!workspaceSlug ||
-		!hasMentorAccess ||
-		!features?.mentorEnabled
-	) {
-		return null;
-	}
-
-	return (
-		<Copilot
-			hasMessages={mentorChat.messages.length > 0}
-			onNewChat={() => {
-				mentorChat.setMessages([]);
-			}}
-			onOpenFullChat={() => {
-				const threadId = mentorChat.currentThreadId ?? mentorChat.id;
-				if (threadId && workspaceSlug) {
-					void router.navigate({
-						to: "/w/$workspaceSlug/mentor/$threadId",
-						params: { threadId, workspaceSlug },
-					});
-				}
-			}}
-		>
-			<Chat
-				messages={mentorChat.messages}
-				votes={mentorChat.votes}
-				status={mentorChat.status}
-				readonly={false}
-				attachments={[]}
-				onMessageSubmit={handleMessageSubmit}
-				onMessageEdit={handleMessageEdit}
-				onStop={() => void mentorChat.stop()}
-				onFileUpload={() => Promise.resolve([])}
-				onAttachmentsChange={() => {}}
-				onCopy={handleCopy}
-				onVote={handleVote}
-				inputPlaceholder="Ask me anything..."
-				disableAttachments
-				className="h-full max-h-none"
-				partRenderers={defaultPartRenderers}
-			/>
-		</Copilot>
-	);
-}
-
 function HeaderContainer() {
 	const {
 		isAuthenticated,
@@ -272,6 +192,7 @@ function HeaderContainer() {
 			sidebarTrigger={isAuthenticated && <SidebarTrigger className="-ml-1" />}
 			version={environment.version}
 			environmentName={environment.deployment.name}
+			pullRequest={environment.deployment.pullRequest}
 			isProduction={environment.deployment.isProduction}
 			isAuthenticated={isAuthenticated}
 			isLoading={isLoading}
@@ -293,7 +214,7 @@ function HeaderContainer() {
 	);
 }
 
-function ProviderColorScope({ children }: { children: React.ReactNode }) {
+function ProviderColorScope({ children }: { children: ReactNode }) {
 	const { providerType } = useActiveWorkspaceSlug();
 	return <div data-provider={getProviderSlug(providerType)}>{children}</div>;
 }
@@ -305,10 +226,8 @@ function AppSidebarContainer() {
 	const navigate = useNavigate();
 	const switchWorkspace = useWorkspaceSwitcher();
 	const workspaceAccess = useWorkspaceAccess();
-	const { chromeWorkspaceSlug, workspaces } = workspaceAccess;
+	const { chromeWorkspaceSlug, chromeWorkspace, workspaces } = workspaceAccess;
 	const hasWorkspace = Boolean(chromeWorkspaceSlug);
-	const workspaceList = Array.isArray(workspaces) ? workspaces : [];
-	const activeWorkspace = workspaceList.find((ws) => ws.workspaceSlug === chromeWorkspaceSlug);
 	const integrationCatalogQuery = useQuery({
 		...getIntegrationCatalogOptions({ path: { workspaceSlug: chromeWorkspaceSlug ?? "" } }),
 		enabled: workspaceAccess.isAdmin && Boolean(chromeWorkspaceSlug),
@@ -320,9 +239,9 @@ function AppSidebarContainer() {
 	const integrationKinds = [
 		...new Set([
 			...integrationCatalog.map((entry) => entry.kind),
-			...(activeWorkspace?.providerType === "GITLAB"
+			...(chromeWorkspace?.providerType === "GITLAB"
 				? (["GITLAB"] as const)
-				: activeWorkspace?.providerType === "GITHUB"
+				: chromeWorkspace?.providerType === "GITHUB"
 					? (["GITHUB"] as const)
 					: []),
 		]),
@@ -349,7 +268,7 @@ function AppSidebarContainer() {
 		return null;
 	}
 
-	const handleWorkspaceChange = (ws: typeof activeWorkspace) => {
+	const handleWorkspaceChange = (ws: typeof chromeWorkspace) => {
 		if (!ws) return;
 		void switchWorkspace(ws);
 	};
@@ -366,8 +285,8 @@ function AppSidebarContainer() {
 			hasMentorAccess={hasMentorAccess}
 			integrationKinds={integrationKinds}
 			context={sidebarContext}
-			workspaces={workspaceList}
-			activeWorkspace={activeWorkspace}
+			workspaces={workspaces}
+			activeWorkspace={chromeWorkspace}
 			onWorkspaceChange={handleWorkspaceChange}
 			onAddWorkspace={handleAddWorkspace}
 			workspacesLoading={workspaceAccess.isLoading}

@@ -3,7 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-08-28
 **Authors:** Felix T.J. Dietrich
-**Builds on:** [ADR 0033](0033-bun-is-the-javascript-runtime-and-package-manager.md) (the runtime the controller is written for)
+**Builds on:** [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) (the runtime the controller is written for)
 
 ## Context
 
@@ -57,7 +57,7 @@ reviewer wants *in order to* review.
 5. **Restricting `pull_request_target` to the default branch, and refusing stacked layers.**
    Rejected. Since 2025-12-08 GitHub takes the workflow file and the checked-out commit for
    `pull_request_target` from the default branch whatever the pull request targets, so a base-branch
-   filter no longer withholds anything. Even before that it was not the boundary it looked like: a
+   filter withholds nothing. Even before that it was not the boundary it looked like: a
    same-repository branch belongs to someone who can already read every repository secret, because
    this repository's `pull_request` workflows receive them (`cd-docs.yml` deploys with `SURGE_TOKEN`).
    The filter would cost stacked previews, which `CONTRIBUTING.md` encourages, and protect nothing.
@@ -129,8 +129,8 @@ The gates that remain are the ones that describe *what may run*, not *who asked*
 reviewed, merged code, and a fork's head is never checked out or executed. GitHub guarantees that;
 this repository does not have to arrange it, and no base-branch filter adds to it.
 
-Those jobs sparse-checkout `.github/actions/setup-bun`, `package.json` and `scripts/` — no
-application source. They run no install step, and the controller imports only the runtime's built-in
+Those jobs sparse-checkout `.github/actions/setup-toolchain`, the package manifests and `scripts/` —
+no application source. They run no install step, and the controller imports only the runtime's built-in
 modules, so nothing from the lockfile is resolved on a runner holding the preview secrets. The
 third-party actions that do run there are pinned by commit SHA; that pin, not their absence, is the
 control.

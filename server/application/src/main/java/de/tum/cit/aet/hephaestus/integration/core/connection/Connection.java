@@ -239,10 +239,6 @@ public class Connection {
         this.config = config;
     }
 
-    void setCredentialsEncrypted(byte @Nullable [] credentialsEncrypted) {
-        this.credentialsEncrypted = credentialsEncrypted;
-    }
-
     /** Encrypts or clears this connection's credentials. */
     public void setCredentials(@Nullable CredentialBundle bundle, CredentialBundleConverter converter) {
         if (bundle == null) {
@@ -298,11 +294,11 @@ public class Connection {
         }
         IntegrationKind expected =
                 switch (config) {
-                    case ConnectionConfig.GitHubAppConfig __ -> IntegrationKind.GITHUB;
-                    case ConnectionConfig.GitHubPatConfig __ -> IntegrationKind.GITHUB;
-                    case ConnectionConfig.GitLabConfig __ -> IntegrationKind.GITLAB;
-                    case ConnectionConfig.SlackConfig __ -> IntegrationKind.SLACK;
-                    case ConnectionConfig.OutlineConfig __ -> IntegrationKind.OUTLINE;
+                    case ConnectionConfig.GitHubAppConfig ignored -> IntegrationKind.GITHUB;
+                    case ConnectionConfig.GitHubPatConfig ignored -> IntegrationKind.GITHUB;
+                    case ConnectionConfig.GitLabConfig ignored -> IntegrationKind.GITLAB;
+                    case ConnectionConfig.SlackConfig ignored -> IntegrationKind.SLACK;
+                    case ConnectionConfig.OutlineConfig ignored -> IntegrationKind.OUTLINE;
                 };
         if (kind != expected) {
             throw new IllegalStateException("Connection kind=" + kind

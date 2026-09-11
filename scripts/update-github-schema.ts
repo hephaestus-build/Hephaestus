@@ -1,5 +1,5 @@
 /**
- * Refreshes the vendored GitHub GraphQL schema, which the Maven codegen turns into the client the
+ * Refreshes the vendored GitHub GraphQL schema, which the Gradle codegen turns into the client the
  * server compiles against. Vendoring makes each refresh a reviewable diff instead of a build that
  * changes under you.
  *
@@ -125,9 +125,7 @@ async function main(): Promise<void> {
 		renameSync(tempFile, SCHEMA_FILE);
 
 		console.log(`Schema updated successfully: ${SCHEMA_FILE}`);
-		console.log(
-			"\nTo regenerate types: cd server && ./mvnw -pl generated-clients -am compile -DskipTests",
-		);
+		console.log("\nTo regenerate types: cd server && ./gradlew :generated-clients:classes");
 	} catch (error) {
 		try {
 			unlinkSync(tempFile);

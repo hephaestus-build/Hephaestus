@@ -20,7 +20,7 @@ import org.springframework.validation.annotation.Validated;
  * all environments have been updated.
  *
  * @param authToken personal access token or fine-grained token used for unauthenticated-ish
- *                  reads of the {@code ls1intum/Hephaestus} contributor graph
+ *                  reads of the {@code hephaestus-build/Hephaestus} contributor graph
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.contributors.github")

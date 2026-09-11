@@ -2,10 +2,13 @@ package de.tum.cit.aet.hephaestus.core.auth.web;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.auth.AuthSessionService;
 import de.tum.cit.aet.hephaestus.core.auth.impersonation.ImpersonationService;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -21,11 +24,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-/**
- * Session-lifecycle verbs: logout, refresh, impersonate, impersonate:exit. Strictly
- * session control — identity reads live on {@code /user}. Cookie + JWT mechanics are
- * delegated to {@link AuthSessionService} so this controller stays thin.
- */
 @ConditionalOnServerRole
 @RestController
 @RequestMapping("/auth")
@@ -54,27 +52,38 @@ public class AuthLifecycleController {
     @PostMapping("/refresh")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Rotate the access token (new jti, old revoked)", operationId = "refresh")
+    @ApiResponse(responseCode = "204", description = "Session renewal completed")
+    @ApiResponse(responseCode = "401", description = "Session has ended")
     public ResponseEntity<Void> refresh(HttpServletRequest request, HttpServletResponse response) {
-        sessionService.refresh(
+        boolean sessionContinues = sessionService.refresh(
                 CurrentAccount.requireId(),
                 CurrentAccount.requireJti(),
-                new AuthSessionService.RefreshContext(
+                new TokenConstraints(
                         CurrentAccount.impersonatorId(),
                         CurrentAccount.impersonationExpiresAt(),
-                        CurrentAccount.sessionExpiresAt()),
+                        CurrentAccount.sessionExpiresAt(),
+                        CurrentAccount.authTime()),
                 request,
                 response);
-        return ResponseEntity.noContent().build();
+        return sessionContinues
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
 
     @PostMapping("/impersonate")
     @PreAuthorize("hasAuthority('app_admin')")
     @Operation(summary = "Begin impersonating another account", operationId = "impersonate")
+    @RequiresRecentSignIn
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "IMPERSONATION_BEGIN")
     public ResponseEntity<Void> impersonate(
             @Valid @RequestBody ImpersonateRequestDTO body, HttpServletRequest request, HttpServletResponse response) {
-        ImpersonationService.Result result =
-                impersonationService.begin(CurrentAccount.requireId(), body.targetAccountId(), body.reason(), request);
+        ImpersonationService.Result result = impersonationService.begin(
+                CurrentAccount.requireId(),
+                body.targetAccountId(),
+                body.reason(),
+                CurrentAccount.authTime(),
+                CurrentAccount.sessionExpiresAt(),
+                request);
         sessionService.setCookie(response, result.token());
         return ResponseEntity.noContent().build();
     }
@@ -88,7 +97,12 @@ public class AuthLifecycleController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "not currently impersonating");
         }
         ImpersonationService.Result result = impersonationService.exit(
-                impersonatorId, CurrentAccount.requireId(), CurrentAccount.requireJti(), request);
+                impersonatorId,
+                CurrentAccount.requireId(),
+                CurrentAccount.requireJti(),
+                CurrentAccount.authTime(),
+                CurrentAccount.sessionExpiresAt(),
+                request);
         sessionService.setCookie(response, result.token());
         return ResponseEntity.noContent().build();
     }

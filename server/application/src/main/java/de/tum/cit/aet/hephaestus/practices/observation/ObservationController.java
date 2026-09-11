@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.observation;
 
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
+import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.DeveloperPracticeSummaryDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationDetailDTO;
@@ -49,14 +50,14 @@ public class ObservationController {
             summary = "List observations for current user",
             description = "Paginated observations for the authenticated developer with optional filters")
     @ApiResponse(responseCode = "200", description = "Paginated observations returned")
-    public ResponseEntity<Page<ObservationListDTO>> listObservations(
+    public ResponseEntity<PageResponseDTO<ObservationListDTO>> listObservations(
             WorkspaceContext workspaceContext, @Valid @ParameterObject ObservationFeedFilterParams filter) {
         Pageable pageable = filter.pageable();
 
         Page<ObservationListDTO> observations = observationService
                 .getObservations(workspaceContext.id(), filter.toQuery(), pageable)
                 .map(ObservationListDTO::from);
-        return ResponseEntity.ok(observations);
+        return ResponseEntity.ok(PageResponseDTO.from(observations));
     }
 
     @GetMapping("/summary")

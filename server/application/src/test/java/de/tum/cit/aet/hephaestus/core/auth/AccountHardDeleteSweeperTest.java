@@ -11,10 +11,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
-import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Job;
-import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Outcome;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -36,8 +35,8 @@ class AccountHardDeleteSweeperTest extends BaseUnitTest {
     @Mock
     private AuthProperties authProperties;
 
-    @Mock
-    private PrivacyJobMetrics metrics;
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    private final PrivacyJobMetrics metrics = new PrivacyJobMetrics(registry);
 
     private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
@@ -73,8 +72,16 @@ class AccountHardDeleteSweeperTest extends BaseUnitTest {
 
         sweeper.sweep();
 
-        verify(metrics).record(Job.ACCOUNT_ERASURE, Outcome.SUCCESS);
-        verify(metrics).recordAffected(Job.ACCOUNT_ERASURE, 0);
+        assertThat(registry.get("privacy.job.completed")
+                        .tags("job", "account_erasure", "outcome", "success")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+        assertThat(registry.get("privacy.job.affected")
+                        .tag("job", "account_erasure")
+                        .counter()
+                        .count())
+                .isEqualTo(0);
     }
 
     @Test
@@ -86,6 +93,10 @@ class AccountHardDeleteSweeperTest extends BaseUnitTest {
 
         assertThatThrownBy(sweeper::sweep).isInstanceOf(IllegalStateException.class);
 
-        verify(metrics).record(Job.ACCOUNT_ERASURE, Outcome.FAILURE);
+        assertThat(registry.get("privacy.job.completed")
+                        .tags("job", "account_erasure", "outcome", "failure")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
     }
 }

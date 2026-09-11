@@ -13,7 +13,7 @@ Hephaestus ships **one JAR** that boots in any of three runtime roles. The same 
 | Worker | `hephaestus.runtime.worker.enabled` | `true` |
 | Webhook | `hephaestus.runtime.webhook.enabled` | `true` |
 
-All three default-on means `vp run dev:server` starts a working monolith.
+All three default-on means a JAR started with no profile overlay boots a working monolith.
 
 ## Boot log
 
@@ -58,6 +58,18 @@ Each role ships with a Spring profile YAML that flips the other two flags off an
 
 To deploy a worker pod set `SPRING_PROFILES_ACTIVE=prod,worker` and point `HEPHAESTUS_HUB_URL` at the app pod's WSS endpoint. See `docker/compose.app.yaml` for a working compose template.
 
+## Build-only profiles
+
+`specs` and `cds-training` generate artifacts; they are not deployment modes. They load the
+application contract without runtime bootstrap, container-image validation or image pulls. They
+supply no shared placeholder secrets. If an authentication component needs a key to initialize,
+the build uses the existing non-production ephemeral-key behavior, without a runtime warning.
+
+Never combine either profile with `prod`, including through the `worker-node` or `webhook-server`
+profile groups. Startup rejects that combination even when production secrets are configured.
+Production encryption requirements apply to Spring's expanded profiles, so selecting a production
+profile group requires the same keys as selecting `prod` directly.
+
 ## Configuration cheatsheet
 
 Each cell is the value a pod boots with when the operator sets **no** env var for it — the profile
@@ -95,10 +107,11 @@ active. The two env-var flags in particular default `false` on **every** role un
 the variable — no profile turns work on for you.
 
 `Needs user-auth wiring` is **not** in that group — its cells read `yes | no | no` because it really
-does differ by role. The whole `core.auth` module carries `@ConditionalOnServerRole`, so setting
+does differ by role. User authentication exists only with the server role, so setting
 `hephaestus.runtime.server.enabled=false` drops it; the `worker` overlay additionally excludes
-`OAuth2ResourceServerAutoConfiguration` outright, so a worker-only pod never depends on user-auth
-wiring at boot. The `webhook` overlay does not carry that exclusion and relies on the role gate alone.
+Spring's OAuth2 resource-server autoconfiguration outright, so a worker-only pod never depends on
+user-auth wiring at boot. The `webhook` overlay does not carry that exclusion and relies on the role
+gate alone.
 
 There is no `hephaestus.sandbox.enabled`, and an arch test forbids introducing one: the Docker
 sandbox *is* the worker capability, so it follows `hephaestus.runtime.worker.enabled`. Reading the
@@ -106,6 +119,12 @@ worker row down the **Server** column: a server pod carries the worker role too,
 sandbox gateway on the same port and needs the same firewall treatment as a split-out worker. The
 webhook role turns the worker role off, so it opens no gateway — the three `sandbox.gateway` rows
 read `—` in that column.
+
+Sandbox maintenance follows the worker role in both split-out and single-container deployments.
+Idle mentor sessions and orphaned resources are cleaned periodically without enabling server-wide
+scheduled jobs on the worker. Stalled writes are checked on a separate thread so a slow Docker cleanup
+cannot delay their timeout. API-contract generation and CDS training do not run sandbox maintenance, server scheduled jobs or
+startup sync-job recovery.
 
 Only worker containers bind their HTTP and management endpoints to loopback: that is the `worker`
 overlay's doing, and a single-container install running all three roles still serves `/api/**` and
@@ -123,15 +142,12 @@ file sets the env var the base default leaves off:
 `hephaestus.agent.enabled` (`AGENT_ENABLED`) gates three things that must agree, or a split
 deployment silently does half its job. They do **not** share a gate:
 
-- **Submission** (`AgentJobEventListener` / `IssueAgentJobEventListener` / `BotCommandProcessor`,
-  which turn PR/issue/bot events into `agent_job` rows) needs only this flag. It wires on *any* pod
-  where the flag is `true`, including a `prod,worker` pod — a worker with the flag on submits as well
-  as executes.
-- **Orphan recovery** (`AgentJobZombieSweeper`, which reclaims a dead worker's stuck jobs) needs this
-  flag **and** the server role (`@ConditionalOnServerRole`), so it does not double-run on a
-  dedicated worker pod.
-- **Execution** (`AgentJobExecutor`, the poll loop that claims and runs jobs) needs this flag **and**
-  the worker role.
+- **Submission** (turning pull request, issue and bot-command events into queued jobs) needs only
+  this flag. It wires on *any* pod where the flag is `true`, including a `prod,worker` pod — a worker
+  with the flag on submits as well as executes.
+- **Orphan recovery** (reclaiming a dead worker's stuck jobs) needs this flag **and** the server
+  role, so it does not double-run on a dedicated worker pod.
+- **Execution** (the poll loop that claims and runs jobs) needs this flag **and** the worker role.
 
 `AGENT_ENABLED` is `false` on every role until you set it, however the pod is started. Set it to
 `true` on **every** pod that needs any of the three — in the split-pod topology that is both
@@ -177,6 +193,11 @@ host is noisy — and mind the name: the JVM binds
 (`docker/compose.app.yaml` translates them); set them on a K8s or systemd deployment and they are
 silently ignored.
 
+Review capacity is also capped by `SANDBOX_MAX_CONCURRENT`: a worker never claims more reviews at
+once than the host lets it start sandboxes for. The single-host self-hosted Compose file sets that to
+1, so raising review capacity there changes nothing until you raise the sandbox limit too — with the
+RAM to match (see the [Install guide](./install)).
+
 The app pod signs worker tokens from a key *ring*, not a single value:
 `hephaestus.worker.hub.token.keys[0].kid` + `.private-key` and
 `hephaestus.worker.hub.token.active-kid`. Indexed list binding has no single env-var form, so
@@ -203,7 +224,7 @@ The compose template pins `stop_grace_period: 6m` to give the JVM 60s of headroo
 The full design rationale lives in the architecture decision records, which are kept in the
 repository rather than on this site:
 
-- [**ADR 0005**](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0005-two-role-runtime-via-conditional-on-property.md) — original two-role design.
-- [**ADR 0008**](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md) — webhook role rationale.
-- [**ADR 0009**](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0009-worker-runtime-substrate-wss-control-channel.md) — worker substrate + WSS control channel.
-- [**ADR 0025**](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0025-agent-job-queue-on-postgresql.md) — agent job queue moved off NATS onto PostgreSQL.
+- [**ADR 0005**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0005-two-role-runtime-via-conditional-on-property.md) — original two-role design.
+- [**ADR 0008**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md) — webhook role rationale.
+- [**ADR 0009**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0009-worker-runtime-substrate-wss-control-channel.md) — worker substrate + WSS control channel.
+- [**ADR 0025**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0025-agent-job-queue-on-postgresql.md) — agent job queue moved off NATS onto PostgreSQL.

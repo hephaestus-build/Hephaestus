@@ -1,6 +1,6 @@
-import { format, isSameYear, parseISO, subDays } from "date-fns";
+import { format, isSameYear, subDays } from "date-fns";
 import { CalendarDays, CalendarIcon, CalendarRange, Clock } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { DateRange } from "react-day-picker";
 
 import { useNow } from "@/components/common/use-now";
@@ -14,6 +14,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { asDate } from "@/lib/dates";
 import {
 	DEFAULT_SCHEDULE,
 	detectPresetFromDates,
@@ -57,25 +58,20 @@ export function ProfileTimeframePicker({
 	enableAllActivity = true,
 	schedule = DEFAULT_SCHEDULE,
 }: ProfileTimeframePickerProps) {
-	const [chosenPreset, setChosenPreset] = useState<TimeframePreset>();
-	// Ticks, so a week or month boundary crossed with the page open rolls the emitted range over
-	// instead of stranding it in the period that ended.
-	const nowMs = useNow();
-	const now = new Date(nowMs);
-
-	const selectedPreset =
-		chosenPreset ?? detectPresetFromDates(now, afterDate, beforeDate, schedule, enableAllActivity);
-
-	const [customRange, setCustomRange] = useState<DateRange | undefined>(() => {
-		if (selectedPreset === "custom" && afterDate) {
-			const from = parseISO(afterDate);
-			const to = beforeDate ? subDays(parseISO(beforeDate), 1) : undefined;
-			return { from, to };
-		}
-		return undefined;
-	});
-
-	const lastEmittedRef = useRef<{ after: string; before?: string } | null>(null);
+	const [customRangeOpen, setCustomRangeOpen] = useState(false);
+	const now = new Date(useNow());
+	const selectedPreset = detectPresetFromDates(
+		now,
+		afterDate,
+		beforeDate,
+		schedule,
+		enableAllActivity,
+	);
+	const startDate = asDate(afterDate);
+	const before = asDate(beforeDate);
+	const customRange = startDate
+		? { from: startDate, to: before ? subDays(before, 1) : undefined }
+		: undefined;
 
 	const baseItems: { value: TimeframePreset; label: string }[] = [
 		{ value: "this-week", label: formatDropdownLabel("this-week") },
@@ -88,60 +84,22 @@ export function ProfileTimeframePicker({
 		? [{ value: "all-activity", label: formatDropdownLabel("all-activity") }, ...baseItems]
 		: baseItems;
 
-	useEffect(() => {
-		if (!onTimeframeChange) return;
-
-		let range: { after: string; before: string | undefined };
-
-		const at = new Date(nowMs);
-
-		if (selectedPreset === "custom") {
-			if (!customRange?.from) return;
-			const dateRange = getDateRangeForPreset(at, selectedPreset, schedule, {
-				from: customRange.from,
-				to: customRange.to,
-			});
-			range = formatDateRangeForApi(dateRange);
-		} else {
-			const dateRange = getDateRangeForPreset(at, selectedPreset, schedule);
-			range = formatDateRangeForApi(dateRange);
-		}
-
-		if (
-			lastEmittedRef.current?.after === range.after &&
-			lastEmittedRef.current.before === range.before
-		) {
+	const handlePresetChange = (preset: TimeframePreset) => {
+		if (preset === "custom") {
+			setCustomRangeOpen(true);
 			return;
 		}
-
-		lastEmittedRef.current = range;
-		onTimeframeChange(range.after, range.before);
-	}, [nowMs, selectedPreset, customRange, schedule, onTimeframeChange]);
-
-	const handlePresetChange = (preset: TimeframePreset) => {
-		setChosenPreset(preset);
-
-		if (preset === "custom" && !customRange?.from) {
-			if (afterDate) {
-				const fromDate = parseISO(afterDate);
-				setCustomRange({
-					from: fromDate,
-					to: now,
-				});
-			} else {
-				setCustomRange({
-					from: subDays(now, 7),
-					to: now,
-				});
-			}
-		}
+		setCustomRangeOpen(false);
+		const range = formatDateRangeForApi(getDateRangeForPreset(now, preset, schedule));
+		onTimeframeChange?.(range.after, range.before);
 	};
 
 	const handleCustomRangeChange = (range: DateRange | undefined) => {
-		if (range) {
-			setChosenPreset("custom");
-			setCustomRange(range);
-		}
+		if (!range?.from) return;
+		const dates = formatDateRangeForApi(
+			getDateRangeForPreset(now, "custom", schedule, { from: range.from, to: range.to }),
+		);
+		onTimeframeChange?.(dates.after, dates.before);
 	};
 
 	const formatCustomRangeLabel = () => {
@@ -202,12 +160,13 @@ export function ProfileTimeframePicker({
 				</SelectContent>
 			</Select>
 
-			{selectedPreset === "custom" && (
-				<Popover>
+			{(selectedPreset === "custom" || customRangeOpen) && (
+				<Popover open={customRangeOpen} onOpenChange={setCustomRangeOpen}>
 					<PopoverTrigger
 						render={
 							<Button
 								variant="outline"
+								aria-label="Choose custom dates"
 								className={cn(
 									"justify-start text-left font-normal",
 									!customRange?.from && "text-muted-foreground",

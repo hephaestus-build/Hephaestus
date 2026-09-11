@@ -1,6 +1,6 @@
 ---
 title: End-to-end testing
-description: How the Playwright suite is structured and how to run it locally.
+description: Running the live practice-review path end to end locally, and the Playwright browser suite.
 ---
 
 # Live practice-review E2E
@@ -25,6 +25,16 @@ Do not expose this profile outside a trusted development machine: it enables pas
 login. The setup script accepts only loopback application and database URLs. The application server
 still needs to be reachable from Docker through `host.docker.internal`, so enforce the boundary with
 the host firewall or an isolated development network.
+
+## Local SCM simulation
+
+For an isolated simulator, set `hephaestus.e2e.scm-origin` (environment variable
+`HEPHAESTUS_E2E_SCM_ORIGIN`) to its exact `http://127.0.0.1:<port>` origin, without a trailing
+slash. Startup rejects this setting unless `e2e` is active and `prod` is absent. Workspace
+validation and GitLab preflight allow only that origin; other destinations retain the normal
+HTTPS and private-address restrictions. Preflight clients do not follow redirects and cannot
+send requests to a different origin. This does not enable a GitHub simulator or supply missing
+provider APIs, Git transport, or historical replay.
 
 ## Setup
 
@@ -81,7 +91,7 @@ requires the appropriate group role and license.
 The agent runs in a Docker sandbox (`ghcr.io/hephaestus-build/agent-pi`) and calls the LLM through
 the in-app proxy, so provider keys never enter the sandbox. Host-run E2E uses a non-internal Docker
 network (`allowInternet=true`) so the sandbox can reach that proxy through `host.docker.internal`.
-Feedback is posted back to the MR, and the observations behind it are shown under the workspace's **Practices → Runs** view.
+Feedback is posted back to the MR, and the observations behind it are shown under the workspace's **Practices → Practice reviews** view.
 
 Live runner JUnit tests call the upstream provider directly. They do not cover application proxying,
 budget admission, durable usage accounting, sandbox execution, or SCM delivery.

@@ -20,7 +20,7 @@ class SpringAsyncConfigTest {
 
     @Test
     void asyncMethodsRunOnTheBoundedApplicationPool() {
-        // setActiveProfiles("default") clears surefire's "test" profile so @Profile("!test") applies.
+        // setActiveProfiles("default") clears Gradle's "test" profile so @Profile("!test") applies.
         new ApplicationContextRunner()
                 .withInitializer(ctx -> ctx.getEnvironment().setActiveProfiles("default"))
                 .withUserConfiguration(SpringAsyncConfig.class, AsyncProbe.class)

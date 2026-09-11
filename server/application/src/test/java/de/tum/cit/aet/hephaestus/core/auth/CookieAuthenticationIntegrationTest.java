@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -8,7 +10,9 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import java.time.Instant;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
@@ -90,7 +94,13 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
 
     @Test
     void noCredentialsIsUnauthorized() {
-        webTestClient.get().uri("/user").exchange().expectStatus().isUnauthorized();
+        webTestClient
+                .get()
+                .uri("/user")
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -106,7 +116,8 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
                 .header(HttpHeaders.COOKIE, cookieName + "=" + issued.token())
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         // Revoke every session for the account (the issuer persisted the issued_jwt row). The
         // @Modifying query needs an active, COMMITTED tx so the server thread's next read sees it.
@@ -121,21 +132,119 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
                 .header(HttpHeaders.COOKIE, cookieName + "=" + issued.token())
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
-    // NOTE on CSRF: the cookie-style POST-without-token → 403 contract is covered by
-    // CsrfProtectionIntegrationTest (it asserts the 403→401 transition on /auth/logout). It is not
-    // re-asserted here because, once the cookie authenticates, a logout/refresh proceeds to an audit
-    // write whose partitioned auth_event schema is not materialized under the test profile's
-    // ddl-auto:create (Liquibase is disabled for tests) — that would mask CSRF behind a 500. Keeping
-    // this slice focused on resolution avoids that test-environment entanglement.
+    @Test
+    void shouldAllowSignInDiscoveryWhenBrowserPresentsRevokedCredentials() {
+        IssuedAccount issued = issueRealTokenForNewAccount("Revoked Discovery");
+        new TransactionTemplate(txManager)
+                .executeWithoutResult(status -> issuedJwtRepository.revokeAllForAccount(
+                        issued.accountId(), Instant.now(), IssuedJwt.RevokedReason.SIGN_OUT_EVERYWHERE));
+
+        webTestClient
+                .get()
+                .uri("/identity-providers")
+                .header(HttpHeaders.COOKIE, cookieName + "=" + issued.token())
+                .headers(headers -> headers.setBearerAuth(issued.token()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    void shouldRejectCookieAuthenticatedMutationWhenCsrfTokenIsMissing() {
+        IssuedAccount issued = issueRealTokenForNewAccount("Cookie CSRF");
+        webTestClient
+                .post()
+                .uri("/auth/logout")
+                .header(HttpHeaders.COOKIE, cookieName + "=" + issued.token())
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    void shouldRejectCookieAuthenticatedMutationWhenBearerHeaderAlsoExists() {
+        IssuedAccount issued = issueRealTokenForNewAccount("Mixed CSRF");
+        webTestClient
+                .post()
+                .uri("/auth/logout")
+                .header(HttpHeaders.COOKIE, cookieName + "=" + issued.token())
+                .headers(headers -> headers.setBearerAuth(issued.token()))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    void shouldReachAuthenticationWithoutCsrfWhenOnlyBearerHeaderExists() {
+        webTestClient
+                .post()
+                .uri("/auth/logout")
+                .headers(headers -> headers.setBearerAuth("invalid-token"))
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    void shouldKeepCsrfCookieStableWhenValidatingAnExistingSession() {
+        IssuedAccount issued = issueRealTokenForNewAccount("Stable CSRF");
+        String csrf = TestAuthUtils.fetchCsrfToken(webTestClient);
+        var response = webTestClient
+                .get()
+                .uri("/user")
+                .header(HttpHeaders.COOKIE, cookieName + "=" + issued.token() + "; __Host-XSRF-TOKEN=" + csrf)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .returnResult(Void.class);
+        assertNull(response.getResponseCookies().getFirst("__Host-XSRF-TOKEN"));
+    }
+
+    @Test
+    void shouldEndSessionAndCommitRevocationWhenAccountIsSuspendedBeforeRefresh() {
+        IssuedAccount issued = issueRealTokenForNewAccount("Suspended Refresh");
+        Account account = accountRepository.findById(issued.accountId()).orElseThrow();
+        account.setStatus(Account.Status.SUSPENDED);
+        accountRepository.saveAndFlush(account);
+        String csrf = TestAuthUtils.fetchCsrfToken(webTestClient);
+
+        var response = webTestClient
+                .post()
+                .uri("/auth/refresh")
+                .header(HttpHeaders.COOKIE, cookieName + "=" + issued.token() + "; __Host-XSRF-TOKEN=" + csrf)
+                .header("X-XSRF-TOKEN", csrf)
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .returnResult(Void.class);
+        var cleared = response.getResponseCookies().getFirst(cookieName);
+        assertNotNull(cleared);
+        assertEquals("", cleared.getValue());
+
+        webTestClient
+                .get()
+                .uri("/user")
+                .header(HttpHeaders.COOKIE, cookieName + "=" + issued.token())
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
+    }
 
     private record IssuedAccount(String token, long accountId) {}
 
     private IssuedAccount issueRealTokenForNewAccount(String displayName) {
         Account account = accountRepository.save(new Account(displayName));
-        HephaestusJwtIssuer.Token token = jwtIssuer.issue(principalFactory.forAccount(account), null, null);
+        HephaestusJwtIssuer.Token token = jwtIssuer.issue(
+                principalFactory.forAccount(account), TokenConstraints.session(null, Instant.now()), null);
         return new IssuedAccount(token.value(), persistedId(account.getId()));
     }
 

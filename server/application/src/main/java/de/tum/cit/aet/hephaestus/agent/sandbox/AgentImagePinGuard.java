@@ -4,9 +4,11 @@ import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import java.util.Objects;
 import java.util.regex.Pattern;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 @Component
+@Profile("!specs & !cds-training")
 @ConditionalOnProperty(prefix = "hephaestus.agent.image", name = "require-digest", havingValue = "true")
 public class AgentImagePinGuard {
 

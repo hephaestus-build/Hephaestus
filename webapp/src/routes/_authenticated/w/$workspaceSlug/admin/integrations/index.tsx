@@ -15,24 +15,22 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/core/PageHeader";
 import { PageLayout } from "@/components/core/PageLayout";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/integrations/")({
 	head: workspaceAdminHead("Integrations"),
+	// The cards are keyed by integration kind, which is the same key in every workspace, so a switch
+	// would otherwise leave a sync this workspace never asked for pending on the matching card.
+	remountDeps: ({ params }) => params.workspaceSlug,
 	component: IntegrationsOverview,
 });
 
 function IntegrationsOverview() {
-	const { workspaceSlug } = useActiveWorkspaceSlug();
-	const slug = workspaceSlug ?? "";
+	const { workspaceSlug: slug } = Route.useParams();
 
-	const catalogQuery = useQuery({
-		...getIntegrationCatalogOptions({ path: { workspaceSlug: slug } }),
-		enabled: Boolean(workspaceSlug),
-	});
+	const catalogQuery = useQuery(getIntegrationCatalogOptions({ path: { workspaceSlug: slug } }));
 
 	return (
 		<PageLayout>

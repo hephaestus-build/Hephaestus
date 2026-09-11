@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.time.Instant;
 import org.assertj.core.api.Assertions;
@@ -54,7 +55,8 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
                 .headers(h -> h.setBearerAuth(tokenFor(user)))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -336,12 +338,13 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
                 .headers(h -> h.setBearerAuth(tokenFor(user)))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     private void seedFailure(long id, AuthEvent.EventType type, Instant occurredAt, String failureReason) {
-        AuthEventData data =
-                new AuthEventData(type, AuthEvent.Result.FAILURE, null, null, failureReason, null, null, null, null);
+        AuthEventData data = new AuthEventData(
+                type, AuthEvent.Result.FAILURE, null, null, failureReason, null, null, null, null, false);
         authEventRepository.save(AuthEvent.create(data, id, occurredAt, "127.0.0.1", "test-agent"));
     }
 
@@ -352,7 +355,7 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
             @Nullable Long accountId,
             @Nullable Long actingAccountId) {
         AuthEventData data = new AuthEventData(
-                type, AuthEvent.Result.SUCCESS, accountId, actingAccountId, null, null, null, null, null);
+                type, AuthEvent.Result.SUCCESS, accountId, actingAccountId, null, null, null, null, null, false);
         authEventRepository.save(AuthEvent.create(data, id, occurredAt, "127.0.0.1", "test-agent"));
     }
 
@@ -364,7 +367,9 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
     }
 
     private String tokenFor(Account account) {
-        return jwtIssuer.issue(principalFactory.forAccount(account), null, null).value();
+        return jwtIssuer
+                .issue(principalFactory.forAccount(account), TokenConstraints.session(null, Instant.now()), null)
+                .value();
     }
 
     private static long persistedId(@Nullable Long id) {

@@ -17,10 +17,10 @@ concurrency:
 permissions: {}
 
 jobs:
-  validate-title:
-    name: "Validate title"
+  validate-pr:
+    name: "Validate PR"
     timeout-minutes: 5
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     if: ${{ !github.event.pull_request.draft }}
     permissions:
       contents: read
@@ -114,21 +114,9 @@ jobs:
         if: steps.title.outcome == 'failure'
         run: exit 1
 
-  # Squash-merge hides a commit's author on `main`, but a pull request's commit list keeps it
-  # forever, and that list is where reviewers and provenance readers look. `CONTRIBUTING.md`
-  # § Identity and Transparency asks for accountable identities; this is what holds them to it.
-  verify-commit-identity:
-    name: "Verify commit identity"
-    timeout-minutes: 5
-    runs-on: ubuntu-latest
-    if: ${{ !github.event.pull_request.draft }}
-    permissions:
-      contents: read
-      pull-requests: write
-    # No checkout: the query and the rule live here, so nothing from the pull request is fetched.
-    steps:
       - name: "Resolve the author of every commit"
         id: identity
+        if: ${{ !cancelled() }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         continue-on-error: true
         with:
@@ -212,10 +200,80 @@ jobs:
         if: steps.identity.outcome == 'failure'
         run: exit 1
 
+      # AGENTS.md forbids model, agent, harness or tool attribution in a pull request title or
+      # body, and `scripts/verify-changesets.ts` enforces the same for a changeset summary. Both
+      # are prose a reader weighs the change by. A commit trailer is not: `Co-authored-by:` is
+      # git's own way to credit who or what worked on a commit, and crediting a tool there is
+      # allowed.
+      - name: "Refuse model attribution in the pull request body"
+        id: attribution
+        if: ${{ !cancelled() }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        continue-on-error: true
+        with:
+          script: |
+            const { writeFile } = require("node:fs/promises");
+
+            // Mirrors `scripts/lib/model-attribution.ts`; this job has no checkout to import it.
+            // `scripts/pull-request-workflows.test.ts` executes this policy against real descriptions.
+            const patterns = [
+              {
+                name: "a Co-Authored-By trailer naming a model or tool",
+                pattern:
+                  /^co-authored-by:.*(?:claude|codex|copilot|gpt|openai|anthropic|gemini|cursor|noreply@anthropic\.com)/im,
+              },
+              { name: "a Claude-Session trailer", pattern: /^claude-session:/im },
+              { name: 'a "Generated with" marker', pattern: /\bgenerated with\b/i },
+              { name: "a claude.ai/code or session link", pattern: /claude\.ai\/(?:code|session)/i },
+            ];
+            const findAttribution = (text) =>
+              patterns.filter(({ pattern }) => pattern.test(text ?? "")).map(({ name }) => name);
+
+            const { data: { body } } = await github.rest.pulls.get({
+              ...context.repo, pull_number: context.payload.pull_request.number,
+            });
+            const bodyMatches = findAttribution(body);
+            if (bodyMatches.length === 0) return;
+
+            await writeFile(
+              `${process.env.RUNNER_TEMP}/attribution-comment.md`,
+              [
+                "## Attribution check failed",
+                "",
+                "This pull request's body names the model, agent, harness or tool that helped write",
+                `it: ${bodyMatches.join(", ")}. \`AGENTS.md\` § Pull requests asks for none of that in a`,
+                "title or a body, because a description is read by people deciding whether to trust",
+                "the change.",
+                "",
+                "Edit the description to remove it. A commit trailer crediting a tool is fine, and a",
+                "human co-author stays welcome under the same trailer.",
+                "",
+              ].join("\n"),
+            );
+            core.setFailed("The pull request body carries model attribution.");
+
+      - name: "Comment on PR with the attribution violations"
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        if: steps.attribution.outcome == 'failure'
+        with:
+          header: pr-attribution-error
+          path: ${{ runner.temp }}/attribution-comment.md
+
+      - name: "Remove attribution error comment on success"
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        if: steps.attribution.outcome == 'success'
+        with:
+          header: pr-attribution-error
+          delete: true
+
+      - name: "Fail workflow if the attribution check failed"
+        if: steps.attribution.outcome == 'failure'
+        run: exit 1
+
   assign-author:
     name: "Assign author"
     timeout-minutes: 5
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     permissions:
       pull-requests: write
     if: github.event.action == 'opened'

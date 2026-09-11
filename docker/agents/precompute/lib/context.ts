@@ -1,26 +1,10 @@
-/**
- * Read-only access to the materialised agent context directory (inputs/context/) from a precompute script.
- *
- * A precompute script receives the context dir as its 4th argument (after repoPath, diffFiles, metadata).
- * These helpers let a script consult the SAME cross-artifact context the agent sees — the whole-project
- * inventory, the resolved linked work-items, the issue thread — so it can emit `directions` that point the
- * LLM at relevant neighbours (e.g. "12 OPEN issues exist; check project_inventory.json for overlap").
- *
- * Contract reminder: precompute surfaces FACTS and DIRECTIONS, never verdicts. These helpers only READ;
- * they never decide.
- */
+/** Read-only helpers for a precompute script's task-declared context root. */
 
 import { readFile } from "node:fs/promises";
 
 import { isJsonObject } from "./practice-contract.ts";
 
-/**
- * Best-effort JSON read of a context file; returns `null` when absent/unreadable (the common case).
- *
- * The result is `unknown` on purpose: the file is written by whichever connector produced the context,
- * so its shape is a claim about another system, not something this side can know. Narrow it — see
- * `readProjectInventory` below for the pattern.
- */
+/** Returns null for absent, unreadable or invalid JSON; callers validate the shape. */
 export async function readContextJson(
 	contextDir: string | undefined,
 	name: string,
@@ -43,7 +27,6 @@ export interface ProjectInventory {
 	truncated?: boolean;
 }
 
-/** An issue or pull request in the inventory listing. Every consumer renders `#number "title"`. */
 export interface InventoryItem {
 	number: number;
 	title: string;
@@ -66,10 +49,6 @@ function optionalBoolean(value: unknown): boolean | undefined {
 	return typeof value === "boolean" ? value : undefined;
 }
 
-/**
- * An item without a usable number AND title cannot be rendered or compared by any consumer, so it is
- * dropped here rather than being handed on as a hole for every call site to defend against.
- */
 function parseInventoryItems(value: unknown): InventoryItem[] | undefined {
 	if (!Array.isArray(value)) return undefined;
 	const items: InventoryItem[] = [];
@@ -91,7 +70,6 @@ function parseInventoryItems(value: unknown): InventoryItem[] | undefined {
 	return items;
 }
 
-/** Narrow a parsed `project_inventory.json` to the fields this side actually reads. */
 export function parseProjectInventory(value: unknown): ProjectInventory | null {
 	if (!isJsonObject(value)) return null;
 	const focal = isJsonObject(value.focal) ? value.focal : undefined;
@@ -112,7 +90,6 @@ export function parseProjectInventory(value: unknown): ProjectInventory | null {
 	};
 }
 
-/** Convenience: load the whole-project inventory, or `null` when it was not materialised. */
 export async function readProjectInventory(
 	contextDir: string | undefined,
 ): Promise<ProjectInventory | null> {

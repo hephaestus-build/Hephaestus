@@ -1,20 +1,25 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 
@@ -28,20 +33,25 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
     private static final UUID JOB_ID = UUID.randomUUID();
     private static final String NETWORK_ID = "net-abc123";
 
+    @Test
+    void shouldExcludeOtherOwnersAndLegacyNetworksWhenListingNetworks() {
+        var properties =
+                new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "docker", "course");
+        var manager = new SandboxNetworkManager(networkOps, properties);
+        String id = UUID.randomUUID().toString();
+        var own = new DockerOperations.NetworkInfo("own", "hephaestus-sandbox-course--" + id);
+        when(networkOps.listNetworksByName(manager.networkPrefix()))
+                .thenReturn(List.of(
+                        own,
+                        new DockerOperations.NetworkInfo("foreign", "hephaestus-sandbox-course--other--" + id),
+                        new DockerOperations.NetworkInfo("legacy", "agent-net-" + id)));
+        assertThat(manager.listOrphanedNetworks()).containsExactly(own);
+    }
+
     @BeforeEach
     void setUp() {
-        SandboxProperties properties = new SandboxProperties(
-                "unix:///var/run/docker.sock",
-                false,
-                null,
-                5,
-                10,
-                60,
-                null,
-                "app-server-id",
-                209_715_200L,
-                500_000,
-                null);
+        DockerSandboxProperties properties = new DockerSandboxProperties(
+                "unix:///var/run/docker.sock", false, null, null, "app-server-id", "docker", "default");
         manager = new SandboxNetworkManager(networkOps, properties);
     }
 
@@ -55,7 +65,64 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
             String networkId = manager.createJobNetwork(JOB_ID, false);
 
             assertThat(networkId).isEqualTo(NETWORK_ID);
-            verify(networkOps).createNetwork("agent-net-" + JOB_ID, true);
+            verify(networkOps).createNetwork("hephaestus-sandbox-default--" + JOB_ID, true);
+        }
+
+        @Test
+        @DisplayName("a network an interrupted run left under this job's name is removed, not fought over")
+        void shouldReplaceLeftoverNetworkOfTheSameJob() {
+            String networkName = "hephaestus-sandbox-default--" + JOB_ID;
+            when(networkOps.listNetworksByName(networkName))
+                    .thenReturn(List.of(new DockerOperations.NetworkInfo("stale-net", networkName)));
+            when(networkOps.createNetwork(anyString(), eq(true))).thenReturn(NETWORK_ID);
+
+            assertThat(manager.createJobNetwork(JOB_ID, false)).isEqualTo(NETWORK_ID);
+
+            verify(networkOps).disconnectFromNetwork("stale-net", "app-server-id");
+            verify(networkOps).removeNetwork("stale-net");
+            verify(networkOps).createNetwork(networkName, true);
+        }
+
+        @Test
+        @DisplayName("a leftover network that will not go is reported, not worked around")
+        void shouldFailWhenLeftoverNetworkCannotBeRemoved() {
+            String networkName = "hephaestus-sandbox-default--" + JOB_ID;
+            when(networkOps.listNetworksByName(networkName))
+                    .thenReturn(List.of(new DockerOperations.NetworkInfo("stale-net", networkName)));
+            Mockito.doThrow(new SandboxInfrastructureException("network has active endpoints"))
+                    .when(networkOps)
+                    .removeNetwork("stale-net");
+
+            assertThatThrownBy(() -> manager.createJobNetwork(JOB_ID, false))
+                    .isInstanceOf(SandboxInfrastructureException.class);
+
+            verify(networkOps, Mockito.never()).createNetwork(anyString(), Mockito.anyBoolean());
+        }
+
+        @Test
+        @DisplayName("another job's network is left alone even when the daemon returns it")
+        void shouldLeaveOtherJobsNetworksAlone() {
+            String networkName = "hephaestus-sandbox-default--" + JOB_ID;
+            when(networkOps.listNetworksByName(networkName))
+                    .thenReturn(List.of(new DockerOperations.NetworkInfo("other-net", networkName + "-suffix")));
+            when(networkOps.createNetwork(anyString(), eq(true))).thenReturn(NETWORK_ID);
+
+            assertThat(manager.createJobNetwork(JOB_ID, false)).isEqualTo(NETWORK_ID);
+
+            verify(networkOps, Mockito.never()).removeNetwork(anyString());
+        }
+
+        @Test
+        @DisplayName("a daemon that cannot list networks does not stop the create")
+        void shouldCreateWhenTheLeftoverProbeFails() {
+            String networkName = "hephaestus-sandbox-default--" + JOB_ID;
+            when(networkOps.listNetworksByName(networkName))
+                    .thenThrow(new SandboxInfrastructureException("Failed to list networks"));
+            when(networkOps.createNetwork(anyString(), eq(true))).thenReturn(NETWORK_ID);
+
+            assertThat(manager.createJobNetwork(JOB_ID, false)).isEqualTo(NETWORK_ID);
+
+            verify(networkOps).createNetwork(networkName, true);
         }
 
         @Test
@@ -65,7 +132,7 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
             String networkId = manager.createJobNetwork(JOB_ID, true);
 
             assertThat(networkId).isEqualTo(NETWORK_ID);
-            verify(networkOps).createNetwork("agent-net-" + JOB_ID, false);
+            verify(networkOps).createNetwork("hephaestus-sandbox-default--" + JOB_ID, false);
         }
     }
 
@@ -81,10 +148,12 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
             assertThat(ip).isEqualTo("172.18.0.2");
         }
 
-        @Test
-        void shouldFallBackToHostname() {
-            SandboxProperties propsNoId = new SandboxProperties(
-                    "unix:///var/run/docker.sock", false, null, 5, 10, 60, null, null, 209_715_200L, 500_000, null);
+        @ParameterizedTest
+        @NullAndEmptySource
+        @ValueSource(strings = "   ")
+        void shouldFallBackToHostnameWhenContainerIdIsMissingOrBlank(@Nullable String containerId) {
+            DockerSandboxProperties propsNoId = new DockerSandboxProperties(
+                    "unix:///var/run/docker.sock", false, null, null, containerId, "docker", "default");
             SandboxNetworkManager mgr = new SandboxNetworkManager(networkOps, propsNoId, () -> "hostname-container-id");
 
             when(networkOps.connectToNetwork(NETWORK_ID, "hostname-container-id"))
@@ -98,8 +167,8 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
 
         @Test
         void shouldReturnNullWhenNoContainerId() {
-            SandboxProperties propsNoId = new SandboxProperties(
-                    "unix:///var/run/docker.sock", false, null, 5, 10, 60, null, null, 209_715_200L, 500_000, null);
+            DockerSandboxProperties propsNoId = new DockerSandboxProperties(
+                    "unix:///var/run/docker.sock", false, null, null, null, "docker", "default");
             SandboxNetworkManager mgr = new SandboxNetworkManager(networkOps, propsNoId, () -> null);
 
             String ip = mgr.connectAppServer(NETWORK_ID);
@@ -109,8 +178,8 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
 
         @Test
         void shouldReturnNullWhenHostnameBlank() {
-            SandboxProperties propsNoId = new SandboxProperties(
-                    "unix:///var/run/docker.sock", false, null, 5, 10, 60, null, null, 209_715_200L, 500_000, null);
+            DockerSandboxProperties propsNoId = new DockerSandboxProperties(
+                    "unix:///var/run/docker.sock", false, null, null, null, "docker", "default");
             SandboxNetworkManager mgr = new SandboxNetworkManager(networkOps, propsNoId, () -> "  ");
 
             String ip = mgr.connectAppServer(NETWORK_ID);
@@ -121,8 +190,8 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
         @Test
         void shouldCacheContainerId() {
             var callCount = new AtomicInteger(0);
-            SandboxProperties propsNoId = new SandboxProperties(
-                    "unix:///var/run/docker.sock", false, null, 5, 10, 60, null, null, 209_715_200L, 500_000, null);
+            DockerSandboxProperties propsNoId = new DockerSandboxProperties(
+                    "unix:///var/run/docker.sock", false, null, null, null, "docker", "default");
             SandboxNetworkManager mgr = new SandboxNetworkManager(networkOps, propsNoId, () -> {
                 callCount.incrementAndGet();
                 return "cached-id";
@@ -150,8 +219,8 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
 
         @Test
         void shouldNoOpWhenNoContainerId() {
-            SandboxProperties propsNoId = new SandboxProperties(
-                    "unix:///var/run/docker.sock", false, null, 5, 10, 60, null, null, 209_715_200L, 500_000, null);
+            DockerSandboxProperties propsNoId = new DockerSandboxProperties(
+                    "unix:///var/run/docker.sock", false, null, null, null, "docker", "default");
             SandboxNetworkManager mgr = new SandboxNetworkManager(networkOps, propsNoId, () -> null);
 
             // Should not throw — silently skips disconnect
@@ -177,8 +246,9 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
 
         @Test
         void shouldListByPrefix() {
-            when(networkOps.listNetworksByName("agent-net-"))
-                    .thenReturn(List.of(new DockerOperations.NetworkInfo("n1", "agent-net-" + JOB_ID)));
+            when(networkOps.listNetworksByName("hephaestus-sandbox-default--"))
+                    .thenReturn(
+                            List.of(new DockerOperations.NetworkInfo("n1", "hephaestus-sandbox-default--" + JOB_ID)));
 
             var networks = manager.listOrphanedNetworks();
 

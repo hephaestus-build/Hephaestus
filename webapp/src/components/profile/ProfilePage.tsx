@@ -14,9 +14,12 @@ interface ProfileProps {
 	providerType?: ProviderType;
 	profileData?: Profile;
 	activityMonitorData?: ProfileActivityMonitor;
+	activityMonitorError?: unknown;
+	onRetryActivityMonitor?: () => void;
 	activityMonitorFilters: ActivityMonitorFilters;
 	onActivityMonitorFiltersChange: (filters: ActivityMonitorFilters) => void;
 	isLoading: boolean;
+	isActivityLoading?: boolean;
 	error?: unknown;
 	onRetry?: () => void;
 	username: string;
@@ -26,7 +29,6 @@ interface ProfileProps {
 	before?: string;
 	onTimeframeChange?: (afterDate: string, beforeDate?: string) => void;
 	schedule?: LeaderboardSchedule;
-	achievementsEnabled?: boolean;
 	progressionEnabled?: boolean;
 	leaguesEnabled?: boolean;
 	practiceGroupStandings?: ReactNode;
@@ -36,9 +38,12 @@ export function ProfilePage({
 	providerType = "GITHUB",
 	profileData,
 	activityMonitorData,
+	activityMonitorError,
+	onRetryActivityMonitor,
 	activityMonitorFilters,
 	onActivityMonitorFiltersChange,
 	isLoading,
+	isActivityLoading = isLoading,
 	error,
 	onRetry,
 	username,
@@ -48,7 +53,6 @@ export function ProfilePage({
 	before,
 	onTimeframeChange,
 	schedule,
-	achievementsEnabled = true,
 	progressionEnabled = true,
 	leaguesEnabled = true,
 	practiceGroupStandings,
@@ -70,8 +74,6 @@ export function ProfilePage({
 				leaguePoints={profileData?.userInfo.leaguePoints}
 				userXpRecord={profileData?.xpRecord}
 				isLoading={isLoading}
-				workspaceSlug={workspaceSlug}
-				achievementsEnabled={achievementsEnabled}
 				progressionEnabled={progressionEnabled}
 				leaguesEnabled={leaguesEnabled}
 			/>
@@ -81,21 +83,29 @@ export function ProfilePage({
 					<Separator />
 				</>
 			)}
-			<ProfileContent
-				providerType={providerType}
-				activityMonitorData={activityMonitorData}
-				activityMonitorFilters={activityMonitorFilters}
-				onActivityMonitorFiltersChange={onActivityMonitorFiltersChange}
-				isLoading={isLoading}
-				username={username}
-				displayName={profileData?.userInfo.name}
-				currUserIsDashboardUser={currUserIsDashboardUser}
-				workspaceSlug={workspaceSlug}
-				afterDate={after}
-				beforeDate={before}
-				onTimeframeChange={onTimeframeChange}
-				schedule={schedule}
-			/>
+			{activityMonitorError ? (
+				<QueryErrorAlert
+					error={activityMonitorError}
+					title="Could not load activity"
+					onRetry={onRetryActivityMonitor}
+				/>
+			) : (
+				<ProfileContent
+					providerType={providerType}
+					activityMonitorData={activityMonitorData}
+					activityMonitorFilters={activityMonitorFilters}
+					onActivityMonitorFiltersChange={onActivityMonitorFiltersChange}
+					isLoading={isActivityLoading}
+					username={username}
+					displayName={profileData?.userInfo.name}
+					currUserIsDashboardUser={currUserIsDashboardUser}
+					workspaceSlug={workspaceSlug}
+					afterDate={after}
+					beforeDate={before}
+					onTimeframeChange={onTimeframeChange}
+					schedule={schedule}
+				/>
+			)}
 		</div>
 	);
 }

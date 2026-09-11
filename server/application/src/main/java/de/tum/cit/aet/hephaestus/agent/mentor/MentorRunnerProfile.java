@@ -14,8 +14,8 @@ public final class MentorRunnerProfile implements PiRunnerProfile {
      * declares the JSON-RPC contract this runner speaks with {@code MentorRunnerClient}. Both are
      * imported with relative specifiers, so both must be staged beside pi-mentor-runner.ts.
      */
-    private static final List<String> SIDECARS =
-            List.of("pi-error-text.ts", SandboxLayout.PROVIDER_HELPER_FILENAME, "pi-mentor-protocol.ts");
+    private static final List<String> SIDECARS = List.of(
+            "pi-agent-sandbox.ts", "pi-error-text.ts", SandboxLayout.PROVIDER_HELPER_FILENAME, "pi-mentor-protocol.ts");
 
     @Override
     public String runnerScript() {

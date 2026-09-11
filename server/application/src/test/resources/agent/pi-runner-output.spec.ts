@@ -43,3 +43,15 @@ void test("a name that would escape or hide itself is refused", () => {
 	);
 	assert.throws(() => outputPath("/workspace/out", ""), /must start with an ASCII letter or digit/);
 });
+
+void test("nested traversal and noncanonical member names are refused", () => {
+	for (const name of [
+		"group/../../result.json",
+		"group/../result.json",
+		"group/./result.json",
+		"group//result.json",
+		"group/",
+	]) {
+		assert.throws(() => outputPath("/workspace/out", name), /non-empty, relative path segments/);
+	}
+});

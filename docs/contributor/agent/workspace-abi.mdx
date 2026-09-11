@@ -13,7 +13,7 @@ a separate workspace contract.
 The workspace is partitioned by **lifecycle, expressed as location** (ADR 0020): read-only
 vs writable is decided by *where* a file lives, not by convention. Three top-level regions —
 `inputs/` (read-only), `work/` (agent + precompute scratch; never collected), and `out/`
-(the only directory collected back into SQL).
+(the only directory collected back to the server).
 
 ```text
 /workspace/
@@ -42,11 +42,14 @@ vs writable is decided by *where* a file lives, not by convention. Three top-lev
 ├── task.json                        # TaskEnvelope<…> — runtime contract between handler and runner.
 ├── .pi/                             # Pi SDK agent dir — $PI_CODING_AGENT_DIR resolves here.
 │   ├── AGENTS.md                    #   Orchestrator instructions
-│   └── settings.json                #   Pi SDK config (provider, model, compaction)
+│   └── settings.json                #   Pi SDK config (provider, model, compaction, retry)
 ├── .sessions/                       # Pi SDK session JSONL, one file per session.
 ├── pi-provider.json                 # Provider/model routing for the runner.
 ├── pi-provider.ts                   # Provider/model helper imported by both runners.
 ├── pi-error-text.ts                 # Shared error-message helper.
+├── pi-task-paths.ts                 # Task path validation and resolution.
+├── pi-precompute.sh                 # Bounded, best-effort precompute bootstrap.
+├── pi-precompute.ts                 # Precompute launcher using task-declared paths.
 ├── pi-observation-normalize.ts      # Normalises sandbox observations before out/ is written.
 ├── pi-runner-usage.ts               # Token-usage accounting sidecar.
 ├── pi-runner-timings.ts             # Attempt-timing sidecar.
@@ -58,7 +61,7 @@ vs writable is decided by *where* a file lives, not by convention. Three top-lev
 
 The mentor runner stages `pi-provider.ts`, `pi-error-text.ts` and `pi-mentor-protocol.ts` instead. Everything
 here runs on Node; see
-[ADR 0036](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md).
+[ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md).
 
 The mentor interactive sandbox has its own `context/target/`, `context/user/`, and `scratch/` layout and is not
 covered by this ABI.
@@ -92,11 +95,64 @@ covered by this ABI.
 - **`node_modules`** — a symlink to `/opt/pi-sdk/node_modules`, so the runner's bare-specifier
   import of `@earendil-works/pi-coding-agent` resolves. The runner, precompute scripts, and SDK native
   bindings execute on Node.
-- **`task.json`** — `TaskEnvelope<T extends Task>`. Schema version `1`. The runner asserts
-  `schemaVersion` and `task.kind`, exiting `42` on mismatch (envelope/image drift signal).
+- **`task.json`** — the [task envelope](#task-envelope).
 - **`.pi*`** / `inputs/practices/` / `work/precompute*` / `work/analysis/` / `out/`
   — internal control surfaces. AI-readable as configured by the orchestrator, but
   *not* part of the public agent ABI; subject to change without a `schemaVersion` bump.
+
+## Private execution capture
+
+With `PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED=true`, the practice runner persists native Pi
+session trees in `out/trace/sessions/` instead of `.sessions/`, including composition and retry
+sessions. Pi's `before_provider_request` extension hook records the final provider-specific request
+body in `out/trace/requests/`, addressed by SHA-256; it does not rewrite that body. Native session
+JSONL retains messages, tool calls, tool results and branch/compaction structure. The separate
+`events-*.jsonl` journal records observed event times and session associations rather than inferring
+timings from the transcript.
+
+`capture.json` reports capture limits, dropped records and unfinished sessions. A nonzero exit,
+missing native session or truncated journal cannot claim complete capture. This is not a packet
+capture or a claim that all provider-internal processing is visible. Scratch files under `work/`
+are not independently archived; their contents are visible only when present in captured tool
+results or requests. Abrupt cancellation may prevent output collection entirely.
+
+The server retains staged input bytes and collected output bytes in the existing Context Fabric
+content-addressed store, with immutable manifests per job attempt. The image field is the declared image reference, not a
+resolved registry digest or a promise of deterministic replay. Archive state distinguishes
+`INPUTS_CAPTURED` from `OUTPUTS_CAPTURED`; neither means the review succeeded or the native capture
+is complete. An empty attempt list means no retained capture, never an empty complete transcript.
+Workspace-admin archive endpoints check job membership before allowing access to an individual
+blob, and responses disable caching. See [operator guidance](/admin/observability#private-execution-archives)
+for privacy and retention.
+
+## Task envelope
+
+`task.json` contains a `TaskEnvelope` with `schemaVersion: 2`, `jobId`, `workspaceId`, `task`
+and `paths`. The practice runner accepts `task.kind: "practice_review"` and requires a non-empty
+`task.prompt`. Unreadable or invalid JSON, unsupported versions or kinds, blank prompts and invalid
+paths exit with `42`.
+
+All seven `paths` fields are required:
+
+| Field | Location |
+|-------|----------|
+| `contextRoot` | Captured context directory, including `metadata.json` and `diff.patch` when applicable |
+| `repositoryRoot` | Captured repository directory |
+| `manifest` | Source and artifact manifest file |
+| `practiceIndex` | Practice index file; practice documents share its directory |
+| `compositionRequest` | Feedback-composition request file |
+| `preparedFeedback` | Previously prepared feedback file; review history shares its directory |
+| `precomputeScripts` | Per-practice TypeScript script directory |
+
+Values are relative to `/workspace`, use `/` separators, and cannot be empty or consist only of
+Unicode separators. Absolute paths, `.` or `..` components, empty components, backslashes, colons
+and control characters are rejected. Validation is lexical; it does not establish filesystem
+ownership or prevent symlink traversal.
+
+A declared location does not guarantee content exists there. For example, a review without a
+repository has no repository tree, and feedback composition runs only when its request is present.
+The runner and precompute resolve input locations from these fields, not from the layout shown above.
+Scratch and output locations remain fixed by this ABI.
 
 ## Output archive validation
 
@@ -123,19 +179,63 @@ worker filesystem.
 
 | Code | Meaning |
 |------|---------|
-| 0    | Success — `out/result.json` is complete, whether from the first attempt, the recovery retry, or reconstruction from persisted tool state |
+| 0    | Success — `out/result.json` is complete, from the first attempt or from the recovery retry |
 | 1    | No complete review output after the initial attempt *and* the recovery retry |
 | 2    | Fatal runner error — an unhandled rejection or uncaught exception. Debug and usage files are persisted first |
 | 3    | Watchdog hard-kill (budget + grace exceeded); writes `out/watchdog-killed.json` first |
-| 42   | Envelope mismatch (unsupported `schemaVersion` or unknown `kind`) — image/server drift |
+| 42   | Task-envelope contract drift: malformed envelope, unsupported version or kind, or invalid paths |
+| 75   | The review finished, but the call admitting its observations never reached the server |
+| 76   | No practice was reached, and every model call the run made went unanswered |
 
-`137` is a container SIGKILL from the runtime, not a runner code. The server treats `0` as success and
-`42` as drift; every other non-zero code is a generic failure.
+`137` is a container SIGKILL from the runtime, not a runner code. The server treats `0` as success,
+`42` as drift, and `75` and `76` as attempts to repeat; every other non-zero code is a generic failure.
+
+A sandbox reaches the server at the address the app server held when the container started, so a
+server that came back somewhere else — a deploy, a restart that moved the container — is unreachable
+for the rest of that run, whatever the runner's own retries do. The server answers `75` by queueing
+the work for another attempt with a rotated token and the usual backoff, keeping the finished
+attempt's transcript on the row; past the retry cap it terminalizes like any other non-zero exit. A
+job whose observations did reach the server — the admission committed and only its answer was lost —
+is never repeated: a second payload against a digest the job already carries is refused. That decision
+is taken under the row lock the admission itself takes, and governs every requeue, including the one a
+classified infrastructure failure asks for.
+
+`76` says the same thing about the other end of the run. A review that reached no practice because
+every model call went unanswered measured nothing, so there is nothing to record about the work and
+nothing a second attempt would repeat; the runner counts the calls the provider never answered and
+names them in the transcript, and the server queues the work again on the same terms as `75`.
 
 ## Versioning policy
 
-`task.json.schemaVersion` is per-envelope, not per-task variant. Add a new permitted `Task`
-subtype (a new `kind` discriminator) without bumping the version. Add a required field to an
-existing kind, and the version bumps. The Pi runner and the Java server ship in the same
-Docker-image rebuild, so version drift is bounded by deploy cadence; there is no cross-version
-contract.
+`task.json.schemaVersion` versions the envelope shared by task kinds. Bump it when an existing
+producer or consumer must change: for example, adding a required field, removing a field, or
+changing a field's meaning. An additive optional field or new task kind does not require a bump;
+runners still reject kinds they do not support.
+
+The server creates the envelope and stages the runner and its sidecars from its own classpath for
+each attempt. They evolve together; there is no cross-version envelope compatibility layer.
+
+The agent image's `hephaestus.agent.runtime-contract` label versions its runtime dependencies and
+launch contract separately. Its value is `2`, independent of the envelope schema version. See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md)
+for the image contract.
+
+## Precompute validation and limits
+
+Precompute is advisory. In production, the image runner validates every script's default export
+and returned hints, directions and finite numeric metrics. An invalid result or a thrown exception
+becomes a recorded script error with no hints; it does not become an observation about the reviewed work.
+
+The server-staged bootstrap bounds the **entire stage**, including copying scripts, module imports
+and synchronous execution, to one tenth of the job timeout, capped at 30 seconds. This fits inside
+the existing 60-second non-model allowance. The image runner's per-script asynchronous timeout is
+not a substitute for this outer deadline. Ordinary child processes are killed when the stage ends,
+including after success. Failed precompute remains best-effort: the practice review continues without
+its hints.
+
+The bootstrap clears the inherited environment, retains the Node filesystem permission grants and
+applies a **10 MiB per-file limit** in its subshell, including the diagnostic log. On failure, at most
+8 KiB of diagnostics is passed onward. The subsequent review does not inherit that file limit.
+These are safeguards against broken scripts, not hostile-code isolation: a per-file limit is not a
+cumulative disk quota, Node child-process permission is not a security boundary, and a deliberately
+detached process can escape process-group cleanup. Container resource limits and teardown remain the
+outer boundary. Runtime contract v3's workspace budgets and gateway transport are separate work.

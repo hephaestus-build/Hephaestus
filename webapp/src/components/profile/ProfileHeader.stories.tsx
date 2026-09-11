@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { expect } from "storybook/test";
 
 import { ProfileHeader } from "./ProfileHeader";
 
@@ -8,9 +9,6 @@ const meta = {
 		layout: "centered",
 	},
 	tags: ["autodocs"],
-	args: {
-		workspaceSlug: "example-workspace",
-	},
 } satisfies Meta<typeof ProfileHeader>;
 
 export default meta;
@@ -199,5 +197,24 @@ export const LevelUpReady: Story = {
 		leaguePoints: 2000,
 		firstContribution: new Date("2020-01-01T00:00:00Z"),
 		contributedRepositories: [],
+	},
+};
+
+export const Mobile: Story = {
+	args: Default.args,
+	parameters: {
+		chromatic: { disableSnapshot: true },
+		viewport: { defaultViewport: "reflow" },
+	},
+	play: async ({ canvas }) => {
+		const league = await canvas.findByLabelText(/tier$/);
+		const name = canvas.getByRole("heading", { level: 1 });
+		const leagueBox = league.getBoundingClientRect();
+		const nameBox = name.getBoundingClientRect();
+		// Vertical overlap and horizontal separation keep the league beside the identity.
+		await expect(Math.min(leagueBox.bottom, nameBox.bottom)).toBeGreaterThan(
+			Math.max(leagueBox.top, nameBox.top),
+		);
+		await expect(leagueBox.left).toBeGreaterThanOrEqual(nameBox.right);
 	},
 };

@@ -2,12 +2,16 @@ package de.tum.cit.aet.hephaestus.core.tenancy;
 
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.metamodel.EntityType;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import org.hibernate.SessionFactory;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.metamodel.MappingMetamodel;
+import org.hibernate.metamodel.mapping.TableDetails;
 import org.hibernate.persister.entity.EntityPersister;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,7 +50,6 @@ public class WorkspaceScopedTables {
             "workspace_slug_history",
             "user",
             "user_preferences",
-            "user_achievement",
             // Synced upstream identity (workspace linked separately via FK)
             "organization",
             "identity_provider",
@@ -93,6 +96,7 @@ public class WorkspaceScopedTables {
 
     private volatile Set<String> scopedTables = Set.of();
     private volatile Set<String> manyToManyJoinTables = Set.of();
+    private volatile Map<String, Set<String>> primaryKeyColumns = Map.of();
     private final ObjectProvider<EntityManagerFactory> entityManagerFactoryProvider;
 
     /**
@@ -116,11 +120,14 @@ public class WorkspaceScopedTables {
         Set<EntityType<?>> entities = entityManagerFactory.getMetamodel().getEntities();
 
         Set<String> tables = new TreeSet<>();
+        Map<String, Set<String>> keys = new HashMap<>();
         for (EntityType<?> entity : entities) {
             Class<?> javaType = entity.getJavaType();
             if (javaType == null) continue;
             EntityPersister persister = metamodel.getEntityDescriptor(javaType);
-            addIfScoped(tables, persister.getMappedTableDetails().getTableName());
+            var tableDetails = persister.getMappedTableDetails();
+            addIfScoped(tables, tableDetails.getTableName());
+            recordPrimaryKey(keys, tableDetails);
         }
         // Many-to-many join tables + element-collection tables: physical tables with no
         // workspace_id column of their own. They inherit the parent's tenancy boundary,
@@ -145,19 +152,41 @@ public class WorkspaceScopedTables {
         }
         this.scopedTables = Set.copyOf(tables);
         this.manyToManyJoinTables = Set.copyOf(joinTables);
+        this.primaryKeyColumns = Map.copyOf(keys);
         log.info(
                 "WorkspaceScopedTables populated: {} workspace-scoped tables (incl. join tables), {} global",
                 scopedTables.size(),
                 GLOBAL_TABLES.size());
     }
 
+    /**
+     * The table's complete primary key, as the physical column names the inspector will read out of
+     * a WHERE clause. An entity whose key columns cannot all be named contributes nothing, so the
+     * inspector's lookup comes back empty and the statement falls through to the normal check.
+     */
+    private static void recordPrimaryKey(Map<String, Set<String>> keys, TableDetails tableDetails) {
+        String table = normalize(tableDetails.getTableName());
+        if (table.isEmpty()) return;
+        Set<String> columns = new HashSet<>();
+        for (TableDetails.KeyColumn column : tableDetails.getKeyDetails().getKeyColumns()) {
+            String name = normalize(column.getColumnName());
+            if (name.isEmpty()) return;
+            columns.add(name);
+        }
+        if (!columns.isEmpty()) keys.put(table, Set.copyOf(columns));
+    }
+
+    /** Bare, unquoted, lowercase — the form the inspector compares against. */
+    private static String normalize(String rawName) {
+        if (rawName == null) return "";
+        return rawName.substring(rawName.lastIndexOf('.') + 1).replace("\"", "").toLowerCase(Locale.ROOT);
+    }
+
     private static void addIfScoped(Set<String> tables, String rawName) {
         if (rawName == null || rawName.isBlank()) return;
         // The inspector compares bare, lowercase names; a schema-qualified or quoted metamodel
         // name must land in the same form or it never matches.
-        String name = rawName.substring(rawName.lastIndexOf('.') + 1)
-                .replace("\"", "")
-                .toLowerCase(Locale.ROOT);
+        String name = normalize(rawName);
         if (!GLOBAL_TABLES.contains(name)) {
             tables.add(name);
         }
@@ -166,6 +195,17 @@ public class WorkspaceScopedTables {
     /** Workspace-scoped physical table names (lowercase). Empty until ApplicationReady fires. */
     public Set<String> scopedTables() {
         return scopedTables;
+    }
+
+    /**
+     * The table's complete primary-key columns per the mapping metamodel, or empty when the table is
+     * unknown — before {@link ApplicationReadyEvent}, or for a table no entity maps. Empty is the
+     * fail-closed answer: a caller comparing a WHERE clause against it can never conclude the clause
+     * covers the whole key.
+     */
+    public Set<String> primaryKeyColumns(String tableName) {
+        if (tableName == null) return Set.of();
+        return primaryKeyColumns.getOrDefault(tableName.toLowerCase(Locale.ROOT), Set.of());
     }
 
     /** True iff the table is a {@code @ManyToMany} join table, per the mapping metamodel. */

@@ -49,6 +49,8 @@ function startApplication(name: string, image: string): number {
 		"--env",
 		"SPRING_PROFILES_ACTIVE=e2e",
 		"--env",
+		"SPRING_LIQUIBASE_CONTEXTS=prod",
+		"--env",
 		"SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/hephaestus",
 		"--env",
 		"SPRING_DATASOURCE_USERNAME=root",
@@ -95,7 +97,28 @@ async function waitUntilReady(name: string, port: number): Promise<void> {
 	throw new Error(`${name} did not become ready within 180 seconds`);
 }
 
-async function login(port: number, username: string): Promise<string> {
+/**
+ * One signed-in caller. A request that changes something sends the CSRF token twice — as a cookie
+ * and as the header it is compared against — so the two travel together rather than as a cookie a
+ * caller can pair and forget. `SecurityConfig` owns when that is required.
+ */
+interface Session {
+	/** The `Cookie` header: authentication and CSRF cookies together. */
+	readonly cookie: string;
+	/** Headers a state-changing request must add on top of `cookie`. */
+	readonly writeHeaders: Readonly<Record<string, string>>;
+}
+
+function cookieNamed(response: Response, suffix: string): string | undefined {
+	// The `__Host-` prefix is present or absent with `hephaestus.auth.cookie-secure`, so match the
+	// suffix rather than the whole name.
+	return response.headers
+		.getSetCookie()
+		.find((value) => value.slice(0, value.indexOf("=")).endsWith(suffix))
+		?.split(";", 1)[0];
+}
+
+async function login(port: number, username: string): Promise<Session> {
 	const response = await fetchWithTimeout(`http://127.0.0.1:${port}/auth/dev-login`, {
 		method: "POST",
 		headers: { "content-type": "application/json" },
@@ -107,24 +130,30 @@ async function login(port: number, username: string): Promise<string> {
 	});
 	if (response.status !== 204)
 		throw new Error(`Dev login returned ${response.status}: ${await response.text()}`);
-	const cookie = response.headers
-		.getSetCookie()
-		.find((value) => value.slice(0, value.indexOf("=")).endsWith("HEPHAESTUS_AT"))
-		?.split(";", 1)[0];
-	if (!cookie) throw new Error("Dev login did not return an authentication cookie");
-	return cookie;
+	const authCookie = cookieNamed(response, "HEPHAESTUS_AT");
+	if (!authCookie) throw new Error("Dev login did not return an authentication cookie");
+	// Fetch a CSRF cookie for the signed-in caller before any write. Dev login is not asked for one,
+	// so it returns none to pair with.
+	const probe = await fetchWithTimeout(`http://127.0.0.1:${port}/user`, {
+		headers: { cookie: authCookie },
+	});
+	if (!probe.ok) throw new Error(`Reading the signed-in user returned ${probe.status}`);
+	// This test drives two releases in turn, and the previous one may predate CSRF enforcement: it
+	// issues no token and requires none. Sending the header anyway would be meaningless, and
+	// demanding one here would fail the upgrade path rather than test it. A candidate that requires
+	// a token still fails loudly — as a 403 on the first request that changes something.
+	const csrfCookie = cookieNamed(probe, "XSRF-TOKEN");
+	if (!csrfCookie) return { cookie: authCookie, writeHeaders: {} };
+	return {
+		cookie: `${authCookie}; ${csrfCookie}`,
+		writeHeaders: { "x-xsrf-token": csrfCookie.slice(csrfCookie.indexOf("=") + 1) },
+	};
 }
 
-/**
- * A signed-in person may not read anything else until they complete the current transparency
- * notice, so the drill completes it through the endpoint the first-login interstitial uses. The
- * notice arrived after some of the releases this runs against, and those have no consent endpoint.
- */
-async function completeTransparencyNotice(port: number, cookie: string): Promise<void> {
+async function completeTransparencyNotice(port: number, session: Session): Promise<void> {
 	const status = await fetchWithTimeout(`http://127.0.0.1:${port}/user/consent`, {
-		headers: { cookie },
+		headers: { cookie: session.cookie },
 	});
-	if (status.status === 404) return;
 	if (!status.ok)
 		throw new Error(`Consent status returned ${status.status}: ${await status.text()}`);
 	const statusBody: unknown = await status.json();
@@ -138,7 +167,11 @@ async function completeTransparencyNotice(port: number, cookie: string): Promise
 	if ("completed" in statusBody && statusBody.completed === true) return;
 	const completed = await fetchWithTimeout(`http://127.0.0.1:${port}/user/consent`, {
 		method: "PUT",
-		headers: { "content-type": "application/json", cookie },
+		headers: {
+			"content-type": "application/json",
+			cookie: session.cookie,
+			...session.writeHeaders,
+		},
 		body: JSON.stringify({
 			noticeVersion: statusBody.noticeVersion,
 			termsAccepted: true,
@@ -151,8 +184,10 @@ async function completeTransparencyNotice(port: number, cookie: string): Promise
 		);
 }
 
-async function assertCoreReads(port: number, cookie: string): Promise<void> {
-	const user = await fetchWithTimeout(`http://127.0.0.1:${port}/user`, { headers: { cookie } });
+async function assertCoreReads(port: number, session: Session): Promise<void> {
+	const user = await fetchWithTimeout(`http://127.0.0.1:${port}/user`, {
+		headers: { cookie: session.cookie },
+	});
 	if (!user.ok) throw new Error(`Core read /user returned ${user.status}: ${await user.text()}`);
 	const userBody: unknown = await user.json();
 	if (
@@ -172,7 +207,7 @@ async function assertCoreReads(port: number, cookie: string): Promise<void> {
 	if (!Array.isArray(providerBody) || providerBody.length === 0)
 		throw new Error("Core read /identity-providers returned no providers");
 	const workspaces = await fetchWithTimeout(`http://127.0.0.1:${port}/workspaces`, {
-		headers: { cookie },
+		headers: { cookie: session.cookie },
 	});
 	if (!workspaces.ok)
 		throw new Error(
@@ -192,10 +227,14 @@ async function assertCoreReads(port: number, cookie: string): Promise<void> {
 		throw new Error("Core read /workspaces did not return the seeded workspace");
 }
 
-async function seedWorkspace(port: number, cookie: string, workspaceSlug: string): Promise<void> {
+async function seedWorkspace(port: number, session: Session, workspaceSlug: string): Promise<void> {
 	const response = await fetchWithTimeout(`http://127.0.0.1:${port}/workspaces`, {
 		method: "POST",
-		headers: { "content-type": "application/json", cookie },
+		headers: {
+			"content-type": "application/json",
+			cookie: session.cookie,
+			...session.writeHeaders,
+		},
 		body: JSON.stringify({
 			workspaceSlug,
 			displayName: "Upgrade Fixture",
@@ -209,10 +248,10 @@ async function seedWorkspace(port: number, cookie: string, workspaceSlug: string
 		throw new Error(`Workspace seed returned ${response.status}: ${await response.text()}`);
 }
 
-async function adoptCatalogPractice(port: number, cookie: string): Promise<void> {
+async function adoptCatalogPractice(port: number, session: Session): Promise<void> {
 	const catalog = `http://127.0.0.1:${port}/workspaces/${ADOPTION_WORKSPACE_SLUG}/practice-catalog/adoption`;
 	const offered = await fetchWithTimeout(catalog, {
-		headers: { cookie },
+		headers: { cookie: session.cookie },
 	});
 	if (!offered.ok)
 		throw new Error(`Adoptable practices returned ${offered.status}: ${await offered.text()}`);
@@ -240,7 +279,7 @@ async function adoptCatalogPractice(port: number, cookie: string): Promise<void>
 
 	const url = `${catalog}/${encodeURIComponent(practice.slug)}`;
 	const preview = await fetchWithTimeout(url, {
-		headers: { cookie },
+		headers: { cookie: session.cookie },
 	});
 	if (!preview.ok)
 		throw new Error(`Adoption preview returned ${preview.status}: ${await preview.text()}`);
@@ -248,7 +287,7 @@ async function adoptCatalogPractice(port: number, cookie: string): Promise<void>
 	if (!validator) throw new Error("Adoption preview returned no ETag to send as If-Match");
 	const adopted = await fetchWithTimeout(url, {
 		method: "POST",
-		headers: { cookie, "if-match": validator },
+		headers: { cookie: session.cookie, "if-match": validator, ...session.writeHeaders },
 	});
 	if (adopted.status !== 201)
 		throw new Error(
@@ -355,6 +394,56 @@ function appliedChangeCount(): number {
 	return count("SELECT count(*) FROM databasechangelog;");
 }
 
+function synchronizeBaseline(image: string): void {
+	const baselineFile = "db/changelog/0000000000000_baseline_v0_77_4.xml";
+	if (
+		count(`SELECT count(*) FROM databasechangelog
+			WHERE id = 'baseline_v0_77_4-tag' AND author = 'hephaestus-release'
+			AND filename = '${baselineFile}' AND tag = 'baseline_v0_77_4';`) === 1
+	)
+		return;
+
+	if (
+		count(`SELECT count(*) FROM databasechangelog
+			WHERE id = '1788679885460-1' AND author = 'hephaestus'
+			AND filename = 'db/changelog/1788679885460_changelog.xml'
+			AND md5sum = '9:658c0b7abed980fcd0e8142337bec5be'
+			AND exectype IN ('EXECUTED', 'MARK_RAN');`) !== 1
+	)
+		throw new Error(
+			"The previous release has not reached the verified v0.77.4 baseline cut-point.",
+		);
+
+	// Use the candidate's bundled Liquibase and resources, not a separately versioned CLI.
+	docker(
+		"run",
+		"--rm",
+		"--network",
+		network,
+		"--entrypoint",
+		"/cnb/lifecycle/launcher",
+		image,
+		"--",
+		"java",
+		"-cp",
+		"runner.jar:lib/*",
+		"liquibase.integration.commandline.Main",
+		"--changeLogFile=db/master.xml",
+		"--url=jdbc:postgresql://postgres:5432/hephaestus",
+		"--username=root",
+		"--password=root",
+		"--contexts=prod",
+		"changeLogSyncToTag",
+		"baseline_v0_77_4",
+	);
+	if (
+		count(`SELECT count(*) FROM databasechangelog
+			WHERE id = 'baseline_v0_77_4-tag' AND author = 'hephaestus-release'
+			AND filename = '${baselineFile}' AND tag = 'baseline_v0_77_4';`) !== 1
+	)
+		throw new Error("Baseline synchronization did not record the expected tag.");
+}
+
 try {
 	docker("network", "create", network);
 	docker(
@@ -387,12 +476,12 @@ try {
 
 	let port = startApplication(application, previousImage);
 	await waitUntilReady(application, port);
-	const previousCookie = await login(port, "alice");
-	await completeTransparencyNotice(port, previousCookie);
+	const previousSession = await login(port, "alice");
+	await completeTransparencyNotice(port, previousSession);
 	await login(port, "root");
 	linkWorkspaceIdentity();
-	await seedWorkspace(port, previousCookie, WORKSPACE_SLUG);
-	await assertCoreReads(port, previousCookie);
+	await seedWorkspace(port, previousSession, WORKSPACE_SLUG);
+	await assertCoreReads(port, previousSession);
 	const seededData = dataFingerprint();
 	for (const kind of ["account", "identity", "user", "workspace", "membership", "connection"]) {
 		if (!seededData.includes(`${kind}|`))
@@ -403,6 +492,7 @@ try {
 
 	docker("stop", "--time", "30", application);
 	docker("rm", application);
+	synchronizeBaseline(candidateImage);
 	application = `${runId}-candidate`;
 	port = startApplication(application, candidateImage);
 	await waitUntilReady(application, port);
@@ -419,15 +509,15 @@ try {
 		throw new Error(
 			`Liquibase history shrank during upgrade: before=${previousChanges}, after=${candidateChanges}`,
 		);
-	const candidateCookie = await login(port, "alice");
-	await completeTransparencyNotice(port, candidateCookie);
-	await assertCoreReads(port, candidateCookie);
+	const candidateSession = await login(port, "alice");
+	await completeTransparencyNotice(port, candidateSession);
+	await assertCoreReads(port, candidateSession);
 
-	await seedWorkspace(port, candidateCookie, ADOPTION_WORKSPACE_SLUG);
+	await seedWorkspace(port, candidateSession, ADOPTION_WORKSPACE_SLUG);
 	const practicesBeforeAdoption = workspacePracticeCount(ADOPTION_WORKSPACE_SLUG);
 	if (practicesBeforeAdoption !== 0)
 		throw new Error(`New workspace unexpectedly started with ${practicesBeforeAdoption} practices`);
-	await adoptCatalogPractice(port, candidateCookie);
+	await adoptCatalogPractice(port, candidateSession);
 	const practicesAfterAdoption = workspacePracticeCount(ADOPTION_WORKSPACE_SLUG);
 	if (practicesAfterAdoption !== 1)
 		throw new Error(`Adoption created ${practicesAfterAdoption} practices instead of one`);
@@ -438,7 +528,7 @@ try {
 		try {
 			console.error(`\n--- ${name} logs ---\n${docker("logs", name)}`);
 		} catch {
-			// Containers created after the failure point have no logs.
+			// Preserve the upgrade failure if diagnostic collection also fails.
 		}
 	}
 	throw error;

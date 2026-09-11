@@ -26,16 +26,16 @@ Who gets practice review is **not** among them. There is no instance-wide popula
 turns itself on, and decides its own coverage.
 
 See the
-[server configuration](https://github.com/ls1intum/Hephaestus/blob/main/server/application/src/main/resources/application.yml)
-and [reference Compose files](https://github.com/ls1intum/Hephaestus/tree/main/docker) before changing an
+[server configuration](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/application.yml)
+and [reference Compose files](https://github.com/hephaestus-build/Hephaestus/tree/main/docker) before changing an
 environment variable. Unknown or unforwarded variables do not configure the application.
 
 Repository checkouts, replay metadata, and content-addressed evidence share the fabric root. A split
 or multi-host deployment must mount the same durable read-write filesystem on every server and worker, with
 cross-process locks, atomic rename, and access controls suitable for source content.
 
-[ADR 0039](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0039-git-and-postgresql-own-evidence.md)
-defines the accepted 1.0 replacement; current releases still require this mount.
+[ADR 0039](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0039-git-and-postgresql-own-evidence.md)
+records the decision to replace this mount; current releases still require it.
 
 Source authorization is not a deployment toggle. The shipped artifact-source contract fixes which governed
 sources each purpose may use; integrations only determine which authorized sources are available. See
@@ -144,6 +144,9 @@ behaviors matter independently of their exact defaults:
 
 - **Background task cadences are fixed in code.** Their thresholds may be configurable even when their
   polling schedules are not.
+- **Feedback preparation recovery has a bounded window.** The sweeper selects recent completed pull
+  request and issue reviews with missing preparation marks. Older unfinished preparation is not
+  automatically recovered. A successful empty result is complete; recovery does not rerun the model.
 - **Retryable occurrences eventually lapse.** A workspace left misconfigured can accumulate retries and
   then go quiet when their deadline passes.
 - **Nothing is ever deleted from the occurrence ledger**, in any state, including retired rows. It is the
@@ -168,7 +171,5 @@ behaviors matter independently of their exact defaults:
 
 ## Rollback
 
-Before upgrading, create and verify a database snapshot as described in
-[Backup and restore](./backup-restore.mdx). To return to the previous release after this migration, stop all
-Hephaestus roles, restore the snapshot, then deploy the previous version. Do not run the previous version
-against the migrated schema.
+Back up before upgrading, and return to a previous release only by restoring a compatible backup —
+[Install § Rollback](./install.mdx#rollback).

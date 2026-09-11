@@ -265,6 +265,14 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
     }
 
     private AgentJob admitAndSetOutput(AgentJob job, String rawOutput) {
+        return admitAndSetOutput(job, rawOutput, true);
+    }
+
+    /**
+     * @param reachedEveryPractice the coverage ledger the run left behind, which decides whether this
+     *     review is allowed to say it found nothing
+     */
+    private AgentJob admitAndSetOutput(AgentJob job, String rawOutput, boolean reachedEveryPractice) {
         JsonNode observations = OBJECT_MAPPER.readTree(withEvidence(rawOutput)).path("observations");
         ((PullRequestReviewHandler) handler).admitObservations(job, observations);
         String digest = "test-admission-digest";
@@ -275,6 +283,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         job.setMetadata(metadata);
         ObjectNode output = OBJECT_MAPPER.createObjectNode();
         output.putObject("feedback").put("admissionDigest", digest).putArray("units");
+        output.putObject("practiceCoverage").put("eligible", 2).put("evaluated", reachedEveryPractice ? 2 : 1);
         job.setOutput(output);
         return agentJobRepository.save(job);
     }
@@ -505,6 +514,42 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
             assertThat(body.getValue()).contains("What's working well here");
 
             verify(diffNotePoster).reconcileInlineNotes(eq(agentJob), eq(List.of()));
+        }
+
+        @Test
+        void allPositiveFindingsStayQuietWhenTheReviewDidNotReachEveryPractice() {
+            String output = """
+                {
+                  "observations": [
+                    {
+                      "practiceSlug": "pr-description-quality",
+                      "summary": "Good description",
+                      "presence": "PRESENT",
+                      "assessment": "GOOD",
+                      "severity": "INFO",
+                      "evidenceRationale": "The description explains the change."
+                    }
+                  ]
+                }""";
+            agentJob = admitAndSetOutput(agentJob, output, false);
+
+            handler.deliver(agentJob);
+
+            assertThat(observationRepository.findAll()).hasSize(1);
+            verify(commentPoster, never()).postFormattedBody(any(), any());
+        }
+
+        @Test
+        void aPartialReviewStillReportsTheProblemItFound() {
+            agentJob = admitAndSetOutput(agentJob, validAgentOutput(), false);
+            when(commentPoster.postFormattedBody(any(), any())).thenReturn("comment-partial");
+            when(diffNotePoster.reconcileInlineNotes(any(), any()))
+                    .thenReturn(new DiffNotePoster.DiffNoteResult(1, 0, List.of()));
+
+            handler.deliver(agentJob);
+
+            assertThat(observationRepository.findAll()).hasSize(2);
+            verify(commentPoster).postFormattedBody(eq(agentJob), any(String.class));
         }
     }
 

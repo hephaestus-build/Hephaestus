@@ -2,24 +2,19 @@ package de.tum.cit.aet.hephaestus.core.auth.jwt;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.EncryptionException;
-import de.tum.cit.aet.hephaestus.core.security.SecurityProperties;
+import de.tum.cit.aet.hephaestus.core.security.SystemEncryptionKey;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
  * Seals the {@code jwt_signing_key.private_key_pem} column at rest with AES-256-GCM,
- * reusing the system master key bound via {@link SecurityProperties#encryptionKey()} —
- * the same key {@code CredentialBundleConverter} already requires in prod.
+ * reusing the system master key validated by {@link SystemEncryptionKey}. Credential bundles
+ * have their own separately configured encryption keys.
  *
  * <h2>Why system-scoped (not tenant-scoped) AAD</h2>
  * Signing keys are system-wide, not per-workspace. The GCM AAD is a single fixed,
@@ -36,16 +31,14 @@ import org.springframework.stereotype.Component;
  * </pre>
  *
  * <h2>Enablement / fail-fast</h2>
- * Mirrors {@code CredentialBundleConverter}: enabled iff a valid 32-char key is present.
+ * Enabled iff a valid 32-byte system key is present.
  * In the {@code prod} profile a missing key throws (prod requires it); in dev/CI/test an
  * absent key disables sealing so a local boot still works (writing raw {@code v0-unsealed}
- * rows). A non-32-char key is always rejected.
+ * rows). A key that is not 32 UTF-8 bytes is always rejected.
  */
 @ConditionalOnServerRole
 @Component
 public class JwtSigningKeySealer {
-
-    private static final Logger log = LoggerFactory.getLogger(JwtSigningKeySealer.class);
 
     /** Tag stamped on {@code jwt_signing_key.encryption_key_id} for blobs sealed by this class. */
     public static final String KEY_ID = "aesgcm-system-v1";
@@ -70,39 +63,9 @@ public class JwtSigningKeySealer {
     private final @Nullable SecretKey secretKey;
     private final boolean enabled;
 
-    /**
-     * Spring-wired constructor. The key is bound via {@link SecurityProperties}; the active
-     * profile string comes through {@code @Value} so the prod fail-fast check is identical to
-     * {@code CredentialBundleConverter}.
-     */
-    @Autowired
-    public JwtSigningKeySealer(
-            SecurityProperties securityProperties, @Value("${spring.profiles.active:}") String activeProfiles) {
-        this(securityProperties.encryptionKey(), activeProfiles);
-    }
-
-    /**
-     * Canonical constructor (also the unit-test seam): builds the cipher key from raw inputs.
-     * Missing key fails fast in prod, disables elsewhere; a non-32-char key is rejected.
-     */
-    public JwtSigningKeySealer(@Nullable String encryptionKey, @Nullable String activeProfiles) {
-        if (encryptionKey == null || encryptionKey.isBlank()) {
-            if (activeProfiles != null && activeProfiles.contains("prod")) {
-                throw new IllegalStateException("Encryption key is required in production to seal JWT signing keys! "
-                        + "Set hephaestus.security.encryption-key");
-            }
-            log.warn("Skipped JWT signing-key sealing: reason=missing_key, "
-                    + "action=set_hephaestus_security_encryption_key_in_production");
-            this.secretKey = null;
-            this.enabled = false;
-        } else if (encryptionKey.length() != 32) {
-            throw new IllegalArgumentException(
-                    "Encryption key must be exactly 32 characters (256 bits). Got: " + encryptionKey.length());
-        } else {
-            this.secretKey = new SecretKeySpec(encryptionKey.getBytes(StandardCharsets.UTF_8), "AES");
-            this.enabled = true;
-            log.info("Enabled JWT signing-key sealing at rest (AES-256-GCM, system-scoped AAD)");
-        }
+    public JwtSigningKeySealer(SystemEncryptionKey systemEncryptionKey) {
+        this.secretKey = systemEncryptionKey.key();
+        this.enabled = secretKey != null;
     }
 
     /** Whether sealing is operational (a valid key is configured). */

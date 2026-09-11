@@ -4,59 +4,87 @@
 	"checks": [
 		{
 			"name": "Binary-Artifacts",
-			"score": 10
+			"score": 10,
+			"scoredOver": "history",
+			"reason": "Executables committed to the tree, and for the committed Gradle wrapper the successful validation run that vouches for it. That run is what makes this a window: on a push the wrapper job is still executing, so the commit cannot yet answer for itself."
 		},
 		{
 			"name": "CI-Tests",
-			"score": 10
+			"score": 10,
+			"scoredOver": "history",
+			"reason": "The share of the ~30 most recent commits a CI system reported a result on."
 		},
 		{
 			"name": "Code-Review",
-			"score": 10
+			"score": 10,
+			"scoredOver": "history",
+			"reason": "The share of the ~30 most recent commits that carry an approval."
 		},
 		{
 			"name": "Dangerous-Workflow",
-			"score": 10
+			"score": 10,
+			"scoredOver": "configuration",
+			"reason": "Dangerous patterns in the workflow files as they stand."
 		},
 		{
 			"name": "Dependency-Update-Tool",
-			"score": 10
+			"score": 10,
+			"scoredOver": "configuration",
+			"reason": "Whether an update tool is configured in the tree."
 		},
 		{
 			"name": "License",
-			"score": 10
+			"score": 10,
+			"scoredOver": "configuration",
+			"reason": "Whether a recognised license file is present."
 		},
 		{
 			"name": "Maintained",
-			"score": 10
+			"score": 10,
+			"scoredOver": "history",
+			"reason": "Commit and issue activity over the previous 90 days."
 		},
 		{
 			"name": "Pinned-Dependencies",
-			"score": 10
+			"score": 10,
+			"scoredOver": "configuration",
+			"reason": "Whether every dependency the tree declares is pinned."
 		},
 		{
 			"name": "SAST",
-			"score": 10
+			"score": 10,
+			"scoredOver": "history",
+			"reason": "The share of the ~30 most recent merged pull requests a SAST tool ran on."
 		},
 		{
 			"name": "Security-Policy",
-			"score": 10
+			"score": 10,
+			"scoredOver": "configuration",
+			"reason": "Whether the committed security policy is present and specific."
 		},
 		{
 			"name": "Token-Permissions",
-			"score": 10
+			"score": 10,
+			"scoredOver": "configuration",
+			"reason": "The permissions the workflow files grant."
 		},
 		{
 			"name": "Vulnerabilities",
-			"score": 10
+			"score": 10,
+			"scoredOver": "configuration",
+			"reason": "Advisories against the inventory OSV extracts from the checkout, including Gradle verification metadata rather than only resolved dependencies."
 		},
 		{
 			"name": "Signed-Releases",
-			"score": 8
+			"score": 8,
+			"scoredOver": "history",
+			"reason": "The share of the 30 most recent releases whose artifacts are signed."
 		},
 		{
 			"name": "Branch-Protection",
-			"score": 4
+			"score": 4,
+			"scoredOver": "configuration",
+			"reason": "The protection rules the default and release branches carry."
 		},
 		{
 			"name": "Contributors",
@@ -76,6 +104,7 @@
 		}
 	],
 	"excluded": {
+		"Vulnerabilities": "OSV inventories every Gradle verification-metadata component, including unselected versions and descriptor-only entries. This is a checksum allowlist, not the resolved graph. Source and reproduction: https://docs.hephaestus.build/contributor/ci-cd#gradle-dependency-inventory-and-the-vulnerabilities-exclusion ; upstream extractor: https://github.com/google/osv-scalibr/blob/cf20290d7624/extractor/filesystem/language/java/gradleverificationmetadataxml/gradleverificationmetadataxml.go . Only this Scorecard check is excluded; dependency and release vulnerability gates remain enforced. Tracked in https://github.com/hephaestus-build/Hephaestus/issues/2078.",
 		"Contributors": "Organization diversity is not a repository engineering control.",
 		"CII-Best-Practices": "An OpenSSF badge is a separate adoption decision.",
 		"Fuzzing": "Fuzzing adoption is a separate policy decision.",

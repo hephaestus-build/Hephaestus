@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 
 import { asArray, asRecord, asString, readJsonFile } from "./lib/json.ts";
+import { CLAUDE_SESSION_PATTERN } from "./lib/model-attribution.ts";
 
 const changesetEntries = (status: unknown): Map<string, Record<string, unknown>> => {
 	const entries = asArray(
@@ -61,7 +62,10 @@ export const verifyChangesets = (
 					: `${file}: a release changeset needs a user- or operator-facing summary`,
 			);
 		}
-		if (/^(?:Co-authored-by|Claude-Session):/im.test(summary)) {
+		// A changeset summary is a release note: it carries no trailer at all, not even a human
+		// co-author's, so `Co-authored-by:` is refused outright rather than only the model-named
+		// shape `scripts/lib/model-attribution.ts` matches.
+		if (/^co-authored-by:/im.test(summary) || CLAUDE_SESSION_PATTERN.test(summary)) {
 			throw new Error(
 				`${file}: release notes must not contain Co-authored-by or Claude-Session metadata`,
 			);

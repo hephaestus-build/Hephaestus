@@ -17,6 +17,7 @@ export interface PromotionRequest {
 	commit?: string;
 	allowRollback: boolean;
 	freeze: boolean;
+	refreshDatabaseImage: boolean;
 }
 
 export interface PromotionSources {
@@ -37,7 +38,7 @@ export async function resolvePromotion(
 	request: PromotionRequest,
 	sources: PromotionSources,
 ): Promise<Promotion> {
-	const { release, commit, allowRollback, freeze } = request;
+	const { release, commit, allowRollback, freeze, refreshDatabaseImage } = request;
 	if (commit !== undefined) {
 		if (release !== undefined) throw new Error("Name a release or a commit, not both");
 		if (!isCommit(commit)) throw new Error(`Follow a full commit SHA, not '${commit}'`);
@@ -46,9 +47,15 @@ export async function resolvePromotion(
 		if (status !== "identical" && status !== "ahead")
 			throw new Error(`${commit} is not on the default branch`);
 		const images = await sources.images(commit);
-		return { channel: { release: commit, images, allowRollback, freeze }, version: commit };
+		return {
+			channel: { release: commit, images, allowRollback, freeze, refreshDatabaseImage },
+			version: commit,
+		};
 	}
 	if (release === undefined) throw new Error("Name a release or a commit");
+	// A release runs the images its evidence describes, so there is no carried pin to refresh.
+	if (refreshDatabaseImage)
+		throw new Error("refresh-database-image applies to a commit, not to a release");
 	if (!RELEASE_TAG.test(release))
 		throw new Error(`Promote an immutable vX.Y.Z release, not '${release}'`);
 	// The host binds the tag's source tree to the signed release lock before applying it.
@@ -72,6 +79,7 @@ if (import.meta.main) {
 			commit: optional("COMMIT"),
 			allowRollback: process.env.ALLOW_ROLLBACK === "true",
 			freeze: process.env.FREEZE === "true",
+			refreshDatabaseImage: process.env.REFRESH_DATABASE_IMAGE === "true",
 		},
 		{
 			compare: (base, head) => compareStatus(repository, base, head),

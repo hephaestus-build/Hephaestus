@@ -35,7 +35,6 @@ For how the words fit together at runtime — the four stages, and the refusal v
 | **Artifact source**                 | A registered logical input that can supply evidence.                                                                                                                                                                                       | file, mount, cache                                                |
 | **Materialization**                 | A file, database projection, cache entry, or tool result representing a source for one use.                                                                                                                                                | source kind                                                       |
 | **Job folder**                      | The directory the owning worker renders for one review attempt and deletes once the result is admitted: permitted context areas as files plus a working copy of each permitted repository.                                                 | workspace mount, evidence store, content-addressed store          |
-| **Sandbox Gateway**                 | The single network address a sandbox may reach: the owning worker's one non-loopback listener, carrying model traffic, workspace download, result upload and mentor frames.                                                                | LLM proxy, git proxy, sandbox ingress                             |
 | **Source kind**                     | A stable identifier for one logical source, such as pull request details.                                                                                                                                                                  | file type                                                         |
 | **Artifact kind**                   | The family of reviewed work a practice is about, such as `scm.pull_request`. Derived from a binding's signals, never stated separately.                                                                                                    | work type, artifact type                                          |
 | **Known limitation**                | A claim the evidence cannot support even when every requirement passes.                                                                                                                                                                    | blind spot, caveat                                                |
@@ -49,7 +48,7 @@ For how the words fit together at runtime — the four stages, and the refusal v
 | **Practice autonomy**               | Who may authorize feedback for one practice: nobody (`OFF`), a workspace owner or administrator (`HUMAN_APPROVAL`), or the system (`AUTOMATIC`). Nullable at practice and group levels, where null means “inherit”.                         | review tier, loudness tier, shadow mode, enabled                  |
 | **Effective autonomy**              | The autonomy in force after resolving practice → group → workspace. Always server-resolved and reported with its source.                                                                                                                    | autonomy override                                                 |
 | **Review coverage**                 | Which repositories' and which workspace members' work may be reviewed. Repository and person modes are independent; effective coverage is their intersection.                                                                                      | filter, audience, pilot allowlist, review scope                   |
-| **Sandbox gateway**                 | The only listener a review's sandbox may reach on a worker. Defined for operators in [runtime roles](../admin/runtime-roles).                                                                                                          | LLM proxy port, internal API, agent gateway                       |
+| **Sandbox gateway**                 | The only listener a review's sandbox may reach on a worker. Defined for operators in [runtime roles](/admin/runtime-roles).                                                                                                            | LLM proxy port, internal API, agent gateway                       |
 | **Delivery status**                 | Whether new external practice feedback may leave a workspace (`ACTIVE` or `PAUSED`). Pausing does not stop review or erase coverage.                                                                                                       | review status, practice autonomy, Silent Mode                     |
 
 A practice author defines requirements. That definition is not proof that the evidence is sufficient or that a
@@ -114,10 +113,8 @@ signal. `ObservationOrigin` is the population any resulting observation belongs 
 `MANUAL` and `BACKFILL` are self-selected samples and `LIVE` is not, which is why they are held apart in
 every behavioural read. A `BACKFILL` observation is additionally entitled only to `IN_APP` — the
 developer's own practice feedback — and that entitlement is a ceiling, not an instruction: the in-app
-router refuses a cluster made entirely of backfilled measurements (`BACKFILL_HELD`), so a backfill
-observation is measured and never delivered, by construction rather than by configuration. Do not write
-*profile* for this channel: **Profile** is the page at `/w/{workspaceSlug}/user/{username}` that the rest
-of the workspace can read, and the two are different surfaces with different audiences.
+router refuses a cluster made entirely of backfilled measurements (`BACKFILL_QUIET`), so a backfill
+observation is measured and never delivered, by construction rather than by configuration.
 
 ## Signal state reasons
 
@@ -129,7 +126,7 @@ refill, or an ordinary sync — without the work occurring again.
 `ARTIFACT_GONE` is terminal: the work is missing or unreviewable, or a person requested a review while
 it was tombstoned. `ARTIFACT_NOT_VISIBLE` holds automatic occasions for a reversible mirror tombstone,
 including live events and pending retries. Ordinary sync can restore the row
-([ADR 0024](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md)).
+([ADR 0024](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md)).
 A manual request is not retried after restoration; the person can request another review.
 
 `COALESCED` means an issue-update snapshot was displaced before admission. It is suppressed, not pending:
@@ -213,7 +210,7 @@ enrols people. How a membership row comes to exist is
 the same population, so a person who is not an eligible member cannot be selected.
 
 The review subject for pull requests, merge requests, and issues is their author, and
-`PracticeReviewCoverageService.SubjectStatus` records which of four things it turned out to be:
+`ReviewSubjectStatus` records which of four things it turned out to be:
 `RESOLVED_LINKED_HUMAN`, `MISSING`, `NON_HUMAN`, or `UNLINKED`. Only the first can be matched against the
 person axis; the other three are never expanded to the whole eligible population. This makes coverage an
 operator-selected population while preserving the recipient's delivery preference as a separate veto.
@@ -233,7 +230,7 @@ if later approved. Instance Silent Mode remains the stronger instance-wide egres
 
 Automatic admission records the current workspace `revision`. Any change to coverage, delivery status, the
 workspace default autonomy, or post-merge delivery advances it — narrowing as well as widening; the
-cooldown does not. Area and practice autonomy changes remain prospective through the proposal lifecycle
+cooldown does not. Group and practice autonomy changes remain prospective through the proposal lifecycle
 and the practice-authority check rather than a second revision counter. An artifact refused before review
 records a typed terminal reason; changing coverage affects later work, not the refused occurrence.
 
@@ -291,23 +288,21 @@ A practice review does two things, in two model turns, and the words for them ar
 the words. The test is whether the sentence can be checked against the artifact: if you can settle it by
 reading the work, it is measurement, and if you can only settle it by watching what the person does next,
 it is intervention. The seam is
-[ADR 0029](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md);
+[ADR 0029](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md);
 how it runs is in the [practice review pipeline](./practice-review-pipeline.mdx#measurement-and-intervention).
 
 | Term                       | Plain meaning                                                                                                                                                                                                                                        | Do not use for this concept                                |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| **Measurement**            | The first phase: reading one piece of work against each practice and recording what is there.                                                                                                                                                        | detection pass, scan, phase one                            |
-| **Observation**            | One measurement — one practice's answer about one piece of work, immutable for as long as it is retained. Carries an `evidenceRationale` and never advice.                                                                                           | finding, verdict, result                                   |
+| **Measurement**            | The first phase: reading one piece of work against each practice and recording one [observation](./practice-feedback-language.md) per practice — immutable for as long as it is retained, carrying an `evidenceRationale` and never advice.           | detection pass, scan, phase one                            |
 | **Intervention**           | The second phase: deciding what is worth saying now, to whom, and on which surface.                                                                                                                                                                  | synthesis, rendering, formatting                           |
 | **Composition**            | The second LLM turn in the review's existing agent session. It starts only after Java has admitted the final measurements.                                                                                                                           | the composer's turn as part of the review, second pass     |
-| **Composed feedback unit** | One intervention the composition turn proposes for one channel and one practice, before any server gate has admitted it.                                                                                                                             | feedback row, draft feedback                               |
-| **Feedback**               | An admitted unit, written to the ledger with its channel, delivery state and the observations it rests on.                                                                                                                                           | comment, message, guidance                                 |
+| **Composed feedback unit** | One intervention the composition turn proposes for one channel and one practice, before any server gate has admitted it. Once admitted it is [feedback](./practice-feedback-language.md) in the ledger, with its channel, delivery state and the observations it rests on. | feedback row, draft feedback                               |
 | **Withhold**               | The composer's own decision that a lane is not worth writing on, recorded with a reason.                                                                                                                                                             | suppress, skip, drop                                       |
 | **Suppress**               | The *server's* refusal to deliver feedback it was given, recorded as `FeedbackSuppressionReason`.                                                                                                                                                    | withhold, silence                                          |
 | **Notes**                  | What is composed for the mentor conversation: `situation`, `capability`, `evidenceSummary`, and `inConversationSignal`. Notes *to* the mentor, never a sentence for it to say — it writes the turn from the live conversation and admitted evidence. | move, opener, conversation message, prepared reply, script |
 | **Placement**              | Where in-context feedback belongs: `DIFF` names an admitted observation and citation for server-resolved coordinates; `ARTIFACT` stays at summary level.                                                                                             | model-authored path, model-authored line number            |
 | **Thread key**             | The identity of one continuing conversation about one thing with one person on one channel.                                                                                                                                                          | correlation key, idempotency key                           |
-| **Supersession**           | Replacing a queued, still-unread message with a newer one on the same thread.                                                                                                                                                                        | edit, update, delete                                       |
+| **Supersession**           | Replacing prepared, still-unread feedback with newer feedback on the same thread.                                                                                                                                                                    | edit, update, delete                                       |
 
 **Withhold and suppress are two different refusals and must never be merged.** A withhold reason
 (`NO_MATERIAL_CHANGE`, `ALREADY_SAID`, `BELOW_BAR`) is the composer saying nothing was worth saying. A
@@ -317,40 +312,24 @@ opted out, the artifact closed, a cap was reached, or the measurement came from 
 
 ### The three channels are three levels
 
-`FeedbackChannel` is not three renderers of one message. Each value is a different level of Hattie &
-Timperley's model, and every name answers one question — *where does this land?* — because a set of names
-on different axes is how three lanes drift into saying the same thing three times.
+What each `FeedbackChannel` value is and where it lands is defined in the
+[practice feedback language](./practice-feedback-language.md). Each value is a different level of Hattie
+& Timperley's model — `IN_CONTEXT` the task level, "what is worth changing or reinforcing here?";
+`IN_APP` the process level, "what keeps happening in how I work?"; `IN_CHAT` the self-regulation level,
+"what capability could this conversation support?" — and the level is **derived from the channel and
+never stored**: there is no `level` column, and a stored copy would be a second truth that can disagree.
 
-| Channel      | Lands                                                                                            | Level           | Answers                                            | Audience                               |
-| ------------ | ------------------------------------------------------------------------------------------------ | --------------- | -------------------------------------------------- | -------------------------------------- |
-| `IN_CONTEXT` | on the work artifact — pull request summary or inline note, issue comment                        | task            | "what is worth changing or reinforcing here?"      | public — the team reads it on the work |
-| `IN_APP`     | on the developer's own practice pages                                                            | process         | "what keeps happening in how I work?"              | private — the developer alone          |
-| `IN_CHAT`    | in a turn of a conversation, wherever it runs — the in-app mentor at `/w/:slug/mentor`, or Slack | self-regulation | "what capability could this conversation support?" | private — a live mentor turn           |
-
-**`IN_CHAT` is defined by being dialogic, `IN_APP` by being the non-dialogic practice surface.** The
-mentor renders inside the app as well, so "in the app" cannot be the test: `IN_CHAT` is a turn the
-developer can answer, and `IN_APP` is written down, where reading it is the whole interaction. Ask *is it
-a turn?* before *which screen?* — a new written surface inside Hephaestus is `IN_APP`, and a mentor in
-another chat product is still `IN_CHAT`.
-
-The level is **derived from the channel and never stored**: there is no `level` column, and a stored copy
-would be a second truth that can disagree. Three words are close enough to be tempting and are still
-wrong. Do not write *profile* for `IN_APP` — **Profile** is the workspace-readable page at
-`/w/{workspaceSlug}/user/{username}` — and
-do not write *reflection* either: it named what the developer was meant to do rather than where the
-message lands, and it is the name this lane was renamed away from
-([ADR 0029](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md)).
-Do not write *conversation* for `IN_CHAT`: `chat.conversation_thread` is a kind of work Hephaestus
-*reviews*, not a place it delivers to. And do not describe `IN_CHAT` as a prepared reply; what is stored
-is notes to the mentor, not words to speak.
+Two exact names are close enough to be tempting and are still wrong. **Profile** is the
+workspace-readable page at `/w/{workspaceSlug}/user/{username}`, not `IN_APP`; and
+`chat.conversation_thread` is a kind of work Hephaestus *reviews*, not the place `IN_CHAT` delivers to.
 
 ### Thread key and supersession
 
-A **thread** is a chain of messages about one thing to one person on one channel, identified by a hash
+A **thread** is a chain of feedback about one thing to one person on one channel, identified by a hash
 (`FeedbackThreadKey`) rather than by prose. The longitudinal channels key on the *practice*, because a
 habit claim is about the practice and not about one merge request; the in-context channel keys on the
-artifact. `thread_key` is deliberately not unique: a thread is a chain of rows over time, and the
-invariant that matters — at most one live `PREPARED` per thread — is held by a compare-and-swap.
+artifact. `thread_key` groups related feedback; it does not enforce a unique `PREPARED` item.
+Supersession atomically retires a selected `PREPARED` item, but new feedback can coexist on the thread.
 
 Supersession only ever claims `PREPARED` feedback. Say **superseded** for feedback that was prepared but
 replaced before anybody read it, and **continued** for newer feedback written beside feedback that was
@@ -409,7 +388,7 @@ delta can say. A strength that simply was not re-observed is not `RESOLVED`.
 | Rollout revision             | `revision`                         | `long`                                     | `workspace.practice_rollout_revision`                                         |
 | Coverage repository mode     | `repositoryMode`                   | `ReviewRepositoryMode`                     | `workspace.practice_repository_coverage_mode`                                 |
 | Coverage person mode         | `personMode`                       | `ReviewPersonMode`                         | `workspace.practice_person_coverage_mode`                                     |
-| Delivery policy evaluation   | `deliveryPolicy[]` on the trace    | `DeliveryPolicyEvaluation`                 | `delivery_policy_evaluation`                                                  |
+| Delivery policy evaluation   | `deliveryPolicy[]` on the feedback detail | `DeliveryPolicyEvaluation`          | `delivery_policy_evaluation`                                                  |
 | Delivery policy check        | `checks[].check`                   | `DeliveryPolicyCheck`                      | inside `delivery_policy_evaluation.checks`                                    |
 | Delivery policy check status | `checks[].status`                  | `DeliveryPolicyCheckStatus`                | inside `delivery_policy_evaluation.checks`                                    |
 | Delivery policy stage        | `stage`                            | `DeliveryPolicyStage`                      | `delivery_policy_evaluation.stage`                                            |
@@ -421,7 +400,7 @@ delta can say. A strength that simply was not re-observed is not `RESOLVED`.
 | Withhold reason              | inside `out/feedback.json`         | `ComposedFeedbackUnit.WithholdReason`      | not stored                                                                    |
 | Conversation move            | not on the HTTP API                | `ConversationBriefBody`                    | JSON inside `feedback.body`                                                   |
 | Thread key                   | not on the HTTP API                | `FeedbackThreadKey`                        | `feedback.thread_key` (not unique)                                            |
-| What a message follows       | not on the HTTP API                | —                                          | `feedback.replaces_id`                                                        |
+| What feedback follows        | not on the HTTP API                | —                                          | `feedback.replaces_id`                                                        |
 | Locus movement               | inside `inputs/history/delta.json` | `ObservationDelta.Status`                  | derived, never stored                                                         |
 | Signal refusal reason        | —                                  | `SignalStateReason`                        | `artifact_signal.state_reason`                                                |
 | Group dashboard visibility    | `visibleInPracticeDashboards`      | `PracticeGroup.visibleInPracticeDashboards` | `visible_in_practice_dashboards`                                              |
@@ -479,7 +458,7 @@ server admission.
 1. Name the actor: “Hephaestus reviews the work,” not “the practice is detectable.”
 2. Name the outcome: “skip automated review,” not “return not applicable.”
 3. Use provider terms when known: **pull request**, **merge request**, **issue**, or **Slack thread**.
-4. Put stable reason codes in machine fields and plain explanations in UI messages.
+4. Put stable reason codes in machine fields and plain explanations in UI copy.
 5. Prefer short names only when they remain unambiguous.
 6. Use **AI-supported mentoring** for the product promise and **practice review** for the bounded operation.
 7. Describe autonomy as release authority, never as loudness or reach. It does not affect the public **Profile** page.

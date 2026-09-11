@@ -9,6 +9,7 @@ import { AdminAuditTable } from "./AdminAuditTable";
 const events: AuthEventView[] = [
 	{
 		id: 3,
+		elevatedViaInstanceAdmin: false,
 		occurredAt: new Date("2026-06-02T10:05:00Z"),
 		eventType: "APP_ROLE_CHANGED",
 		result: "SUCCESS",
@@ -23,6 +24,7 @@ const events: AuthEventView[] = [
 	},
 	{
 		id: 2,
+		elevatedViaInstanceAdmin: false,
 		occurredAt: new Date("2026-06-02T10:00:00Z"),
 		eventType: "IMPERSONATION_BEGIN",
 		result: "SUCCESS",
@@ -35,6 +37,7 @@ const events: AuthEventView[] = [
 	},
 	{
 		id: 1,
+		elevatedViaInstanceAdmin: false,
 		occurredAt: new Date("2026-06-02T09:30:00Z"),
 		eventType: "LOGIN_FAILED",
 		result: "FAILURE",
@@ -44,6 +47,19 @@ const events: AuthEventView[] = [
 		userAgent: "curl/8.4.0",
 	},
 ];
+
+const elevatedAccess: AuthEventView = {
+	id: 9,
+	elevatedViaInstanceAdmin: true,
+	occurredAt: new Date("2026-06-02T12:00:00Z"),
+	eventType: "WORKSPACE_ELEVATION",
+	result: "SUCCESS",
+	accountId: 7,
+	account: { id: 7, displayName: "Grace Hopper", email: "grace@example.com" },
+	workspaceId: 12,
+	ipAddress: "203.0.113.7",
+	userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/124.0",
+};
 
 const meta = {
 	component: AdminAuditTable,
@@ -77,6 +93,7 @@ export const DeletedAccountFallback: Story = {
 		events: [
 			{
 				id: 5,
+				elevatedViaInstanceAdmin: false,
 				occurredAt: new Date("2026-06-02T11:00:00Z"),
 				eventType: "ACCOUNT_DELETED",
 				result: "SUCCESS",
@@ -97,6 +114,32 @@ export const RowDetail: Story = {
 		await userEvent.click(firstDetails);
 		await expectSettledVisible(await screen.findByText("User agent"));
 		screen.getByText("Workspace");
+	},
+};
+
+export const ElevatedWorkspaceAccess: Story = {
+	args: { events: [elevatedAccess] },
+	play: async ({ canvas }) => {
+		canvas.getByText("Workspace reached as instance admin");
+		await expect(canvas.getByText("Elevated")).toBeVisible();
+	},
+};
+
+export const ElevatedRowDetail: Story = {
+	args: { events: [elevatedAccess] },
+	play: async ({ canvas }) => {
+		const [details] = canvas.getAllByRole("button", { name: /View details/i });
+		if (!details) throw new Error("The table rendered no rows to open");
+		await userEvent.click(details);
+		await expectSettledVisible(await screen.findByText("Access"));
+		screen.getByText(/not a member of/i);
+	},
+};
+
+export const UnelevatedRowHasNoBadge: Story = {
+	args: { events: [{ ...elevatedAccess, elevatedViaInstanceAdmin: false }] },
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByText("Elevated")).toBeNull();
 	},
 };
 

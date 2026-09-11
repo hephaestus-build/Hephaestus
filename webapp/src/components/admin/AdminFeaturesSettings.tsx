@@ -22,11 +22,6 @@ const FEATURES = [
 		description: "Let eligible workspace members chat with Heph in the web app.",
 	},
 	{
-		key: "achievementsEnabled",
-		label: "Achievements",
-		description: "Show badges and skill trees.",
-	},
-	{
 		key: "leaderboardEnabled",
 		label: "Leaderboard",
 		description: "Rank contributors by their activity scores.",

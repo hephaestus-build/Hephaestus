@@ -49,13 +49,12 @@ final class PiProcessHandle {
      * {@link de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec}.
      */
     static PiProcessHandle spawn(
-            String dockerCli,
+            DockerCli dockerCli,
             String containerId,
             String containerUser,
             List<String> command,
             Map<String, String> environment) {
         List<String> argv = new ArrayList<>();
-        argv.add(dockerCli);
         argv.add("exec");
         argv.add("-i"); // never -t: no TTY → no TIOCSTI injection vector
         argv.add("-u");
@@ -67,7 +66,7 @@ final class PiProcessHandle {
         argv.add(containerId);
         argv.addAll(command);
 
-        ProcessBuilder pb = new ProcessBuilder(argv);
+        ProcessBuilder pb = dockerCli.configure(new ProcessBuilder(argv));
         pb.redirectErrorStream(false);
         try {
             Process p = pb.start();

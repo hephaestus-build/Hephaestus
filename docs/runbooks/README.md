@@ -10,7 +10,7 @@ before, the order of operations, and how to roll back.
 **Repo-only, like `docs/decisions/`.** Nothing in this directory is registered with a Docusaurus
 plugin, so none of it appears on [the site](https://docs.hephaestus.build/). Link a runbook
 from a published page by absolute GitHub URL
-(`https://github.com/ls1intum/Hephaestus/blob/main/docs/runbooks/<file>.md`), never by a relative
+(`https://github.com/hephaestus-build/Hephaestus/blob/main/docs/runbooks/<file>.md`), never by a relative
 path — see [`../decisions/README.md`](../decisions/README.md) for the full rule.
 
 **Standing operations do not live here.** A step a self-hoster performs on an ordinary install

@@ -8,8 +8,12 @@ vi.mock("@/api/sdk.gen", () => ({ refresh: vi.fn() }));
 
 const refreshMock = vi.mocked(refresh);
 
-/** A rotation the server accepted — the generated client reports failure via `error`, not by throwing. */
-const rotated = { data: undefined, error: undefined };
+const rotated = {
+	data: undefined,
+	error: undefined,
+	request: new Request("http://localhost/auth/refresh"),
+	response: new Response(null, { status: 204 }),
+};
 
 describe("refreshAccessToken", () => {
 	beforeEach(() => {
@@ -31,7 +35,7 @@ describe("refreshAccessToken", () => {
 		]);
 		settle?.();
 
-		expect(await overlapping).toStrictEqual([true, true, true]);
+		expect(await overlapping).toStrictEqual(["refreshed", "refreshed", "refreshed"]);
 		expect(refreshMock).toHaveBeenCalledTimes(1);
 	});
 
@@ -44,9 +48,27 @@ describe("refreshAccessToken", () => {
 		expect(refreshMock).toHaveBeenCalledTimes(2);
 	});
 
-	it("answers false rather than throwing when the rotation fails", async () => {
+	it("reports unavailable rather than throwing when the rotation fails", async () => {
 		refreshMock.mockRejectedValue(new Error("offline"));
 
-		await expect(refreshAccessToken()).resolves.toBe(false);
+		await expect(refreshAccessToken()).resolves.toBe("unavailable");
 	});
+	it("reports unavailable when the generated client returns a transport error without a response", async () => {
+		refreshMock.mockResolvedValue({ data: undefined, error: new Error("offline") });
+		await expect(refreshAccessToken()).resolves.toBe("unavailable");
+	});
+
+	it.each([
+		[401, "expired"],
+		[403, "unavailable"],
+		[429, "unavailable"],
+		[500, "unavailable"],
+		[503, "unavailable"],
+	] as const)(
+		"classifies HTTP %i without confusing outages with expiry",
+		async (status, expected) => {
+			refreshMock.mockResolvedValue({ ...rotated, response: new Response(null, { status }) });
+			await expect(refreshAccessToken()).resolves.toBe(expected);
+		},
+	);
 });

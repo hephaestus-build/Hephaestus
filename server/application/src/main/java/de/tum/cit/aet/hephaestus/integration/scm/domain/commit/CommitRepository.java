@@ -7,7 +7,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -341,17 +340,6 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
             @Param("sha") String sha,
             @Param("parentCount") @Nullable Integer parentCount,
             @Param("parentShas") @Nullable String parentShas);
-
-    /** N most recent commits by an author as of {@code asOf}. Used by the AtomicChanges achievement evaluator. */
-    @Query("""
-        SELECT c FROM Commit c
-        WHERE c.author.id = :authorId
-        AND c.authoredAt <= :asOf
-        ORDER BY c.authoredAt DESC
-        """)
-    List<Commit> findTopNByAuthorIdOrderByAuthoredAtDesc(
-            @Param("authorId") @Nullable Long authorId, @Param("asOf") Instant asOf, Pageable pageable);
-
     /**
      * A pull request's commits through {@code commit_pull_request}, oldest authored first with the SHA as the
      * tiebreak so two commits authored in the same second stage in the same order on every review. Used by the
@@ -364,29 +352,4 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
         ORDER BY c.authoredAt ASC, c.sha ASC
         """)
     List<Commit> findByAssociatedPullRequestId(@Param("pullRequestId") Long pullRequestId, Pageable pageable);
-
-    /** Commit by id with file changes eagerly loaded. Used by the CrossBoundary achievement evaluator. */
-    @Query("""
-        SELECT c FROM Commit c
-        LEFT JOIN FETCH c.fileChanges
-        WHERE c.id = :id
-        """)
-    Optional<Commit> findByIdWithFileChanges(@Param("id") Long id);
-
-    /** Distinct file extensions across an author's commits as of {@code asOf}. Used by the Polyglot achievement evaluator. */
-    @Query(value = """
-        SELECT DISTINCT LOWER(
-            CASE
-                WHEN cf.filename LIKE '%.%' THEN SUBSTRING(cf.filename FROM '\\.([^.]+)$')
-                ELSE NULL
-            END
-        )
-        FROM commit_file_change cf
-        JOIN git_commit gc ON cf.commit_id = gc.id
-        WHERE gc.author_id = :authorId
-        AND gc.authored_at <= :asOf
-        AND cf.filename LIKE '%.%'
-        """, nativeQuery = true)
-    List<String> findDistinctFileExtensionsByAuthorId(
-            @Param("authorId") @Nullable Long authorId, @Param("asOf") Instant asOf);
 }

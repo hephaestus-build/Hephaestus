@@ -78,7 +78,8 @@ class InstanceLlmSettingsControllerIntegrationTest extends AbstractWorkspaceInte
                 .bodyValue(new UpdateInstanceLlmSettingsRequestDTO("api.openai.com", false))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         InstanceLlmSettingsDTO fetched = webTestClient
                 .put()
@@ -106,6 +107,7 @@ class InstanceLlmSettingsControllerIntegrationTest extends AbstractWorkspaceInte
                 .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 }

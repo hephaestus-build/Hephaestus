@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
@@ -91,6 +92,9 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
 
     @Autowired
     private PullRequestRepository pullRequestRepository;
+
+    @Autowired
+    private PullRequestReviewRepository reviewRepository;
 
     @Autowired
     private IssueRepository issueRepository;
@@ -310,7 +314,10 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
         var decision = new GateDecision.Detect(workspace, List.of(), 1, TriggerMode.AUTO);
         when(detectionGate.evaluate(any(), eq(ScmSignals.PULL_REQUEST_OPENED), eq(TriggerMode.AUTO)))
                 .thenReturn(decision);
-        resubmit(new PullRequestSignalResubmitter(jobs, pullRequestRepository, detectionGate, signalRecorder), held);
+        resubmit(
+                new PullRequestSignalResubmitter(
+                        jobs, pullRequestRepository, detectionGate, signalRecorder, reviewRepository),
+                held);
 
         var request = ArgumentCaptor.forClass(PullRequestReviewSubmissionRequest.class);
         verify(jobs)
@@ -396,7 +403,8 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
      * profile leaves off, so they are built from the same beans the container would inject.
      */
     private PullRequestSignalResubmitter pullRequestResubmitter() {
-        return new PullRequestSignalResubmitter(agentJobService, pullRequestRepository, gate, signalRecorder);
+        return new PullRequestSignalResubmitter(
+                agentJobService, pullRequestRepository, gate, signalRecorder, reviewRepository);
     }
 
     private IssueSignalResubmitter issueResubmitter() {

@@ -9,14 +9,14 @@
 
 Hephaestus mirrors third-party content — GitHub and GitLab issues/pull requests/merge requests and
 their reviews and comments, Slack messages, Outline documents — into PostgreSQL, because practice
-detection and mentor context read the mirror, not the vendor. Two questions about that mirror had
+reviews and mentor context read the mirror, not the vendor. Two questions about that mirror had
 never been answered the same way twice across the four integrations.
 
 **"Upstream no longer has this row."** Every sync path is upsert-only, so a deleted artifact
 survives locally forever. Webhooks cannot close the gap: this deployment's inbound deliveries are
 not redeliverable (ADR 0008), GitHub has no `pull_request.deleted` action at all, and GitLab emits
 no issue- or merge-request-deletion event whatsoever. A phantom row inflates the counts the admin
-UI reports and keeps feeding detection as if it were live.
+UI reports and keeps feeding reviews as if it were live.
 
 **"This workspace's basis for holding the mirror is gone."** Slack and Outline hard-deleted their
 mirrored rows on both admin disconnect and workspace purge. GitHub erased only on the vendor-side
@@ -221,7 +221,7 @@ home for who does it.
 | --- | --- | --- |
 | Activity events, XP, leaderboard (`activity`, `leaderboard`) | No | An event is a historical fact: the review happened, and the reviewer earned it. Deleting the work upstream does not un-review it, and rewriting scores retroactively is a worse lie than an orphaned row. |
 | Profile counts, contributed repositories, earliest-contribution dates (`profile`, `workspace`) | No | Same record, same reason; a profile that shrinks when somebody else deletes a branch is not a profile of the developer. |
-| Observations and delivered feedback (`practices`) | No | Feedback that was delivered was delivered — the ledger says so, and hiding it at read time would make the ledger and the read disagree with no recorded reason. Suppressing feedback about a vanished artifact is a *delivery* decision and belongs to `FeedbackSuppressionReason.ARTIFACT_GONE`, in the `agent` module that may depend on `integration.scm`. `practices` may depend on the integration contract and on nothing that implements it, so it never names the `issue` table. |
+| Observations and delivered feedback (`practices`) | No | Feedback that was delivered was delivered — the ledger says so, and hiding it at read time would make the ledger and the read disagree with no recorded reason. Suppressing feedback about a vanished artifact is a *delivery* decision and belongs to `FeedbackSuppressionReason.ARTIFACT_GONE`, decided by `PracticeFeedbackDeliveryPolicy` in the `agent` module, which may depend on `integration.scm`. `practices` may depend on the integration contract and on nothing that implements it, so it never names the `issue` table. |
 | The gate loaders the pending-signal resubmitters read | No | They must tell "deleted upstream" apart from "temporarily swept": a resubmitter that cannot find the row records `SignalStateReason.ARTIFACT_GONE`, which is terminal, and the resurrection (a) promises would leave the occasion retired for good. So a review a person asks for on one artifact is refused with `SignalStateReason.ARTIFACT_GONE`; an automatically re-offered signal is not, and can still start a review of a tombstoned row. Retiring it needs a retryable reason meaning "temporarily swept", which the vocabulary does not have yet. |
 
 **Slack and Outline are out of scope of this update, deliberately.** `SlackMessage` and

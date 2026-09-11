@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception;
 
+import java.io.Serial;
+
 /**
  * Exception thrown when a GitHub App installation is no longer accessible.
  * This typically occurs when:
@@ -13,6 +15,9 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception;
  * by retrying. The caller should abort the operation and clean up any cached state.
  */
 public class InstallationNotFoundException extends RuntimeException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private final long installationId;
 

@@ -4,68 +4,30 @@ import { test } from "node:test";
 
 import { parseDocument } from "yaml";
 
+import { asArray, asRecord, asString, asStringArray, at } from "./lib/json.ts";
 import { releaseSignerIdentity, releaseSignerRepository } from "./lib/release-signer.ts";
 import { SMOKE_HOSTNAME } from "./prepare-host-smoke-env.ts";
-import { parseStacks } from "./reconcile-deployment.ts";
+import { parseStacks, POSTGRES_IMAGE_INPUTS } from "./reconcile-deployment.ts";
 
 const release = readFileSync(".github/workflows/release.yml", "utf8");
-const deployment = readFileSync(".github/workflows/deploy-locked-compose.yml", "utf8");
 const promotion = readFileSync(".github/workflows/promote.yml", "utf8");
 const resolver = readFileSync("scripts/resolve-promotion.ts", "utf8");
 const reconciler = readFileSync("scripts/reconcile-deployment.ts", "utf8");
 const upgradeDrill = readFileSync("scripts/release-upgrade-test.ts", "utf8");
 
-await test("release promotion deploys the complete topology by signed tag", () => {
-	assert.match(release, /image-tag: \$\{\{ needs\.release\.outputs\.tag_name \}\}/);
-	assert.doesNotMatch(release, /'image-tag': '\$\{\{ needs\.release\.outputs\.version \}\}'/);
-	for (const stack of ["proxy", "core", "app"])
-		assert.match(deployment, new RegExp(`render ${stack} docker/compose\\.${stack}\\.yaml`));
-	assert.match(deployment, /STACKS: .*'app core'.*'app core proxy'/);
-});
-
-await test("deployment uses Compose metadata, waits for readiness, and preserves rollback images", () => {
-	assert.match(deployment, /config --variables --format json/);
-	assert.match(deployment, /--wait --wait-timeout 600/);
-	assert.doesNotMatch(deployment, /docker image prune/);
-});
-
-await test("both deploy paths start the stacks in the same order", () => {
-	const configured = /^\s+STACKS: (.+)$/m.exec(deployment)?.[1];
-	assert.ok(configured, "the deploy job must declare the stacks and their order in STACKS");
-	// Every stack list the expression can yield: one per environment shape it selects between.
-	const orders = [...configured.matchAll(/&& '([a-z ]+)' \|\| '([a-z ]+)'/g)].flatMap((match) => [
-		String(match[1]).split(" "),
-		String(match[2]).split(" "),
-	]);
-	assert.ok(orders.length > 0);
-	for (const stacks of orders) {
+await test("the reconciler starts the stacks in dependency order", () => {
+	// Hosts pull; nothing in this repository deploys to them. What still has to hold is the order
+	// the reconciler derives from the stack names, whichever order the host lists them in.
+	for (const listed of ["core app", "app core", "proxy core app", "app proxy core"]) {
+		const ordered = parseStacks(listed);
 		// The application server runs the Liquibase migration the webhook runtime in core reads.
 		assert.ok(
-			stacks.indexOf("app") < stacks.indexOf("core"),
-			`${stacks.join(" ")} starts the webhook runtime before the migration that feeds it`,
+			ordered.indexOf("app") < ordered.indexOf("core"),
+			`${ordered.join(" ")} starts the webhook runtime before the migration that feeds it`,
 		);
 		// The edge comes last, so it never routes to a stack that is still starting.
-		if (stacks.includes("proxy")) assert.equal(stacks.at(-1), "proxy");
-		// The pull reconciler decides its own order from the same stack names, and a host that
-		// migrates after it starts the webhook runtime serves deliveries against a stale schema.
-		assert.deepEqual(
-			parseStacks(stacks.join(" ")),
-			stacks,
-			"the pull reconciler must order stacks the way the push deploy does",
-		);
+		if (ordered.includes("proxy")) assert.equal(ordered.at(-1), "proxy");
 	}
-
-	const script = deployment.slice(deployment.indexOf("envs: STACKS"));
-	// The broker is recreated before any stack, and only where this environment runs core, so an
-	// environment that leaves core out never deploys a broker it did not render.
-	const broker = script.search(/\*" core "\*\)/);
-	const stacks = script.indexOf("for stack in $STACKS");
-	assert.ok(
-		broker >= 0,
-		"the broker must be guarded on core being one of this deployment's stacks",
-	);
-	assert.ok(stacks > broker, "the broker must be recreated before any stack starts");
-	assert.match(script.slice(broker, stacks), /--force-recreate nats-server/);
 });
 
 const upgrade = readFileSync(".github/workflows/release-upgrade.yml", "utf8");
@@ -111,24 +73,18 @@ await test("verification identity is the release's own: run context now, the map
 
 	assert.match(release, derivedIdentity);
 	assert.match(rescan, /resolve-release-identity\.ts.*certificate-identity/);
-	assert.match(deployment, /resolve-release-identity\.ts.*certificate-identity/);
 	assert.match(prepareLock, /releaseCertificateIdentity\(release, process\.env\)/);
 	assert.match(prepareLock, /releaseRepository\(release, process\.env\)/);
-	for (const contents of [release, deployment, rescan, prepareLock]) {
+	for (const contents of [release, reconciler, rescan, prepareLock]) {
 		assert.doesNotMatch(contents, /certificate-identity[^\n]*\n?[^\n]*ls1intum\/Hephaestus/);
 		assert.doesNotMatch(
 			contents,
 			/certificate-identity[^\n]*\n?[^\n]*hephaestus-build\/Hephaestus/,
 		);
 	}
-	assert.match(
-		deployment,
-		/EXPECTED_SIGNER_REPOSITORY: \$\{\{ inputs\.expected-signer-repository \}\}/,
-	);
-	assert.match(
-		deployment,
-		/"\$\{SERVER_URL\}\/\$\{EXPECTED_SIGNER_REPOSITORY\}\/\.github\/workflows\/release\.yml@refs\/heads\/main"/,
-	);
+	// The pull path derives the same identity from the release it is verifying, never from a
+	// literal: prepare-release-lock.ts is the only thing that names the signer, and the
+	// assertions above pin it to the release's own repository.
 });
 
 await test("every promotion decision is taken by the script that owns it", () => {
@@ -143,15 +99,62 @@ await test("every promotion decision is taken by the script that owns it", () =>
 			),
 			`${consumer} must sign and publish the file the resolver wrote`,
 		);
-	assert.match(release, /^ +run: node scripts\/await-staging\.ts$/m);
 	// Rollback must support releases predating immutable tags; the signed lock binds their digests.
 	assert.doesNotMatch(resolver, /isImmutable/);
-	// The verifier is the tooling this tick runs — resolved from the running script, which Node pins
-	// to the tree it loaded — never the release under review.
-	assert.match(reconciler, /join\(import\.meta\.dirname, "prepare-release-lock\.ts"\)/);
-	assert.doesNotMatch(reconciler, /join\(releaseTree, "scripts\/prepare-release-lock\.ts"\)/);
-	// Run through the tooling link, argv[1] and import.meta.filename differ; only import.meta.main holds.
-	assert.match(reconciler, /^if \(import\.meta\.main\) \{/m);
+});
+
+function referenced(expression: string, pattern: RegExp): string[] {
+	return [...expression.matchAll(pattern)].flatMap(([, name]) =>
+		name === undefined ? [] : [name],
+	);
+}
+
+/**
+ * What makes `cicd.yml` rebuild the published PostgreSQL image, split into the path globs the change
+ * filters behind it name and the outputs that decide a rebuild without reading a diff at all.
+ */
+function postgresRebuildTriggers(): { paths: string[]; unconditional: string[] } {
+	const workflow: unknown = parseDocument(
+		readFileSync(".github/workflows/cicd.yml", "utf8"),
+	).toJS();
+	const detect = asRecord(at(workflow, ["jobs", "detect-changes"], "cicd.yml"), "detect-changes");
+	const outputs = asRecord(detect.outputs, "detect-changes.outputs");
+	const step = asArray(detect.steps, "detect-changes.steps")
+		.map((value, index) => asRecord(value, `detect-changes.steps[${index}]`))
+		.find((candidate) => candidate.id === "filter");
+	if (step === undefined) throw new Error("detect-changes declares no `filter` step");
+	// dorny/paths-filter takes its filters as YAML inside a string, so they parse in a second pass.
+	const filters = asRecord(
+		parseDocument(
+			asString(asRecord(step.with, "the filter step").filters, "the filter step's filters"),
+		).toJS(),
+		"the change filters",
+	);
+	const condition = asString(
+		at(workflow, ["jobs", "Docker", "with", "postgres_image_changed"], "cicd.yml"),
+		"Docker's postgres_image_changed input",
+	);
+
+	const paths = new Set<string>();
+	const unconditional = new Set<string>();
+	for (const name of referenced(condition, /needs\.detect-changes\.outputs\.([\w-]+)/g)) {
+		const expression = asString(outputs[name], `detect-changes.outputs.${name}`);
+		const behind = referenced(expression, /steps\.filter\.outputs\.([\w-]+)/g);
+		if (behind.length === 0) unconditional.add(name);
+		for (const filter of behind)
+			for (const glob of asStringArray(filters[filter], `the ${filter} filter`)) paths.add(glob);
+	}
+	return { paths: [...paths], unconditional: [...unconditional].toSorted() };
+}
+
+await test("a host following commits watches every path CI rebuilds the database image for", () => {
+	const { paths, unconditional } = postgresRebuildTriggers();
+	// A path CI rebuilds for that the host does not diff is a rebuilt image the host never applies.
+	assert.deepEqual([...paths].toSorted(), [...POSTGRES_IMAGE_INPUTS].toSorted());
+	// What is left decides a rebuild without reading the diff, so the host cannot answer it from the
+	// two commits; it takes those rebuilds on a day's cadence instead. A new entry here is a decision
+	// about `commitImages`, not a list to extend.
+	assert.deepEqual(unconditional, ["all-images"]);
 });
 
 await test("derives the canonical signer identity and refuses missing CI identity", () => {

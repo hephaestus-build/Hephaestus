@@ -4,10 +4,6 @@
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
-> The decision below is the original one, kept intact. The 2026-07-28 update extends this ADR's
-> scope from "which JVM hosts the proxy" to the whole server-side OpenAI-compatible model catalog
-> the proxy now resolves credentials from. Read both.
-
 ## Context
 
 Sandboxed agent containers running inside Hephaestus call out to LLM providers
@@ -234,7 +230,7 @@ ship. Do not start that epic assuming the 2026-05-20 default still protects it.
 [ADR 0041](0041-compose-1x-kubernetes-2.md) supersedes the **Decision** above, and with it the
 2026-07-28 update's Revisit trigger. Considered option 3, “hardcode on worker”, rejected here on
 2026-05-20, is now the chosen path: the proxy is capability 1 of four on the owning worker's Sandbox
-Gateway and `hephaestus.sandbox.llm-proxy.enabled` is retired. The rejection was sound for its
+Gateway. The rejection was sound for its
 premise — a worker Hephaestus does not operate — and ADR 0041 removes that premise by withdrawing the
 BYO remote-worker purpose. “BYO” is now a governed provider-key lookup behind that proxy. The
 credential-isolation driver in the Context above is unchanged and still binding: the sandbox receives

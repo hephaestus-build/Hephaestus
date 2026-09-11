@@ -100,6 +100,23 @@ public record SignalRevision(String value) {
         return new SignalRevision(RevisionScheme.EVENT_ID.prefix() + eventId);
     }
 
+    /**
+     * The event {@link #ofEventId} encoded here, or empty when another scheme minted this revision or
+     * a persisted value predates a grammar the constructor no longer rejects.
+     */
+    public Optional<Long> eventId() {
+        if (scheme().orElse(null) != RevisionScheme.EVENT_ID) {
+            return Optional.empty();
+        }
+        try {
+            long eventId = Long.parseLong(
+                    value.substring(RevisionScheme.EVENT_ID.prefix().length()));
+            return eventId > 0 ? Optional.of(eventId) : Optional.empty();
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
+    }
+
     /** The scheme that produced this revision, read back off its prefix. */
     public Optional<RevisionScheme> scheme() {
         for (RevisionScheme scheme : RevisionScheme.values()) {

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.StuckDeliveryRow;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
@@ -257,28 +258,36 @@ public class AgentJobZombieSweeper {
     @Scheduled(fixedDelay = 5, initialDelay = 3, timeUnit = TimeUnit.MINUTES)
     public void recoverStuckDeliveries() {
         Instant cutoff = Instant.now().minus(DELIVERY_PENDING_STUCK_THRESHOLD);
-        List<AgentJob> stuck =
+        List<StuckDeliveryRow> stuck =
                 jobRepository.findStuckPendingDeliveries(cutoff, PageRequest.of(0, DELIVERY_RECOVERY_BATCH_SIZE));
         if (stuck.isEmpty()) {
             return;
         }
         log.warn("Found {} agent job(s) stuck at delivery_status=PENDING; attempting recovery", stuck.size());
-        for (AgentJob job : stuck) {
+        for (StuckDeliveryRow candidate : stuck) {
             try {
-                if (job.getDeliveryAttempts() >= MAX_DELIVERY_RECOVERY_ATTEMPTS) {
+                if (candidate.getDeliveryAttempts() >= MAX_DELIVERY_RECOVERY_ATTEMPTS) {
                     transactionTemplate.executeWithoutResult(s -> jobRepository.updateDeliveryStatus(
-                            job.getId(), DeliveryStatus.FAILED, job.getDeliveryCommentId()));
+                            candidate.getId(), DeliveryStatus.FAILED, candidate.getDeliveryCommentId()));
                     log.warn(
                             "Delivery recovery exhausted after {} attempt(s); marking FAILED: jobId={}",
-                            job.getDeliveryAttempts(),
-                            job.getId());
+                            candidate.getDeliveryAttempts(),
+                            candidate.getId());
                     continue;
                 }
-                short expectedAttempts = job.getDeliveryAttempts();
+                short expectedAttempts = candidate.getDeliveryAttempts();
                 Integer claimed = transactionTemplate.execute(
-                        s -> jobRepository.claimDeliveryRecoveryAttempt(job.getId(), expectedAttempts));
+                        s -> jobRepository.claimDeliveryRecoveryAttempt(candidate.getId(), expectedAttempts));
                 if (claimed == null || claimed == 0) {
                     continue; // a concurrent sweeper replica already claimed this pass's attempt
+                }
+                // Only now is the job worth reading whole: everything above decided from three columns,
+                // and the delivery itself needs the output the review produced.
+                AgentJob job = jobRepository
+                        .findDeliveryRecoveryCandidate(candidate.getId())
+                        .orElse(null);
+                if (job == null) {
+                    continue; // it finished, failed or was removed between the sweep and this attempt
                 }
                 // The CAS's post-increment value is THIS attempt's fence token for its terminal write.
                 short claimedAttempts = (short) (expectedAttempts + 1);
@@ -287,7 +296,7 @@ public class AgentJobZombieSweeper {
                     deliveryRecovered.increment();
                 }
             } catch (Exception e) {
-                log.warn("Delivery recovery pass failed for job {}: {}", job.getId(), e.getMessage());
+                log.warn("Delivery recovery pass failed for job {}: {}", candidate.getId(), e.getMessage());
             }
         }
     }

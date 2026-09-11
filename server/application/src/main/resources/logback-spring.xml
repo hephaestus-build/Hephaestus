@@ -15,23 +15,27 @@
             <includeMdc>true</includeMdc>
             <decorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
                 <pathMask>
-                    <paths>password,secret,token,access_token,accessToken,refresh_token,refreshToken,authorization</paths>
+                    <paths>password,secret,token,access_token,accessToken,refresh_token,refreshToken,authorization,Authorization,api_key,apiKey,client_secret,clientSecret,cookie,Cookie,set-cookie,Set-Cookie,x-api-key,X-Api-Key</paths>
                     <mask>***</mask>
                 </pathMask>
                 <valueMask>
-                    <value>(?i)Bearer\s+[A-Za-z0-9._~+/=-]+</value>
-                    <mask>Bearer ***</mask>
+                    <value>(?i)(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+</value>
+                    <mask>$1 ***</mask>
                 </valueMask>
                 <valueMask>
                     <value>glpat-[A-Za-z0-9_-]+</value>
                     <mask>glpat-***</mask>
                 </valueMask>
                 <valueMask>
-                    <value>github_pat_[A-Za-z0-9_]+</value>
-                    <mask>github_pat_***</mask>
+                    <value>(github_pat_|gh[pousr]_)[A-Za-z0-9_]+</value>
+                    <mask>$1***</mask>
                 </valueMask>
                 <valueMask>
-                    <value>([?&amp;]token=)[^&amp;\s"']+</value>
+                    <value>(xox[baprs]-)[A-Za-z0-9-]+</value>
+                    <mask>$1***</mask>
+                </valueMask>
+                <valueMask>
+                    <value>(?i)([?&amp;](?:token|access_token|refresh_token|client_secret|api_key|X-Amz-Credential|X-Amz-Signature|X-Amz-Security-Token)=)[^&amp;\s"']+</value>
                     <mask>$1***</mask>
                 </valueMask>
             </decorator>

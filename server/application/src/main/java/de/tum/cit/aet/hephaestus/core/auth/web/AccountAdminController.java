@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth.web;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.auth.AccountService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -22,12 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Instance-admin account management, guarded by the namespaced {@code app_admin} authority (the
- * granted authority the issuer mints for {@code APP_ADMIN}; see {@code JwtPrincipalFactory}). Thin
- * adapter over {@link AccountService}. Access JWTs are short-lived (~15m) and refresh re-derives
- * roles from the DB, so no legacy-authority grace is carried in code.
- */
+/** Instance-admin account management. */
 @ConditionalOnServerRole
 @RestController
 @RequestMapping("/admin/users")
@@ -60,6 +56,7 @@ public class AccountAdminController {
 
     @PatchMapping("/{id}")
     @Operation(summary = "Update an account's app role", operationId = "adminUpdateUser")
+    @RequiresRecentSignIn
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "APP_ROLE_CHANGED")
     public ResponseEntity<AdminAccountViewDTO> update(
             @PathVariable Long id, @Valid @RequestBody UpdateAccountRequestDTO body) {
@@ -71,6 +68,7 @@ public class AccountAdminController {
     @Operation(
             summary = "Force sign-out: revoke all of an account's active sessions",
             operationId = "adminRevokeUserSessions")
+    @RequiresRecentSignIn
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "JWT_REVOKED")
     public ResponseEntity<RevokeSessionsResultDTO> revokeSessions(@PathVariable Long id) {
         int revoked = accountService.adminRevokeAllSessions(id, CurrentAccount.requireId());

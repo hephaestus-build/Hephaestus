@@ -161,7 +161,7 @@ This gateway is the worker's only non-loopback listener. The sandbox can reach e
 it receives no provider or repository credential and has no ingress. The gateway never initiates a
 connection to a sandbox. `gitProxyUrl` remains absent and no Git server is introduced. BYO provider
 support is a credential lookup behind the same proxy, not a second proxy topology; the Squid sidecar
-proposal in [#1108](https://github.com/ls1intum/Hephaestus/issues/1108) is withdrawn.
+proposal in [#1108](https://github.com/hephaestus-build/Hephaestus/issues/1108) is withdrawn.
 
 Protocol v3 uses a per-job credential, runtime capability discovery with an explicit cumulative-byte
 budget, one required workspace-tar request with optional additive responses, admitted result upload,
@@ -250,7 +250,7 @@ upgrade hooks, and PostgreSQL/JetStream connection contracts. It does not own a 
 There are exactly three runtime roles — `server`, `worker`, and `webhook` — from one signed image. WSS
 remains the control channel for cancel, drain, capacity, and mentor frames. The worker is not a
 customer-hosted remote executor: the BYO remote-worker purpose and
-[#1318](https://github.com/ls1intum/Hephaestus/issues/1318) are withdrawn. “BYO” means a governed
+[#1318](https://github.com/hephaestus-build/Hephaestus/issues/1318) are withdrawn. “BYO” means a governed
 model/provider connection.
 
 2.0 replaces the deployment substrate under previews, not the product policy above them:

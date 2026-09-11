@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.agent.task.TaskPaths;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -15,21 +16,9 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/**
- * Pins the orchestrator prompt's workspace inventory against the paths collectors actually write.
- *
- * <p>A wrong path in the prompt is the same class of defect as a missing collector: the model is told to
- * read a file, reads nothing, and reports what it did not find as a fact about a developer. Neither a
- * test of the collectors alone nor of the prompt alone catches this — a path can be named but never
- * staged, or staged but never named.
- */
+/** Checks the prompt's documented workspace inventory against known collector paths. */
 class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
 
-    /**
-     * Every file the review collectors can write into {@code inputs/}, and the one place that list is
-     * stated. Hand-maintained on purpose: a new collector output has to be added here, which is the same
-     * edit that forces the author to say what it is in the prompt.
-     */
     private static final Set<String> STAGED_INPUT_PATHS = new LinkedHashSet<>(java.util.List.of(
             // Pull request
             SandboxLayout.CONTEXT_PREFIX + "metadata.json",
@@ -63,30 +52,34 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
             OutlineDocumentContentSource.REVIEW_PREFIX);
 
     @Test
-    @DisplayName("every file a review collector stages is described in the orchestrator prompt")
-    void promptDescribesEveryStagedInput() throws IOException {
-        String prompt = orchestratorPrompt();
+    @DisplayName("the workspace section documents the known collector outputs")
+    void workspaceSectionDocumentsCollectorOutputs() throws IOException {
+        String prompt = documentedWorkspaceSection();
 
         assertThat(STAGED_INPUT_PATHS)
-                .as("a staged file the prompt never mentions is context the model was not told it has")
+                .as("the workspace section must describe each known collector output")
                 .allSatisfy(path ->
                         assertThat(prompt).as("prompt mentions %s", path).contains(path));
     }
 
     @Test
-    @DisplayName("the orchestrator prompt names no sandbox input that nothing stages")
-    void promptNamesNoUnstagedInput() throws IOException {
+    @DisplayName("prompt paths belong to known files or content directories")
+    void promptPathsBelongToKnownInputs() throws IOException {
         Set<String> named = new LinkedHashSet<>();
         Matcher matcher =
-                Pattern.compile("inputs/[A-Za-z0-9_./<>-]*[A-Za-z0-9_>]").matcher(orchestratorPrompt());
+                Pattern.compile("inputs/[A-Za-z0-9_./<>-]*[A-Za-z0-9_>]").matcher(resolvedDocumentedPrompt());
         while (matcher.find()) {
             named.add(matcher.group());
         }
 
+        TaskPaths paths = TaskPaths.capturedInputs();
         assertThat(named).isNotEmpty();
         assertThat(named)
-                .as("the prompt sends the model to a path nothing writes; it will read nothing and say so")
+                .as("documented paths must belong to known files or content directories")
                 .allSatisfy(path -> assertThat(STAGED_INPUT_PATHS.contains(path)
+                                || path.equals(paths.compositionRequest())
+                                || path.equals(paths.preparedFeedback())
+                                || STAGED_INPUT_PATHS.stream().anyMatch(staged -> staged.startsWith(path + "/"))
                                 || STAGED_INPUT_PREFIXES.stream().anyMatch(prefix -> path.startsWith(prefix))
                                 ||
                                 // Trailing-slash and templated forms of the prefixes above.
@@ -95,12 +88,38 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
                         .isTrue());
     }
 
-    private static String orchestratorPrompt() throws IOException {
+    private static String resolvedDocumentedPrompt() throws IOException {
         Path candidate = Path.of("src/main/resources/agent/pi-orchestrator.md");
         Path resolved = Files.exists(candidate)
                 ? candidate
                 : Path.of("server/application/src/main/resources/agent/pi-orchestrator.md");
         assertThat(resolved).isRegularFile();
-        return Files.readString(resolved, StandardCharsets.UTF_8);
+        String prompt = Files.readString(resolved, StandardCharsets.UTF_8);
+        TaskPaths paths = TaskPaths.capturedInputs();
+        String resolvedPrompt = prompt.replace("<contextRoot>", paths.contextRoot())
+                .replace("<repositoryRoot>", paths.repositoryRoot())
+                .replace("<manifest>", paths.manifest())
+                .replace("<practiceIndex>", paths.practiceIndex())
+                .replace("<compositionRequest>", paths.compositionRequest())
+                .replace("<preparedFeedback>", paths.preparedFeedback())
+                .replace("<practiceRoot>", paths.practiceIndex().replaceFirst("/[^/]+$", ""))
+                .replace("<historyRoot>", paths.preparedFeedback().replaceFirst("/[^/]+$", ""));
+        assertThat(Pattern.compile("<[A-Za-z][A-Za-z0-9]*>")
+                        .matcher(resolvedPrompt)
+                        .results()
+                        .map(result -> result.group())
+                        .toList())
+                .as("remaining notation must be a documented content placeholder, not an unresolved task path")
+                .allMatch(Set.of("<collection>", "<doc>", "<n>", "<slug>", "<verb>")::contains);
+        return resolvedPrompt;
+    }
+
+    private static String documentedWorkspaceSection() throws IOException {
+        String resolvedPrompt = resolvedDocumentedPrompt();
+        int workspaceStart = resolvedPrompt.indexOf("## Workspace");
+        int workspaceEnd = resolvedPrompt.indexOf("## Rules", workspaceStart);
+        assertThat(workspaceStart).isNotNegative();
+        assertThat(workspaceEnd).isGreaterThan(workspaceStart);
+        return resolvedPrompt.substring(workspaceStart, workspaceEnd);
     }
 }

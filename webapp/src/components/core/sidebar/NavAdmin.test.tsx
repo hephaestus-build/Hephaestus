@@ -30,11 +30,7 @@ function renderNavigation(initialEntry: string, defaultOpen = true) {
 	const rootRoute = createRootRoute({
 		component: () => (
 			<SidebarProvider defaultOpen={defaultOpen}>
-				<NavAdmin
-					workspaceSlug="acme"
-					achievementsEnabled
-					integrationKinds={["GITHUB", "SLACK", "OUTLINE"]}
-				/>
+				<NavAdmin workspaceSlug="acme" integrationKinds={["GITHUB", "SLACK", "OUTLINE"]} />
 			</SidebarProvider>
 		),
 	});
@@ -91,9 +87,6 @@ describe("NavAdmin", () => {
 		await screen.findByRole("link", { name: "Practice setup" });
 		const submenu = within(screen.getByRole("list", { name: "Practices" }));
 
-		// By accessible name, not by `textContent`: an `sr-only` suffix is part of the name and not
-		// part of the text, so reading the text is how an entry that announces itself wrongly passes
-		// a test about what it announces. `getByRole(name)` runs that computation.
 		submenu.getByRole("link", { name: "Practice setup" });
 		submenu.getByRole("link", { name: "Review" });
 		submenu.getByRole("link", { name: "Practice reviews" });

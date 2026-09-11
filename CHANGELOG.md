@@ -1,5 +1,382 @@
 # Changelog
 
+## 0.79.0
+
+### Minor Changes
+
+- Retires achievements, including badges, skill trees, unlock notifications, and achievement administration. Activity history, practice feedback, leaderboards, leagues, and XP progression remain available.
+
+  **Operators:** Remove links and integrations that use achievement pages or API endpoints, and stop sending `achievementsEnabled` in workspace feature updates. This upgrade permanently deletes stored achievement progress and the old workspace flag. Back up the database and stop all application runtime roles before upgrading; older versions must not run against the upgraded schema.
+
+- Practice reviews and precomputed analysis use the input locations declared by each task instead of assuming a fixed folder layout. Precomputed analysis also supports script paths containing URL-special characters such as `#`.
+
+  Precomputed analysis now has a whole-stage deadline and a per-file output limit, so a stuck or excessively noisy script can fall back to review without precomputed hints.
+
+### Patch Changes
+
+- Repository collaborator permissions now sync again. Workspaces whose repositories use collaborator permissions saw the sync abort partway with a tenancy error, leaving the permissions Hephaestus held for that repository stale until the next full resync.
+- Source builds now fail when static analysis cannot finish, instead of accepting an incomplete check as a pass.
+
+  Source builds also reject missing dependency locks instead of silently resolving unpinned dependencies.
+
+  API contract generation no longer starts scheduled background jobs or pulls container images.
+  Scheduling now respects the runtime-role switch even with Spring Modulith on the classpath.
+
+- The migration guide's current release lookup, compatibility policy, documentation and help links now point directly to the current repository and documentation site. Historical release image locations and signing identities remain unchanged.
+- Container builds no longer wait for an unavailable database during startup optimization. Production startup continues to reject unsealed signing keys.
+- The build no longer resolves a vulnerable `graphql-java` or `handlebars` while generating provider clients. Neither reached a running Hephaestus — they are used only to generate code at build time — so no deployment is affected.
+- Source builds now use a verified Gradle wrapper, reuse unchanged compilation outputs, and select server tests explicitly by tier. Release images continue to use the same packaged application verified by the API and browser checks. Existing deployments require no configuration changes.
+- An instance whose NATS server URI is blank or missing its `nats://` scheme now starts far enough to print the configuration readiness report that names the setting, instead of stopping on an internal error that said nothing about which value was wrong. The URI is required of the server and webhook roles, and the shipped default is blank, so this was every first production start of those roles that had not set it yet. A NATS URI whose scheme is written in capitals is also no longer reported as needing action, since the client accepts it.
+- Updates the server's bundled Bouncy Castle cryptography library to fix [CVE-2026-8149](https://github.com/advisories/GHSA-mx76-r943-rf8g). No configuration changes are required.
+- A preview deployment's header badge now says which pull request it is of, and links to it. Every preview called itself "Preview", so a browser tab open on one gave no way to tell which change it was showing, or to get back to the pull request it came from.
+- A host that has not been promoted yet now says so. The deployment reconciler reported the missing channel as an unhandled error, so the first thing a new self-hosted instance logged was a stack trace rather than the sentence naming the environment and the workflow that publishes it.
+- Startup now derives the abandoned mentor-turn cleanup window from the maximum allowed turn duration instead of reporting the built-in default as unsafe. Explicitly configured windows still cannot interrupt a turn that is allowed to run.
+- Signing out works again. The browser could not find the CSRF token the server requires, so the server rejected the request and the app reported that it could not confirm the sign-out. Other actions that change something were rejected the same way. Instances that never set `XSRF_COOKIE_NAME`, which is every instance following the shipped configuration, were affected.
+- Stay signed in across breaks with a default 24-hour renewable cookie and a fixed 7-day sign-in limit. Sensitive actions still require a recent sign-in. Tabs coordinate session renewal, and temporary renewal failures no longer redirect you to sign-in. Explicit operator timeout overrides remain unchanged.
+
+  Cookie-authenticated actions now consistently require CSRF protection, including when a bearer header is also present.
+
+  Failed sign-out now reports an error instead of appearing successful. Impersonation changes coordinate with session renewal, and revoked sessions no longer prevent the sign-in page from listing providers.
+
+  Sessions that end during renewal now return an authentication refusal instead of reporting success.
+
+- The workspace isolation check is exact about which single-row statements it exempts. A statement whose key predicates sat behind a SQL comment, or whose assignment read from a second table, could be treated as addressing one keyed row when it did not. Both keyed exemptions are now held to the same rule: every assignment must be a bound parameter. No released version exempted these shapes.
+- Worker-only deployments now reclaim idle mentor sessions and orphaned sandbox resources periodically. Stalled writes to a mentor runtime are now interrupted by the configured timeout, even while Docker cleanup is waiting for a response. Generating the API contract no longer runs sandbox cleanup against the local Docker daemon.
+
+## 0.78.0
+
+### Minor Changes
+
+- Require PostgreSQL 18 and initialize new databases from a compact v0.77.4 baseline instead of replaying the full migration history.
+
+  **Operators:** If you run PostgreSQL 17, complete the documented PostgreSQL 18 upgrade using v0.77.4 before installing this release. All existing installations must back up their database, verify the v0.77.4 cut-point, and synchronize the baseline before starting this release. Fresh installations initialize automatically.
+
+### Patch Changes
+
+- Account exports now record a failed attempt after a database transaction rolls back, instead of remaining queued or processing when generation fails. Successful exports are counted only after their data commits.
+- Stops a sync started in one workspace from appearing to run in another. Switching workspace kept the integration overview's cards mounted, so a sync the new workspace had never asked for could still show as pending on the matching integration.
+
+  The certificate migration in the pull-based deployment guide no longer risks the certificates a host is already serving: the copy refuses when the volume already holds an ACME store, instead of overwriting it and warning about it afterwards.
+
+- GitLab sign-in options show the GitLab icon even when their login provider has a custom registration name.
+- Practice reviews no longer treat a substantive issue body as a repetition of its title solely because the title is missing, empty, or contains no Latin letters or digits.
+- Short practice-review timeouts now reserve time for the review to finish and save its result before the sandbox deadline, instead of extending the work budget beyond the available shutdown time.
+- Updates the cryptography libraries used for secure Docker connections to maintained releases without requiring operator configuration changes.
+- Release a mentor conversation promptly when its browser connection closes before the response starts, so a new message does not wait for an inactive turn to time out.
+- Practice reviews continue when a preparation step fails. Completed observations are preserved, and practices that could not be reviewed remain explicitly unevaluated.
+- Profiles now show a retry action when workspace settings or activity cannot load, instead of silently showing missing activity. The loaded developer profile remains visible.
+
+  Changing an activity filter now shows loading placeholders instead of presenting the previous range’s results under the new selection.
+
+- Workspace administrators can replace GitHub and GitLab personal access tokens directly from the integration page, restoring connections whose stored token can no longer be read without removing repositories or synced work.
+- Outline connection forms no longer carry a previously entered server URL or token into another workspace or a new connection.
+- Keeps the recovery pass for practices nothing observed when the first pass runs long. The pass that retries them was being given the review time left unspent, which is none after an overrun — so on exactly the slow reviews where practices are most likely still unobserved, no retry ran at all, even with minutes left before the review's deadline. It now keeps the share reserved for it whenever that time genuinely exists, and is skipped only when it does not.
+- Practice reviews no longer start another analysis or composition turn after its available time has expired. Admitted observations remain available for delivery if feedback composition cannot start or finish.
+- Practice review output archives reject nested path traversal and ambiguous file paths.
+- Keep review requests and profile data tied to the work and developer currently open, even when you navigate while a request is running. Bookmarked practice-group pages now respect disabled practice reviews, filters preserve your scroll position and bookmarked custom dates survive Back navigation, and responding to feedback refreshes the group's cached review filters.
+- Active sessions renew reliably when you resume activity after an idle renewal check. Inactive sessions still expire normally.
+- Protects instances with API documentation enabled against unbounded locale-cache growth. API documentation remains disabled by default, and no operator configuration change is required.
+- Keeps unhighlighted code in practice feedback and legal pages readable in light and dark themes while preserving line wrapping. Updates interface icons and motion dependencies without changing operator configuration.
+- Opening a bookmarked leaderboard interval or using Back preserves its exact dates instead of silently resetting them. Custom dates near weekly and monthly boundaries remain editable, and All time is recognized consistently across time zones.
+- Practice review activity no longer reports an all-clear when a completed review has no record of whether it reached a practice. Existing observations remain visible, and missing coverage is explained separately from practices the review explicitly did not reach.
+- Switching workspaces now resets integration job-history pages and pending form state. A token replacement still refreshes the workspace it was submitted for, without disabling another workspace's token form or showing its previous job history.
+
+## 0.77.4
+
+### Patch Changes
+
+- Removes the review activity surface from workspaces that do not run practice reviews. The sidebar entry no longer appears, and a link kept from before — or from another workspace — lands on the workspace home instead of a page whose only content would be an explanation of its own emptiness.
+
+## 0.77.3
+
+### Patch Changes
+
+- Stops workspaces that do not run practice reviews being told practices are merely unconfigured. A profile no longer shows an empty "practice groups" section when practice reviews are off, and the review activity page now says practice reviews are off — rather than suggesting the work simply has not synced yet, which was the one explanation it offered for silence.
+
+  On a phone, a contributor's league tier now sits beside their name instead of on a row of its own below the profile.
+
+## 0.77.2
+
+### Patch Changes
+
+- Fixes teams and leaderboard pages failing to load on instances with synced labels. The tenancy self-check treats a keyed fetch as safe, but did not recognise the batched form Hibernate emits when it fills several repositories' label collections in one round trip, so it rejected the query and the request failed. Workspace isolation is unchanged — the rejected query was already pinned to keys the caller held.
+
+## 0.77.1
+
+### Patch Changes
+
+- A release no longer waits behind an unapproved production deployment. The approval for production
+  used to sit inside the same run that serialises tag promotion, so a release nobody approved held
+  that lock and every later release queued behind it without starting — for two days, in a state the
+  default run listing does not show. The lock now covers only the promotion of the version, series and
+  latest tags.
+- An instance that used the mentor before its chat storage changed can now upgrade without a
+  hand-run migration. The upgrade previously stopped at a step that refuses to remove the old
+  chat-parts table while it still holds rows, and nothing ever emptied it, so the application stayed
+  down on exactly the installations that had chat history. The history itself is carried onto the
+  message, as that step always intended.
+- Keeps the edge proxy's TLS certificates across deployments. They were stored next to the Compose file, which on a pull-based host is replaced with every release, so each deployment re-issued every certificate and a handful of deployments in one week were enough for Let's Encrypt to start refusing — leaving the site on an untrusted certificate. Certificates now live in their own volume and survive upgrades.
+
+  An instance that already serves TLS from the bundled proxy issues its certificates once more on the first start after this upgrade, which needs nothing from you. To skip even that, copy `acme.json` out of the `letsencrypt` directory beside your Compose files into the new `proxy_letsencrypt` volume before starting.
+
+## 0.77.0
+
+### Minor Changes
+
+- Staging now follows the default branch instead of waiting for a release, so a merge reaches it in
+  minutes rather than sitting undeployed until someone cuts a version. Its channel names the commit
+  and the images to run, each pinned by digest and each required to carry this repository's build
+  provenance, so nothing runs there that a release would not have been allowed to run.
+
+  Releases are unchanged and remain how production is promoted. A release no longer promotes staging:
+  it re-tags the images of a commit staging has already been running, so there is nothing left to
+  rehearse. To hold an environment on what it has, freeze its channel.
+
+- Both audit viewers now show when an instance admin acted in a workspace they are not a member of. Instance admins have always been able to open any active workspace with admin rights without joining it; that access was simply invisible on the audit trails. Each such access window is now recorded as a "Workspace reached as instance admin" event in the sign-in audit log, and every settings change made that way is marked "Elevated" in the settings audit log — in the instance-wide console and in each workspace's own, so a workspace admin can see it too. The CSV export of the sign-in audit log gains a final `elevated_via_instance_admin` column; it is appended after the existing columns, so a spreadsheet or script that reads the export by column position keeps working. Events recorded before this release are unmarked, which means "no elevation recorded" rather than "the person was a member".
+- Deleting your account now also deletes the product feedback you sent and the survey answers or dismissals you gave. They used to survive account deletion: the deleted account is kept as an empty placeholder, so the database cleanup that should have removed them never ran.
+
+  **Operators:** the upgrade permanently deletes the product-feedback submissions and survey answers of accounts that were already deleted. It runs once, as part of the database migration, and cannot be undone — export them or take a database backup first if you need to keep them.
+
+- Sensitive instance-admin actions now ask an administrator to confirm access when their last sign-in
+  is more than five minutes old: changing an account's role, forcing an account out of every session,
+  starting an impersonation, changing a login provider, and registering or removing an LLM connection.
+  Linking a new identity to an account asks the same of every user, because a new link is a permanent
+  second way in. A stolen admin session is therefore only useful for a few minutes, and every refused
+  attempt appears on the audit trail.
+
+  Confirming access uses a provider the account is already linked to, and the action is never replayed
+  afterwards — review it and submit it again. Set `HEPHAESTUS_AUTH_STEP_UP_MAX_AGE` to change the
+  window. This is a local confirmation, not multi-factor authentication: an identity provider that
+  still holds a session may complete it without asking for anything, so enforce MFA at the provider.
+
+- Issue practice reviews now react to a title, description, label, assignment, milestone or reopen change on GitHub and GitLab, and to a native issue type change on GitHub — where before only a new label did. Closing an issue again after reopening it is now reviewed again too, instead of only the first close being. Practices already bound to the labelled occasion move to the wider one automatically on upgrade, keeping their customisations. Expect issue reviews to run more often: each round of triage that changes what a practice can read occasions its own review, there is no delay that batches a burst of edits into one, and the first backfill campaign after the upgrade reviews each already-closed issue once more. Locking an issue, pinning it, or editing a due date, weight or time estimate occasions nothing, and a replayed event or a return to an issue state already reviewed no longer starts another review.
+- Docker sandbox settings now live under `hephaestus.sandbox.docker.*`. Interactive sessions use the configured Docker connection rather than an inherited Docker context.
+
+  **Operators:** Rename custom Spring property overrides and replace `SANDBOX_TLS_VERIFY` and `SANDBOX_CONTAINER_RUNTIME` with `SANDBOX_DOCKER_TLS_VERIFY` and `SANDBOX_DOCKER_CONTAINER_RUNTIME`. TLS verification requires an explicit certificate directory. Removed names have no aliases: a worker-role process refuses to start while any of them is still set. Follow the migration guide before upgrading. The Docker host environment variable and gateway port are unchanged.
+
+### Patch Changes
+
+- A review no longer discards a finding for writing a quoted line without the change marker or the
+  indentation in front of it. The line it names still has to be the line it read, on the same side of
+  the change; only the leading whitespace is forgiven.
+- A review no longer discards its own finding for copying a line exactly as the change displays it. The
+  diff a review reads prints a line number in front of every line, and quoting that back was the most
+  common reason an observation was thrown away — on one repository, a median of three per review, and
+  up to fourteen. The quote still has to be the line the citation names.
+- A review transcript now says why a model turn failed instead of only that it stopped, and reports the
+  provider retries the run rode out. A review that gave up because its provider kept refusing can be
+  told apart from one that simply had nothing to say.
+- A practice review that has finished its work no longer throws it away when the server it reports to
+  does not answer for a moment. It waits and tries again for a few seconds instead of ending with
+  nothing to show for the review it just did.
+- Listing a workspace's agent jobs no longer reads every review transcript into the server's memory to
+  throw it away. A page of a hundred jobs cost tens of megabytes of heap per request and grew with how
+  much each review had to say; it now reads only what the listing shows. The delivery-recovery sweep
+  reads a job whole only for the delivery it actually re-attempts.
+- A practice review no longer loses a whole practice when its model provider is briefly overloaded. A
+  failed model turn is now repeated for just over two minutes before the review gives that practice up,
+  where it previously stopped after about fourteen seconds and reported the practice as unevaluated.
+- When a review quotes a line that is not in the change it is reviewing, the run now records which part
+  was wrong: the line number, the side of the diff, or the text itself. The quote is still checked
+  against the change exactly as before; only the explanation is new, and it is what lets a review
+  correct itself instead of dropping the practice.
+- A practice review's log now names every observation it refused to record, and why. A review that was
+  refused all of them read exactly like one that found nothing, so the difference could not be seen
+  from the outside.
+- A practice review of a very large change no longer finishes with nothing to say. A review could spend
+  everything it had reading and record none of what it had already worked out. It is now asked to write
+  down what it has settled while it still has room to, and asked again as that room runs out.
+- A practice review whose work finished while the server was being restarted now runs again instead of
+  ending with nothing. The sandbox can only reach the server at the address it had when the review
+  started, so a server that comes back elsewhere is unreachable for the rest of that run. The review is
+  queued for another attempt unless its observations did reach the server, in which case they are
+  already on record, and what the first attempt reported about itself stays on record either way.
+- A practice review that does not get to every practice now reports the practices it did reach, instead
+  of being thrown away whole. What it could not get to is recorded as unevaluated on the developer's
+  page, and a review in that state never reports that there was nothing to find, because that would be a
+  claim about work it never looked at.
+- A review that reads a change and finds none of its practices in it is no longer thrown away. That
+  outcome was treated as a sign that the review had been handed an empty change, so the whole review was
+  refused and the developer's practice page kept no record of it. A review is only refused now when it
+  never quoted the change at all.
+- A practice review that recorded nothing because the model stopped answering now runs again, instead
+  of being recorded as a review that found nothing. A restart or a provider outage then costs a delay
+  rather than the review, and the run says how many calls went unanswered. A review that reached some
+  of its practices still delivers what it reached, as before.
+- A practice review can now use its whole time budget when it needs it. Part of that budget was held
+  back even while the review was running short of time, so a review could end with practices unreviewed
+  and deliver no feedback at all, minutes of its budget unspent. A review that needs a second pass now
+  holds its sandbox for the full budget, so those reviews take longer and cost more model time than
+  before.
+- A practice review's transcript is now kept whole, so what a review actually did can be read back. Only
+  its ending was stored, and that ending was itself collected from the last few hundred lines the run
+  printed, so what the review was asked, what it read and what it was refused had been thrown away before
+  anyone could look. A run large enough to threaten the server now keeps its beginning and its ending with
+  a line between them naming exactly how much is missing, and collection that gives up early says so
+  rather than stopping quietly. Transcripts take correspondingly more room until retention clears them, on
+  the schedule it always did.
+- A practice review that succeeds no longer logs a validation failure. Every review that recorded
+  observations wrote one, so the first line an operator read when a review looked wrong pointed away
+  from the real problem.
+- A worker no longer claims practice reviews its sandbox cannot start. When a host allows fewer
+  containers than the worker's review capacity, the worker could pick up a review, fail to start it and
+  put it back, logging a warning each time; a queued review waited behind that churn instead of running.
+  A claim interrupted by a database error no longer retires one of that worker's review slots until
+  the next restart.
+- The container that runs a practice review no longer carries a package manager, so nothing in it can
+  install software while a review is running.
+- A review whose observations Hephaestus will not record now ends with that reason on the run, instead
+  of failing as an internal error with nothing to show. The reason appears in the run's transcript and
+  on the run itself, and the review stops rather than re-submitting what the server has already
+  declined.
+- Feedback on a change with nothing to fix now says what the review saw, rather than how it searched.
+  Where a line used to read "I walked all six sink classes across every added line", it now reads
+  "Added lines reduce external values to booleans; none reach a sink". The reasoning behind each
+  observation is still recorded with the review.
+- A practice review interrupted mid-run can start again. Restarting the application while reviews were
+  running left each one's isolated network behind, and because a review's network is named after the
+  review, every later attempt was refused for a name already in use. Those reviews spent every attempt
+  they had on the same refusal and ended as failed without producing feedback. A review now clears the
+  network its interrupted run left behind.
+- An observation on your practice page now names what the review saw. A summary of a single word, such
+  as "Test", sat above the practice's own name and told you nothing about the work; a short phrase is
+  recorded there instead.
+- A practice page no longer reports a practice as assessed and clean while its review is still running,
+  or after that review has died. Both now say what is actually true of the run: one is under way, the
+  other did not finish.
+- The workspace wizard no longer offers GitHub App setup when its installation URL is blank.
+- Serving an instance on more than one hostname is now entirely the reverse proxy's job: the extra
+  names, their shared certificate, and the redirect that sends a browser back to `APP_HOSTNAME` are all
+  configured in one place. An instance that names a single hostname routes and serves exactly as
+  before, and one fronted by a proxy that does not read this stack's routing configuration answers on
+  whatever names that proxy sends it — configure the extra names and their redirect there instead.
+- Repository and release links now open Hephaestus in the hephaestus-build organization, and contributor credits are fetched directly from the transferred repository. New default workspaces monitor the transferred Hephaestus repository while continuing to monitor Artemis in ls1intum.
+- Signing in for the first time works again. A new account was shown "Something went wrong" instead of
+  the transparency notice: the server withholds everything until the notice is answered, and the page
+  you land on after signing in asked for your workspaces before asking for the notice. That page now
+  sends you to the notice like every other page already did, and the address bar stays on the page you
+  were opening, so the notice reads as that page pausing rather than a detour.
+
+  The notice itself is easier to answer: a short summary you can scroll, the required acceptance and
+  the optional research choice clearly separated, and a way to sign out if you would rather not accept.
+  The sign-in page is shorter, while still saying — before you sign in — that doing so shares your
+  provider identity.
+
+- A host that follows the default branch no longer restarts its database on every apply. The
+  PostgreSQL image is rebuilt for every commit, so each apply used to bring the database container
+  back up under a new image, dropping every connection for minutes, failing the practice reviews in
+  flight and answering 503 meanwhile. The host now carries the PostgreSQL image it runs across
+  applies. It takes the commit's image when that commit changes what the image is built from, and
+  otherwise on the first apply of a new day, so the security updates the rebuild carries still reach
+  the host within a day. Promote with **refresh-database-image** to take a commit's image at once. A
+  release still applies exactly the images it was signed with.
+- Practice-review diff summaries no longer misdescribe a changed file whose path contains unusual characters or a quoted rename.
+- Issue metadata edits now wait briefly for triage to settle before starting a practice review, instead of spending a review on every intermediate snapshot. Pending updates survive server restarts, duplicate deliveries do not extend the delay, and queued reviews refuse metadata that changed after admission. Review activity explains coalesced updates, and operators can count deferred and duplicate occasions.
+
+  Previously queued issue-update reviews without a recorded admission revision stop safely rather than guessing which metadata they were meant to review. A manual review can be requested if needed.
+
+  A review that was rolled back is no longer written to the logs as if it had started.
+
+- Restores the timeouts the bundled edge applies to the application server, so a backend that accepts a connection but never answers releases the browser with an error page instead of leaving requests and mentor chat streams hanging indefinitely. A host that keeps itself on its channel now starts the stacks in the order the migration requires, converges again when you promote the release it already runs, and no longer refuses to retry after a partly-applied deploy. Rolling back to a release published before GitHub offered immutable tags works again.
+- An integration whose stored token cannot be read now tells a workspace administrator to store a replacement personal access token, instead of naming an API surface the console has no form for.
+
+  The credential key rotation runbook's statement for clearing a quarantined GitHub App credential now matches the key version and quarantine time you listed, so it cannot null out a credential that was reconnected between the listing and the statement.
+
+- The TUM-operated instance is now addressed as `hephaestus.build`. The imprint, the privacy
+  statement, the in-app footer links, `security.txt` and the documentation all name it, and the older
+  `hephaestus.aet.cit.tum.de` address continues to reach the same instance. Source links follow the
+  repository to the `hephaestus-build` organisation; images and signatures for releases cut before the
+  move keep their original namespace and signing identity, so verifying an older release is unchanged.
+- Live GitHub and GitLab events no longer start practice reviews while the work is marked as deleted upstream. The occasion stays visible as pending and can be retried if an ordinary sync restores the work, within the existing retry deadline.
+- Once a host that pulls its own releases applies a release that carries this change, it runs that
+  release's deployment tooling and keeps its two systemd units matching it, so applying a release
+  also brings the tooling forward — a host whose tooling had fallen behind previously failed every run
+  until an operator logged in and updated it by hand. The tooling an operator installs or upgrades by
+  hand, and releases older than this change, are the exceptions: the host keeps the tooling it has
+  while running one. A host installed before this release needs the one-time upgrade steps in the
+  pull-based deployment guide.
+- An instance now sends `Strict-Transport-Security` whatever proxy sits in front of it. The header was
+  attached to the reverse proxy shipped with Hephaestus, so a deployment fronted by a different proxy —
+  a PaaS, or an existing ingress — served without it, and the omission was easy to miss because every
+  other security header comes from the responses themselves. Nothing changes for a deployment that uses
+  the bundled proxy.
+- Impersonating an account now ends when it should. It cannot outlive the operator's own session, it
+  ends as soon as the operator stops being an instance administrator, and it ends if the account being
+  impersonated is promoted to instance administrator — the case an operator could previously reach only
+  by starting over. The time-box running out or the target being promoted return the operator to their
+  own session and are recorded in the audit viewer as the end of the impersonation, with the reason; the
+  operator's own session ending or the operator no longer being an instance administrator end the
+  impersonation outright.
+
+  Leaving an impersonation that has already ended is now refused instead of quietly handing back a
+  session, and an ordinary session can no longer be renewed past its absolute lifetime.
+
+- Issue updates are reviewed again. Since updates to an issue began being grouped into a single review,
+  every one of them was refused as it was recorded and then dropped, so no practice review ever ran for
+  it. Nothing already stored changes, and the next update to an issue is picked up normally.
+- Removing a label from an issue or pull request no longer fails the sync that noticed it. Workspace
+  isolation had rejected the statement that unlinks a label, so a repository whose labels changed
+  upstream stopped following them.
+- A developer's projected league change loads even when an account outside your workspace uses the
+  same login on another provider. The league looks at the developer who is a member of your
+  workspace, not at whoever else shares their login.
+- A login-provider change that the database refuses no longer appears in the audit viewer as if it had
+  succeeded. Moving a provider onto a base URL another provider already uses is rejected, and the
+  rejection now happens before the change is recorded, so the trail matches what the instance actually
+  has configured.
+- The transparency notice now interrupts the page you were opening instead of taking you somewhere
+  else: the address bar keeps the page you asked for while you answer, and you land back on it. And if
+  the notice itself cannot be loaded, you keep working on the page rather than meeting an error screen
+  — the server still withholds anything that needs your answer.
+- Practice reviews can search the reviewed work again. The search their sandbox offered relied on a
+  program the sandbox does not allow to run, so every search failed and observers could only read
+  files one at a time.
+- Practice reviews and Heph conversations complete again on the current agent image. The previous fix
+  let a review start, but every model turn still failed inside its sandbox before any practice was
+  evaluated.
+- Practice reviews and Heph conversations complete instead of stopping at their first tool call.
+- A repository checkout whose remote configuration became unusable is rebuilt on the next sync; a repository that no longer exists upstream is reported, not rebuilt.
+- A practice review whose results cannot be read back is now reported as failed instead of as a review
+  that found nothing. Results are capped at 50 MiB in total, 10 MiB per file and 10,000 files, and a
+  result file's name is limited to 100 characters including its folder; a review that passes a cap, or
+  whose results come back damaged, fails rather than reporting a partial answer. A review interrupted
+  by the container host while its results were being read is retried, since that one can succeed on a
+  second attempt.
+
+  A symbolic link inside a repository under review is no longer followed when the work is handed to the
+  reviewing container, so a link is left out rather than pulling in whatever it points at.
+
+- Feedback about a code review you left is now addressed to you rather than to the author of the pull request when the review had to be retried after a pause, such as a spent budget or an inactive workspace.
+- Pending practice reviews no longer run after reconciliation marks their issue, pull request, or merge request as deleted upstream. They resume automatically if a later sync finds the work again.
+- A hardcoded credential committed in a package named `example` or `sample` — the placeholder package
+  most JVM projects are generated with — is no longer read as sample code. Those words counted as a
+  directory of samples wherever they sat in a path, so a credential in ordinary application code was
+  reduced to a minor suggestion, and a review with other suggestions to make could leave it out of the
+  comment entirely. A credential in an `examples/` or `samples/` directory is still a minor suggestion.
+- The self-host setup script no longer generates an encryption key on a host that already has a
+  Hephaestus database, and stops rather than guess when Docker cannot say whether one exists. A
+  generated key made every stored integration credential unreadable without warning; setup now names
+  the key to carry over, and the pull-based deployment guide says which settings a host keeps when it
+  moves.
+- A practice review shares what it read about a change with every practice it then checks. The step that
+  does that reading was being cut off before it could answer, so most reviews threw it away and each
+  practice started from nothing: the review spent its time re-reading the same change and had less to
+  say at the end of it.
+- Writing a personal access token to a workspace whose GitHub connection is an App installation, or reading a credential the server's current keys cannot decrypt, now answers with the conflict that names the connection's state instead of an internal server error.
+- Practice reviews no longer treat missing or upstream-deleted issues, pull requests, merge requests and their discussions as empty work: the review stops with the work reported unavailable instead of producing feedback about a change nobody can open. New feedback checks that its reviewed work is still available before it is delivered, on the work itself, on the practice page and in conversation, including feedback prepared for a conversation in advance. Previously delivered feedback remains in your history, subject to access and privacy controls.
+- A stored integration credential that none of the server's configured encryption keys can read is
+  now shown for what it is. When the key version itself is missing from the server's configuration,
+  the request fails as a configuration fault instead, as the operator guide explains. The workspace's integration pages say the stored token cannot be read and what to
+  do, and a request that needs the credential answers with that same explanation instead of a generic
+  server error. Replacing the credential clears it.
+- A worker's log no longer fills with warnings about the heartbeats its own hub sends. The hub answers
+  every capacity report with a heartbeat to keep an idle control channel alive, and the worker was
+  reporting each one as a protocol violation, roughly three warnings a minute per worker.
+- A workspace page no longer fails when one of its stored integration credentials cannot be read with
+  the running encryption key: the page reports whether a token is stored without decrypting it. A
+  developer's profile and their projected league change load again; both had stopped with an error
+  after workspace isolation started rejecting their queries.
+
 ## 0.76.0
 
 ### Minor Changes

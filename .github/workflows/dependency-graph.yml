@@ -1,0 +1,35 @@
+name: Gradle dependency graph
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: dependency-graph-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      GITHUB_DEPENDENCY_GRAPH_JOB_CORRELATOR: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up the Java build
+        uses: ./.github/actions/setup-caches
+        with:
+          dependency-graph: generate-and-upload
+      # Capture the resolved graphs without packaging again or disabling dependency verification.
+      - name: Resolve the dependency graph
+        working-directory: server
+        run: ./gradlew dependencies --no-configuration-cache
+      - name: Require the snapshot
+        run: test -s dependency-graph-reports/server.json

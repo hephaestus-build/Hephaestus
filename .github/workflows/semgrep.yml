@@ -10,7 +10,9 @@ permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # As in `codeql.yml`: a superseded scan of a branch is wasted work, and a superseded scan of the
+  # default branch is the only scan that commit will ever get.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   scan:

@@ -36,12 +36,11 @@ public record CreatePracticeRequestDTO(
                 max = 1,
                 message = "A practice is reviewed on one occasion. To read different evidence at a different moment, "
                         + "split this into two practices.")
-        @Valid
         @Schema(
                 description = "The one occasion this practice is reviewed on, with the evidence that review reads. "
                         + "The kind of work reviewed is read off the signals.")
         @Nullable
-        List<PracticeBinding> bindings,
+        List<@Valid PracticeBinding> bindings,
 
         @NotBlank(message = "Criteria is required")
         @Size(max = 50000, message = "Criteria must be at most 50000 characters")

@@ -22,7 +22,8 @@ public record AgentJobDTO(
         @Schema(description = "Job metadata (routing/display info)") @Nullable
         Object metadata,
 
-        @Schema(description = "Job output (agent results)") Object output,
+        @Schema(description = "Job output (agent results)") @Nullable
+        Object output,
 
         @NonNull
         @Schema(
@@ -45,14 +46,16 @@ public record AgentJobDTO(
         @Nullable
         String model,
 
-        @Schema(description = "Container exit code") Integer exitCode,
+        @Schema(description = "Container exit code") @Nullable
+        Integer exitCode,
 
-        @Schema(description = "Human-readable error message")
+        @Schema(description = "Human-readable error message") @Nullable
         String errorMessage,
 
         @Schema(
                 description =
                         "Delivery status: null = not applicable, PENDING = awaiting delivery, DELIVERED = posted, FAILED = delivery error")
+        @Nullable
         DeliveryStatus deliveryStatus,
 
         @Schema(description = "Git provider comment/note ID for posted feedback") @Nullable
@@ -79,10 +82,10 @@ public record AgentJobDTO(
         @NonNull @Schema(description = "Timestamp when the job was created")
         Instant createdAt,
 
-        @Schema(description = "Timestamp when the job started running")
+        @Schema(description = "Timestamp when the job started running") @Nullable
         Instant startedAt,
 
-        @Schema(description = "Timestamp when the job completed")
+        @Schema(description = "Timestamp when the job completed") @Nullable
         Instant completedAt,
 
         @Schema(description = "LLM model used (e.g. gpt-5.4-mini, openai/gpt-oss-120b)") @Nullable
@@ -141,6 +144,42 @@ public record AgentJobDTO(
                 job.getLlmTotalReasoningTokens(),
                 job.getLlmCacheReadTokens(),
                 job.getLlmCacheWriteTokens());
+    }
+
+    /**
+     * The listing's row, which carries every column this record renders and no transcript — the one
+     * thing an entity page would have read per row and thrown away.
+     */
+    public static AgentJobDTO from(AgentJobRepository.AgentJobListRow row) {
+        JsonNode snapshot = row.getConfigSnapshot();
+        return new AgentJobDTO(
+                row.getId(),
+                row.getJobType(),
+                row.getStatus(),
+                ReviewRunTargetDTO.from(row),
+                row.getMetadata(),
+                row.getOutput(),
+                ReviewRunOutcome.fromJobOutput(row.getOutput()),
+                redactInstanceBaseUrl(snapshot),
+                snapshotString(snapshot, "upstreamModelId"),
+                row.getExitCode(),
+                row.getErrorMessage(),
+                row.getDeliveryStatus(),
+                row.getDeliveryCommentId(),
+                row.getRetryCount(),
+                row.getAvailableAt(),
+                row.getHoldReason(),
+                row.getCreatedAt(),
+                row.getStartedAt(),
+                row.getCompletedAt(),
+                row.getLlmModel(),
+                row.getLlmModelVersion(),
+                row.getLlmTotalCalls(),
+                row.getLlmTotalInputTokens(),
+                row.getLlmTotalOutputTokens(),
+                row.getLlmTotalReasoningTokens(),
+                row.getLlmCacheReadTokens(),
+                row.getLlmCacheWriteTokens());
     }
 
     /**

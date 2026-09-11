@@ -6,26 +6,16 @@ import { LandingProjectOriginsSection } from "./LandingProjectOriginsSection";
 
 interface LandingPageProps {
 	onSignIn: (idpHint: string) => void;
-	onGoToDashboard?: () => void;
-	isSignedIn?: boolean;
 }
 
-export function LandingPage({ onSignIn, onGoToDashboard, isSignedIn = false }: LandingPageProps) {
+export function LandingPage({ onSignIn }: LandingPageProps) {
 	return (
 		<div className="flex flex-col">
-			<LandingHeroSection
-				onSignIn={onSignIn}
-				onGoToDashboard={onGoToDashboard}
-				isSignedIn={isSignedIn}
-			/>
+			<LandingHeroSection onSignIn={onSignIn} />
 			<LandingFeaturesSection />
 			<LandingProjectOriginsSection />
 			<LandingFaqSection />
-			<LandingCtaSection
-				onSignIn={onSignIn}
-				onGoToDashboard={onGoToDashboard}
-				isSignedIn={isSignedIn}
-			/>
+			<LandingCtaSection onSignIn={onSignIn} />
 		</div>
 	);
 }

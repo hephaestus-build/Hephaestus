@@ -2,14 +2,19 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitConfig;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.github.bucket4j.BucketConfiguration;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
+import org.springframework.core.io.ClassPathResource;
 
 class SandboxGatewayConfigurationTest extends BaseUnitTest {
 
@@ -34,18 +39,22 @@ class SandboxGatewayConfigurationTest extends BaseUnitTest {
         assertThat(factory.getAddress()).isEqualTo(InetAddress.getLoopbackAddress());
     }
 
-    /**
-     * The fallback a worker-only pod runs on, where the instance's shared resolver is not wired. Two
-     * calls with one key have to reach one bucket, or the limit stops limiting.
-     */
     @Test
-    void givesOneBucketPerKeyWhenThePodHasNoSharedResolver() {
-        BucketResolver resolver = new SandboxGatewayConfiguration().sandboxGatewayBucketResolver();
-        BucketConfiguration onePerMinute =
-                new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)).bucketConfiguration();
-
-        assertThat(resolver.resolve("job:1", onePerMinute).tryConsume(1)).isTrue();
-        assertThat(resolver.resolve("job:1", onePerMinute).tryConsume(1)).isFalse();
-        assertThat(resolver.resolve("job:2", onePerMinute).tryConsume(1)).isTrue();
+    void shouldProvideGatewayBucketsWithoutAuthInfrastructureWhenWorkerProfileIsLoaded() throws IOException {
+        var overlay = new YamlPropertySourceLoader().load("worker", new ClassPathResource("application-worker.yml"));
+        new ApplicationContextRunner()
+                .withUserConfiguration(SandboxGatewayConfiguration.class, AuthRateLimitConfig.class)
+                .withInitializer(context -> overlay.forEach(
+                        source -> context.getEnvironment().getPropertySources().addLast(source)))
+                .run(context -> {
+                    assertThat(context).hasNotFailed().hasSingleBean(BucketResolver.class);
+                    assertThat(context).doesNotHaveBean(AuthRateLimitConfig.class);
+                    BucketResolver resolver = context.getBean(BucketResolver.class);
+                    BucketConfiguration limit =
+                            new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)).bucketConfiguration();
+                    assertThat(resolver.resolve("job:1", limit).tryConsume(1)).isTrue();
+                    assertThat(resolver.resolve("job:1", limit).tryConsume(1)).isFalse();
+                    assertThat(resolver.resolve("job:2", limit).tryConsume(1)).isTrue();
+                });
     }
 }

@@ -21,10 +21,10 @@ import org.springframework.test.context.ActiveProfiles;
  * and will only run when the profile is explicitly activated:
  *
  * <pre>
- *   ./mvnw test -Plive-tests
+ *   ./gradlew :application:liveTest
  * </pre>
  *
- * These tests are excluded from normal mvn test and mvn verify runs to keep CI
+ * These tests are excluded from every non-live Gradle tier to keep CI
  * fast
  * and prevent accidental API calls. Use them to validate actual GitHub API
  * behavior.

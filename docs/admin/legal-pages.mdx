@@ -10,9 +10,20 @@ Hephaestus ships with two legal pages, `/imprint` and `/privacy`, that are rende
 If your deployment is reachable to end users and `/imprint` or `/privacy` still show the red "not configured" banner, you are operating without a valid imprint (§ 5 DDG) and without a valid privacy statement (Art. 13 GDPR). Either select `LEGAL_PROFILE=tumaet` (if you are the canonical TUM / AET deployment) or mount your own `/legal-overrides/` directory **before** opening the deployment to users.
 :::
 
+## First-login consent notice
+
+These overrides affect `/imprint` and `/privacy`, not the first-login consent notice. The server
+currently selects the immutable `2026-08-30` notice, which names TUM/AET as the operator and research
+organization. There is no supported operator-specific replacement mechanism for that notice.
+
+Non-TUM operators must resolve this before opening the service to users. Editing the baseline or
+updating the existing notice is not a safe replacement: recorded consent decisions reference its
+version and content hash. An operator-specific notice needs a new immutable version and server-side
+selection of that version.
+
 ## Operator obligations
 
-Regardless of where you get the source code, **the operator of a running Hephaestus instance is the controller** for the personal data processed by that instance within the meaning of Art. 4(7) GDPR, and the **content provider** within the meaning of § 5 DDG (Digitale-Dienste-Gesetz). Neither obligation can be satisfied by linking to the upstream `hephaestus.aet.cit.tum.de` pages, and neither obligation can be delegated to the Hephaestus project.
+Regardless of where you get the source code, **the operator of a running Hephaestus instance is the controller** for the personal data processed by that instance within the meaning of Art. 4(7) GDPR, and the **content provider** within the meaning of § 5 DDG (Digitale-Dienste-Gesetz). Neither obligation can be satisfied by linking to the upstream `hephaestus.build` pages, and neither obligation can be delegated to the Hephaestus project.
 
 Practically, every running deployment must publish:
 
@@ -35,7 +46,7 @@ At page load, the webapp fetches the relevant Markdown file in this priority ord
 
 ## Choosing a configuration mode
 
-### Mode A — Bundled profile (operators of `hephaestus.aet.cit.tum.de`)
+### Mode A — Bundled profile (operators of `hephaestus.build`)
 
 If your deployment is the canonical TUM / AET deployment, set `LEGAL_PROFILE=tumaet` in your environment. No other configuration is needed — the `tumaet` profile is baked into the webapp image and contains the audited texts matching the [DSMS record](./dsms) on file at TUM.
 

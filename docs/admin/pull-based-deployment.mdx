@@ -11,10 +11,10 @@ digest-pinned Compose stacks. Deployment needs no inbound administration connect
 
 For a release deployment, the host verifies two signatures:
 
-| Artifact | Signed by | Answers |
-| --- | --- | --- |
-| The channel (`channels/<env>.json`) | the promotion workflow | *may this host move, and who said so* |
-| The release lock (`release-<version>.json`) | the release workflow | *which source commit and image digests are this release* |
+| Artifact                                    | Signed by              | Answers                                                  |
+| ------------------------------------------- | ---------------------- | -------------------------------------------------------- |
+| The channel (`channels/<env>.json`)         | the promotion workflow | *may this host move, and who said so*                    |
+| The release lock (`release-<version>.json`) | the release workflow   | *which source commit and image digests are this release* |
 
 The host rejects a new channel commit that does not descend from its last accepted channel commit.
 It also rejects lower release versions and older commits unless `allowRollback` is set. These checks
@@ -26,16 +26,17 @@ do not order manual transitions between releases and commits; choose those targe
 { "release": "v1.2.3", "allowRollback": false, "freeze": false }
 ```
 
-| Field | Effect |
-| --- | --- |
-| `release` | the `vX.Y.Z` release to apply when not frozen |
-| `allowRollback` | permits one deliberate move backwards |
-| `freeze` | holds the environment where it is, for an incident |
+| Field           | Effect                                             |
+| --------------- | -------------------------------------------------- |
+| `release`       | the `vX.Y.Z` release to apply when not frozen      |
+| `allowRollback` | permits one deliberate move backwards              |
+| `freeze`        | holds the environment where it is, for an incident |
 
 Staging can follow successful builds of `main` instead of releases. Its channel names a full
-`commit` SHA instead of `release`, plus an `images` map of digest-pinned references. The promotion
-workflow verifies first-party image provenance against that source commit before signing the channel.
-Upstream image pins come from that commit's inventory.
+`commit` SHA instead of `release`, plus an `images` map of digest-pinned references and a
+`refreshDatabaseImage` flag (see [What restarts the database](#what-restarts-the-database)). The
+promotion workflow verifies first-party image provenance against that source commit before signing
+the channel. Upstream image pins come from that commit's inventory.
 
 Automatic promotions check the latest channel while holding the promotion lock. A frozen channel,
 an already-promoted commit, or an older completed build leaves the channel unchanged, including
@@ -95,13 +96,41 @@ nothing about pull-based deployment changes them. The per-stack files in `/etc/h
 to the Compose installer — so carry these over from the previous deployment before the first
 reconcile:
 
-| Setting | What it must be |
-| --- | --- |
-| `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` | the previous deployment's value: what the server encrypts at rest other than integration credentials was written with it |
-| `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` | the previous deployment's value, or the master key on an installation that never set it separately: integration credentials were written with it, and a different key makes them unreadable without a word of warning |
+| Setting                                                                                                                                                                                                                          | What it must be                                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`                                                                                                                                                                                             | the previous deployment's value: what the server encrypts at rest other than integration credentials was written with it                                                                                                    |
+| `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`                                                                                                                                                                                  | the previous deployment's value, or the master key on an installation that never set it separately: integration credentials were written with it, and a different key makes them unreadable without a word of warning       |
 | `HEPHAESTUS_SECURITY_CREDENTIAL_ROTATION_ENABLED`, `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION`, `HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY`, `HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY_VERSION` | whatever the previous deployment set, if it rotated credential keys: each stored credential names the key version that wrote it, and a credential written under the prior key is readable only while that key is configured |
-| `WEBHOOK_SECRET` | what the providers were registered to sign with |
-| `HEPHAESTUS_AUTH_STATE_COOKIE_KEY` | optional; a new one only invalidates sign-ins that are in flight at the moment of the switch |
+| `WEBHOOK_SECRET`                                                                                                                                                                                                                 | what the providers were registered to sign with                                                                                                                                                                             |
+| `HEPHAESTUS_AUTH_STATE_COOKIE_KEY`                                                                                                                                                                                               | optional; a new one only invalidates sign-ins that are in flight at the moment of the switch                                                                                                                                |
+
+A host that also brings its own edge keeps its certificates in the `proxy_letsencrypt` volume. Before
+reconciling a host that used the old bind mount, pause the timer and stop its existing Traefik container
+so the ACME store cannot change during the copy. Back up that `acme.json` first; in a release worktree
+it is under `docker/letsencrypt/`. Copy it into the volume before starting the new proxy, or Traefik
+issues the certificates again.
+
+A volume that already holds an `acme.json` holds the store Traefik is using: copying an older backup
+over it discards the certificates currently being served. The command below refuses in that case
+rather than leaving the operator to notice, so a store that is already there has to be looked at
+deliberately before anything replaces it.
+
+On the Docker Engine host, use the volume's actual mountpoint rather than assuming Docker's data root:
+
+```bash
+sudo docker volume create proxy_letsencrypt
+volume_path=$(sudo docker volume inspect --format '{{ .Mountpoint }}' proxy_letsencrypt)
+if sudo test -s "$volume_path/acme.json"; then
+  echo "acme.json is already in proxy_letsencrypt — inspect it before replacing it" >&2
+else
+  sudo install -m 600 /path/to/previous/acme.json "$volume_path/acme.json"
+fi
+```
+
+Keep the backup until the new proxy serves the existing certificates successfully, then re-enable
+reconciliation. A rollback to a release whose proxy still uses the bind mount needs the current ACME
+store copied back while Traefik is stopped; retaining the old release tree alone does not keep that
+copy current.
 
 The pull-based stacks use the bundled database with its fixed credentials, so there is no
 database password to carry. On the Compose installer, `docker/self-host/setup.sh` refuses to
@@ -150,15 +179,16 @@ ingress, omit `proxy` and use `core app`.
 
 ## Operating it
 
-| You want to | Do this |
-| --- | --- |
-| Move an environment | Run the **Promote** workflow: pick the environment and release or commit |
-| Roll back | Promote the older release with **allow-rollback** |
-| Hold an environment | Promote with **freeze** |
-| Resume a held environment | Manually promote the desired release or commit with **freeze** cleared |
-| Reapply Compose configuration | Promote the release or commit the host already runs |
-| Prevent new reconciliation runs | `sudo systemctl disable --now hephaestus-reconcile.timer` |
-| See what a host runs | `cat /var/lib/hephaestus/applied.json` |
+| You want to                                            | Do this                                                                  |
+| ------------------------------------------------------ | ------------------------------------------------------------------------ |
+| Move an environment                                    | Run the **Promote** workflow: pick the environment and release or commit |
+| Roll back                                              | Promote the older release with **allow-rollback**                        |
+| Hold an environment                                    | Promote with **freeze**                                                  |
+| Resume a held environment                              | Manually promote the desired release or commit with **freeze** cleared   |
+| Reapply Compose configuration                          | Promote the release or commit the host already runs                      |
+| Move a following host onto the commit's database image | Promote the commit with **refresh-database-image**                       |
+| Prevent new reconciliation runs                        | `sudo systemctl disable --now hephaestus-reconcile.timer`                |
+| See what a host runs                                   | `cat /var/lib/hephaestus/applied.json`                                   |
 
 :::warning Pause reconciliation before manual changes
 Disable the timer and confirm the service is no longer running with
@@ -168,6 +198,30 @@ Disabling the timer does not stop an active reconciliation. Re-enable the timer 
 Re-promoting reapplies Compose configuration; it does not restore arbitrary container-file changes.
 The reconciler refuses a release checkout with modified tracked files.
 :::
+
+### What restarts the database
+
+An apply recreates a container whose image or Compose definition changed, and recreating PostgreSQL
+drops every connection to it for as long as the application services take to stop and come back.
+Every commit of the default branch rebuilds the PostgreSQL image — the rebuild is what carries
+Debian's security updates into it — so a host following commits is offered a new digest on every
+apply. Taking each one would restart the database several times a day, so the reconciler keeps the
+image it already runs and applies the rest of the channel.
+
+On such a host the database restarts when:
+
+- the commit changes what the image is built from — `docker/postgres/`, or the workflows that build
+  it;
+- the first commit of a later day is applied, so the security updates in that day's rebuild land
+  within a day of the push that built them;
+- the `postgres` service in `docker/compose.app.yaml` changes;
+- the host has no usable record of the image it runs — no applied commit, no lock for it, or a
+  checkout that cannot resolve the two commits;
+- you promote with **refresh-database-image**, which takes that commit's image once. The next
+  automatic promotion goes back to carrying it.
+
+A release is applied exactly as its signed lock names it, so a release that rebuilt the image
+restarts the database.
 
 ## Watching it
 
@@ -194,6 +248,14 @@ A promotion without **freeze** waits for the public webapp to report the request
 checks the webapp version, not the readiness of every service; use host metrics and logs for the
 Compose result. A promotion with **freeze** records the hold without waiting for a version change.
 Skipped automatic promotions do not start an environment deployment.
+
+The promotion job summary names this boundary explicitly, including when a version check fails or
+is skipped for a hold. It does not fetch host metrics: their textfile collector and authenticated
+monitoring access belong to the host, not to the public application. Confirm a fresh successful
+reconciliation and the expected release/channel commit on **each** participating host, then inspect
+its Compose health and service logs. A matching frontend version alone says nothing about server,
+worker, webhook, database, NATS, or integration readiness. Do not expose management endpoints to
+make the public version check stand in for that operator verification.
 
 ## What it will not do
 

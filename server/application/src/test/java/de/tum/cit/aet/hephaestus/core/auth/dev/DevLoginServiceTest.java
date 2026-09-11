@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,6 +15,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipal;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Duration;
@@ -64,7 +64,7 @@ class DevLoginServiceTest extends BaseUnitTest {
 
     private void stubIssuer() {
         when(principalFactory.forAccountId(anyLong())).thenReturn(new JwtPrincipal(7L, "dev", "dev", Set.of()));
-        when(jwtIssuer.issue(any(), any(), any(), any(), any())).thenReturn(token);
+        when(jwtIssuer.issue(any(), any(), any())).thenReturn(token);
     }
 
     @Test
@@ -74,7 +74,7 @@ class DevLoginServiceTest extends BaseUnitTest {
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
-        verify(jwtIssuer, never()).issue(any(), any(), any(), any(), any());
+        verify(jwtIssuer, never()).issue(any(), any(), any());
     }
 
     @Test
@@ -110,11 +110,11 @@ class DevLoginServiceTest extends BaseUnitTest {
         verify(accountRepository).save(saved.capture());
         assertThat(saved.getValue().getPrimaryEmail()).isEqualTo("alice@dev.invalid");
         assertThat(saved.getValue().getAppRole()).isEqualTo(Account.AppRole.USER);
-        // The mint must stamp the same absolute session ceiling the OAuth path does (now + sessionMaxLifetime),
-        // not the unbounded 3-arg overload — capture the 4th arg so a revert to null is caught.
-        ArgumentCaptor<Instant> sessionCeiling = ArgumentCaptor.forClass(Instant.class);
-        verify(jwtIssuer).issue(any(), isNull(), isNull(), sessionCeiling.capture(), any());
-        assertThat(sessionCeiling.getValue()).isEqualTo(FIXED_NOW.plus(SESSION_MAX));
+        // The mint must stamp the same absolute session ceiling the OAuth path does (now + sessionMaxLifetime)
+        // and the same auth_time, so a dev session is neither unbounded nor permanently step-up-stale.
+        ArgumentCaptor<TokenConstraints> constraints = ArgumentCaptor.forClass(TokenConstraints.class);
+        verify(jwtIssuer).issue(any(), constraints.capture(), any());
+        assertThat(constraints.getValue()).isEqualTo(TokenConstraints.session(FIXED_NOW.plus(SESSION_MAX), FIXED_NOW));
     }
 
     @Test
@@ -149,7 +149,7 @@ class DevLoginServiceTest extends BaseUnitTest {
 
         // No save: the account already exists and no promotion was requested.
         verify(accountRepository, never()).save(any());
-        verify(jwtIssuer).issue(any(), isNull(), isNull(), any(), any());
+        verify(jwtIssuer).issue(any(), any(), any());
     }
 
     @Test

@@ -43,9 +43,12 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         verifyNoInteractions(reporter, scopedTables);
     }
 
+    // Closing the scope is the operation; its binding is intentionally unread.
+    @SuppressWarnings("try")
     @Test
     void bypassActiveSkipsEverything() {
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
+
         try (TenancyBypass.Scope ignored = TenancyBypass.open("test")) {
             inspector.inspect("SELECT * FROM pull_request");
         }
@@ -280,6 +283,29 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
     }
 
     @Test
+    void hibernateBatchedCollectionLoadByParentFkIsAllowed() {
+        // The query that took production down: Repository.labels carries @BatchSize, so Hibernate
+        // fills several repositories' label collections in one round trip and writes the parent FK
+        // predicate as "= any(?)" rather than "= ?". Same safety argument as the unbatched form —
+        // the caller already held every key in the array — so it stays on the fast path.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
+        inspector.inspect("select l1_0.repository_id,l1_0.id,l1_0.color,l1_0.name "
+                + "from label l1_0 where l1_0.repository_id=any(?)");
+        verifyNoInteractions(reporter, scopedTables);
+    }
+
+    @Test
+    void batchedParentFkDisjoinedWithOrStillEnforced() {
+        // The batched form earns the fast path only while the array predicate is what pins the
+        // result set. A disjunction widens it past those keys exactly as it does for "= ?".
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        when(scopedTables.isScoped("label")).thenReturn(true);
+        String sql = "select l1_0.id from label l1_0 where l1_0.repository_id=any(?) or l1_0.is_public=true";
+        inspector.inspect(sql);
+        verify(reporter).report(sql, Set.of("label"), TenancyEnforcement.LOG);
+    }
+
+    @Test
     void pkPredicateDisjoinedWithOrStillEnforced() {
         // The PK-only fast path tolerates extra CONJUNCTIVE predicates, but a DISJUNCTION broadens the
         // result set past the single keyed row — "WHERE id = ? OR is_public = true" returns every public
@@ -321,6 +347,147 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         inspector.inspect("select pr1_0.id,pr1_0.body,pr1_0.title " + "from issue pr1_0 "
                 + "where pr1_0.id=? and pr1_0.issue_type='PullRequest'");
         verifyNoInteractions(reporter, scopedTables);
+    }
+
+    // composite primary keys: the mapping metamodel decides, never a naming convention
+
+    @Test
+    void updateByCompleteCompositeKeyIsAllowed() {
+        // The production shape: an @EmbeddedId association entity carrying a payload column.
+        // Collaborator sync aborted on this until the key came from the metamodel.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
+        // Without this the table is unscoped, the standard check passes it anyway, and the
+        // assertion below holds even if the rule under test never fires.
+        when(scopedTables.isScoped("repository_collaborator")).thenReturn(true);
+        when(scopedTables.primaryKeyColumns("repository_collaborator")).thenReturn(Set.of("repository_id", "user_id"));
+        inspector.inspect("update repository_collaborator set permission=? where repository_id=? and \"user_id\"=?");
+        inspector.inspect("delete from repository_collaborator where repository_id=? and user_id=?");
+        verifyNoInteractions(reporter);
+    }
+
+    @Test
+    void compositeKeyAllowanceToleratesTheOptimisticLock() {
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
+        when(scopedTables.isScoped("repository_collaborator")).thenReturn(true);
+        when(scopedTables.primaryKeyColumns("repository_collaborator")).thenReturn(Set.of("repository_id", "user_id"));
+        inspector.inspect(
+                "update repository_collaborator set permission=? where repository_id=? and user_id=? and version=?");
+        verifyNoInteractions(reporter);
+    }
+
+    @Test
+    void aPartialOrPaddedKeyIsNotACompleteKey() {
+        // Fewer columns than the key reaches more than one row; more columns is a hand-written
+        // query the standard check must still see.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        when(scopedTables.isScoped("repository_collaborator")).thenReturn(true);
+        when(scopedTables.primaryKeyColumns("repository_collaborator")).thenReturn(Set.of("repository_id", "user_id"));
+        for (String sql : List.of(
+                "update repository_collaborator set permission=? where repository_id=? and permission=?",
+                "delete from repository_collaborator where repository_id=? and user_id=? and permission=?",
+                "delete from repository_collaborator where repository_id=? or user_id=?",
+                "delete from repository_collaborator where repository_id=? and repository_id=?",
+                "delete from repository_collaborator where repository_id=? and user_id in (select id from \"user\")")) {
+            inspector.inspect(sql);
+            verify(reporter).report(sql, Set.of("repository_collaborator"), TenancyEnforcement.LOG);
+        }
+    }
+
+    @Test
+    void aTableTheMetamodelDoesNotKnowFailsClosed() {
+        // Before ApplicationReady the key map is empty. Unsure must mean reported, not allowed.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        when(scopedTables.isScoped("repository_collaborator")).thenReturn(true);
+        when(scopedTables.primaryKeyColumns("repository_collaborator")).thenReturn(Set.of());
+        String sql = "update repository_collaborator set permission=? where repository_id=? and user_id=?";
+        inspector.inspect(sql);
+        verify(reporter).report(sql, Set.of("repository_collaborator"), TenancyEnforcement.LOG);
+    }
+
+    @Test
+    void aSingleColumnKeyIsCoveredTooWhenTheMetamodelNamesIt() {
+        // `code`, not `id`: KEY_EQUALS_PARAMETER matches only `id` or `*_id`, so a key named this
+        // way can reach the allowance under test and nothing else.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
+        when(scopedTables.isScoped("bad_practice")).thenReturn(true);
+        when(scopedTables.primaryKeyColumns("bad_practice")).thenReturn(Set.of("code"));
+        inspector.inspect("update bad_practice set title=? where code=?");
+        verifyNoInteractions(reporter);
+    }
+
+    @Test
+    void aWhereClauseHiddenBehindACommentIsNotAWhereClause() {
+        // PostgreSQL reads the second line as a comment and updates every row, so the statement the
+        // database runs has no WHERE at all.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        when(scopedTables.isScoped("repository_collaborator")).thenReturn(true);
+        when(scopedTables.primaryKeyColumns("repository_collaborator")).thenReturn(Set.of("repository_id", "user_id"));
+        for (String sql : List.of(
+                "update repository_collaborator set permission=?\n-- where repository_id=? and user_id=?",
+                "update repository_collaborator set permission=? /* */ where repository_id=? and user_id=?",
+                "update repository_collaborator set permission=? where repository_id=? and user_id=? -- and more")) {
+            inspector.inspect(sql);
+            verify(reporter).report(sql, Set.of("repository_collaborator"), TenancyEnforcement.LOG);
+        }
+    }
+
+    @Test
+    void aKeyedTargetDoesNotExemptWhatItsAssignmentReads() {
+        // One row changes, but the value written is read from every workspace's rows.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        when(scopedTables.isScoped("repository_collaborator")).thenReturn(true);
+        when(scopedTables.primaryKeyColumns("repository_collaborator")).thenReturn(Set.of("repository_id", "user_id"));
+        String sql = "update repository_collaborator set permission=(select max(permission) from "
+                + "repository_collaborator) where repository_id=? and user_id=?";
+        inspector.inspect(sql);
+        verify(reporter).report(sql, Set.of("repository_collaborator"), TenancyEnforcement.LOG);
+    }
+
+    @Test
+    void anAssignmentMustBeABoundParameterAndNotAnExpressionThatReads() {
+        // PostgreSQL spells a read more than one way. `TABLE t` is a SELECT equivalent, so a
+        // keyword blacklist cannot decide this; only "every assignment is a bound parameter" can.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        when(scopedTables.isScoped("repository_collaborator")).thenReturn(true);
+        when(scopedTables.primaryKeyColumns("repository_collaborator")).thenReturn(Set.of("repository_id", "user_id"));
+        for (String sql : List.of(
+                "update repository_collaborator set permission=case when exists (table repository_collaborator "
+                        + "offset 1) then ? else ? end where repository_id=? and user_id=?",
+                "update repository_collaborator set permission=(select max(permission) from repository_collaborator) "
+                        + "where repository_id=? and user_id=?",
+                "update repository_collaborator set permission=coalesce(permission,?) where repository_id=? and user_id=?")) {
+            inspector.inspect(sql);
+            verify(reporter).report(sql, Set.of("repository_collaborator"), TenancyEnforcement.LOG);
+        }
+    }
+
+    @Test
+    void theSingleKeyFormIsHeldToTheSameRules() {
+        // The older exemption used to accept these, so the newer one could simply be routed around
+        // by naming one key column instead of two.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        when(scopedTables.isScoped("repository_collaborator")).thenReturn(true);
+        for (String sql : List.of(
+                "update repository_collaborator set permission=?\n-- where repository_id=?",
+                "update repository_collaborator set permission=(select max(permission) from repository_collaborator) "
+                        + "where repository_id=?",
+                "update repository_collaborator set permission=case when exists (table repository_collaborator) "
+                        + "then ? else ? end where repository_id=?")) {
+            inspector.inspect(sql);
+            verify(reporter).report(sql, Set.of("repository_collaborator"), TenancyEnforcement.LOG);
+        }
+    }
+
+    @Test
+    void aStatementLongerThanTheOrmEmitsDeclinesTheFastPath() {
+        // The bound keeps a reluctant match over pathological whitespace from costing more than the
+        // check it would have skipped. Declining is safe: the standard check still reports.
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        when(scopedTables.isScoped("repository_collaborator")).thenReturn(true);
+        when(scopedTables.primaryKeyColumns("repository_collaborator")).thenReturn(Set.of("repository_id", "user_id"));
+        String sql = "delete from repository_collaborator where repository_id" + " ".repeat(9000) + "=? and user_id=?";
+        inspector.inspect(sql);
+        verify(reporter).report(sql, Set.of("repository_collaborator"), TenancyEnforcement.LOG);
     }
 
     // helper: Mockito.any() shorthand

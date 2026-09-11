@@ -42,12 +42,7 @@ function ConsentPage() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const { logout } = useAuth();
-	const { data, isError, refetch } = useQuery({
-		...getConsentStatusOptions({}),
-		// The guard above has just resolved this; refetching immediately would only risk replacing a
-		// usable notice with an error state.
-		staleTime: 30_000,
-	});
+	const { data, isError, refetch } = useQuery(getConsentStatusOptions({}));
 	const mutation = useMutation({
 		...completeFirstLoginConsentMutation(),
 		onSuccess: (status) => {

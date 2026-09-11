@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.time.Instant;
 import java.util.List;
@@ -63,7 +64,8 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
                 .bodyValue(Map.of("appRole", "USER"))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         assertThat(accountRepository.findById(persistedId(victim.getId())))
                 .get()
@@ -159,7 +161,8 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
                 .headers(h -> h.setBearerAuth(tokenFor(user)))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     private Callable<Integer> demote(String token, Long targetId, CountDownLatch ready, CountDownLatch go) {
@@ -201,7 +204,9 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
     }
 
     private String tokenFor(Account account) {
-        return jwtIssuer.issue(principalFactory.forAccount(account), null, null).value();
+        return jwtIssuer
+                .issue(principalFactory.forAccount(account), TokenConstraints.session(null, Instant.now()), null)
+                .value();
     }
 
     private static long persistedId(@Nullable Long id) {

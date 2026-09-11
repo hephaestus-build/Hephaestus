@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.IssueReviewSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
@@ -50,6 +51,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @ConditionalOnProperty(name = "hephaestus.dev.trigger-enabled", havingValue = "true")
+@RecentSignInExempt(reason = "development-only trigger, disabled unless hephaestus.dev.trigger-enabled is set")
 @PreAuthorize("hasAuthority('app_admin')")
 @WorkspaceAgnostic("Dev-only endpoint; workspace ID passed as request parameter")
 public class DevTriggerController {

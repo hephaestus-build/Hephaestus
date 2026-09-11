@@ -1,4 +1,8 @@
 import type { ConfigAuditEntryView } from "@/api/types.gen";
+import {
+	ELEVATION_DESCRIPTION,
+	ElevationBadge,
+} from "@/components/admin/audit-shared/ElevationBadge";
 import { prettyJson } from "@/components/admin/audit-shared/pretty-json";
 import { formatTimestamp } from "@/components/admin/audit-shared/time-format";
 import { DetailRow } from "@/components/common/DetailRow";
@@ -101,6 +105,14 @@ export function ConfigAuditDetailSheet({
 									</span>
 								)}
 							</DetailRow>
+							{entry.elevatedViaInstanceAdmin && (
+								<DetailRow label="Access">
+									<ElevationBadge elevated />
+									<span className="ml-2 text-xs text-muted-foreground">
+										{ELEVATION_DESCRIPTION}
+									</span>
+								</DetailRow>
+							)}
 							{actor.actingAs && <DetailRow label="Impersonating">{actor.actingAs}</DetailRow>}
 							<DetailRow label="Workspace">
 								{entry.workspaceId == null

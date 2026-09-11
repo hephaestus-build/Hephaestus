@@ -36,7 +36,7 @@ Art. 26 GDPR (joint controllership) is equally absent: EDPB 07/2020 §§ 50–65
 
 ## Why the workspace administrator is not an Art. 28 processor
 
-Workspace administrators are **joint controllers** with TUM/AET under Art. 26 GDPR for the workspace-configurable decisions enumerated in §10 of the privacy statement (which Git repositories are connected, the practice catalog, the LLM provider and credentials, whether practice reviews are auto-triggered on new pull/merge requests, leaderboard / leagues / achievements, Slack routing, and whether Outline and selected collections are enabled). The Art. 26(2) Satz 1 allocation of duties and the Art. 26(2) Satz 2 essence of the arrangement are made available to data subjects via the privacy statement; TUM/AET is the single point of contact for data-subject rights, with the workspace administrator additionally addressable for workspace-specific questions.
+Workspace administrators are **joint controllers** with TUM/AET under Art. 26 GDPR for the workspace-configurable decisions enumerated in §10 of the privacy statement (which Git repositories are connected, the practice catalog, the LLM provider and credentials, whether practice reviews are auto-triggered on new pull/merge requests, leaderboard / leagues, Slack routing, and whether Outline and selected collections are enabled). The Art. 26(2) Satz 1 allocation of duties and the Art. 26(2) Satz 2 essence of the arrangement are made available to data subjects via the privacy statement; TUM/AET is the single point of contact for data-subject rights, with the workspace administrator additionally addressable for workspace-specific questions.
 
 ## Follow-up if the processing surface changes
 

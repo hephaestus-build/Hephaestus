@@ -199,7 +199,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
             verify(filterChain).doFilter(any(), any());
             assertThat(authCapture.get()).isInstanceOf(JobTokenAuthentication.class);
-            ProxyRouting routing = (ProxyRouting) ((JobTokenAuthentication) authCapture.get()).getPrincipal();
+            ProxyRouting routing = ((JobTokenAuthentication) authCapture.get()).getPrincipal();
             assertThat(routing.principalDescription()).isEqualTo("job:" + job.getId());
             assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         }
@@ -340,7 +340,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
 
         private void assertAuthenticatedAsJob(Authentication installed, AgentJob job) {
             assertThat(installed).isInstanceOf(JobTokenAuthentication.class);
-            ProxyRouting routing = (ProxyRouting) ((JobTokenAuthentication) installed).getPrincipal();
+            ProxyRouting routing = ((JobTokenAuthentication) installed).getPrincipal();
             assertThat(routing.principalDescription()).isEqualTo("job:" + job.getId());
             assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         }
@@ -439,7 +439,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             Authentication authentication = authCapture.get();
             org.junit.jupiter.api.Assertions.assertNotNull(authentication);
             org.junit.jupiter.api.Assertions.assertInstanceOf(JobTokenAuthentication.class, authentication);
-            ProxyRouting routing = (ProxyRouting) ((JobTokenAuthentication) authentication).getPrincipal();
+            ProxyRouting routing = ((JobTokenAuthentication) authentication).getPrincipal();
             assertThat(routing.apiProtocol()).isEqualTo("openai-completions");
         }
 
@@ -524,7 +524,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             Authentication authentication = authCapture.get();
             org.junit.jupiter.api.Assertions.assertNotNull(authentication);
             org.junit.jupiter.api.Assertions.assertInstanceOf(JobTokenAuthentication.class, authentication);
-            return (ProxyRouting) ((JobTokenAuthentication) authentication).getPrincipal();
+            return ((JobTokenAuthentication) authentication).getPrincipal();
         }
     }
 

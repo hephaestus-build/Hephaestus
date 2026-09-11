@@ -10,9 +10,7 @@ import { cn } from "@/lib/utils";
 type ButtonSize = ComponentPropsWithoutRef<typeof Button>["size"];
 
 interface LandingSignInCtaProps {
-	isSignedIn: boolean;
 	onSignIn: (idpHint: string) => void;
-	onGoToDashboard?: () => void;
 	size?: ButtonSize;
 	className?: string;
 }
@@ -21,23 +19,9 @@ interface LandingSignInCtaProps {
  * One call-to-action instead of a wall of provider buttons repeated across every section: `/login`
  * stays the single place a provider is chosen, so a visitor never picks one twice.
  */
-export function LandingSignInCta({
-	isSignedIn,
-	onSignIn,
-	onGoToDashboard,
-	size = "lg",
-	className,
-}: LandingSignInCtaProps) {
+export function LandingSignInCta({ onSignIn, size = "lg", className }: LandingSignInCtaProps) {
 	const navigate = useNavigate();
 	const { data: providers } = useQuery(listIdentityProvidersOptions());
-
-	if (isSignedIn) {
-		return (
-			<Button size={size} className={cn("gap-2", className)} onClick={onGoToDashboard}>
-				Go to dashboard <ArrowRight className="h-4 w-4" />
-			</Button>
-		);
-	}
 
 	const handleSignIn = () => {
 		// One provider → straight to OAuth (no pointless picker). Several (or not yet known) → the

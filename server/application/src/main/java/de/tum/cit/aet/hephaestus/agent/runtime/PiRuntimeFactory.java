@@ -31,15 +31,14 @@ public class PiRuntimeFactory {
 
     private static final Logger log = LoggerFactory.getLogger(PiRuntimeFactory.class);
 
-    /** Grace window before the sandbox hard-kills the runner — must fire before that deadline. */
+    /** Time reserved for runner shutdown and sandbox teardown, outside the model's work budget. */
     public static final int TIMEOUT_BUFFER_SECONDS = 60;
 
-    /**
-     * Floor for the self-watchdog budget, so a spec just above the minimum timeout does not compute an
-     * effectively-zero one. Must stay below {@code TIMEOUT_BUFFER_SECONDS * 1000}: the watchdog has to
-     * fire before the sandbox hard kill.
-     */
-    static final long MIN_BUDGET_MS = (TIMEOUT_BUFFER_SECONDS - 1) * 1000L;
+    /** Turns the SDK repeats before a provider failure ends the session that hit it. */
+    private static final int RETRY_MAX_ATTEMPTS = 5;
+
+    /** Wait before the first repeat; each further attempt doubles it. */
+    private static final int RETRY_BASE_DELAY_MS = 4000;
 
     static final String AGENT_RESOURCE_PREFIX = "agent/";
 
@@ -77,7 +76,7 @@ public class PiRuntimeFactory {
         inputFiles.putAll(promptScaffolding);
         inputFiles.putAll(spec.extraInputs());
 
-        long agentTimeoutMs = Math.max(MIN_BUDGET_MS, (long) (spec.timeoutSeconds() - TIMEOUT_BUFFER_SECONDS) * 1000);
+        long agentTimeoutMs = (spec.timeoutSeconds() - TIMEOUT_BUFFER_SECONDS) * 1000L;
         env.put("AGENT_BUDGET_MS", Long.toString(agentTimeoutMs));
 
         env.put("HOME", "/home/agent");
@@ -158,6 +157,16 @@ public class PiRuntimeFactory {
         compaction.put("enabled", true);
         compaction.put("reserveTokens", 16384);
         settings.put("compaction", compaction);
+        // A provider that answers "overloaded" is answered by waiting. The SDK's own default gives up
+        // after 2+4+8 seconds, which ended whole practice lanes here while the review still had most of
+        // its budget left, and a lane that dies takes its practice out of the review's coverage. Five
+        // attempts four seconds apart, doubling, ride out just over two minutes of provider trouble,
+        // and a review that spends that on every turn still ends inside its own watchdog.
+        Map<String, Object> retry = new LinkedHashMap<>();
+        retry.put("enabled", true);
+        retry.put("maxRetries", RETRY_MAX_ATTEMPTS);
+        retry.put("baseDelayMs", RETRY_BASE_DELAY_MS);
+        settings.put("retry", retry);
         try {
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(settings);
         } catch (JacksonException e) {

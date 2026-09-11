@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.web;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthAuditService;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
@@ -81,6 +82,9 @@ public class AuthAuditController {
             @NonNull Instant occurredAt,
             @NonNull String eventType,
             @NonNull String result,
+            // @NonNull so springdoc marks it required and the client types it `boolean`: the column is
+            // NOT NULL, and an optional flag would make every reader write `e.elevated… && …`.
+            @NonNull boolean elevatedViaInstanceAdmin,
             @Nullable Long accountId,
             @Nullable Long actingAccountId,
             // Resolved identities for accountId / actingAccountId (null when the account no longer exists);
@@ -95,7 +99,7 @@ public class AuthAuditController {
 
     @GetMapping
     @Operation(summary = "List auth audit events (paged, newest first)", operationId = "adminListAuthEvents")
-    public ResponseEntity<Page<AuthEventViewDTO>> list(
+    public ResponseEntity<PageResponseDTO<AuthEventViewDTO>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size,
             @ParameterObject AuditFilterParams filter) {
@@ -105,7 +109,7 @@ public class AuthAuditController {
         Pageable pageable = PageRequest.of(safePage, safeSize);
         AuthAuditService.AuditPage result0 = authAuditService.list(filter.toFilter(), pageable);
         Page<AuthEventViewDTO> events = result0.events().map(e -> toView(e, result0.identities()));
-        return ResponseEntity.ok(events);
+        return ResponseEntity.ok(PageResponseDTO.from(events));
     }
 
     @GetMapping(value = "/export", produces = "text/csv")
@@ -116,9 +120,11 @@ public class AuthAuditController {
         AuthAuditService.AuditPage data = authAuditService.list(filter.toFilter(), PageRequest.of(0, EXPORT_MAX_ROWS));
         var identities = data.identities();
         StringBuilder csv = new StringBuilder();
-        csv.append(
-                "occurred_at_utc,event_type,result,account_id,account_name,account_email,"
-                        + "acting_account_id,actor_name,actor_email,failure_reason,workspace_id,ip_address,user_agent,details\n");
+        // A new column is APPENDED, never inserted: an operator's parser keyed on column order keeps
+        // working, and one keyed on the header picks the new column up.
+        csv.append("occurred_at_utc,event_type,result,account_id,account_name,account_email,"
+                + "acting_account_id,actor_name,actor_email,failure_reason,workspace_id,ip_address,user_agent,details,"
+                + "elevated_via_instance_admin\n");
         for (AuthEvent e : data.events().getContent()) {
             AuthAuditService.AccountRef account = AuthAuditService.refOf(e.getAccountId(), identities);
             AuthAuditService.AccountRef actor = AuthAuditService.refOf(e.getActingAccountId(), identities);
@@ -137,7 +143,8 @@ public class AuthAuditController {
                     str(e.getWorkspaceId()),
                     e.getIpInet(),
                     e.getUserAgent(),
-                    e.getDetails());
+                    e.getDetails(),
+                    Boolean.toString(e.isElevatedViaInstanceAdmin()));
         }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"audit-log.csv\"")
@@ -179,6 +186,7 @@ public class AuthAuditController {
                 e.getId().getOccurredAt(),
                 e.getEventType().name(),
                 e.getResult().name(),
+                e.isElevatedViaInstanceAdmin(),
                 e.getAccountId(),
                 e.getActingAccountId(),
                 toRef(AuthAuditService.refOf(e.getAccountId(), identities)),

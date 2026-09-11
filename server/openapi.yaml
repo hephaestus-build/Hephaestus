@@ -17,7 +17,7 @@ info:
     Amounts are USD throughout — the ledger, the caps and the gates all meter in USD, and the currency is therefore part of the field name (`...Usd`) rather than a per-amount field. Where a response also carries `FxRateInfo`, that is a display-only estimate in a second currency and is never an input to a budget decision.
   license:
     name: MIT License
-    url: https://github.com/ls1intum/Hephaestus/blob/develop/LICENSE
+    url: https://github.com/hephaestus-build/Hephaestus/blob/main/LICENSE
   title: Hephaestus API
   version: 0.0.0-development
 servers:
@@ -26,8 +26,6 @@ servers:
 security:
 - bearerAuth: []
 tags:
-- description: User achievement progress and unlocks
-  name: Achievements
 - description: Per-workspace LLM spend rollup and budget status
   name: LLM Usage
 - description: Practice group trends and review runs for the current developer
@@ -211,6 +209,7 @@ paths:
             - EXPORT_REQUESTED
             - APP_ROLE_CHANGED
             - RESEARCH_CONSENT_REVOKED
+            - WORKSPACE_ELEVATION
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -251,7 +250,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageAuthEventView"
+                $ref: "#/components/schemas/PageResponseDTOAuthEventView"
           description: OK
       summary: "List auth audit events (paged, newest first)"
       tags:
@@ -293,6 +292,7 @@ paths:
             - EXPORT_REQUESTED
             - APP_ROLE_CHANGED
             - RESEARCH_CONSENT_REVOKED
+            - WORKSPACE_ELEVATION
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -437,7 +437,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageConfigAuditEntryView"
+                $ref: "#/components/schemas/PageResponseDTOConfigAuditEntryView"
           description: OK
       summary: "List admin configuration changes across workspaces (paged, newest\
         \ first)"
@@ -1779,8 +1779,10 @@ paths:
     post:
       operationId: refresh
       responses:
-        "200":
-          description: OK
+        "204":
+          description: Session renewal completed
+        "401":
+          description: Session has ended
       summary: "Rotate the access token (new jti, old revoked)"
       tags:
       - Auth
@@ -2367,7 +2369,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageAgentJob"
+                $ref: "#/components/schemas/PageResponseDTOAgentJob"
           description: Paginated job list
       summary: List agent jobs for a workspace
       tags:
@@ -2624,7 +2626,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageConfigAuditEntryView"
+                $ref: "#/components/schemas/PageResponseDTOConfigAuditEntryView"
           description: OK
       summary: "List this workspace's admin configuration changes (paged, newest first)"
       tags:
@@ -2824,7 +2826,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageSyncJob"
+                $ref: "#/components/schemas/PageResponseDTOSyncJob"
           description: OK
       summary: Paginated sync job history for one connection
       tags:
@@ -5318,7 +5320,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageObservationList"
+                $ref: "#/components/schemas/PageResponseDTOObservationList"
           description: Paginated observations returned
       summary: List observations for current user
       tags:
@@ -7627,118 +7629,6 @@ paths:
       summary: List workspace users and the teams they belong to
       tags:
       - workspace
-  /workspaces/{workspaceSlug}/users/{login}/achievements:
-    get:
-      description: Returns all achievements with progress information for the specified
-        user
-      operationId: getUserAchievements
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: the user's GitHub login
-        in: path
-        name: login
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Achievement"
-          description: list of all achievements with user-specific progress
-      security: []
-      summary: Get user achievements
-      tags:
-      - Achievements
-  /workspaces/{workspaceSlug}/users/{login}/achievements/definitions:
-    get:
-      description: Returns the master list of all available achievements. Restricted
-        to non-prod environments.
-      operationId: getAllAchievementDefinitions
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - in: path
-        name: login
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Achievement"
-          description: OK
-      security: []
-      summary: Get all achievement definitions
-      tags:
-      - Achievements
-  /workspaces/{workspaceSlug}/users/{login}/achievements/recalculate:
-    post:
-      description: Wipes and historically recalculates a user's achievement timeline.
-        Admin only.
-      operationId: recalculateUserAchievements
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: the user's GitHub login
-        in: path
-        name: login
-        required: true
-        schema:
-          type: string
-      responses:
-        "202":
-          description: Recalculation task started successfully
-      summary: Recalculate user achievements
-      tags:
-      - Achievements
-  /workspaces/{workspaceSlug}/users/{login}/achievements/reload:
-    post:
-      description: Hot reloads the achievements.yml configuration without requiring
-        a restart. Admin only.
-      operationId: reloadAchievements
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - in: path
-        name: login
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          description: OK
-      summary: Reload achievements configuration
-      tags:
-      - Achievements
 components:
   schemas:
     AccountRef:
@@ -7755,129 +7645,6 @@ components:
           format: int64
       required:
       - id
-    Achievement:
-      type: object
-      description: Achievement with user-specific progress information
-      properties:
-        category:
-          type: string
-          description: Category for grouping achievements
-          enum:
-          - pull_requests
-          - commits
-          - communication
-          - issues
-          - milestones
-          example: pull_requests
-        id:
-          type: string
-          $ref: "#/components/schemas/AchievementId"
-          description: Unique identifier for the achievement
-          example: pr.merged.common.1
-        isHidden:
-          type: boolean
-          description: Whether the achievement should be hidden until unlocked
-        parent:
-          type: string
-          description: Parent achievement in progression chain
-          example: first_pull
-        progressData:
-          description: The structured progress data based on the achievements evaluator
-          oneOf:
-          - $ref: "#/components/schemas/BinaryAchievementProgress"
-          - $ref: "#/components/schemas/LinearAchievementProgress"
-        rarity:
-          type: string
-          description: Visual level tier/rarity for badge styling
-          enum:
-          - common
-          - uncommon
-          - rare
-          - epic
-          - legendary
-          - mythic
-          example: common
-        status:
-          type: string
-          description: Current status of the achievement for this user
-          enum:
-          - locked
-          - available
-          - unlocked
-          - hidden
-          example: unlocked
-        unlockedAt:
-          type: string
-          format: date-time
-          description: "When the achievement was unlocked, absent while it is still\
-            \ locked"
-      required:
-      - category
-      - id
-      - progressData
-      - rarity
-      - status
-    AchievementId:
-      type: string
-      enum:
-      - commit.common.1
-      - commit.common.2
-      - commit.epic
-      - commit.legendary
-      - commit.mythic
-      - commit.rare
-      - commit.special.atomic_changes
-      - commit.special.brute_force
-      - commit.special.cross_boundary
-      - commit.special.itsy_bitsy
-      - commit.uncommon.1
-      - commit.uncommon.2
-      - issue.close.common.1
-      - issue.close.common.2
-      - issue.close.epic
-      - issue.close.legendary
-      - issue.close.rare
-      - issue.close.uncommon
-      - issue.open.common.1
-      - issue.open.common.2
-      - issue.open.epic
-      - issue.open.legendary
-      - issue.open.rare
-      - issue.open.uncommon
-      - issue.special.hive_mind
-      - issue.special.necromancer
-      - issue.special.oracle
-      - milestone.all_epic
-      - milestone.all_legendary
-      - milestone.all_rare
-      - milestone.first_action
-      - milestone.long_time_return
-      - milestone.night_owl
-      - milestone.polyglot
-      - pr.merged.common.1
-      - pr.merged.common.2
-      - pr.merged.epic
-      - pr.merged.legendary
-      - pr.merged.rare
-      - pr.merged.uncommon
-      - pr.special.speedster
-      - review.common.1
-      - review.common.2
-      - review.epic
-      - review.legendary
-      - review.mythic
-      - review.rare
-      - review.uncommon.1
-      - review.uncommon.2
-    AchievementProgress:
-      description: Polymorphic progress data
-      discriminator:
-        propertyName: type
-      properties:
-        type:
-          type: string
-      required:
-      - type
     AdminAccountView:
       type: object
       properties:
@@ -8305,6 +8072,8 @@ components:
           $ref: "#/components/schemas/AccountRef"
         details:
           type: string
+        elevatedViaInstanceAdmin:
+          type: boolean
         eventType:
           type: string
         failureReason:
@@ -8325,6 +8094,7 @@ components:
           type: integer
           format: int64
       required:
+      - elevatedViaInstanceAdmin
       - eventType
       - id
       - occurredAt
@@ -8452,16 +8222,6 @@ components:
           description: Integration-defined backfill state string
       required:
       - state
-    BinaryAchievementProgress:
-      allOf:
-      - $ref: "#/components/schemas/AchievementProgress"
-      - type: object
-        properties:
-          unlocked:
-            type: boolean
-      description: Binary progress indicating unlocked state
-      required:
-      - unlocked
     BindPracticeGroupRequest:
       type: object
       description: Request to move a practice to a group or Unassigned
@@ -8785,6 +8545,10 @@ components:
           description: dot-paths that differ between <code>oldValue</code> and <code>newValue</code>
           items:
             type: string
+        elevatedViaInstanceAdmin:
+          type: boolean
+          description: whether the actor reached this workspace by instance-admin
+            elevation
         entityId:
           type: string
         entityType:
@@ -8826,6 +8590,8 @@ components:
         workspaceId:
           type: integer
           format: int64
+      required:
+      - elevatedViaInstanceAdmin
     ConfigurationFact:
       type: object
       properties:
@@ -9452,7 +9218,7 @@ components:
           format: int64
           description: "The artifact's internal id, as the trace and review listings\
             \ report it"
-          minimum: 0
+          exclusiveMinimum: 0
         artifactKind:
           type: string
           description: "The artifact kind's wire id, e.g. scm.pull_request. A raw\
@@ -10949,23 +10715,6 @@ components:
       required:
       - leaguePointsChange
       - login
-    LinearAchievementProgress:
-      allOf:
-      - $ref: "#/components/schemas/AchievementProgress"
-      - type: object
-        properties:
-          current:
-            type: integer
-            format: int32
-            minimum: 0
-          target:
-            type: integer
-            format: int32
-            minimum: 0
-      description: Linear progress with current and target counts
-      required:
-      - current
-      - target
     LinkedProvider:
       type: object
       description: "A provider instance the current user is linked to: its type +\
@@ -11639,8 +11388,26 @@ components:
             \ it) — sync is unaffected."
       required:
       - accepted
-    PageAgentJob:
+    PageMetadata:
+      properties:
+        number:
+          type: integer
+          format: int64
+        size:
+          type: integer
+          format: int64
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int64
+    PageResponseDTOAgentJob:
       type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
       properties:
         content:
           type: array
@@ -11659,20 +11426,24 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: "#/components/schemas/Pageable"
         size:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
-    PageAuthEventView:
+    PageResponseDTOAuthEventView:
       type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
       properties:
         content:
           type: array
@@ -11691,20 +11462,24 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: "#/components/schemas/Pageable"
         size:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
-    PageConfigAuditEntryView:
+    PageResponseDTOConfigAuditEntryView:
       type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
       properties:
         content:
           type: array
@@ -11723,34 +11498,24 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: "#/components/schemas/Pageable"
         size:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
-    PageMetadata:
-      properties:
-        number:
-          type: integer
-          format: int64
-        size:
-          type: integer
-          format: int64
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int64
-    PageObservationList:
+    PageResponseDTOObservationList:
       type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
       properties:
         content:
           type: array
@@ -11769,20 +11534,24 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: "#/components/schemas/Pageable"
         size:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
-    PageSyncJob:
+    PageResponseDTOSyncJob:
       type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
       properties:
         content:
           type: array
@@ -11801,19 +11570,19 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: "#/components/schemas/Pageable"
         size:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
-    PageableObject:
+    Pageable:
       type: object
       properties:
         offset:
@@ -11828,7 +11597,7 @@ components:
         paged:
           type: boolean
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         unpaged:
           type: boolean
     PagedModelFeedbackItem:
@@ -14871,7 +14640,7 @@ components:
       - slackUserId
       - workspaceName
       - workspaceSlug
-    SortObject:
+    Sort:
       type: object
       properties:
         empty:
@@ -15941,9 +15710,6 @@ components:
       description: Request to update workspace feature flags. Null fields are left
         unchanged.
       properties:
-        achievementsEnabled:
-          type: boolean
-          description: Enable the achievements system
         leaderboardEnabled:
           type: boolean
           description: Enable the leaderboard ranking page
@@ -16187,9 +15953,6 @@ components:
         accountLogin:
           type: string
           description: Git provider account login associated with this workspace
-        achievementsEnabled:
-          type: boolean
-          description: Whether the achievements system is enabled
         createdAt:
           type: string
           format: date-time
@@ -16298,7 +16061,6 @@ components:
           example: my-workspace
       required:
       - accountLogin
-      - achievementsEnabled
       - createdAt
       - displayName
       - gitlabWebhookRegistered
@@ -16323,9 +16085,6 @@ components:
         accountLogin:
           type: string
           description: Git provider account login associated with this workspace
-        achievementsEnabled:
-          type: boolean
-          description: Whether the achievements system is enabled
         createdAt:
           type: string
           format: date-time
@@ -16371,7 +16130,6 @@ components:
           example: my-workspace
       required:
       - accountLogin
-      - achievementsEnabled
       - createdAt
       - displayName
       - id

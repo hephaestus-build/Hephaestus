@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1788616652575-1" author="hephaestus">
+        <preConditions onFail="MARK_RAN" onFailMessage="auth_event.elevated_via_instance_admin already present">
+            <not><columnExists tableName="auth_event" columnName="elevated_via_instance_admin"/></not>
+        </preConditions>
+        <comment>
+            Whether the request that produced this auth event reached its workspace on instance-admin
+            authority rather than membership. DEFAULT false backfills existing rows, which means false
+            reads as "not known to be elevated" for anything written before this column, never as
+            "known to be a member".
+        </comment>
+        <addColumn tableName="auth_event">
+            <column defaultValueBoolean="false" name="elevated_via_instance_admin" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="auth_event" columnName="elevated_via_instance_admin"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="1788616652575-2" author="hephaestus">
+        <preConditions onFail="MARK_RAN" onFailMessage="config_audit_event.elevated_via_instance_admin already present">
+            <not><columnExists tableName="config_audit_event" columnName="elevated_via_instance_admin"/></not>
+        </preConditions>
+        <comment>
+            The same bit on the configuration trail, resolved for the row's own workspace, so the two
+            audit viewers cannot disagree about whether one action was performed under elevation.
+        </comment>
+        <addColumn tableName="config_audit_event">
+            <column defaultValueBoolean="false" name="elevated_via_instance_admin" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="config_audit_event" columnName="elevated_via_instance_admin"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="1788616652575-3" author="hephaestus">
+        <preConditions onFail="MARK_RAN" onFailMessage="ck_auth_event_event_type already admits WORKSPACE_ELEVATION">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM pg_constraint
+                 WHERE conname = 'ck_auth_event_event_type'
+                   AND pg_get_constraintdef(oid) LIKE '%WORKSPACE_ELEVATION%'
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Admit WORKSPACE_ELEVATION on auth_event: the marker written when an instance admin reaches a
+            workspace they are not a member of. The list is the shipped vocabulary plus that one value,
+            so the ADD validates every existing row in one pass under a momentary ACCESS EXCLUSIVE lock,
+            no rewrite. The change set is not reversible, because narrowing the CHECK back would reject a
+            WORKSPACE_ELEVATION row already in the ledger and an append-only trail may not delete one to
+            make room. DROP IF EXISTS so an instance whose constraint was already removed by hand
+            migrates instead of halting the whole chain.
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            ALTER TABLE auth_event DROP CONSTRAINT IF EXISTS ck_auth_event_event_type;
+            ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN (
+                'LOGIN', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED',
+                'IDENTITY_LINKED', 'IDENTITY_UNLINKED',
+                'IMPERSONATION_BEGIN', 'IMPERSONATION_END',
+                'ACCOUNT_DELETED',
+                'EXPORT_REQUESTED', 'APP_ROLE_CHANGED',
+                'RESEARCH_CONSENT_REVOKED',
+                'WORKSPACE_ELEVATION',
+                'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED',
+                'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED',
+                'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED',
+                'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED',
+                'SILENT_MODE_CHANGED'
+            ));
+        ]]></sql>
+        <!-- Empty on purpose: see the comment above. Rolling back past this change set means accepting
+             that the wider CHECK stays in place. -->
+        <rollback/>
+    </changeSet>
+</databaseChangeLog>

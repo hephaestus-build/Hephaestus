@@ -64,7 +64,7 @@ class CredentialBundleCryptoCompatTest extends BaseUnitTest {
 
         @Test
         void producesBlobsThatDecryptBackWithTheRealConverter() {
-            CredentialBundleConverter converter = new CredentialBundleConverter(KEY, "dev");
+            CredentialBundleConverter converter = new CredentialBundleConverter(KEY, false);
             EncryptionContext ctx =
                     new EncryptionContext(7L, IntegrationKind.GITHUB, "pat", "connection.credentials_encrypted");
 
@@ -100,7 +100,7 @@ class CredentialBundleCryptoCompatTest extends BaseUnitTest {
 
         @Test
         void aadIsBoundToTheRow_wrongContextFailsAuthentication() {
-            CredentialBundleConverter converter = new CredentialBundleConverter(KEY, "dev");
+            CredentialBundleConverter converter = new CredentialBundleConverter(KEY, false);
             EncryptionContext writeCtx =
                     new EncryptionContext(7L, IntegrationKind.GITHUB, "pat", "connection.credentials_encrypted");
             EncryptionContext readCtx = new EncryptionContext(

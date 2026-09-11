@@ -9,6 +9,7 @@ import { RecentAuthActivityCard } from "./RecentAuthActivityCard";
 const events: AuthEventView[] = [
 	{
 		id: 1,
+		elevatedViaInstanceAdmin: false,
 		eventType: "LOGIN",
 		result: "SUCCESS",
 		occurredAt: minutesBefore(5),
@@ -17,6 +18,7 @@ const events: AuthEventView[] = [
 	},
 	{
 		id: 2,
+		elevatedViaInstanceAdmin: false,
 		eventType: "LOGIN_FAILED",
 		result: "FAILURE",
 		failureReason: "invalid_grant",
@@ -25,6 +27,7 @@ const events: AuthEventView[] = [
 	},
 	{
 		id: 3,
+		elevatedViaInstanceAdmin: false,
 		eventType: "IMPERSONATION_BEGIN",
 		result: "SUCCESS",
 		occurredAt: hoursBefore(3),
@@ -35,6 +38,7 @@ const events: AuthEventView[] = [
 	},
 	{
 		id: 4,
+		elevatedViaInstanceAdmin: false,
 		eventType: "APP_ROLE_CHANGED",
 		result: "SUCCESS",
 		occurredAt: hoursBefore(26),
@@ -56,6 +60,10 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("Failed sign-in");
+		await expect(canvas.getByRole("link", { name: "View audit log" })).toHaveAttribute(
+			"href",
+			"/admin/audit?tab=signins",
+		);
 	},
 };
 

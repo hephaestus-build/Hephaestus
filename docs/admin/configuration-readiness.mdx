@@ -43,7 +43,7 @@ Compose maps `POSTGRES_PASSWORD` to `DATABASE_PASSWORD` and owns the runtime-rol
 | `hephaestus.llm.egress.allow-loopback` | `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK` |
 | `hephaestus.agent.image.require-digest` | `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` |
 | `hephaestus.agent.image.reference` | `HEPHAESTUS_AGENT_IMAGE_REFERENCE` |
-| `hephaestus.sandbox.container-runtime` | `SANDBOX_CONTAINER_RUNTIME` |
+| `hephaestus.sandbox.docker.container-runtime` | `SANDBOX_DOCKER_CONTAINER_RUNTIME` |
 | `hephaestus.sentry.dsn` | `SENTRY_DSN` |
 
 ## Runtime roles
@@ -96,6 +96,59 @@ GitHub or GitLab sign-in provider in the database-backed provider catalogue. Env
 entries are seeds, not the readiness authority. Slack and Outline are link-only providers and do not
 satisfy sign-in readiness. Worker and webhook roles do not load login providers.
 
+### Recent sign-in for sensitive actions
+
+Changing an account's role, forcing an account out of all its sessions, starting an impersonation,
+changing a login provider, registering an LLM connection, and linking an identity all require a
+sign-in from the last few minutes. `HEPHAESTUS_AUTH_STEP_UP_MAX_AGE` sets that window; it defaults to
+`5m` and must be a positive duration shorter than the absolute session lifetime, or the gate can
+never bind.
+
+Confirming access uses a provider the account is already linked to. This is a local confirmation, not
+multi-factor authentication: an identity provider that still holds a session may complete it without
+asking for anything, so enforce MFA at the provider. A refused action is not replayed once access is
+confirmed — review it and submit it again.
+
+### Session and impersonation deadlines
+
+The access cookie lasts `24h` by default (`HEPHAESTUS_AUTH_ACCESS_TTL`). The browser renews it
+approximately hourly while active, before expiry, or when returning to a tab whose renewal is due.
+Hidden or inactive tabs do not continuously renew it. This is a renewable credential lifetime, not a precise
+last-request idle timeout: after the cookie expires, signing in is required. Tokens stay in HttpOnly,
+Secure, host-only, SameSite=Lax cookies in production; they are never stored in browser local storage.
+
+A session ends at `hephaestus.auth.session-max-lifetime` (default `7d`, configurable with
+`HEPHAESTUS_AUTH_SESSION_MAX_LIFETIME`) no matter how active it is;
+renewing an access token rolls within that deadline and never past it. An impersonation ends at
+`hephaestus.auth.impersonation-max-lifetime` (default `1h`), or sooner — when its time-box is reached
+or when the account being impersonated is promoted to instance admin, both of which return the
+operator to their own session and record an `IMPERSONATION_END` entry in the audit viewer; neither
+requires anyone to sign in again. The operator's own session ending, or the operator no longer being
+an instance admin, ends the impersonation outright instead — there is no session left to return to.
+
+### Choosing session limits
+
+Longer sessions reduce interruptions but increase exposure to stolen cookies and unattended devices.
+The defaults suit individual devices used for routine team work. Shorten both limits for shared
+computers or sensitive deployments; require MFA at the identity provider. The recent-sign-in gate
+above does not establish a second factor.
+
+[NIST SP 800-63B-4 §2.1.3](https://pages.nist.gov/800-63-4/sp800-63b.html#aal1reauth) recommends an
+overall timeout of no more than 30 days at AAL1 and does not require an inactivity timeout there.
+[OWASP's session guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#automatic-session-expiration)
+gives more conservative examples: 15–30 minutes idle and a 4–8 hour overall timeout. These are
+risk-based reference points, not an assurance-level certification for Hephaestus.
+
+Explicit overrides take precedence over defaults. Renewal applies the configured access lifetime but
+preserves the session's original absolute deadline and sign-in time. Revocation and account
+suspension still deny access before either deadline.
+
+Temporary renewal failures leave the page open; they do not bypass server authentication. A failed
+sign-out reports an error and can be retried. If the server rotates a token but its response is lost,
+signing in again may be necessary. Cross-tab coordination requires
+[Web Locks support](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API) and a secure
+context (HTTPS in production).
+
 ## LLM proxy
 
 Worker roles must leave `hephaestus.llm.egress.allow-loopback=false`. Provider credentials and model
@@ -108,9 +161,66 @@ Worker roles require digest enforcement and a SHA-256-pinned `hephaestus.agent.i
 
 ## Sandbox isolation
 
-Set `SANDBOX_CONTAINER_RUNTIME=runsc` on workers after
+Set `SANDBOX_DOCKER_CONTAINER_RUNTIME=runsc` on workers after
 [installing and configuring gVisor](https://gvisor.dev/docs/user_guide/install/) on the host. This
 recommendation is non-fatal.
+
+### Docker configuration
+
+For the single-host deployment, keep the local Unix socket default. Docker-specific settings under
+`hephaestus.sandbox.docker.*` apply to processes with the worker role enabled.
+The gateway keeps its independent `hephaestus.sandbox.gateway.*` settings; resource limits, capacity
+and workspace transfer limits remain under `hephaestus.sandbox.*`.
+
+| Property under `hephaestus.sandbox.docker` | Environment variable                     | Default                       |
+| ------------------------------------------ | ---------------------------------------- | ----------------------------- |
+| `host`                                     | `SANDBOX_DOCKER_HOST`                    | `unix:///var/run/docker.sock` |
+| `tls-verify`                               | `SANDBOX_DOCKER_TLS_VERIFY`              | `false`                       |
+| `cert-path`                                | `SANDBOX_DOCKER_CERT_PATH`               | unset                         |
+| `container-runtime`                        | `SANDBOX_DOCKER_CONTAINER_RUNTIME`       | Docker daemon default         |
+| `app-server-container-id`                  | `SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID` | container `HOSTNAME`          |
+| `cli`                                      | `SANDBOX_DOCKER_CLI`                     | `docker`                      |
+| `owner`                                    | `SANDBOX_DOCKER_OWNER`                   | `default`                     |
+
+Compose forwards these variables to `application-server` and `application-worker`. Leave the
+container-ID override empty so each container uses its own `HOSTNAME` when joining job networks.
+
+Use a distinct `owner` for each installation that shares a Docker daemon but uses a different
+database. All worker-capable roles of the same installation must use the same stable value.
+It accepts 1–63 lowercase letters, digits and hyphens, starting with a letter or digit.
+Container inventory, capacity accounting and cleanup select the `hephaestus.sandbox-owner` label;
+job and interactive-session networks use `hephaestus-sandbox-<owner>--<UUID>`.
+This prevents accidental cross-installation cleanup; it is not an authorization boundary against
+a process with Docker daemon access.
+
+Before upgrading from unscoped sandbox ownership or changing `owner`, drain reviews and interactive
+sessions and stop that installation's workers. Remove its remaining containers and networks only
+after verifying ownership. The new cleanup does not adopt legacy `hephaestus.managed=true`
+containers or `agent-net-` networks, or resources belonging to a previous owner.
+
+Java operations and interactive Docker CLI commands use the same host, TLS and certificate settings.
+Inherited `DOCKER_CONTEXT`, `DOCKER_HOST` and Docker TLS environment variables do not override
+interactive commands. `cli` selects only the executable.
+
+A TCP connection changes how the worker reaches Docker, not where its containers run: the daemon
+must manage the worker container and its sandbox networks. Follow [Docker's mutual-TLS setup](https://docs.docker.com/engine/security/protect-access/).
+Set `SANDBOX_DOCKER_TLS_VERIFY=true` and mount client certificates read-only into each worker-capable
+container using a Compose override. `SANDBOX_DOCKER_CERT_PATH` must name that **container** directory
+containing `ca.pem`, `cert.pem` and `key.pem`; setting a host path in `.env` does not mount it.
+Never mount the Docker socket or client certificates in a sandbox.
+
+Unknown keys under `hephaestus.sandbox.docker`, blank `host` or `cli`, and TLS verification without a
+certificate path prevent worker startup. These checks do not verify daemon connectivity or runtime
+availability. See [runtime roles](./runtime-roles) for the gateway boundary.
+
+Harden the Docker host itself; the application cannot enforce these from inside a container. The
+supported host matrix's [Docker Engine version](./install#supported-host-matrix) already closes
+CVE-2024-29018's DNS-exfiltration path; in addition:
+
+- Block the cloud metadata endpoint on the host: `iptables -I DOCKER-USER -d 169.254.0.0/16 -j DROP`.
+- Recommended: front the daemon socket with a proxy such as Tecnativa's `docker-socket-proxy`
+  configured with `EXEC=0`.
+- Recommended: `userns-remap=default` in `/etc/docker/daemon.json`.
 
 ## Optional observability
 

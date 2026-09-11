@@ -59,6 +59,7 @@ import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
@@ -936,7 +937,8 @@ public class GitHubPullRequestSyncService {
                 return true;
             }
 
-            List<Map> nodes = response.field("repository.pullRequests.nodes").toEntityList(Map.class);
+            List<Map<String, Object>> nodes = response.field("repository.pullRequests.nodes")
+                    .toEntityList(new ParameterizedTypeReference<Map<String, Object>>() {});
             if (nodes.isEmpty()) {
                 // Repository genuinely has no pull requests at all — nothing to sync.
                 return false;

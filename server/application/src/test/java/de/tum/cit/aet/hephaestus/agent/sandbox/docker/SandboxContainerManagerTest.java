@@ -39,10 +39,20 @@ class SandboxContainerManagerTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        properties = new SandboxProperties(
-                "unix:///var/run/docker.sock", false, null, 5, 10, 60, null, null, 209_715_200L, 500_000, null);
+        properties = new SandboxProperties(5, 10, 60, 209_715_200L, 500_000, null);
         executor = Executors.newSingleThreadExecutor();
-        manager = new SandboxContainerManager(containerOps, image -> {}, properties, executor, Duration.ofMillis(20));
+        manager = new SandboxContainerManager(
+                containerOps, image -> {}, properties, "default", executor, Duration.ofMillis(20));
+    }
+
+    @Test
+    void shouldListOnlyTheConfiguredOwnerForCleanupAndCapacity() {
+        var owned = new DockerOperations.ContainerInfo(
+                "owned", "test", Map.of(SandboxLabels.OWNER, "course"), "running", Instant.now());
+        when(containerOps.listContainersByLabel(SandboxLabels.OWNER, "course")).thenReturn(List.of(owned));
+        var courseManager = new SandboxContainerManager(containerOps, image -> {}, properties, "course", executor);
+        assertThat(courseManager.listManagedContainers()).containsExactly(owned);
+        verify(containerOps).listContainersByLabel(SandboxLabels.OWNER, "course");
     }
 
     @AfterEach
@@ -57,7 +67,7 @@ class SandboxContainerManagerTest extends BaseUnitTest {
         void shouldEnsureImageIsPresentWhenCreatingContainer() {
             List<String> guarded = new ArrayList<>();
             SandboxContainerManager guardedManager =
-                    new SandboxContainerManager(containerOps, guarded::add, properties, executor);
+                    new SandboxContainerManager(containerOps, guarded::add, properties, "default", executor);
             DockerOperations.ContainerSpec spec = new DockerOperations.ContainerSpec(
                     "ghcr.io/example/agent:latest",
                     List.of("true"),
@@ -222,7 +232,7 @@ class SandboxContainerManagerTest extends BaseUnitTest {
 
         @Test
         void shouldListByManagedLabel() {
-            when(containerOps.listContainersByLabel("hephaestus.managed", "true"))
+            when(containerOps.listContainersByLabel("hephaestus.sandbox-owner", "default"))
                     .thenReturn(List.of(
                             new DockerOperations.ContainerInfo("c1", "/test", Map.of(), "running", Instant.EPOCH)));
 

@@ -106,3 +106,146 @@ void describe("ships-tests-with-the-change", () => {
 		assert.ok(result.directions.join(" ").includes("WORKTREE NOT VISIBLE"));
 	});
 });
+
+void describe("issue classification across practices", () => {
+	const names = [
+		"issue-has-checkable-outcome",
+		"issue-states-an-actionable-problem",
+		"issue-scoped-to-single-concern",
+	];
+
+	for (const { name, metadata, emptyOrTitleEcho, hasDeliverableType, looksUmbrella } of [
+		{
+			name: "empty deliverable",
+			metadata: { title: "Export billing reports", labels: ["FEATURE"] },
+			emptyOrTitleEcho: 1,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "title repeated with different punctuation",
+			metadata: {
+				title: "Export billing reports to CSV",
+				body: "EXPORT billing reports: to CSV!",
+				issue_type: "Task",
+			},
+			emptyOrTitleEcho: 1,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "substantive umbrella",
+			metadata: {
+				title: "Billing improvements",
+				body: "Split the invoice work into independently deliverable child issues with their own acceptance criteria.",
+				labels: ["REQUIREMENT"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 1,
+		},
+		{
+			name: "substantive body with an omitted title",
+			metadata: {
+				body: "The PDF contains overlapping text when a customer's address spans more than three lines.",
+				labels: ["BUG"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "substantive body with an empty title",
+			metadata: {
+				title: "",
+				body: "The PDF contains overlapping text when a customer's address spans more than three lines.",
+				labels: ["BUG"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "substantive body with a non-Latin title",
+			metadata: {
+				title: "报告",
+				body: "The PDF contains overlapping text when a customer's address spans more than three lines.",
+				labels: ["BUG"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "substantive untyped issue",
+			metadata: {
+				title: "Unreadable invoice",
+				body: "The PDF contains overlapping text when a customer's address spans more than three lines.",
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 0,
+			looksUmbrella: 0,
+		},
+	]) {
+		void it(`preserves shared facts for a ${name}`, async () => {
+			for (const scriptName of names) {
+				const run = await loadScript(scriptName);
+				const result = await run("", new Map(), metadata);
+				assert.equal(result.metrics.emptyOrTitleEcho, emptyOrTitleEcho, scriptName);
+				assert.deepEqual(result.hints, [], scriptName);
+				if (scriptName !== "issue-scoped-to-single-concern") {
+					assert.equal(result.metrics.hasDeliverableType, hasDeliverableType, scriptName);
+					assert.equal(result.metrics.looksUmbrella, looksUmbrella, scriptName);
+				}
+				if (
+					scriptName === "issue-states-an-actionable-problem" &&
+					emptyOrTitleEcho &&
+					hasDeliverableType
+				) {
+					assert.ok(
+						result.directions.some((direction) =>
+							direction.includes("investigate whether a maintainer can actually act on it."),
+						),
+					);
+				}
+			}
+		});
+	}
+});
+
+void it("linked-work analysis reads only explicitly supplied context, never a repository-derived fallback", async () => {
+	const root = await createTempDir("linked-work-context-");
+	const analyse = await loadScript("honours-linked-issue-acceptance-criteria");
+	try {
+		const legacy = join(root, "inputs", "context");
+		const context = join(root, "areas/linked work");
+		const repo = join(root, "inputs", "sources", "scm", "repo");
+		await mkdir(legacy, { recursive: true });
+		await mkdir(context, { recursive: true });
+		await writeFile(
+			join(legacy, "linked_work_items.json"),
+			JSON.stringify({ workItems: [{ bodyExcerpt: "- [ ] WRONG CONTEXT" }] }),
+		);
+		await writeFile(
+			join(context, "linked_work_items.json"),
+			JSON.stringify({ workItems: [{ bodyExcerpt: "Acceptance criteria\n- [ ] one\n- [ ] two" }] }),
+		);
+		const metadata = {
+			source_branch: "fix-example",
+			title: "Fixes #12",
+			pr_number: 1,
+			pr_url: "https://example.invalid/pull/1",
+			repository_full_name: "owner/project",
+			target_branch: "main",
+			commit_sha: "a".repeat(40),
+		};
+		const explicit = await analyse(repo, new Map(), metadata, context);
+		assert.equal(explicit.metrics.acceptanceCriteriaCheckboxes, 2);
+		const absent = await analyse(repo, new Map(), metadata);
+		assert.equal(absent.metrics.linkedItemsFilePresent, 0);
+		const missing = await analyse(repo, new Map(), metadata, join(root, "missing"));
+		assert.equal(missing.metrics.linkedItemsFilePresent, 0);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});

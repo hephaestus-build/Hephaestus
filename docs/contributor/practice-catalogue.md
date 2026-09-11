@@ -40,7 +40,7 @@ All three scopes use the same definition fields. What differs is who owns the va
 
 Neither step silently rewrites a customized instance definition or an existing workspace practice.
 The badge tables an administrator reads for both scopes live in the
-[Practice Catalog admin guide](https://docs.hephaestus.build/admin/practice-catalog).
+[Practice Catalog admin guide](/admin/practice-catalog).
 
 | Stakeholder                | Primary task                                                                                                               | Deliberately not their task                      |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
@@ -55,7 +55,7 @@ The badge tables an administrator reads for both scopes live in the
 The practice editor follows the decisions an author can make confidently:
 
 1. **Practice** — give one observable habit a short, action-oriented name, choose the work it
-   applies to, and optionally group it in a group.
+   applies to, and optionally place it in a group.
 2. **Review guidance** — describe what to look for, why it matters, and one concrete example.
 3. **How Hephaestus can help** — choose AI-supported mentoring, human review, or guidance only.
 
@@ -116,7 +116,7 @@ such as whether a developer understood a trade-off discussed privately with a me
 The instance tables store only decisions that differ from the bundled catalog: a customized
 definition, inclusion policy, accepted bundled digest, or position. No override row means the
 bundled definition and order apply. See
-[ADR 0028](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0028-source-synced-practice-catalog.md)
+[ADR 0028](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0028-source-synced-practice-catalog.md)
 for the architectural decision.
 
 ## Workspace adoption lifecycle
@@ -127,8 +127,8 @@ for the architectural decision.
   audit event. **Use Hephaestus order** removes custom positions.
 - **Automatic installation is keyed on the installation record, not on age.** At startup, a workspace
   with no `practice_catalog_installation` row receives the whole effective catalogue once. Recording
-  that row is what makes a workspace start empty, and only workspaces created through the workspace
-  API record it today — see [#1362](https://github.com/ls1intum/Hephaestus/issues/1362).
+  that row is what makes a workspace start empty, and only `WorkspaceService` — the workspace API —
+  records it.
 - **Adoption is deliberate.** Workspace administrators can show the instance library alongside their
   workspace configuration, inspect a complete effective definition, and add either one practice or all
   available practices in a group as independent copies. Group adoption is one transaction. Both flows

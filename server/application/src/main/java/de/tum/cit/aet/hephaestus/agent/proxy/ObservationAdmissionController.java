@@ -1,10 +1,14 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageSourceType;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.core.signal.PracticeReviewRefusalMetrics;
 import io.swagger.v3.oas.annotations.Hidden;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -22,10 +26,15 @@ import tools.jackson.databind.node.ObjectNode;
 @PreAuthorize("isAuthenticated()")
 public class ObservationAdmissionController {
 
-    private final ObservationAdmissionService admission;
+    private static final Logger log = LoggerFactory.getLogger(ObservationAdmissionController.class);
 
-    public ObservationAdmissionController(ObservationAdmissionService admission) {
+    private final ObservationAdmissionService admission;
+    private final PracticeReviewRefusalMetrics refusals;
+
+    public ObservationAdmissionController(
+            ObservationAdmissionService admission, PracticeReviewRefusalMetrics refusals) {
         this.admission = admission;
+        this.refusals = refusals;
     }
 
     @PostMapping("/admit-observations")
@@ -49,6 +58,14 @@ public class ObservationAdmissionController {
             return admission.admit(jobId, request.path("observations"));
         } catch (ObservationAdmissionService.AdmissionConflictException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Observations differ from the admitted payload", e);
+        } catch (ObservationsRefusedException e) {
+            // A decision, not a defect: the review ran and what it submitted does not support a claim
+            // about anyone's work. Answering 5xx would have the sandbox repeat a submission this server
+            // refuses for the same reason every time, and would file the refusal as an internal error.
+            refusals.recordExecutionRefusal(e.reasonCode());
+            admission.recordRefusal(jobId, e.reasonCode(), e.reason());
+            log.info("Refused this review's observations ({}): jobId={}, {}", e.reasonCode(), jobId, e.reason());
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, e.reason(), e);
         }
     }
 }

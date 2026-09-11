@@ -16,7 +16,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -44,20 +44,18 @@ public class CredentialBundleConverter {
 
     @Autowired
     public CredentialBundleConverter(
-            SecurityProperties properties,
-            @Value("${spring.profiles.active:}") String activeProfiles,
-            ObjectMapper objectMapper) {
+            SecurityProperties properties, Environment environment, ObjectMapper objectMapper) {
         this(
                 properties.credentialEncryptionKey(),
                 properties.credentialEncryptionKeyVersion(),
                 properties.priorCredentialEncryptionKey(),
                 properties.priorCredentialEncryptionKeyVersion(),
-                activeProfiles,
+                environment.matchesProfiles("prod"),
                 objectMapper);
     }
 
-    public CredentialBundleConverter(@Nullable String encryptionKey, @Nullable String activeProfiles) {
-        this(encryptionKey, 1, null, null, activeProfiles, testObjectMapper());
+    public CredentialBundleConverter(@Nullable String encryptionKey, boolean production) {
+        this(encryptionKey, 1, null, null, production, testObjectMapper());
     }
 
     public CredentialBundleConverter(
@@ -65,13 +63,13 @@ public class CredentialBundleConverter {
             int activeKeyVersion,
             @Nullable String priorCredentialEncryptionKey,
             @Nullable Integer priorKeyVersion,
-            @Nullable String activeProfiles) {
+            boolean production) {
         this(
                 encryptionKey,
                 activeKeyVersion,
                 priorCredentialEncryptionKey,
                 priorKeyVersion,
-                activeProfiles,
+                production,
                 testObjectMapper());
     }
 
@@ -80,7 +78,7 @@ public class CredentialBundleConverter {
             int activeKeyVersion,
             @Nullable String priorCredentialEncryptionKey,
             @Nullable Integer priorKeyVersion,
-            @Nullable String activeProfiles,
+            boolean production,
             ObjectMapper objectMapper) {
         if (activeKeyVersion < 1) throw new IllegalArgumentException("Active key version must be positive");
         if ((priorCredentialEncryptionKey == null) != (priorKeyVersion == null)) {
@@ -93,7 +91,7 @@ public class CredentialBundleConverter {
         this.priorKeyVersion = priorKeyVersion;
         this.objectMapper = objectMapper;
         if (encryptionKey == null || encryptionKey.isBlank()) {
-            if (activeProfiles != null && activeProfiles.contains("prod")) {
+            if (production) {
                 throw new IllegalStateException(
                         "Credential encryption key is required in production! Set hephaestus.security.credential-encryption-key");
             }

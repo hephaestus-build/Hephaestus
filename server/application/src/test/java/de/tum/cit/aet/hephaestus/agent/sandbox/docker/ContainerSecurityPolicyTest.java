@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
@@ -22,8 +21,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        SandboxProperties properties = new SandboxProperties(
-                "unix:///var/run/docker.sock", false, null, 5, 10, 60, null, null, 209_715_200L, 500_000, null);
+        DockerSandboxProperties properties = new DockerSandboxProperties(
+                "unix:///var/run/docker.sock", false, null, null, null, "docker", "default");
         securityPolicy = new ContainerSecurityPolicy(properties, null);
     }
 
@@ -139,8 +138,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
 
         @Test
         void shouldUseGlobalRuntime() {
-            SandboxProperties propsWithRuntime = new SandboxProperties(
-                    "unix:///var/run/docker.sock", false, null, 5, 10, 60, "runsc", null, 209_715_200L, 500_000, null);
+            DockerSandboxProperties propsWithRuntime = new DockerSandboxProperties(
+                    "unix:///var/run/docker.sock", false, null, "runsc", null, "docker", "default");
             ContainerSecurityPolicy policyWithRuntime = new ContainerSecurityPolicy(propsWithRuntime, null);
 
             DockerOperations.HostConfigSpec config = policyWithRuntime.buildHostConfig(
@@ -166,7 +165,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
             UUID jobId = UUID.randomUUID();
             Map<String, String> labels = securityPolicy.buildLabels(jobId);
 
-            assertThat(labels).containsEntry("hephaestus.managed", "true");
+            assertThat(labels).containsEntry("hephaestus.sandbox-owner", "default");
+            assertThat(labels).doesNotContainKey("hephaestus.managed");
             assertThat(labels).containsEntry("hephaestus.job-id", jobId.toString());
         }
     }
@@ -177,18 +177,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
         @Test
         void shouldIncludeSeccompWhenProvided() {
             ContainerSecurityPolicy policyWithSeccomp = new ContainerSecurityPolicy(
-                    new SandboxProperties(
-                            "unix:///var/run/docker.sock",
-                            false,
-                            null,
-                            5,
-                            10,
-                            60,
-                            null,
-                            null,
-                            209_715_200L,
-                            500_000,
-                            null),
+                    new DockerSandboxProperties(
+                            "unix:///var/run/docker.sock", false, null, null, null, "docker", "default"),
                     "{\"defaultAction\":\"SCMP_ACT_ERRNO\"}");
 
             DockerOperations.HostConfigSpec config = policyWithSeccomp.buildHostConfig(
@@ -341,8 +331,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
 
         @Test
         void shouldPreventRuntimeDowngrade() {
-            SandboxProperties propsWithRuntime = new SandboxProperties(
-                    "unix:///var/run/docker.sock", false, null, 5, 10, 60, "runsc", null, 209_715_200L, 500_000, null);
+            DockerSandboxProperties propsWithRuntime = new DockerSandboxProperties(
+                    "unix:///var/run/docker.sock", false, null, "runsc", null, "docker", "default");
             ContainerSecurityPolicy policyWithRuntime = new ContainerSecurityPolicy(propsWithRuntime, null);
 
             SecurityProfile runcProfile = new SecurityProfile("runc", "none", List.of("ALL"), Map.of());

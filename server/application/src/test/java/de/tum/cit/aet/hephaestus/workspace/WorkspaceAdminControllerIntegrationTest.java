@@ -63,6 +63,7 @@ class WorkspaceAdminControllerIntegrationTest extends AbstractWorkspaceIntegrati
                 .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 }

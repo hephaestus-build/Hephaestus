@@ -1,6 +1,4 @@
-import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Sparkles } from "lucide-react";
 
 import type { ProfileXpRecord, RepositoryInfo, UserInfo } from "@/api/types.gen";
 import { LeagueIcon } from "@/components/leaderboard/LeagueIcon";
@@ -10,7 +8,6 @@ import {
 	getLeagueTier,
 } from "@/components/leaderboard/utils.ts";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getInitials } from "@/lib/avatar";
@@ -25,8 +22,6 @@ export interface ProfileHeaderProps {
 	leaguePoints?: number;
 	userXpRecord?: ProfileXpRecord;
 	isLoading: boolean;
-	workspaceSlug: string;
-	achievementsEnabled?: boolean;
 	progressionEnabled?: boolean;
 	leaguesEnabled?: boolean;
 }
@@ -37,8 +32,6 @@ export function ProfileHeader({
 	leaguePoints = 0,
 	userXpRecord = { currentLevel: 1, currentLevelXP: 0, totalXP: 0, xpNeeded: 150 },
 	isLoading,
-	workspaceSlug,
-	achievementsEnabled = true,
 	progressionEnabled = true,
 	leaguesEnabled = true,
 }: ProfileHeaderProps) {
@@ -52,7 +45,7 @@ export function ProfileHeader({
 	const leagueTier = rawTier === "none" ? "bronze" : rawTier;
 
 	return (
-		<div className="flex min-w-0 flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+		<div className="flex min-w-0 flex-row items-start justify-between gap-4 sm:gap-6">
 			<div className="flex min-w-0 w-full max-w-xl flex-col gap-4">
 				<div className="flex min-w-0 items-center gap-4">
 					<div className="relative shrink-0">
@@ -110,20 +103,6 @@ export function ProfileHeader({
 								>
 									{user.htmlUrl ? new URL(user.htmlUrl).host : ""}/{user.login}
 								</a>
-								{achievementsEnabled && (
-									<Link
-										to="/w/$workspaceSlug/user/$username/achievements"
-										params={{ workspaceSlug, username: user.login }}
-										className={buttonVariants({
-											variant: "ghost",
-											size: "sm",
-											className: "h-7 gap-1.5 text-muted-foreground hover:text-foreground",
-										})}
-									>
-										<Sparkles className="w-3.5 h-3.5" />
-										<span className="text-xs">Achievements</span>
-									</Link>
-								)}
 							</div>
 						</div>
 					) : null}

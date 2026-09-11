@@ -10,6 +10,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -39,6 +40,9 @@ import org.springframework.transaction.annotation.Transactional;
  * roles              — flat string array of granted roles (Hephaestus-specific; the authority converter reads it)
  * given_name         — first name; only when known
  * act                — RFC 8693 actor object {@code {"sub": "<impersonator_id>"}}; absent when not impersonating
+ * imp_exp            — absolute impersonation ceiling (epoch seconds); see {@link TokenConstraints}
+ * session_exp        — absolute session ceiling (epoch seconds); see {@link TokenConstraints}
+ * auth_time          — last interactive sign-in (epoch seconds, standard OIDC claim); see {@link TokenConstraints}
  * </pre>
  *
  * <h2>Issuance contract</h2>
@@ -73,57 +77,23 @@ public class HephaestusJwtIssuer {
     }
 
     /**
-     * Mint a new access JWT for {@code principal} (optionally under impersonation), recording the
-     * {@code jti} in {@code issued_jwt} in the same transaction. Claim shape: see the class Javadoc.
+     * Mint a new access JWT for {@code principal}, recording the {@code jti} in {@code issued_jwt} in the
+     * same transaction. Claim shape: see the class Javadoc.
      *
-     * @param principal      account id + login + roles to bake in.
-     * @param impersonatorId if non-null, sets the RFC 8693 {@code act} claim.
-     * @param request        used to capture {@code user_agent} + remote IP into the revocation row.
+     * <p>The token's {@code exp} is capped at the earliest of {@code now + accessTtl} and the ceilings in
+     * {@code constraints}, and those ceilings are also carried as claims, so {@code AuthSessionService
+     * .refresh} re-caps the rotated token at the same instants — a rolling silent refresh can extend
+     * neither an impersonation nor a session (OWASP absolute timeout).
+     *
+     * @param principal   account id + login + roles to bake in.
+     * @param constraints the authority and deadlines carried across rotations.
+     * @param request     used to capture {@code user_agent} + remote IP into the revocation row.
      */
     @Transactional
-    public Token issue(JwtPrincipal principal, @Nullable Long impersonatorId, @Nullable HttpServletRequest request) {
-        return issueToken(principal, impersonatorId, null, null, request);
-    }
-
-    /**
-     * As {@link #issue(JwtPrincipal, Long, HttpServletRequest)} but with an impersonation time-box.
-     * When {@code impersonationExpiresAt} is set, the token's {@code exp} is capped at
-     * {@code min(now + accessTtl, impersonationExpiresAt)} and an {@code imp_exp} claim carries the
-     * absolute ceiling so {@code AuthSessionService.refresh} can auto-exit once it passes. Only the
-     * impersonation paths supply it; ordinary issuance keeps the full {@code accessTtl}.
-     */
-    @Transactional
-    public Token issue(
-            JwtPrincipal principal,
-            @Nullable Long impersonatorId,
-            @Nullable Instant impersonationExpiresAt,
-            @Nullable HttpServletRequest request) {
-        return issueToken(principal, impersonatorId, impersonationExpiresAt, null, request);
-    }
-
-    /**
-     * As {@link #issue(JwtPrincipal, Long, Instant, HttpServletRequest)} plus an absolute SESSION
-     * ceiling: the token {@code exp} is capped at {@code min(now + accessTtl, sessionExpiresAt)} and a
-     * constant {@code session_exp} claim carries the ceiling, so {@code AuthSessionService.refresh}
-     * re-caps the rotated token at it — the rolling silent refresh can never extend a session past it
-     * (OWASP absolute timeout). Set at login; carried unchanged across refreshes.
-     */
-    @Transactional
-    public Token issue(
-            JwtPrincipal principal,
-            @Nullable Long impersonatorId,
-            @Nullable Instant impersonationExpiresAt,
-            @Nullable Instant sessionExpiresAt,
-            @Nullable HttpServletRequest request) {
-        return issueToken(principal, impersonatorId, impersonationExpiresAt, sessionExpiresAt, request);
-    }
-
-    private Token issueToken(
-            JwtPrincipal principal,
-            @Nullable Long impersonatorId,
-            @Nullable Instant impersonationExpiresAt,
-            @Nullable Instant sessionExpiresAt,
-            @Nullable HttpServletRequest request) {
+    public Token issue(JwtPrincipal principal, TokenConstraints constraints, @Nullable HttpServletRequest request) {
+        Long impersonatorId = constraints.impersonatorId();
+        Instant impersonationExpiresAt = constraints.impersonationExpiresAt();
+        Instant sessionExpiresAt = constraints.sessionExpiresAt();
         Instant now = clock.instant();
         Instant expiresAt = now.plus(properties.accessTtl());
         if (impersonationExpiresAt != null && impersonationExpiresAt.isBefore(expiresAt)) {
@@ -132,6 +102,10 @@ public class HephaestusJwtIssuer {
         if (sessionExpiresAt != null && sessionExpiresAt.isBefore(expiresAt)) {
             expiresAt = sessionExpiresAt;
         }
+        // JWT deadlines are serialized as whole seconds, so the wire token expires at the truncated
+        // instant. issued_jwt keeps the untruncated one, and its active-token check would then answer
+        // "still valid" for the fraction of a second the presented token is already expired.
+        expiresAt = expiresAt.truncatedTo(ChronoUnit.SECONDS);
         UUID jti = UUID.randomUUID();
         JWK signingKey = keyService.currentSigningKey();
         JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
@@ -157,6 +131,11 @@ public class HephaestusJwtIssuer {
         if (sessionExpiresAt != null) {
             // Absolute session ceiling (epoch seconds), constant across refreshes (OWASP absolute timeout).
             claims.claim("session_exp", sessionExpiresAt.getEpochSecond());
+        }
+        if (constraints.authTime() != null) {
+            // Stamped once by the login that completed the OAuth dance and copied verbatim through every
+            // rotation: a silent refresh must not make a session look freshly signed in.
+            claims.claim("auth_time", constraints.authTime().getEpochSecond());
         }
         JwsHeader header = JwsHeader.with(SignatureAlgorithm.ES256)
                 .keyId(signingKey.getKeyID())

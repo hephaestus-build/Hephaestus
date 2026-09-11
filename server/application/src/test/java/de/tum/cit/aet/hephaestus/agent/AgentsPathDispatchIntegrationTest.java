@@ -87,6 +87,7 @@ class AgentsPathDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .bodyValue(Map.of("instanceModelId", 1))
                 .exchange()
                 .expectStatus()
-                .isBadRequest();
+                .isBadRequest()
+                .expectBody(Void.class);
     }
 }

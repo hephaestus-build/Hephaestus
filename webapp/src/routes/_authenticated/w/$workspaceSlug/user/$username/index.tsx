@@ -24,6 +24,7 @@ import {
 } from "@/lib/activity-monitor";
 import { resolveLeaderboardSchedule } from "@/lib/leaderboard-schedule";
 import { toScmProviderType } from "@/lib/provider";
+import { useSearchState } from "@/lib/search-params";
 import { formatDateRangeForApi, getDateRangeForPreset } from "@/lib/timeframe";
 
 const profileSearchSchema = z.object({
@@ -37,8 +38,6 @@ const profileSearchSchema = z.object({
 		.max(MAX_ACTIVITY_MONITOR_LIMIT)
 		.default(DEFAULT_ACTIVITY_MONITOR_LIMIT),
 });
-
-type ProfileSearchParams = z.infer<typeof profileSearchSchema>;
 
 const parseRepositoryIds = (value?: string): number[] => {
 	if (!value) return [];
@@ -58,6 +57,7 @@ const serializeRepositoryIds = (repositoryIds: number[]) => {
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/user/$username/")({
 	component: UserProfile,
+	remountDeps: ({ params }) => params,
 	validateSearch: profileSearchSchema,
 	search: {
 		middlewares: [retainSearchParams(["after", "before", "monitorRepositories", "monitorLimit"])],
@@ -68,11 +68,12 @@ function UserProfile() {
 	const { username, workspaceSlug } = Route.useParams();
 	const { isCurrentUser } = useAuth();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
-	const achievementsEnabled = featureState.features?.achievementsEnabled;
 	const progressionEnabled = featureState.features?.progressionEnabled;
 	const leaguesEnabled = featureState.features?.leaguesEnabled;
+	const practicesEnabled = featureState.features?.practicesEnabled;
 	const { after, before, monitorRepositories, monitorLimit } = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
+	const setSearch = useSearchState();
 
 	const workspaceQuery = useQuery({
 		...getWorkspaceOptions({
@@ -104,26 +105,29 @@ function UserProfile() {
 
 	const currUserIsDashboardUser = isCurrentUser(username);
 
+	// Standings only mean anything where practices review the work, so with them off this asks for
+	// nothing rather than asking and rendering an empty answer as "none configured".
+	const showsPracticeStandings = currUserIsDashboardUser && practicesEnabled === true;
 	const groupsQuery = useQuery({
 		...listGroupsOptions({
 			path: { workspaceSlug },
 			query: { visibleInPracticeDashboardsOnly: true },
 		}),
-		enabled: Boolean(workspaceSlug) && currUserIsDashboardUser,
+		enabled: Boolean(workspaceSlug) && showsPracticeStandings,
 	});
 	const practiceGroups = groupsQuery.data ?? [];
 	const groupStandingsQuery = useQuery({
 		...listPracticeGroupStandingsOptions({
 			path: { workspaceSlug },
 		}),
-		enabled: Boolean(workspaceSlug) && currUserIsDashboardUser,
+		enabled: Boolean(workspaceSlug) && showsPracticeStandings,
 	});
 	const groupStandings = Object.fromEntries(
 		(groupStandingsQuery.data ?? []).map((status) => [status.groupSlug, status]),
 	);
 	const standingsQuery = useQuery({
 		...listPracticeStandingsOptions({ path: { workspaceSlug } }),
-		enabled: Boolean(workspaceSlug) && currUserIsDashboardUser,
+		enabled: Boolean(workspaceSlug) && showsPracticeStandings,
 	});
 	const practicesByGroup = (standingsQuery.data ?? []).reduce<Record<string, PracticeStanding[]>>(
 		(grouped, practice) => {
@@ -163,23 +167,19 @@ function UserProfile() {
 	});
 
 	const handleTimeframeChange = (nextAfter: string, nextBefore?: string) => {
-		void navigate({
-			search: (prev: ProfileSearchParams) => ({
-				...prev,
-				after: nextAfter,
-				before: nextBefore,
-			}),
-		});
+		void setSearch((prev) => ({
+			...prev,
+			after: nextAfter,
+			before: nextBefore,
+		}));
 	};
 
 	const handleActivityMonitorFiltersChange = (filters: ActivityMonitorFilters) => {
-		void navigate({
-			search: (prev: ProfileSearchParams) => ({
-				...prev,
-				monitorRepositories: serializeRepositoryIds(filters.repositoryIds),
-				monitorLimit: filters.limit === DEFAULT_ACTIVITY_MONITOR_LIMIT ? undefined : filters.limit,
-			}),
-		});
+		void setSearch((prev) => ({
+			...prev,
+			monitorRepositories: serializeRepositoryIds(filters.repositoryIds),
+			monitorLimit: filters.limit === DEFAULT_ACTIVITY_MONITOR_LIMIT ? undefined : filters.limit,
+		}));
 	};
 
 	if (featureState.isError) {
@@ -197,15 +197,21 @@ function UserProfile() {
 			providerType={toScmProviderType(workspaceQuery.data?.providerType)}
 			profileData={profileQuery.data}
 			activityMonitorData={activityMonitorQuery.data}
+			activityMonitorError={workspaceQuery.error ?? activityMonitorQuery.error}
+			onRetryActivityMonitor={() => {
+				if (workspaceQuery.isError) void workspaceQuery.refetch();
+				if (activityMonitorQuery.isError) void activityMonitorQuery.refetch();
+			}}
 			activityMonitorFilters={{
 				repositoryIds: selectedRepositoryIds,
 				limit: monitorLimit,
 			}}
 			onActivityMonitorFiltersChange={handleActivityMonitorFiltersChange}
-			isLoading={
-				profileQuery.isPending ||
+			isLoading={profileQuery.isPending || workspaceQuery.isPending}
+			isActivityLoading={
 				workspaceQuery.isPending ||
-				(activityMonitorQuery.isPending && !activityMonitorQuery.data)
+				activityMonitorQuery.isPending ||
+				activityMonitorQuery.isPlaceholderData
 			}
 			error={profileQuery.error ?? undefined}
 			onRetry={() => void profileQuery.refetch()}
@@ -216,11 +222,10 @@ function UserProfile() {
 			before={effectiveDates.before}
 			onTimeframeChange={handleTimeframeChange}
 			schedule={schedule}
-			achievementsEnabled={achievementsEnabled === true}
 			progressionEnabled={progressionEnabled === true}
 			leaguesEnabled={leaguesEnabled === true}
 			practiceGroupStandings={
-				currUserIsDashboardUser ? (
+				showsPracticeStandings ? (
 					<PracticeGroupStandingCard
 						groups={practiceGroups}
 						standings={groupStandings}

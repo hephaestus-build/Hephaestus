@@ -18,7 +18,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.lang.reflect.Field;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -32,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @Tag("unit")
 class CredentialRotationServiceTest extends BaseUnitTest {
@@ -53,8 +53,8 @@ class CredentialRotationServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        oldConverter = new CredentialBundleConverter(OLD_KEY, "dev");
-        rotatingConverter = new CredentialBundleConverter(NEW_KEY, 2, OLD_KEY, 1, "dev");
+        oldConverter = new CredentialBundleConverter(OLD_KEY, false);
+        rotatingConverter = new CredentialBundleConverter(NEW_KEY, 2, OLD_KEY, 1, false);
         SecurityProperties properties = new SecurityProperties(null, NEW_KEY, 2, OLD_KEY, 1, true, 25);
         meterRegistry = new SimpleMeterRegistry();
         service = new CredentialRotationService(
@@ -77,7 +77,7 @@ class CredentialRotationServiceTest extends BaseUnitTest {
         assertThat(stale.getCredentialsEncrypted()).isNotEqualTo(staleBlob);
         assertThat(stale.credentials(rotatingConverter)).contains(TOKEN);
         // The rewritten blob must not need the prior key any more.
-        CredentialBundleConverter activeOnly = new CredentialBundleConverter(NEW_KEY, 2, null, null, "dev");
+        CredentialBundleConverter activeOnly = new CredentialBundleConverter(NEW_KEY, 2, null, null, false);
         assertThat(stale.credentials(activeOnly)).contains(TOKEN);
     }
 
@@ -111,7 +111,7 @@ class CredentialRotationServiceTest extends BaseUnitTest {
         byte[] corrupted =
                 Objects.requireNonNull(orphaned.getCredentialsEncrypted()).clone();
         corrupted[corrupted.length - 1] ^= 1;
-        orphaned.setCredentialsEncrypted(corrupted);
+        ReflectionTestUtils.setField(orphaned, "credentialsEncrypted", corrupted);
         Connection stale = connection(58L);
         stale.setCredentials(TOKEN, oldConverter);
         when(connectionRepository.lockCredentialRotationBatch(2, 25)).thenReturn(List.of(57L, 58L));
@@ -136,7 +136,7 @@ class CredentialRotationServiceTest extends BaseUnitTest {
         byte[] corrupted =
                 Objects.requireNonNull(orphaned.getCredentialsEncrypted()).clone();
         corrupted[corrupted.length - 1] ^= 1;
-        orphaned.setCredentialsEncrypted(corrupted);
+        ReflectionTestUtils.setField(orphaned, "credentialsEncrypted", corrupted);
         when(connectionRepository.lockCredentialRotationBatch(2, 25)).thenReturn(List.of(61L));
         when(connectionRepository.findAllById(List.of(61L))).thenReturn(List.of(orphaned));
 
@@ -197,21 +197,11 @@ class CredentialRotationServiceTest extends BaseUnitTest {
                 IntegrationKind.GITHUB,
                 "100",
                 new ConnectionConfig.GitHubAppConfig(100L, null, null, Set.of()));
-        setField(connection, "id", id);
+        ReflectionTestUtils.setField(connection, "id", id);
         return connection;
     }
 
     private static void setKeyVersion(Connection connection, @Nullable Integer version) {
-        setField(connection, "credentialsKeyVersion", version);
-    }
-
-    private static void setField(Connection connection, String name, @Nullable Object value) {
-        try {
-            Field field = Connection.class.getDeclaredField(name);
-            field.setAccessible(true);
-            field.set(connection, value);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        ReflectionTestUtils.setField(connection, "credentialsKeyVersion", version);
     }
 }

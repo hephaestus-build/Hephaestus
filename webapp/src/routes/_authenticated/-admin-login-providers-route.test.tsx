@@ -73,4 +73,51 @@ describe("instance login providers route", () => {
 		releaseSlowToggle?.();
 		await waitFor(() => expect(slowToggleCalls).toBe(1));
 	});
+
+	it("asks for a fresh sign-in when a provider change is refused, and recovers its own load failure", async () => {
+		let changes = 0;
+		server.use(
+			http.get("*/admin/login-providers", () =>
+				HttpResponse.json([provider("gitlab", "Team GitLab")]),
+			),
+			http.patch("*/admin/login-providers/gitlab", () => {
+				changes += 1;
+				return HttpResponse.json(
+					{ status: 403, code: "step_up_required", maxAgeSeconds: 300 },
+					{ status: 403 },
+				);
+			}),
+			http.get("*/identity-providers", () => HttpResponse.json({}, { status: 503 })),
+		);
+
+		renderLoginProvidersRoute();
+		fireEvent.click(
+			await screen.findByRole("switch", { name: "Disable Team GitLab" }, ROUTE_RENDER_WAIT),
+		);
+
+		await screen.findByRole("dialog", { name: "Confirm access" });
+		expect((await screen.findByRole("alert")).textContent).toContain(
+			"Could not load sign-in options",
+		);
+
+		server.use(
+			http.get("*/identity-providers", () =>
+				HttpResponse.json([
+					{ registrationId: "gitlab", providerType: "GITLAB", displayName: "Team GitLab" },
+				]),
+			),
+		);
+		fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+		expect(await screen.findByRole("button", { name: "Continue with Team GitLab" })).not.toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: "Close" }));
+		await waitFor(() =>
+			expect(screen.queryByRole("dialog", { name: "Confirm access" })).toBeNull(),
+		);
+		// The refused change is abandoned, not replayed, and the row still shows the server's state.
+		expect(changes).toBe(1);
+		expect(
+			screen.getByRole("switch", { name: "Disable Team GitLab" }).getAttribute("aria-checked"),
+		).toBe("true");
+	});
 });

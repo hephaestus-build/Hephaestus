@@ -230,5 +230,22 @@ class SecretDiffScannerTest extends BaseUnitTest {
             assertThat(scanner.isLowSignalPath("examples/demo.env")).isTrue();
             assertThat(scanner.isLowSignalPath("src/main/Weather.swift")).isFalse();
         }
+
+        @Test
+        void packageNamedExampleIsNotLowSignal() {
+            assertThat(scanner.isLowSignalPath("src/main/java/com/example/util/CacheManager.java"))
+                    .isFalse();
+            assertThat(scanner.isLowSignalPath("app/src/main/kotlin/com/sample/Api.kt"))
+                    .isFalse();
+        }
+
+        @Test
+        @DisplayName("a samples directory stays low-signal wherever it sits, including inside a package")
+        void samplesDirectoryIsLowSignalAtAnyDepth() {
+            assertThat(scanner.isLowSignalPath("packages/sdk/examples/quickstart.ts"))
+                    .isTrue();
+            assertThat(scanner.isLowSignalPath("e2e/samples/seed.json")).isTrue();
+            assertThat(scanner.isLowSignalPath("example/demo.env")).isTrue();
+        }
     }
 }

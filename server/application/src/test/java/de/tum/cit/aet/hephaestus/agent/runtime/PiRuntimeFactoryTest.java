@@ -13,6 +13,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -167,6 +169,23 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
             assertThat(root.path("compaction").path("enabled").asBoolean()).isTrue();
             assertThat(root.path("compaction").path("reserveTokens").asInt()).isEqualTo(16384);
         }
+
+        @Test
+        @DisplayName("a session waits out a provider blip rather than ending on the SDK's 14-second default")
+        void ridesOutAProviderBlip() throws Exception {
+            byte[] json = factory.buildPiSettingsJson(null);
+            JsonNode root = objectMapper.readTree(new String(json, StandardCharsets.UTF_8));
+            assertThat(root.path("retry").path("enabled").asBoolean()).isTrue();
+            int attempts = root.path("retry").path("maxRetries").asInt();
+            int baseDelayMs = root.path("retry").path("baseDelayMs").asInt();
+            // What the settings buy, in seconds of provider trouble: the doubling waits before each
+            // repeat. Two minutes is the floor this exists for; the review's own budget is the ceiling.
+            long ridesOutMs = 0;
+            for (int attempt = 1; attempt <= attempts; attempt++) {
+                ridesOutMs += (long) baseDelayMs << (attempt - 1);
+            }
+            assertThat(ridesOutMs).isBetween(120_000L, 600_000L);
+        }
     }
 
     @Nested
@@ -216,26 +235,9 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
     @Nested
     class Environment {
 
-        @Test
-        void budget_leavesGraceUnderSpecTimeout() {
-            var pspec = spec("azure-openai-responses", "gpt-5.4-mini", false);
-            String budget = factory.build(pspec).environment().get("AGENT_BUDGET_MS");
-            assertThat(budget).as("AGENT_BUDGET_MS must be present").isNotNull();
-            long budgetMs = Long.parseLong(budget);
-            long hardTimeoutMs = (long) pspec.timeoutSeconds() * 1_000L;
-            assertThat(budgetMs)
-                    .as("Pi's self-watchdog must fire strictly before the SPI hard kill — leaves grace")
-                    .isLessThan(hardTimeoutMs)
-                    .isPositive();
-        }
-
-        @Test
-        @DisplayName("budget floor applies just above the minimum timeout — stays positive and under the hard kill")
-        void budget_floorAppliesAtMinimumTimeout() {
-            // Smallest spec PiPlanSpec accepts (timeoutSeconds > TIMEOUT_BUFFER_SECONDS=60). The computed
-            // budget (1s) is below MIN_BUDGET_MS, so the floor branch fires — this exercises the otherwise
-            // untested Math.max floor. The floor must stay positive AND strictly under the hard-kill deadline.
-            int timeoutSeconds = PiRuntimeFactory.TIMEOUT_BUFFER_SECONDS + 1;
+        @ParameterizedTest
+        @CsvSource({"61, 1000", "90, 30000", "119, 59000", "600, 540000", "2147483647, 2147483587000"})
+        void shouldReserveShutdownTimeBeforeTheSandboxDeadline(int timeoutSeconds, long expectedBudgetMs) {
             PiPlanSpec spec = new PiPlanSpec(
                     "openai-completions",
                     "gpt-x",
@@ -248,12 +250,13 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
                     PRACTICE,
                     Map.of(),
                     "");
+
             long budgetMs = Long.parseLong(factory.build(spec).environment().get("AGENT_BUDGET_MS"));
-            long hardTimeoutMs = (long) timeoutSeconds * 1_000L;
-            assertThat(budgetMs)
-                    .isEqualTo(PiRuntimeFactory.MIN_BUDGET_MS)
-                    .isPositive()
-                    .isLessThan(hardTimeoutMs);
+
+            assertThat(budgetMs).isEqualTo(expectedBudgetMs).isPositive();
+            assertThat(budgetMs + 30_000L)
+                    .as("the runner's watchdog includes a 30-second shutdown grace")
+                    .isLessThan(timeoutSeconds * 1000L);
         }
 
         @Test

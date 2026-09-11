@@ -1,4 +1,8 @@
 import type { AuthEventView } from "@/api/types.gen";
+import {
+	ELEVATION_DESCRIPTION,
+	ElevationBadge,
+} from "@/components/admin/audit-shared/ElevationBadge";
 import { prettyJson } from "@/components/admin/audit-shared/pretty-json";
 import { refLabel } from "@/components/admin/audit-shared/ref-label";
 import { formatTimestamp } from "@/components/admin/audit-shared/time-format";
@@ -80,6 +84,12 @@ export function AuditEventDetailSheet({
 								"—"
 							)}
 						</DetailRow>
+						{event.elevatedViaInstanceAdmin && (
+							<DetailRow label="Access">
+								<ElevationBadge elevated />
+								<span className="ml-2 text-xs text-muted-foreground">{ELEVATION_DESCRIPTION}</span>
+							</DetailRow>
+						)}
 						<DetailRow label="Impersonated by">
 							{actor ? (
 								<span>

@@ -20,7 +20,7 @@ export function AboutCallToActionSection() {
 			</p>
 			<div className="flex flex-col sm:flex-row gap-4 justify-center">
 				<a
-					href="https://github.com/ls1intum/Hephaestus"
+					href="https://github.com/hephaestus-build/Hephaestus"
 					target="_blank"
 					rel="noopener noreferrer"
 					className={buttonVariants({ size: "lg" })}

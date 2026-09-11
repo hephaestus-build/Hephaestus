@@ -11,10 +11,10 @@ Hephaestus supports full-stack development across Java and TypeScript. This guid
 
 Install and configure the following tools before you attempt a local build:
 
-1. **Java JDK 21**, plus `curl` or `wget` and `unzip` – Required for the Spring Boot application
-   server. The Maven wrapper ships no binary: on first use it downloads Maven and verifies the
-   archive against the checksum in `server/.mvn/wrapper/maven-wrapper.properties`, and without
-   `unzip` it falls back to an archive that checksum does not cover and refuses it.
+1. **Java JDK 21** – Required for the Spring Boot application server. Gradle reads the target JDK
+   from `.java-version` and uses its Java toolchain support. The checked-in wrapper downloads the
+   pinned Gradle distribution and verifies `server/gradle/wrapper/gradle-wrapper.properties`' checksum;
+   CI also validates the wrapper JAR. No global Gradle installation is needed.
 2. **Docker and Docker Compose** – Required for PostgreSQL and NATS. Verify both with `docker info`
    and `docker compose version`.
 3. **Vite+ (`vp`)** – The command surface for every repository task, and how you get the pinned
@@ -32,6 +32,7 @@ Install and configure the following tools before you attempt a local build:
    from one, an IDE task or a desktop app, needs `vp` on its PATH like `node` and `git`.
 
    After `vp install`, `vp --version` prints the pinned `vite-plus`.
+
 4. **NATS CLI (optional)** – Helpful when inspecting the webhook/sync event stream (NATS is disabled by default locally). The agent job queue runs on PostgreSQL and needs no NATS.
 
 If you push branches to the repository rather than to a fork, configure commit signing as well — [CONTRIBUTING.md § Signed Commits](https://github.com/hephaestus-build/Hephaestus/blob/main/CONTRIBUTING.md#signed-commits) has the setup, and `vp install` warns while it is missing.
@@ -60,7 +61,7 @@ vp run check                 # Complete local quality gate
 ```
 
 Use the [local verification contract](./local-verification.mdx) for affected checks, the pre-push gate,
-budgets, and CI exclusions.
+and CI exclusions.
 
 IntelliJ and WebStorm are also supported.
 
@@ -76,7 +77,8 @@ The repository commands are the source of truth. Optional editor integrations:
 - [IntelliJ](https://plugins.jetbrains.com/plugin/13180-palantir-java-format)
 - [Eclipse](https://github.com/palantir/palantir-java-format/tree/develop/eclipse_plugin)
 
-Other editors should run the repository command.
+Other editors should run the repository command. VS Code does not format Java on save: a Java
+formatter with a different style would undo Spotless's Palantir formatting.
 
 ## Application server
 
@@ -87,8 +89,8 @@ have their own `application-<name>.yml` under `server/application/src/main/resou
 the per-role and per-purpose overlays (`worker`, `webhook`, `e2e`, `cds-training`) documented where
 they are used.
 
-They are **not** Maven profiles. Maven passes the active Spring profile through the `app.profiles`
-property, so use `-Dapp.profiles=…` to override it; `vp run dev:server:e2e` uses that interface.
+These are Spring profiles, not build profiles. Gradle’s `bootRun` passes `-Pprofiles=…` through to
+Spring; `vp run dev:server:e2e` uses that interface.
 
 Create `application-local.yml` in `server/application/src/main/resources` to override defaults. This file is gitignored.
 
@@ -114,11 +116,11 @@ Never commit `application-local.yml`. It may contain secrets and machine-specifi
    vp run dev:webapp   # terminal 2 — Vite dev server
    ```
 
-3. Access the API at `http://localhost:8080` and the webapp at `http://localhost:4200`.
+3. Open the configured server and webapp ports; see the [port map](#default-port-map).
+   The defaults are `http://localhost:8080` and `http://localhost:4200`.
 
-   The OpenAPI description and Swagger UI are **off** unless you switch them on: the endpoints answer
-   unauthenticated wherever springdoc registers them, so a deployment that left them on published its
-   complete route list, admin routes included. For a local session, set `SPRINGDOC_API_DOCS_ENABLED=true`
+   The OpenAPI description and Swagger UI are **off** by default. When enabled, these endpoints are
+   unauthenticated and expose the route list, including admin routes. For a local session, set `SPRINGDOC_API_DOCS_ENABLED=true`
    (and `SPRINGDOC_SWAGGER_UI_ENABLED=true` for the browser UI) and Swagger UI appears at
    `http://localhost:8080/swagger-ui/index.html`. Committing a spec does not need either flag —
    `vp run generate:api:specs` boots under the `specs` profile, which turns them on
@@ -132,12 +134,12 @@ Every host-side port is configurable so multiple Hephaestus instances (or other 
 
 #### Default port map
 
-| Service              | Default | Variable                    | Config location                  |
-| -------------------- | ------- | --------------------------- | -------------------------------- |
-| PostgreSQL           | 5432    | `POSTGRES_PORT`             | `server/.env` |
-| Application server   | 8080    | `SERVER_PORT`               | `server/.env` |
-| Sandbox gateway      | 8081    | `SANDBOX_API_PORT`          | `server/.env` |
-| Webapp (Vite dev)    | 4200    | `WEBAPP_PORT`               | Shell env only                   |
+| Service            | Default | Variable           | Config location |
+| ------------------ | ------- | ------------------ | --------------- |
+| PostgreSQL         | 5432    | `POSTGRES_PORT`    | `server/.env`   |
+| Application server | 8080    | `SERVER_PORT`      | `server/.env`   |
+| Sandbox gateway    | 8081    | `SANDBOX_API_PORT` | `server/.env`   |
+| Webapp (Vite dev)  | 4200    | `WEBAPP_PORT`      | Shell env only  |
 
 :::tip Pre-flight check
 Run `vp run check:ports` before starting the stack. It checks the four ports above; a NATS
@@ -146,7 +148,7 @@ container binds 4222 as well, and a conflict there shows up only at boot.
 
 #### How it works
 
-The `.env` file in `server/` is read by **both** Docker Compose (for container port mappings) and Spring Boot (via `spring.config.import`). This means a single file controls the entire local stack.
+The `.env` file in `server/` is read by **both** Docker Compose (for container port mappings) and Spring Boot (via `spring.config.import`). The webapp port is a separate shell setting, as listed above.
 
 Ports flow through the system like this:
 
@@ -212,19 +214,11 @@ APPLICATION_HOST_URL=http://localhost:5200
 
 Changing a port in one place may require updates elsewhere. This table shows the full picture:
 
-| When you change...          | Also update...                                             | Why                                      |
-| --------------------------- | ---------------------------------------------------------- | ---------------------------------------- |
-| `WEBAPP_PORT`               | `APPLICATION_HOST_URL` in `.env`                           | CORS origin must match                   |
-| `SERVER_PORT`               | Webapp's `APPLICATION_SERVER_URL` (if connecting directly) | API base URL changes                     |
-| `POSTGRES_PORT`             | Nothing (automatic)                                        | Both Compose and Spring read from `.env` |
-
-:::warning Webapp defaults
-The webapp reads its configuration from `window.__ENV__`, falling back to hardcoded dev defaults in
-`webapp/src/environment/index.ts` — `APPLICATION_SERVER_URL` defaults to `http://localhost:8080`. In
-production the Docker entrypoint writes the real values into `env-config.js`. For local development
-with non-standard ports, put the override in `webapp/public/env-config.js` as shown above. Nothing
-here reads a Vite environment variable.
-:::
+| When you change... | Also update...                                             | Why                                      |
+| ------------------ | ---------------------------------------------------------- | ---------------------------------------- |
+| `WEBAPP_PORT`      | `APPLICATION_HOST_URL` in `.env`                           | CORS origin must match                   |
+| `SERVER_PORT`      | Webapp's `APPLICATION_SERVER_URL` (if connecting directly) | API base URL changes                     |
+| `POSTGRES_PORT`    | Nothing (automatic)                                        | Both Compose and Spring read from `.env` |
 
 ### GitHub configuration
 
@@ -286,10 +280,11 @@ hephaestus:
   sync:
     filters:
       allowed-organizations:
+        - hephaestus-build
         - ls1intum
         - HephaestusTest
       allowed-repositories:
-        - ls1intum/Hephaestus
+        - hephaestus-build/Hephaestus
         - ls1intum/Artemis
         - HephaestusTest/demo-repository
 ```
@@ -323,15 +318,17 @@ rejected outright. To point a connection at a local OpenAI-compatible gateway du
 set:
 
 ```yaml
-# server/.env or application-local.yml
+# application-local.yml
 hephaestus.llm.egress.allow-loopback: true
 ```
 
-This is off by default everywhere except `application-local.yml`/`application-e2e.yml`; never enable it in a deployed environment.
+or `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK=true` in `server/.env`. It is off by default and
+`application-e2e.yml` is the only shipped profile that turns it on; never enable it in a deployed
+environment.
 
 ### Authentication (local)
 
-Authentication is Hephaestus-native (no Keycloak — see [ADR 0017](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md)). The server federates to GitHub (and optionally GitLab — gitlab.com or a self-hosted instance) via Spring Security `oauth2Login`, then issues its own short-lived ES256 cookie-session JWT. The webapp reads `GET /user` and redirects to `/auth/login` — there is no token in the browser.
+Authentication is Hephaestus-native (no Keycloak — see [ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md)). The server federates to GitHub (and optionally GitLab — gitlab.com or a self-hosted instance) via Spring Security `oauth2Login`, then issues its own short-lived ES256 cookie-session JWT. The webapp reads `GET /user` and redirects to `/auth/login` — there is no token in the browser.
 
 #### Configure GitHub login
 
@@ -370,10 +367,8 @@ development the monolith default boots all three runtime roles (`server`, `worke
 so `vp run dev:server` exposes the unified `/webhooks/{kind}` endpoint (kinds: `github`,
 `gitlab`, `slack`, `outline`) alongside the rest of the API.
 
-In production the receiver is deployed as a separate `webhook-server` container from the same
-image, activated with `SPRING_PROFILES_ACTIVE=prod,webhook`. The app-server's deploy cycle does
-NOT interrupt webhook reception — push events on GitHub/GitLab are not manually redeliverable,
-so restart independence is operationally required. See ADR 0008.
+Production runs the receiver in its own container — [Runtime roles](../admin/runtime-roles#monolith-vs-split-pod)
+and [ADR 0008](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md).
 
 When you run `docker/compose.core.yaml` set the webhook secret up front so signature checks
 succeed (the same secret is used by both auto-registration and the receiver):
@@ -424,8 +419,8 @@ vp run --filter webapp chromatic:ci        # Visual regression in CI
 ```
 
 - Every new UI component ships with at least one story covering empty, loading, and error states.
-- Chromatic runs on every pull request – review visual diffs before merging.
-- Reference [ui.shadcn.com](https://ui.shadcn.com/) for composition patterns; stick to headless Radix primitives when you need new widgets.
+- CI runs Chromatic for same-repository pull requests that change the webapp – review visual diffs before merging.
+- Reference [ui.shadcn.com](https://ui.shadcn.com/) for composition patterns; a new widget builds on the Base UI primitives already wrapped under `src/components/ui/**`.
 
 ### OpenAPI client
 
@@ -442,3 +437,33 @@ spec. Commit both with the change.
 - Schema names carry no `DTO` suffix; the server strips it when it publishes the spec.
 - Pair every new endpoint with its generated TanStack Query options; never hand-roll `fetch` — the
   generated client is configured once and carries the cookie session.
+
+### Updating Java dependencies
+
+Edit `server/gradle/libs.versions.toml`, then resolve the graphs and exercise the changed tools.
+Strict dependency locking rejects missing lock state as well as version drift; do not delete a
+lockfile or disable verification to make an update pass.
+The root `dependencies` report covers both projects, including PMD's auxiliary classpath, so
+Renovate's standard lock and checksum commands refresh the same graphs used by source builds.
+Set `GRADLE_USER_HOME` to an empty temporary directory and disable configuration caching when
+generating metadata, so cached resolution cannot omit parent POM or module-descriptor checksums:
+
+```sh
+./server/gradlew -p server --no-configuration-cache \
+  :application:dependencies :generated-clients:dependencies \
+  --write-locks --write-verification-metadata sha256
+./server/gradlew -p server --no-configuration-cache \
+  :application:check :application:bootJar --write-locks --write-verification-metadata sha256
+```
+
+Review the dependency-lock diffs and independently verify newly trusted artifacts against their
+publisher before committing `server/gradle/verification-metadata.xml`. Metadata generation records
+what was downloaded; it does not establish trust. Run the checks again without metadata-writing
+flags, still without configuration caching and with another empty Gradle user home, to verify fresh
+downloads. Exercise changed generators, formatters, Liquibase or mutation tooling as well: their
+classpaths are separate from the application runtime. Restore your usual Gradle user home afterward.
+
+For a Gradle wrapper update, also run the build with `--warning-mode all` and review plugin
+compatibility before accepting a new major. Do not suppress upstream deprecations to make the
+upgrade appear clean. A JDK-line change updates `.java-version` and Renovate's matching
+`constraints.java`; `gate:toolchain` rejects drift between them.

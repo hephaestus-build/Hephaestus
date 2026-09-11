@@ -54,7 +54,8 @@ class ImpersonationGuardIntegrationTest extends BaseIntegrationTest {
                 .headers(headers -> headers.setBearerAuth(TestSecurityConfig.IMPERSONATION_TOKEN))
                 .exchange()
                 .expectStatus()
-                .value(status -> Assertions.assertThat(status).isNotEqualTo(403));
+                .value(status -> Assertions.assertThat(status).isNotEqualTo(403))
+                .expectBody(Void.class);
     }
 
     @Test
@@ -67,6 +68,7 @@ class ImpersonationGuardIntegrationTest extends BaseIntegrationTest {
                 .headers(headers -> headers.setBearerAuth(TestSecurityConfig.IMPERSONATION_TOKEN))
                 .exchange()
                 .expectStatus()
-                .value(status -> Assertions.assertThat(status).isNotEqualTo(403));
+                .value(status -> Assertions.assertThat(status).isNotEqualTo(403))
+                .expectBody(Void.class);
     }
 }

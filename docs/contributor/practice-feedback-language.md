@@ -27,7 +27,7 @@ area*, `PracticeArea`, `areaSlug`, and `/practice-areas` are retired names, not 
 | **Practice**                        | A defined way of working used to review work                                                                                                               | rule, detector                                                       |
 | **Practice group**                   | A named collection of related practices                                                                                                                               | category, goal, learning objective                                   |
 | **Unassigned**                      | Practices that are not in a practice group                                                                                                                  | ungrouped, unbound                                                   |
-| **Observation**                     | One recorded result of reviewing one practice against one piece of reviewed work                                                                           | finding, detection                                                   |
+| **Observation**                     | One recorded result of reviewing one practice against one piece of reviewed work                                                                           | finding, detection, verdict                                          |
 | **Practice feedback**               | Guidance written from observations and addressed to a developer — both the whole and the countable unit                                                    | message, AI feedback, feedback item, ledger unit                     |
 | **Delivery**                        | Whether one piece of feedback was prepared, delivered, withheld, failed, or replaced                                                                       | placement, surface                                                   |
 | **Channel**                         | Where one piece of feedback is intended to appear — a fact about that piece, not a workspace setting; the destinations are the `FeedbackChannel` constants | destination, surface, reach                                          |
@@ -79,14 +79,14 @@ developer's own practice pages, where nobody replies to it.
 
 The mentor also renders inside the app, so the line between the last two is *dialogic or not*: ask **is it
 a turn?** before **which screen?** A channel names a destination, never a cognitive level and never what
-the developer is supposed to do about it. The three do line up with the task, self-regulation and process
-levels of Hattie & Timperley's model (ADR 0029), but a level is a claim about content that a destination
-cannot enforce, so do not use the level as the name.
+the developer is supposed to do about it. The three do line up with the levels of Hattie & Timperley's
+model ([which is which](./practice-review-glossary.mdx#the-three-channels-are-three-levels)), but a
+level is a claim about content that a destination cannot enforce, so do not use the level as the name.
 
 `IN_APP` is the code noun — the enum constant and the `chk_feedback_channel` value. Do not call it a
 *profile* or *reflection* channel: those words name a different surface or an outcome the system cannot
 observe.
-[ADR 0029](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md)
+[ADR 0029](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md)
 records the naming
 decision. On an operator surface, the place reads **On their practice pages**.
 
@@ -107,15 +107,11 @@ workspace-admin route `/workspaces/{workspaceSlug}/practices/reviews/observation
 reads live under `/workspaces/{workspaceSlug}/practices/observations`. Apart from the web-route redirect, a
 *finding* in this subsystem is a bug.
 
-Use **practice autonomy** for who may authorize feedback: **Off**, **Review before sending**, or
-**Send automatically**. **Off** stops the review. **Review before sending** composes in-context feedback but
-requires a workspace owner or administrator to approve the exact proposal. **Send automatically** lets new
-feedback proceed without that decision, subject to delivery policy. Do not call this a tier, loudness, reach,
-or shadow mode: those names obscure the human authorization step.
-
-Most practices inherit from their group, and most groups inherit from the workspace. Use **effective autonomy**
-for the resolved value, **override** for a value set at the level being discussed, and **inherited** when a
-parent supplied it.
+**Practice autonomy** and **effective autonomy** are the glossary's
+([Practice autonomy](./practice-review-glossary.mdx#practice-autonomy),
+[Autonomy inheritance](./practice-review-glossary.mdx#autonomy-inheritance)). The product labels for the
+three values are **Off**, **Review before sending** and **Send automatically**; a value set at the level
+being discussed is an **override**, and one a parent supplied is **inherited**.
 
 For whether an instance entry is copied into new workspaces, use **include / exclude** (see the table
 above). Do not use *shipped*, *offered*, *retired*, *ours*, *yours*, or *here* in catalog UI copy;

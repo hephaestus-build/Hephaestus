@@ -6,7 +6,7 @@ description: How repository activity is ingested, backfilled and kept current.
 # Integration sync lifecycle
 
 What each integration actually does at every phase of its life, from first connect to erasure.
-Companion to [ADR 0024](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md),
+Companion to [ADR 0024](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md),
 which records *why* the two deletion semantics are separate.
 
 ## The cohesive principle
@@ -16,10 +16,10 @@ only transport policy — retries, rate-limit accounting, pagination bounds, ten
 
 | Integration | Contract | Generated from |
 | --- | --- | --- |
-| GitHub | GraphQL schema | `graphql-codegen-maven-plugin` → `…scm.github.graphql` |
-| GitLab | GraphQL schema | `graphql-codegen-maven-plugin` → `…scm.gitlab.graphql` |
+| GitHub | GraphQL schema | GraphQL Codegen Gradle plugin → `…scm.github.graphql` |
+| GitLab | GraphQL schema | GraphQL Codegen Gradle plugin → `…scm.gitlab.graphql` |
 | Slack | Official SDK | `com.slack.api:bolt` |
-| Outline | OpenAPI spec | `openapi-generator-maven-plugin` → `spec3.yml` + `outline-supplement.yaml` |
+| Outline | OpenAPI spec | OpenAPI Generator Gradle plugin → `spec3.yml` + `outline-supplement.yaml` |
 
 Schemas and specs are refreshed by `vp run schema:github`, `schema:gitlab`, and `schema:outline`.
 No integration hand-rolls a vendor DTO.
@@ -82,8 +82,8 @@ erasure can never implement the drift path.
 
 There is no entity-level soft-delete filter: which reads honour a tombstone, and which keep returning
 the row because they record something that happened, is decided surface by surface in
-[ADR 0024](https://github.com/ls1intum/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md)
-§ Update — 2026-09-03 (issue #1404): which reads honour a drift tombstone.
+[ADR 0024](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md)
+under *Which reads honour a drift tombstone*.
 
 ### Erasure is orphan-guarded
 
@@ -137,7 +137,7 @@ connection by the sync-job pruner. Global identity rows (`user`, `organization`,
 | --- | --- |
 | Job types and what each implies | `integration.core.sync.SyncJobType` |
 | Per-integration job bodies | `…{github,gitlab,slack,outline}…IntegrationSyncRunner` |
-| Deletion sweeps | `GitHubDeletionSweepService`, `GitLabDeletionSweepService`, `OutlineDocumentSyncService#tombstoneVanished` |
+| Deletion sweeps | `GitHubDeletionSweepService`, `GitLabDeletionSweepService`, `OutlineMirrorRetentionService#tombstoneVanished` |
 | SCM erasure | `workspace.ScmWorkspaceContentEraser`, `workspace.adapter.ScmWorkspacePurgeAdapter` |
 | Slack / Outline erasure | `SlackWorkspaceContentEraser`, `OutlineConnectionStrategy#revoke`, `OutlineWorkspacePurgeAdapter` |
 | Monitor identity healing | `BackfillStateProvider#reconcileSyncTargetIdentity` / `#reconcileSyncTargetsForRepository` |

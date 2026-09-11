@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
@@ -119,6 +120,17 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                         org.mockito.Mockito.mock(FeedbackLedgerRecorder.class)),
                 observationRepository);
         lenient().when(cas.get(anyString())).thenReturn(java.util.Optional.of(new byte[0]));
+    }
+
+    @Test
+    void shouldFinishWithoutComposingFeedbackWhenObservationsWereRefused() {
+        var refused = new de.tum.cit.aet.hephaestus.agent.job.AgentJob();
+        var metadata = objectMapper.createObjectNode();
+        metadata.putObject(ObservationAdmissionService.REFUSAL_METADATA_KEY).put("reasonCode", "no_valid_observations");
+        refused.setMetadata(metadata);
+        org.assertj.core.api.Assertions.assertThatCode(() -> handler.deliver(refused))
+                .doesNotThrowAnyException();
+        org.mockito.Mockito.verifyNoInteractions(feedbackService, observationRepository, deliveryService);
     }
 
     @Test
@@ -376,7 +388,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
 
             assertThat(files).containsKey("task.json");
             JsonNode envelope = objectMapper.readTree(files.get("task.json"));
-            assertThat(envelope.get("schemaVersion").asInt()).isEqualTo(1);
+            assertThat(envelope.get("schemaVersion").asInt()).isEqualTo(2);
             assertThat(envelope.get("workspaceId").asLong()).isEqualTo(WORKSPACE_ID);
             JsonNode task = envelope.get("task");
             assertThat(task.get("kind").asString()).isEqualTo("practice_review");
@@ -512,6 +524,27 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldRefuseInconsistentPinnedAssessmentBeforePersistingObservations() {
+            String rawOutput = """
+                    {"observations": [{
+                      "practiceSlug": "avoids-insecure-defaults-and-over-broad-permissions",
+                      "summary": "The harmful behaviour is good",
+                      "presence": "PRESENT",
+                      "assessment": "GOOD",
+                      "evidenceRationale": "Original evidence rationale",
+                      "evidence": {}
+                    }]}
+                    """;
+            AgentJob job = jobWithOutput(rawOutput);
+
+            assertThatThrownBy(() -> admit(job, rawOutput))
+                    .isInstanceOfSatisfying(
+                            ObservationsRefusedException.class,
+                            e -> assertThat(e.reasonCode()).isEqualTo("incoherent_assessment"));
+            verifyNoInteractions(deliveryService, feedbackService, observationRepository);
+        }
+
+        @Test
         void shouldHoldAutomaticFeedbackInsideTheReviewPackageWhenAnyPracticeNeedsApproval() {
             String lead = "The retry path is covered now, but the description never says why it changed.";
             ObjectNode metadata = sampleJobMetadata();
@@ -569,6 +602,77 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             admit(job, rawOutput);
 
             verify(deliveryService).deliver(eq(job), any());
+        }
+
+        /** A job past admission, carrying the coverage ledger its run wrote. */
+        private AgentJob jobAwaitingDelivery(int eligible, int evaluated) {
+            ObjectNode metadata = sampleJobMetadata();
+            metadata.put(ObservationAdmissionService.DIGEST_METADATA_KEY, "digest-1");
+            AgentJob job = jobWithMetadata(metadata);
+            ObjectNode output = objectMapper.createObjectNode();
+            output.putObject("feedback").put("admissionDigest", "digest-1");
+            ObjectNode coverage = output.putObject("practiceCoverage");
+            coverage.put("eligible", eligible);
+            coverage.put("evaluated", evaluated);
+            job.setOutput(output);
+            return job;
+        }
+
+        private void observed(AgentJob job, Practice practice, Assessment assessment) {
+            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(java.util.List.of(practice));
+            var observation = org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.model.Observation.class);
+            lenient().when(observation.getPractice()).thenReturn(practice);
+            lenient().when(observation.getSummary()).thenReturn("What the review saw");
+            lenient()
+                    .when(observation.getPresence())
+                    .thenReturn(assessment == Assessment.BAD ? Presence.ABSENT : Presence.PRESENT);
+            lenient().when(observation.getAssessment()).thenReturn(assessment);
+            lenient()
+                    .when(observation.getSeverity())
+                    .thenReturn(assessment == Assessment.BAD ? Severity.MAJOR : Severity.INFO);
+            lenient().when(observation.getEvidenceRationale()).thenReturn("The evidence warrants it.");
+            lenient().when(observation.getOccurrenceKey()).thenReturn("occ-" + practice.getSlug());
+            lenient().when(observation.getRecurrenceKey()).thenReturn("rk-" + practice.getSlug());
+            when(observationRepository.findByAgentJobId(
+                            job.getId(), job.getWorkspace().getId()))
+                    .thenReturn(java.util.List.of(observation));
+        }
+
+        @Test
+        void shouldWithholdAnAllClearWhenTheReviewDidNotReachEveryPractice() {
+            AgentJob job = jobAwaitingDelivery(2, 1);
+            observed(
+                    job,
+                    createPractice("pr-description-quality", "PR Description Quality", "criteria"),
+                    Assessment.GOOD);
+
+            handler.deliver(job);
+
+            verify(feedbackService, never()).deliverFeedback(any(), any(), any());
+            verify(feedbackService, never()).recordProposal(any(), any(), any());
+        }
+
+        @Test
+        void shouldStillReportWhatAPartialReviewFound() {
+            AgentJob job = jobAwaitingDelivery(2, 1);
+            observed(job, createPractice("error-handling", "Error Handling", "criteria"), Assessment.BAD);
+
+            handler.deliver(job);
+
+            verify(feedbackService).deliverFeedback(eq(job), any(), any());
+        }
+
+        @Test
+        void shouldPostAnAllClearWhenTheReviewReachedEveryPractice() {
+            AgentJob job = jobAwaitingDelivery(2, 2);
+            observed(
+                    job,
+                    createPractice("pr-description-quality", "PR Description Quality", "criteria"),
+                    Assessment.GOOD);
+
+            handler.deliver(job);
+
+            verify(feedbackService).deliverFeedback(eq(job), any(), any());
         }
 
         @Test
@@ -640,8 +744,46 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> admit(job, rawOutput))
                     .isInstanceOf(JobDeliveryException.class)
-                    .hasMessageContaining("stale/empty diff");
+                    .hasMessageContaining("answered without reading the change");
             verifyNoInteractions(deliveryService);
+        }
+
+        @Test
+        void admitsWhenNothingDecidedButAnObservationQuotesTheDiff() {
+            String rawOutput = """
+                {
+                  "observations": [{
+                    "practiceSlug": "pr-description-quality",
+                    "summary": "Not applicable here",
+                    "presence": "NOT_APPLICABLE",
+                    "evidenceRationale": "The practice has no subject in this change.",
+                    "evidence": {
+                      "citations": [{
+                        "sourceKind": "scm.pull-request.diff",
+                        "artifactPath": "inputs/context/diff.patch",
+                        "path": "Sources/Auth.swift",
+                        "side": "NEW",
+                        "startLine": 1,
+                        "endLine": 1,
+                        "quote": "+changed"
+                      }],
+                      "inapplicability": { "reason": "No relevant subject exists." }
+                    }
+                  }]
+                }
+                """;
+            AgentJob job = jobWithMetadata(sampleJobMetadata());
+            ObjectNode output = objectMapper.createObjectNode();
+            output.put("rawOutput", rawOutput);
+            job.setOutput(output);
+            stubDiff(
+                    "diff --git a/Sources/Auth.swift b/Sources/Auth.swift\n+++ b/Sources/Auth.swift\n@@ -1 +1 @@\n+changed\n");
+            when(deliveryService.deliver(eq(job), any()))
+                    .thenAnswer(inv -> new DeliveryResult(1, 0, false, inv.getArgument(1)));
+
+            admit(job, rawOutput);
+
+            verify(deliveryService).deliver(eq(job), any());
         }
 
         @Test

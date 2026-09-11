@@ -12,6 +12,8 @@ import java.util.Set;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
@@ -83,6 +85,70 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         assertStatus(facts, "webhook.shared-secret", ConfigurationStatus.SATISFIED);
         assertStatus(facts, "auth.login-provider", ConfigurationStatus.NOT_APPLICABLE);
         assertStatus(facts, "agent.image-contract", ConfigurationStatus.NOT_APPLICABLE);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"NATS://broker:4222", "TLS://broker:4222"})
+    void shouldAcceptANatsSchemeInAnyCaseBecauseTheClientLowercasesIt(String server) {
+        Map<String, Object> properties = validProperties();
+        properties.put("hephaestus.sync.nats.server", server);
+
+        assertStatus(evaluateReadiness(properties, true), "nats.server", ConfigurationStatus.SATISFIED);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "nats", "//broker:4222", "broker:4222"})
+    void shouldReportANatsServerWithoutANatsSchemeInsteadOfFailingToEvaluate(String server) {
+        Map<String, Object> properties = validProperties();
+        properties.put("hephaestus.sync.nats.server", server);
+
+        assertStatus(evaluateReadiness(properties, true), "nats.server", ConfigurationStatus.ACTION_REQUIRED);
+    }
+
+    @Test
+    void shouldReportTheDockerRuntimeSettingAndDetectWhenItIsMissing() {
+        Map<String, Object> properties = role(true, false);
+        assertThat(evaluateReadiness(properties, true))
+                .filteredOn(fact -> fact.id().equals("sandbox.isolation-runtime"))
+                .singleElement()
+                .satisfies(fact -> {
+                    assertThat(fact.subject()).isEqualTo("hephaestus.sandbox.docker.container-runtime");
+                    assertThat(fact.status()).isEqualTo(ConfigurationStatus.SATISFIED);
+                });
+
+        properties.remove("hephaestus.sandbox.docker.container-runtime");
+        assertStatus(
+                evaluateReadiness(properties, true), "sandbox.isolation-runtime", ConfigurationStatus.ACTION_REQUIRED);
+        properties.put("hephaestus.runtime.worker.enabled", false);
+        assertStatus(
+                evaluateReadiness(properties, true), "sandbox.isolation-runtime", ConfigurationStatus.NOT_APPLICABLE);
+    }
+
+    @Test
+    void shouldRejectARemovedSandboxPropertyName() {
+        Map<String, Object> properties = role(true, false);
+        assertStatus(
+                evaluateReadiness(properties, true),
+                "sandbox.docker-legacy-configuration",
+                ConfigurationStatus.SATISFIED);
+
+        properties.put("hephaestus.sandbox.container-runtime", "runsc");
+        List<ConfigurationFactDTO> facts = evaluateReadiness(properties, true);
+        assertStatus(facts, "sandbox.docker-legacy-configuration", ConfigurationStatus.ACTION_REQUIRED);
+        assertThat(facts)
+                .filteredOn(fact -> fact.id().equals("sandbox.docker-legacy-configuration"))
+                .singleElement()
+                .satisfies(fact -> assertThat(fact.subject()).isEqualTo("hephaestus.sandbox.container-runtime"));
+    }
+
+    @Test
+    void shouldRejectARemovedSandboxEnvironmentVariableName() {
+        Map<String, Object> properties = role(true, false);
+        properties.put("SANDBOX_TLS_VERIFY", "true");
+        assertStatus(
+                evaluateReadiness(properties, true),
+                "sandbox.docker-legacy-configuration",
+                ConfigurationStatus.ACTION_REQUIRED);
     }
 
     @Test
@@ -234,7 +300,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         properties.put("hephaestus.llm.egress.allow-loopback", false);
         properties.put("hephaestus.agent.image.require-digest", true);
         properties.put("hephaestus.agent.image.reference", "ghcr.io/example/agent@sha256:" + "a".repeat(64));
-        properties.put("hephaestus.sandbox.container-runtime", "runsc");
+        properties.put("hephaestus.sandbox.docker.container-runtime", "runsc");
         return properties;
     }
 

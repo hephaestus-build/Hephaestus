@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate, redirect, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { z } from "zod";
 import {
@@ -15,6 +15,7 @@ import {
 	replaceFeedbackResponseMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { PracticeStanding } from "@/api/types.gen";
+import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import {
 	PracticeGroupDetailPage,
 	type ReviewRunFeedState,
@@ -23,9 +24,11 @@ import {
 	isEmptyFeedbackResponse,
 	type ObservationDetailState,
 } from "@/components/profile/review-runs";
+import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { resolveCurrentUser } from "@/integrations/auth/guard";
 import { loadedPages } from "@/integrations/tanstack-query/spring-page";
 import { problemDetailOf } from "@/lib/problem-detail";
+import { useSearchState } from "@/lib/search-params";
 
 const ACTIVITY_PAGE_SIZE = 10;
 
@@ -47,6 +50,7 @@ export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/user/$username/practice-groups/$groupSlug",
 )({
 	validateSearch: practiceGroupDetailSearchSchema,
+	remountDeps: ({ params }) => params,
 	beforeLoad: async ({ context, params }) => {
 		const user = await resolveCurrentUser(context.queryClient);
 		const isOwnProfile = user?.username?.toLowerCase() === params.username.toLowerCase();
@@ -58,16 +62,44 @@ export const Route = createFileRoute(
 			});
 		}
 	},
-	component: PracticeGroupDetail,
+	component: PracticeGroupRoute,
 });
+
+function PracticeGroupRoute() {
+	const { workspaceSlug, username } = Route.useParams();
+	const featureState = useWorkspaceFeatures(workspaceSlug);
+	if (featureState.isError) {
+		return (
+			<QueryErrorAlert
+				error={featureState.error}
+				title="Couldn't load workspace features"
+				onRetry={featureState.refetch}
+			/>
+		);
+	}
+	if (featureState.features?.practicesEnabled === false) {
+		return (
+			<Navigate
+				to="/w/$workspaceSlug/user/$username"
+				params={{ workspaceSlug, username }}
+				replace
+			/>
+		);
+	}
+	if (featureState.features?.practicesEnabled !== true) {
+		return <PracticeGroupDetailPage isLoading />;
+	}
+	return <PracticeGroupDetail />;
+}
 
 function PracticeGroupDetail() {
 	const { workspaceSlug, username, groupSlug } = Route.useParams();
 	const { practice: selectedPracticeSlug, observation: openObservationId } = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
 	const queryClient = useQueryClient();
+	const setSearch = useSearchState();
 	const updateSelection = (search: { practice?: string; observation?: string }) =>
-		void navigate({ search: (previous) => ({ ...previous, ...search }) });
+		void setSearch((previous) => ({ ...previous, ...search }));
 
 	const groupsQuery = useQuery({
 		...listGroupsOptions({
@@ -101,7 +133,7 @@ function PracticeGroupDetail() {
 	});
 	const invalidateReviewRuns = () =>
 		queryClient.invalidateQueries({
-			queryKey: listPracticeGroupReviewRunsInfiniteQueryKey(reviewRunsRequest),
+			queryKey: listPracticeGroupReviewRunsInfiniteQueryKey({ path: { workspaceSlug, groupSlug } }),
 		});
 	const replaceResponseMutation = useMutation({
 		...replaceFeedbackResponseMutation(),

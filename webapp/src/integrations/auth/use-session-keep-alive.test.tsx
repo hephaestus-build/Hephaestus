@@ -1,23 +1,13 @@
+/* oxlint-disable no-restricted-properties -- Fixtures follow the fake session clock. */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { StrictMode, type ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { getCurrentUserQueryKey } from "@/api/@tanstack/react-query.gen";
 import { server } from "@/mocks/server";
-
 import { useSessionKeepAlive } from "./use-session-keep-alive";
-
-// Real behaviour, no mocks of our own code: the hook fetches /user through the actual client + query
-// layer, schedules a real setTimeout against the returned expiry, and POSTs /auth/refresh — we just
-// observe the requests the keep-alive makes. REFRESH_SKEW_MS is 60s, so a token that expires ~61s out is
-// due for renewal in ~1s; real timers keep the test honest while staying quick.
-
-function wrapper(queryClient: QueryClient) {
-	return ({ children }: { children: ReactNode }) => (
-		<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-	);
-}
 
 function userPayload(expiresInSec: number) {
 	return {
@@ -28,72 +18,173 @@ function userPayload(expiresInSec: number) {
 		impersonating: false,
 		linkedProviders: [],
 		roles: [],
-		// oxlint-disable-next-line no-restricted-properties -- The hook schedules against the wall clock, so a fixture expiry has to be stated against it or the renewal is already due.
 		accessTokenExpiresAt: Math.floor(Date.now() / 1000) + expiresInSec,
 	};
 }
 
-const sleep = (ms: number) =>
-	new Promise((resolve) => {
-		setTimeout(resolve, ms);
+beforeEach(() => {
+	vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+	vi.setSystemTime(new Date("2026-09-07T12:00:00Z"));
+});
+afterEach(() => {
+	vi.useRealTimers();
+	vi.restoreAllMocks();
+});
+
+async function advance(ms: number) {
+	await act(() => vi.advanceTimersByTimeAsync(ms));
+}
+
+function mountSession(expiresInSec = 61) {
+	let refreshCalls = 0;
+	let userCalls = 0;
+	server.use(
+		http.get("*/user", () => {
+			userCalls++;
+			return HttpResponse.json(userPayload(refreshCalls < 2 ? expiresInSec : 3600));
+		}),
+		http.post("*/auth/refresh", () => {
+			refreshCalls++;
+			return new HttpResponse(null, { status: 204 });
+		}),
+	);
+	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+	queryClient.setQueryData(getCurrentUserQueryKey(), userPayload(expiresInSec));
+	const { unmount } = renderHook(() => useSessionKeepAlive(), {
+		wrapper: ({ children }: { children: ReactNode }) => (
+			<StrictMode>
+				<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+			</StrictMode>
+		),
 	});
+	return { refreshCalls: () => refreshCalls, userCalls: () => userCalls, unmount };
+}
 
 describe("useSessionKeepAlive", () => {
-	it("proactively rotates the access cookie before it expires while the user is active", async () => {
-		let userCalls = 0;
-		let refreshCalls = 0;
-		// First load: expiry just past the refresh skew, so a renewal is due almost at once. The
-		// refetched /user then reports a far-future expiry, settling the scheduler — so one proactive
-		// refresh proves both that it renews early and that it does not storm.
-		server.use(
-			http.get(
-				"*/user",
-				() => {
-					userCalls += 1;
-					return HttpResponse.json(userPayload(61));
-				},
-				{ once: true },
-			),
-			http.get("*/user", () => {
-				userCalls += 1;
-				return HttpResponse.json(userPayload(3600));
-			}),
-			http.post("*/auth/refresh", () => {
-				refreshCalls += 1;
-				return new HttpResponse(null, { status: 204 });
-			}),
-		);
-
-		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-		renderHook(() => useSessionKeepAlive(), { wrapper: wrapper(queryClient) });
-
-		await waitFor(() => expect(refreshCalls).toBe(1), { timeout: 3000 });
-		// Re-read /user afterwards to pick up the new expiry (initial load + post-refresh refetch).
-		expect(userCalls).toBeGreaterThanOrEqual(2);
+	it("renews once on mount even when Strict Mode replays the effect", async () => {
+		const session = mountSession();
+		await advance(1_000);
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
+		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
 	});
 
-	it("does NOT keep renewing an idle session — once the user stops interacting, the token lapses", async () => {
-		let refreshCalls = 0;
+	it("leaves a renewed session idle until activity resumes", async () => {
+		const session = mountSession();
+		await advance(1_000);
+		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
+		await advance(5_000);
+		expect(session.refreshCalls()).toBe(1);
+		act(() => {
+			window.dispatchEvent(new Event("pointerdown"));
+		});
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
+		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(2)));
+		await advance(5_000);
+		expect(session.refreshCalls()).toBe(2);
+	});
+
+	it("can renew after a transient failure without retrying an idle session", async () => {
+		const session = mountSession();
 		server.use(
-			// Every load reports the same short expiry, so a renewal is due ~1s into every cycle.
-			http.get("*/user", () => HttpResponse.json(userPayload(61))),
-			http.post("*/auth/refresh", () => {
-				refreshCalls += 1;
-				return new HttpResponse(null, { status: 204 });
-			}),
+			http.post("*/auth/refresh", () => new HttpResponse(null, { status: 503 }), { once: true }),
 		);
+		await advance(1_000);
+		await advance(5_000);
+		expect(session.userCalls()).toBe(0);
+		expect(session.refreshCalls()).toBe(0);
+		act(() => {
+			window.dispatchEvent(new Event("keydown"));
+		});
+		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
+		expect(session.refreshCalls()).toBe(1);
+		await advance(5_000);
+		expect(session.refreshCalls()).toBe(1);
+	});
 
-		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-		// No interaction is ever dispatched. Mounting counts as activity (we never drop a just-loaded
-		// session), so cycle 1 renews once — then, with no further interaction, cycle 2 must be skipped
-		// and the session left to expire. This is the OWASP idle timeout.
-		renderHook(() => useSessionKeepAlive(), { wrapper: wrapper(queryClient) });
+	it("renews a full-day cookie hourly while active but not indefinitely while idle", async () => {
+		const session = mountSession(24 * 60 * 60);
+		await advance(60 * 60_000);
+		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
+		await advance(2 * 60 * 60_000);
+		expect(session.refreshCalls()).toBe(1);
+		act(() => {
+			window.dispatchEvent(new Event("keydown"));
+		});
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
+	});
 
-		// Cycle 1 (seeded by mount-activity) renews exactly once.
-		await waitFor(() => expect(refreshCalls).toBe(1), { timeout: 3000 });
-		// Wait well past cycle 2's due time (~1s after the cycle-1 renewal): with zero interaction it must
-		// NOT renew again.
-		await sleep(1800);
-		expect(refreshCalls).toBe(1);
+	it("does not rotate on every activity event when the absolute expiry stays unchanged", async () => {
+		const session = mountSession(24 * 60 * 60);
+		const fixedIdentity = userPayload(24 * 60 * 60);
+		server.use(http.get("*/user", () => HttpResponse.json(fixedIdentity)));
+		await advance(60 * 60_000);
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
+		await advance(11_000);
+		act(() => {
+			window.dispatchEvent(new Event("keydown"));
+		});
+		await advance(11_000);
+		act(() => {
+			window.dispatchEvent(new Event("keydown"));
+		});
+		expect(session.refreshCalls()).toBe(1);
+		await advance(60 * 60_000);
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
+	});
+
+	it("checks the unchanged absolute deadline instead of postponing it for an hour", async () => {
+		const session = mountSession();
+		const fixedIdentity = userPayload(61);
+		server.use(http.get("*/user", () => HttpResponse.json(fixedIdentity)));
+		await advance(1_000);
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
+		await advance(11_000);
+		act(() => {
+			window.dispatchEvent(new Event("keydown"));
+		});
+		await advance(30_000);
+		expect(session.refreshCalls()).toBe(1);
+		await advance(19_000);
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
+	});
+
+	it("bounds renewal after a successful rotation even when identity revalidation fails", async () => {
+		const session = mountSession(24 * 60 * 60);
+		server.use(http.get("*/user", () => new HttpResponse(null, { status: 503 })));
+		await advance(60 * 60_000);
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
+		await advance(11_000);
+		act(() => {
+			window.dispatchEvent(new Event("keydown"));
+		});
+		await advance(11_000);
+		act(() => {
+			window.dispatchEvent(new Event("keydown"));
+		});
+		expect(session.refreshCalls()).toBe(1);
+		await advance(60 * 60_000);
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
+	});
+
+	it("does not renew a hidden tab until it becomes visible", async () => {
+		const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+		const session = mountSession();
+		await advance(2_000);
+		expect(session.refreshCalls()).toBe(0);
+		visibility.mockReturnValue("visible");
+		act(() => {
+			document.dispatchEvent(new Event("visibilitychange"));
+		});
+		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
+	});
+
+	it("removes the timer and activity listeners when unmounted", async () => {
+		const session = mountSession();
+		session.unmount();
+		await advance(120_000);
+		act(() => {
+			window.dispatchEvent(new Event("pointerdown"));
+		});
+		expect(session.refreshCalls()).toBe(0);
 	});
 });

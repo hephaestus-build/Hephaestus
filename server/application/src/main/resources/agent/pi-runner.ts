@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 import {
 	type AgentSession,
@@ -13,10 +14,14 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 
+import {
+	SANDBOX_RESOURCE_LOADER_OPTIONS,
+	SANDBOX_SETTINGS_MANAGER_OPTIONS,
+} from "./pi-agent-sandbox.ts";
 import { errorText } from "./pi-error-text.ts";
 import { buildGrepTool } from "./pi-grep-tool.ts";
 import {
-	citationMatchesArtifact,
+	describeCitationMismatch,
 	dedupeKeyForObservation,
 	isRecord,
 	type NormalizedObservation,
@@ -27,6 +32,7 @@ import {
 } from "./pi-observation-normalize.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { loadProviderConfig, registerHephaestusProvider } from "./pi-provider.ts";
+import { ReviewTrace } from "./pi-review-trace.ts";
 import {
 	buildReviewTree,
 	mapConcurrent,
@@ -39,60 +45,54 @@ import {
 	type ComposedFeedbackEnvelope,
 	type ComposedFeedbackUnit,
 	type PreparedFeedbackTarget,
+	notReachedNote,
 	undeliverableUnits,
 	validateFeedbackEvidence,
 } from "./pi-runner-composition.ts";
 import { outputPath } from "./pi-runner-output.ts";
-import { deriveTimeouts, deriveTurnTiming, deriveWorkstreamBudget } from "./pi-runner-timings.ts";
+import {
+	createRecordingPace,
+	promptTokens,
+	type RecordingPace,
+} from "./pi-runner-recording-pace.ts";
+import { isRetryableStatus, retrying } from "./pi-runner-retry.ts";
+import {
+	armRetryWindow,
+	deriveCompositionWindow,
+	deriveReconBudget,
+	deriveTimeouts,
+	deriveTurnTiming,
+	deriveWorkstreamBudget,
+} from "./pi-runner-timings.ts";
 import {
 	addAssistantUsage,
 	extractUsageFromSession,
 	newUsageLedger,
 	type UsageReport,
 } from "./pi-runner-usage.ts";
-import { forkSessions } from "./pi-session-tree.ts";
+import { stopSession } from "./pi-session-lifecycle.ts";
+import { forkSessions, reconnaissanceSeed } from "./pi-session-tree.ts";
+import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
 
-// ── Reading what other processes wrote ───────────────────────────────────────
-// Everything this runner is handed — the task envelope, the manifest, the practice index, the
-// composition request, the staged history, the admission response — is JSON written by another process.
-// None of it is typed by having been parsed, so each reader below states the shape it needs and checks
-// for it, and the checks are the only reason the shapes are true.
-
-/** JSON.parse with the return type it actually has. */
 function parseJson(text: string): unknown {
 	return JSON.parse(text);
 }
 
-/** The elements of a value the writer was supposed to send as an array, and none for anything else. */
 function jsonArray(value: unknown): unknown[] {
 	return Array.isArray(value) ? value : [];
 }
 
-/**
- * A value nobody has checked, as log text. A string reads as itself; anything else is rendered as the
- * JSON it arrived as, because an object coerced to a string is "[object Object]" — and a line that
- * reports a rejected envelope that way has said nothing about the envelope.
- */
 function logValue(value: unknown): string {
 	if (typeof value === "string") return value;
 	if (value === undefined) return "undefined";
 	return JSON.stringify(value);
 }
 
-/**
- * An array field the SDK declares required, read as the empty list when it is not there.
- *
- * <p>These reads run over whatever a session has left behind — before a first turn, after an abort,
- * after a provider error — which is the state in which pi-runner-usage.ts records a message arriving
- * without the usage block its declaration promises. Neither a session with no transcript nor a
- * message with no parts is a reason to throw inside an event subscription, or to end a review that
- * has already measured something.
- */
+/** SDK event arrays may be absent before completion or after abort. */
 function listOrEmpty<T>(items: T[] | undefined): T[] {
 	return items ?? [];
 }
 
-/** One practice this run may report on, as inputs/practices/index.json describes it. */
 interface PracticeIndexEntry {
 	slug: string;
 	group?: string;
@@ -105,6 +105,7 @@ interface TaskEnvelope {
 	schemaVersion: number;
 	jobId: unknown;
 	workspaceId: unknown;
+	paths: ReturnType<typeof taskPaths>;
 	task: {
 		kind: string;
 		prompt: string;
@@ -123,33 +124,19 @@ interface ChannelBounds {
 /** Where an IN_CONTEXT note may be placed on this artifact. */
 type PlacementKind = "DIFF" | "ARTIFACT";
 
-/** inputs/feedback-composition.json, once its bounds have been clamped to what this run may do. */
+/** The task-declared composition request, once its bounds have been clamped to what this run may do. */
 interface CompositionRequest {
 	channels: Record<Channel, ChannelBounds>;
 	inContextPlacementKinds: PlacementKind[];
 	minDistinctArtifacts: number;
 }
 
-/**
- * One citation of an observation Java has admitted.
- *
- * <p>Only `index` is named, because only `index` is checked. Everything else the server sends rides the
- * index signature: the runner copies those fields onward without reading them, and naming a type it
- * never verifies would be a claim about the server's payload that nothing here establishes.
- */
 interface AdmittedCitation {
 	index: number;
 	[key: string]: unknown;
 }
 
-/**
- * An observation after Java has admitted it.
- *
- * <p>The server owns this shape and the runner re-emits it whole — work/composition/observations.json is
- * this object verbatim, because the composer's prompt reads fields the runner never looks at. So the
- * three fields the runner itself depends on are named and checked, and the index signature is what
- * carries the rest of the server's payload across untouched.
- */
+/** Validate consumed fields; preserve other server fields for the composer. */
 interface AdmittedObservation {
 	id: string;
 	practiceSlug: string;
@@ -171,14 +158,20 @@ function isAdmittedObservation(value: unknown): value is AdmittedObservation {
 	);
 }
 
-// Overridable so a harness with no /workspace can drive the runner. Production never sets it.
 const WORKSPACE_ROOT = "/workspace";
 // The SDK's grep spawns ripgrep, which the sandbox forbids; the runner's own search tool takes its
 // place in every session under the same name. "grep" stays listed: the SDK filters custom tools
 // through this list too, and a listed custom definition replaces the built-in of that name.
 const EVIDENCE_TOOLS = ["read", "grep"] as const;
 const CWD = process.env.PI_RUNNER_CWD ?? WORKSPACE_ROOT;
+const ENVELOPE_MISMATCH_EXIT = 42;
+const SUPPORTED_KIND = "practice_review";
+const TASK_PATH = `${CWD}/task.json`;
+const taskEnvelope = readTaskEnvelope();
+const INPUT_PATHS = resolveTaskPaths(CWD, taskEnvelope.paths);
 const OUTPUT = `${CWD}/out`;
+const reviewTrace = process.env.PI_REVIEW_CAPTURE === "true" ? new ReviewTrace(OUTPUT) : undefined;
+process.on("exit", (code) => reviewTrace?.finish(code));
 const RESULT_PATH = outputPath(OUTPUT, "result.json");
 const REVIEW_STATE_PATH = outputPath(OUTPUT, "review-state.json");
 const WATCHDOG_PATH = outputPath(OUTPUT, "watchdog-killed.json");
@@ -195,11 +188,16 @@ const AGENT_DIR = process.env.PI_CODING_AGENT_DIR;
 if (!AGENT_DIR) {
 	throw new Error("PI_CODING_AGENT_DIR env var is required");
 }
+const TIMEOUTS = deriveTimeouts(AGENT_BUDGET_MS, existsSync(INPUT_PATHS.compositionRequest));
 const {
 	initialMs: INITIAL_TIMEOUT_MS,
 	retryMs: RETRY_TIMEOUT_MS,
 	compositionMs: COMPOSITION_TIMEOUT_MS,
-} = deriveTimeouts(AGENT_BUDGET_MS, existsSync(`${CWD}/inputs/feedback-composition.json`));
+} = TIMEOUTS;
+
+// The instant the watchdog below counts from. Every stage deadline starts later than this, so it is
+// the only reading against which the process budget means anything.
+const PROCESS_START_MS = Date.now();
 
 setTimeout(() => {
 	console.error(`[pi-runner] Watchdog: ${AGENT_BUDGET_MS + 30_000}ms elapsed, hard-exiting`);
@@ -229,15 +227,15 @@ function readManifest(): {
 	availableSourceKinds: Set<string>;
 	artifactSources: Map<string, string>;
 } {
-	const manifest = parseJson(readFileSync(`${CWD}/inputs/manifest.json`, "utf8"));
+	const manifest = parseJson(readFileSync(INPUT_PATHS.manifest, "utf8"));
 	if (!isRecord(manifest) || !Array.isArray(manifest.sources)) {
-		throw new Error("inputs/manifest.json: expected a sources array");
+		throw new Error("Task manifest: expected a sources array");
 	}
 	const availableSourceKinds = new Set<string>();
 	const artifactSources = new Map<string, string>();
 	for (const source of jsonArray(manifest.sources)) {
 		if (!isRecord(source) || typeof source.kind !== "string" || !isRecord(source.state)) {
-			throw new Error("inputs/manifest.json: every source needs a string kind and a state");
+			throw new Error("Task manifest: every source needs a string kind and a state");
 		}
 		if (source.state.availability === "AVAILABLE") availableSourceKinds.add(source.kind);
 		for (const artifact of jsonArray(source.artifacts)) {
@@ -255,11 +253,11 @@ function readManifest(): {
  * waiting to happen.
  */
 function readPracticeIndex(): PracticeIndexEntry[] {
-	const index = parseJson(readFileSync(`${CWD}/inputs/practices/index.json`, "utf8"));
-	if (!Array.isArray(index)) throw new Error("inputs/practices/index.json: expected an array");
+	const index = parseJson(readFileSync(INPUT_PATHS.practiceIndex, "utf8"));
+	if (!Array.isArray(index)) throw new Error("the task-declared practice index: expected an array");
 	return jsonArray(index).map((practice): PracticeIndexEntry => {
 		if (!isRecord(practice) || typeof practice.slug !== "string") {
-			throw new Error("inputs/practices/index.json: every practice needs a string slug");
+			throw new Error("the task-declared practice index: every practice needs a string slug");
 		}
 		return {
 			slug: practice.slug,
@@ -433,7 +431,14 @@ const observationSchema = {
 	required: ["practiceSlug", "summary", "outcome", "evidence", "evidenceRationale"],
 	properties: {
 		practiceSlug: { type: "string", minLength: 1 },
-		summary: { type: "string", minLength: 1, maxLength: 120 },
+		summary: {
+			type: "string",
+			minLength: 1,
+			maxLength: 120,
+			description:
+				"A short phrase naming what you observed, such as 'Debug print left in the request handler'. " +
+				"Never a single word and never the practice's own name.",
+		},
 		outcome: {
 			type: "string",
 			enum: [
@@ -483,77 +488,12 @@ function persistReviewState() {
 	);
 }
 
-const OUTCOME_VALUES = observationSchema.properties.outcome.enum;
-
-/** Validates the model-authored wire shape before normalization. */
-function isValidObservation(candidate: unknown): boolean {
-	if (!isRecord(candidate)) return false;
-	if (typeof candidate.practiceSlug !== "string" || !candidate.practiceSlug.trim()) return false;
-	if (typeof candidate.summary !== "string" || !candidate.summary.trim()) return false;
-	if (typeof candidate.outcome !== "string") return false;
-	return OUTCOME_VALUES.some((outcome) => outcome === candidate.outcome);
-}
-
-interface ObservationsPayload {
-	observations: unknown[];
-}
-
-function isValidObservationsPayload(payload: unknown): payload is ObservationsPayload {
-	return (
-		isRecord(payload) &&
-		Array.isArray(payload.observations) &&
-		payload.observations.length > 0 &&
-		payload.observations.every(isValidObservation)
-	);
-}
-
-const CONTROL_CHARACTER_ESCAPES = new Map([
-	["\n", "\\n"],
-	["\r", "\\r"],
-	["\t", "\\t"],
-]);
-const LAST_CONTROL_CODE_POINT = 0x1f;
-const DELETE_CODE_POINT = 0x7f;
-
-function lenientJsonParse(text: string): unknown {
-	try {
-		return parseJson(text);
-	} catch {
-		// Retry after escaping raw control characters.
-	}
-	let cleaned = "";
-	for (const character of text) {
-		const codePoint = character.codePointAt(0) ?? 0;
-		if (codePoint > LAST_CONTROL_CODE_POINT && codePoint !== DELETE_CODE_POINT) {
-			cleaned += character;
-			continue;
-		}
-		cleaned += CONTROL_CHARACTER_ESCAPES.get(character) ?? "";
-	}
-	return parseJson(cleaned);
-}
-
-function checkResultFile(): boolean {
-	if (!existsSync(RESULT_PATH)) return false;
-	try {
-		const data = lenientJsonParse(readFileSync(RESULT_PATH, "utf8"));
-		if (!isValidObservationsPayload(data)) {
-			const observations = isRecord(data) ? jsonArray(data.observations) : [];
-			const validCount = observations.filter(isValidObservation).length;
-			console.error(
-				`[pi-runner] result.json validation failed: observations=${observations.length}, valid=${validCount}`,
-			);
-			return false;
-		}
-		const normalized = data.observations.map(normalizeAndValidateObservation);
-		writeFileSync(RESULT_PATH, JSON.stringify({ observations: normalized }, null, 2));
-		return true;
-	} catch (e) {
-		console.error(`[pi-runner] result.json parse error: ${errorText(e)}`);
-		return false;
-	}
-}
-
+/**
+ * Writes the collected result, and is the only thing that writes it: a review session is opened with
+ * `read`, `grep` and `report_observation` and no tool that writes a file, so an observation reaches
+ * this runner through the tool or not at all. What lands here is therefore already normalised and
+ * already validated, by the same call that recorded it.
+ */
 function maybeWriteResultFile(): boolean {
 	if (reviewState.observations.length === 0) return false;
 	writeFileSync(RESULT_PATH, JSON.stringify({ observations: reviewState.observations }, null, 2));
@@ -562,12 +502,6 @@ function maybeWriteResultFile(): boolean {
 
 function hasPersistedReviewState(): boolean {
 	return reviewState.observations.length > 0;
-}
-
-function resolveResultFile(): "agent" | "tool-state" | null {
-	if (checkResultFile()) return "agent";
-	if (maybeWriteResultFile()) return "tool-state";
-	return null;
 }
 
 function appendObservations(observations: unknown[]): {
@@ -611,11 +545,12 @@ function normalizeAndValidateObservation(rawObservation: unknown): NormalizedObs
 	validateInapplicabilityScope(observation, availableSourceKinds);
 	for (const citation of observation.evidence.citations) {
 		const content = readFileSync(`${CWD}/${citation.artifactPath}`, "utf8");
-		if (!citationMatchesArtifact(citation, content)) {
+		const mismatch = describeCitationMismatch(citation, content);
+		if (mismatch !== null) {
 			throw new Error(
 				`citation does not match ${citation.path}:${citation.startLine}-${citation.endLine} ` +
-					`(${citation.side ?? "text"}) in '${citation.artifactPath}'; copy the exact artifact text ` +
-					`and, for a diff, use its [L<n>] coordinates and OLD/NEW side`,
+					`(${citation.side ?? "text"}) in '${citation.artifactPath}': ${mismatch}. Copy the exact ` +
+					`artifact text and, for a diff, use its [L<n>] coordinates and OLD/NEW side`,
 			);
 		}
 	}
@@ -630,6 +565,37 @@ interface ReportObservationDetails {
 	totalObservations?: number;
 	measurementClosed?: boolean;
 	remainingPractices?: string[];
+}
+
+const MAX_REFUSAL_LOG_CHARS = 500;
+
+/**
+ * Names a refused observation in the log as well as to the session.
+ *
+ * The session is told either way — that is how it corrects itself and tries again — but nothing was
+ * written for the reader, so a review whose every recording was refused read exactly like one that
+ * never recorded: the same tool lines, then an empty result.
+ *
+ * A reason can quote a model-authored field, and only the tail of a container's log is kept, so an
+ * unreasonable one is cut here rather than left to evict the transcript it is there to explain.
+ */
+function logRefusal(params: unknown, reason: string): void {
+	const slug =
+		isRecord(params) && typeof params.practiceSlug === "string" ? params.practiceSlug : "unknown";
+	const line = `[pi-runner] observation refused for ${slug}: ${reason}`;
+	console.error(
+		line.length > MAX_REFUSAL_LOG_CHARS ? `${line.slice(0, MAX_REFUSAL_LOG_CHARS)}…` : line,
+	);
+}
+
+/** Logs a refusal thrown by one step, and hands the session the same error it would have seen. */
+function refusing<T>(params: unknown, step: () => T): T {
+	try {
+		return step();
+	} catch (error) {
+		logRefusal(params, errorText(error));
+		throw error;
+	}
 }
 
 function buildReportObservationTool(allowedPracticeSlugs?: readonly string[]) {
@@ -650,30 +616,27 @@ function buildReportObservationTool(allowedPracticeSlugs?: readonly string[]) {
 			"Persist exactly one structured observation immediately so it survives retries and timeouts. Call this as soon as one observation is ready. Do not wait to batch observations.",
 		parameters: scopedObservationSchema,
 		execute: (_toolCallId, params): Promise<AgentToolResult<ReportObservationDetails>> => {
+			// Every branch below that declines to record logs the same reason it hands to the session.
 			if (measurementClosed) {
+				const text = "Measurement is closed; this turn may only compose feedback.";
+				logRefusal(params, text);
 				return Promise.resolve({
-					content: [
-						{
-							type: "text",
-							text: "Measurement is closed; this turn may only compose feedback.",
-						},
-					],
+					content: [{ type: "text", text }],
 					details: { inserted: 0, measurementClosed: true },
 				});
 			}
-			const normalized = normalizeObservation(params);
+			const normalized = refusing(params, () => normalizeObservation(params));
 			if (allowed && !allowed.has(normalized.practiceSlug)) {
+				const text = `This observer is scoped to ${[...allowed].join(", ")}, not '${normalized.practiceSlug}'.`;
+				logRefusal(params, text);
 				return Promise.resolve({
-					content: [
-						{
-							type: "text",
-							text: `This observer is scoped to ${[...allowed].join(", ")}, not '${normalized.practiceSlug}'.`,
-						},
-					],
+					content: [{ type: "text", text }],
 					details: { inserted: 0, remainingPractices: [...allowed] },
 				});
 			}
-			const { inserted, duplicates, negatives } = appendObservations([params]);
+			const { inserted, duplicates, negatives } = refusing(params, () =>
+				appendObservations([params]),
+			);
 			const observed = new Set(reviewState.observations.map((item) => item.practiceSlug));
 			const remainingPractices = allowed
 				? [...allowed].filter((practiceSlug) => !observed.has(practiceSlug))
@@ -746,10 +709,25 @@ const PERSIST_DISCIPLINE =
 	`Do not add derivative low-signal observations when a stronger observation already covers the problem. ` +
 	`Use tools only from this point onward. Do not write planning prose or plain-text commentary.`;
 
-const ENVELOPE_MISMATCH_EXIT = 42;
-const SUPPORTED_SCHEMA_VERSION = 1;
-const SUPPORTED_KIND = "practice_review";
-const TASK_PATH = `${CWD}/task.json`;
+/**
+ * The review is finished and only the call carrying it home did not arrive. The server keeps the
+ * work queued for another attempt when it sees this, so the measurement is repeated against a
+ * server the next sandbox can reach rather than recorded as a review that produced nothing.
+ */
+const SERVER_UNREACHABLE_EXIT = 75;
+/**
+ * No practice was reached, and every model call this run made failed. That is the same kind of fact
+ * as an unreachable server — nothing about the reviewed work was measured, and nothing was learned
+ * that a second attempt would repeat — so the server queues the review again rather than recording it
+ * as one that found nothing.
+ */
+const PROVIDER_UNREACHABLE_EXIT = 76;
+
+/**
+ * The session labels whose turns are the ones that record observations — the per-practice observers
+ * and their retry lane. A practice is reached from one of these or not at all.
+ */
+const RECORDING_LANE = /^(observer|retry):/;
 
 function readTaskEnvelope(): TaskEnvelope {
 	let raw: string;
@@ -770,7 +748,7 @@ function readTaskEnvelope(): TaskEnvelope {
 	if (envelope.schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
 		console.error(
 			`[pi-runner] Unsupported schemaVersion: got ${logValue(envelope.schemaVersion)}, expected ${SUPPORTED_SCHEMA_VERSION}. ` +
-				`Server/image version drift — rebuild the agent-pi image or roll back the server.`,
+				`Task envelope and staged runner disagree.`,
 		);
 		process.exit(ENVELOPE_MISMATCH_EXIT);
 	}
@@ -786,7 +764,15 @@ function readTaskEnvelope(): TaskEnvelope {
 		console.error(`[pi-runner] task.prompt is missing or blank in ${TASK_PATH}`);
 		process.exit(ENVELOPE_MISMATCH_EXIT);
 	}
+	let paths: ReturnType<typeof taskPaths>;
+	try {
+		paths = taskPaths(envelope.paths);
+	} catch (error) {
+		console.error(`[pi-runner] ${errorText(error)}`);
+		process.exit(ENVELOPE_MISMATCH_EXIT);
+	}
 	return {
+		paths,
 		schemaVersion: SUPPORTED_SCHEMA_VERSION,
 		jobId: envelope.jobId,
 		workspaceId: envelope.workspaceId,
@@ -799,7 +785,6 @@ function readTaskEnvelope(): TaskEnvelope {
 	};
 }
 
-const taskEnvelope = readTaskEnvelope();
 const prompt = taskEnvelope.task.prompt.trim();
 console.error(
 	`[pi-runner] Task envelope loaded: kind=${taskEnvelope.task.kind}, ` +
@@ -808,10 +793,10 @@ console.error(
 		`prNumber=${logValue(taskEnvelope.task.pullRequestNumber ?? "?")}`,
 );
 
-const COMPOSITION_REQUEST_PATH = `${CWD}/inputs/feedback-composition.json`;
+const COMPOSITION_REQUEST_PATH = INPUT_PATHS.compositionRequest;
 const FEEDBACK_PATH = outputPath(OUTPUT, "feedback.json");
 const COMPOSER_PROMPT_PATH = `${CWD}/feedback-composer.md`;
-const PREPARED_FEEDBACK_PATH = `${CWD}/inputs/history/prepared.json`;
+const PREPARED_FEEDBACK_PATH = INPUT_PATHS.preparedFeedback;
 const COMPOSITION_OBSERVATIONS_PATH = `${CWD}/work/composition/observations.json`;
 let compositionAdmitted = false;
 let admissionDigest: string | null = null;
@@ -1150,7 +1135,7 @@ function buildFeedbackTool(
 							type: "string",
 							maxLength: 64,
 							description:
-								"Required for SUPERSEDE: the threadKey of an entry in inputs/history/prepared.json. " +
+								"Required for SUPERSEDE: the threadKey of an entry in the task-declared prepared-feedback file. " +
 								"You may not name a key that is not in that file.",
 						},
 						withholdReason: { type: "string", enum: WITHHOLD_REASONS },
@@ -1380,7 +1365,7 @@ function validateUnit(
 					target.practiceSlug === unit.practiceSlug,
 			)
 		) {
-			return `No queued message has threadKey '${unit.supersedesThreadKey}'; it must come from inputs/history/prepared.json. Skipped.`;
+			return `No queued message has threadKey '${unit.supersedesThreadKey}'; it must come from the task-declared prepared-feedback file. Skipped.`;
 		}
 	}
 	if (unit.channel === "IN_CHAT") {
@@ -1460,6 +1445,7 @@ function normalizeQuotedText(value: string): string {
 function buildCompositionTurn(
 	request: CompositionRequest,
 	observations: readonly AdmittedObservation[],
+	notReached: readonly string[] = [],
 ): string {
 	const lanes = CHANNELS.filter((channel) => request.channels[channel].enabled)
 		.map((channel) => `${channel} (at most ${request.channels[channel].maxUnits})`)
@@ -1471,6 +1457,7 @@ function buildCompositionTurn(
 	const placementNote = request.channels.IN_CONTEXT.enabled
 		? ` IN_CONTEXT placements available here: ${request.inContextPlacementKinds.join(", ")}.`
 		: "";
+	const coverageNote = notReachedNote(notReached);
 	return (
 		`## This turn\n` +
 		`The review just finished. Its ${observations.length} measurement(s) are in ` +
@@ -1478,24 +1465,111 @@ function buildCompositionTurn(
 		`therefore carry a note on the work. Read that file first, then the history.\n\n` +
 		`Lanes open this turn: ${lanes}.${closedNote}${placementNote}` +
 		`\nA pattern claim needs at least ${request.minDistinctArtifacts} distinct pieces of work.\n\n` +
-		`Persist each unit with report_feedback as soon as it is ready, and call report_summary once for ` +
+		`${coverageNote}Persist each unit with report_feedback as soon as it is ready, and call report_summary once for ` +
 		`how the review opens. Writing nothing on a lane is a correct and common outcome; say in one line ` +
 		`why, and stop.`
 	);
 }
 
+/** A transport failure or a server that is not answering yet; a refusal is a decision, not a blip. */
+class AdmissionUnreachable extends Error {}
+
+/** The cause behind a wrapped error, in parentheses, or nothing when the error carries none. */
+function causeText(error: unknown): string {
+	return error instanceof Error && error.cause !== undefined ? ` (${errorText(error.cause)})` : "";
+}
+
+/**
+ * What a blip costs. The proxy address is the app server's IP as it was when this container started,
+ * so a server that came back somewhere else is not something waiting can reach — and a deployment
+ * outlasts any wait that fits here anyway, its healthcheck allowing itself 90s to come up. These
+ * attempts buy the failures that clear in place: a reset connection, a socket refused while the
+ * process is coming back. Their 15s is already half the watchdog's grace, which still has to cover
+ * the composer session this run builds next.
+ */
+const ADMISSION_ATTEMPTS = 4;
+
+/**
+ * How long one attempt may take before it counts as not arriving. A server that closes the socket
+ * fails immediately; one that goes silent without closing it would otherwise hold the attempt for
+ * Node's own five-minute default, and the watchdog would end the run before a second attempt existed.
+ *
+ * Four attempts at five seconds, waiting one second then doubling, is at most 27 seconds — inside the
+ * 30 seconds of grace the watchdog leaves after the budget. A slow answer that is really coming is
+ * retried rather than lost: the same observations replay against the digest the server already holds.
+ */
+const ADMISSION_ATTEMPT_TIMEOUT_MS = 5_000;
+
+/**
+ * What the server said about an answer it refused, as text a reader can act on. A body that cannot be
+ * read is not worth failing over twice: the status alone still says a refusal happened.
+ */
+async function answerText(response: Response): Promise<string> {
+	try {
+		const body = await response.text();
+		const problem: unknown = body.trim().startsWith("{") ? parseJson(body) : null;
+		const detail = isRecord(problem) ? problem.detail : null;
+		return typeof detail === "string" && detail.length > 0 ? detail : body.slice(0, 500);
+	} catch {
+		return "the server gave no readable reason";
+	}
+}
+
+/** One admission attempt: the answer it returns is the parsed body, unvalidated. */
+async function postAdmission(): Promise<unknown> {
+	let response: Response;
+	try {
+		response = await fetch(`${process.env.LLM_PROXY_URL}/admit-observations`, {
+			method: "POST",
+			signal: AbortSignal.timeout(ADMISSION_ATTEMPT_TIMEOUT_MS),
+			headers: {
+				authorization: `Bearer ${process.env.LLM_PROXY_TOKEN}`,
+				"content-type": "application/json",
+				...(process.env.TRACEPARENT ? { traceparent: process.env.TRACEPARENT } : {}),
+			},
+			body: JSON.stringify({ schemaVersion: 1, observations: reviewState.observations }),
+		});
+	} catch (error) {
+		// Node reports every transport failure as `TypeError: fetch failed`; only the cause says which
+		// one it was, and a report that has just the message cannot tell a restart from a wrong URL.
+		throw new AdmissionUnreachable(
+			`observation admission could not be sent: ${errorText(error)}${causeText(error)}`,
+		);
+	}
+	if (isRetryableStatus(response.status)) {
+		throw new AdmissionUnreachable(`observation admission failed: HTTP ${response.status}`);
+	}
+	if (!response.ok) {
+		// The server has decided, and it said why. Asking again puts the same question, so the run ends
+		// here — with the reason in the transcript, which is the only place a reader can find it.
+		throw new Error(
+			`observation admission was refused: HTTP ${response.status} — ${await answerText(response)}`,
+		);
+	}
+	try {
+		return await response.json();
+	} catch (error) {
+		// A server that dies while writing its answer ends the body mid-stream. The admission may well
+		// have been recorded; asking again replays it rather than admitting it twice.
+		throw new AdmissionUnreachable(
+			`observation admission answer was cut short: ${errorText(error)}${causeText(error)}`,
+		);
+	}
+}
+
 async function admitObservations() {
-	const response = await fetch(`${process.env.LLM_PROXY_URL}/admit-observations`, {
-		method: "POST",
-		headers: {
-			authorization: `Bearer ${process.env.LLM_PROXY_TOKEN}`,
-			"content-type": "application/json",
-			...(process.env.TRACEPARENT ? { traceparent: process.env.TRACEPARENT } : {}),
-		},
-		body: JSON.stringify({ schemaVersion: 1, observations: reviewState.observations }),
-	});
-	if (!response.ok) throw new Error(`observation admission failed: HTTP ${response.status}`);
-	const admitted: unknown = await response.json();
+	// The measurement is finished by the time this runs and exists nowhere else, so the one call that
+	// carries it out of the sandbox is worth repeating when it did not arrive. Repeating it is safe:
+	// the payload is frozen once the measurement is closed, and the server replays an identical one.
+	const admitted: unknown = await retrying(
+		postAdmission,
+		(error) => error instanceof AdmissionUnreachable,
+		{ attempts: ADMISSION_ATTEMPTS },
+		(attempt, error, delayMs) =>
+			console.error(
+				`[pi-runner] admission attempt ${attempt}/${ADMISSION_ATTEMPTS} did not arrive (${errorText(error)}); retrying in ${delayMs}ms`,
+			),
+	);
 	if (
 		!isRecord(admitted) ||
 		admitted.schemaVersion !== 1 ||
@@ -1525,14 +1599,26 @@ let retryAborted = false;
 
 function scheduleDeadline(timeoutMs: number, onTimeout: () => void) {
 	let release = () => {};
+	// Racing `elapsed` says the wait is over, not why: the caller reads this to tell an answer from a
+	// budget that ran out.
+	const state = { expired: false };
 	const elapsed = new Promise<void>((resolve) => {
 		release = resolve;
 	});
 	const timer = setTimeout(() => {
+		state.expired = true;
 		onTimeout();
 		release();
 	}, timeoutMs);
-	return { elapsed, timer };
+	return { elapsed, timer, state };
+}
+
+/** Timers request cancellation; the owning finally block drains events before disposal. */
+function abortSession(session: AgentSession) {
+	session.clearQueue();
+	void session.abort().catch((error) => {
+		console.error(`[pi-runner] session abort failed: ${errorText(error)}`);
+	});
 }
 
 function scheduleTurnTimers(
@@ -1561,7 +1647,7 @@ function scheduleTurnTimers(
 		console.error(
 			`[pi-runner] turn ${turnNumber}/${turnCount} exhausted its fair share — aborting this turn`,
 		);
-		session.dispose();
+		abortSession(session);
 	});
 	return { softTimer, hardTimer: hard.timer, hardDeadline: hard.elapsed, state };
 }
@@ -1573,18 +1659,14 @@ async function main() {
 	);
 
 	// Pi filters custom tools through this allowlist; omit filesystem mutation tools.
-	// Untrusted on purpose: a trusted project makes the SDK look for `.agents/skills` in every ancestor
-	// of the working directory, up to `/`, and the sandbox lets Node read only /workspace and the SDK
-	// itself (PiRunnerProfile), so that walk dies on the first ancestor with a permission error before
-	// the model is ever called. Nothing project-local is wanted here anyway: every resource this run
-	// uses is injected by the runner, never discovered from the checkout.
-	const settingsManager = SettingsManager.create(CWD, AGENT_DIR, { projectTrusted: false });
+	// pi-agent-sandbox.ts has the rationale for running untrusted; both Pi runners in this image
+	// share it.
+	const settingsManager = SettingsManager.create(CWD, AGENT_DIR, SANDBOX_SETTINGS_MANAGER_OPTIONS);
 	const grepTool = buildGrepTool(CWD);
-	// The only instructions a session carries beyond its prompt are the orchestrator the server staged
-	// in the agent dir. The SDK's own context-file discovery would climb from the working directory
-	// to `/` looking for AGENTS.md and die on the first ancestor the allowlist forbids, and it would
-	// read the reviewed checkout's AGENTS.md as instructions rather than as evidence; so discovery is
-	// off and the staged file is handed over by name. A run without it does not start.
+	// The only instructions a session carries beyond its prompt are the orchestrator the server
+	// staged in the agent dir, handed over by name below; the SDK's own discovery is turned off
+	// (pi-agent-sandbox.ts) and is not the channel a run's instructions arrive on. A run without
+	// this file does not start.
 	const orchestratorPath = `${AGENT_DIR}/AGENTS.md`;
 	const orchestrator = readFileSync(orchestratorPath, "utf8");
 	// One loader per session: a loader owns the extension runtime a session binds its tools into, and
@@ -1594,7 +1676,8 @@ async function main() {
 			cwd: CWD,
 			agentDir: AGENT_DIR ?? getAgentDir(),
 			settingsManager,
-			noContextFiles: true,
+			...SANDBOX_RESOURCE_LOADER_OPTIONS,
+			extensionFactories: reviewTrace ? [reviewTrace.extension] : [],
 			agentsFilesOverride: () => ({
 				agentsFiles: [{ path: orchestratorPath, content: orchestrator }],
 			}),
@@ -1617,8 +1700,16 @@ async function main() {
 	}
 	const model = modelRuntime.getModel("hephaestus", providerConfig.modelId);
 	if (!model) throw new Error(`Hephaestus model was not registered: ${providerConfig.modelId}`);
+	// The window a session is paced against is the registered model's own, which is where the
+	// workspace's declared window and the runner's default for a model that declares none already
+	// meet. It is also the window the SDK compacts against, so pacing and compaction cannot disagree.
+	const contextWindow = model.contextWindow;
 	console.error(
-		`[pi-runner] registered hephaestus provider: apiProtocol=${providerConfig.apiProtocol} model=${providerConfig.modelId}`,
+		// The window is logged because everything downstream is measured against it: a workspace that
+		// declares it wrong says so in the first lines of every transcript, rather than only in the
+		// shape of the reviews it produces.
+		`[pi-runner] registered hephaestus provider: apiProtocol=${providerConfig.apiProtocol} ` +
+			`model=${providerConfig.modelId} contextWindow=${contextWindow}`,
 	);
 
 	const compositionRequest = loadCompositionRequest();
@@ -1632,27 +1723,89 @@ async function main() {
 		: null;
 	const events: { type: string; timestamp: number }[] = [];
 	const streamUsage = newUsageLedger();
-	const subscribeSession = (trackedSession: AgentSession, label: string) =>
-		trackedSession.subscribe((event: AgentSessionEvent) => {
+	let providerFailures = 0;
+	const subscribeSession = (
+		trackedSession: AgentSession,
+		label: string,
+		pace: RecordingPace | null = null,
+	) => {
+		const sessionId = trackedSession.sessionManager.getSessionId();
+		reviewTrace?.session(sessionId, label, trackedSession.sessionManager.getSessionFile());
+		return trackedSession.subscribe((event: AgentSessionEvent) => {
+			reviewTrace?.event(sessionId, event);
 			if (event.type === "tool_execution_start") {
 				console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
+			}
+			// The SDK rides out a retryable provider failure on its own. A run that took longer, or that
+			// gave up after several of these, says so here rather than looking like an idle session.
+			if (event.type === "auto_retry_start") {
+				console.error(
+					`[pi-runner] ${label} provider call failed, retrying in ${event.delayMs}ms ` +
+						`(attempt ${event.attempt}/${event.maxAttempts}): ${event.errorMessage}`,
+				);
+			}
+			if (event.type === "auto_retry_end" && !event.success) {
+				const finalError = event.finalError ?? "no error given";
+				// A call the provider never answered, after the SDK spent its whole budget on it. Only the
+				// lanes that record observations are counted: reconnaissance and composition can fail
+				// without costing a practice, and what this number decides is whether a review that
+				// recorded nothing was cut off or simply had nothing to record.
+				if (RECORDING_LANE.test(label)) providerFailures++;
+				console.error(
+					`[pi-runner] ${label} provider call failed for good after ${event.attempt} retries: ${finalError}`,
+				);
 			}
 			if (event.type === "message_end" && event.message.role === "assistant") {
 				addAssistantUsage(streamUsage, event.message);
 				const stopReason = event.message.stopReason;
 				const types = listOrEmpty(event.message.content).map((c) => c.type);
 				const toolCalls = types.filter((t) => t === "toolCall").length;
+				// A turn that ended in an error or ran out of room said why, and without it the
+				// transcript shows a session that simply stopped answering — the one thing a reader
+				// cannot diagnose afterwards.
+				const rawStopReason = event.message.rawStopReason;
+				const failure =
+					stopReason === "error" || stopReason === "length"
+						? `, error=${event.message.errorMessage ?? "none given"}${rawStopReason ? `, rawStopReason=${rawStopReason}` : ""}`
+						: "";
 				console.error(
 					`[pi-runner] ${label} assistant msg: stopReason=${stopReason}, toolCalls=${toolCalls}, ` +
-						`types=[${types.join(",")}]`,
+						`types=[${types.join(",")}]${failure}`,
 				);
+				// How much of the window this turn's prompt occupied. A turn that was aborted or that
+				// failed carries whatever counts the provider had sent before it stopped, which describes
+				// no prompt the model answered; the SDK leaves those out of its own context maths too.
+				const settled = stopReason !== "aborted" && stopReason !== "error";
+				const reached =
+					pace === null || !settled
+						? null
+						: pace.checkpointReached(promptTokens(event.message.usage));
+				if (reached !== null) {
+					console.error(
+						`[pi-runner] ${label}: ${Math.round(reached * 100)}% of its context spent — asking it to record`,
+					);
+					// Checkpoint nudges must not relax the evidence requirements.
+					trackedSession
+						.steer(
+							`You have spent ${Math.round(reached * 100)}% of your context. Record now every practice your ` +
+								`evidence already settles, one report_observation call per practice. Record nothing for a ` +
+								`practice you cannot yet quote the deciding evidence for. ${PERSIST_DISCIPLINE}`,
+						)
+						.catch((err) => console.error(`[pi-runner] steer failed: ${errorText(err)}`));
+				}
 			}
 			events.push({ type: `${label}:${event.type}`, timestamp: Date.now() });
 		});
+	};
 
-	async function completeWithAdmittedComposition() {
+	/**
+	 * @param notReached the practices this review never settled, named for the composer so nothing it
+	 *   writes reads as a verdict on them
+	 */
+	async function completeWithAdmittedComposition(notReached: readonly string[]) {
 		measurementClosed = true;
 		await admitObservations();
+		persistComposedFeedback();
 		const parsed = parseJson(readFileSync(RESULT_PATH, "utf8"));
 		const result: Record<string, unknown> = isRecord(parsed) ? parsed : {};
 		result.admissionDigest = admissionDigest;
@@ -1664,7 +1817,9 @@ async function main() {
 				agentDir: AGENT_DIR,
 				tools: ["read", "grep", "report_feedback", "report_summary"],
 				customTools: [grepTool, feedbackTool, buildSummaryTool()],
-				sessionManager: SessionManager.inMemory(),
+				sessionManager: reviewTrace
+					? SessionManager.create(CWD, reviewTrace.sessionDir)
+					: SessionManager.inMemory(),
 				settingsManager,
 				resourceLoader: await loadResources(),
 				modelRuntime,
@@ -1675,26 +1830,37 @@ async function main() {
 		}
 		const unsubscribeComposer = subscribeSession(composerSession, "composer");
 		const instructions = readFileSync(COMPOSER_PROMPT_PATH, "utf8");
-		const compositionDeadline = scheduleDeadline(COMPOSITION_TIMEOUT_MS, () => {
+		const compositionMs = deriveCompositionWindow(
+			COMPOSITION_TIMEOUT_MS,
+			AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS),
+		);
+		if (compositionMs === 0) {
+			console.error("[pi-runner] Composition budget exhausted — preserving admitted observations");
+			await stopSession(composerSession);
+			unsubscribeComposer();
+			persistComposedFeedback();
+			return;
+		}
+		const compositionDeadline = scheduleDeadline(compositionMs, () => {
 			console.error(
 				`[pi-runner] Composition timeout — preserving observations and composed units so far`,
 			);
-			composerSession.dispose();
+			abortSession(composerSession);
 		});
 		try {
 			await Promise.race([
 				composerSession.prompt(
-					`${instructions}\n\n${buildCompositionTurn(compositionRequest, admittedObservations)}`,
+					`${instructions}\n\n${buildCompositionTurn(compositionRequest, admittedObservations, notReached)}`,
 				),
 				compositionDeadline.elapsed,
 			]);
 		} finally {
 			clearTimeout(compositionDeadline.timer);
+			await stopSession(composerSession);
 			unsubscribeComposer();
+			persistComposedFeedback();
 		}
-		persistComposedFeedback();
 		const combinedUsage = extractUsageFromSession(composerSession.state, streamUsage);
-		composerSession.dispose();
 		accumulateUsage(prevUsage, combinedUsage);
 		prevUsage = combinedUsage;
 		persistUsage();
@@ -1704,14 +1870,18 @@ async function main() {
 	const activeSessions = new Set<AgentSession>();
 	const hardAbort = new AbortController();
 
-	const hardTimer = setTimeout(() => {
+	const reviewDeadline = PROCESS_START_MS + INITIAL_TIMEOUT_MS;
+	const abortInitial = () => {
 		hardAborted = true;
 		hardAbort.abort();
 		console.error(`[pi-runner] Hard timeout — aborting ${activeSessions.size} active session(s)`);
 		for (const activeSession of activeSessions) {
-			activeSession.dispose();
+			abortSession(activeSession);
 		}
-	}, INITIAL_TIMEOUT_MS);
+	};
+	const initialWindowMs = Math.max(0, reviewDeadline - Date.now());
+	const hardTimer = initialWindowMs > 0 ? setTimeout(abortInitial, initialWindowMs) : undefined;
+	if (initialWindowMs === 0) abortInitial();
 
 	console.error(`[pi-runner] Starting initial analysis`);
 	const startMs = Date.now();
@@ -1726,8 +1896,7 @@ async function main() {
 		process.env.PI_REVIEW_CONCURRENCY,
 		tree.practiceCount,
 	);
-	const sessionDir = `${CWD}/.sessions`;
-	const reviewDeadline = startMs + INITIAL_TIMEOUT_MS;
+	const sessionDir = reviewTrace?.sessionDir ?? `${CWD}/.sessions`;
 	console.error(
 		`[pi-runner] Review tree: ${tree.practiceCount} practices, ${tree.groups.length} evidence group(s), concurrency=${concurrency}`,
 	);
@@ -1735,54 +1904,63 @@ async function main() {
 	const groupSessionFiles = new Map<string, string>();
 	const groupSeedFiles = new Map<string, string>();
 	if (!hardAborted) {
-		const manager = SessionManager.create(CWD, sessionDir);
-		const { session: reconSession } = await createAgentSession({
-			cwd: CWD,
-			agentDir: AGENT_DIR,
-			tools: [...EVIDENCE_TOOLS],
-			customTools: [grepTool],
-			sessionManager: manager,
-			settingsManager,
-			resourceLoader: await loadResources(),
-			modelRuntime,
-			model,
-		});
-		const unsubscribeRecon = subscribeSession(reconSession, "recon:shared");
-		activeSessions.add(reconSession);
-		const reconBudgetMs = Math.min(
-			180_000,
-			Math.max(45_000, Math.floor(INITIAL_TIMEOUT_MS * 0.05)),
-		);
-		const reconDeadline = scheduleDeadline(reconBudgetMs, () => reconSession.dispose());
 		try {
-			const groupScope = tree.groups
-				.map((group) => `${group.id} [${group.practiceSlugs.join(", ")}]`)
-				.join("; ");
-			await Promise.race([
-				reconSession.prompt(
-					`Build one factual reconnaissance map for this review. Read the manifest and the artifact summary first, then inspect only enough shared evidence to identify changed surfaces, review activity, linked work, tests, and likely code paths. Record exact artifact paths and diff coordinates. Do not evaluate a practice or claim GOOD/BAD. The following group sessions will continue from this checkpoint: ${groupScope}`,
-				),
-				reconDeadline.elapsed,
-			]);
-			const checkpointEntryId = reconSession.sessionManager.getLeafId();
-			const seedSessionFile = reconSession.sessionManager.getSessionFile();
-			if (!checkpointEntryId || !seedSessionFile)
-				throw new Error("shared reconnaissance produced no persistent checkpoint");
-			for (const fork of forkSessions({
-				seedSessionFile,
-				checkpointEntryId,
-				keys: tree.groups.map((group) => group.id),
-				sessionDir,
-			})) {
-				groupSeedFiles.set(fork.key, fork.sessionFile);
+			const manager = SessionManager.create(CWD, sessionDir);
+			const { session: reconSession } = await createAgentSession({
+				cwd: CWD,
+				agentDir: AGENT_DIR,
+				tools: [...EVIDENCE_TOOLS],
+				customTools: [grepTool],
+				sessionManager: manager,
+				settingsManager,
+				resourceLoader: await loadResources(),
+				modelRuntime,
+				model,
+			});
+			if (hardAbort.signal.aborted || Date.now() >= reviewDeadline) {
+				hardAborted = true;
+				hardAbort.abort();
+				await stopSession(reconSession);
+			} else {
+				const unsubscribeRecon = subscribeSession(reconSession, "recon:shared");
+				activeSessions.add(reconSession);
+				const reconBudgetMs = Math.min(
+					deriveReconBudget(INITIAL_TIMEOUT_MS),
+					reviewDeadline - Date.now(),
+				);
+				const reconDeadline = scheduleDeadline(reconBudgetMs, () => abortSession(reconSession));
+				try {
+					const groupScope = tree.groups
+						.map((group) => `${group.id} [${group.practiceSlugs.join(", ")}]`)
+						.join("; ");
+					await Promise.race([
+						reconSession.prompt(
+							`Build one factual reconnaissance map for this review. Read the manifest and the artifact summary first, then inspect only enough shared evidence to identify changed surfaces, review activity, linked work, tests, and likely code paths. Record exact artifact paths and diff coordinates. Do not evaluate a practice or claim GOOD/BAD. The following group sessions will continue from this checkpoint: ${groupScope}`,
+						),
+						reconDeadline.elapsed,
+					]);
+					const { seedSessionFile, checkpointEntryId } = reconnaissanceSeed(
+						reconSession.sessionManager,
+						reconDeadline.state,
+						reconBudgetMs,
+					);
+					for (const fork of forkSessions({
+						seedSessionFile,
+						checkpointEntryId,
+						keys: tree.groups.map((group) => group.id),
+						sessionDir,
+					})) {
+						groupSeedFiles.set(fork.key, fork.sessionFile);
+					}
+				} finally {
+					clearTimeout(reconDeadline.timer);
+					activeSessions.delete(reconSession);
+					await stopSession(reconSession);
+					unsubscribeRecon();
+				}
 			}
 		} catch (error) {
 			console.error(`[pi-runner] shared reconnaissance failed: ${errorText(error)}`);
-		} finally {
-			clearTimeout(reconDeadline.timer);
-			activeSessions.delete(reconSession);
-			unsubscribeRecon();
-			reconSession.dispose();
 		}
 	}
 
@@ -1792,60 +1970,73 @@ async function main() {
 			tree.groups,
 			concurrency,
 			async (group, index) => {
-				const seedFile = groupSeedFiles.get(group.id);
-				const manager = seedFile
-					? SessionManager.open(seedFile, sessionDir)
-					: SessionManager.create(CWD, sessionDir);
-				const scopedTool = buildReportObservationTool(group.practiceSlugs);
-				const { session: observerSession } = await createAgentSession({
-					cwd: CWD,
-					agentDir: AGENT_DIR,
-					tools: [...EVIDENCE_TOOLS, "report_observation"],
-					customTools: [grepTool, scopedTool],
-					sessionManager: manager,
-					settingsManager,
-					resourceLoader: await loadResources(),
-					modelRuntime,
-					model,
-				});
-				const unsubscribeObserver = subscribeSession(observerSession, `observer:${group.id}`);
-				activeSessions.add(observerSession);
-				const remainingMs = Math.max(1, reviewDeadline - Date.now());
-				const activeSlots = Math.min(concurrency, remainingGroups);
-				const groupBudgetMs = deriveWorkstreamBudget(remainingMs, activeSlots, remainingGroups);
-				const timing = deriveTurnTiming(groupBudgetMs, 1);
-				const timers = scheduleTurnTimers(
-					observerSession,
-					index + 1,
-					tree.groups.length,
-					timing.softNudgeMs,
-					timing.fairShareMs,
-				);
 				try {
-					await Promise.race([
-						observerSession.prompt(
-							`${prompt}\n\n## Practice group: ${group.id}\nEvaluate exactly these practices: ${group.practiceSlugs.join(", ")}. ` +
-								`Read their files under inputs/practices/, then start with the cheapest decisive practice. Persist each ` +
-								`observation as soon as it is supported; do not finish a group-wide evidence map first. Reuse evidence ` +
-								`already gathered when investigating the remaining practices. Persist at least one disposition for ` +
-								`every listed practice, plus any distinct material problems a practice exposes. Use ` +
-								`NO_REVIEW_OCCASION only after complete evidence proves the practice's explicit prerequisite did not ` +
-								`occur; missing evidence is not an occasion that failed to happen. Do not skip a practice because its ` +
-								`behavior is absent.`,
-						),
-						timers.hardDeadline,
-					]);
+					const seedFile = groupSeedFiles.get(group.id);
+					const manager = seedFile
+						? SessionManager.open(seedFile, sessionDir)
+						: SessionManager.create(CWD, sessionDir);
+					const scopedTool = buildReportObservationTool(group.practiceSlugs);
+					const { session: observerSession } = await createAgentSession({
+						cwd: CWD,
+						agentDir: AGENT_DIR,
+						tools: [...EVIDENCE_TOOLS, "report_observation"],
+						customTools: [grepTool, scopedTool],
+						sessionManager: manager,
+						settingsManager,
+						resourceLoader: await loadResources(),
+						modelRuntime,
+						model,
+					});
+					if (hardAbort.signal.aborted || Date.now() >= reviewDeadline) {
+						hardAborted = true;
+						hardAbort.abort();
+						await stopSession(observerSession);
+						return;
+					}
+					const unsubscribeObserver = subscribeSession(
+						observerSession,
+						`observer:${group.id}`,
+						createRecordingPace(contextWindow, seedFile !== undefined),
+					);
+					activeSessions.add(observerSession);
+					const remainingMs = Math.max(1, reviewDeadline - Date.now());
+					const activeSlots = Math.min(concurrency, remainingGroups);
+					const groupBudgetMs = deriveWorkstreamBudget(remainingMs, activeSlots, remainingGroups);
+					const timing = deriveTurnTiming(groupBudgetMs, 1);
+					const timers = scheduleTurnTimers(
+						observerSession,
+						index + 1,
+						tree.groups.length,
+						timing.softNudgeMs,
+						timing.fairShareMs,
+					);
+					try {
+						await Promise.race([
+							observerSession.prompt(
+								`${prompt}\n\n## Practice group: ${group.id}\nEvaluate exactly these practices: ${group.practiceSlugs.join(", ")}. ` +
+									`Read their files under ${dirname(taskEnvelope.paths.practiceIndex)}/, then start with the cheapest decisive practice. Persist each ` +
+									`observation as soon as it is supported; do not finish a group-wide evidence map first. Reuse evidence ` +
+									`already gathered when investigating the remaining practices. Persist at least one disposition for ` +
+									`every listed practice, plus any distinct material problems a practice exposes. Use ` +
+									`NO_REVIEW_OCCASION only after complete evidence proves the practice's explicit prerequisite did not ` +
+									`occur; missing evidence is not an occasion that failed to happen. Do not skip a practice because its ` +
+									`behavior is absent.`,
+							),
+							timers.hardDeadline,
+						]);
+					} finally {
+						const sessionFile = observerSession.sessionManager.getSessionFile();
+						if (sessionFile) groupSessionFiles.set(group.id, sessionFile);
+						softTimeoutFired ||= timers.state.softTimedOut;
+						clearTimeout(timers.softTimer);
+						clearTimeout(timers.hardTimer);
+						activeSessions.delete(observerSession);
+						await stopSession(observerSession);
+						unsubscribeObserver();
+					}
 				} catch (error) {
 					console.error(`[pi-runner] observer ${group.id} failed: ${errorText(error)}`);
 				} finally {
-					const sessionFile = observerSession.sessionManager.getSessionFile();
-					if (sessionFile) groupSessionFiles.set(group.id, sessionFile);
-					softTimeoutFired ||= timers.state.softTimedOut;
-					clearTimeout(timers.softTimer);
-					clearTimeout(timers.hardTimer);
-					activeSessions.delete(observerSession);
-					unsubscribeObserver();
-					observerSession.dispose();
 					remainingGroups--;
 				}
 			},
@@ -1877,23 +2068,18 @@ async function main() {
 		`[pi-runner] Initial: ${(initialDurationMs / 1000).toFixed(1)}s, calls=${initialUsage.totalCalls}, softTimeout=${softTimeoutFired}, hardAbort=${hardAborted}, resultFile=${existsSync(RESULT_PATH)}, reviewState=${hasPersistedReviewState()}`,
 	);
 
-	const resultFileSource = resolveResultFile();
+	const resultFileWritten = maybeWriteResultFile();
 	const missingAfterInitial = missingPracticeSlugs(
 		allSlugs,
 		reviewState.observations.map((item) => item.practiceSlug),
 	);
 	if (missingAfterInitial.length === 0) logPracticeCoverage();
 
-	if (resultFileSource === "agent" && missingAfterInitial.length === 0) {
-		console.error(`[pi-runner] SUCCESS: result.json valid after initial run`);
-		await completeWithAdmittedComposition();
-		process.exit(0);
-	}
-	if (resultFileSource === "tool-state" && missingAfterInitial.length === 0) {
+	if (resultFileWritten && missingAfterInitial.length === 0) {
 		console.error(
 			`[pi-runner] SUCCESS: composed result.json from persisted tool state after initial run`,
 		);
-		await completeWithAdmittedComposition();
+		await completeWithAdmittedComposition([]);
 		process.exit(0);
 	}
 
@@ -1902,14 +2088,20 @@ async function main() {
 	);
 
 	const retryAbort = new AbortController();
-	const retryTimer = setTimeout(() => {
-		retryAborted = true;
-		retryAbort.abort();
-		console.error(`[pi-runner] Retry hard timeout — aborting`);
-		for (const activeSession of activeSessions) {
-			activeSession.dispose();
-		}
-	}, RETRY_TIMEOUT_MS);
+	const retry = armRetryWindow(
+		TIMEOUTS,
+		initialDurationMs,
+		AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS),
+		() => {
+			retryAborted = true;
+			retryAbort.abort();
+			console.error(`[pi-runner] Retry hard timeout — aborting`);
+			for (const activeSession of activeSessions) {
+				abortSession(activeSession);
+			}
+		},
+	);
+	console.error(`[pi-runner] Retry window: ${(retry.windowMs / 1000).toFixed(1)}s`);
 
 	const retryStartMs = Date.now();
 
@@ -1926,56 +2118,86 @@ async function main() {
 			retryGroups,
 			concurrency,
 			async (group) => {
-				const retryTool = buildReportObservationTool(group.practiceSlugs);
-				const priorSessionFile = groupSessionFiles.get(group.id);
-				const { session: retrySession } = await createAgentSession({
-					cwd: CWD,
-					agentDir: AGENT_DIR,
-					tools: [...EVIDENCE_TOOLS, "report_observation"],
-					customTools: [grepTool, retryTool],
-					sessionManager: priorSessionFile
-						? SessionManager.open(priorSessionFile, sessionDir)
-						: SessionManager.inMemory(),
-					settingsManager,
-					resourceLoader: await loadResources(),
-					modelRuntime,
-					model,
-				});
-				const unsubscribeRetry = subscribeSession(retrySession, `retry:${group.id}`);
-				activeSessions.add(retrySession);
-				const activeSlots = Math.min(concurrency, retriesRemaining);
-				const retryBudgetMs = deriveWorkstreamBudget(
-					RETRY_TIMEOUT_MS,
-					activeSlots,
-					retriesRemaining,
-				);
-				const retryDeadline = scheduleDeadline(retryBudgetMs, () => {
-					retrySession.dispose();
-				});
 				try {
-					await Promise.race([
-						retrySession.prompt(
-							`${prompt}\n\n## Recovery practice group\nThe earlier group did not persist: ${group.practiceSlugs.join(", ")}. ` +
-								`Continue from its evidence and tool feedback. Persist one best-justified outcome for each missing ` +
-								`practice now; read more only to resolve a specific validation failure or genuinely open evidence ` +
-								`question. Evaluate no other practice. ${PERSIST_DISCIPLINE}`,
-						),
-						retryDeadline.elapsed,
-					]);
+					const retryTool = buildReportObservationTool(group.practiceSlugs);
+					const priorSessionFile = groupSessionFiles.get(group.id);
+					// Read through a call rather than inline: testing `signal.aborted` directly narrows it
+					// to false for the rest of the branch, which would make the identical check after
+					// the await dead to the type system while the signal can still abort during it.
+					const retryIsOver = () =>
+						retryAbort.signal.aborted || retryStartMs + retry.windowMs - Date.now() <= 0;
+					// Before building anything: a session costs the budget composition is about to need,
+					// and a window that is already gone would only have it stopped again.
+					if (retryIsOver()) {
+						retryAborted = true;
+						retryAbort.abort();
+						return;
+					}
+					const { session: retrySession } = await createAgentSession({
+						cwd: CWD,
+						agentDir: AGENT_DIR,
+						tools: [...EVIDENCE_TOOLS, "report_observation"],
+						customTools: [grepTool, retryTool],
+						sessionManager: priorSessionFile
+							? SessionManager.open(priorSessionFile, sessionDir)
+							: reviewTrace
+								? SessionManager.create(CWD, reviewTrace.sessionDir)
+								: SessionManager.inMemory(),
+						settingsManager,
+						resourceLoader: await loadResources(),
+						modelRuntime,
+						model,
+					});
+					// Again after: building the session takes time of its own, and the window may have
+					// closed or the abort fired while it was being built.
+					if (retryIsOver()) {
+						retryAborted = true;
+						retryAbort.abort();
+						await stopSession(retrySession);
+						return;
+					}
+					const remainingRetryMs = Math.max(0, retryStartMs + retry.windowMs - Date.now());
+					const unsubscribeRetry = subscribeSession(
+						retrySession,
+						`retry:${group.id}`,
+						createRecordingPace(contextWindow, priorSessionFile !== undefined),
+					);
+					activeSessions.add(retrySession);
+					const activeSlots = Math.min(concurrency, retriesRemaining);
+					const retryBudgetMs = deriveWorkstreamBudget(
+						remainingRetryMs,
+						activeSlots,
+						retriesRemaining,
+					);
+					const retryDeadline = scheduleDeadline(retryBudgetMs, () => {
+						abortSession(retrySession);
+					});
+					try {
+						await Promise.race([
+							retrySession.prompt(
+								`${prompt}\n\n## Recovery practice group\nThe earlier group did not persist: ${group.practiceSlugs.join(", ")}. ` +
+									`Continue from its evidence and tool feedback. Persist one best-justified outcome for each missing ` +
+									`practice now; read more only to resolve a specific validation failure or genuinely open evidence ` +
+									`question. Evaluate no other practice. ${PERSIST_DISCIPLINE}`,
+							),
+							retryDeadline.elapsed,
+						]);
+					} finally {
+						clearTimeout(retryDeadline.timer);
+						activeSessions.delete(retrySession);
+						await stopSession(retrySession);
+						unsubscribeRetry();
+					}
 				} catch (error) {
 					console.error(`[pi-runner] retry ${group.id} failed: ${errorText(error)}`);
 				} finally {
-					clearTimeout(retryDeadline.timer);
-					activeSessions.delete(retrySession);
-					unsubscribeRetry();
-					retrySession.dispose();
 					retriesRemaining--;
 				}
 			},
 			retryAbort.signal,
 		);
 	} finally {
-		clearTimeout(retryTimer);
+		clearTimeout(retry.timer);
 	}
 
 	const retryDurationMs = Date.now() - retryStartMs;
@@ -2003,32 +2225,35 @@ async function main() {
 		reviewState.observations.map((item) => item.practiceSlug),
 	);
 	logPracticeCoverage();
+	// A practice nobody reached is recorded as unevaluated and reported as such, not turned into a
+	// reason to throw away the practices that were reached. Every observation here was quoted and
+	// validated when it was recorded, and the coverage ledger already carries what is missing, so the
+	// honest outcome is a review that says what it looked at. A review that reached nothing at all has
+	// nothing to say and remains a failure.
 	if (missingAfterRetry.length > 0) {
 		console.error(
-			`[pi-runner] FAILED: ${missingAfterRetry.length} practice observer(s) still missing after retry: ${missingAfterRetry.join(", ")}`,
+			`[pi-runner] PARTIAL: ${missingAfterRetry.length} of ${allSlugs.length} practice(s) not reached: ${missingAfterRetry.join(", ")}`,
 		);
-		process.exit(1);
 	}
 
-	if (checkResultFile()) {
-		console.error(`[pi-runner] SUCCESS: result.json valid after retry`);
-		await completeWithAdmittedComposition();
-		process.exit(0);
-	}
-
-	// As in resolveResultFile(): what maybeWriteResultFile() writes is already normalised and validated,
-	// and re-reading it through checkResultFile() could only reject a measurement already admitted.
 	if (maybeWriteResultFile()) {
 		console.error(
-			`[pi-runner] SUCCESS: composed result.json from persisted tool state after retry`,
+			missingAfterRetry.length > 0
+				? `[pi-runner] SUCCESS: composed result.json from the practices this review reached`
+				: `[pi-runner] SUCCESS: composed result.json from persisted tool state after retry`,
 		);
-		await completeWithAdmittedComposition();
+		await completeWithAdmittedComposition(missingAfterRetry);
 		process.exit(0);
 	}
 
-	console.error(
-		`[pi-runner] FAILED: no complete persisted review output after initial attempt + recovery retry`,
-	);
+	if (providerFailures > 0) {
+		console.error(
+			`[pi-runner] UNREACHABLE: this review reached no practice, and ${providerFailures} model call(s) ` +
+				`went unanswered — the provider, not the work, is what this run could not read`,
+		);
+		process.exit(PROVIDER_UNREACHABLE_EXIT);
+	}
+	console.error(`[pi-runner] FAILED: this review reached no practice at all`);
 	process.exit(1);
 }
 
@@ -2050,5 +2275,8 @@ main().catch((err: unknown) => {
 	console.error(`[pi-runner] FATAL: ${errorText(err)}\n${err instanceof Error ? err.stack : ""}`);
 	persistRunnerDebug();
 	persistUsage();
-	process.exit(2);
+	// A server this container never reached is not a defect in the review, and the attempts above have
+	// already ridden out the failures that clear in place. Saying so distinctly is what lets the server
+	// try the same work again instead of ending it.
+	process.exit(err instanceof AdmissionUnreachable ? SERVER_UNREACHABLE_EXIT : 2);
 });
