@@ -46,7 +46,9 @@ it("withholds the floating composer for No AI and after a failed preference refe
 	await act(async () => {
 		queryClient.setQueryData(key, optedIn);
 	});
-	await user.click(await screen.findByRole("button", { name: "Open Heph, AI mentor" }));
+	await user.click(
+		await screen.findByRole("button", { name: "Open Heph, AI mentor" }, ROUTE_RENDER_WAIT),
+	);
 	await screen.findByRole("textbox");
 	server.use(
 		http.get("*/workspaces/acme/onboarding/me", () => new HttpResponse(null, { status: 503 })),

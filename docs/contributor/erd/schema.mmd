@@ -325,27 +325,6 @@ erDiagram
         TIMESTAMPTZ evaluated_at "NOT NULL"
     }
 
-    DirectoryPolicy {
-        BIGINT id PK
-        JSONB active_snapshot
-        TIMESTAMPTZ approved_at
-        BIGINT approved_by_account_id FK
-        JSONB approved_group_ids "NOT NULL"
-        BIGINT configuration_version "NOT NULL"
-        BIGINT connection_id FK "NOT NULL"
-        JSONB draft_group_ids "NOT NULL"
-        VARCHAR(512) failure_reason
-        VARCHAR(16) health "NOT NULL"
-        BIGINT identity_provider_id FK "NOT NULL"
-        VARCHAR(512) issuer "NOT NULL"
-        TIMESTAMPTZ last_attempt_at
-        JSONB preview_snapshot
-        VARCHAR(64) registration_id "NOT NULL"
-        VARCHAR(16) status "NOT NULL"
-        BIGINT version "NOT NULL"
-        BIGINT workspace_id FK,UK "NOT NULL"
-    }
-
     Discussion {
         BIGINT id PK
         TIMESTAMPTZ created_at
@@ -526,87 +505,6 @@ erDiagram
         TEXT parent_shas
         VARCHAR(32) status_check_rollup_state
         VARCHAR(255) on_behalf_of_login
-    }
-
-    GithubAccessAction {
-        BIGINT id PK
-        INTEGER attempts "NOT NULL"
-        BIGINT configuration_version "NOT NULL"
-        TIMESTAMPTZ confirmed_at
-        TIMESTAMPTZ created_at "NOT NULL"
-        TIMESTAMPTZ directory_capture_started_at
-        BIGINT directory_configuration_version
-        TIMESTAMPTZ directory_source_version
-        VARCHAR(32) failure_code
-        VARCHAR(512) failure_reason
-        BIGINT github_user_id "NOT NULL"
-        TIMESTAMPTZ last_attempt_at
-        BIGINT organization_id "NOT NULL"
-        VARCHAR(32) provider_state
-        TIMESTAMPTZ retry_at
-        BIGINT scope_id "NOT NULL"
-        VARCHAR(32) status "NOT NULL"
-        VARCHAR(16) type "NOT NULL"
-        BIGINT membership_id FK "NOT NULL"
-        BIGINT target_id FK "NOT NULL"
-        BIGINT workspace_id FK "NOT NULL"
-    }
-
-    GithubAccessMembership {
-        BIGINT id PK,UK
-        BIGINT account_id FK
-        VARCHAR(512) blocker
-        TIMESTAMPTZ confirmed_at
-        BIGINT directory_identity_link_id
-        VARCHAR(512) directory_subject
-        BOOLEAN enrolled "NOT NULL"
-        VARCHAR(512) exception_reason
-        VARCHAR(32) external_state
-        BIGINT github_identity_link_id
-        VARCHAR(100) github_login
-        BIGINT github_user_id UK "NOT NULL"
-        BIGINT invitation_id
-        BOOLEAN managed "NOT NULL"
-        BOOLEAN manual_exception "NOT NULL"
-        BOOLEAN revocation_requested "NOT NULL"
-        BIGINT version "NOT NULL"
-        BIGINT target_id FK,UK "NOT NULL"
-        BIGINT workspace_id FK,UK "NOT NULL"
-    }
-
-    GithubAccessTarget {
-        BIGINT id PK,UK
-        TIMESTAMPTZ approved_at
-        BIGINT approved_by_account_id FK
-        JSONB approved_group_ids "NOT NULL"
-        BOOLEAN authority_held "NOT NULL"
-        JSONB owner_authorization
-        BIGINT configuration_version "NOT NULL"
-        BIGINT connection_id FK,UK "NOT NULL"
-        BIGINT directory_provider_id FK "NOT NULL"
-        JSONB draft_group_ids "NOT NULL"
-        VARCHAR(32) failure_code
-        VARCHAR(512) failure_reason
-        TIMESTAMPTZ handoff_expires_at
-        VARCHAR(64) handoff_hash UK
-        BIGINT handoff_issued_by_account_id FK
-        VARCHAR(512) issuer "NOT NULL"
-        TIMESTAMPTZ last_attempt_at
-        TIMESTAMPTZ last_confirmed_at
-        BIGINT organization_id
-        VARCHAR(100) organization_login
-        BOOLEAN paused "NOT NULL"
-        BIGINT pending_installation_id "NOT NULL"
-        JSONB preview
-        VARCHAR(64) registration_id "NOT NULL"
-        VARCHAR(100) requested_organization "NOT NULL"
-        VARCHAR(100) requested_team
-        TIMESTAMPTZ retry_at
-        BIGINT scope_id
-        VARCHAR(255) scope_name
-        VARCHAR(16) status "NOT NULL"
-        BIGINT version "NOT NULL"
-        BIGINT workspace_id FK,UK "NOT NULL"
     }
 
     IdentityLink {
@@ -859,7 +757,6 @@ erDiagram
         BOOLEAN seeded_from_env "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at "NOT NULL"
-        JSONB directory_group_ids "NOT NULL"
     }
 
     MentorSlackThread {
@@ -1559,56 +1456,6 @@ erDiagram
         BIGINT practice_config_version "NOT NULL"
     }
 
-    WorkspaceAccessNotification {
-        BIGINT id PK
-        INTEGER attempts "NOT NULL"
-        VARCHAR(16) kind UK "NOT NULL"
-        TIMESTAMPTZ next_attempt_at "NOT NULL"
-        VARCHAR(32) reason
-        TIMESTAMPTZ sent_at
-        VARCHAR(16) state "NOT NULL"
-        BIGINT request_id FK,UK "NOT NULL"
-        BIGINT workspace_id FK,UK "NOT NULL"
-    }
-
-    WorkspaceAccessPolicy {
-        BIGINT id PK
-        BOOLEAN enabled "NOT NULL"
-        JSONB settings "NOT NULL"
-        BIGINT version "NOT NULL"
-        BIGINT workspace_id FK,UK "NOT NULL"
-    }
-
-    WorkspaceAccessRequest {
-        BIGINT id PK,UK
-        BIGINT account_id FK,UK "NOT NULL"
-        JSONB approved_details
-        TIMESTAMPTZ decided_at
-        BIGINT decided_by_account_id FK
-        VARCHAR(4000) decision_comment
-        JSONB policy_snapshot "NOT NULL"
-        BIGINT policy_version "NOT NULL"
-        VARCHAR(24) status "NOT NULL"
-        JSONB submission "NOT NULL"
-        TIMESTAMPTZ submitted_at "NOT NULL"
-        BIGINT supersedes_request_id FK
-        BIGINT version "NOT NULL"
-        BIGINT workspace_id FK,UK "NOT NULL"
-    }
-
-    WorkspaceAccountMembership {
-        BIGINT id PK
-        BIGINT account_id FK,UK "NOT NULL"
-        TIMESTAMPTZ created_at "NOT NULL"
-        VARCHAR(16) role "NOT NULL"
-        VARCHAR(16) source "NOT NULL"
-        BOOLEAN suspended "NOT NULL"
-        BIGINT workspace_id FK,UK "NOT NULL"
-        VARCHAR(512) directory_subject
-        BIGINT access_request_id FK
-        TIMESTAMPTZ expires_at
-    }
-
     WorkspaceAgentBinding {
         BIGINT id PK
         BIGINT workspace_id FK,UK "NOT NULL"
@@ -1720,18 +1567,13 @@ erDiagram
     %% Relationships
     %% One-to-One relationships
     ChatMessage ||--|| ChatMessageVote : has
-    Workspace ||--|| DirectoryPolicy : has
-    Connection ||--|| DirectoryPolicy : has
     DiscussionComment ||--|| Discussion : references
-    Connection ||--|| GithubAccessTarget : has
     PracticeRevision ||--|| Practice : references
     Workspace ||--|| PracticeCatalogInstallation : has
     WorkspaceMembership ||--|| PracticeReviewPersonTarget : reviewed
     PullRequestReviewComment ||--|| PullRequestReviewThread : reviewed
     User ||--|| UserPreference : has
     Organization ||--|| Workspace : has
-    Workspace ||--|| WorkspaceAccessPolicy : has
-    WorkspaceAccessRequest ||--|| WorkspaceAccountMembership : belongs_to
     Workspace ||--|| WorkspaceOnboardingSetting : has
 
     %% One-to-Many relationships
@@ -1765,8 +1607,6 @@ erDiagram
     Feedback ||--o{ DeliveryPolicyEvaluation : references
     AgentJob ||--o{ DeliveryPolicyEvaluation : references
     Workspace ||--o{ DeliveryPolicyEvaluation : has
-    Account ||--o{ DirectoryPolicy : has
-    IdentityProvider ||--o{ DirectoryPolicy : has
     User ||--o{ Discussion : references
     User ||--o{ Discussion : authored_by
     DiscussionCategory ||--o{ Discussion : has
@@ -1790,19 +1630,6 @@ erDiagram
     User ||--o{ GitCommit : authored_by
     User ||--o{ GitCommit : references
     Repository ||--o{ GitCommit : has
-    GithubAccessMembership ||--o{ GithubAccessAction : membership_id
-    GithubAccessTarget ||--o{ GithubAccessAction : target_id
-    Workspace ||--o{ GithubAccessAction : has
-    GithubAccessMembership ||--o{ GithubAccessAction : membership_id
-    GithubAccessTarget ||--o{ GithubAccessAction : target_id
-    GithubAccessTarget ||--o{ GithubAccessMembership : target_id
-    Workspace ||--o{ GithubAccessMembership : belongs_to
-    Account ||--o{ GithubAccessMembership : belongs_to
-    GithubAccessTarget ||--o{ GithubAccessMembership : target_id
-    Workspace ||--o{ GithubAccessTarget : has
-    Account ||--o{ GithubAccessTarget : approved_by_account_id
-    IdentityProvider ||--o{ GithubAccessTarget : references
-    Account ||--o{ GithubAccessTarget : handoff_issued_by_account_id
     Account ||--o{ IdentityLink : has
     IdentityProvider ||--o{ IdentityLink : references
     Repository ||--o{ Issue : has
@@ -1894,15 +1721,6 @@ erDiagram
     Workspace ||--o{ SyncJob : has
     IdentityProvider ||--o{ Team : references
     IdentityProvider ||--o{ User : references
-    WorkspaceAccessRequest ||--o{ WorkspaceAccessNotification : request_id
-    Workspace ||--o{ WorkspaceAccessNotification : has
-    WorkspaceAccessRequest ||--o{ WorkspaceAccessNotification : request_id
-    Workspace ||--o{ WorkspaceAccessRequest : has
-    Account ||--o{ WorkspaceAccessRequest : account_id
-    WorkspaceAccessRequest ||--o{ WorkspaceAccessRequest : references
-    Account ||--o{ WorkspaceAccessRequest : decided_by_account_id
-    Workspace ||--o{ WorkspaceAccountMembership : belongs_to
-    Account ||--o{ WorkspaceAccountMembership : belongs_to
     LlmModel ||--o{ WorkspaceAgentBinding : references
     Workspace ||--o{ WorkspaceAgentBinding : has
     WorkspaceLlmModel ||--o{ WorkspaceAgentBinding : workspace_model_id
