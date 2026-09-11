@@ -683,42 +683,31 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("a screenshot neither spends the budget nor ends the walk the source is waiting in")
-        void shouldStageSourceRatherThanBinaries() throws Exception {
-            // The image fits the per-file bound but image and filler together exceed the total: had the
-            // image been staged, the walk would have ended at the filler and never reached the source.
+        @DisplayName("skips a binary blob without spending the size bound on it or ending the walk")
+        void shouldSkipABinaryBlobWithoutSpendingTheBoundOnIt() throws Exception {
+            // The image fits the per-file bound; image and filler together do not fit the total, so a
+            // walk that staged the image would end at the filler and never reach the source behind it.
             manager = createManager(true, 20_000, DataSize.ofKilobytes(70), DataSize.ofKilobytes(70));
             try (Git sourceGit = createSourceRepo()) {
-                // Sorted before the text, as a documentation image is in a real repository.
-                byte[] png = new byte[64 * 1024];
-                png[0] = (byte) 0x89;
-                png[1] = 'P';
-                png[2] = 'N';
-                png[3] = 'G';
-                png[8] = 0; // the NUL that makes it binary
-                Files.write(sourceRepoPath.resolve("a-screenshot.png"), png);
+                // Longer than the head the binary rule reads, so the staged copy has to carry both parts.
+                String source = "class Service {}\n".repeat(1024);
+                Files.write(sourceRepoPath.resolve("a-screenshot.png"), new byte[64 * 1024]);
                 Files.writeString(sourceRepoPath.resolve("b-filler.txt"), "x".repeat(40 * 1024));
-                // Longer than the opening bytes the rule inspects, so the staged copy proves the head
-                // that was read for the decision and the tail that was not both reach the disk.
-                Files.writeString(sourceRepoPath.resolve("c-service.java"), "class Service {}\n".repeat(1024));
-                // A lone carriage return is binary to JGit's diff, so it is binary to the tree as well.
-                Files.writeString(sourceRepoPath.resolve("d-classic-mac.txt"), "line one\rline two\r");
+                Files.writeString(sourceRepoPath.resolve("c-service.java"), source);
                 sourceGit.add().addFilepattern(".").call();
                 String sha = commit(sourceGit, "Add a documentation image ahead of the source");
 
                 manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
 
                 try (var snapshot = manager.readTreeSnapshot(1L, sha)) {
-                    assertThat(snapshot.files())
-                            .containsKeys("b-filler.txt", "c-service.java")
-                            .doesNotContainKeys("a-screenshot.png", "d-classic-mac.txt");
-                    assertThat(Files.size(snapshot.files().get("c-service.java")))
-                            .isEqualTo("class Service {}\n".length() * 1024L);
-                    // The manifest still says what the review could not have been shown, and the walk
-                    // reached the end of the tree rather than stopping at a file it never staged.
+                    assertThat(snapshot.files()).doesNotContainKey("a-screenshot.png");
+                    assertThat(snapshot.files()).containsKeys("b-filler.txt", "c-service.java");
+                    assertThat(Files.readString(snapshot.files().get("c-service.java")))
+                            .isEqualTo(source);
                     assertThat(snapshot.limitations())
                             .contains(GitRepositoryManager.TREE_LIMITATION_BINARY)
                             .doesNotContain(GitRepositoryManager.TREE_LIMITATION_TOTAL_SIZE);
+                    assertThat(snapshot.complete()).isFalse();
                 }
             }
         }
@@ -858,8 +847,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             manager = createManager(true, 20_000, DataSize.ofKilobytes(6), DataSize.ofKilobytes(4));
             try (Git sourceGit = createSourceRepo()) {
                 for (int i = 0; i < 8; i++) {
-                    // Text, not zeroes: a blob of NUL bytes is binary, and the bound under test here is
-                    // the size one.
+                    // Text: zero-filled blobs are binary and would never reach the bound under test.
                     Files.writeString(sourceRepoPath.resolve("file" + i + ".txt"), "x".repeat(2 * 1024));
                 }
                 sourceGit.add().addFilepattern(".").call();

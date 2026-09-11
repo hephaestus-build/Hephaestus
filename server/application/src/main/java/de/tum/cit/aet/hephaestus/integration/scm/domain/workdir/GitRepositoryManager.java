@@ -84,11 +84,7 @@ public class GitRepositoryManager {
     /** The walk stopped at {@code hephaestus.git.tree-max-total-size}; the rest was never read. */
     public static final String TREE_LIMITATION_TOTAL_SIZE = "TOTAL_SIZE_LIMIT_REACHED";
 
-    /**
-     * A blob that {@link RawText#isBinary} calls binary was skipped; the walk continued. The review's
-     * tools read and grep text, so a binary could show it nothing, and the bound it would have spent is
-     * what the surrounding source is bought with.
-     */
+    /** A blob {@link RawText#isBinary} calls binary was skipped; the walk continued. */
     public static final String TREE_LIMITATION_BINARY = "BINARY_FILE_EXCLUDED";
 
     private final GitRepositoryProperties properties;
@@ -759,15 +755,15 @@ public class GitRepositoryManager {
      * {@link GitTreeSnapshot#close() close} it to delete the directory.
      *
      * <p>Peak memory being bounded is not the same as the capture being bounded: a repository can be
-     * arbitrarily large, and every staged file is copied into the sandbox, digested and listed in the
-     * evidence manifest. The walk therefore stops at {@code hephaestus.git.tree-max-files} and
-     * {@code tree-max-total-size}, and skips any blob over {@code tree-max-file-size} — each of which makes
-     * {@link GitTreeSnapshot#complete()} false, so nothing downstream can claim something is absent from a
-     * repository it only partly saw.
+     * arbitrarily large, and the whole snapshot is copied into the sandbox for every review. The walk
+     * therefore stops at {@code hephaestus.git.tree-max-files} and {@code tree-max-total-size}, and skips
+     * any blob over {@code tree-max-file-size} — each of which makes {@link GitTreeSnapshot#complete()}
+     * false, so nothing downstream can claim something is absent from a repository it only partly saw.
      *
      * <p>Binary blobs are skipped by the rule {@link DiffFormatter} applies to the diff the same review
-     * reads, so the tree and the diff agree on what is text. A blob's size is read from the object
-     * database before it is written, so an oversized file is never staged and then deleted.
+     * reads: the review can only read and grep text, and a binary would spend the bound the surrounding
+     * source is bought with. A blob's size is read from the object database before it is written, so an
+     * oversized file is never staged and then deleted.
      *
      * <p>Git handles are opened and closed entirely within this call rather than returned as lazy readers,
      * which would leave an {@code ObjectReader} and the repository read lock open across the staging
@@ -859,10 +855,9 @@ public class GitRepositoryManager {
                                 continue;
                             }
                             Path target = stagingDir.resolve(sourcePath);
-                            // The opening bytes decide whether the blob is staged at all, and a blob
-                            // nobody stages must not be what ends the walk, so they are read before the
-                            // size decision and held rather than written: a repository of images never
-                            // writes and deletes one of them against the staging volume.
+                            // The head is read before the size check, since a blob that is never staged
+                            // must not be what ends the walk, and held in memory rather than written, so
+                            // a rejected blob never touches the staging volume.
                             try (InputStream blob =
                                     reader.open(blobId, Constants.OBJ_BLOB).openStream()) {
                                 byte[] head = blob.readNBytes(RawText.getBufferSize());
@@ -885,7 +880,7 @@ public class GitRepositoryManager {
                                     blob.transferTo(out);
                                 }
                             }
-                            totalBytes += Files.size(target);
+                            totalBytes += blobSize;
                             result.put(sourcePath, target);
                         }
                     }
