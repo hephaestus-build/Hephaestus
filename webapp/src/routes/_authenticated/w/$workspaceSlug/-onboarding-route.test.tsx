@@ -39,9 +39,12 @@ const firstVisit = {
 	needsWelcome: true,
 } satisfies WorkspaceOnboarding;
 const aiOptions = [
-	{ choice: "ON_PREMISES", practiceReviewsReady: true, mentorReady: true },
-	{ choice: "PRIVATE_CLOUD", practiceReviewsReady: true, mentorReady: true },
+	{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: true, mentorReady: true },
+	{ choice: "NOT_KEPT_ONLY", practiceReviewsReady: true, mentorReady: true },
+	{ choice: "ANY_DECLARED", practiceReviewsReady: true, mentorReady: true },
 ] satisfies WorkspaceOnboarding["aiOptions"];
+const IN_HOUSE = "Only in-house";
+const NOT_KEPT = "In-house, or a provider that keeps nothing";
 const slack = {
 	connectionId: 9,
 	providerType: "SLACK",
@@ -52,8 +55,11 @@ const slack = {
 	linked: false,
 } satisfies WorkspaceOnboardingLink;
 
-const checked = (name: string) =>
-	screen.getByRole("radio", { name }).getAttribute("aria-checked") === "true";
+const checked = (name: string, role: "radio" | "switch" = "radio") =>
+	screen.getByRole(role, { name }).getAttribute("aria-checked") === "true";
+const checkedBox = (name: string) =>
+	screen.getByRole("checkbox", { name }).getAttribute("aria-checked") === "true";
+const ASK_ON_FIRST_VISIT = "Ask members to set up on their first visit";
 const disabled = (name: string) => screen.getByRole<HTMLButtonElement>("button", { name }).disabled;
 
 describe("workspace member onboarding route", () => {
@@ -91,10 +97,10 @@ describe("workspace member onboarding route", () => {
 	});
 
 	it("updates an untouched saved choice on refetch without overwriting an explicit draft", async () => {
-		mockWorkspace({ ...firstVisit, aiChoice: "ON_PREMISES", aiOptions });
+		mockWorkspace({ ...firstVisit, aiChoice: "IN_HOUSE_ONLY", aiOptions });
 		const { queryClient } = renderRouteAtWithRouter("/w/acme/onboarding");
 		await screen.findByRole("heading", { name: "Welcome to Acme" }, ROUTE_RENDER_WAIT);
-		expect(checked("On-premises")).toBe(true);
+		expect(checked(IN_HOUSE)).toBe(true);
 		server.use(
 			http.get("*/workspaces/acme/onboarding/me", () =>
 				HttpResponse.json({ ...firstVisit, aiChoice: "NO_AI", aiOptions }),
@@ -106,10 +112,10 @@ describe("workspace member onboarding route", () => {
 			});
 		});
 		await waitFor(() => expect(checked("No AI")).toBe(true));
-		fireEvent.click(screen.getByRole("radio", { name: "Private cloud" }));
+		fireEvent.click(screen.getByRole("radio", { name: NOT_KEPT }));
 		server.use(
 			http.get("*/workspaces/acme/onboarding/me", () =>
-				HttpResponse.json({ ...firstVisit, aiChoice: "ON_PREMISES", aiOptions }),
+				HttpResponse.json({ ...firstVisit, aiChoice: "IN_HOUSE_ONLY", aiOptions }),
 			),
 		);
 		await act(async () => {
@@ -117,7 +123,7 @@ describe("workspace member onboarding route", () => {
 				queryKey: getMemberOnboardingQueryKey({ path: { workspaceSlug: "acme" } }),
 			});
 		});
-		expect(checked("Private cloud")).toBe(true);
+		expect(checked(NOT_KEPT)).toBe(true);
 		expect(disabled("Continue")).toBe(false);
 	});
 
@@ -145,7 +151,7 @@ describe("workspace member onboarding route", () => {
 
 	it.each([
 		{ operation: "completion", button: "Continue", completed: true },
-		{ operation: "dismissal", button: "Not now", completed: false },
+		{ operation: "dismissal", button: "Skip for now", completed: false },
 	])(
 		"returns to the original destination after $operation",
 		async ({ operation, button, completed }) => {
@@ -196,7 +202,7 @@ describe("workspace member onboarding route", () => {
 			`/w/acme/onboarding?${new URLSearchParams({ returnTo })}`,
 		);
 		await screen.findByRole("heading", { name: "Welcome to Acme" }, ROUTE_RENDER_WAIT);
-		fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+		fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
 		// With leaderboards disabled, workspace home opens the signed-in developer’s page.
 		await waitFor(
 			() => expect(router.state.location.pathname).toBe(`/w/acme/user/${currentUser.username}`),
@@ -274,14 +280,14 @@ describe("workspace member onboarding route", () => {
 	});
 
 	it("saves an unsaved choice before redirecting to the provider", async () => {
-		mockWorkspace({ ...firstVisit, aiChoice: "ON_PREMISES", aiOptions, links: [slack] });
+		mockWorkspace({ ...firstVisit, aiChoice: "IN_HOUSE_ONLY", aiOptions, links: [slack] });
 		const order: string[] = [];
 		server.use(
 			http.put("*/workspaces/acme/onboarding/me/ai-choice", async ({ request }) => {
 				order.push(`ai-choice ${JSON.stringify(await request.json())}`);
 				return HttpResponse.json({
 					...firstVisit,
-					aiChoice: "PRIVATE_CLOUD",
+					aiChoice: "NOT_KEPT_ONLY",
 					aiOptions,
 					links: [slack],
 				});
@@ -292,15 +298,15 @@ describe("workspace member onboarding route", () => {
 		});
 		renderRouteAtWithRouter("/w/acme/onboarding");
 		await screen.findByRole("heading", { name: "Welcome to Acme" }, ROUTE_RENDER_WAIT);
-		fireEvent.click(screen.getByRole("radio", { name: "Private cloud" }));
+		fireEvent.click(screen.getByRole("radio", { name: NOT_KEPT }));
 		fireEvent.click(screen.getByRole("button", { name: "Connect Slack" }));
 		await waitFor(() => expect(link).toHaveBeenCalledOnce());
-		expect(order).toStrictEqual(['ai-choice {"choice":"PRIVATE_CLOUD"}', "linkAccount"]);
+		expect(order).toStrictEqual(['ai-choice {"choice":"NOT_KEPT_ONLY"}', "linkAccount"]);
 		link.mockRestore();
 	});
 
 	it("stops the provider redirect when the draft cannot be saved", async () => {
-		mockWorkspace({ ...firstVisit, aiChoice: "ON_PREMISES", aiOptions, links: [slack] });
+		mockWorkspace({ ...firstVisit, aiChoice: "IN_HOUSE_ONLY", aiOptions, links: [slack] });
 		server.use(
 			http.put("*/workspaces/acme/onboarding/me/ai-choice", () =>
 				HttpResponse.json({ detail: "Your choice could not be saved." }, { status: 503 }),
@@ -309,7 +315,7 @@ describe("workspace member onboarding route", () => {
 		const link = vi.spyOn(authClient, "linkAccount").mockImplementation(() => {});
 		renderRouteAtWithRouter("/w/acme/onboarding");
 		await screen.findByRole("heading", { name: "Welcome to Acme" }, ROUTE_RENDER_WAIT);
-		fireEvent.click(screen.getByRole("radio", { name: "Private cloud" }));
+		fireEvent.click(screen.getByRole("radio", { name: NOT_KEPT }));
 		fireEvent.click(screen.getByRole("button", { name: "Connect Slack" }));
 		await screen.findByText("Your choice could not be saved.");
 		expect(link).not.toHaveBeenCalled();
@@ -356,7 +362,7 @@ describe("workspace member onboarding route", () => {
 		).toBe(true);
 	});
 
-	it("does not send an AI choice when a member chooses Not now", async () => {
+	it("does not send an AI choice when a member chooses Skip for now", async () => {
 		mockWorkspace(firstVisit);
 		let dismissals = 0;
 		let choices = 0;
@@ -375,7 +381,7 @@ describe("workspace member onboarding route", () => {
 		);
 		const { queryClient } = renderRouteAtWithRouter("/w/acme/onboarding");
 		await screen.findByRole("heading", { name: "Welcome to Acme" }, ROUTE_RENDER_WAIT);
-		fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+		fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
 		await waitFor(() => expect(dismissals).toBe(1));
 		expect(choices).toBe(0);
 		await waitFor(() =>
@@ -423,11 +429,11 @@ describe("workspace member onboarding route", () => {
 	});
 
 	it("keeps the current choice when the server refuses a save", async () => {
-		mockWorkspace({ ...firstVisit, aiChoice: "ON_PREMISES", aiOptions });
+		mockWorkspace({ ...firstVisit, aiChoice: "IN_HOUSE_ONLY", aiOptions });
 		server.use(
 			http.put("*/workspaces/acme/onboarding/me/ai-choice", () =>
 				HttpResponse.json(
-					{ detail: "Only the account owner can choose their AI preference." },
+					{ detail: "Only the account owner can make their AI choice." },
 					{ status: 403 },
 				),
 			),
@@ -442,7 +448,7 @@ describe("workspace member onboarding route", () => {
 			queryClient.getQueryData<WorkspaceOnboarding>(
 				getMemberOnboardingQueryKey({ path: { workspaceSlug: "acme" } }),
 			)?.aiChoice,
-		).toBe("ON_PREMISES");
+		).toBe("IN_HOUSE_ONLY");
 		expect(checked("No AI")).toBe(true);
 	});
 });
@@ -509,7 +515,7 @@ describe("onboarding mutations across workspace navigation", () => {
 		);
 		const { router, queryClient } = renderRouteAtWithRouter("/w/acme/onboarding");
 		await screen.findByRole("heading", { name: "Welcome to Acme" }, ROUTE_RENDER_WAIT);
-		fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+		fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
 		await waitFor(() => expect(started).toBe(true));
 		await act(async () => {
 			await router.navigate({
@@ -547,31 +553,39 @@ describe("onboarding mutations across workspace navigation", () => {
 			http.get("*/workspaces/:workspaceSlug/members/me", () =>
 				HttpResponse.json({ role: "OWNER", userId: 20, userLogin: "ada" }),
 			),
-			http.get("*/workspaces/:workspaceSlug/onboarding/settings", () =>
+			http.get("*/workspaces/acme/onboarding/settings", () =>
 				HttpResponse.json({
 					enabled: false,
+					aiChoiceRequired: false,
 					revision: 0,
-					welcomeMarkdown: "Other guidance",
 					requiredConnectionIds: [],
 				}),
 			),
+			http.get("*/workspaces/other/onboarding/settings", () =>
+				HttpResponse.json({
+					enabled: false,
+					aiChoiceRequired: false,
+					revision: 0,
+					requiredConnectionIds: [slack.connectionId],
+				}),
+			),
 			http.get("*/workspaces/:workspaceSlug/onboarding/settings/links", () =>
-				HttpResponse.json([]),
+				HttpResponse.json([slack]),
 			),
 			http.put("*/workspaces/acme/onboarding/settings", async () => {
 				started = true;
 				await response;
 				return HttpResponse.json({
 					enabled: true,
+					aiChoiceRequired: true,
 					revision: 1,
-					welcomeMarkdown: "Acme guidance",
 					requiredConnectionIds: [],
 				});
 			}),
 		);
 		const { router, queryClient } = renderRouteAtWithRouter("/w/acme/admin/onboarding");
-		await screen.findByRole("switch", { name: "Show a welcome on first visit" }, ROUTE_RENDER_WAIT);
-		fireEvent.click(screen.getByRole("switch", { name: "Show a welcome on first visit" }));
+		await screen.findByRole("switch", { name: ASK_ON_FIRST_VISIT }, ROUTE_RENDER_WAIT);
+		fireEvent.click(screen.getByRole("switch", { name: ASK_ON_FIRST_VISIT }));
 		fireEvent.click(screen.getByRole("button", { name: "Save onboarding settings" }));
 		await waitFor(() => expect(started).toBe(true));
 		await act(async () => {
@@ -580,11 +594,7 @@ describe("onboarding mutations across workspace navigation", () => {
 				params: { workspaceSlug: "other" },
 			});
 		});
-		await waitFor(() =>
-			expect(
-				screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Welcome from your team" }).value,
-			).toBe("Other guidance"),
-		);
+		await waitFor(() => expect(checkedBox("Slack")).toBe(true));
 		await act(async () => {
 			release();
 		});
@@ -595,13 +605,12 @@ describe("onboarding mutations across workspace navigation", () => {
 				),
 			).toMatchObject({ enabled: true, revision: 1 }),
 		);
-		expect(
-			screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Welcome from your team" }).value,
-		).toBe("Other guidance");
+		expect(checkedBox("Slack")).toBe(true);
+		expect(checked(ASK_ON_FIRST_VISIT, "switch")).toBe(false);
 		expect(
 			queryClient.getQueryData(
 				getMemberOnboardingSettingsQueryKey({ path: { workspaceSlug: "other" } }),
 			),
-		).toMatchObject({ enabled: false, welcomeMarkdown: "Other guidance" });
+		).toMatchObject({ enabled: false, requiredConnectionIds: [slack.connectionId] });
 	});
 });

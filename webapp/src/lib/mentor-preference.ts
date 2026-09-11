@@ -1,18 +1,21 @@
 import type { WorkspaceOnboarding } from "@/api/types.gen";
 
-import { memberAiChoiceTitle } from "./llm-processing-location";
+type MemberAiChoice = NonNullable<WorkspaceOnboarding["aiChoice"]>;
 
-/** Why Heph will not answer; `unavailable` carries the saved location's title its sentence names. */
+/**
+ * Why Heph will not answer; `unavailable` carries the saved choice so the view can name it from the
+ * registry — the words for a choice live with its icon, and this layer holds no view vocabulary.
+ */
 export type MentorNotice =
 	| { reason: "no-ai" }
 	| { reason: "choice-required" }
-	| { reason: "unavailable"; location: string };
+	| { reason: "unavailable"; choice: MemberAiChoice };
 
 /**
  * Why Heph will not answer this member, if it will not. The server twin is
  * `MemberAiPreferences.Decision.permitsAi` plus `MemberAiRoutingAdapter.ready(MENTOR)`.
- * `aiChoice == null && !aiChoiceRequired` is `undefined` on purpose: such members use the
- * workspace-default binding.
+ * `aiChoice == null && !aiChoiceRequired` is `undefined` on purpose: members who haven't chosen
+ * are served by the undeclared slot.
  */
 export function mentorPreferenceReason(preference: WorkspaceOnboarding): MentorNotice | undefined {
 	if (preference.aiChoice === "NO_AI") return { reason: "no-ai" };
@@ -23,13 +26,15 @@ export function mentorPreferenceReason(preference: WorkspaceOnboarding): MentorN
 			(option) => option.choice === preference.aiChoice && option.mentorReady,
 		)
 	)
-		return { reason: "unavailable", location: memberAiChoiceTitle(preference.aiChoice) };
+		return { reason: "unavailable", choice: preference.aiChoice };
 	return undefined;
 }
 
 /**
  * The notice per reason. `unavailable` is true only about Heph — the reason fires whenever
  * `mentorReady` is false, even when practice reviews are ready — so its sentence names no reviews.
+ * Its description is two halves around the saved choice's card title, which the view emphasises so
+ * that a title with a comma in it still reads as one noun.
  */
 export const MENTOR_PREFERENCE_COPY = {
 	"no-ai": {
@@ -39,31 +44,20 @@ export const MENTOR_PREFERENCE_COPY = {
 		cta: "Change your AI choice",
 	},
 	"choice-required": {
-		title: "Choose how you want to use AI here",
+		title: "Choose which AI may handle your work",
 		description:
-			"On-premises, Private cloud or No AI. Nothing is chosen until you choose, and until you do there are no practice reviews about you and no Heph.",
+			"Until you choose, there are no practice reviews about you and no Heph in this workspace.",
 		cta: "Make your AI choice",
 	},
 	unavailable: {
 		title: "Heph isn't set up for your AI choice yet",
-		description: (location: string) =>
-			`No Heph model is assigned to ${location}. Nothing switches you elsewhere; ask a workspace owner, or change your choice.`,
+		description: {
+			before: "No Heph model is within ",
+			after: " yet. Nothing switches you elsewhere — ask a workspace owner, or change your choice.",
+		},
 		cta: "Change your AI choice",
 	},
 } satisfies Record<
 	MentorNotice["reason"],
-	{ title: string; description: string | ((location: string) => string); cta: string }
+	{ title: string; description: string | { before: string; after: string }; cta: string }
 >;
-
-/** The three sentences for one notice, with the `unavailable` location already filled in. */
-export function mentorNoticeCopy(notice: MentorNotice): {
-	title: string;
-	description: string;
-	cta: string;
-} {
-	if (notice.reason === "unavailable") {
-		const copy = MENTOR_PREFERENCE_COPY.unavailable;
-		return { ...copy, description: copy.description(notice.location) };
-	}
-	return MENTOR_PREFERENCE_COPY[notice.reason];
-}

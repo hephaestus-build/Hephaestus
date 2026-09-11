@@ -7,7 +7,7 @@ import { PracticeReviewSettings } from "./PracticeReviewSettings";
 import { mockReviewSettings } from "./story-mock-data";
 
 const readyBinding: AgentBinding = {
-	processingLocation: "UNCLASSIFIED",
+	dataHandlingTier: "IN_HOUSE",
 	purpose: "PRACTICE_REVIEW",
 	enabled: true,
 	ready: true,

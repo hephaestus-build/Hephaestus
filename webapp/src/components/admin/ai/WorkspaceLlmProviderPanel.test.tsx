@@ -36,7 +36,7 @@ const connections: WorkspaceLlmConnection[] = [
 
 function model(id: number, connectionId: number, displayName: string): WorkspaceLlmModel {
 	return {
-		processingLocation: "UNCLASSIFIED",
+		dataHandlingTier: "UNDECLARED",
 		id,
 		connectionId,
 		connectionDisplayName:

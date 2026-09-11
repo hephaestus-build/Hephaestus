@@ -39,8 +39,8 @@ it("withholds the floating composer for No AI and after a failed preference refe
 	const key = getMemberOnboardingQueryKey({ path: { workspaceSlug: "acme" } });
 	const optedIn: WorkspaceOnboarding = {
 		...preference,
-		aiChoice: "ON_PREMISES",
-		aiOptions: [{ choice: "ON_PREMISES", mentorReady: true, practiceReviewsReady: true }],
+		aiChoice: "IN_HOUSE_ONLY",
+		aiOptions: [{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true }],
 	};
 	server.use(http.get("*/workspaces/acme/onboarding/me", () => HttpResponse.json(optedIn)));
 	await act(async () => {
@@ -104,8 +104,8 @@ it("keeps setup free of the floating composer even when AI is available", async 
 	mockCopilot({
 		...workspaceOnboarding(),
 		needsWelcome: true,
-		aiChoice: "ON_PREMISES",
-		aiOptions: [{ choice: "ON_PREMISES", mentorReady: true, practiceReviewsReady: true }],
+		aiChoice: "IN_HOUSE_ONLY",
+		aiOptions: [{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true }],
 	});
 	renderRouteAtWithRouter("/w/acme/onboarding");
 	await screen.findByRole("heading", { name: "Welcome to Acme" }, ROUTE_RENDER_WAIT);

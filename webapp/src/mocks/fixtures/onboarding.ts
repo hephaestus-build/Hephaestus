@@ -8,7 +8,6 @@ export function workspaceOnboarding(workspaceName = "Acme"): WorkspaceOnboarding
 		aiChoiceRequired: false,
 		completed: false,
 		revision: 0,
-		welcomeMarkdown: "",
 		links: [],
 		aiOptions: [],
 	};

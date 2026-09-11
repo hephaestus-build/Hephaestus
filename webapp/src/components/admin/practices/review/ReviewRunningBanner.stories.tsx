@@ -4,7 +4,7 @@ import { ReviewRunningBanner } from "./ReviewRunningBanner";
 
 const readyModel = {
 	binding: {
-		processingLocation: "UNCLASSIFIED",
+		dataHandlingTier: "IN_HOUSE",
 		purpose: "PRACTICE_REVIEW",
 		enabled: true,
 		ready: true,
@@ -26,7 +26,9 @@ type Story = StoryObj<typeof meta>;
 
 export const Running: Story = {
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("status")).toHaveTextContent("Reviews are running");
+		const status = canvas.getByRole("status");
+		await expect(status).toHaveTextContent("Reviews are running");
+		await expect(status).toHaveTextContent("a review model declared as Stays in-house is ready");
 	},
 };
 

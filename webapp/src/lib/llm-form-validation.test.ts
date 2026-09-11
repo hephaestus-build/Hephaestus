@@ -116,4 +116,26 @@ describe("validateLlmModelForm", () => {
 	it("skips the upstream id on edit, where the form cannot change it", () => {
 		expect(validateLlmModelForm({ ...validModel, upstreamModelId: undefined })).toStrictEqual({});
 	});
+
+	it("keeps an undeclared model saveable, so upgraded catalogs are not locked", () => {
+		expect(validateLlmModelForm({ ...validModel, trainingConfirmed: false })).toStrictEqual({});
+	});
+
+	it("rejects one declared fact without the other", () => {
+		const errors = validateLlmModelForm({ ...validModel, operatedBy: "PROVIDER" });
+		expect(errors.dataHandling).toBe("Declare both facts or leave data handling undeclared.");
+	});
+
+	it("requires the training guarantee once both facts are declared", () => {
+		const declared = { ...validModel, operatedBy: "PROVIDER", keptAfterReply: "NONE" } as const;
+		expect(validateLlmModelForm(declared)).toStrictEqual({
+			trainingConfirmed: "Confirm the training guarantee, or leave data handling undeclared.",
+		});
+		expect(validateLlmModelForm({ ...declared, trainingConfirmed: true })).toStrictEqual({});
+	});
+
+	it("bounds the admin note to the column that stores it", () => {
+		const errors = validateLlmModelForm({ ...validModel, dataHandlingNote: "x".repeat(201) });
+		expect(errors.dataHandlingNote).toMatch(/200 characters or fewer/);
+	});
 });

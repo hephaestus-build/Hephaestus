@@ -1,10 +1,9 @@
 import {
 	BotIcon,
 	CheckIcon,
-	ChevronRightIcon,
+	CircleOffIcon,
 	Link2Icon,
 	RefreshCwIcon,
-	ShieldCheckIcon,
 	SparklesIcon,
 } from "lucide-react";
 import { type SubmitEvent, useEffect, useId, useRef, useState } from "react";
@@ -15,15 +14,19 @@ import { LegalLinks } from "@/components/auth/LegalLinks";
 import { StepMarker } from "@/components/auth/StepMarker";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { UntrustedMarkdown, UNTRUSTED_MARKDOWN_PROSE } from "@/components/common/UntrustedMarkdown";
 import { PageLayout } from "@/components/core/PageLayout";
 import { Section } from "@/components/core/Section";
 import { getProviderIcon } from "@/components/icons/provider-icons";
 import { HephSays } from "@/components/mentor/HephSays";
+import {
+	MEMBER_AI_CHOICE_DEFS,
+	type MemberAiChoice,
+	memberAiChoiceTitle,
+} from "@/components/practice-vocabulary/data-handling-defs";
+import { statusValues } from "@/components/practice-vocabulary/status-def";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
 	Field,
 	FieldContent,
@@ -44,11 +47,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import {
-	MEMBER_AI_CHOICES,
-	type MemberAiChoice,
-	memberAiChoiceTitle,
-} from "@/lib/llm-processing-location";
 import { openRequiredLinks } from "@/lib/onboarding-links";
 
 export type OnboardingAction = "save" | "continue";
@@ -93,10 +91,10 @@ const AI_FACTS: readonly Fact[] = [
 		icon: BotIcon,
 		term: "What AI does",
 		detail:
-			"Practice reviews about your work, and Heph to talk it through — only on the location you choose. Nothing switches you elsewhere.",
+			"Practice reviews about your work, and Heph to talk it through — only with AI within your answer. Nothing switches you elsewhere.",
 	},
 	{
-		icon: ShieldCheckIcon,
+		icon: CircleOffIcon,
 		term: "No AI",
 		detail:
 			"No new practice reviews about you and no new conversations with Heph. A review already running finishes where it started.",
@@ -105,17 +103,34 @@ const AI_FACTS: readonly Fact[] = [
 		icon: RefreshCwIcon,
 		term: "What never changes",
 		detail:
-			"Your membership, existing feedback and earlier conversations. Change your answer any time from the sidebar.",
+			"Your membership, existing feedback and earlier conversations. Change your answer any time under Your AI choice in the sidebar.",
 	},
 ];
 
-const INTRO =
-	"I'm Heph. Before I read any of your work here, you decide whether I may — and where.";
+const AI_CHOICES = statusValues(MEMBER_AI_CHOICE_DEFS);
 
-function available(data: WorkspaceOnboarding, choice: MemberAiChoice): boolean {
-	if (choice === "NO_AI") return true;
+/**
+ * What the workspace has set up under this answer's ceiling, per purpose. An answer the server has
+ * no option for counts as set up for neither: a card may claim readiness only from the server's
+ * word. No AI needs nothing set up, so it is always covered.
+ */
+function coverage(data: WorkspaceOnboarding, choice: MemberAiChoice) {
+	if (choice === "NO_AI") return { practiceReviews: true, mentor: true };
 	const option = data.aiOptions.find((entry) => entry.choice === choice);
-	return option?.practiceReviewsReady === true || option?.mentorReady === true;
+	return {
+		practiceReviews: option?.practiceReviewsReady === true,
+		mentor: option?.mentorReady === true,
+	};
+}
+
+/** The sentence a card appends when part of the answer runs nothing here; `undefined` when all of it runs. */
+function readinessSentence(data: WorkspaceOnboarding, choice: MemberAiChoice): string | undefined {
+	const { practiceReviews, mentor } = coverage(data, choice);
+	if (!practiceReviews && !mentor)
+		return "Not set up here yet — nothing runs for you until a workspace owner adds a model.";
+	if (!mentor) return "Heph isn't set up for this answer yet.";
+	if (!practiceReviews) return "Practice reviews aren't set up for this answer yet.";
+	return undefined;
 }
 
 function joinNames(names: readonly string[]): string {
@@ -124,11 +139,10 @@ function joinNames(names: readonly string[]): string {
 
 /**
  * Page two of `ConsentPage`: the same frame, one question, and no step count — a total would be a
- * claim about a flow this screen cannot see. The three answers sit in one stacked column rather
- * than three across, and nothing divides "No AI" from the two locations: the `FactList` already
- * names that difference, and an "or" divider would weight it a second time. A card's availability
- * is a sentence in its own description rather than a footer row, so an unavailable answer reads
- * the same way as the others, just with one more fact.
+ * claim about a flow this screen cannot see. The four answers are a 2×2 grid of identical cards;
+ * the `FactList` above them says what any answer means, so no card argues for itself. An answer the
+ * workspace has not set up yet stays selectable — the answer is a ceiling, not a pick from today's
+ * inventory — and says so in its own sentence, so it reads like the others with one more fact.
  */
 export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPageProps) {
 	const [draft, setDraft] = useState<MemberAiChoice>();
@@ -141,15 +155,19 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 	const firstVisit = data?.needsWelcome === true;
 	const choice = draft ?? data?.aiChoice;
 	const changed = choice !== data?.aiChoice;
-	const choiceAvailable = data !== undefined && choice !== undefined && available(data, choice);
-	const savedUnavailable =
-		data !== undefined && data.aiChoice != null && !available(data, data.aiChoice);
+	const savedCoverage =
+		data !== undefined && data.aiChoice != null ? coverage(data, data.aiChoice) : undefined;
+	const savedUncovered =
+		savedCoverage !== undefined && !(savedCoverage.practiceReviews && savedCoverage.mentor);
+	const savedFullyUncovered =
+		savedCoverage !== undefined && !savedCoverage.practiceReviews && !savedCoverage.mentor;
 	const links = data?.links ?? [];
 	const openRequired = openRequiredLinks(links);
 	const openRequiredNames = joinNames(openRequired.map((link) => link.displayName));
 	const requiredSatisfied = openRequired.length === 0;
-	const canSubmit =
-		choice !== undefined && choiceAvailable && requiredSatisfied && (firstVisit || changed);
+	// Required links gate finishing setup, which only a first visit does; a return visit writes the
+	// answer alone, so an open link must never stand between a member and No AI.
+	const canSubmit = choice !== undefined && (firstVisit ? requiredSatisfied : changed);
 	const submission: OnboardingSubmission = ready?.submission ?? { status: "idle" };
 	const saving = submission.status === "saving";
 	const savingAction = submission.status === "saving" ? submission.action : undefined;
@@ -173,6 +191,8 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 				? `Welcome to ${data.workspaceName}`
 				: `Your AI choice in ${data.workspaceName}`;
 
+	const intro = `I read your work in ${data?.workspaceName ?? "this workspace"} only on your say-so: you choose which AI may handle it, or none.`;
+
 	// Heph narrates the reader's answers; the footer hint says the same thing factually and reaches
 	// the button through `aria-describedby`, so focusing it does not replay the line.
 	const narration =
@@ -185,31 +205,29 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 					: changed
 						? "Save and I'll follow your new answer from the next review on."
 						: choice === undefined
-							? "One question: where AI runs for you. Any answer is fine by me, including none."
-							: savedUnavailable
-								? "Your saved choice isn't set up here yet. I won't switch you anywhere else."
-								: !firstVisit
-									? `You chose ${memberAiChoiceTitle(choice)}. Change it whenever you like.`
-									: openRequired.length > 0
-										? `Noted. Connect ${openRequiredNames} and you're in.`
-										: "That's everything. Let's get to work.";
+							? "One question: which AI may handle your work. Any answer is fine by me, including none."
+							: savedFullyUncovered
+								? "Your choice isn't set up here yet. I won't switch you anywhere else."
+								: savedUncovered
+									? "Part of your choice isn't set up here yet. I won't switch you anywhere else."
+									: !firstVisit
+										? `You chose ${memberAiChoiceTitle(choice)}. Change it whenever you like.`
+										: openRequired.length > 0
+											? `Noted. Connect ${openRequiredNames} and you're in.`
+											: "That's everything. Let's get to work.";
 
 	const hint =
 		data === undefined
 			? undefined
-			: choice === undefined && data.aiChoiceRequired && firstVisit
-				? "Choose how you'd like to use AI to continue. Not now leaves without a choice: no practice reviews about you and no Heph until you make one."
-				: choice === undefined
-					? firstVisit
-						? "Choose how you'd like to use AI to continue."
-						: "Choose how you'd like to use AI, then save."
-					: !choiceAvailable
-						? "That location isn't set up here. Choose another, or No AI."
-						: openRequired.length > 0
-							? `Connect ${openRequiredNames} to finish setup.`
-							: !firstVisit && !changed
-								? "You can change this any time from the sidebar."
-								: undefined;
+			: choice === undefined
+				? firstVisit
+					? "Choose an answer to continue."
+					: "Choose an answer, then save."
+				: firstVisit && openRequired.length > 0
+					? `Connect ${openRequiredNames} to finish setup.`
+					: !firstVisit && !changed
+						? "You can change this any time from the sidebar."
+						: undefined;
 
 	const accountsRequired = links.some((link) => link.required && link.available);
 
@@ -227,39 +245,20 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 
 					<header className="space-y-4">
 						<h1 className="break-words text-2xl font-semibold tracking-tight">{heading}</h1>
-						<HephSays intro={INTRO} narration={narration} />
+						<HephSays intro={intro} narration={narration} />
 					</header>
-
-					{ready !== undefined && ready.data.welcomeMarkdown.length > 0 && (
-						<Collapsible defaultOpen={firstVisit}>
-							{/* The disclosure pattern: the heading names the owner's words in the outline, and
-							    the button inside it is what opens them. */}
-							<h2>
-								<CollapsibleTrigger
-									render={<Button type="button" variant="ghost" className="group -ml-3" />}
-								>
-									<ChevronRightIcon aria-hidden="true" className="group-aria-expanded:rotate-90" />
-									From your team
-								</CollapsibleTrigger>
-							</h2>
-							<CollapsibleContent className="mt-2 rounded-xl border border-mentor/30 p-4">
-								<div className={UNTRUSTED_MARKDOWN_PROSE}>
-									<UntrustedMarkdown>{ready.data.welcomeMarkdown}</UntrustedMarkdown>
-								</div>
-							</CollapsibleContent>
-						</Collapsible>
-					)}
 
 					<Separator />
 
 					{state.status === "loading" ? (
 						<div className="space-y-6" aria-busy="true">
 							<span className="sr-only">Loading…</span>
-							<Skeleton className="h-24 w-full" />
-							<div className="grid gap-3">
-								<Skeleton className="h-16" />
-								<Skeleton className="h-16" />
-								<Skeleton className="h-16" />
+							<Skeleton className="h-32 w-full" />
+							<div className="grid gap-3 sm:grid-cols-2">
+								<Skeleton className="h-20" />
+								<Skeleton className="h-20" />
+								<Skeleton className="h-20" />
+								<Skeleton className="h-20" />
 							</div>
 						</div>
 					) : state.status === "error" ? (
@@ -275,10 +274,10 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 								title={
 									<span className="flex items-start gap-3">
 										<StepMarker icon={SparklesIcon} done={choice !== undefined} />
-										<span className="min-w-0">Where should AI run for you?</span>
+										<span className="min-w-0">Which AI may handle your work?</span>
 									</span>
 								}
-								description="Your answer applies to you in this workspace only. Nothing is chosen until you choose."
+								description="For you, in this workspace only. Anything stricter than your answer also counts."
 							>
 								<FactList facts={AI_FACTS} />
 
@@ -293,25 +292,24 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 									disabled={saving}
 									aria-labelledby={`${id}-ai-title`}
 									aria-describedby={`${id}-ai-description`}
-									className="grid gap-3"
+									className="grid gap-3 sm:grid-cols-2"
 								>
-									{MEMBER_AI_CHOICES.map(({ value, title, description }) => {
-										const offered = available(state.data, value);
+									{AI_CHOICES.map((value) => {
+										const { icon: Icon, label, description } = MEMBER_AI_CHOICE_DEFS[value];
+										const readiness = readinessSentence(state.data, value);
 										return (
 											<FieldLabel key={value} htmlFor={`${id}-${value}`}>
-												<Field orientation="horizontal" data-disabled={!offered || undefined}>
+												<Field orientation="horizontal" className="h-full">
+													<Icon className="size-5 shrink-0 text-mentor" aria-hidden="true" />
 													<FieldContent>
-														<FieldTitle id={`${id}-${value}-title`}>{title}</FieldTitle>
+														<FieldTitle id={`${id}-${value}-title`}>{label}</FieldTitle>
 														<FieldDescription id={`${id}-${value}-detail`}>
-															{offered
-																? description
-																: `${description} Not set up in this workspace yet — a workspace owner can add it.`}
+															{readiness ? `${description} ${readiness}` : description}
 														</FieldDescription>
 													</FieldContent>
 													<RadioGroupItem
 														id={`${id}-${value}`}
 														value={value}
-														disabled={!offered}
 														aria-labelledby={`${id}-${value}-title`}
 														aria-describedby={`${id}-${value}-detail`}
 													/>
@@ -340,7 +338,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 										description={
 											accountsRequired
 												? "Required to finish setup."
-												: "Optional. You can do this later from settings."
+												: "Optional. You can do this later from User settings."
 										}
 									>
 										<ItemGroup>
@@ -355,7 +353,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 												return (
 													<Item key={link.connectionId} variant="outline" role="listitem">
 														<ItemMedia variant="icon">
-															<Icon />
+															<Icon aria-hidden="true" />
 														</ItemMedia>
 														<ItemContent>
 															<ItemTitle>{link.displayName}</ItemTitle>
@@ -446,9 +444,9 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 								>
 									{savingAction === "continue" && <Spinner />}
 									{savingAction === "continue"
-										? "Leaving…"
+										? "Skipping…"
 										: firstVisit
-											? "Not now"
+											? "Skip for now"
 											: "Back to workspace"}
 								</Button>
 							</footer>

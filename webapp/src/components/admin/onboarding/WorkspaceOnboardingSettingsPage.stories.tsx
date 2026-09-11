@@ -16,17 +16,19 @@ import {
 type State = WorkspaceOnboardingSettingsPageProps["state"];
 type ReadyState = Extract<State, { status: "ready" }>;
 
+const SWITCH = "Ask members to set up on their first visit";
+
 const settings = {
 	enabled: false,
+	aiChoiceRequired: false,
 	revision: 0,
-	welcomeMarkdown: "",
 	requiredConnectionIds: [],
 } satisfies WorkspaceOnboardingSettings;
 const configured = {
 	...settings,
 	enabled: true,
+	aiChoiceRequired: true,
 	revision: 1,
-	welcomeMarkdown: "Welcome to our team!",
 	requiredConnectionIds: [1],
 } satisfies WorkspaceOnboardingSettings;
 const slack = {
@@ -119,7 +121,7 @@ function ChangedElsewhere(args: WorkspaceOnboardingSettingsPageProps) {
 							setCurrent({
 								...current,
 								revision: current.revision + 1,
-								welcomeMarkdown: "Updated elsewhere",
+								requiredConnectionIds: [2],
 							})
 						}
 					>
@@ -132,14 +134,18 @@ function ChangedElsewhere(args: WorkspaceOnboardingSettingsPageProps) {
 }
 
 /**
- * The owner's page: a welcome switch, the team's Markdown and which account links a member must
- * connect. A requirement on an unavailable link stays clearable, so an owner is never locked into a
- * broken integration; only requiring a broken one is out of reach.
+ * The owner's page: one switch for the setup page and which account links a member must connect.
+ * A requirement on an unavailable link stays clearable, so an owner is never locked into a broken
+ * integration; only requiring a broken one is out of reach.
  *
- * "Configure AI models" sits beside the welcome although it edits nothing here: the answers a member
- * can take on the welcome are the processing locations this workspace's models are classified
- * under, so a workspace whose models are all unclassified offers only No AI. Classifying them is
- * the one action that changes that, and it happens on the models page.
+ * The switch is a one-way door on purpose, and its description says so: the first time it is on,
+ * the server latches the AI choice as required, and turning the page off afterwards hides the only
+ * place a member can answer. The info alert is that latch made visible. An owner-authored welcome
+ * text was tried and dropped: Heph introduces the page, and words nobody maintains go stale.
+ *
+ * "Configure AI models" sits beside the switch although it edits nothing here: what a member can
+ * accept is decided by the data handling each of this workspace's models declares, and declaring
+ * it happens on the models page.
  */
 const meta = {
 	title: "Workspace admin/Member onboarding",
@@ -153,6 +159,8 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+export const Default: Story = {};
+
 export const Empty: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No integrations to require")).toBeVisible();
@@ -162,6 +170,8 @@ export const Empty: Story = {
 			"href",
 			"/w/engineering/admin/integrations",
 		);
+		// Nobody has been asked yet, so there is nobody still to choose.
+		await expect(canvas.queryByText("Members still have to choose")).toBeNull();
 	},
 };
 export const Loading: Story = { args: { state: { status: "loading" } } };
@@ -176,17 +186,33 @@ export const LoadFailed: Story = {
 };
 export const Configured: Story = {
 	args: { state: { ...ready, settings: configured, links: [slack, outline] } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("switch", { name: SWITCH })).toBeChecked();
+		await expect(canvas.queryByText("Members still have to choose")).toBeNull();
+	},
+};
+export const ChoiceStillRequired: Story = {
+	args: { state: { ...ready, settings: { ...configured, enabled: false }, links: [slack] } },
+	play: async ({ canvas, userEvent }) => {
+		await expect(canvas.getByText("Members still have to choose")).toBeVisible();
+		await expect(
+			canvas.getByText(/Members who haven't chosen get no practice reviews and no Heph/),
+		).toBeVisible();
+		// The alert asks for the switch; a draft that turns it on has answered it.
+		await userEvent.click(canvas.getByRole("switch", { name: SWITCH }));
+		await expect(canvas.queryByText("Members still have to choose")).toBeNull();
+	},
 };
 export const EditAndDiscard: Story = {
 	play: async ({ canvas, userEvent }) => {
 		const save = canvas.getByRole("button", { name: "Save onboarding settings" });
-		const welcome = canvas.getByRole("switch", { name: "Show a welcome on first visit" });
-		await expect(welcome).toHaveAccessibleDescription(/see the welcome once/);
+		const ask = canvas.getByRole("switch", { name: SWITCH });
+		await expect(ask).toHaveAccessibleDescription(/finish it later from Your AI choice/);
 		await expectGenuinelyDisabled(save);
-		await userEvent.click(welcome);
+		await userEvent.click(ask);
 		await expect(save).toBeEnabled();
 		await userEvent.click(canvas.getByRole("button", { name: "Discard changes" }));
-		await expect(welcome).not.toBeChecked();
+		await expect(ask).not.toBeChecked();
 		await expectGenuinelyDisabled(save);
 	},
 };
@@ -198,8 +224,8 @@ export const SaveRequiredLink: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Save onboarding settings" }));
 		await expect(readyState(args.state).onSave).toHaveBeenCalledWith({
 			enabled: true,
+			aiChoiceRequired: true,
 			revision: 1,
-			welcomeMarkdown: "Welcome to our team!",
 			requiredConnectionIds: [1, 2],
 		});
 		// The saved payload came back as the settings, so the form is pristine again and still shows it.
@@ -210,11 +236,11 @@ export const SaveRequiredLink: Story = {
 export const Saving: Story = {
 	render: (args) => <AfterSave {...args} outcome={{ status: "saving" }} />,
 	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("switch", { name: "Show a welcome on first visit" }));
+		await userEvent.click(canvas.getByRole("switch", { name: SWITCH }));
 		await userEvent.click(canvas.getByRole("button", { name: "Save onboarding settings" }));
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Saving…" }));
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Discard changes" }));
-		await expectUnavailable(canvas.getByRole("switch", { name: "Show a welcome on first visit" }));
+		await expectUnavailable(canvas.getByRole("switch", { name: SWITCH }));
 	},
 };
 export const SaveFailed: Story = {
@@ -225,15 +251,13 @@ export const SaveFailed: Story = {
 		/>
 	),
 	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("switch", { name: "Show a welcome on first visit" }));
+		await userEvent.click(canvas.getByRole("switch", { name: SWITCH }));
 		await userEvent.click(canvas.getByRole("button", { name: "Save onboarding settings" }));
 		const alert = canvas.getByRole("alert");
 		await expect(alert).toHaveTextContent("Couldn't save onboarding settings");
 		await expect(alert).toHaveTextContent("Onboarding settings changed. Reload before saving.");
 		// The draft survives the failure, so the reader can retry without redoing it.
-		await expect(
-			canvas.getByRole("switch", { name: "Show a welcome on first visit" }),
-		).toBeChecked();
+		await expect(canvas.getByRole("switch", { name: SWITCH })).toBeChecked();
 		await expect(canvas.getByRole("button", { name: "Save onboarding settings" })).toBeEnabled();
 		// The failure was about that draft; discarding it takes the alert with it.
 		await userEvent.click(canvas.getByRole("button", { name: "Discard changes" }));
@@ -244,7 +268,7 @@ export const Conflicted: Story = {
 	...Configured,
 	render: (args) => <ChangedElsewhere {...args} />,
 	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("switch", { name: "Show a welcome on first visit" }));
+		await userEvent.click(canvas.getByRole("checkbox", { name: "Outline" }));
 		await userEvent.click(canvas.getByRole("button", { name: "Change settings elsewhere" }));
 		await expect(canvas.getByRole("alert")).toHaveTextContent(
 			"Someone changed these settings while you were editing",
@@ -254,14 +278,13 @@ export const Conflicted: Story = {
 		// Out of the tab order, so the reason has to reach a reader through the description.
 		await expect(save).toHaveAccessibleDescription(/Someone changed these settings/);
 		await userEvent.click(canvas.getByRole("button", { name: "Load current settings" }));
-		await expect(canvas.getByRole("textbox", { name: "Welcome from your team" })).toHaveValue(
-			"Updated elsewhere",
-		);
+		await expect(canvas.getByRole("checkbox", { name: "Outline" })).toBeChecked();
+		await expect(canvas.getByRole("checkbox", { name: "Slack" })).not.toBeChecked();
 		await expect(canvas.queryByRole("alert")).toBeNull();
-		const welcome = canvas.getByRole("switch", { name: "Show a welcome on first visit" });
-		await expect(welcome).toBeChecked();
+		const ask = canvas.getByRole("switch", { name: SWITCH });
+		await expect(ask).toBeChecked();
 		// The button just pressed left with its alert; focus went to the form, not the body.
-		await expect(document.activeElement).toBe(welcome);
+		await expect(document.activeElement).toBe(ask);
 	},
 };
 export const UnavailableRequirement: Story = {
@@ -293,7 +316,7 @@ export const NarrowViewport: Story = {
 	args: {
 		state: {
 			...ready,
-			settings: configured,
+			settings: { ...configured, enabled: false },
 			links: [
 				{ ...slack, teamName: "Platform engineering and developer experience guild, EMEA region" },
 				outline,

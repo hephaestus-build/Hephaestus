@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 
 import { HephIcon } from "@/components/brand/HephIcon";
+import { memberAiChoiceTitle } from "@/components/practice-vocabulary/data-handling-defs";
 import { buttonVariants } from "@/components/ui/button";
 import {
 	Empty,
@@ -9,14 +11,32 @@ import {
 	EmptyHeader,
 	EmptyMedia,
 } from "@/components/ui/empty";
-import { mentorNoticeCopy, type MentorNotice } from "@/lib/mentor-preference";
+import { MENTOR_PREFERENCE_COPY, type MentorNotice } from "@/lib/mentor-preference";
 
 export interface WorkspaceMentorPreferenceNoticeProps {
 	workspaceSlug: string;
 	/** The page to come back to after changing the choice; the route reads `useLocation().href`. */
 	returnTo: string;
-	/** Produced by `mentorPreferenceReason`, so `unavailable` always arrives with its location. */
+	/** Produced by `mentorPreferenceReason`, so `unavailable` always arrives with the saved choice. */
 	notice: MentorNotice;
+}
+
+/** The three sentences for one notice, with the `unavailable` choice named by its card title. */
+function noticeCopy(notice: MentorNotice): { title: string; description: ReactNode; cta: string } {
+	if (notice.reason === "unavailable") {
+		const { description, ...copy } = MENTOR_PREFERENCE_COPY.unavailable;
+		return {
+			...copy,
+			description: (
+				<>
+					{description.before}
+					<em>{memberAiChoiceTitle(notice.choice)}</em>
+					{description.after}
+				</>
+			),
+		};
+	}
+	return MENTOR_PREFERENCE_COPY[notice.reason];
 }
 
 /**
@@ -28,7 +48,7 @@ export function WorkspaceMentorPreferenceNotice({
 	returnTo,
 	notice,
 }: WorkspaceMentorPreferenceNoticeProps) {
-	const copy = mentorNoticeCopy(notice);
+	const copy = noticeCopy(notice);
 	return (
 		<Empty>
 			<EmptyHeader>

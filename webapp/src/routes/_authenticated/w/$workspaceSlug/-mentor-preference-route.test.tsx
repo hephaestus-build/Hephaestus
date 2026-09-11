@@ -53,8 +53,8 @@ it("keeps an existing conversation readable under No AI and restores its compose
 			getMemberOnboardingQueryKey({ path: { workspaceSlug: "acme" } }),
 			{
 				...preference,
-				aiChoice: "ON_PREMISES",
-				aiOptions: [{ choice: "ON_PREMISES", mentorReady: true, practiceReviewsReady: true }],
+				aiChoice: "IN_HOUSE_ONLY",
+				aiOptions: [{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true }],
 			},
 		);
 	});
@@ -64,7 +64,7 @@ it("keeps an existing conversation readable under No AI and restores its compose
 	).toBeNull();
 });
 
-it("names the saved location when no Heph model is assigned to it", async () => {
+it("names the saved choice when no Heph model is within it", async () => {
 	server.use(
 		http.get("*/workspaces", () =>
 			HttpResponse.json([workspaceListItem("acme", { mentorEnabled: true })]),
@@ -76,8 +76,8 @@ it("names the saved location when no Heph model is assigned to it", async () => 
 		http.get("*/workspaces/acme/onboarding/me", () =>
 			HttpResponse.json({
 				...workspaceOnboarding(),
-				aiChoice: "PRIVATE_CLOUD",
-				aiOptions: [{ choice: "PRIVATE_CLOUD", mentorReady: false, practiceReviewsReady: true }],
+				aiChoice: "NOT_KEPT_ONLY",
+				aiOptions: [{ choice: "NOT_KEPT_ONLY", mentorReady: false, practiceReviewsReady: true }],
 			}),
 		),
 		http.get("*/workspaces/acme/mentor/threads", () => HttpResponse.json([])),
@@ -88,7 +88,12 @@ it("names the saved location when no Heph model is assigned to it", async () => 
 		{ name: "Heph isn't set up for your AI choice yet" },
 		ROUTE_RENDER_WAIT,
 	);
-	screen.getByText(/No Heph model is assigned to Private cloud\./);
+	expect(
+		screen.getByText("In-house, or a provider that keeps nothing", { selector: "em" }).parentElement
+			?.textContent,
+	).toBe(
+		"No Heph model is within In-house, or a provider that keeps nothing yet. Nothing switches you elsewhere — ask a workspace owner, or change your choice.",
+	);
 	expect(screen.getByRole("link", { name: "Change your AI choice" }).getAttribute("href")).toBe(
 		"/w/acme/onboarding?returnTo=%2Fw%2Facme%2Fmentor",
 	);

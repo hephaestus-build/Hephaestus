@@ -18,7 +18,7 @@ const sections = {
 };
 
 const readyBinding = {
-	processingLocation: "UNCLASSIFIED",
+	dataHandlingTier: "IN_HOUSE",
 	purpose: "PRACTICE_REVIEW",
 	enabled: true,
 	ready: true,

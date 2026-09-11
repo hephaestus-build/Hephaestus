@@ -1,43 +1,19 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
-import type { AvailableLlmModel } from "@/api/types.gen";
 import { Label } from "@/components/ui/label";
+import { expectGenuinelyDisabled } from "@/test/controls";
 
 import { ModelPicker } from "./ModelPicker";
+import { mockAvailableModels } from "./story-mock-data";
 
-const mockModels: AvailableLlmModel[] = [
-	{
-		processingLocation: "UNCLASSIFIED",
-		id: 1,
-		scope: "SHARED",
-		displayName: "GPT-5",
-		connectionDisplayName: "OpenAI production",
-		pricingMode: "PRICED",
-		per1mInputUsd: 3,
-		per1mOutputUsd: 15,
-		supportsReasoning: true,
-	},
-	{
-		processingLocation: "UNCLASSIFIED",
-		id: 2,
-		scope: "SHARED",
-		displayName: "Local Llama (self-hosted)",
-		connectionDisplayName: "On-prem GPU",
-		pricingMode: "NO_CHARGE",
-		supportsReasoning: false,
-	},
-	{
-		processingLocation: "UNCLASSIFIED",
-		id: 10,
-		scope: "WORKSPACE",
-		displayName: "My OpenAI key",
-		connectionDisplayName: "My provider",
-		pricingMode: "UNPRICED",
-		supportsReasoning: true,
-	},
-];
-
+/**
+ * A model's declared data handling travels with its name: the tier line under each option and the
+ * icon beside it are the same registry entry the tables and binding rows show, so an admin choosing
+ * a model for a tier row never has to remember what it was declared as. The `tier` prop filters
+ * rather than disables the other models: a disabled option would still have to be read past, and
+ * the row already says which tier it holds.
+ */
 const meta = {
 	component: ModelPicker,
 	parameters: { layout: "centered" },
@@ -45,7 +21,7 @@ const meta = {
 	args: {
 		id: "review-model",
 		"aria-labelledby": "review-model-label",
-		availableModels: mockModels,
+		availableModels: mockAvailableModels,
 		value: null,
 		onChange: fn(),
 	},
@@ -93,7 +69,44 @@ export const Invalid: Story = {
 export const OpensAndListsGroups: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("combobox"));
-		await expect(await screen.findByRole("option", { name: /GPT-5/ })).toBeVisible();
-		await expect(await screen.findByRole("option", { name: /My OpenAI key/ })).toBeVisible();
+		await expect(
+			await screen.findByRole("option", { name: /GPT-5 .* Provider, nothing kept/ }),
+		).toBeVisible();
+		await expect(
+			await screen.findByRole("option", { name: /My OpenAI key .* Not declared/ }),
+		).toBeVisible();
+	},
+};
+
+export const FilteredToTier: Story = {
+	args: { tier: "IN_HOUSE" },
+	play: async ({ canvas }) => {
+		await userEvent.click(canvas.getByRole("combobox"));
+		await expect(
+			await screen.findByRole("option", { name: /Local Llama .* Stays in-house/ }),
+		).toBeVisible();
+		await expect(screen.getAllByRole("option")).toHaveLength(1);
+	},
+};
+
+/**
+ * With nothing to list the picker disables itself; the row around it says what an empty list means
+ * for that tier, in the shape shown here, because only the caller knows whether the reader can add
+ * a model.
+ */
+export const NoModelsForTier: Story = {
+	args: { tier: "PROVIDER_KEPT", "aria-describedby": "model-picker-empty" },
+	render: (args) => (
+		<div className="space-y-2">
+			<ModelPicker {...args} />
+			<p id="model-picker-empty" className="text-sm text-muted-foreground">
+				No model declared as <span className="font-medium">Provider, kept for safety checks</span>{" "}
+				is available here yet. Ask your host, or add one under your own providers.
+			</p>
+		</div>
+	),
+	play: async ({ canvas }) => {
+		await expectGenuinelyDisabled(canvas.getByRole("combobox"));
+		await expect(screen.queryByRole("option")).not.toBeInTheDocument();
 	},
 };

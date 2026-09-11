@@ -14,9 +14,9 @@ import {
 	type OnboardingSubmission,
 	WorkspaceOnboardingPage,
 } from "@/components/onboarding/WorkspaceOnboardingPage";
+import type { MemberAiChoice } from "@/components/practice-vocabulary/data-handling-defs";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { safeReturnTo } from "@/integrations/auth/guard";
-import type { MemberAiChoice } from "@/lib/llm-processing-location";
 import { openRequiredLinks } from "@/lib/onboarding-links";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 

@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { HandshakeIcon, Link2Icon } from "lucide-react";
+import { HandshakeIcon, InfoIcon, Link2Icon } from "lucide-react";
 import { useId, useRef, useState } from "react";
 
 import type { WorkspaceOnboardingLink, WorkspaceOnboardingSettings } from "@/api/types.gen";
@@ -31,7 +31,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 
 export type SettingsSubmission =
@@ -69,7 +68,7 @@ export function WorkspaceOnboardingSettingsPage({
 			<PageHeader
 				icon={<HandshakeIcon />}
 				title="Member onboarding"
-				description="Welcome developers after they join this workspace. This does not grant membership or change how people join."
+				description="Set up developers after they join this workspace. This does not grant membership or change how people join."
 			/>
 			{state.status === "loading" ? (
 				<div
@@ -113,11 +112,7 @@ function sameIds(a: readonly number[], b: readonly number[]) {
 }
 
 function sameSettings(a: WorkspaceOnboardingSettings, b: WorkspaceOnboardingSettings) {
-	return (
-		a.enabled === b.enabled &&
-		a.welcomeMarkdown === b.welcomeMarkdown &&
-		sameIds(a.requiredConnectionIds, b.requiredConnectionIds)
-	);
+	return a.enabled === b.enabled && sameIds(a.requiredConnectionIds, b.requiredConnectionIds);
 }
 
 /**
@@ -172,7 +167,7 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 		>
 			{guard.dialog}
 			<Section
-				title="Welcome"
+				title="First visit"
 				actions={
 					<Link
 						to="/w/$workspaceSlug/admin/models"
@@ -194,29 +189,27 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 							aria-describedby={`${id}-enabled-description`}
 						/>
 						<FieldContent>
-							<FieldLabel htmlFor={`${id}-enabled`}>Show a welcome on first visit</FieldLabel>
+							<FieldLabel htmlFor={`${id}-enabled`}>
+								Ask members to set up on their first visit
+							</FieldLabel>
 							<FieldDescription id={`${id}-enabled-description`}>
-								Members see the welcome once, on their next visit. They can finish it later.
+								Members see the setup page once and can finish it later from Your AI choice in the
+								sidebar. Once on, every member must choose before AI runs for them; turning this off
+								does not undo that.
 							</FieldDescription>
 						</FieldContent>
 					</Field>
-					<Field>
-						<FieldLabel htmlFor={`${id}-welcome`}>Welcome from your team</FieldLabel>
-						<Textarea
-							id={`${id}-welcome`}
-							value={draft.welcomeMarkdown}
-							maxLength={20000}
-							rows={7}
-							disabled={saving}
-							aria-describedby={`${id}-welcome-description`}
-							onChange={(event) => edit({ welcomeMarkdown: event.target.value })}
-							placeholder="What should new members know about working with your team?"
-						/>
-						<FieldDescription id={`${id}-welcome-description`}>
-							Optional Markdown, shown open the first time a member arrives.
-						</FieldDescription>
-					</Field>
 				</FieldGroup>
+				{draft.aiChoiceRequired && !draft.enabled && (
+					<Alert>
+						<InfoIcon aria-hidden="true" />
+						<AlertTitle>Members still have to choose</AlertTitle>
+						<AlertDescription>
+							Members who haven't chosen get no practice reviews and no Heph. Turn the setup page on
+							so they can choose.
+						</AlertDescription>
+					</Alert>
+				)}
 			</Section>
 			<Section
 				title="Required account links"
