@@ -89,6 +89,26 @@ describe("product feedback wire contract", () => {
 		await waitFor(() => expect(result.current.query.data).toStrictEqual([]));
 	});
 
+	it("drops a survey that was already settled elsewhere from the menu", async () => {
+		server.use(
+			http.get("*/workspaces/acme/product-feedback/surveys", () =>
+				HttpResponse.json([surveyInvitation]),
+			),
+			http.post("*/workspaces/acme/product-feedback/surveys/:id/responses", () =>
+				HttpResponse.json({ status: 409 }, { status: 409 }),
+			),
+		);
+		const { wrapper } = setup();
+		const { result } = renderHook(() => useProductSurveys("acme"), { wrapper });
+		await waitFor(() => expect(result.current.query.data).toHaveLength(1));
+		server.use(http.get("*/workspaces/acme/product-feedback/surveys", () => HttpResponse.json([])));
+		await act(async () => {
+			expect(await result.current.submit(surveyInvitation.id, [])).toBe(false);
+		});
+		await waitFor(() => expect(result.current.error).toContain("already answered or declined"));
+		await waitFor(() => expect(result.current.query.data).toStrictEqual([]));
+	});
+
 	it("replaces an earlier response conflict with the latest decline failure", async () => {
 		server.use(
 			http.get("*/workspaces/acme/product-feedback/surveys", () =>

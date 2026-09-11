@@ -164,7 +164,7 @@ export function ProductSurveyForm({
 						{legend}
 						<RadioGroup
 							aria-labelledby={`${id}-legend`}
-							aria-describedby={`${id}-scale`}
+							aria-describedby={low && high ? `${id}-scale` : undefined}
 							aria-required={question.required}
 							value={typeof value === "number" ? String(value) : null}
 							onValueChange={(next) => next !== null && set(question.id, Number(next))}
@@ -185,14 +185,16 @@ export function ProductSurveyForm({
 								</FieldLabel>
 							))}
 						</RadioGroup>
-						<FieldDescription id={`${id}-scale`} className="flex justify-between gap-4">
-							<span>
-								{scale[0]} = {low}
-							</span>
-							<span>
-								{scale[scale.length - 1]} = {high}
-							</span>
-						</FieldDescription>
+						{low && high && (
+							<FieldDescription id={`${id}-scale`} className="flex justify-between gap-4">
+								<span>
+									{scale[0]} = {low}
+								</span>
+								<span>
+									{scale[scale.length - 1]} = {high}
+								</span>
+							</FieldDescription>
+						)}
 						{clearButton}
 					</FieldSet>
 				);

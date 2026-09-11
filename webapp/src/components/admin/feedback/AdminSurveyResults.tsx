@@ -230,7 +230,7 @@ function QuestionResults({ headingId, number, question, summary }: QuestionResul
 			) : (
 				<>
 					<Distribution rows={counts} label={`Answers to question ${number}`} />
-					{question.type === "RATING" && (
+					{question.type === "RATING" && question.lowLabel && question.highLabel && (
 						<p className="flex justify-between gap-4 text-xs text-muted-foreground">
 							<span>1 · {question.lowLabel}</span>
 							<span>5 · {question.highLabel}</span>

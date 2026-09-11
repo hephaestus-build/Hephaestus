@@ -73,6 +73,12 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 			);
 		},
 	});
+	// A survey the server no longer offers (404) or has already settled (409) has to leave the menu
+	// too, or the invitation reopens to the same refusal until the next refetch.
+	const dropWhenGone = (error: unknown, variables: { path: { surveyId: string } }) => {
+		const status = problemStatusOf(error);
+		if (status === 404 || status === 409) removeFromCaches(variables.path.surveyId);
+	};
 	const submit = useMutation({
 		...submitProductSurveyResponseMutation(),
 		mutationKey: SURVEY_DECISION,
@@ -81,6 +87,7 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 			removeFromCaches(variables.path.surveyId);
 			toast.success("Thank you — your response was sent to this instance's administrators.");
 		},
+		onError: dropWhenGone,
 	});
 	const undoDecline = useMutation({
 		...undoProductSurveyDeclineMutation(),
@@ -106,6 +113,7 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 				action: { label: "Undo", onClick: () => undoDecline.mutate({ path: variables.path }) },
 			});
 		},
+		onError: dropWhenGone,
 	});
 	const deciding = () =>
 		!workspaceSlug || queryClient.isMutating({ mutationKey: SURVEY_DECISION }) > 0;
