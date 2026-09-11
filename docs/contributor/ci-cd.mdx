@@ -260,9 +260,10 @@ because GitHub caps a fork token's `security-events` access at read.
 
 ### CodeQL configuration
 
-PR and merge-group diffs select analysis languages, not individual files: each selected language
-scans its configured source tree. Main and scheduled runs select all languages, as do changes to
-the CodeQL workflow or configuration. The language filters live in `.github/workflows/codeql.yml`.
+PR, merge-group and main-push diffs select analysis languages, not individual files: each selected
+language scans its configured source tree. Main compares the full pushed range against the event's
+previous commit, including multi-commit pushes and deletions. Scheduled and manual runs select all
+languages, as do pushes without a previous commit and changes to the CodeQL workflow or configuration. The language filters live in `.github/workflows/codeql.yml`.
 
 CI calls that reusable workflow, and `CI Status Gate` waits for its successful completion, including
 SARIF upload. A merge group therefore cannot pass the gate and lose its temporary ref while CodeQL
@@ -713,9 +714,12 @@ The application image and `Build` artifact gates depend on packaging independent
 and release preflight wait for the image producers, not the API, database or browser checks. The
 final CI gate still requires all of them; an early image verdict cannot approve a failed artifact gate.
 
-A default-branch push reuses the packaged server when a successful release-candidate merge group
+A default-branch push reuses the packaged server when a successful merge group
 validated the exact same commit. The source must be this repository's `cicd.yml` run, with successful
-artifact gates, tests, security checks, dual-platform server builds, release preflight and final gate.
+artifact gates, tests, security checks, the AMD64 server build and final gate. ARM64 image builds
+and release preflight do not change the packaged Java artifact, so their absence in ordinary merge
+groups does not force a rebuild. Main still validates both image platforms; release candidates
+still require release preflight.
 The immutable artifact ID and its SHA-256 digest bind the download to that run. Missing, expired or
 unavailable source evidence falls back to packaging; a corrupt download fails rather than being used.
 Main still runs its own validation and publishes its images, including main-only tags and source maps.
