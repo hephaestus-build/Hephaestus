@@ -1,6 +1,7 @@
 import { Questionnaire as QuestionnairePrimitive } from "@shadcn/react/questionnaire";
 import { type ComponentProps, createContext, type ReactNode, useContext } from "react";
 
+import { cn } from "cn";
 import type { Answer, Question } from "@/api/types.gen";
 import {
 	Questionnaire,
@@ -18,7 +19,6 @@ import {
 	QuestionnaireSubmit,
 	QuestionnaireTitle,
 } from "@/components/ui/questionnaire";
-import { cn } from "@/lib/utils";
 
 import {
 	ANSWER_TEXT_MAX_LENGTH,

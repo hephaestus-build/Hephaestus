@@ -1,10 +1,9 @@
 // ⚠️ Diverges from the shadcn registry — `shadcn add questionnaire` drops the following; re-apply it.
 //
-// 1. `cn` comes from `@/lib/utils`, the repo's one wrapper, not the `cn` package.
-// 2. `react` is a type-only namespace import: a value namespace import of it is restricted here.
+// `react` is a type-only namespace import: a value namespace import of it is restricted here.
 import { Questionnaire as QuestionnairePrimitive } from "@shadcn/react/questionnaire";
+import { cn } from "cn";
 import type * as React from "react";
-import { cn } from "@/lib/utils";
 
 import { CheckIcon } from "lucide-react";
 import { buttonVariants, type Button } from "@/components/ui/button";
