@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -26,7 +27,7 @@ public class LlmModelResolver {
         LlmModel instance = config.getInstanceModel();
         if (instance != null) {
             if (!isUsable(instance, config.getWorkspace().getId())
-                    || !matchesLocation(config, instance.getProcessingLocation())) {
+                    || !matchesTier(config, instance.getDataHandlingTier())) {
                 throw unavailable();
             }
             LlmConnection c = instance.getConnection();
@@ -40,8 +41,7 @@ public class LlmModelResolver {
         }
         WorkspaceLlmModel byo = config.getWorkspaceModel();
         if (byo != null) {
-            if (!isUsable(byo, config.getWorkspace().getId())
-                    || !matchesLocation(config, byo.getProcessingLocation())) {
+            if (!isUsable(byo, config.getWorkspace().getId()) || !matchesTier(config, byo.getDataHandlingTier())) {
                 throw unavailable();
             }
             WorkspaceLlmConnection c = byo.getConnection();
@@ -65,32 +65,36 @@ public class LlmModelResolver {
         LlmModel instance = config.getInstanceModel();
         if (instance != null) {
             return isUsable(instance, config.getWorkspace().getId())
-                    && matchesLocation(config, instance.getProcessingLocation());
+                    && matchesTier(config, instance.getDataHandlingTier());
         }
         WorkspaceLlmModel byo = config.getWorkspaceModel();
         return byo != null
                 && isUsable(byo, config.getWorkspace().getId())
-                && matchesLocation(config, byo.getProcessingLocation());
+                && matchesTier(config, byo.getDataHandlingTier());
     }
 
-    private static boolean matchesLocation(ModelBindingSource source, LlmProcessingLocation location) {
-        return source.getProcessingLocation() == LlmProcessingLocation.UNCLASSIFIED
-                || source.getProcessingLocation() == location;
+    /**
+     * The slot rule is exact: a slot holds only a model whose derived tier equals it, so a model whose
+     * facts later loosen drops out of its slot instead of serving a ceiling it no longer meets. The
+     * {@code UNDECLARED} slot accepts any model.
+     */
+    private static boolean matchesTier(ModelBindingSource source, DataHandlingTier tier) {
+        return source.getDataHandlingTier() == DataHandlingTier.UNDECLARED || source.getDataHandlingTier() == tier;
     }
 
     @Transactional(readOnly = true)
-    public LlmProcessingLocation processingLocation(ConnectionRef ref) {
-        if (ref.modelId() == null || ref.workspaceId() == null) return LlmProcessingLocation.UNCLASSIFIED;
+    public DataHandlingTier dataHandlingTier(ConnectionRef ref) {
+        if (ref.modelId() == null || ref.workspaceId() == null) return DataHandlingTier.UNDECLARED;
         if (ref.scope() == FundingSource.INSTANCE) {
             return llmModelRepository
                     .findById(ref.modelId())
-                    .map(LlmModel::getProcessingLocation)
-                    .orElse(LlmProcessingLocation.UNCLASSIFIED);
+                    .map(LlmModel::getDataHandlingTier)
+                    .orElse(DataHandlingTier.UNDECLARED);
         }
         return workspaceLlmModelRepository
                 .findByIdAndWorkspaceId(ref.modelId(), ref.workspaceId())
-                .map(WorkspaceLlmModel::getProcessingLocation)
-                .orElse(LlmProcessingLocation.UNCLASSIFIED);
+                .map(WorkspaceLlmModel::getDataHandlingTier)
+                .orElse(DataHandlingTier.UNDECLARED);
     }
 
     private boolean isUsable(LlmModel model, Long workspaceId) {

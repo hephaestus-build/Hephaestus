@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -9,7 +10,7 @@ import org.jspecify.annotations.Nullable;
  * binding.
  */
 public interface ModelBindingSource {
-    LlmProcessingLocation getProcessingLocation();
+    DataHandlingTier getDataHandlingTier();
 
     @Nullable
     LlmModel getInstanceModel();

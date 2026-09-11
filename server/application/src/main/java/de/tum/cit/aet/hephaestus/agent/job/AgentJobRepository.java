@@ -1,10 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
@@ -170,10 +170,10 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     @Query(value = """
             SELECT COUNT(*) FROM agent_job
             WHERE workspace_id = :workspaceId AND purpose = :#{#purpose.name()} AND status = 'RUNNING'
-              AND COALESCE(config_snapshot ->> 'processingLocation', 'UNCLASSIFIED') = :#{#location.name()}
+              AND COALESCE(config_snapshot ->> 'dataHandlingTier', 'UNDECLARED') = :#{#tier.name()}
             """, nativeQuery = true)
-    long countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
-            Long workspaceId, AgentPurpose purpose, LlmProcessingLocation location);
+    long countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
+            Long workspaceId, AgentPurpose purpose, DataHandlingTier tier);
 
     long countByWorkspaceIdAndPurposeAndCreatedAtGreaterThanEqual(
             Long workspaceId, AgentPurpose purpose, Instant createdAt);

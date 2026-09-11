@@ -1,7 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.config;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.DataHandlingFacts;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataOperator;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataRetention;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -158,6 +161,65 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .expectStatus()
                 .isBadRequest()
                 .expectBody(Void.class);
+    }
+
+    @Test
+    @WithAdminUser
+    @DisplayName("a tier row refuses a model declared as another tier and names that tier for the client")
+    void bindingAModelDeclaredAsAnotherTierIsRefusedWithTheDeclaredTier() {
+        Workspace workspace = setupWorkspace("binding-slot");
+        LlmModel model = seedInstanceModel("binding-slot");
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, LlmDataRetention.NONE, null));
+        llmModelRepository.save(model);
+
+        webTestClient
+                .put()
+                .uri(
+                        "/workspaces/{slug}/agents/{purpose}?dataHandlingTier=PROVIDER_NOT_KEPT",
+                        workspace.getWorkspaceSlug(),
+                        "PRACTICE_REVIEW")
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("instanceModelId", model.getId(), "enabled", true))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(409)
+                .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo("/problems/agent-binding-slot-mismatch")
+                .jsonPath("$.declaredTier")
+                .isEqualTo("IN_HOUSE")
+                .jsonPath("$.detail")
+                .isEqualTo("This model is declared as a different tier; assign it to that row.");
+    }
+
+    @Test
+    @WithAdminUser
+    @DisplayName("a tier row refuses an undeclared model without claiming it is declared as anything")
+    void bindingAnUndeclaredModelToATierRowIsRefused() {
+        Workspace workspace = setupWorkspace("binding-undeclared");
+        LlmModel model = seedInstanceModel("binding-undeclared");
+
+        webTestClient
+                .put()
+                .uri(
+                        "/workspaces/{slug}/agents/{purpose}?dataHandlingTier=IN_HOUSE",
+                        workspace.getWorkspaceSlug(),
+                        "MENTOR")
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("instanceModelId", model.getId(), "enabled", true))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(409)
+                .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo("/problems/agent-binding-slot-mismatch")
+                .jsonPath("$.declaredTier")
+                .doesNotExist()
+                .jsonPath("$.detail")
+                .isEqualTo("This model's data handling isn't declared yet. "
+                        + "Declare it first, or assign it to Members who haven't chosen.");
     }
 
     @Test

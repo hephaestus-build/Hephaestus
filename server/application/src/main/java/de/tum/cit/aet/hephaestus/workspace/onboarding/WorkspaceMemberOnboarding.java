@@ -8,7 +8,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.Nullable;
 
-/** One account's own, reversible AI preference and first-visit completion in one workspace. */
+/** One account's own, reversible AI choice and first-visit completion in one workspace. */
 @Entity
 @Table(
         name = "workspace_member_onboarding",

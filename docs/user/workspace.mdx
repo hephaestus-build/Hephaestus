@@ -63,31 +63,32 @@ Workspace admins can separately enable the leaderboard, progression, leagues, an
 - **Team missing?** Confirm that the team exists in the connected source platform and has synced.
 - **Feature missing?** Ask a workspace admin whether it is enabled and whether your account has access.
 
-## Your first visit and AI preferences
+## Your AI choice
 
-A workspace can welcome you after your membership is already in place. The welcome introduces your
-team, lets you choose how AI helps you, and shows any Slack or Outline accounts your workspace asks
-you to connect. It does not approve or create membership.
+A workspace can ask you to set up on your first visit, after your membership is already in place. The
+setup page is one page in two parts: which AI may handle your work, and the Slack or Outline accounts
+your workspace asks you to connect. It does not approve or create membership.
 
-Open **Workspace preferences** in the sidebar to return to these settings at any time. Your choice
-belongs to this workspace only:
+Your answer belongs to this workspace only and is a boundary, not a pick from a list of models:
+anything stricter than your answer also counts, and nothing ever switches you to anything looser.
 
-| Choice | What it means |
-| --- | --- |
-| **On-premises** | Use only models your workspace has assigned to infrastructure managed by your organization. |
-| **Private cloud** | Use only models your workspace has assigned to its private cloud environment. |
-| **No AI** | Stop new practice reviews about you and new conversations with Heph in this workspace. |
+| Answer                                         | What it means                                                                                                            |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Only in-house**                              | Runs only on systems your organisation operates.                                                                         |
+| **In-house, or a provider that keeps nothing** | A provider under terms your organisation accepted may process it, never trains on it, and keeps nothing after the reply. |
+| **Any AI this workspace set up**               | Also a provider that keeps it for a limited time for safety checks, which its staff may read if flagged.                 |
+| **No AI**                                      | No AI runs for you in this workspace.                                                                                    |
 
-On your first visit, nothing is preselected. Workspace setup has two steps: choose your AI preference,
-then connect accounts or review your saved choice. Select an option and choose **Save AI preference**
-to apply it and move to the next step. **Back** lets you revise your choice without losing what you saved. If your chosen
-location becomes unavailable, Hephaestus does not switch you to another location. You can wait for a
-workspace owner to restore it, choose a different available location, or choose **No AI**.
+On your first visit, nothing is preselected. Choose an answer and select **Continue**; on a return
+visit the button reads **Save**. You can choose any answer, including one your workspace has not set
+up yet: the card says so, nothing runs for you for that purpose, and Hephaestus never switches you to
+another answer. Wait for a workspace owner to add a model, or change your answer.
 
-Existing feedback and earlier conversations with Heph remain readable. While AI is off, you cannot
-send, edit, or retry a conversation message. Your choice does not remove your work from shared
-repositories or change other members' preferences. A model request already in progress cannot be
-recalled; your new choice applies to subsequent requests. Research participation is a separate setting.
+Open **Your AI choice** in the sidebar to change your answer at any time. Existing feedback and
+earlier conversations with Heph remain readable. With **No AI**, there are no new practice reviews
+about you and no new conversations with Heph; a review already running finishes where it started, and
+you cannot send, edit, or retry a conversation message. Your choice does not remove your work from
+shared repositories or change other members' choices. Research participation is a separate setting.
 
 ### Connect the accounts your workspace uses
 
@@ -95,12 +96,14 @@ A required link must match the Slack team or Outline instance configured for thi
 to a different team or instance does not satisfy it. Connecting an account identifies you on that
 service; it does not enable AI.
 
-You can save **No AI** before connecting required accounts. **Continue to workspace** finishes setup
-once you have saved a choice and connected the required accounts. **Not now** lets you continue and
-return later without treating dismissal as an AI choice or completed setup. If a required integration
-is unavailable, ask a workspace owner to repair it or remove the requirement. Optional accounts never
-block completion. After finishing or choosing **Not now**, you return to the workspace page you
+**Continue** finishes setup once you have chosen an answer and connected the required accounts. Your
+answer is saved when you select **Continue** or **Connect** for an account; **Skip for now** leaves
+without saving it, and the page waits for you under **Your AI choice**. On a return visit, **Save**
+records a new answer whether or not the required accounts are connected, and **Back to workspace**
+leaves without saving. If a required account is unavailable right
+now, it does not hold you up; ask a workspace owner to repair it or remove the requirement. Optional
+accounts never block completion. After finishing or skipping, you return to the workspace page you
 originally opened, including its filters and selected section.
 
-The account notice and optional research question are separate from workspace setup. Linking an
-account or choosing an AI location does not change research participation.
+The sign-in notice and the research question are separate from workspace setup. Linking an account
+or choosing an answer does not change research participation.

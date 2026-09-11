@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -109,16 +110,47 @@ class LlmModelResolverTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRefuseUnclassifiedOrMismatchedModelsForAnExplicitLocation() {
+    void shouldRefuseUndeclaredOrMismatchedModelsForATierSlot() {
         var binding = binding();
         binding.setInstanceModel(model);
-        binding.setProcessingLocation(LlmProcessingLocation.ON_PREMISES);
+        binding.setDataHandlingTier(DataHandlingTier.IN_HOUSE);
         assertThat(resolver.isAvailable(binding)).isFalse();
-        model.setProcessingLocation(LlmProcessingLocation.PRIVATE_CLOUD);
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.NONE, null));
         assertThat(resolver.isAvailable(binding)).isFalse();
         assertThatThrownBy(() -> resolver.resolve(binding)).isInstanceOf(IllegalStateException.class);
-        model.setProcessingLocation(LlmProcessingLocation.ON_PREMISES);
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, LlmDataRetention.NONE, null));
         assertThat(resolver.isAvailable(binding)).isTrue();
+    }
+
+    @Test
+    void shouldRefuseAStricterModelInALooserSlotBecauseTheSlotRuleIsExact() {
+        var binding = binding();
+        binding.setInstanceModel(model);
+        binding.setDataHandlingTier(DataHandlingTier.PROVIDER_NOT_KEPT);
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, LlmDataRetention.NONE, null));
+        assertThat(resolver.isAvailable(binding)).isFalse();
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.NONE, null));
+        assertThat(resolver.isAvailable(binding)).isTrue();
+    }
+
+    @Test
+    void shouldAcceptAnyModelInTheUndeclaredSlot() {
+        var binding = binding();
+        binding.setInstanceModel(model);
+        assertThat(binding.getDataHandlingTier()).isEqualTo(DataHandlingTier.UNDECLARED);
+        assertThat(resolver.isAvailable(binding)).isTrue();
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.FOR_SAFETY_CHECKS, null));
+        assertThat(resolver.isAvailable(binding)).isTrue();
+    }
+
+    @Test
+    void shouldReportTheModelsDerivedTierForAConnectionRef() {
+        var ref = new LlmModelResolver.ConnectionRef(FundingSource.INSTANCE, 10L, 20L, 30L);
+        assertThat(resolver.dataHandlingTier(ref)).isEqualTo(DataHandlingTier.UNDECLARED);
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.NONE, null));
+        assertThat(resolver.dataHandlingTier(ref)).isEqualTo(DataHandlingTier.PROVIDER_NOT_KEPT);
+        assertThat(resolver.dataHandlingTier(LlmModelResolver.ConnectionRef.NONE))
+                .isEqualTo(DataHandlingTier.UNDECLARED);
     }
 
     @Test

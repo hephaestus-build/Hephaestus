@@ -85,9 +85,8 @@ public class WorkspaceLlmModelService {
         if (request.supportsReasoning() != null) {
             model.setSupportsReasoning(request.supportsReasoning());
         }
-        if (request.processingLocation() != null) {
-            model.setProcessingLocation(request.processingLocation());
-        }
+        model.setDataHandling(
+                DataHandlingFacts.of(request.operatedBy(), request.keptAfterReply(), request.dataHandlingNote()));
         if (request.enabled() != null) {
             model.setEnabled(request.enabled());
         }
@@ -149,9 +148,8 @@ public class WorkspaceLlmModelService {
         if (request.supportsReasoning() != null) {
             model.setSupportsReasoning(request.supportsReasoning());
         }
-        if (request.processingLocation() != null) {
-            model.setProcessingLocation(request.processingLocation());
-        }
+        model.setDataHandling(
+                DataHandlingFacts.of(request.operatedBy(), request.keptAfterReply(), request.dataHandlingNote()));
         if (request.enabled() != null) {
             model.setEnabled(request.enabled());
         }

@@ -88,7 +88,7 @@ class ReviewMemberAiPolicyTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRejectMissingSnapshotInsteadOfAssumingItsProcessingLocation() {
+    void shouldRejectMissingSnapshotInsteadOfAssumingItsDataHandlingTier() {
         var workspace = new Workspace();
         workspace.setId(1L);
         var job = new AgentJob();
@@ -96,7 +96,7 @@ class ReviewMemberAiPolicyTest extends BaseUnitTest {
         job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         job.setMetadata(mapper.createObjectNode().put("about_user_id", 20L));
         when(preferences.forDeveloper(1L, 20L))
-                .thenReturn(new MemberAiPreferences.Decision(true, MemberAiChoice.ON_PREMISES));
+                .thenReturn(new MemberAiPreferences.Decision(true, MemberAiChoice.IN_HOUSE_ONLY));
         assertThat(policy.allowsResult(job)).isFalse();
         verifyNoInteractions(routing);
     }

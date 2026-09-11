@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
@@ -40,6 +39,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.core.signal.PracticeReviewRefusalMetrics;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -1135,9 +1135,8 @@ public class AgentJobExecutor {
             ConfigSnapshot snapshot;
             try {
                 ConfigSnapshot submitted = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
-                if (java.util.Objects.requireNonNullElse(
-                                submitted.processingLocation(), LlmProcessingLocation.UNCLASSIFIED)
-                        != binding.getProcessingLocation()) return refuseUnavailableModel(job);
+                if (java.util.Objects.requireNonNullElse(submitted.dataHandlingTier(), DataHandlingTier.UNDECLARED)
+                        != binding.getDataHandlingTier()) return refuseUnavailableModel(job);
                 if (llmAdmissionService != null) {
                     var admitted = llmAdmissionService.admit(binding);
                     var ref = admitted.connection();
@@ -1158,10 +1157,10 @@ public class AgentJobExecutor {
                 return refuseUnavailableModel(job);
             }
 
-            // Admission holds this location's binding row lock until the RUNNING transition commits.
+            // Admission holds this slot's binding row lock until the RUNNING transition commits.
             {
-                long runningCount = jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
-                        job.getWorkspace().getId(), purpose, binding.getProcessingLocation());
+                long runningCount = jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
+                        job.getWorkspace().getId(), purpose, binding.getDataHandlingTier());
                 if (runningCount >= binding.getMaxConcurrentJobs()) {
                     concurrencyRejected.increment();
                     log.info(

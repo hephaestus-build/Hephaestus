@@ -48,12 +48,15 @@ more than 48 hours.
 Review this map with the [record of processing](./record-of-processing.md),
 [artifact-source governance](./artifact-source-governance.md), and the public privacy statement.
 
-## Member onboarding preferences
+## Member onboarding and AI choices
 
-`workspace_member_onboarding` stores an account's AI choice and welcome/completion timestamps in a
-workspace. The account export includes its own rows; account erasure deletes them. Workspace purge
-also deletes them. `workspace_onboarding_settings` stores the welcome Markdown and required integration
-identifiers; the text can contain personal data and is removed with workspace purge, not an individual
-account's erasure. Operators must keep welcome text relevant to the team rather than recording
-individuals' decisions there. Neither table has an independent expiry. Configuration changes also follow
-the existing configuration-audit retention policy.
+`workspace_member_onboarding` stores an account's AI choice (`ai_choice`: `NO_AI`, `IN_HOUSE_ONLY`,
+`NOT_KEPT_ONLY`, `ANY_DECLARED`, or null until chosen) and its first-visit and completion timestamps
+in a workspace. The account export includes its own rows with the choice as that literal; account
+erasure deletes them. Workspace purge also deletes them. `workspace_onboarding_settings` stores
+whether the setup page is on, whether a choice is required, and required integration identifiers; it
+holds no free text and is removed with workspace purge. The data-handling note on `llm_model` and
+`workspace_llm_model` (`data_handling_note`) is an admin-only field for region, agreement and renewal
+date; it is shown to admins only, never to developers, and must not name individuals. Neither table
+has an independent expiry. Configuration changes also follow the existing configuration-audit
+retention policy.

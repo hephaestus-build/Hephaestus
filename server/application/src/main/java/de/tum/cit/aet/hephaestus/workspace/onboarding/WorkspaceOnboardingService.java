@@ -54,7 +54,6 @@ class WorkspaceOnboardingService {
                 policy.isEnabled(),
                 policy.isEnabled() && (member == null || member.getWelcomedAt() == null),
                 policy.getRevision(),
-                policy.getWelcomeMarkdown(),
                 policy.isAiChoiceRequired() || member != null,
                 member == null ? null : member.getAiChoice(),
                 completed,
@@ -65,17 +64,12 @@ class WorkspaceOnboardingService {
                 linkOptions);
     }
 
+    /** The choice is a boundary, not a pick from today's bindings: any of the four values is accepted. */
     @Transactional
     public WorkspaceOnboardingDTO choose(WorkspaceContext context, long accountId, MemberAiChoice choice) {
         requireSelf();
         Workspace workspace = lockWorkspace(context.id());
         requireMember(context.id(), accountId);
-        if (choice != MemberAiChoice.NO_AI
-                && availability.options(context.id()).stream()
-                        .noneMatch(option ->
-                                option.choice() == choice && (option.practiceReviewsReady() || option.mentorReady()))) {
-            throw conflict("This AI location is not available in this workspace. Choose another option or No AI.");
-        }
         var member = members.findByWorkspace_IdAndAccountId(context.id(), accountId)
                 .orElseGet(() -> {
                     var created = new WorkspaceMemberOnboarding();
@@ -98,8 +92,8 @@ class WorkspaceOnboardingService {
         if (policy.getRevision() != revision)
             throw conflict("Workspace onboarding changed. Review the current requirements and try again.");
         var member = members.findByWorkspace_IdAndAccountId(context.id(), accountId)
-                .orElseThrow(() -> conflict("Choose your AI preference first; No AI is always available."));
-        if (member.getAiChoice() == null) throw conflict("Choose your AI preference first; No AI is always available.");
+                .filter(row -> row.getAiChoice() != null)
+                .orElseThrow(() -> conflict("Make your AI choice first; No AI is always available."));
         // A required link the workspace cannot offer right now is the owner's to repair; it never
         // holds a member's setup open.
         if (links.options(context.id(), accountId, policy.getRequiredConnectionIds()).stream()
@@ -172,7 +166,6 @@ class WorkspaceOnboardingService {
         var before = new SettingsSnapshot(toDTO(policy));
         policy.setEnabled(request.enabled());
         policy.setAiChoiceRequired(policy.isAiChoiceRequired() || request.enabled());
-        policy.setWelcomeMarkdown(request.welcomeMarkdown());
         policy.setRequiredConnectionIds(List.copyOf(request.requiredConnectionIds()));
         settings.saveAndFlush(policy);
         var result = toDTO(policy);
@@ -193,8 +186,7 @@ class WorkspaceOnboardingService {
 
     private static void requireSelf() {
         if (CurrentAccount.impersonatorId() != null)
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "Only the account owner can choose their AI preference.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the account owner can make their AI choice.");
     }
 
     private Workspace lockWorkspace(long id) {
@@ -206,8 +198,8 @@ class WorkspaceOnboardingService {
     private static WorkspaceOnboardingSettingsDTO toDTO(WorkspaceOnboardingSettings policy) {
         return new WorkspaceOnboardingSettingsDTO(
                 policy.isEnabled(),
+                policy.isAiChoiceRequired(),
                 policy.getRevision(),
-                policy.getWelcomeMarkdown(),
                 policy.getRequiredConnectionIds());
     }
 

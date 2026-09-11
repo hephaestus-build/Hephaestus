@@ -132,8 +132,7 @@ class LlmProxyService {
         }
 
         if (!requestPolicy.allows(routing)) {
-            return ResponseEntity.status(403)
-                    .body("Your AI preference no longer permits this model in this workspace.");
+            return ResponseEntity.status(403).body("Your AI choice no longer permits this model in this workspace.");
         }
 
         // Before any credential is resolved or the network touched. Never interrupts a live stream.
@@ -187,7 +186,7 @@ class LlmProxyService {
                 accounting.recordStreamUsageUnsupported(routing.apiProtocol());
                 if (!requestPolicy.allows(routing))
                     return ResponseEntity.status(403)
-                            .body("Your AI preference no longer permits this model in this workspace.");
+                            .body("Your AI choice no longer permits this model in this workspace.");
                 upstream = callUpstream(
                         upstreamUri,
                         upstreamHeaders,

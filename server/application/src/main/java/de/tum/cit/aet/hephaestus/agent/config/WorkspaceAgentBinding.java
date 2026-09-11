@@ -1,11 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.config;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation;
 import de.tum.cit.aet.hephaestus.agent.catalog.ModelBindingSource;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -35,15 +35,15 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>Routing and credentials live in the selected catalog model. Exactly one of
  * {@link #instanceModel} / {@link #workspaceModel} is set ({@code ck_workspace_agent_binding_single_model}
- * enforces it); no row for a purpose and location means that route is unconfigured (off).
+ * enforces it); no row for a purpose and tier means that slot is unconfigured (off).
  */
 @Entity
 @Table(
         name = "workspace_agent_binding",
         uniqueConstraints =
                 @UniqueConstraint(
-                        name = "uk_workspace_agent_binding_purpose_location",
-                        columnNames = {"workspace_id", "purpose", "processing_location"}))
+                        name = "uk_workspace_agent_binding_purpose_tier",
+                        columnNames = {"workspace_id", "purpose", "data_handling_tier"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -68,12 +68,16 @@ public class WorkspaceAgentBinding implements ModelBindingSource {
     @Column(name = "purpose", nullable = false, length = 32)
     private AgentPurpose purpose;
 
-    /** UNCLASSIFIED is the existing workspace default, never a fallback for an explicit member choice. */
+    /**
+     * The slot this row fills: the bound model's derived tier must equal it, except that the
+     * {@code UNDECLARED} slot accepts any model. {@code UNDECLARED} is the legacy slot for members with
+     * no choice, never a fallback for a member who chose.
+     */
     @Enumerated(EnumType.STRING)
-    @ColumnDefault("'UNCLASSIFIED'")
-    @Column(name = "processing_location", nullable = false, length = 24)
+    @ColumnDefault("'UNDECLARED'")
+    @Column(name = "data_handling_tier", nullable = false, length = 24)
     @Getter(onMethod_ = @Override)
-    private LlmProcessingLocation processingLocation = LlmProcessingLocation.UNCLASSIFIED;
+    private DataHandlingTier dataHandlingTier = DataHandlingTier.UNDECLARED;
 
     @ColumnDefault("true")
     @Column(name = "enabled", nullable = false)

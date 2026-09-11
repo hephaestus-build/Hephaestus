@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.config;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
@@ -14,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -50,14 +50,14 @@ public class AgentBindingService {
     }
 
     /**
-     * Create or replace the workspace's binding for one purpose from a direct write: bind exactly one
-     * available model and set the execution limits.
+     * Create or replace the workspace's binding for one purpose and tier slot from a direct write: bind
+     * exactly one available model whose declared tier fills the slot, and set the execution limits.
      */
     @Transactional
     public WorkspaceAgentBinding upsertBinding(
             WorkspaceContext workspaceContext,
             AgentPurpose purpose,
-            LlmProcessingLocation location,
+            DataHandlingTier tier,
             AgentBindingRequestDTO request) {
         Long workspaceId = workspaceContext.id();
         Workspace workspace = workspaceRepository
@@ -65,11 +65,12 @@ public class AgentBindingService {
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceContext.slug()));
 
         WorkspaceAgentBinding binding = bindingRepository
-                .findByWorkspaceIdAndPurposeAndProcessingLocation(workspaceId, purpose, location)
-                .orElseGet(() -> newBinding(workspace, purpose, location));
+                .findByWorkspaceIdAndPurposeAndDataHandlingTier(workspaceId, purpose, tier)
+                .orElseGet(() -> newBinding(workspace, purpose, tier));
         BindingSnapshot before = BindingSnapshot.of(binding);
 
         applyModel(binding, workspaceId, request.instanceModelId(), request.workspaceModelId());
+        requireModelFillsSlot(binding);
         if (request.timeoutSeconds() != null) {
             binding.setTimeoutSeconds(request.timeoutSeconds());
         }
@@ -88,16 +89,16 @@ public class AgentBindingService {
         return saved;
     }
 
-    /** Remove the workspace's binding for a purpose (detection/mentor off). */
+    /** Remove the workspace's binding for a purpose and tier slot (that slot off). */
     @Transactional
-    public void deleteBinding(WorkspaceContext workspaceContext, AgentPurpose purpose, LlmProcessingLocation location) {
+    public void deleteBinding(WorkspaceContext workspaceContext, AgentPurpose purpose, DataHandlingTier tier) {
         Long workspaceId = workspaceContext.id();
         // Taken for the row lock and the 404 only; nothing below writes the workspace row.
         workspaceRepository
                 .findByIdForUpdate(workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceContext.slug()));
         bindingRepository
-                .findByWorkspaceIdAndPurposeAndProcessingLocation(workspaceId, purpose, location)
+                .findByWorkspaceIdAndPurposeAndDataHandlingTier(workspaceId, purpose, tier)
                 .ifPresent(binding -> {
                     BindingSnapshot before = BindingSnapshot.of(binding);
                     bindingRepository.delete(binding);
@@ -128,13 +129,31 @@ public class AgentBindingService {
             binding.setWorkspaceModel(model);
             binding.setInstanceModel(null);
         }
-        requireModelAvailableToWorkspace(binding);
     }
 
-    private void requireModelAvailableToWorkspace(WorkspaceAgentBinding binding) {
+    private void requireModelFillsSlot(WorkspaceAgentBinding binding) {
+        DataHandlingTier slot = binding.getDataHandlingTier();
+        if (slot != DataHandlingTier.UNDECLARED) {
+            DataHandlingTier declared = declaredTier(binding);
+            if (declared == DataHandlingTier.UNDECLARED) {
+                throw AgentBindingSlotMismatchException.undeclared();
+            }
+            if (declared != slot) {
+                throw AgentBindingSlotMismatchException.declaredAs(declared);
+            }
+        }
         if (!llmModelResolver.isAvailable(binding)) {
             throw new IllegalArgumentException("This model isn't available to this workspace.");
         }
+    }
+
+    private static DataHandlingTier declaredTier(WorkspaceAgentBinding binding) {
+        LlmModel instance = binding.getInstanceModel();
+        if (instance != null) {
+            return instance.getDataHandlingTier();
+        }
+        WorkspaceLlmModel own = binding.getWorkspaceModel();
+        return own != null ? own.getDataHandlingTier() : DataHandlingTier.UNDECLARED;
     }
 
     private void audit(AgentPurpose purpose, Long workspaceId, BindingSnapshot before, BindingSnapshot after) {
@@ -142,25 +161,24 @@ public class AgentBindingService {
                 ConfigAuditEntityType.AGENT_BINDING, purpose.name(), workspaceId, before, after));
     }
 
-    private static WorkspaceAgentBinding newBinding(
-            Workspace workspace, AgentPurpose purpose, LlmProcessingLocation location) {
+    private static WorkspaceAgentBinding newBinding(Workspace workspace, AgentPurpose purpose, DataHandlingTier tier) {
         WorkspaceAgentBinding binding = new WorkspaceAgentBinding();
         binding.setWorkspace(workspace);
         binding.setPurpose(purpose);
-        binding.setProcessingLocation(location);
+        binding.setDataHandlingTier(tier);
         return binding;
     }
 
     /** Audit projection of a binding's effective model + enabled state. */
     private record BindingSnapshot(
-            LlmProcessingLocation processingLocation,
+            DataHandlingTier dataHandlingTier,
             @Nullable Long instanceModelId,
             @Nullable Long workspaceModelId,
             @Nullable Boolean enabled)
             implements ConfigAuditSnapshot {
         static BindingSnapshot of(WorkspaceAgentBinding b) {
             return new BindingSnapshot(
-                    b.getProcessingLocation(),
+                    b.getDataHandlingTier(),
                     b.getInstanceModel() == null ? null : b.getInstanceModel().getId(),
                     b.getWorkspaceModel() == null ? null : b.getWorkspaceModel().getId(),
                     b.isEnabled());

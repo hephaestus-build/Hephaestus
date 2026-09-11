@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -38,8 +39,17 @@ public record LlmModelDTO(
         @NonNull @Schema(description = "Whether the model supports a reasoning mode")
         Boolean supportsReasoning,
 
-        @NonNull @Schema(description = "Operator-declared processing location")
-        LlmProcessingLocation processingLocation,
+        @Nullable @Schema(description = "Who operates the systems the work is sent to; null until declared")
+        LlmDataOperator operatedBy,
+
+        @Nullable @Schema(description = "What stays behind after the reply; null until declared")
+        LlmDataRetention keptAfterReply,
+
+        @Nullable @Schema(description = "Admin-only note: region, agreement, renewal date")
+        String dataHandlingNote,
+
+        @NonNull @Schema(description = "Data-handling tier derived from the two facts; UNDECLARED until both are set")
+        DataHandlingTier dataHandlingTier,
 
         @NonNull @Schema(description = "Share with all workspaces (PUBLIC) or only selected ones (GRANTED)")
         ModelVisibility visibility,
@@ -68,7 +78,10 @@ public record LlmModelDTO(
                 model.getContextWindow(),
                 model.getMaxOutputTokens(),
                 model.isSupportsReasoning(),
-                model.getProcessingLocation(),
+                model.getDataHandling().getOperatedBy(),
+                model.getDataHandling().getKeptAfterReply(),
+                model.getDataHandling().getNote(),
+                model.getDataHandlingTier(),
                 model.getVisibility(),
                 grantedWorkspaceIds,
                 model.isEnabled(),

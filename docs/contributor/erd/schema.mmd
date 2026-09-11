@@ -691,7 +691,9 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
-        VARCHAR(24) processing_location "NOT NULL"
+        VARCHAR(200) data_handling_note
+        VARCHAR(24) kept_after_reply
+        VARCHAR(24) operated_by
     }
 
     LlmModelPrice {
@@ -1468,7 +1470,7 @@ erDiagram
         BIGINT workspace_model_id FK
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
-        VARCHAR(24) processing_location UK "NOT NULL"
+        VARCHAR(24) data_handling_tier UK "NOT NULL"
     }
 
     WorkspaceLlmConnection {
@@ -1505,7 +1507,9 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
-        VARCHAR(24) processing_location "NOT NULL"
+        VARCHAR(200) data_handling_note
+        VARCHAR(24) kept_after_reply
+        VARCHAR(24) operated_by
     }
 
     WorkspaceMemberOnboarding {
@@ -1533,7 +1537,6 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         JSONB required_connection_ids "NOT NULL"
         BIGINT revision "NOT NULL"
-        TEXT welcome_markdown "NOT NULL"
     }
 
     WorkspaceSlugHistory {

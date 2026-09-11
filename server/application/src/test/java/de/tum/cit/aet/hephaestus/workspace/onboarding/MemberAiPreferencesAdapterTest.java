@@ -48,7 +48,7 @@ class MemberAiPreferencesAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldResolveTheStableIdentityAndPreserveNoAiWhenWelcomeIsHidden() {
+    void shouldResolveTheStableIdentityAndPreserveNoAiWhenSetupIsHidden() {
         linkedDeveloper();
         var row = new WorkspaceMemberOnboarding();
         row.setAiChoice(MemberAiChoice.NO_AI);
@@ -59,7 +59,7 @@ class MemberAiPreferencesAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNotTreatDismissalAsAnAiChoiceEvenIfWelcomeIsLaterHidden() {
+    void shouldNotTreatDismissalAsAnAiChoiceEvenIfSetupIsLaterHidden() {
         linkedDeveloper();
         when(members.findByWorkspace_IdAndAccountId(1L, 10L)).thenReturn(Optional.of(new WorkspaceMemberOnboarding()));
         var result = preferences.forDeveloper(1L, 20L);
@@ -78,7 +78,7 @@ class MemberAiPreferencesAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRefuseAnUnlinkedIdentityWhenIndividualPreferencesExistWithoutEnabledWelcome() {
+    void shouldRefuseAnUnlinkedIdentityWhenIndividualChoicesExistWithoutEnabledSetup() {
         linkedDeveloper();
         when(identities.resolveActiveAccountId(7L, "123", null)).thenReturn(Optional.empty());
         when(members.existsByWorkspace_Id(1L)).thenReturn(true);
@@ -89,7 +89,7 @@ class MemberAiPreferencesAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldPreserveTheLegacyDefaultForAnIdentifiedMemberWithoutTheirOwnPreference() {
+    void shouldPreserveTheLegacyDefaultForAnIdentifiedMemberWithoutTheirOwnChoice() {
         linkedDeveloper();
 
         when(members.existsByWorkspace_Id(1L)).thenReturn(true);

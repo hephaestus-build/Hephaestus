@@ -20,7 +20,7 @@ class WorkspaceOnboardingMigrationTest {
     private static final String CHANGELOG = "1789038452155_changelog.xml";
 
     @Test
-    void shouldPreserveExistingAssignmentsAndEnforceWorkspaceAccountPreferences() throws Exception {
+    void shouldPreserveExistingAssignmentsAndEnforceDeclaredFactsAndChoices() throws Exception {
         var fixture = PostgreSQLTestContainer.createDatabase("member_onboarding_upgrade");
         try (var connection = DriverManager.getConnection(fixture.jdbcUrl(), fixture.username(), fixture.password())) {
             var database =
@@ -36,7 +36,7 @@ class WorkspaceOnboardingMigrationTest {
                 int count = (int) pending.stream()
                         .filter(change -> change.getFilePath().endsWith(CHANGELOG))
                         .count();
-                assertThat(count).isEqualTo(12);
+                assertThat(count).isEqualTo(16);
                 liquibase.update(before, contexts, labels);
                 liquibase.tag("before-member-onboarding");
                 execute(connection, """
@@ -53,12 +53,15 @@ class WorkspaceOnboardingMigrationTest {
      """);
                 connection.commit();
                 liquibase.update(count, contexts, labels);
-                assertThat(scalar(connection, "SELECT processing_location FROM llm_model WHERE id = 990105"))
-                        .isEqualTo("UNCLASSIFIED");
+                // A model that exists on main lands with no facts declared: it serves the undeclared slot only.
+                assertThat(
+                                scalar(
+                                        connection,
+                                        "SELECT operated_by IS NULL AND kept_after_reply IS NULL AND data_handling_note IS NULL FROM llm_model WHERE id = 990105"))
+                        .isEqualTo("t");
                 assertThat(scalar(
-                                connection,
-                                "SELECT processing_location FROM workspace_agent_binding WHERE id = 990106"))
-                        .isEqualTo("UNCLASSIFIED");
+                                connection, "SELECT data_handling_tier FROM workspace_agent_binding WHERE id = 990106"))
+                        .isEqualTo("UNDECLARED");
                 // Before configuration is used, the additive upgrade has a safe, tested rollback.
                 liquibase.rollback("before-member-onboarding", contexts, labels);
                 assertThat(scalar(
@@ -67,10 +70,15 @@ class WorkspaceOnboardingMigrationTest {
                         .isEqualTo("990105");
                 liquibase.update(count, contexts, labels);
                 execute(connection, """
-     INSERT INTO workspace_agent_binding (workspace_id, purpose, instance_model_id, processing_location)
-     VALUES (990101, 'PRACTICE_REVIEW', 990105, 'ON_PREMISES'), (990101, 'PRACTICE_REVIEW', 990105, 'PRIVATE_CLOUD');
+     UPDATE llm_model SET operated_by = 'PROVIDER', kept_after_reply = 'NONE', data_handling_note = 'EU region, DPA renews 2027-03' WHERE id = 990105;
+     INSERT INTO workspace_llm_connection (id, workspace_id, slug, display_name, base_url, api_protocol, created_at)
+     VALUES (990107, 990101, 'own-models', 'Own models', 'https://own.example.invalid', 'openai-completions', now());
+     INSERT INTO workspace_llm_model (id, workspace_id, connection_id, slug, display_name, upstream_model_id, operated_by, kept_after_reply, created_at)
+     VALUES (990108, 990101, 990107, 'own', 'Own', 'own-model', 'OWN_ORGANISATION', 'NONE', now());
+     INSERT INTO workspace_agent_binding (workspace_id, purpose, instance_model_id, data_handling_tier)
+     VALUES (990101, 'PRACTICE_REVIEW', 990105, 'IN_HOUSE'), (990101, 'PRACTICE_REVIEW', 990105, 'PROVIDER_NOT_KEPT'), (990101, 'PRACTICE_REVIEW', 990105, 'PROVIDER_KEPT');
      INSERT INTO workspace_member_onboarding (workspace_id, account_id, ai_choice, updated_at)
-     VALUES (990101, 990103, 'NO_AI', now()), (990102, 990103, 'ON_PREMISES', now());
+     VALUES (990101, 990103, 'NO_AI', now()), (990102, 990103, 'IN_HOUSE_ONLY', now());
      """);
                 connection.commit();
                 assertThat(
@@ -96,14 +104,34 @@ class WorkspaceOnboardingMigrationTest {
                                         "UPDATE workspace_member_onboarding SET ai_choice = 'AUTOMATIC' WHERE workspace_id = 990101 AND account_id = 990103"))
                         .hasMessageContaining("ck_member_onboarding_ai_choice");
                 connection.rollback();
+                assertThatThrownBy(() ->
+                                execute(connection, "UPDATE llm_model SET operated_by = 'AUTOMATIC' WHERE id = 990105"))
+                        .hasMessageContaining("ck_llm_model_operated_by");
+                connection.rollback();
                 assertThatThrownBy(() -> execute(
-                                connection, "UPDATE llm_model SET processing_location = 'AUTOMATIC' WHERE id = 990105"))
-                        .hasMessageContaining("ck_llm_model_processing_location");
+                                connection, "UPDATE llm_model SET kept_after_reply = 'FOREVER' WHERE id = 990105"))
+                        .hasMessageContaining("ck_llm_model_kept_after_reply");
+                connection.rollback();
+                assertThatThrownBy(() -> execute(
+                                connection,
+                                "UPDATE workspace_llm_model SET operated_by = 'AUTOMATIC' WHERE id = 990108"))
+                        .hasMessageContaining("ck_workspace_llm_model_operated_by");
+                connection.rollback();
+                assertThatThrownBy(() -> execute(
+                                connection,
+                                "UPDATE workspace_llm_model SET kept_after_reply = 'FOREVER' WHERE id = 990108"))
+                        .hasMessageContaining("ck_workspace_llm_model_kept_after_reply");
                 connection.rollback();
                 assertThatThrownBy(
                                 () -> execute(
                                         connection,
-                                        "INSERT INTO workspace_onboarding_settings (workspace_id, enabled, ai_choice_required, required_connection_ids, welcome_markdown) VALUES (990101, true, false, '[]', '')"))
+                                        "UPDATE workspace_agent_binding SET data_handling_tier = 'AUTOMATIC' WHERE id = 990106"))
+                        .hasMessageContaining("ck_agent_binding_data_handling_tier");
+                connection.rollback();
+                assertThatThrownBy(
+                                () -> execute(
+                                        connection,
+                                        "INSERT INTO workspace_onboarding_settings (workspace_id, enabled, ai_choice_required, required_connection_ids) VALUES (990101, true, false, '[]')"))
                         .hasMessageContaining("ck_onboarding_requires_choice");
                 connection.rollback();
                 assertThatThrownBy(() -> liquibase.rollback("before-member-onboarding", contexts, labels))

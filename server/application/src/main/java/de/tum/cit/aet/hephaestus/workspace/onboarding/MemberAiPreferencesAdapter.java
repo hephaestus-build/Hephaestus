@@ -30,13 +30,13 @@ class MemberAiPreferencesAdapter implements MemberAiPreferences {
                         null));
         if (account.isEmpty()) return unresolved(workspaceId, required);
         var preference = members.findByWorkspace_IdAndAccountId(workspaceId, account.get());
-        // A saved refusal remains binding even when an administrator turns off the welcome flow.
+        // A saved refusal remains binding even when an owner turns off the setup page.
         if (preference.isPresent()) return new Decision(true, preference.get().getAiChoice());
         return new Decision(required, null);
     }
 
     private Decision unresolved(long workspaceId, boolean required) {
-        // Unlinking an identity must not turn its saved location or refusal into the legacy default.
+        // Unlinking an identity must not turn its saved ceiling or refusal into the legacy default.
         return new Decision(required || members.existsByWorkspace_Id(workspaceId), null);
     }
 }

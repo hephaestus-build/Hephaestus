@@ -630,7 +630,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             return "Connection lost.";
         }
         if (e instanceof IllegalStateException && isMissingMentorConfig(e.getMessage())) {
-            return "Your AI preference or this workspace’s model settings do not currently allow conversations with Heph. Review Workspace preferences or ask a workspace owner to check the model assignment.";
+            return "Heph isn't set up for your AI choice in this workspace yet. Ask a workspace owner, or change your choice under Your AI choice in the sidebar.";
         }
         if (e instanceof InteractiveSandboxException) {
             return "I couldn't start the mentor runtime. Please try again in a moment.";

@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -89,7 +90,8 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
 
     private CreateWorkspaceLlmModelRequestDTO enabledUnpricedCreateRequest() {
         return new CreateWorkspaceLlmModelRequestDTO(
-                "gpt-5", "GPT-5", "gpt-5", null, null, null, null, true, null, null, null, null, null, null);
+                "gpt-5", "GPT-5", "gpt-5", null, null, null, null, null, null, true, null, null, null, null, null,
+                null);
     }
 
     private CreateWorkspaceLlmModelRequestDTO createRequest(
@@ -100,6 +102,8 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                 "gpt-5",
                 "GPT-5",
                 "gpt-5",
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -229,6 +233,8 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                     null,
                     null,
                     null,
+                    null,
+                    null,
                     true,
                     PricingMode.PRICED,
                     new BigDecimal("3.00"),
@@ -259,12 +265,33 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
             UpdateWorkspaceLlmModelRequestDTO request = new UpdateWorkspaceLlmModelRequestDTO(
-                    "New name", null, null, null, null, null, null, null, null, null, null, null);
+                    "New name", null, null, null, null, null, null, null, null, null, null, null, null, null);
 
             WorkspaceLlmModel result = modelService.update(workspaceContext, 7L, request);
 
             assertThat(result.getDisplayName()).isEqualTo("New name");
             assertThat(result.getPricingMode()).isEqualTo(PricingMode.UNPRICED);
+        }
+
+        @Test
+        void dataHandlingIsReplacedWholesaleOnEveryUpdate() {
+            byoEnabled(true);
+            WorkspaceLlmModel existing = new WorkspaceLlmModel();
+            existing.setId(7L);
+            existing.setWorkspace(connection().getWorkspace());
+            existing.setConnection(connection());
+            existing.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.NONE, "EU"));
+            when(modelRepository.findByIdAndWorkspaceIdForUpdate(7L, 1L)).thenReturn(Optional.of(existing));
+            when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            WorkspaceLlmModel result = modelService.update(
+                    workspaceContext,
+                    7L,
+                    new UpdateWorkspaceLlmModelRequestDTO(
+                            "New name", null, null, null, null, null, null, null, null, null, null, null, null, null));
+
+            assertThat(result.getDataHandlingTier()).isEqualTo(DataHandlingTier.UNDECLARED);
+            assertThat(result.getDataHandling().getNote()).isNull();
         }
     }
 
@@ -310,7 +337,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
             UpdateWorkspaceLlmModelRequestDTO request = new UpdateWorkspaceLlmModelRequestDTO(
-                    "Renamed", null, null, null, null, null, null, null, null, null, null, null);
+                    "Renamed", null, null, null, null, null, null, null, null, null, null, null, null, null);
 
             WorkspaceLlmModel result = modelService.update(workspaceContext, 7L, request);
 

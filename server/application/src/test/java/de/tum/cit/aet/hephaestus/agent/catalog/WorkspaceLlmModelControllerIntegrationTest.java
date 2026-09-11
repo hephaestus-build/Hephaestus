@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +35,9 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
 
     @Autowired
     private LlmModelWorkspaceGrantRepository llmModelWorkspaceGrantRepository;
+
+    @Autowired
+    private WorkspaceLlmModelRepository workspaceLlmModelRepository;
 
     private Workspace setupWorkspace(String slug) {
         User owner = persistUser(slug + "-owner");
@@ -70,6 +74,8 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 slug,
                 "My Model",
                 "gpt-5-secret-upstream-id",
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -144,7 +150,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .isEqualTo(1);
 
         var updateRequest = new UpdateWorkspaceLlmModelRequestDTO(
-                "Renamed Model", null, null, null, null, null, null, null, null, null, null, null);
+                "Renamed Model", null, null, null, null, null, null, null, null, null, null, null, null, null);
         webTestClient
                 .patch()
                 .uri("/workspaces/{slug}/llm/models/{id}", workspace.getWorkspaceSlug(), created.id())
@@ -175,6 +181,86 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .expectStatus()
                 .isNotFound()
                 .expectBody(Void.class);
+    }
+
+    @Test
+    @WithAdminUser
+    void workspaceAdminDeclaresDataHandlingAndTheTierIsDerivedOnEveryRead() {
+        Workspace workspace = setupWorkspace("wsmodel-declared-ws");
+        WorkspaceLlmConnectionDTO connection = createWorkspaceConnection(workspace, "conn-declared");
+        var request = new CreateWorkspaceLlmModelRequestDTO(
+                "declared-model",
+                "Declared Model",
+                "gpt-5-secret-upstream-id",
+                null,
+                null,
+                null,
+                LlmDataOperator.PROVIDER,
+                LlmDataRetention.NONE,
+                "EU region, DPA renews next spring",
+                true,
+                PricingMode.NO_CHARGE,
+                null,
+                null,
+                null,
+                null,
+                "Test-owned model has no per-token charge");
+        WorkspaceLlmModelDTO created = Objects.requireNonNull(webTestClient
+                .post()
+                .uri(
+                        "/workspaces/{slug}/llm/connections/{connectionId}/models",
+                        workspace.getWorkspaceSlug(),
+                        connection.id())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody(WorkspaceLlmModelDTO.class)
+                .returnResult()
+                .getResponseBody());
+        assertThat(created.operatedBy()).isEqualTo(LlmDataOperator.PROVIDER);
+        assertThat(created.keptAfterReply()).isEqualTo(LlmDataRetention.NONE);
+        assertThat(created.dataHandlingNote()).isEqualTo("EU region, DPA renews next spring");
+        assertThat(created.dataHandlingTier()).isEqualTo(DataHandlingTier.PROVIDER_NOT_KEPT);
+
+        DataHandlingFacts stored = workspaceLlmModelRepository
+                .findByIdAndWorkspaceId(created.id(), workspace.getId())
+                .orElseThrow()
+                .getDataHandling();
+        assertThat(stored.getOperatedBy()).isEqualTo(LlmDataOperator.PROVIDER);
+        assertThat(stored.getKeptAfterReply()).isEqualTo(LlmDataRetention.NONE);
+        assertThat(stored.getNote()).isEqualTo("EU region, DPA renews next spring");
+
+        webTestClient
+                .patch()
+                .uri("/workspaces/{slug}/llm/models/{id}", workspace.getWorkspaceSlug(), created.id())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("operatedBy", "PROVIDER"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody()
+                .jsonPath("$.detail")
+                .isEqualTo("Declare both facts or neither");
+
+        webTestClient
+                .patch()
+                .uri("/workspaces/{slug}/llm/models/{id}", workspace.getWorkspaceSlug(), created.id())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new UpdateWorkspaceLlmModelRequestDTO(
+                        null, null, null, null, null, null, null, null, null, null, null, null, null, null))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.operatedBy")
+                .doesNotExist()
+                .jsonPath("$.dataHandlingTier")
+                .isEqualTo("UNDECLARED");
     }
 
     @Test
@@ -286,7 +372,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new UpdateWorkspaceLlmModelRequestDTO(
-                        null, null, null, null, null, false, null, null, null, null, null, null))
+                        null, null, null, null, null, null, null, false, null, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()

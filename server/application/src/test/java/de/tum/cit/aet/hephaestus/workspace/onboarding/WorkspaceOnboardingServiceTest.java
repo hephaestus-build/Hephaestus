@@ -144,14 +144,24 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRefuseUnavailableAiInsteadOfSwitchingLocations() {
+    void shouldAcceptAChoiceNoBindingCoversYet() {
         member();
+        enabledPolicy();
         when(availability.options(1L))
-                .thenReturn(List.of(new WorkspaceAiAvailability.Option(MemberAiChoice.PRIVATE_CLOUD, true, true)));
-        assertThatThrownBy(() -> service.choose(context, 10L, MemberAiChoice.ON_PREMISES))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("not available");
-        verifyNoInteractions(members);
+                .thenReturn(List.of(
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, false, false),
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.NOT_KEPT_ONLY, false, false),
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.ANY_DECLARED, true, true)));
+        var result = service.choose(context, 10L, MemberAiChoice.IN_HOUSE_ONLY);
+        var saved = ArgumentCaptor.forClass(WorkspaceMemberOnboarding.class);
+        verify(members).save(saved.capture());
+        assertThat(saved.getValue().getAiChoice()).isEqualTo(MemberAiChoice.IN_HOUSE_ONLY);
+        assertThat(result.aiOptions())
+                .filteredOn(option -> option.choice() == MemberAiChoice.IN_HOUSE_ONLY)
+                .allSatisfy(option -> {
+                    assertThat(option.practiceReviewsReady()).isFalse();
+                    assertThat(option.mentorReady()).isFalse();
+                });
     }
 
     @Test
@@ -219,14 +229,16 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepAiChoiceRequiredAfterHidingTheWelcome() {
+    void shouldKeepAiChoiceRequiredAfterHidingTheSetupPage() {
         var workspace = new Workspace();
         workspace.setId(1L);
         when(workspaces.findByIdForUpdate(1L)).thenReturn(Optional.of(workspace));
         var policy = enabledPolicy();
-        service.configure(context, 10L, new WorkspaceOnboardingSettingsDTO(false, 3, "", List.of()));
+        // The request says false; the latch wins and the response reports it.
+        var result = service.configure(context, 10L, new WorkspaceOnboardingSettingsDTO(false, false, 3, List.of()));
         assertThat(policy.isEnabled()).isFalse();
         assertThat(policy.isAiChoiceRequired()).isTrue();
+        assertThat(result.aiChoiceRequired()).isTrue();
         verify(audit).record(any());
     }
 
@@ -238,7 +250,7 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
                 .claim("act", Map.of("sub", "99"))
                 .build();
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
-        assertThatThrownBy(() -> service.choose(context, 10L, MemberAiChoice.ON_PREMISES))
+        assertThatThrownBy(() -> service.choose(context, 10L, MemberAiChoice.IN_HOUSE_ONLY))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("account owner");
         assertThatThrownBy(() -> service.dismiss(context, 10L)).isInstanceOf(ResponseStatusException.class);

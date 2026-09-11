@@ -7,8 +7,10 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionSlugConflictExceptio
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelInUseException;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelSlugConflictException;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUpstreamIdConflictException;
+import de.tum.cit.aet.hephaestus.agent.config.AgentBindingSlotMismatchException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStateConflictException;
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.net.URI;
 import java.util.Optional;
 import org.springframework.core.Ordered;
@@ -63,6 +65,18 @@ public class AgentControllerAdvice {
     @ExceptionHandler(AgentJobStateConflictException.class)
     ProblemDetail handleAgentJobStateConflict(AgentJobStateConflictException exception) {
         return problem(HttpStatus.CONFLICT, "agent-job-state-conflict", "Agent job state conflict", exception);
+    }
+
+    /** {@code declaredTier} lets the client name the tier from its own label registry. */
+    @ExceptionHandler(AgentBindingSlotMismatchException.class)
+    ProblemDetail handleBindingSlotMismatch(AgentBindingSlotMismatchException exception) {
+        ProblemDetail problem =
+                problem(HttpStatus.CONFLICT, "agent-binding-slot-mismatch", "Model does not fill this row", exception);
+        DataHandlingTier declaredTier = exception.declaredTier();
+        if (declaredTier != null) {
+            problem.setProperty("declaredTier", declaredTier);
+        }
+        return problem;
     }
 
     @ExceptionHandler(LlmConnectionInUseException.class)

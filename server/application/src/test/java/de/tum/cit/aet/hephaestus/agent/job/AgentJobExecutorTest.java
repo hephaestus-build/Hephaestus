@@ -337,7 +337,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -374,7 +374,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(3L); // equals max
 
@@ -391,7 +391,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -500,7 +500,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             bindFundedBy(FundingSource.WORKSPACE); // no instance model bound = the workspace pays
             when(llmBudgetService.decide(99L)).thenReturn(instanceBlocked(LlmBudgetBlockReason.EXHAUSTED));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -628,7 +628,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -648,7 +648,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
             when(llmBudgetService.decide(99L)).thenReturn(LlmBudgetDecision.ALLOWED);
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -673,7 +673,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -698,7 +698,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -798,7 +798,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -826,7 +826,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -855,7 +855,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -881,7 +881,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -912,7 +912,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -946,7 +946,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -981,7 +981,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -1005,7 +1005,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -1084,7 +1084,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -1149,7 +1149,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -1212,7 +1212,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -1268,7 +1268,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -1331,7 +1331,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -1391,7 +1391,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -1451,7 +1451,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -1499,7 +1499,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -1527,7 +1527,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -1569,7 +1569,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -1600,7 +1600,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -1677,7 +1677,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -1709,7 +1709,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -1940,7 +1940,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -2230,7 +2230,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -2275,7 +2275,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -2442,7 +2442,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
-            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -2466,7 +2466,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
         when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any())).thenReturn(Optional.of(job));
         when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                 .thenReturn(Optional.of(binding));
-        when(jobRepository.countRunningByWorkspaceIdAndPurposeAndProcessingLocation(
+        when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
                         eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                 .thenReturn(0L);
         when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));

@@ -123,8 +123,7 @@ public class PracticeDetectionDeliveryService {
 
         if (!memberAiPolicy.allowsResult(job))
             throw new ObservationsRefusedException(
-                    "member_ai_declined",
-                    "The developer's AI preference no longer permits recording this review result.");
+                    "member_ai_declined", "The developer's AI choice no longer permits recording this review result.");
         EvidenceBoundary evidenceBoundary = evidenceBoundary(job);
         for (SourceKind kind : evidenceBoundary.allowedSources()) {
             if (!sourceCatalogs.isSourceUsePermitted(

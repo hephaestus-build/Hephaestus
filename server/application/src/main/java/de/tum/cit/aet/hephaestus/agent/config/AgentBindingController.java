@@ -1,11 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.config;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * A workspace's agents: what model, with what limits, runs each {@link AgentPurpose}. There is
- * one assignment per purpose and processing location; {@code PUT} is idempotent within that pair.
+ * one assignment per purpose and data-handling tier; {@code PUT} is idempotent within that pair.
  */
 @WorkspaceScopedController
 @RequestMapping("/agents")
@@ -58,15 +58,20 @@ public class AgentBindingController {
             responseCode = "404",
             description = "Model not found",
             content = @Content(schema = @Schema(hidden = true)))
+    @ApiResponse(
+            responseCode = "409",
+            description =
+                    "The model is undeclared, or declared as another tier than this slot (problem type agent-binding-slot-mismatch, property declaredTier)",
+            content = @Content(schema = @Schema(hidden = true)))
     @RequireAtLeastWorkspaceAdmin
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "AGENT_BINDING")
     public ResponseEntity<AgentBindingDTO> configureAgent(
             WorkspaceContext workspaceContext,
             @PathVariable AgentPurpose purpose,
-            @RequestParam(defaultValue = "UNCLASSIFIED") LlmProcessingLocation processingLocation,
+            @RequestParam(defaultValue = "UNDECLARED") DataHandlingTier dataHandlingTier,
             @Valid @RequestBody AgentBindingRequestDTO request) {
         WorkspaceAgentBinding binding =
-                agentBindingService.upsertBinding(workspaceContext, purpose, processingLocation, request);
+                agentBindingService.upsertBinding(workspaceContext, purpose, dataHandlingTier, request);
         return ResponseEntity.ok(AgentBindingDTO.from(binding, agentBindingService.isReady(binding)));
     }
 
@@ -78,8 +83,8 @@ public class AgentBindingController {
     public ResponseEntity<Void> deleteAgent(
             WorkspaceContext workspaceContext,
             @PathVariable AgentPurpose purpose,
-            @RequestParam(defaultValue = "UNCLASSIFIED") LlmProcessingLocation processingLocation) {
-        agentBindingService.deleteBinding(workspaceContext, purpose, processingLocation);
+            @RequestParam(defaultValue = "UNDECLARED") DataHandlingTier dataHandlingTier) {
+        agentBindingService.deleteBinding(workspaceContext, purpose, dataHandlingTier);
         return ResponseEntity.noContent().build();
     }
 }

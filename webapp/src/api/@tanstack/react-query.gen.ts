@@ -2898,7 +2898,7 @@ export const updateNotificationsMutation = (options?: Partial<Options<UpdateNoti
 export const getMemberOnboardingQueryKey = (options: Options<GetMemberOnboardingData>) => createQueryKey('getMemberOnboarding', options, false, ['workspace-onboarding']);
 
 /**
- * Get first-visit guidance and your AI choice in this workspace
+ * Get your first-visit setup and AI choice in this workspace
  */
 export const getMemberOnboardingOptions = (options: Options<GetMemberOnboardingData>) => queryOptions<GetMemberOnboardingResponse, DefaultError, GetMemberOnboardingResponse, ReturnType<typeof getMemberOnboardingQueryKey>>({
   queryFn: async ({ queryKey, signal }) => {
@@ -2931,7 +2931,7 @@ export const updateMemberAiChoiceMutation = (options?: Partial<Options<UpdateMem
 };
 
 /**
- * Finish first-visit guidance after required account links are complete
+ * Finish first-visit setup after required account links are complete
  */
 export const completeMemberOnboardingMutation = (options?: Partial<Options<CompleteMemberOnboardingData>>): UseMutationOptions<CompleteMemberOnboardingResponse, DefaultError, Options<CompleteMemberOnboardingData>> => {
   const mutationOptions: UseMutationOptions<CompleteMemberOnboardingResponse, DefaultError, Options<CompleteMemberOnboardingData>> = {
@@ -2983,7 +2983,7 @@ export const getMemberOnboardingSettingsOptions = (options: Options<GetMemberOnb
 });
 
 /**
- * Configure first-visit guidance and required workspace account links
+ * Configure first-visit setup and required workspace account links
  */
 export const updateMemberOnboardingSettingsMutation = (options?: Partial<Options<UpdateMemberOnboardingSettingsData>>): UseMutationOptions<UpdateMemberOnboardingSettingsResponse, DefaultError, Options<UpdateMemberOnboardingSettingsData>> => {
   const mutationOptions: UseMutationOptions<UpdateMemberOnboardingSettingsResponse, DefaultError, Options<UpdateMemberOnboardingSettingsData>> = {

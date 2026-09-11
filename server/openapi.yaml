@@ -2509,15 +2509,16 @@ paths:
           - PRACTICE_REVIEW
           - MENTOR
       - in: query
-        name: processingLocation
+        name: dataHandlingTier
         required: false
         schema:
           type: string
-          default: UNCLASSIFIED
+          default: UNDECLARED
           enum:
-          - UNCLASSIFIED
-          - ON_PREMISES
-          - PRIVATE_CLOUD
+          - IN_HOUSE
+          - PROVIDER_NOT_KEPT
+          - PROVIDER_KEPT
+          - UNDECLARED
       responses:
         "204":
           description: Binding removed
@@ -2543,15 +2544,16 @@ paths:
           - PRACTICE_REVIEW
           - MENTOR
       - in: query
-        name: processingLocation
+        name: dataHandlingTier
         required: false
         schema:
           type: string
-          default: UNCLASSIFIED
+          default: UNDECLARED
           enum:
-          - UNCLASSIFIED
-          - ON_PREMISES
-          - PRIVATE_CLOUD
+          - IN_HOUSE
+          - PROVIDER_NOT_KEPT
+          - PROVIDER_KEPT
+          - UNDECLARED
       requestBody:
         content:
           application/json:
@@ -2567,6 +2569,9 @@ paths:
           description: Binding saved
         "404":
           description: Model not found
+        "409":
+          description: "The model is undeclared, or declared as another tier than\
+            \ this slot (problem type agent-binding-slot-mismatch, property declaredTier)"
       summary: Configure the agent for one purpose
       tags:
       - Agents
@@ -4081,7 +4086,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceOnboarding"
           description: OK
-      summary: Get first-visit guidance and your AI choice in this workspace
+      summary: Get your first-visit setup and AI choice in this workspace
       tags:
       - workspace-onboarding
   /workspaces/{workspaceSlug}/onboarding/me/ai-choice:
@@ -4135,7 +4140,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceOnboarding"
           description: OK
-      summary: Finish first-visit guidance after required account links are complete
+      summary: Finish first-visit setup after required account links are complete
       tags:
       - workspace-onboarding
   /workspaces/{workspaceSlug}/onboarding/me/dismissal:
@@ -4204,7 +4209,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceOnboardingSettings"
           description: OK
-      summary: Configure first-visit guidance and required workspace account links
+      summary: Configure first-visit setup and required workspace account links
       tags:
       - workspace-onboarding
   /workspaces/{workspaceSlug}/onboarding/settings/links:
@@ -7998,6 +8003,13 @@ components:
       properties:
         allowInternet:
           type: boolean
+        dataHandlingTier:
+          type: string
+          enum:
+          - IN_HOUSE
+          - PROVIDER_NOT_KEPT
+          - PROVIDER_KEPT
+          - UNDECLARED
         enabled:
           type: boolean
         instanceModelId:
@@ -8006,12 +8018,6 @@ components:
         maxConcurrentJobs:
           type: integer
           format: int32
-        processingLocation:
-          type: string
-          enum:
-          - UNCLASSIFIED
-          - ON_PREMISES
-          - PRIVATE_CLOUD
         purpose:
           type: string
           enum:
@@ -8027,8 +8033,8 @@ components:
           type: integer
           format: int64
       required:
+      - dataHandlingTier
       - enabled
-      - processingLocation
       - purpose
       - ready
     AgentBindingRequest:
@@ -8370,6 +8376,14 @@ components:
         connectionDisplayName:
           type: string
           description: Owning connection's display name
+        dataHandlingTier:
+          type: string
+          description: Data-handling tier derived from the admin's declared facts
+          enum:
+          - IN_HOUSE
+          - PROVIDER_NOT_KEPT
+          - PROVIDER_KEPT
+          - UNDECLARED
         displayName:
           type: string
           description: Human-readable name
@@ -8400,13 +8414,6 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
-        processingLocation:
-          type: string
-          description: Operator-declared processing location
-          enum:
-          - UNCLASSIFIED
-          - ON_PREMISES
-          - PRIVATE_CLOUD
         scope:
           type: string
           description: SHARED (instance catalog) or WORKSPACE (your own provider)
@@ -8418,10 +8425,10 @@ components:
           description: Whether the model supports a reasoning mode
       required:
       - connectionDisplayName
+      - dataHandlingTier
       - displayName
       - id
       - pricingMode
-      - processingLocation
       - scope
       - supportsReasoning
     BackfillSummary:
@@ -9229,6 +9236,11 @@ components:
           format: int32
           description: Context window in tokens
           minimum: 1
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+          maxLength: 200
+          minLength: 0
         displayName:
           type: string
           description: Human-readable name
@@ -9237,19 +9249,24 @@ components:
         enabled:
           type: boolean
           description: Whether the model is active (default false)
+        keptAfterReply:
+          type: string
+          description: What stays behind after the reply; declare both facts or neither
+          enum:
+          - NONE
+          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
           description: Maximum output tokens
           minimum: 1
-        processingLocation:
+        operatedBy:
           type: string
-          description: Operator-declared processing location; unclassified models
-            cannot serve a member's explicit location choice
+          description: Who operates the systems the work is sent to; declare both
+            facts or neither
           enum:
-          - UNCLASSIFIED
-          - ON_PREMISES
-          - PRIVATE_CLOUD
+          - OWN_ORGANISATION
+          - PROVIDER
         slug:
           type: string
           description: Optional internal slug; generated from displayName when omitted
@@ -9572,6 +9589,11 @@ components:
           format: int32
           description: Context window in tokens
           minimum: 1
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+          maxLength: 200
+          minLength: 0
         displayName:
           type: string
           description: Human-readable name
@@ -9580,11 +9602,24 @@ components:
         enabled:
           type: boolean
           description: Whether the model is active (default false)
+        keptAfterReply:
+          type: string
+          description: What stays behind after the reply; declare both facts or neither
+          enum:
+          - NONE
+          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
           description: Maximum output tokens
           minimum: 1
+        operatedBy:
+          type: string
+          description: Who operates the systems the work is sent to; declare both
+            facts or neither
+          enum:
+          - OWN_ORGANISATION
+          - PROVIDER
         per1mCacheReadUsd:
           type: number
           format: decimal
@@ -9616,14 +9651,6 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
-        processingLocation:
-          type: string
-          description: Operator-declared processing location; unclassified models
-            cannot serve a member's explicit location choice
-          enum:
-          - UNCLASSIFIED
-          - ON_PREMISES
-          - PRIVATE_CLOUD
         slug:
           type: string
           description: Optional internal slug; generated from displayName when omitted
@@ -11059,6 +11086,18 @@ components:
         currentPrice:
           $ref: "#/components/schemas/LlmModelPrice"
           description: Current price; null if none has ever been set
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+        dataHandlingTier:
+          type: string
+          description: Data-handling tier derived from the two facts; UNDECLARED until
+            both are set
+          enum:
+          - IN_HOUSE
+          - PROVIDER_NOT_KEPT
+          - PROVIDER_KEPT
+          - UNDECLARED
         displayName:
           type: string
           description: Human-readable name
@@ -11076,17 +11115,22 @@ components:
           type: integer
           format: int64
           description: Model id
+        keptAfterReply:
+          type: string
+          description: What stays behind after the reply; null until declared
+          enum:
+          - NONE
+          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
           description: Maximum output tokens
-        processingLocation:
+        operatedBy:
           type: string
-          description: Operator-declared processing location
+          description: Who operates the systems the work is sent to; null until declared
           enum:
-          - UNCLASSIFIED
-          - ON_PREMISES
-          - PRIVATE_CLOUD
+          - OWN_ORGANISATION
+          - PROVIDER
         slug:
           type: string
           description: Unique slug within the connection
@@ -11110,11 +11154,11 @@ components:
       - connectionDisplayName
       - connectionId
       - createdAt
+      - dataHandlingTier
       - displayName
       - enabled
       - grantedWorkspaceIds
       - id
-      - processingLocation
       - slug
       - supportsReasoning
       - upstreamModelId
@@ -11325,8 +11369,9 @@ components:
           type: string
           enum:
           - NO_AI
-          - ON_PREMISES
-          - PRIVATE_CLOUD
+          - IN_HOUSE_ONLY
+          - NOT_KEPT_ONLY
+          - ANY_DECLARED
       required:
       - choice
     ObservationDetail:
@@ -15828,6 +15873,11 @@ components:
           format: int32
           description: Context window in tokens
           minimum: 1
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+          maxLength: 200
+          minLength: 0
         displayName:
           type: string
           description: Human-readable name
@@ -15836,19 +15886,24 @@ components:
         enabled:
           type: boolean
           description: Active toggle (off = existing settings stop working)
+        keptAfterReply:
+          type: string
+          description: What stays behind after the reply; declare both facts or neither
+          enum:
+          - NONE
+          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
           description: Maximum output tokens
           minimum: 1
-        processingLocation:
+        operatedBy:
           type: string
-          description: Operator-declared processing location; unclassified models
-            cannot serve a member's explicit location choice
+          description: Who operates the systems the work is sent to; declare both
+            facts or neither
           enum:
-          - UNCLASSIFIED
-          - ON_PREMISES
-          - PRIVATE_CLOUD
+          - OWN_ORGANISATION
+          - PROVIDER
         supportsReasoning:
           type: boolean
           description: Whether the model supports a reasoning mode
@@ -16224,6 +16279,11 @@ components:
           format: int32
           description: Context window in tokens
           minimum: 1
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+          maxLength: 200
+          minLength: 0
         displayName:
           type: string
           description: Human-readable name
@@ -16232,11 +16292,24 @@ components:
         enabled:
           type: boolean
           description: Active toggle
+        keptAfterReply:
+          type: string
+          description: What stays behind after the reply; declare both facts or neither
+          enum:
+          - NONE
+          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
           description: Maximum output tokens
           minimum: 1
+        operatedBy:
+          type: string
+          description: Who operates the systems the work is sent to; declare both
+            facts or neither
+          enum:
+          - OWN_ORGANISATION
+          - PROVIDER
         per1mCacheReadUsd:
           type: number
           format: decimal
@@ -16267,14 +16340,6 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
-        processingLocation:
-          type: string
-          description: Operator-declared processing location; unclassified models
-            cannot serve a member's explicit location choice
-          enum:
-          - UNCLASSIFIED
-          - ON_PREMISES
-          - PRIVATE_CLOUD
         supportsReasoning:
           type: boolean
           description: Whether the model supports a reasoning mode
@@ -16559,8 +16624,9 @@ components:
           type: string
           enum:
           - NO_AI
-          - ON_PREMISES
-          - PRIVATE_CLOUD
+          - IN_HOUSE_ONLY
+          - NOT_KEPT_ONLY
+          - ANY_DECLARED
         mentorReady:
           type: boolean
         practiceReviewsReady:
@@ -16708,6 +16774,18 @@ components:
         currency:
           type: string
           description: Currency code
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+        dataHandlingTier:
+          type: string
+          description: Data-handling tier derived from the two facts; UNDECLARED until
+            both are set
+          enum:
+          - IN_HOUSE
+          - PROVIDER_NOT_KEPT
+          - PROVIDER_KEPT
+          - UNDECLARED
         displayName:
           type: string
           description: Human-readable name
@@ -16718,10 +16796,22 @@ components:
           type: integer
           format: int64
           description: Model id
+        keptAfterReply:
+          type: string
+          description: What stays behind after the reply; null until declared
+          enum:
+          - NONE
+          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
           description: Maximum output tokens
+        operatedBy:
+          type: string
+          description: Who operates the systems the work is sent to; null until declared
+          enum:
+          - OWN_ORGANISATION
+          - PROVIDER
         per1mCacheReadUsd:
           type: number
           format: decimal
@@ -16748,13 +16838,6 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
-        processingLocation:
-          type: string
-          description: Operator-declared processing location
-          enum:
-          - UNCLASSIFIED
-          - ON_PREMISES
-          - PRIVATE_CLOUD
         slug:
           type: string
           description: Unique slug within the workspace
@@ -16773,11 +16856,11 @@ components:
       - connectionId
       - createdAt
       - currency
+      - dataHandlingTier
       - displayName
       - enabled
       - id
       - pricingMode
-      - processingLocation
       - slug
       - supportsReasoning
       - upstreamModelId
@@ -16941,8 +17024,9 @@ components:
           type: string
           enum:
           - NO_AI
-          - ON_PREMISES
-          - PRIVATE_CLOUD
+          - IN_HOUSE_ONLY
+          - NOT_KEPT_ONLY
+          - ANY_DECLARED
         aiChoiceRequired:
           type: boolean
         aiOptions:
@@ -16962,8 +17046,6 @@ components:
         revision:
           type: integer
           format: int64
-        welcomeMarkdown:
-          type: string
         workspaceName:
           type: string
       required:
@@ -16974,7 +17056,6 @@ components:
       - links
       - needsWelcome
       - revision
-      - welcomeMarkdown
       - workspaceName
     WorkspaceOnboardingLink:
       type: object
@@ -17005,7 +17086,12 @@ components:
       - required
     WorkspaceOnboardingSettings:
       type: object
+      description: |-
+        <code>aiChoiceRequired</code> is read on GET and ignored on PUT: the server latches it the first time
+         the setup page is enabled and never clears it.
       properties:
+        aiChoiceRequired:
+          type: boolean
         enabled:
           type: boolean
         requiredConnectionIds:
@@ -17019,15 +17105,11 @@ components:
         revision:
           type: integer
           format: int64
-        welcomeMarkdown:
-          type: string
-          maxLength: 20000
-          minLength: 0
       required:
+      - aiChoiceRequired
       - enabled
       - requiredConnectionIds
       - revision
-      - welcomeMarkdown
     WorkspaceProviders:
       type: object
       description: Available workspace creation providers and their configuration

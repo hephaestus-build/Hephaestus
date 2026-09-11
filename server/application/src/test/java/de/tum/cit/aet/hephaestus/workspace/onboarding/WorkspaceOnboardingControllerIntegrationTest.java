@@ -118,7 +118,7 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
                 .uri("/workspaces/{slug}/onboarding/settings", workspace.getWorkspaceSlug())
                 .headers(headers -> headers.setBearerAuth(MEMBER))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new WorkspaceOnboardingSettingsDTO(true, 0, "Welcome", List.of()))
+                .bodyValue(new WorkspaceOnboardingSettingsDTO(true, false, 0, List.of()))
                 .exchange()
                 .expectStatus()
                 .isForbidden()
@@ -127,20 +127,52 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
     }
 
     @Test
-    void shouldEnforceExplicitChoicesAfterWelcomeIsEnabledAndAfterItIsHidden() {
+    void shouldLetAWorkspaceAdminReadButNotChangeTheSettings() {
+        var admin = persistUser("testuser");
+        var workspace = createWorkspace(
+                "onboarding-admin-reads",
+                "Engineering",
+                "onboarding-admin-reads",
+                AccountType.ORG,
+                persistUser("owner-onboarding-admin-reads"));
+        ensureOwnerMembership(workspace);
+        ensureWorkspaceMembership(workspace, admin, WorkspaceMembership.WorkspaceRole.ADMIN);
+        client.get()
+                .uri("/workspaces/{slug}/onboarding/settings", workspace.getWorkspaceSlug())
+                .headers(headers -> headers.setBearerAuth(MEMBER))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.enabled")
+                .isEqualTo(false);
+        client.put()
+                .uri("/workspaces/{slug}/onboarding/settings", workspace.getWorkspaceSlug())
+                .headers(headers -> headers.setBearerAuth(MEMBER))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new WorkspaceOnboardingSettingsDTO(true, false, 0, List.of()))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    void shouldEnforceExplicitChoicesAfterSetupIsEnabledAndAfterItIsHidden() {
         var user = persistUser("testuser");
         var workspace = workspace("onboarding-policy", user);
         var policy = Objects.requireNonNull(client.put()
                 .uri("/workspaces/{slug}/onboarding/settings", workspace.getWorkspaceSlug())
                 .headers(headers -> headers.setBearerAuth(OWNER))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new WorkspaceOnboardingSettingsDTO(true, 0, "Welcome", List.of()))
+                .bodyValue(new WorkspaceOnboardingSettingsDTO(true, false, 0, List.of()))
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectBody(WorkspaceOnboardingSettingsDTO.class)
                 .returnResult()
                 .getResponseBody());
+        assertThat(policy.aiChoiceRequired()).isTrue();
         assertThat(preferences.forDeveloper(workspace.getId(), user.getId()).permitsAi())
                 .isFalse();
         client.get()
@@ -158,17 +190,28 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
                 .uri("/workspaces/{slug}/onboarding/settings", workspace.getWorkspaceSlug())
                 .headers(headers -> headers.setBearerAuth(OWNER))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new WorkspaceOnboardingSettingsDTO(false, policy.revision(), "", List.of()))
+                .bodyValue(new WorkspaceOnboardingSettingsDTO(false, false, policy.revision(), List.of()))
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectBody(Void.class);
         assertThat(preferences.forDeveloper(workspace.getId(), user.getId()).permitsAi())
                 .isFalse();
+        client.get()
+                .uri("/workspaces/{slug}/onboarding/settings", workspace.getWorkspaceSlug())
+                .headers(headers -> headers.setBearerAuth(OWNER))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.enabled")
+                .isEqualTo(false)
+                .jsonPath("$.aiChoiceRequired")
+                .isEqualTo(true);
     }
 
     @Test
-    void shouldPreserveLegacyAiPermissionsWhenDismissingPreferencesWithoutAnEnabledWelcome() {
+    void shouldPreserveLegacyAiPermissionsWhenDismissingWithoutAnEnabledSetupPage() {
         var user = persistUser("testuser");
         var workspace = workspace("onboarding-legacy-dismiss", user);
         assertThat(preferences.forDeveloper(workspace.getId(), user.getId()).permitsAi())

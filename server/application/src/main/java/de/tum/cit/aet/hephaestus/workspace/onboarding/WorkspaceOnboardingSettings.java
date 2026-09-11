@@ -9,7 +9,7 @@ import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/** Optional first-visit guidance; it never creates or revokes membership. */
+/** Optional first-visit setup; it never creates or revokes membership. */
 @Entity
 @Table(name = "workspace_onboarding_settings")
 @Getter
@@ -31,13 +31,10 @@ class WorkspaceOnboardingSettings {
     @Column(nullable = false)
     private boolean enabled = false;
 
-    @Column(name = "welcome_markdown", nullable = false, columnDefinition = "text")
-    private String welcomeMarkdown = "";
-
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "required_connection_ids", nullable = false, columnDefinition = "jsonb")
     private List<Long> requiredConnectionIds = List.of();
-    /** Once enabled, hiding the welcome flow never silently restores unrestricted AI processing. */
+    /** Once enabled, hiding the setup page never silently restores unrestricted AI processing. */
     @ColumnDefault("false")
     @Column(name = "ai_choice_required", nullable = false)
     private boolean aiChoiceRequired = false;

@@ -10,7 +10,6 @@ public record WorkspaceOnboardingDTO(
         @NonNull boolean enabled,
         @NonNull boolean needsWelcome,
         @NonNull long revision,
-        @NonNull String welcomeMarkdown,
         @NonNull boolean aiChoiceRequired,
         @Nullable MemberAiChoice aiChoice,
         @NonNull boolean completed,

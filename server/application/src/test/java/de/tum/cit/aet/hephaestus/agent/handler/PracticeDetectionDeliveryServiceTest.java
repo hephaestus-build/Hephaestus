@@ -312,7 +312,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 .isInstanceOfSatisfying(
                         ObservationsRefusedException.class,
                         refused -> assertThat(refused.reasonCode()).isEqualTo("member_ai_declined"))
-                .hasMessageContaining("AI preference");
+                .hasMessageContaining("AI choice");
         verifyNoInteractions(observationRepository, eventPublisher);
     }
 

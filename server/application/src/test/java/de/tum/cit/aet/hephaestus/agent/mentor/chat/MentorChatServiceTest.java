@@ -437,7 +437,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertThat(emitter.recordedTypes()).contains("error");
         assertThat(String.join("\n", emitter.rawData))
                 .contains(
-                        "Your AI preference or this workspace’s model settings do not currently allow conversations with Heph. Review Workspace preferences or ask a workspace owner to check the model assignment.")
+                        "Heph isn't set up for your AI choice in this workspace yet. Ask a workspace owner, or change your choice under Your AI choice in the sidebar.")
                 .doesNotContain("workspace " + WORKSPACE_ID);
         try {
             verify(interactiveSandboxService, never()).attach(any());

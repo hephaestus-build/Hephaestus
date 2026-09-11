@@ -213,10 +213,10 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 connection, "model-" + System.nanoTime(), "catalog-model", ModelVisibility.PUBLIC, modelEnabled));
         // A workspace binds one model per purpose, so a second job re-points the binding it already has.
         WorkspaceAgentBinding binding = agentBindingRepository
-                .findByWorkspaceIdAndPurposeAndProcessingLocation(
+                .findByWorkspaceIdAndPurposeAndDataHandlingTier(
                         workspace.getId(),
                         AgentPurpose.PRACTICE_REVIEW,
-                        de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation.UNCLASSIFIED)
+                        de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier.UNDECLARED)
                 .orElseGet(WorkspaceAgentBinding::new);
         binding.setWorkspace(workspace);
         binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);

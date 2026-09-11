@@ -2,11 +2,11 @@ package de.tum.cit.aet.hephaestus.agent.config;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmProcessingLocation;
 import de.tum.cit.aet.hephaestus.agent.catalog.ModelBindingSource;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
@@ -45,7 +45,8 @@ public record ConfigSnapshot(
         int timeoutSeconds,
         boolean allowInternet,
         @Nullable LlmPriceSnapshot priceSnapshot,
-        @Nullable LlmProcessingLocation processingLocation) {
+        // The slot the job was routed to; null in older rows reads as UNDECLARED.
+        @Nullable DataHandlingTier dataHandlingTier) {
     /**
      * Bump only for a reshape (field removal, type change, semantic reinterpretation). Adding a
      * nullable field is compatible both ways and needs no bump.
@@ -88,7 +89,7 @@ public record ConfigSnapshot(
                 source.getTimeoutSeconds(),
                 source.isAllowInternet(),
                 null,
-                source.getProcessingLocation());
+                source.getDataHandlingTier());
     }
 
     public ConfigSnapshot withPriceSnapshot(@Nullable LlmPriceSnapshot price) {
@@ -108,7 +109,7 @@ public record ConfigSnapshot(
                 timeoutSeconds,
                 allowInternet,
                 price,
-                processingLocation);
+                dataHandlingTier);
     }
 
     public JsonNode toJson(ObjectMapper objectMapper) {
@@ -177,6 +178,6 @@ public record ConfigSnapshot(
                 timeoutSeconds,
                 allowInternet,
                 null,
-                LlmProcessingLocation.UNCLASSIFIED);
+                DataHandlingTier.UNDECLARED);
     }
 }

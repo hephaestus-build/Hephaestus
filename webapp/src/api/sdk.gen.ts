@@ -1534,7 +1534,7 @@ export const updateNotifications = <ThrowOnError extends boolean = false>(option
 });
 
 /**
- * Get first-visit guidance and your AI choice in this workspace
+ * Get your first-visit setup and AI choice in this workspace
  */
 export const getMemberOnboarding = <ThrowOnError extends boolean = false>(options: Options<GetMemberOnboardingData, ThrowOnError>): RequestResult<GetMemberOnboardingResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetMemberOnboardingResponses, unknown, ThrowOnError>({
   security: [{ scheme: 'bearer', type: 'http' }],
@@ -1556,7 +1556,7 @@ export const updateMemberAiChoice = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * Finish first-visit guidance after required account links are complete
+ * Finish first-visit setup after required account links are complete
  */
 export const completeMemberOnboarding = <ThrowOnError extends boolean = false>(options: Options<CompleteMemberOnboardingData, ThrowOnError>): RequestResult<CompleteMemberOnboardingResponses, unknown, ThrowOnError> => (options.client ?? client).put<CompleteMemberOnboardingResponses, unknown, ThrowOnError>({
   security: [{ scheme: 'bearer', type: 'http' }],
@@ -1587,7 +1587,7 @@ export const getMemberOnboardingSettings = <ThrowOnError extends boolean = false
 });
 
 /**
- * Configure first-visit guidance and required workspace account links
+ * Configure first-visit setup and required workspace account links
  */
 export const updateMemberOnboardingSettings = <ThrowOnError extends boolean = false>(options: Options<UpdateMemberOnboardingSettingsData, ThrowOnError>): RequestResult<UpdateMemberOnboardingSettingsResponses, unknown, ThrowOnError> => (options.client ?? client).put<UpdateMemberOnboardingSettingsResponses, unknown, ThrowOnError>({
   security: [{ scheme: 'bearer', type: 'http' }],
