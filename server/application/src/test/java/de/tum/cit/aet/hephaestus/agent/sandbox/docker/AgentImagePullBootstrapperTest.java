@@ -38,8 +38,8 @@ class AgentImagePullBootstrapperTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"default,true,true", "specs,true,false", "default,false,false"})
-    void shouldOnlyBootstrapImagesForWorkersOutsideSpecGeneration(
+    @CsvSource({"default,true,true", "specs,true,false", "cds-training,true,false", "default,false,false"})
+    void shouldOnlyBootstrapImagesForWorkersOutsideArtifactGeneration(
             String profile, boolean workerEnabled, boolean expected) {
         new ApplicationContextRunner()
                 .withPropertyValues(

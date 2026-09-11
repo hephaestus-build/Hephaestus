@@ -1,5 +1,5 @@
 name: "Setup toolchain"
-description: "The Node.js version package.json pins and, for a frozen install, its pnpm and Vite+ pins with the pnpm executable and the pnpm store cached; install is none or frozen."
+description: "The Node.js version package.json pins and, for a frozen install, its pnpm and Vite+ pins with the executable, package store and native lockfile-verification verdict cached; install is none or frozen."
 inputs:
   install:
     description: "none: the Node.js runtime alone, for dependency-free Node scripts or shell; frozen: pnpm and Vite+ as well, then pnpm install --frozen-lockfile --ignore-scripts. No lifecycle script runs in CI, so pnpm-workspace.yaml#allowBuilds is exercised only by a contributor's install."
@@ -102,7 +102,45 @@ runs:
         node-manager: false
         cache: false
         run-install: false
+    # setup-node caches package bytes, not pnpm's content-and-policy-validated verification record.
+    # Without the latter, even a fully warm store repeats registry metadata checks on every runner.
+    - name: Locate pnpm verification cache
+      id: pnpm-verification-path
+      if: inputs.install == 'frozen'
+      shell: bash
+      run: |
+        cache_dir="$(pnpm cache path)"
+        echo "path=$(node -p 'require("node:path").join(process.argv[1], "lockfile-verified.jsonl")' "$cache_dir")" >> "$GITHUB_OUTPUT"
+    - name: Restore pnpm verification cache
+      id: pnpm-verification-cache
+      if: inputs.install == 'frozen'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.pnpm-verification-path.outputs.path }}
+        key: pnpm-verification-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.pnpm.outputs.version }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}
     # pnpm/setup cannot pass --ignore-scripts, so the install is its own step.
-    - if: inputs.install == 'frozen'
+    - name: Install dependencies
+      id: pnpm-install
+      if: inputs.install == 'frozen'
       shell: bash
       run: pnpm install --frozen-lockfile --ignore-scripts
+    - name: Verify pnpm verification cache
+      if: inputs.install == 'frozen'
+      shell: bash
+      env:
+        PNPM_VERIFICATION_CACHE: ${{ steps.pnpm-verification-path.outputs.path }}
+      run: |
+        node -e 'if (!require("node:fs").statSync(process.argv[1]).isFile()) process.exit(1)' "$PNPM_VERIFICATION_CACHE"
+        echo "Verified native cache file: $PNPM_VERIFICATION_CACHE"
+    # Only a successful default-branch push install publishes a reusable policy verdict.
+    # pnpm itself checks the lockfile content and policy again before accepting a restored record.
+    - name: Save pnpm verification cache
+      if: >-
+        inputs.install == 'frozen' && steps.pnpm-install.outcome == 'success' &&
+        steps.pnpm-verification-cache.outputs.cache-hit != 'true' &&
+        github.event_name == 'push' &&
+        github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.pnpm-verification-path.outputs.path }}
+        key: pnpm-verification-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.pnpm.outputs.version }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}

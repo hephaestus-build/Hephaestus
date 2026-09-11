@@ -115,7 +115,7 @@ class CredentialReaderIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 IntegrationKind.GITHUB,
                 instanceKey,
                 new ConnectionConfig.GitHubAppConfig(100L, null, null, Set.of())));
-        connection.setCredentials(TOKEN, new CredentialBundleConverter(OTHER_KEY, "test"));
+        connection.setCredentials(TOKEN, new CredentialBundleConverter(OTHER_KEY, false));
         return connectionRepository.saveAndFlush(connection);
     }
 }

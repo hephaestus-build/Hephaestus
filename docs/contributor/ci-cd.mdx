@@ -205,6 +205,16 @@ The first Trivy pass is the code-scanning feed: SARIF output reports every sever
 and it keeps Trivy's secret scanner,
 which covers the whole tree where TruffleHog covers a pull request's own commits.
 
+TruffleHog has two independent pins in `ci-security-scan.yml`: the action commit selects its
+wrapper, while the supported `image` and `version` inputs select the scanner container by tag and
+digest. The wrapper otherwise defaults to a mutable scanner tag even when its action is pinned.
+Renovate tracks the wrapper through its GitHub Actions manager and the scanner through a Docker
+custom manager; their versions need not move together. When reviewing a wrapper update, verify its
+[`image` and `version` input contract](https://github.com/trufflesecurity/trufflehog/blob/363923b901c911a9164f50b6c423f47c15372b1c/action.yml):
+the resulting Docker reference must retain the digest, and scanner failure must still fail the step.
+The event's immutable base/head commit range, verified-secret policy, and scan-error failure policy
+apply to either update.
+
 Renovate groups routine Gradle updates as server dependencies and webapp development updates
 separately. Webapp production dependencies remain separate unless Renovate identifies a package
 family that must move together.
@@ -258,12 +268,17 @@ CI calls that reusable workflow, and `CI Status Gate` waits for its successful c
 SARIF upload. A merge group therefore cannot pass the gate and lose its temporary ref while CodeQL
 is still publishing results. The weekly scan also runs directly from the same workflow.
 
-Java uses manual extraction with the JDK pinned in `.java-version` and a clean, uncached
-`:application:testClasses` compilation. This gives CodeQL the real dependencies, generated clients
-and annotation-processed source instead of no-build dependency and JDK guesses. The single-use Gradle
-process runs inside the extractor; neither cached classes nor a pre-existing daemon can bypass it.
-This compilation produces analysis inputs only: the packaged server remains owned by the build-once
-job. Actions and JavaScript/TypeScript retain no-build analysis.
+Java uses manual extraction with the JDK pinned in `.java-version` and a clean
+`:application:testClasses` compilation with build and configuration caches disabled. The shared
+`setup-caches` action restores Gradle dependencies read-only from the default-branch package
+producer through the Gradle action's OS-wide fallback; analysis never publishes a cache. The
+package job is the only writer, and a missing or expired entry falls back to a cold build.
+This gives CodeQL the real dependencies, generated clients and annotation-processed source instead
+of no-build dependency and JDK guesses. The single-use Gradle process runs inside the extractor;
+neither cached classes nor a pre-existing daemon can bypass project compilation. Gradle's own
+generated version-catalog helpers, outside the project source tree, need not be recompiled or
+extracted on a cache hit. This compilation produces analysis inputs only: the packaged server
+remains owned by the build-once job. Actions and JavaScript/TypeScript retain no-build analysis.
 
 `.github/workflows/codeql.yml` runs CodeQL under advanced setup: only advanced setup reads a
 committed config file, and `.github/codeql/codeql-config.yml` excludes `security/semgrep/**`,
@@ -276,7 +291,7 @@ advanced → Disable CodeQL**, not something a workflow file can do.
 ### Scorecard baseline
 
 `security/scorecard-baseline.json` owns the minimum every enforced Scorecard check must hold, the
-four exclusions with their reasons, and what each enforced check is scored over. Checks are compared
+exclusions with their reasons, and what each enforced check is scored over. Checks are compared
 one at a time, so an improvement cannot offset a regression, and a check the baseline does not name
 is not enforced. Lowering a minimum also edits the map in `scripts/check-scorecard.test.ts`, so the
 change is visible in the pull request that makes it.
@@ -307,6 +322,53 @@ It is a workflow of its own because
 [OpenSSF restricts the publishing job](https://github.com/ossf/scorecard-action#workflow-restrictions)
 to allowlisted actions. Reproduce it with `node scripts/check-scorecard.ts`, or
 `node --test scripts/check-scorecard.test.ts` without network access.
+
+#### Gradle dependency inventory and the Vulnerabilities exclusion
+
+Scorecard's `Vulnerabilities` check does not read the dependency graph submitted to GitHub or
+Dependabot's alerts. The [pinned action's dependencies](https://github.com/ossf/scorecard-action/blob/2d1146689b8cda280b9bc96326124645441f03bc/go.mod)
+select Scorecard 5.5.0 and OSV Scanner 2.3.2. [Scorecard's OSV client](https://github.com/ossf/scorecard/blob/v5.5.0/clients/osv.go)
+scans the checkout recursively and queries its Git commit. The
+[Gradle verification-metadata extractor](https://github.com/google/osv-scalibr/blob/cf20290d7624/extractor/filesystem/language/java/gradleverificationmetadataxml/gradleverificationmetadataxml.go)
+turns every component's group, name and version in `server/gradle/verification-metadata.xml` into a
+package, ignoring its artifact entries and whether Gradle selected that version.
+
+That file is a checksum allowlist, not a resolved dependency graph. Gradle can need an older
+version's POM or module descriptor while selecting a patched JAR; metadata generation also retains
+previously trusted artifacts. For example, resolution reads Jackson 2.15.3 module descriptors and
+the Commons Lang 3.16.0 POM even though the lockfile selects patched versions: their verification
+entries contain only `.module` or `.pom` artifacts, not JARs. Removing their checksums to quiet OSV
+would break fresh dependency verification, not fix a dependency. Pruning obsolete JAR hashes alone
+would still leave these descriptor-only entries in OSV's inventory.
+
+Reproduce the distinction for the Gradle sources from the repository root with the
+[OSV Scanner release used by the action](https://github.com/google/osv-scanner/releases/tag/v2.3.2):
+
+```sh
+osv-scanner scan source --format json --all-packages \
+  --lockfile server/application/gradle.lockfile \
+  --lockfile server/generated-clients/gradle.lockfile \
+  --lockfile server/gradle/verification-metadata.xml
+```
+
+Each result names its `source.path`, package coordinates and version, and any advisory's affected
+ranges. `--all-packages` also includes the patched lockfile entries, so compare the same package
+across sources rather than treating every reported version as selected. Exit 1 means vulnerabilities
+were reported; an extraction or network error is not a clean assessment. The advisories investigated
+in [#2078](https://github.com/hephaestus-build/Hephaestus/issues/2078) all came from verification
+metadata, not either resolved lockfile. The script classpath is separate: those lockfiles do not
+cover the GraphQL and OpenAPI build plugins. `server/build.gradle.kts` forces their GraphQL Java and
+Handlebars dependencies to patched versions; check `./server/gradlew -p server buildEnvironment`
+when diagnosing those packages rather than inferring their absence from an application lockfile.
+Re-run the checks when the action or dependencies change; the recorded observation is not an
+exemption for a new advisory against a resolved package.
+
+This inventory limitation justifies excluding the Scorecard `Vulnerabilities` check, not relaxing
+other gates. The baseline records that reason; its other exclusions have separate policy reasons.
+The [dependency vulnerability gate](#security-and-supply-chain-controls) and release image policy remain
+enforced. Restore the check when its input distinguishes verified descriptors and historical hashes
+from selected dependencies; do not alter dependency submission or disable checksum verification to
+change its score.
 
 ## Environments
 
@@ -442,6 +504,7 @@ why the label is the authority, and which alternatives were priced and declined,
 | `pull-request.yml` | PR opened, edited, synchronized, reopened, ready for review | Validates the title against the policy `commitlint.config.ts` exports, without installing the workspace, checks that every commit resolves to the pull request's author, and assigns the author when the pull request opens |
 | `ci-quality-gates.yml` | Called by cicd.yml | Selects quality legs, clean-install verification and story tests |
 | `ci-quality-leg.yml` | Called by ci-quality-gates.yml | Shared formatting, lint, type-check and unit-test execution for each selected task-graph leg |
+| `cache-toolchain.yml` | Main push changing install inputs or setup | Seeds trusted Linux and Windows install caches without repeating quality gates |
 | `ci-build.yml` | Called by cicd.yml | Runs the OpenAPI, schema, database and browser E2E gates against the server artifact packaged by cicd.yml |
 | `ci-tests.yml` | Called by cicd.yml | The server unit, architecture and integration suites, compiled from source |
 | `ci-docker-build.yml` | Called by cicd.yml | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images |
@@ -494,13 +557,30 @@ credential is still `GITHUB_TOKEN`, so these commits start no further workflow r
 | `restore-server-build` | Downloads and validates the packaged JARs, compiled tests and resources; outputs the executable JAR path without recompiling or installing local artifacts |
 | `setup-browsers` | Restores the exact Playwright browser version and installs Chromium system dependencies |
 | `setup-release-security-tools` | Installs Cosign, Trivy, and optionally Syft for release-evidence jobs |
-| `download-trivy-db` | Fetches the vulnerability database with retries and a mirror fallback; optionally refuses one over `max-age-hours` old and records its metadata |
+| `download-trivy-db` | Downloads with retries and mirror fallback, or restores the CI run's immutable advisory artifact; checks freshness at consumption and records metadata as requested — [database identity](./vulnerability-remediation.mdx#advisory-database-identity) owns the rerun contract |
 | `ghcr-login` | Authenticates Docker to GHCR |
 
 Browser jobs install Playwright's system dependencies using the runner's Ubuntu package sources,
 with APT configuration scoped to that installation process. Unrelated vendor repositories do not
 participate; repository signatures and package hashes remain enforced. The pinned Playwright CLI
 then installs Chromium as the runner user so the browser cache retains its normal ownership.
+
+Repository-local actions require checkout first. Jobs without checkout use the external SHA-pinned
+action directly rather than checking out the repository only to reach a wrapper. The reusable
+image builder also uses the external login action because its registry is a caller input, whereas
+`ghcr-login` intentionally authenticates only to GHCR. Browser E2E boots the packaged JAR without
+Gradle, so it sets up Java directly; OpenAPI autocommit builds the JAR and uses `setup-caches`.
+Preview controllers keep their trusted sparse bootstrap checkouts explicit: a repository-local
+action is unavailable before checkout. Their inventory job uses `github-script`'s bundled Node;
+controller jobs that invoke Node scripts use `setup-toolchain` without a package install.
+
+Image verification stays beside publishing. The single-platform step signs and verifies one image;
+the merge job signs recursively, then verifies the index; the alias job verifies each immutable
+subject before moving its tags. Merge and alias jobs need no checkout or repository toolchain just
+to verify registry evidence. `scripts/ci-provenance.test.ts` executes all three shell paths and pins
+the same repository/workflow signature identity, GitHub OIDC issuer and owner-constrained
+attestation verification, including rejection before alias publication. Signing remains in
+`reusable-docker-build.yml`, so a refactor cannot silently change the certificate identity.
 
 ### Caches
 
@@ -510,6 +590,25 @@ published only by the server package job on trusted default-branch push, schedul
 Other jobs are read-only consumers: the Gradle action prefers an older same-job cache over a newer
 producer cache, so consumers must not publish snapshots that become stale between their main-branch runs.
 The pnpm executable cache also saves only from `main`. The JDK is pinned once, in `.java-version`.
+
+The package store and pnpm's lockfile-verification cache are separate. `setup-toolchain` also restores
+`lockfile-verified.jsonl` from the directory reported by `pnpm cache path`; without it, a warm store
+still needs registry metadata for release-age and resolution checks. Only successful default-branch
+push installs publish this record, keyed by platform, pnpm
+version, lockfile, workspace policy and any repository `.npmrc`. pnpm's [native verification cache](https://github.com/pnpm/pnpm/blob/v12.3.4/pnpm/crates/lockfile-verification/src/cache.rs)
+validates the content and policy before reusing a verdict. The frozen install still runs with scripts
+disabled and package integrity checks intact; a miss performs normal verification, not an offline
+fallback. The action verifies the native cache file exists on each runner, including Windows; a
+changed upstream cache contract must be reviewed rather than silently losing reuse. Registry
+metadata itself is not cached by this action. A dependency update is cold under its new key; only
+later runs with the same inputs can reuse the default branch's verdict.
+
+`cache-toolchain.yml` performs a frozen install on Linux and Windows after a main-branch push changes
+these inputs or the setup workflow/action. Ordinary main CI skips quality legs, so this dedicated
+producer keeps both platforms warm without duplicating their gates. It is separate from release
+validation: a failed or expired cache is a normal cold install, not a reason to block a release.
+Rerunning the original main-push cache workflow can replenish an expired entry; manual dispatch and
+pull requests cannot publish verification verdicts.
 
 Java quality verdicts are not stored in the Vite task cache: Gradle owns their task inputs and outputs.
 GraphQL generation opts into Gradle's build cache using the plugin's declared inputs and outputs.
@@ -525,16 +624,16 @@ exact-match cache cannot refresh build outputs after source-only changes. Config
 reuse remains within a job: no encryption key is configured, so the
 action does not persist configuration-cache entries across jobs.
 
-Repository-local actions require checkout first. Jobs without checkout use the external SHA-pinned
-action directly rather than checking out the repository only to reach a wrapper.
-
 ## Path filters
 
 `detect-changes` in `cicd.yml` selects legs from the changed paths on the two events that are a
 diff: a pull request against its base, and a merge group against `merge_group.base_sha..head_sha`. A
-push to `main` and a dispatch validate a whole commit and run every leg, which `detect-changes`
-publishes as `unfiltered`. Same-repository pull requests also run `Build` and `Docker` regardless of
-paths, because previews need every image at the head SHA; no other event has a preview.
+push to `main` and a dispatch publish `unfiltered` selection flags rather than filtering a diff.
+Selection does not override the outer event guards: ordinary main pushes omit Quality, Test,
+Security, Actionlint, Zizmor and Compose, and skip the API/schema/database/browser jobs inside
+`Build`; release-version pushes repeat those checks. Main still packages and publishes images and
+runs CodeQL. Same-repository pull requests also run `Build` and `Docker` regardless of paths, because
+previews need every image at the head SHA; no other event has a preview.
 
 | Selects | Paths |
 | --- | --- |
@@ -574,6 +673,12 @@ When release preflight is required, it owns image vulnerability scanning for bot
 the image-build workflows omit their duplicate amd64 scans. Other published builds retain those
 scans. The final gate rejects a required preflight that is skipped, cancelled or unsuccessful.
 
+The build scan resolves its immutable image reference through
+`scripts/resolve-image-scan-subject.ts`, using the same platform resolver in `scripts/lib/image-scan.ts` as scheduled rescans. An index must
+contain the requested platform; a missing platform or malformed index fails instead of falling back
+to whichever architecture the scanner's host would choose. A single manifest is resolved through
+that same immutable reference.
+
 ## Image identity
 
 Every consumer resolves an image through the commit the run built it from, and
@@ -595,6 +700,11 @@ browser checks boot that executable JAR; buildpacks consume it without another b
 and database contract tests use the restored classes with `-PpackagedServer=true`, which bypasses
 compilation. Unit, architecture and integration suites compile from source in `Test` without
 waiting for packaging; their outputs do not ship.
+
+API and ERD drift checks use `scripts/assert-generated-clean.ts` against their own generated paths.
+It includes added, modified, deleted and staged files without staging anything or refreshing the Git
+index. Unrelated changes cannot contaminate either verdict. The API and schema steps still report
+independently, and a failure in either fails the artifact gate.
 
 The application image and `Build` artifact gates depend on packaging independently. Host smoke
 and release preflight wait for the image producers, not the API, database or browser checks. The
@@ -639,18 +749,28 @@ reaches no such commit builds every image itself. `detect-changes` resolves that
   validation. Either survivor must pass release preflight; the merge queue separately validates
   the final merge tree. Ordinary PRs, forks, main pushes and merge groups retain separate lanes.
 - A run on `main` that leaves a per-commit record — `codeql.yml`, `semgrep.yml`, `scorecard.yml`,
-  `scorecard-ratchet.yml` — is never cancelled, because it is the only run that commit will get and
-  its absence is what a later score reads as a gap. Those workflows write
+  `scorecard-ratchet.yml` — does not cancel an in-progress predecessor when another commit arrives;
+  a missing record can become a gap in a later score. Those workflows write
   `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}`, and `scripts/ci-contract.test.ts`
   holds every `main` push to it; a workflow whose newest run simply replaces the last, such as the
-  docs deploy, is named there as the exception.
+  docs deploy, is named there as the exception. GitHub can still replace a **pending** run in the
+  same [concurrency group](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency):
+  `cancel-in-progress: false` protects running work, not every queued commit. Post-merge verification
+  must use the actual completed run for the converged main head, not infer success from this setting.
+  GitHub's native `queue: max` can retain more pending runs, but the required Actionlint parser
+  [does not yet support it](https://github.com/rhysd/actionlint/issues/657). Adopt it when a supported
+  validator release is available; do not suppress workflow syntax checks or add a custom queue.
 
 ## Monitoring CI
 
 Use GitHub's organization-level [Actions metrics](https://docs.github.com/en/actions/concepts/metrics)
 for workflow and job run time, queue time, failure rate, and runner usage. Each `CI Status Gate` job
-also includes the current run's dependency-aware timeline and job summary, and JUnit results appear
-as `Test Results - …` check runs.
+also includes the current run's dependency-aware timeline, every direct prerequisite's result and
+the boolean selection flags from `Detect changes`. Selection is not a claim that a component's files
+changed: an unfiltered run or a preview can select unchanged inputs. The summary counts all skipped
+prerequisites without guessing their cause and links to the [local verification guide](./local-verification.mdx)
+for troubleshooting. It stays checkout-free because the same job writes commit statuses. JUnit
+results appear as `Test Results - …` check runs.
 
 ### Pull-request latency
 
@@ -796,6 +916,32 @@ Extend the pipeline at the ownership boundary that changed; do not copy an exist
 5. Pass the change-detection output from `cicd.yml` to every reusable workflow that needs it.
 
 `scripts/ci-contract.test.ts` owns the workflow invariants; extend it when the service introduces one.
+
+## Static preview comments
+
+Storybook and documentation previews list every published story or page from changed source files,
+using the built Storybook index and Docusaurus metadata rather than guessing routes. The lists are
+not a dependency-impact report: changing a component without changing its story file does not add
+that component's stories. Unpublished or deleted entries cannot link to a preview page.
+
+Stories are grouped by their full Storybook component title (including its sidebar path), and pages
+by their source directory. Each group shows its count and all its links, with no collapsed sections
+or item cap. Headings and wrapping link paragraphs keep the paths readable without repeating them
+for every variant or introducing a wide table.
+
+`scripts/render-preview-comment.ts` writes a JSON array of complete Markdown comments. The shared
+renderer keeps whole links together and repeats the group heading when a group spans comments.
+Large lists continue in numbered comments below GitHub's 65,536-character limit; every part retains
+the preview link, total count, checked-out commit and build logs. An individual link too large to fit
+fails explicitly rather than dropping content.
+
+`scripts/publish-preview-comments.ts` uses the GitHub SDK provided by `actions/github-script` to
+update the preview's existing bot comments in place. It validates the entire artifact before
+writing, paginates existing comments, skips unchanged bodies, and deletes surplus parts only after
+publishing every current part. GitHub does not offer atomic multi-comment updates; a failed run
+fails the publication step and a retry converges without duplicate comments. Teardown replaces the
+main comment and deletes continuation parts for both previews. A delayed publisher that observes a
+closed pull request also retires its comments instead of restoring live links.
 
 ## Chromatic visual coverage
 

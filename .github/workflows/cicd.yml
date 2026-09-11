@@ -539,10 +539,53 @@ jobs:
           # A re-run of failed jobs keeps this artifact; a re-run of all jobs replaces it.
           overwrite: true
 
+  # Image policy has one advisory set per attempt. Failed-job reruns retain the producer's
+  # artifact ID; rerunning every job creates a new snapshot. Java identification is separate.
+  vulnerability-database:
+    name: "Image advisory database"
+    needs: [detect-changes]
+    if: |
+      needs.detect-changes.outputs.should_skip != 'true' && (
+        needs.detect-changes.outputs.release-preflight == 'true' ||
+        needs.detect-changes.outputs.release-images == 'true' ||
+        (needs.detect-changes.outputs.publishable == 'true' && (
+          needs.detect-changes.outputs.all-images == 'true' ||
+          needs.detect-changes.outputs.application-server-image == 'true' ||
+          needs.detect-changes.outputs.supported-host-smoke == 'true' ||
+          needs.detect-changes.outputs.webapp-image == 'true' ||
+          needs.detect-changes.outputs.agent-images == 'true' ||
+          needs.detect-changes.outputs.postgres-image == 'true' ||
+          needs.detect-changes.outputs.docker-config == 'true'
+        ))
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      artifact-id: ${{ steps.snapshot.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: ./.github/actions/setup-release-security-tools
+        with:
+          install-syft: "false"
+      - uses: ./.github/actions/download-trivy-db
+        id: database
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        id: snapshot
+        with:
+          name: trivy-db-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.database.outputs.database-directory }}
+          if-no-files-found: error
+          retention-days: 1
+
   application-server-image:
     name: "App Server image"
-    needs: [detect-changes, server-package]
-    if: needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'
+    needs: [detect-changes, server-package, vulnerability-database]
+    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.server-package.result == 'success' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') }}
     uses: ./.github/workflows/reusable-docker-build.yml
     permissions:
       contents: read
@@ -551,6 +594,7 @@ jobs:
       attestations: write
       artifact-metadata: write
     with:
+      database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
       image-name: "hephaestus-build/application-server"
       use-buildpacks: true
       application-artifact: server-build-${{ github.run_id }}
@@ -577,8 +621,9 @@ jobs:
 
   Security:
     uses: ./.github/workflows/ci-security-scan.yml
-    needs: [detect-changes]
+    needs: [detect-changes, vulnerability-database]
     if: |
+      !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
       needs.detect-changes.outputs.should_skip != 'true' && (
         needs.detect-changes.outputs.any-code == 'true' ||
@@ -590,6 +635,7 @@ jobs:
       contents: read
       security-events: write
     with:
+      database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       release_images_changed: ${{ (needs.detect-changes.outputs.release-images == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
 
@@ -629,11 +675,12 @@ jobs:
       SENTRY_AUTH_TOKEN: ${{ github.event_name == 'push' && secrets.SENTRY_AUTH_TOKEN || '' }}
       SENTRY_ORG: ${{ github.event_name == 'push' && secrets.SENTRY_ORG || '' }}
       SENTRY_PROJECT: ${{ github.event_name == 'push' && secrets.SENTRY_PROJECT || '' }}
-    needs: [detect-changes]
+    needs: [detect-changes, vulnerability-database]
     # Same-repository previews require every image at the PR head tag; unchanged images are aliased
     # here and the application image is built by Build. A fork and a merge group have no preview, so
     # their image builds stay path-filtered.
     if: |
+      !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
       needs.detect-changes.outputs.should_skip != 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.previews == 'true' ||
@@ -647,6 +694,7 @@ jobs:
       attestations: write
       artifact-metadata: write
     with:
+      database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
       single_arch: ${{ needs.detect-changes.outputs.single-arch }}
@@ -716,8 +764,8 @@ jobs:
   # release-management.mdx owns the evidence contract.
   Release-preflight:
     name: "Release evidence preflight"
-    needs: [detect-changes, application-server-image, Docker]
-    if: needs.detect-changes.outputs.release-preflight == 'true'
+    needs: [detect-changes, application-server-image, Docker, vulnerability-database]
+    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.application-server-image.result == 'success' && needs.Docker.result == 'success' && (needs.detect-changes.outputs.release-preflight == 'true') }}
     timeout-minutes: 45
     runs-on: ubuntu-latest
     permissions:
@@ -739,6 +787,7 @@ jobs:
       - uses: ./.github/actions/download-trivy-db
         with:
           max-age-hours: "24"
+          database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
           java-db: "true"
 
       - uses: ./.github/actions/ghcr-login
@@ -793,7 +842,7 @@ jobs:
     permissions:
       actions: read
       statuses: write
-    needs: [detect-changes, gradle-wrapper, workflow-lint, zizmor, CodeQL, Quality, server-package, application-server-image, Build, Security, Test, Changesets, Compose, Docker, Supported-host-smoke, Release-preflight]
+    needs: [detect-changes, vulnerability-database, gradle-wrapper, workflow-lint, zizmor, CodeQL, Quality, server-package, application-server-image, Build, Security, Test, Changesets, Compose, Docker, Supported-host-smoke, Release-preflight]
     if: always()
     steps:
       - name: Generate workflow timeline
@@ -886,161 +935,51 @@ jobs:
 
           echo "status=success" >> $GITHUB_OUTPUT
 
+      # Keep this checkout-free: the job writes commit statuses and must not execute PR source.
       - name: Generate CI Summary
         if: always()
-        run: |
-          echo "## 🔍 CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [[ "${{ steps.evaluate.outputs.status }}" == "success" ]]; then
-            echo "✅ **All checks passed!**" >> $GITHUB_STEP_SUMMARY
-          elif [[ "${{ steps.evaluate.outputs.status }}" == "failure" ]]; then
-            echo "❌ **Some checks failed.** See details below." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "⚠️ **CI was cancelled or encountered an issue.**" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          echo "### Workflow Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Workflow | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| CodeQL | ${{ needs.CodeQL.result }} |" >> $GITHUB_STEP_SUMMARY
-
-          result_to_emoji() {
-            case "$1" in
-              success) echo "✅ Passed" ;;
-              failure) echo "❌ Failed" ;;
-              skipped) echo "⏭️ Skipped" ;;
-              cancelled) echo "🚫 Cancelled" ;;
-              *) echo "❓ Unknown" ;;
-            esac
-          }
-
-          echo "| Actionlint | $(result_to_emoji '${{ needs.workflow-lint.result }}') |" >> $GITHUB_STEP_SUMMARY
-          echo "| Zizmor | $(result_to_emoji '${{ needs.zizmor.result }}') |" >> $GITHUB_STEP_SUMMARY
-          echo "| Quality | $(result_to_emoji '${{ needs.Quality.result }}') |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build | $(result_to_emoji '${{ needs.Build.result }}') |" >> $GITHUB_STEP_SUMMARY
-          echo "| Test | $(result_to_emoji '${{ needs.Test.result }}') |" >> $GITHUB_STEP_SUMMARY
-          echo "| Changesets | $(result_to_emoji '${{ needs.Changesets.result }}') |" >> $GITHUB_STEP_SUMMARY
-          echo "| Compose | $(result_to_emoji '${{ needs.Compose.result }}') |" >> $GITHUB_STEP_SUMMARY
-          echo "| Security | $(result_to_emoji '${{ needs.Security.result }}') |" >> $GITHUB_STEP_SUMMARY
-          echo "| Docker | $(result_to_emoji '${{ needs.Docker.result }}') |" >> $GITHUB_STEP_SUMMARY
-          echo "| Supported-host boot smoke | $(result_to_emoji '${{ needs.Supported-host-smoke.result }}') |" >> $GITHUB_STEP_SUMMARY
-          echo "| Release evidence preflight | $(result_to_emoji '${{ needs.Release-preflight.result }}') |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          echo "### 📁 Components Changed" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Component | Changed |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|---------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Webapp | ${{ needs.detect-changes.outputs.webapp == 'true' && '✅ Yes' || '➖ No' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Application Server | ${{ needs.detect-changes.outputs.application-server == 'true' && '✅ Yes' || '➖ No' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Agent Images | ${{ needs.detect-changes.outputs.agent-images == 'true' && '✅ Yes' || '➖ No' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| CI Config | ${{ needs.detect-changes.outputs.ci-config == 'true' && '⚙️ Yes' || '➖ No' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [[ "${{ steps.evaluate.outputs.status }}" == "failure" ]]; then
-            echo "### 💡 Troubleshooting Guide" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-
-            if [[ "${{ needs.detect-changes.outputs.release-candidate == 'true' && needs.Release-preflight.result != 'success' }}" == "true" ]]; then
-              echo "❌ **The release evidence preflight did not pass.** Merging this pull request cuts a release, so its gate requires the preflight to succeed in this run; it was \`${{ needs.Release-preflight.result }}\`." >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-            fi
-
-            if [[ "${{ needs.Quality.result }}" == "failure" ]]; then
-              echo "<details><summary><b>❌ Quality Failed</b></summary>" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "| Issue | Fix Command |" >> $GITHUB_STEP_SUMMARY
-              echo "|-------|-------------|" >> $GITHUB_STEP_SUMMARY
-              echo "| Formatting errors | \`vp run format\` |" >> $GITHUB_STEP_SUMMARY
-              echo "| TypeScript errors | \`vp run typecheck\` |" >> $GITHUB_STEP_SUMMARY
-              echo "| Lint errors (webapp) | \`vp run fix:webapp\` |" >> $GITHUB_STEP_SUMMARY
-              echo "| Lint errors (outside webapp) | \`vp run fix:agents\` |" >> $GITHUB_STEP_SUMMARY
-              echo "| Java formatting | \`vp run format:java\` |" >> $GITHUB_STEP_SUMMARY
-              echo "| Java lint (PMD) | \`vp run lint:java:report\` |" >> $GITHUB_STEP_SUMMARY
-              echo "| Storybook sidebar order | \`vp run gate:story-sort\` |" >> $GITHUB_STEP_SUMMARY
-              echo "| Mermaid diagram parse errors | \`vp run gate:diagrams\` |" >> $GITHUB_STEP_SUMMARY
-              echo "| Stale \`routeTree.gen.ts\` | \`vp run --filter webapp build\` |" >> $GITHUB_STEP_SUMMARY
-              echo "| OpenAPI out of sync | \`vp run generate:api\` |" >> $GITHUB_STEP_SUMMARY
-              echo "| Database schema drift | \`vp run db:draft-changelog\` |" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "</details>" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-            fi
-
-            if [[ "${{ needs.Test.result }}" == "failure" ]]; then
-              echo "<details><summary><b>❌ Tests Failed</b></summary>" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "| Test Suite | Run Locally |" >> $GITHUB_STEP_SUMMARY
-              echo "|------------|-------------|" >> $GITHUB_STEP_SUMMARY
-              echo "| Webapp unit | \`vp run test:webapp\` |" >> $GITHUB_STEP_SUMMARY
-              echo "| Webapp Storybook | \`vp run --filter webapp test:storybook\` |" >> $GITHUB_STEP_SUMMARY
-              echo "| Application server | \`cd server && ./gradlew :application:test\` |" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "**Tip:** Check the **Test Results** tab above for specific failures." >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "</details>" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-            fi
-
-            if [[ "${{ needs.Changesets.result }}" == "failure" ]]; then
-              echo "<details><summary><b>❌ Changesets Failed</b></summary>" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "Run \`vp run gate:changesets\` for policy-test failures; otherwise correct the changeset reported by the job." >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "</details>" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-            fi
-
-            if [[ "${{ needs.Docker.result }}" == "failure" ]]; then
-              echo "<details><summary><b>❌ Docker Failed</b></summary>" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "Common causes:" >> $GITHUB_STEP_SUMMARY
-              echo "- Build errors in the application code" >> $GITHUB_STEP_SUMMARY
-              echo "- Missing dependencies" >> $GITHUB_STEP_SUMMARY
-              echo "- Dockerfile syntax errors" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "Test locally: \`docker build -f <component>/Dockerfile .\`" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "</details>" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-            fi
-
-            if [[ "${{ needs.Security.result }}" == "failure" ]]; then
-              echo "<details><summary><b>❌ Security Failed</b></summary>" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "Check the **Security** tab for details on vulnerabilities." >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "</details>" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-            fi
-
-            echo "---" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Quick fix:** Run \`vp run format && vp run check\` before pushing." >> $GITHUB_STEP_SUMMARY
-          fi
-
-          if [[ "${{ steps.evaluate.outputs.status }}" == "success" ]]; then
-            echo "### ⚡ Performance" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            SKIPPED_COUNT=0
-            [[ "${{ needs.Quality.result }}" == "skipped" ]] && SKIPPED_COUNT=$((SKIPPED_COUNT + 1)) || true
-            [[ "${{ needs.Build.result }}" == "skipped" ]] && SKIPPED_COUNT=$((SKIPPED_COUNT + 1)) || true
-            [[ "${{ needs.Test.result }}" == "skipped" ]] && SKIPPED_COUNT=$((SKIPPED_COUNT + 1)) || true
-            [[ "${{ needs.Security.result }}" == "skipped" ]] && SKIPPED_COUNT=$((SKIPPED_COUNT + 1)) || true
-            [[ "${{ needs.Docker.result }}" == "skipped" ]] && SKIPPED_COUNT=$((SKIPPED_COUNT + 1)) || true
-            if [[ $SKIPPED_COUNT -gt 0 ]]; then
-              echo "🚀 **Path-based filtering saved time!** $SKIPPED_COUNT workflow(s) skipped because no relevant files changed." >> $GITHUB_STEP_SUMMARY
-            else
-              echo "All workflows ran (CI config or main branch push)." >> $GITHUB_STEP_SUMMARY
-            fi
-          fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "*Generated by CI Status Gate • [View workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})*" >> $GITHUB_STEP_SUMMARY
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          VERDICT: ${{ steps.evaluate.outputs.status }}
+        with:
+          script: |
+            const needs = JSON.parse(process.env.NEEDS);
+            if (!needs || typeof needs !== 'object' || Array.isArray(needs)) {
+              throw new Error('Expected CI job results');
+            }
+            const statuses = new Set(['success', 'failure', 'skipped', 'cancelled']);
+            const jobs = Object.entries(needs);
+            for (const [name, job] of jobs) {
+              if (!job || typeof job !== 'object' || !statuses.has(job.result)) {
+                throw new Error(`Invalid CI result for ${name}`);
+              }
+            }
+            const verdict = process.env.VERDICT;
+            core.summary.addHeading('CI Pipeline Summary', 2)
+              .addRaw(verdict === 'success' ? '✅ All required checks passed.\n\n'
+                : verdict === 'failure' ? '❌ CI failed. Review the job results and logs.\n\n'
+                : verdict === 'cancelled' ? '🚫 CI was cancelled before it finished.\n\n'
+                : '⚠️ CI did not produce a verdict.\n\n')
+              .addHeading('Job results', 3)
+              .addTable([
+                [{data: 'Job', header: true}, {data: 'Result', header: true}],
+                ...jobs.map(([name, job]) => [name, job.result]),
+              ]);
+            const skipped = jobs.filter(([, job]) => job.result === 'skipped').length;
+            core.summary.addRaw(`${skipped} of ${jobs.length} jobs skipped. Job conditions determine why; a skip alone does not prove a path-filter saving.\n\n`);
+            const selection = needs['detect-changes']?.outputs;
+            const flags = selection && typeof selection === 'object' && !Array.isArray(selection)
+              ? Object.entries(selection).filter(([, value]) => value === 'true' || value === 'false') : [];
+            if (flags.length > 0) {
+              core.summary.addHeading('Selection flags', 3).addTable([
+                [{data: 'Flag', header: true}, {data: 'Value', header: true}],
+                ...flags,
+              ]);
+            }
+            core.summary.addLink('Local verification and troubleshooting',
+              `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/blob/main/docs/contributor/local-verification.mdx`);
+            await core.summary.write();
 
       - name: Create commit status
         if: ${{ !cancelled() }}

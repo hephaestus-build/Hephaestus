@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, it } from "node:test";
+
+import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
+import { isMap, isSeq, parseDocument } from "yaml";
 
 import {
 	assess,
@@ -896,5 +900,121 @@ void describe("preview schema drift", () => {
 		});
 
 		assert.equal(core.outputs.get("eligible"), "true");
+	});
+});
+
+void describe("preview workflow reporting follows the finalized deployment", () => {
+	const workflow = parseDocument(readFileSync(".github/workflows/deploy-preview.yml", "utf8"));
+	function runs(name: string, outputs: Record<string, Record<string, string>>) {
+		const steps = workflow.getIn(["jobs", "deploy", "steps"]);
+		assert.ok(isSeq(steps));
+		const step = steps.items.find((item) => isMap(item) && item.get("name") === name);
+		assert.ok(isMap(step));
+		const condition = step.get("if");
+		assert.ok(typeof condition === "string");
+		const functions = new Map([
+			[
+				"always",
+				{ name: "always", minArgs: 0, maxArgs: 0, call: () => new data.BooleanData(true) },
+			],
+		]);
+		const expression = new Parser(
+			new Lexer(condition).lex().tokens,
+			["steps"],
+			[...functions.values()],
+		).parse();
+		const context: unknown = JSON.parse(
+			JSON.stringify({
+				steps: Object.fromEntries(
+					Object.entries(outputs).map(([id, values]) => [id, { outputs: values }]),
+				),
+			}),
+			data.reviver,
+		);
+		assert.ok(context instanceof data.Dictionary);
+		return new Evaluator(expression, context, functions).evaluate().coerceString() === "true";
+	}
+
+	for (const scenario of [
+		{ name: "ready preview", state: "success", pull, comment: false, fail: false, link: true },
+		{ name: "failed deployment", state: "failure", pull, comment: true, fail: true, link: false },
+		{ name: "deployment error", state: "error", pull, comment: true, fail: true, link: false },
+		{
+			name: "superseded preflight",
+			state: "inactive",
+			pull,
+			comment: false,
+			fail: false,
+			link: false,
+		},
+		{
+			name: "label removed before a failure",
+			state: "failure",
+			pull: unlabelled,
+			comment: false,
+			fail: false,
+			link: false,
+		},
+		{
+			name: "pull request closed before an error",
+			state: "error",
+			pull: { ...pull, state: "closed" },
+			comment: false,
+			fail: false,
+			link: false,
+		},
+	]) {
+		void it(scenario.name, async () => {
+			Object.assign(process.env, {
+				DEPLOYMENT_ID: "2",
+				DESCRIPTION: "Deployment finished",
+				ENVIRONMENT: "preview/pr-7",
+				FINAL_STATE: scenario.state,
+				LOG_URL: "https://coolify.example/logs/2",
+				PREVIEW_URL: "https://pr7.example",
+				PR_NUMBER: "7",
+				SOURCE_RUN_URL: "https://github.example/runs/50",
+			});
+			const core = makeCore();
+			await finalize({
+				github: makeGitHub({ resolvedPull: scenario.pull }),
+				context: makeContext(),
+				core,
+			});
+			const outputs = {
+				context: { eligible: "true" },
+				recheck: { proceed: scenario.state === "inactive" ? "false" : "true" },
+				queue: { deployment_uuid: scenario.state === "inactive" ? "" : "deployment" },
+				wait: { state: scenario.state === "inactive" ? "" : scenario.state },
+				finalize: Object.fromEntries(core.outputs),
+			};
+			assert.equal(runs("Report a failed preview", outputs), scenario.comment);
+			assert.equal(runs("Fail when the preview failed", outputs), scenario.fail);
+			assert.equal(runs("Publish the preview link", outputs), scenario.link);
+		});
+	}
+
+	void it("still reports a real failure before finalization or queueing completes", () => {
+		const outputs = {
+			context: { eligible: "true" },
+			recheck: {},
+			queue: {},
+			wait: {},
+			finalize: {},
+		};
+		assert.equal(runs("Report a failed preview", outputs), true);
+		assert.equal(runs("Publish the preview link", outputs), false);
+		assert.equal(runs("Fail when the preview failed", outputs), false);
+		assert.equal(
+			runs("Fail when the preview failed", {
+				...outputs,
+				queue: { deployment_uuid: "deployment" },
+			}),
+			true,
+		);
+		assert.equal(
+			runs("Report a failed preview", { ...outputs, context: { eligible: "false" } }),
+			false,
+		);
 	});
 });

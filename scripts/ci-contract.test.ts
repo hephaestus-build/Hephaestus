@@ -419,6 +419,10 @@ void describe("CI contract", () => {
 	void test("the server package job is the only Gradle cache producer", async () => {
 		const action = parseDocument(await readFile(".github/actions/setup-caches/action.yml", "utf8"));
 		assert.equal(action.getIn(["inputs", "cache-write", "default"]), "false");
+		assert.equal(
+			namedStep(action, ["runs"], "Set up JDK").getIn(["with", "java-version-file"]),
+			".java-version",
+		);
 		const sources = await workflowSources();
 		const writers = [...sources].filter(([, source]) => source.includes('cache-write: "true"'));
 		assert.deepEqual(
@@ -435,6 +439,36 @@ void describe("CI contract", () => {
 		assert.equal(cache.getIn(["with", "cache-write"]), "true");
 		const source = await readFile(".github/actions/setup-caches/action.yml", "utf8");
 		assert.match(source, /inputs.cache-write != 'true' \|\| github.ref != format/);
+	});
+
+	void test("OpenAPI generation uses the read-only Gradle setup but runtime-only E2E does not", async () => {
+		const api = parseDocument(await readFile(".github/workflows/openapi-autocommit.yml", "utf8"));
+		const setup = namedStep(api, ["jobs", "generate"], "Set up Java build");
+		assert.equal(setup.get("uses"), "./.github/actions/setup-caches");
+		assert.notEqual(setup.getIn(["with", "cache-write"]), "true");
+		assert.equal(api.getIn(["jobs", "generate", "permissions", "contents"]), "read");
+		assert.doesNotMatch(job(String(api), "generate"), /actions\/setup-java@/);
+		assert.doesNotMatch(job(String(api), "commit"), /setup-caches|gradlew|vp run/);
+		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
+		assert.match(job(build, "webapp-e2e"), /actions\/setup-java@/);
+		assert.doesNotMatch(job(build, "webapp-e2e"), /setup-caches|gradlew/);
+	});
+
+	void test("GHCR-only rescans share login while the image builder keeps its registry input", async () => {
+		const rescan = parseDocument(
+			await readFile(".github/workflows/rescan-main-images.yml", "utf8"),
+		);
+		const login = namedStep(rescan, ["jobs", "rescan"], "Log in to Container Registry");
+		assert.equal(login.get("uses"), "./.github/actions/ghcr-login");
+		assert.equal(login.getIn(["with", "username"]), `\${{ github.actor }}`);
+		assert.equal(login.getIn(["with", "password"]), `\${{ secrets.GITHUB_TOKEN }}`);
+		const reusable = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
+		for (const name of ["build", "merge", "scan"]) {
+			const registry = step(reusable, ["jobs", name], "docker/login-action");
+			assert.equal(registry.get("registry"), `\${{ inputs.registry }}`);
+		}
 	});
 
 	void test("image scans are delegated only to required release preflight", async () => {
@@ -663,7 +697,7 @@ void describe("CI contract", () => {
 		assert.match(e2e, /http:\/\/localhost:8080\/actuator\/health\/readiness/);
 		assert.doesNotMatch(e2e, /actuator\/health\/liveness/);
 		const image = job(orchestrator, "application-server-image");
-		assert.match(image, /needs: \[detect-changes, server-package\]/);
+		assert.match(image, /needs: \[detect-changes, server-package, vulnerability-database\]/);
 		assert.match(image, /use-buildpacks: true/);
 
 		// The long suites compile from source and never wait for the package job.
@@ -693,7 +727,11 @@ void describe("CI contract", () => {
 		for (const name of ["Build", "application-server-image"]) {
 			const dependencies = workflow.getIn(["jobs", name, "needs"]);
 			assert.ok(isSeq(dependencies));
-			assert.deepEqual(dependencies.toJSON(), ["detect-changes", "server-package"]);
+			assert.deepEqual(dependencies.toJSON(), [
+				"detect-changes",
+				"server-package",
+				...(name === "application-server-image" ? ["vulnerability-database"] : []),
+			]);
 		}
 		for (const name of ["Supported-host-smoke", "Release-preflight"]) {
 			const dependencies = workflow.getIn(["jobs", name, "needs"]);
@@ -702,6 +740,7 @@ void describe("CI contract", () => {
 				"detect-changes",
 				"application-server-image",
 				"Docker",
+				...(name === "Release-preflight" ? ["vulnerability-database"] : []),
 			]);
 		}
 		const gate = workflow.getIn(["jobs", "all-ci-passed", "needs"]);
@@ -733,7 +772,10 @@ void describe("CI contract", () => {
 		assert.match(storybook, /surge \.\/webapp\/storybook-static/);
 		assert.match(storybook, /render-preview-comment\.ts storybook webapp\/storybook-static/);
 		assert.match(storybook, /github\.event\.pull_request\.base\.sha/);
-		assert.match(storybook, /path: \$\{\{ runner\.temp \}\}\/storybook-preview\.md/);
+		assert.match(
+			storybook,
+			/PREVIEW_COMMENT_PATH: \$\{\{ runner\.temp \}\}\/storybook-preview\.json/,
+		);
 		assert.match(storybook, /name: Create Storybook status check\s+if: >-\s+success\(\)/);
 	});
 
@@ -748,7 +790,32 @@ void describe("CI contract", () => {
 		assert.match(buildPreview, /fetch-depth: 0/);
 		assert.match(buildPreview, /render-preview-comment\.ts docs docs\/\.docusaurus/);
 		assert.match(buildPreview, /github\.event\.pull_request\.base\.sha/);
-		assert.match(job(docs, "preview"), /path: preview-comment\/docs-preview-comment\.md/);
+		assert.match(
+			job(docs, "preview"),
+			/PREVIEW_COMMENT_PATH: preview-comment\/docs-preview-comment\.json/,
+		);
+	});
+
+	void test("shares a continuation-aware publisher across both previews and teardown", async () => {
+		for (const [file, kind] of [
+			["ci-quality-gates.yml", "storybook"],
+			["cd-docs.yml", "docs"],
+		]) {
+			const source = await readFile(`.github/workflows/${file}`, "utf8");
+			assert.match(source, /scripts\/publish-preview-comments\.ts/);
+			assert.ok(source.includes(`kind: "${kind}", path: process.env.PREVIEW_COMMENT_PATH`));
+		}
+		const docs = parseDocument(await readFile(".github/workflows/cd-docs.yml", "utf8"));
+		for (const dependency of [
+			"scripts/publish-preview-comments.ts",
+			"scripts/lib/preview-comment.ts",
+		]) {
+			assert.ok(String(docs.getIn(["on", "pull_request", "paths"])).includes(dependency));
+		}
+		const teardown = await readFile(".github/workflows/cd-docs-teardown.yml", "utf8");
+		assert.match(teardown, /scripts\/publish-preview-comments\.ts/);
+		assert.match(teardown, /for \(const kind of \["docs", "storybook"\]\)/);
+		assert.match(teardown, /publishPreviewComments\(\{ github, context, kind \}\)/);
 	});
 
 	void test("routes tooling-only changes away from server infrastructure", async () => {
@@ -791,7 +858,12 @@ void describe("CI contract", () => {
 			/version-bump: \${{ steps\.version_bump\.outputs\.changed }}/,
 		);
 		for (const name of ["workflow-lint", "zizmor", "Quality", "Security", "Test", "Compose"]) {
-			assert.match(job(source, name), /needs: \[detect-changes\]/);
+			assert.match(
+				job(source, name),
+				name === "Security"
+					? /needs: \[detect-changes, vulnerability-database\]/
+					: /needs: \[detect-changes\]/,
+			);
 			assert.match(
 				job(source, name),
 				/github\.event_name != 'push'.*needs\.detect-changes\.outputs\.version-bump == 'true'/s,
@@ -1177,11 +1249,10 @@ void describe("CI contract", () => {
 		);
 		const declared = reusable.getIn(["env", "STANDARD_IMAGE_TAGS"]);
 		assert.equal(typeof declared, "string");
-		// `${{ github.event_name <op> '<event>' && <expression> || '' }}`: every tag the build
-		// publishes is guarded on the event that started the run, so a consumer can derive from its
-		// own event which tags exist. A tag published under every event names the attempt rather than
-		// the artefact, and a re-run of a failed job would resolve nothing.
-		const guard = /^\$\{\{ github\.event_name (==|!=) '(\w+)' && (.+?) \|\| '' }}$/;
+		// Native metadata-action entries keep the event guard alongside the value. A tag names
+		// the artifact, not a run attempt that a re-run could never resolve.
+		const guard =
+			/^type=raw,value=\$\{\{ (.+?) }},enable=\$\{\{ github\.event_name (==|!=) '(\w+)' }}$/;
 		const lines = String(declared)
 			.split("\n")
 			.filter((line) => line.length > 0);
@@ -1189,8 +1260,30 @@ void describe("CI contract", () => {
 			lines.flatMap((line) => {
 				const parsed = guard.exec(line);
 				assert.ok(parsed, `image tag "${line}" is published under every event`);
-				return (parsed[1] === "==") === (parsed[2] === event) ? [String(parsed[3])] : [];
+				return (parsed[2] === "==") === (parsed[3] === event) ? [String(parsed[1])] : [];
 			});
+
+		assert.deepEqual(publishedOn("push"), [
+			"github.ref_name",
+			"format('ci-{0}', github.run_number)",
+			"github.sha",
+		]);
+		assert.deepEqual(publishedOn("pull_request"), [
+			"github.event.pull_request.head.sha",
+			"format('pr-{0}', github.event.number)",
+		]);
+		for (const event of ["merge_group", "workflow_dispatch"])
+			assert.deepEqual(publishedOn(event), ["github.sha"]);
+		for (const name of ["build", "merge"]) {
+			const metadata = step(reusable, ["jobs", name], "docker/metadata-action");
+			assert.equal(
+				metadata.get("tags"),
+				name === "build"
+					? `\${{ inputs.single-arch && env.STANDARD_IMAGE_TAGS || '' }}`
+					: `\${{ env.STANDARD_IMAGE_TAGS }}`,
+			);
+		}
+		assert.doesNotMatch(String(reusable), /steps\.tags\.outputs|Prepare tag configuration/);
 
 		const source = await readFile(".github/workflows/cicd.yml", "utf8");
 		const triggers = /^on:\n([\s\S]*?)^\S/m.exec(source)?.[1] ?? "";
@@ -1427,7 +1520,7 @@ void describe("CI contract", () => {
 		// documents are re-derived and compared exactly as the release re-derives them.
 		assert.match(preflight, /node scripts\/verify-release-evidence\.ts evidence\n/);
 		assert.match(preflight, /max-age-hours: "24"/);
-		assert.match(preflight, /if: needs\.detect-changes\.outputs\.release-preflight == 'true'/);
+		assert.match(preflight, /if: .*needs\.detect-changes\.outputs\.release-preflight == 'true'/);
 		assert.match(cicd, /^ {6}release-preflight:$/m);
 		assert.match(job(cicd, "all-ci-passed"), /needs: \[[^\]]*Release-preflight\]/);
 
@@ -1869,6 +1962,8 @@ void describe("CI contract", () => {
 		const scanPath = ["jobs", "security-scan"];
 		assert.equal(workflow.getIn([...scanPath, "env", "TRIVY_INCLUDE_DEV_DEPS"]), "true");
 		const secretScan = stepInputs(namedStep(workflow, scanPath, "Secret detection"));
+		assert.equal(secretScan.get("image"), "ghcr.io/trufflesecurity/trufflehog");
+		assert.match(String(secretScan.get("version")), /^\d+\.\d+\.\d+@sha256:[a-f0-9]{64}$/);
 		assert.equal(
 			secretScan.get("base"),
 			`\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || '' }}`,
@@ -1878,6 +1973,7 @@ void describe("CI contract", () => {
 			`\${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}`,
 		);
 		assert.ok(String(secretScan.get("extra_args")).split(" ").includes("--fail-on-scan-errors"));
+		assert.ok(String(secretScan.get("extra_args")).split(" ").includes("--only-verified"));
 		const report = stepInputs(namedStep(workflow, scanPath, "Trivy dependency scan"));
 		assert.equal(report.get("format"), "sarif");
 		assert.ok(
@@ -2351,6 +2447,94 @@ void test("proves the toolchain on Windows and from a clean clone", async () => 
 	assert.doesNotMatch(prePushHook, /^\s*vp run check\s*$/m);
 });
 
+void test("pnpm reuses only trusted native verification verdicts and still runs a frozen install", async () => {
+	const action = parseDocument(
+		await readFile(".github/actions/setup-toolchain/action.yml", "utf8"),
+	);
+	const actionPath = ["runs"];
+	const locate = namedStep(action, actionPath, "Locate pnpm verification cache");
+	const restore = namedStep(action, actionPath, "Restore pnpm verification cache");
+	const install = namedStep(action, actionPath, "Install dependencies");
+	const proof = namedStep(action, actionPath, "Verify pnpm verification cache");
+	const save = namedStep(action, actionPath, "Save pnpm verification cache");
+	const steps = action.getIn(["runs", "steps"]);
+	assert.ok(isSeq(steps));
+	assert.ok(steps.items.indexOf(locate) < steps.items.indexOf(restore));
+	assert.ok(steps.items.indexOf(restore) < steps.items.indexOf(install));
+	assert.ok(steps.items.indexOf(install) < steps.items.indexOf(proof));
+	assert.ok(steps.items.indexOf(proof) < steps.items.indexOf(save));
+	for (const declaration of [locate, restore, install, proof])
+		assert.equal(declaration.get("if"), "inputs.install == 'frozen'");
+	assert.equal(install.get("run"), "pnpm install --frozen-lockfile --ignore-scripts");
+	assert.match(String(locate.get("run")), /\$\(pnpm cache path\)/);
+	assert.match(
+		String(locate.get("run")),
+		/require\("node:path"\)\.join\(process\.argv\[1\], "lockfile-verified\.jsonl"\)/,
+	);
+	assert.equal(
+		proof.getIn(["env", "PNPM_VERIFICATION_CACHE"]),
+		`\${{ steps.pnpm-verification-path.outputs.path }}`,
+	);
+	assert.match(String(proof.get("run")), /statSync\(process\.argv\[1\]\)\.isFile\(\)/);
+	assert.match(String(restore.get("uses")), /^actions\/cache\/restore@/);
+	assert.match(String(save.get("uses")), /^actions\/cache\/save@/);
+	const restored = stepInputs(restore);
+	assert.deepEqual(stepInputs(save).toJSON(), restored.toJSON());
+	assert.equal(restored.get("path"), `\${{ steps.pnpm-verification-path.outputs.path }}`);
+	assert.equal(restored.has("restore-keys"), false);
+	assert.equal(
+		restored.get("key"),
+		`pnpm-verification-v1-\${{ runner.os }}-\${{ runner.arch }}-\${{ steps.pnpm.outputs.version }}-\${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}`,
+	);
+	const parsed = new Parser(
+		new Lexer(String(save.get("if"))).lex().tokens,
+		["inputs", "steps", "github"],
+		[],
+	).parse();
+	for (const [event, ref, branch, outcome, hit, mode, expected] of [
+		["push", "refs/heads/main", "main", "success", "false", "frozen", true],
+		["push", "refs/heads/trunk", "trunk", "success", "false", "frozen", true],
+		["push", "refs/heads/topic", "main", "success", "false", "frozen", false],
+		["schedule", "refs/heads/main", "main", "success", "false", "frozen", false],
+		["workflow_dispatch", "refs/heads/main", "main", "success", "false", "frozen", false],
+		["pull_request", "refs/pull/1/merge", "main", "success", "false", "frozen", false],
+		["pull_request_target", "refs/heads/main", "main", "success", "false", "frozen", false],
+		["workflow_run", "refs/heads/main", "main", "success", "false", "frozen", false],
+		[
+			"merge_group",
+			"refs/heads/gh-readonly-queue/main/pr-1",
+			"main",
+			"success",
+			"false",
+			"frozen",
+			false,
+		],
+		["workflow_dispatch", "refs/heads/topic", "main", "success", "false", "frozen", false],
+		["push", "refs/heads/main", "main", "failure", "false", "frozen", false],
+		["push", "refs/heads/main", "main", "skipped", "false", "frozen", false],
+		["push", "refs/heads/main", "main", "success", "true", "frozen", false],
+		["push", "refs/heads/main", "main", "success", "false", "none", false],
+	] as const) {
+		const context: unknown = JSON.parse(
+			JSON.stringify({
+				inputs: { install: mode },
+				steps: {
+					"pnpm-install": { outcome },
+					"pnpm-verification-cache": { outputs: { "cache-hit": hit } },
+				},
+				github: { ref, event_name: event, event: { repository: { default_branch: branch } } },
+			}),
+			data.reviver,
+		);
+		assert.ok(context instanceof data.Dictionary);
+		assert.equal(
+			new Evaluator(parsed, context).evaluate().coerceString(),
+			String(expected),
+			`${event} ${ref} ${outcome} ${hit} ${mode}`,
+		);
+	}
+});
+
 void test(
 	"quality dispatch selects one task and rejects an unknown leg",
 	{ skip: !bashRunsRunnerSteps() },
@@ -2463,12 +2647,28 @@ void test("CodeQL runs advanced setup and excludes the Semgrep fixtures it would
 		for (const match of source.matchAll(new RegExp(`uses: ${action}@([\\w.-]+)`, "g")))
 			assert.match(match[1] ?? "", /^[a-f0-9]{40}$/, `${action} must be pinned by commit`);
 	const init = step(workflow, ["jobs", "analyze"], "github/codeql-action/init");
+	for (const input of ["debug", "debug-artifact-name", "debug-database-name"]) {
+		assert.equal(
+			init.has(input),
+			false,
+			"full debug databases are temporary evidence, not routine CI artifacts",
+		);
+	}
 	assert.match(
 		String(init.get("build-mode")),
 		/matrix\.language == 'java-kotlin' && 'manual' \|\| 'none'/,
 	);
-	const java = step(workflow, ["jobs", "analyze"], "actions/setup-java");
-	assert.equal(java.get("java-version-file"), ".java-version");
+	const java = namedStep(workflow, ["jobs", "analyze"], "Set up Java build");
+	assert.equal(java.get("uses"), "./.github/actions/setup-caches");
+	assert.equal(java.get("if"), "matrix.language == 'java-kotlin'");
+	assert.equal(java.has("with"), false, "analysis consumes the default read-only Gradle cache");
+	const steps = workflow.getIn(["jobs", "analyze", "steps"]);
+	assert.ok(isSeq(steps));
+	assert.ok(
+		steps.items.indexOf(java) <
+			steps.items.indexOf(namedStep(workflow, ["jobs", "analyze"], "Initialize CodeQL")),
+		"provision dependencies before starting the extractor",
+	);
 	const compile = namedStep(workflow, ["jobs", "analyze"], "Compile Java for analysis");
 	assert.equal(compile.get("if"), "matrix.language == 'java-kotlin'");
 	assert.equal(compile.get("working-directory"), "server");
@@ -2556,6 +2756,9 @@ void test("CodeQL selects languages with native change detection", async () => {
 		);
 	}
 	assert.ok(asArray(filters["java-kotlin"], "Java paths").includes("server/**"));
+	assert.ok(
+		asArray(filters["java-kotlin"], "Java paths").includes(".github/actions/setup-caches/**"),
+	);
 	assert.ok(asArray(filters["javascript-typescript"], "JS paths").includes("pnpm-lock.yaml"));
 });
 
@@ -2648,3 +2851,44 @@ void test(
 			}
 	},
 );
+
+void test("toolchain cache producers cover Linux and Windows without repeating quality gates", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/cache-toolchain.yml", "utf8"));
+	const triggers = workflow.get("on");
+	assert.ok(isMap(triggers));
+	assert.deepEqual(triggers.toJSON(), {
+		push: {
+			branches: ["main"],
+			paths: [
+				"package.json",
+				"pnpm-lock.yaml",
+				"pnpm-workspace.yaml",
+				".npmrc",
+				".github/actions/setup-toolchain/**",
+				".github/workflows/cache-toolchain.yml",
+			],
+		},
+	});
+	const jobs = workflow.get("jobs");
+	assert.ok(isMap(jobs));
+	assert.equal(jobs.items.length, 1);
+	const install = jobs.get("install");
+	assert.ok(isMap(install));
+	assert.equal(install.get("runs-on"), `\${{ matrix.os }}`);
+	assert.equal(install.has("if"), false);
+	const platforms = install.getIn(["strategy", "matrix", "os"]);
+	assert.ok(isSeq(platforms));
+	assert.deepEqual(platforms.toJSON(), ["ubuntu-latest", "windows-latest"]);
+	assert.equal(install.getIn(["strategy", "fail-fast"]), false);
+	const steps = install.get("steps");
+	assert.ok(isSeq(steps));
+	assert.equal(steps.items.length, 2);
+	const checkout = steps.items[0];
+	const setup = steps.items[1];
+	assert.ok(isMap(checkout) && isMap(setup));
+	assert.match(String(checkout.get("uses")), /^actions\/checkout@/);
+	assert.equal(checkout.getIn(["with", "persist-credentials"]), false);
+	assert.equal(setup.get("uses"), "./.github/actions/setup-toolchain");
+	assert.equal(setup.getIn(["with", "install"]), "frozen");
+	assert.equal(setup.has("if"), false);
+});

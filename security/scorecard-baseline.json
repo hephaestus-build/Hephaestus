@@ -72,7 +72,7 @@
 			"name": "Vulnerabilities",
 			"score": 10,
 			"scoredOver": "configuration",
-			"reason": "Advisories open against the dependencies the checkout resolves. Excluded below: what it reports is not what this checkout resolves."
+			"reason": "Advisories against the inventory OSV extracts from the checkout, including Gradle verification metadata rather than only resolved dependencies."
 		},
 		{
 			"name": "Signed-Releases",
@@ -104,7 +104,7 @@
 		}
 	],
 	"excluded": {
-		"Vulnerabilities": "Reports fourteen advisories against version ranges this tree resolves outside of \u2014 jackson-core 2.21.5, jackson-databind 2.21.5, graphql-java 25.0, pmd-core 7.27.0, commons-lang3 3.20.0, bcprov-lts8on 2.73.11, handlebars 4.5.2 \u2014 while Dependabot reports none. The list did not change when #2075 forced two of them to patched versions, so it does not track what this repository resolves. Enforcing it would report a regression that does not exist. Tracked in #2078.",
+		"Vulnerabilities": "OSV inventories every Gradle verification-metadata component, including unselected versions and descriptor-only entries. This is a checksum allowlist, not the resolved graph. Source and reproduction: https://docs.hephaestus.build/contributor/ci-cd#gradle-dependency-inventory-and-the-vulnerabilities-exclusion ; upstream extractor: https://github.com/google/osv-scalibr/blob/cf20290d7624/extractor/filesystem/language/java/gradleverificationmetadataxml/gradleverificationmetadataxml.go . Only this Scorecard check is excluded; dependency and release vulnerability gates remain enforced. Tracked in https://github.com/hephaestus-build/Hephaestus/issues/2078.",
 		"Contributors": "Organization diversity is not a repository engineering control.",
 		"CII-Best-Practices": "An OpenSSF badge is a separate adoption decision.",
 		"Fuzzing": "Fuzzing adoption is a separate policy decision.",

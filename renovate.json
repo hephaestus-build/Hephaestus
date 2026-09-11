@@ -253,6 +253,15 @@
 				"SEMGREP_IMAGE: (?<depName>semgrep/semgrep):(?<currentValue>[0-9.]+)@(?<currentDigest>sha256:[a-f0-9]{64})"
 			],
 			"datasourceTemplate": "docker"
+		},
+		{
+			"description": "Track the TruffleHog scanner image",
+			"customType": "regex",
+			"managerFilePatterns": ["/^\\.github/workflows/ci-security-scan\\.yml$/"],
+			"matchStrings": [
+				"image: (?<depName>ghcr.io/trufflesecurity/trufflehog)\\s+version: (?<currentValue>[0-9.]+)@(?<currentDigest>sha256:[a-f0-9]{64})"
+			],
+			"datasourceTemplate": "docker"
 		}
 	],
 	"vulnerabilityAlerts": {
