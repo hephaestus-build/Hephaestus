@@ -127,7 +127,7 @@ class GitDiffOperationsJGitTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldListTheRangeOldestFirstWithSubjectBodyAndFileCountWhenReadingTheCommitLog()
+    void shouldListCommitsOldestFirstWithSubjectBodyAndFileCountWhenTheHistoryIsLinear()
             throws GitAPIException, IOException {
         write("c.txt", "c\n");
         String laterSha = commit("add c\n\nNeeded before the shadow pass lands.\n");
@@ -165,10 +165,8 @@ class GitDiffOperationsJGitTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepAMergedBranchTogetherAndLeaveTheMergeWithoutAFileCountWhenHistoryHasTwoLines()
-            throws GitAPIException, IOException {
-        // Commit times interleave the two lines (feature 10:00, main 10:30, feature 11:00); topological
-        // order must not.
+    void shouldKeepAMergedBranchTogetherWhenCommitTimesInterleaveTheLines() throws GitAPIException, IOException {
+        // Commit times interleave the two lines; topological order must not.
         write("c.txt", "c\n");
         String featureFirst = commitAt("add c", Instant.parse("2026-06-01T10:00:00Z"));
         write("d.txt", "d\n");

@@ -27,7 +27,6 @@ import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.revwalk.filter.RevFilter;
 import org.eclipse.jgit.treewalk.AbstractTreeIterator;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
-import org.eclipse.jgit.treewalk.TreeWalk;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -247,12 +246,11 @@ public class GitDiffOperations {
         });
     }
 
-    /** The commits of one range, oldest first; {@code truncated} when the range held more than were kept. */
     public record CommitLog(List<CommitLogEntry> commits, boolean truncated) {}
 
     /**
-     * One commit as {@code git log} shows it: {@code subject} is git's title paragraph and {@code body} the
-     * rest; {@code changedFiles} counts the paths that differ from the first parent, so a merge commit has none.
+     * {@code subject} is git's title paragraph and {@code body} the rest; {@code changedFiles} is the number of
+     * files changed against the sole parent, renames counted once, so it is null on a merge.
      */
     public record CommitLogEntry(
             String sha,
@@ -264,9 +262,9 @@ public class GitDiffOperations {
             @Nullable Integer changedFiles) {}
 
     /**
-     * {@code git log --topo-order --reverse base..head}, keeping at most {@code limit} commits. Topological
-     * order keeps a merged branch's commits together where commit-time order would interleave them with the
-     * other line of history.
+     * {@code git log --topo-order --reverse base..head}, cut after the oldest {@code limit} commits. Topological
+     * order keeps a merged branch's commits together where commit-time order would interleave the two lines
+     * of history.
      */
     @Nullable
     public CommitLog commitLog(Path repoPath, String baseRef, String headRef, int limit) {
@@ -277,11 +275,12 @@ public class GitDiffOperations {
             List<CommitLogEntry> entries = new ArrayList<>();
             boolean truncated = false;
             try (RevWalk walk = new RevWalk(repo);
-                    ObjectReader reader = repo.newObjectReader()) {
+                    ObjectReader reader = repo.newObjectReader();
+                    DiffFormatter formatter = newDiffFormatter(repo, null)) {
                 walk.sort(RevSort.TOPO_KEEP_BRANCH_TOGETHER);
                 walk.sort(RevSort.REVERSE, true);
-                // The walk loads the whole range before it yields its first commit; keeping bodies only for
-                // the kept commits bounds what an oversized range holds in memory to its graph.
+                // A sorted walk buffers the whole range before yielding, so bodies are retained only for the
+                // commits the limit admits.
                 walk.setRetainBody(false);
                 walk.markStart(walk.parseCommit(range[1]));
                 walk.markUninteresting(walk.parseCommit(range[0]));
@@ -290,27 +289,25 @@ public class GitDiffOperations {
                         truncated = true;
                         break;
                     }
-                    entries.add(toLogEntry(commit, walk, reader));
+                    entries.add(toLogEntry(commit, walk, reader, formatter));
                 }
             }
             return new CommitLog(List.copyOf(entries), truncated);
         });
     }
 
-    private static CommitLogEntry toLogEntry(RevCommit commit, RevWalk walk, ObjectReader reader) throws IOException {
+    private static CommitLogEntry toLogEntry(
+            RevCommit commit, RevWalk walk, ObjectReader reader, DiffFormatter formatter) throws IOException {
         walk.parseBody(commit);
         String[] paragraphs = commit.getFullMessage().split("\\R\\R", 2);
         String body = paragraphs.length == 2 ? paragraphs[1].strip() : "";
 
         Integer changedFiles = null;
         if (commit.getParentCount() == 1) {
-            // A tree walk counts the paths that differ without reading a blob, so a long history stays cheap.
-            try (TreeWalk treeWalk = new TreeWalk(reader)) {
-                treeWalk.addTree(walk.parseCommit(commit.getParent(0)).getTree());
-                treeWalk.addTree(commit.getTree());
-                treeWalk.setRecursive(true);
-                changedFiles = DiffEntry.scan(treeWalk).size();
-            }
+            // A file count with rename detection; line counts would content-diff every file of every commit.
+            changedFiles = formatter
+                    .scan(treeIterator(reader, walk, commit.getParent(0)), treeIterator(reader, walk, commit))
+                    .size();
         }
         return new CommitLogEntry(
                 commit.getName(),

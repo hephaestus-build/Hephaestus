@@ -50,12 +50,6 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/**
- * The pull request under review, as three sources: the record ({@code metadata.json} from the mirror and
- * {@code commits.json} from the clone), the change ({@code diff.patch} and its index) and the inline review
- * comments. The commits and the diff are read over the same {@code merge-base..head} range, so the commit
- * list is exactly the history the diff sums up.
- */
 @Component
 @Order(100)
 public class PullRequestContentSource implements EvidenceSource, ReviewContextBuilder {
@@ -184,8 +178,8 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
                     COMMENTS, comments.comments().isEmpty() ? SourceContentState.EMPTY : SourceContentState.NON_EMPTY);
         }
         if (readsClone(selectedKinds)) {
-            // The record's commits and the diff are both read off the clone over the same range, so a clone
-            // or a range the diff cannot be computed from fails the record the same way.
+            // The record's commits are read from the clone over the diff's range, so the record fails as the
+            // diff does when the clone or the range is unavailable.
             ChangeRange range = resolveChangeRange(repositoryId, metadata);
             if (selectedKinds.contains(CORE)) {
                 storeMetadata(files, pullRequest, metadata);
@@ -403,12 +397,10 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         return new ChangeRange(repoPath, range[0], range[1]);
     }
 
-    /** The commits the pull request carries, as {@code git log base..head} lists them; true when cut. */
     private boolean storeCommits(Map<String, byte[]> files, ChangeRange range, long repositoryId) {
         GitDiffOperations.CommitLog commitLog =
                 gitDiffOperations.commitLog(range.repoPath(), range.base(), range.head(), MAX_COMMITS);
-        // A null log is a failed read, never a pull request without commits: the range resolved, so at
-        // least one commit separates its base from its head.
+        // A null log is a failed read, never an empty history: a resolved range holds at least one commit.
         if (commitLog == null) {
             throw new JobPreparationException("Commit log could not be read for range=" + range.base()
                     + ".."
@@ -421,7 +413,6 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             var node = commits.addObject();
             node.put("sha", commit.sha());
             node.put("subject", commit.subject());
-            // An absent body or file count has no key, never a JSON null.
             if (commit.body() != null) {
                 node.put("body", commit.body());
             }

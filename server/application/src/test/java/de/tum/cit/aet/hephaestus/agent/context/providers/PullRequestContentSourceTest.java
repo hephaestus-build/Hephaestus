@@ -184,7 +184,6 @@ class PullRequestContentSourceTest extends BaseUnitTest {
     @Nested
     class MetadataAndComments {
 
-        /** The record's commits are read off the clone, so the record fails as the diff does without one. */
         @Test
         void shouldFailTheRecordWhenTheCloneIsUnavailable() {
             when(gitRepositoryManager.isEnabled()).thenReturn(false);
@@ -215,7 +214,6 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(authored.get("committed_at").asString()).isEqualTo("2026-06-01T10:01:00Z");
             assertThat(authored.get("parent_count").asInt()).isEqualTo(1);
             assertThat(authored.get("changed_files").asInt()).isEqualTo(3);
-            // An absent body or file count has no key, never a JSON null.
             JsonNode merge = commits.get("commits").get(1);
             assertThat(merge.get("parent_count").asInt()).isEqualTo(2);
             assertThat(merge.has("body")).isFalse();
