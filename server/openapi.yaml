@@ -13362,7 +13362,7 @@ components:
         nextCheck:
           type: string
           format: date-time
-          description: when the scheduler will try again
+          description: when the next automatic check is due
         retryUntil:
           type: string
           format: date-time

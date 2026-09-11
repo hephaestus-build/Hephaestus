@@ -3790,7 +3790,7 @@ export type ReleaseStatus = {
    */
   latest?: LatestRelease;
   /**
-   * when the scheduler will try again
+   * when the next automatic check is due
    */
   nextCheck?: Date;
   /**
