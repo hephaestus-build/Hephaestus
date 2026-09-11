@@ -45,11 +45,19 @@ public class ConsentDecision {
     @Column(name = "mechanism", nullable = false, length = 32)
     private Mechanism mechanism;
 
+    /** Which wording the account was shown — {@link ConsentService#WORDING_VERSION} owns it. */
     @Column(name = "notice_version", nullable = false, length = 32)
     private String noticeVersion;
 
-    @Column(name = "notice_sha256", nullable = false, length = 64)
-    private String noticeSha256;
+    /**
+     * The organisation the research question named, as it was rendered. Null on every other purpose,
+     * and on a research decision only where the instance ran no study.
+     *
+     * <p>It is here rather than derived from configuration because configuration changes and evidence
+     * may not: after a rename, this is the only record of who the account was actually asked about.
+     */
+    @Column(name = "research_organization", length = 255)
+    private @Nullable String researchOrganization;
 
     @CreationTimestamp(source = SourceType.DB)
     @Column(name = "occurred_at", nullable = false, updatable = false)
@@ -61,13 +69,13 @@ public class ConsentDecision {
             boolean granted,
             Mechanism mechanism,
             String noticeVersion,
-            String noticeSha256) {
+            @Nullable String researchOrganization) {
         this.account = account;
         this.purpose = purpose;
         this.granted = granted;
         this.mechanism = mechanism;
         this.noticeVersion = noticeVersion;
-        this.noticeSha256 = noticeSha256;
+        this.researchOrganization = researchOrganization;
     }
 
     public enum Purpose {

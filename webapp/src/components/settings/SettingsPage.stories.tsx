@@ -72,6 +72,7 @@ export const Default: Story = {
 		},
 		showResearchSection: true,
 		researchProps: {
+			organization: "AET",
 			participateInResearch: true,
 			onToggleResearch: fn(),
 		},
@@ -90,6 +91,7 @@ export const AllTogglesDisabled: Story = {
 		},
 		showResearchSection: true,
 		researchProps: {
+			organization: "AET",
 			participateInResearch: false,
 			onToggleResearch: fn(),
 		},
@@ -108,6 +110,7 @@ export const Loading: Story = {
 		},
 		showResearchSection: true,
 		researchProps: {
+			organization: "AET",
 			participateInResearch: true,
 			onToggleResearch: fn(),
 		},
@@ -126,6 +129,7 @@ export const ResearchHidden: Story = {
 		},
 		showResearchSection: false,
 		researchProps: {
+			organization: "AET",
 			participateInResearch: true,
 			onToggleResearch: fn(),
 		},

@@ -8890,15 +8890,17 @@ components:
       properties:
         completed:
           type: boolean
-        noticeText:
-          type: string
         noticeVersion:
           type: string
+          description: Version of the first-login wording the client must be rendering
         participateInResearch:
           type: boolean
+        researchOrganization:
+          type: string
+          description: "Organisation running the optional research programme, or null\
+            \ when this instance runs none"
       required:
       - completed
-      - noticeText
       - noticeVersion
       - participateInResearch
     Contributor:
@@ -10168,11 +10170,16 @@ components:
           type: string
         participateInResearch:
           type: boolean
+          description: "Required when the instance names a research organisation,\
+            \ omitted otherwise"
+        researchOrganization:
+          type: string
+          description: The organisation the research question named on screen; omitted
+            when it asked none
         termsAccepted:
           type: boolean
       required:
       - noticeVersion
-      - participateInResearch
       - termsAccepted
     FxRateInfo:
       type: object
@@ -13368,8 +13375,14 @@ components:
       properties:
         granted:
           type: boolean
+        noticeVersion:
+          type: string
+        researchOrganization:
+          type: string
+          description: The organisation this control named on screen
       required:
       - granted
+      - noticeVersion
     ResourceCounts:
       type: object
       description: Resource-level rollup for the connection overview badge
