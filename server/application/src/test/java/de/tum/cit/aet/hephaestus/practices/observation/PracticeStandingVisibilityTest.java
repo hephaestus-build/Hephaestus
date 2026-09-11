@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
@@ -32,6 +33,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -104,8 +106,9 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
                 .observedAt(NOW.minusSeconds(3600))
                 .agentJobId(new UUID(0L, 42L))
                 .summary("a problem")
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.ABSENT)
-                .assessment(Assessment.BAD)
+                .assessment(Assessment.GOOD)
                 .severity(severity)
                 .build();
     }
@@ -170,7 +173,7 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
         return practice;
     }
 
-    private Observation strength(Practice practice, Presence presence) {
+    private Observation strength(Practice practice, @Nullable Presence presence) {
         return Observation.builder()
                 .id(UUID.randomUUID())
                 .practice(practice)
@@ -179,8 +182,9 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
                 .observedAt(NOW.minusSeconds(3600))
                 .agentJobId(new UUID(0L, 42L))
                 .summary("nothing swallowed on the paths you added")
+                .assessmentStatus(presence == null ? AssessmentStatus.NOT_APPLICABLE : AssessmentStatus.ASSESSED)
                 .presence(presence)
-                .assessment(Assessment.GOOD)
+                .assessment(presence == null ? null : presence == Presence.PRESENT ? Assessment.GOOD : Assessment.BAD)
                 .build();
     }
 

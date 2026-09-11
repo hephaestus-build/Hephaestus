@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
@@ -142,6 +143,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 .id(UUID.randomUUID())
                 .summary("Swallowed IOException")
                 .practice(practice)
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.PRESENT)
                 .assessment(Assessment.BAD)
                 .severity(Severity.MINOR)
@@ -184,6 +186,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 .practice(practiceBad)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(123L)
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.PRESENT)
                 .assessment(Assessment.BAD)
                 .severity(Severity.MAJOR)
@@ -202,7 +205,8 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 .id(UUID.randomUUID())
                 .summary("No test surface")
                 .practice(practiceNa)
-                .presence(Presence.NOT_APPLICABLE)
+                .assessmentStatus(AssessmentStatus.NOT_APPLICABLE)
+                .presence(null)
                 .assessment(null)
                 .severity(null)
                 .observedAt(observedNa)
@@ -250,7 +254,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 .contains("IOException");
 
         JsonNode na = obs.get(1);
-        assertThat(na.get("presence").asString()).isEqualTo("NOT_APPLICABLE");
+        assertThat(na.get("assessmentStatus").asString()).isEqualTo("NOT_APPLICABLE");
         // assessment/severity must be JSON null (not the string "null", not absent).
         assertThat(na.get("assessment").isNull()).isTrue();
         assertThat(na.get("severity").isNull()).isTrue();

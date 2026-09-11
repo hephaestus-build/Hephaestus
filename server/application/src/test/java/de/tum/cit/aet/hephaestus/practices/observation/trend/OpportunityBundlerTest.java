@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import java.time.Instant;
@@ -129,6 +130,7 @@ class OpportunityBundlerTest {
                 .agentJobId(jobId)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(artifactId)
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.PRESENT)
                 .assessment(assessment)
                 .observedAt(Instant.parse(observedAt))
@@ -141,7 +143,8 @@ class OpportunityBundlerTest {
                 .agentJobId(jobId)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(artifactId)
-                .presence(Presence.NOT_APPLICABLE)
+                .assessmentStatus(AssessmentStatus.NOT_APPLICABLE)
+                .presence(null)
                 .observedAt(Instant.parse(observedAt))
                 .build();
     }

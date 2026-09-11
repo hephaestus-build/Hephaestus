@@ -7,6 +7,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.LocusObservation;
@@ -68,8 +70,8 @@ class ObservationTrendServiceTest extends BaseUnitTest {
         // a RESOLVED locus carries the PRIOR run's prose (it is absent now; that is what the student last saw)
         LocusTransition resolved = transition(d, "keyY");
         assertThat(resolved.summary()).isEqualTo("Y title");
-        assertThat(resolved.priorAssessment()).isEqualTo(Assessment.BAD);
-        assertThat(resolved.currentAssessment()).isNull();
+        assertThat(resolved.priorOutcome()).isEqualTo(Outcome.NEGATIVE);
+        assertThat(resolved.currentOutcome()).isNull();
     }
 
     @Test
@@ -189,8 +191,8 @@ class ObservationTrendServiceTest extends BaseUnitTest {
         assertThat(d.countRegressed()).isEqualTo(1);
         LocusTransition t = d.transitions().get(0);
         assertThat(t.status()).isEqualTo(TransitionStatus.REGRESSED);
-        assertThat(t.priorAssessment()).isEqualTo(Assessment.GOOD);
-        assertThat(t.currentAssessment()).isEqualTo(Assessment.BAD);
+        assertThat(t.priorOutcome()).isEqualTo(Outcome.POSITIVE);
+        assertThat(t.currentOutcome()).isEqualTo(Outcome.NEGATIVE);
     }
 
     @Test
@@ -208,7 +210,7 @@ class ObservationTrendServiceTest extends BaseUnitTest {
         assertThat(d.countResolved()).isZero();
         LocusTransition t = d.transitions().get(0);
         assertThat(t.status()).isEqualTo(TransitionStatus.PERSISTED);
-        assertThat(t.currentAssessment()).isEqualTo(Assessment.GOOD);
+        assertThat(t.currentOutcome()).isEqualTo(Outcome.POSITIVE);
     }
 
     @Test
@@ -245,7 +247,7 @@ class ObservationTrendServiceTest extends BaseUnitTest {
                                 JOB_CURR,
                                 "keyM",
                                 Presence.ABSENT,
-                                Assessment.BAD,
+                                Assessment.GOOD,
                                 Severity.MAJOR,
                                 0.7f,
                                 "m",
@@ -257,7 +259,7 @@ class ObservationTrendServiceTest extends BaseUnitTest {
         assertThat(d.transitions()).hasSize(1);
         LocusTransition t = d.transitions().get(0);
         assertThat(t.status()).isEqualTo(TransitionStatus.REGRESSED);
-        assertThat(t.currentAssessment()).isEqualTo(Assessment.BAD);
+        assertThat(t.currentOutcome()).isEqualTo(Outcome.NEGATIVE);
         assertThat(t.currentSeverity()).isEqualTo(Severity.MAJOR);
     }
 
@@ -304,8 +306,8 @@ class ObservationTrendServiceTest extends BaseUnitTest {
         Assessment assessment =
                 switch (v) {
                     case PRESENT -> Assessment.GOOD;
-                    case ABSENT -> Assessment.BAD;
-                    case NOT_APPLICABLE, INCONCLUSIVE -> null;
+                    case ABSENT -> Assessment.GOOD;
+                    case null -> null;
                 };
         return locusFull(job, key, v, assessment, sev, conf, slug, title);
     }
@@ -324,6 +326,11 @@ class ObservationTrendServiceTest extends BaseUnitTest {
             String slug,
             String title) {
         return new LocusObservation() {
+            @Override
+            public AssessmentStatus getAssessmentStatus() {
+                return AssessmentStatus.ASSESSED;
+            }
+
             @Override
             public UUID getAgentJobId() {
                 return job;

@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.observation;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.LocusObservation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.RunRef;
 import de.tum.cit.aet.hephaestus.practices.observation.TrendDelta.LocusTransition;
@@ -93,24 +93,41 @@ public class ObservationTrendService {
             LocusObservation prior = prevMap.get(key);
             LocusObservation curr = currMap.get(key);
             if (prior == null) {
-                // present now, absent prior → NEW (carries curr.getAssessment() so the footer can tell a new
-                // PROBLEM from a newly-observed strength; only a BAD-new is a "new problem" — C10).
+                // present now, absent prior → NEW (carries Outcome.of(curr.getPresence(), curr.getAssessment()) so the
+                // footer can tell a new
+                // PROBLEM from a newly-observed strength; only a NEGATIVE-new is a "new problem" — C10).
                 LocusObservation current = Objects.requireNonNull(curr);
-                transitions.add(transition(key, TransitionStatus.NEW, current, null, current.getAssessment()));
+                transitions.add(transition(
+                        key,
+                        TransitionStatus.NEW,
+                        current,
+                        null,
+                        Outcome.of(current.getPresence(), current.getAssessment())));
             } else if (curr == null) {
-                // present prior, absent now. Only a vanished PROBLEM is RESOLVED ("you fixed X"). A GOOD strength
+                // present prior, absent now. Only a vanished PROBLEM is RESOLVED ("you fixed X"). A POSITIVE strength
                 // that simply was not re-observed this run is NOT a fix — emitting RESOLVED would credit the
                 // developer with fixing something that was already right (C10). Drop it: no transition.
-                if (prior.getAssessment() == Assessment.BAD) {
-                    transitions.add(transition(key, TransitionStatus.RESOLVED, prior, prior.getAssessment(), null));
+                if (Outcome.of(prior.getPresence(), prior.getAssessment()) == Outcome.NEGATIVE) {
+                    transitions.add(transition(
+                            key,
+                            TransitionStatus.RESOLVED,
+                            prior,
+                            Outcome.of(prior.getPresence(), prior.getAssessment()),
+                            null));
                 }
             } else {
-                // present in both — PERSISTED, unless it backslid GOOD→BAD (REGRESSED; ADR 0022).
-                // BAD→GOOD is an IMPROVEMENT, not a regression: it stays PERSISTED but currentAssessment
-                // carries GOOD so B1 can render "now satisfied".
-                boolean regressed = prior.getAssessment() == Assessment.GOOD && curr.getAssessment() == Assessment.BAD;
+                // present in both — PERSISTED, unless it backslid POSITIVE→NEGATIVE (REGRESSED; ADR 0022).
+                // NEGATIVE→POSITIVE is an IMPROVEMENT, not a regression: it stays PERSISTED but currentOutcome
+                // carries POSITIVE so B1 can render "now satisfied".
+                boolean regressed = Outcome.of(prior.getPresence(), prior.getAssessment()) == Outcome.POSITIVE
+                        && Outcome.of(curr.getPresence(), curr.getAssessment()) == Outcome.NEGATIVE;
                 TransitionStatus status = regressed ? TransitionStatus.REGRESSED : TransitionStatus.PERSISTED;
-                transitions.add(transition(key, status, curr, prior.getAssessment(), curr.getAssessment()));
+                transitions.add(transition(
+                        key,
+                        status,
+                        curr,
+                        Outcome.of(prior.getPresence(), prior.getAssessment()),
+                        Outcome.of(curr.getPresence(), curr.getAssessment())));
             }
         }
         transitions.sort(Comparator.comparingInt((LocusTransition t) -> statusOrder(t.status()))
@@ -125,15 +142,15 @@ public class ObservationTrendService {
             String key,
             TransitionStatus status,
             LocusObservation represent,
-            @Nullable Assessment priorAssessment,
-            @Nullable Assessment currentAssessment) {
+            @Nullable Outcome priorOutcome,
+            @Nullable Outcome currentOutcome) {
         return new LocusTransition(
                 key,
                 status,
                 represent.getPracticeSlug(),
                 represent.getSummary(),
-                priorAssessment,
-                currentAssessment,
+                priorOutcome,
+                currentOutcome,
                 represent.getSeverity());
     }
 
@@ -147,8 +164,8 @@ public class ObservationTrendService {
     }
 
     private static LocusObservation worse(LocusObservation a, LocusObservation b) {
-        // Severity is null for a GOOD (strength) observation (ADR 0022): treat absent as least-severe
-        // (ordinal beyond INFO) so a BAD observation always wins the representative slot.
+        // Severity is null for a POSITIVE (strength) observation (ADR 0022): treat absent as least-severe
+        // (ordinal beyond INFO) so a NEGATIVE observation always wins the representative slot.
         int sev = Integer.compare(severityOrdinal(a), severityOrdinal(b));
         if (sev != 0) {
             return sev < 0 ? a : b; // lower ordinal = more severe (CRITICAL=0)

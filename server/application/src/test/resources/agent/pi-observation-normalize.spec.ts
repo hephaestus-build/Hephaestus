@@ -4,7 +4,6 @@ import test from "node:test";
 import {
 	ASSESSMENT_DESCRIPTIONS,
 	ASSESSMENT_VALUES,
-	carriesValence,
 	citationMatchesArtifact,
 	describeCitationMismatch,
 	dedupeKeyForObservation,
@@ -13,7 +12,6 @@ import {
 	normalizeObservation as normalizeFinalObservation,
 	PRESENCE_DESCRIPTIONS,
 	PRESENCE_VALUES,
-	type Presence,
 	type RecordedInapplicability,
 	type RecordedSearch,
 	SEVERITY_DESCRIPTIONS,
@@ -26,35 +24,28 @@ import {
 interface ObservationOverrides {
 	practiceSlug?: unknown;
 	title?: unknown;
-	presence?: string;
-	assessment?: string;
-	severity?: string;
+	presence?: unknown;
+	assessmentStatus?: unknown;
+	assessment?: unknown;
+	severity?: unknown;
 	reasoning?: unknown;
 	evidence?: EvidenceOverrides;
 	[key: string]: unknown;
 }
-
 type EvidenceFixture = { citations: Record<string, unknown>[] } & Record<string, unknown>;
-
 type EvidenceOverrides = Partial<EvidenceFixture> & Record<string, unknown>;
-
-interface RawObservationFixture {
-	practiceSlug: unknown;
-	summary: unknown;
-	outcome: unknown;
-	evidence: EvidenceFixture;
-	evidenceRationale: unknown;
-	[key: string]: unknown;
-}
-
-function baseObservation(overrides: ObservationOverrides = {}): RawObservationFixture {
-	const presence = (overrides.presence ?? "PRESENT").toUpperCase();
-	const assessment = (overrides.assessment ?? "BAD").toUpperCase();
-	const severity = (overrides.severity ?? "MAJOR").toUpperCase();
-	const rawEvidence: EvidenceOverrides = overrides.evidence ?? {};
-	const citations: Record<string, unknown>[] = Array.isArray(rawEvidence.citations)
-		? rawEvidence.citations
-		: [
+function baseObservation(overrides: ObservationOverrides = {}) {
+	return {
+		practiceSlug: "writes_focused_pull_requests",
+		summary: "PR mixes unrelated changes",
+		assessmentStatus: "ASSESSED",
+		presence: "PRESENT",
+		assessment: "BAD",
+		severity: "MAJOR",
+		evidenceRationale: "The diff touches auth and billing in one PR.",
+		...overrides,
+		evidence: {
+			citations: overrides.evidence?.citations ?? [
 				{
 					sourceKind: "scm.pull-request.diff",
 					artifactPath: "inputs/context/diff.patch",
@@ -64,80 +55,12 @@ function baseObservation(overrides: ObservationOverrides = {}): RawObservationFi
 					endLine: 10,
 					quote: "+ insecure();",
 				},
-			];
-	const evidence: EvidenceFixture = {
-		citations,
-		...((rawEvidence.search ?? rawEvidence.exhaustiveSearch) == null
-			? {}
-			: { exhaustiveSearch: rawEvidence.search ?? rawEvidence.exhaustiveSearch }),
-		...((rawEvidence.inapplicability ?? rawEvidence.exclusion) == null
-			? {}
-			: { exclusion: rawEvidence.inapplicability ?? rawEvidence.exclusion }),
-		...((rawEvidence.undecidability ?? rawEvidence.missingEvidence) == null
-			? {}
-			: { missingEvidence: rawEvidence.undecidability ?? rawEvidence.missingEvidence }),
+			],
+			...overrides.evidence,
+		},
 	};
-	const outcome = ["PRESENT", "ABSENT"].includes(presence)
-		? `BEHAVIOR_${presence}_${assessment}${assessment === "BAD" ? `_${severity}` : ""}`
-		: presence === "NOT_APPLICABLE"
-			? "NO_REVIEW_OCCASION"
-			: "INSUFFICIENT_EVIDENCE";
-	const translated: RawObservationFixture = {
-		practiceSlug: overrides.practiceSlug ?? "writes_focused_pull_requests",
-		summary: overrides.title ?? "PR mixes unrelated changes",
-		outcome,
-		evidence,
-		evidenceRationale: overrides.reasoning ?? "The diff touches auth and billing in one PR.",
-	};
-	for (const [key, value] of Object.entries(overrides)) {
-		if (
-			![
-				"title",
-				"presence",
-				"assessment",
-				"severity",
-				"reasoning",
-				"evidence",
-				"summary",
-				"outcome",
-				"evidenceRationale",
-			].includes(key)
-		)
-			translated[key] = value;
-	}
-	return translated;
 }
-
-function normalizeObservation(input: ObservationOverrides) {
-	if (
-		"presence" in input ||
-		"assessment" in input ||
-		"severity" in input ||
-		"title" in input ||
-		"reasoning" in input
-	) {
-		return normalizeFinalObservation(baseObservation(input));
-	}
-	if (
-		input.evidence &&
-		(input.evidence.search || input.evidence.inapplicability || input.evidence.undecidability)
-	) {
-		return normalizeFinalObservation({
-			...input,
-			evidence: {
-				citations: input.evidence.citations,
-				...(input.evidence.search == null ? {} : { exhaustiveSearch: input.evidence.search }),
-				...(input.evidence.inapplicability == null
-					? {}
-					: { exclusion: input.evidence.inapplicability }),
-				...(input.evidence.undecidability == null
-					? {}
-					: { missingEvidence: input.evidence.undecidability }),
-			},
-		});
-	}
-	return normalizeFinalObservation(input);
-}
+const normalizeObservation = normalizeFinalObservation;
 
 function onlyCitation<T extends object>(citations: readonly T[]): T {
 	const [citation] = citations;
@@ -147,7 +70,7 @@ function onlyCitation<T extends object>(citations: readonly T[]): T {
 
 const UNDECIDABLE = {
 	openQuestion: "Whether the body states a why, or only restates the title",
-	wouldSettleIt: "The body of the issue the description defers to",
+	wouldSettleIt: "Clarification of the contradictory acceptance requirements",
 };
 
 void test("lowercase enums + underscored slug normalize and are accepted (not dropped)", () => {
@@ -160,11 +83,11 @@ void test("lowercase enums + underscored slug normalize and are accepted (not dr
 
 void test("mixed-case enums up-case", () => {
 	const out = normalizeObservation(
-		baseObservation({ presence: "Present", assessment: "Good", severity: "Minor" }),
+		baseObservation({ presence: "Present", assessment: "Good", severity: null }),
 	);
 	assert.equal(out.presence, "PRESENT");
 	assert.equal(out.assessment, "GOOD");
-	assert.equal(out.severity, "INFO");
+	assert.equal(out.severity, null);
 });
 
 void test("an observation carries no confidence, and one offered is rejected", () => {
@@ -178,15 +101,12 @@ void test("an observation carries no confidence, and one offered is rejected", (
 	}
 });
 
-void test("NOT_APPLICABLE (lowercase) nulls assessment", () => {
-	const out = normalizeObservation(
-		notApplicableObservation(goodInapplicability, {
-			presence: "not_applicable",
-			assessment: "bad",
-		}),
-	);
-	assert.equal(out.presence, "NOT_APPLICABLE");
-	assert.equal(out.assessment, undefined);
+void test("NOT_APPLICABLE carries explicit null axes", () => {
+	const out = normalizeObservation(notApplicableObservation(goodInapplicability));
+	assert.equal(out.assessmentStatus, "NOT_APPLICABLE");
+	assert.equal(out.presence, null);
+	assert.equal(out.assessment, null);
+	assert.equal(out.severity, null);
 });
 
 void test("dedupe key uses the normalized hyphenated slug", () => {
@@ -200,18 +120,18 @@ void test("dedupe key uses the normalized hyphenated slug", () => {
 });
 
 void test("a one-word summary is refused, because it names nothing on the practice page", () => {
-	assert.throws(() => normalizeObservation(baseObservation({ title: "Test" })), /short phrase/);
+	assert.throws(() => normalizeObservation(baseObservation({ summary: "Test" })), /short phrase/);
 	assert.throws(
-		() => normalizeObservation(baseObservation({ title: "  Duplication  " })),
+		() => normalizeObservation(baseObservation({ summary: "  Duplication  " })),
 		/short phrase/,
 	);
-	assert.equal(normalizeObservation(baseObservation({ title: "No tests" })).summary, "No tests");
+	assert.equal(normalizeObservation(baseObservation({ summary: "No tests" })).summary, "No tests");
 });
 
 void test("genuinely invalid enum still rejected after normalization", () => {
 	const invalid = baseObservation();
-	invalid.outcome = "MAYBE";
-	assert.throws(() => normalizeObservation(invalid), /invalid outcome/);
+	invalid.presence = "MAYBE";
+	assert.throws(() => normalizeObservation(invalid), /invalid presence/);
 });
 
 void test("missing evidence-source attribution is rejected", () => {
@@ -385,41 +305,39 @@ void test("removed-line citations use old-side coordinates", () => {
 	assert.equal(citationMatchesArtifact({ ...citation, side: "NEW" }, diff), false);
 });
 
-void test("INCONCLUSIVE is accepted and carries no assessment", () => {
+void test("UNDETERMINED is accepted and carries no assessment", () => {
 	const out = normalizeObservation({
 		...baseObservation(),
-		presence: "INCONCLUSIVE",
-		assessment: undefined,
+		assessmentStatus: "UNDETERMINED",
+		presence: null,
+		assessment: null,
+		severity: null,
 		evidence: { ...baseObservation().evidence, undecidability: UNDECIDABLE },
 	});
-	assert.equal(out.presence, "INCONCLUSIVE");
-	assert.equal("assessment" in out, false);
+	assert.equal(out.assessmentStatus, "UNDETERMINED");
+	assert.equal(out.presence, null);
+	assert.equal(out.assessment, null);
 });
 
-void test("an assessment attached to a valence-free presence is dropped, not rejected", () => {
-	const observation = (presence: Presence) =>
-		presence === "NOT_APPLICABLE"
-			? notApplicableObservation(goodInapplicability, { assessment: "GOOD" })
-			: {
-					...baseObservation(),
-					presence,
-					assessment: "GOOD",
-					evidence: { ...baseObservation().evidence, undecidability: UNDECIDABLE },
-				};
-	for (const presence of ["NOT_APPLICABLE", "INCONCLUSIVE"] as const) {
-		const out = normalizeObservation(observation(presence));
-		assert.equal("assessment" in out, false, `${presence} must not carry an assessment`);
+void test("contradictory axes are rejected, not silently corrected", () => {
+	for (const assessmentStatus of ["NOT_APPLICABLE", "UNDETERMINED"]) {
+		assert.throws(
+			() => normalizeObservation(baseObservation({ assessmentStatus })),
+			/explicit null/,
+		);
 	}
-});
-
-void test("carriesValence agrees with the presence/assessment coupling", () => {
-	assert.equal(carriesValence("PRESENT"), true);
-	assert.equal(carriesValence("ABSENT"), true);
-	assert.equal(carriesValence("NOT_APPLICABLE"), false);
-	assert.equal(carriesValence("INCONCLUSIVE"), false);
-	const missingAssessment = baseObservation();
-	missingAssessment.outcome = "BEHAVIOR_PRESENT_BAD";
-	assert.throws(() => normalizeObservation(missingAssessment), /requires a severity suffix/);
+	assert.throws(
+		() => normalizeObservation(baseObservation({ assessment: "GOOD" })),
+		/null severity/,
+	);
+	assert.throws(
+		() => normalizeObservation(baseObservation({ severity: null })),
+		/invalid severity/,
+	);
+	assert.throws(
+		() => normalizeObservation(baseObservation({ presence: null })),
+		/invalid presence/,
+	);
 });
 
 function absentObservation(
@@ -429,7 +347,7 @@ function absentObservation(
 	return {
 		...baseObservation(),
 		presence: "ABSENT",
-		assessment: "BAD",
+		assessment: "GOOD",
 		evidence: { ...baseObservation().evidence, ...(search === undefined ? {} : { search }) },
 		...overrides,
 	};
@@ -442,10 +360,7 @@ const goodSearch = {
 };
 
 void test("an ABSENT observation must record where it searched", () => {
-	assert.throws(
-		() => normalizeObservation(absentObservation(undefined)),
-		/exactly exhaustiveSearch/,
-	);
+	assert.throws(() => normalizeObservation(absentObservation(undefined)), /exactly search/);
 	assert.throws(
 		() => normalizeObservation(absentObservation({ ...goodSearch, consulted: [] })),
 		/at least one source/,
@@ -498,9 +413,9 @@ void test("ABSENT is refused unless the search covered every source the practice
 	);
 });
 
-void test("ABSENT + GOOD needs a practice that bounded its corpus; ABSENT + BAD does not", () => {
+void test("Positive absence needs a bounded corpus; missing desirable behaviour does not", () => {
 	const strength = normalizeObservation(
-		absentObservation(goodSearch, { assessment: "GOOD", severity: undefined }),
+		absentObservation(goodSearch, { assessment: "BAD", severity: null }),
 	);
 	const gap = normalizeObservation(absentObservation(goodSearch));
 	const available = new Set(["scm.review-threads"]);
@@ -508,14 +423,14 @@ void test("ABSENT + GOOD needs a practice that bounded its corpus; ABSENT + BAD 
 	assert.doesNotThrow(() =>
 		validateSearchScope(strength, new Set(["scm.review-threads"]), available),
 	);
-	assert.throws(() => validateSearchScope(strength, new Set(), available), /ABSENT \+ GOOD/);
-	assert.throws(() => validateSearchScope(strength, new Set(), available), /INCONCLUSIVE/);
+	assert.throws(() => validateSearchScope(strength, new Set(), available), /ABSENT \+ BAD/);
+	assert.throws(() => validateSearchScope(strength, new Set(), available), /UNDETERMINED/);
 	assert.doesNotThrow(() => validateSearchScope(gap, new Set(), available));
 });
 
 void test("a bounded corpus does not excuse a partial search, in either direction", () => {
 	const strength = normalizeObservation(
-		absentObservation(goodSearch, { assessment: "GOOD", severity: undefined }),
+		absentObservation(goodSearch, { assessment: "BAD", severity: null }),
 	);
 	const available = new Set(["scm.review-threads", "scm.linked-work-items"]);
 	assert.throws(
@@ -592,8 +507,10 @@ function notApplicableObservation(
 	const base = baseObservation();
 	return {
 		...base,
-		presence: "NOT_APPLICABLE",
-		assessment: undefined,
+		assessmentStatus: "NOT_APPLICABLE",
+		presence: null,
+		assessment: null,
+		severity: null,
 		evidence: {
 			...base.evidence,
 			...(inapplicability === undefined ? {} : { inapplicability }),
@@ -611,7 +528,7 @@ const goodInapplicability = {
 void test("a NOT_APPLICABLE observation must say what rules the practice out", () => {
 	assert.throws(
 		() => normalizeObservation(notApplicableObservation(undefined)),
-		/exactly exclusion/,
+		/exactly inapplicability/,
 	);
 	assert.throws(
 		() => normalizeObservation(notApplicableObservation({ ...goodInapplicability, consulted: [] })),
@@ -634,8 +551,8 @@ void test("a NOT_APPLICABLE observation must say what rules the practice out", (
 	assert.equal(inapplicability.subject, goodInapplicability.subject);
 });
 
-void test("the refusal points at INCONCLUSIVE, because that is the answer it is asking for", () => {
-	assert.throws(() => normalizeObservation(notApplicableObservation(undefined)), /exclusion/);
+void test("the refusal points at UNDETERMINED, because that is the answer it is asking for", () => {
+	assert.throws(() => normalizeObservation(notApplicableObservation(undefined)), /inapplicability/);
 	assert.throws(
 		() =>
 			normalizeObservation(notApplicableObservation({ ...goodInapplicability, ruledOutBy: "" })),
@@ -643,11 +560,13 @@ void test("the refusal points at INCONCLUSIVE, because that is the answer it is 
 	);
 });
 
-void test("INCONCLUSIVE needs no inapplicability block — it is not claiming anything about the work", () => {
+void test("UNDETERMINED needs no inapplicability block — it is not claiming anything about the work", () => {
 	const out = normalizeObservation({
 		...baseObservation(),
-		presence: "INCONCLUSIVE",
-		assessment: undefined,
+		assessmentStatus: "UNDETERMINED",
+		presence: null,
+		assessment: null,
+		severity: null,
 		evidence: { ...baseObservation().evidence, undecidability: UNDECIDABLE },
 	});
 	assert.equal("inapplicability" in out.evidence, false);
@@ -678,33 +597,34 @@ void test("removed measurement fields are rejected rather than silently accepted
 	);
 });
 
-void test("final discriminated outcomes map to the persisted vocabulary", () => {
-	const assessed = baseObservation();
-	assert.deepEqual(
-		{
-			presence: normalizeFinalObservation(assessed).presence,
-			assessment: normalizeFinalObservation(assessed).assessment,
-		},
-		{ presence: "PRESENT", assessment: "BAD" },
-	);
-
-	const declined = baseObservation({
-		presence: "INCONCLUSIVE",
-		evidence: { undecidability: UNDECIDABLE },
-	});
-	const normalized = normalizeFinalObservation(declined);
-	assert.equal(normalized.presence, "INCONCLUSIVE");
-	assert.equal(normalized.assessment, undefined);
+void test("all assessed combinations preserve the fixed target and judgment", () => {
+	for (const presence of PRESENCE_VALUES) {
+		for (const assessment of ASSESSMENT_VALUES) {
+			const severity = (presence === "PRESENT") !== (assessment === "GOOD") ? "MAJOR" : null;
+			const observation = baseObservation({ presence, assessment, severity });
+			const evidence = {
+				...observation.evidence,
+				...(presence === "ABSENT" ? { search: goodSearch } : {}),
+			};
+			const out = normalizeFinalObservation({ ...observation, evidence });
+			assert.equal(out.assessmentStatus, "ASSESSED");
+			assert.equal(out.presence, presence);
+			assert.equal(out.assessment, assessment);
+			assert.equal(out.severity, severity);
+		}
+	}
 });
 
-void test("outcome is one exact semantic value rather than nullable peer fields", () => {
-	const objectOutcome = baseObservation();
-	objectOutcome.outcome = { kind: "ASSESSED", occurrence: "PRESENT", assessment: "GOOD" };
-	assert.throws(() => normalizeFinalObservation(objectOutcome), /invalid outcome/);
-
-	const invalidGood = baseObservation();
-	invalidGood.outcome = "BEHAVIOR_PRESENT_GOOD_MINOR";
-	assert.throws(() => normalizeFinalObservation(invalidGood), /must not carry severity/);
+void test("legacy combined outcomes and omitted status are rejected", () => {
+	assert.throws(
+		() =>
+			normalizeFinalObservation({ ...baseObservation(), outcome: "BEHAVIOR_PRESENT_BAD_MAJOR" }),
+		/unknown observation field/,
+	);
+	assert.throws(
+		() => normalizeFinalObservation({ ...baseObservation(), assessmentStatus: undefined }),
+		/invalid assessmentStatus/,
+	);
 });
 
 void test("every vocabulary value carries a description", () => {
@@ -728,18 +648,6 @@ void test("describeVocabulary refuses a value it cannot describe", () => {
 		() => describeVocabulary([...PRESENCE_VALUES, "UNDECIDED"], unpromising),
 		/'UNDECIDED' has no description/,
 	);
-});
-
-void test("each presence description discriminates it from its nearest neighbour", () => {
-	const rendered = describeVocabulary(PRESENCE_VALUES, PRESENCE_DESCRIPTIONS);
-	for (const value of PRESENCE_VALUES) {
-		assert.ok(rendered.includes(`${value} — `), `${value} is rendered on its own line`);
-		const others = PRESENCE_VALUES.filter((other) => other !== value);
-		assert.ok(
-			others.some((other) => PRESENCE_DESCRIPTIONS[value].includes(other)),
-			`${value} must say how it differs from another presence`,
-		);
-	}
 });
 
 void test("a citation survives the typographic substitutions a model makes while transcribing", () => {
@@ -782,16 +690,21 @@ void test("folding glyphs never makes a quote the artifact does not contain matc
 	assert.equal(citationMatchesArtifact(cite("a rationale the author never wrote"), content), false);
 });
 
-void test("an INCONCLUSIVE observation must say what it could not settle", () => {
+void test("an UNDETERMINED observation must say what it could not settle", () => {
 	const base = {
 		practiceSlug: "describe-what-and-why",
-		title: "Rationale lives somewhere this review cannot read",
-		presence: "INCONCLUSIVE",
-		reasoning: "The body points at an issue for the why, and that issue was not staged.",
+		summary: "Acceptance requirements contradict one another",
+		assessment: null,
+		assessmentStatus: "UNDETERMINED",
+		presence: null,
+
+		severity: null,
+		evidenceRationale:
+			"The captured requirements state incompatible expected results for the same input.",
 		evidence: { citations: baseObservation().evidence.citations },
 	};
 
-	assert.throws(() => normalizeObservation(base), /missingEvidence/);
+	assert.throws(() => normalizeObservation(base), /undecidability/);
 	assert.throws(
 		() =>
 			normalizeObservation({
@@ -811,7 +724,7 @@ void test("an INCONCLUSIVE observation must say what it could not settle", () =>
 			},
 		},
 	});
-	assert.equal(ok.presence, "INCONCLUSIVE");
-	assert.equal(ok.assessment, undefined);
+	assert.equal(ok.assessmentStatus, "UNDETERMINED");
+	assert.equal(ok.assessment, null);
 	assert.equal(ok.evidence.undecidability?.wouldSettleIt, "The linked issue's body");
 });

@@ -9,6 +9,7 @@ const observation = (
 	practiceSlug: "records-decisions",
 	practiceName: "Record significant decisions",
 	title: "The workspace trade-off is documented",
+	assessmentStatus: "ASSESSED",
 	presence: "PRESENT",
 	assessment: "GOOD",
 	...overrides,

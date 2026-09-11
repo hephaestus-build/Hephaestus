@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -54,6 +55,7 @@ class ObservationOrderTest extends BaseUnitTest {
         return new ValidatedObservation(
                 "slug",
                 title,
+                AssessmentStatus.ASSESSED,
                 severity == null ? Presence.ABSENT : Presence.PRESENT,
                 severity == null ? Assessment.GOOD : Assessment.BAD,
                 severity,
@@ -130,6 +132,7 @@ class ObservationOrderTest extends BaseUnitTest {
     void persistedRowsTiebreakOnId() {
         var earlier = de.tum.cit.aet.hephaestus.practices.model.Observation.builder()
                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.PRESENT)
                 .assessment(Assessment.BAD)
                 .severity(Severity.MINOR)
@@ -137,6 +140,7 @@ class ObservationOrderTest extends BaseUnitTest {
                 .build();
         var later = de.tum.cit.aet.hephaestus.practices.model.Observation.builder()
                 .id(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.PRESENT)
                 .assessment(Assessment.BAD)
                 .severity(Severity.MINOR)

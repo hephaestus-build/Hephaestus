@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.BoundObservation;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -29,16 +31,26 @@ public record ReviewBoundObservationDTO(
         ReviewPracticeGroupDTO group,
 
         @NonNull String summary,
-        @NonNull Presence presence,
+        @NonNull AssessmentStatus assessmentStatus,
+        @Nullable Presence presence,
 
-        @Schema(description = "Assessment: GOOD or BAD (null when NOT_APPLICABLE)") @Nullable
+        @Schema(description = "Target behaviour: GOOD means desirable, BAD means undesirable (null unless ASSESSED)")
+        @Nullable
         Assessment assessment,
 
-        @Schema(description = "Severity band (null unless assessment is BAD)") @Nullable
+        @Schema(description = "Severity band (null unless outcome is NEGATIVE)") @Nullable
         Severity severity,
 
         @NonNull ReviewClaimCurrentness claimCurrentness,
         @NonNull Instant observedAt) {
+    @com.fasterxml.jackson.annotation.JsonProperty("outcome")
+    @Schema(
+            description = "Derived from presence and target assessment; null unless assessed",
+            accessMode = Schema.AccessMode.READ_ONLY)
+    public @Nullable Outcome getOutcome() {
+        return Outcome.of(presence, assessment);
+    }
+
     public static ReviewBoundObservationDTO from(BoundObservation row) {
         return new ReviewBoundObservationDTO(
                 row.getObservationId(),
@@ -49,6 +61,7 @@ public record ReviewBoundObservationDTO(
                 ReviewPracticeGroupDTO.from(
                         row.getGroupSlug(), row.getGroupName(), row.getGroupIcon(), row.getGroupColor()),
                 row.getSummary(),
+                row.getAssessmentStatus(),
                 row.getPresence(),
                 row.getAssessment(),
                 row.getSeverity(),

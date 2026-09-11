@@ -38,6 +38,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
@@ -509,13 +510,14 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 Practice practice, String summary, de.tum.cit.aet.hephaestus.practices.model.Severity severity) {
             var observation = org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.model.Observation.class);
             lenient().when(observation.getPractice()).thenReturn(practice);
+            lenient().when(observation.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
             lenient().when(observation.getSummary()).thenReturn(summary);
             lenient()
                     .when(observation.getPresence())
                     .thenReturn(de.tum.cit.aet.hephaestus.practices.model.Presence.ABSENT);
             lenient()
                     .when(observation.getAssessment())
-                    .thenReturn(de.tum.cit.aet.hephaestus.practices.model.Assessment.BAD);
+                    .thenReturn(de.tum.cit.aet.hephaestus.practices.model.Assessment.GOOD);
             lenient().when(observation.getSeverity()).thenReturn(severity);
             lenient().when(observation.getEvidenceRationale()).thenReturn("Reasoning for " + practice.getSlug() + ".");
             lenient().when(observation.getOccurrenceKey()).thenReturn("occ-" + practice.getSlug());
@@ -529,8 +531,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     {"observations": [{
                       "practiceSlug": "avoids-insecure-defaults-and-over-broad-permissions",
                       "summary": "The harmful behaviour is good",
-                      "presence": "PRESENT",
-                      "assessment": "GOOD",
+                      "assessmentStatus": "ASSESSED", "presence": "PRESENT",
+                      "assessment": "GOOD", "severity": null,
                       "evidenceRationale": "Original evidence rationale",
                       "evidence": {}
                     }]}
@@ -587,9 +589,9 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                   "observations": [{
                     "practiceSlug": "pr-description-quality",
                     "summary": "Good PR description",
-                    "presence": "PRESENT",
+                    "assessmentStatus": "ASSESSED", "presence": "PRESENT",
                     "assessment": "GOOD",
-                    "severity": "INFO",
+                    "severity": null,
                     "evidenceRationale": "The description states the purpose.",
                     "evidence": {}
                   }]
@@ -622,14 +624,13 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(java.util.List.of(practice));
             var observation = org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.model.Observation.class);
             lenient().when(observation.getPractice()).thenReturn(practice);
+            lenient().when(observation.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
             lenient().when(observation.getSummary()).thenReturn("What the review saw");
             lenient()
                     .when(observation.getPresence())
                     .thenReturn(assessment == Assessment.BAD ? Presence.ABSENT : Presence.PRESENT);
-            lenient().when(observation.getAssessment()).thenReturn(assessment);
-            lenient()
-                    .when(observation.getSeverity())
-                    .thenReturn(assessment == Assessment.BAD ? Severity.MAJOR : Severity.INFO);
+            lenient().when(observation.getAssessment()).thenReturn(Assessment.GOOD);
+            lenient().when(observation.getSeverity()).thenReturn(assessment == Assessment.BAD ? Severity.MAJOR : null);
             lenient().when(observation.getEvidenceRationale()).thenReturn("The evidence warrants it.");
             lenient().when(observation.getOccurrenceKey()).thenReturn("occ-" + practice.getSlug());
             lenient().when(observation.getRecurrenceKey()).thenReturn("rk-" + practice.getSlug());
@@ -691,7 +692,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                   "observations": [{
                     "practiceSlug": "avoids-insecure-defaults-and-over-broad-permissions",
                     "summary": "Hard-coded credential",
-                    "presence": "PRESENT",
+                    "assessmentStatus": "ASSESSED", "presence": "PRESENT",
                     "assessment": "BAD",
                     "severity": "CRITICAL",
                     "evidenceRationale": "A live API key is committed.",
@@ -729,7 +730,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                   "observations": [{
                     "practiceSlug": "pr-description-quality",
                     "summary": "Not applicable here",
-                    "presence": "NOT_APPLICABLE",
+                    "assessmentStatus": "NOT_APPLICABLE", "presence": null, "assessment": null, "severity": null,
                     "evidenceRationale": "The practice has no subject in this change.",
                     "evidence": { "citations": [], "inapplicability": { "reason": "No relevant subject exists." } }
                   }]
@@ -755,7 +756,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                   "observations": [{
                     "practiceSlug": "pr-description-quality",
                     "summary": "Not applicable here",
-                    "presence": "NOT_APPLICABLE",
+                    "assessmentStatus": "NOT_APPLICABLE", "presence": null, "assessment": null, "severity": null,
                     "evidenceRationale": "The practice has no subject in this change.",
                     "evidence": {
                       "citations": [{
@@ -793,8 +794,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                   "observations": [{
                     "practiceSlug": "error-handling",
                     "summary": "Unhandled error path",
-                    "presence": "ABSENT",
-                    "assessment": "BAD",
+                    "assessmentStatus": "ASSESSED", "presence": "ABSENT",
+                    "assessment": "GOOD",
                     "severity": "MAJOR",
                     "evidenceRationale": "The error branch is swallowed.",
                     "evidence": { "citations": [{ "path": "Sources/NotInDiff.swift", "startLine": 3 }] }
@@ -822,9 +823,9 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                   "observations": [{
                     "practiceSlug": "pr-description-quality",
                     "summary": "Clear description",
-                    "presence": "PRESENT",
+                    "assessmentStatus": "ASSESSED", "presence": "PRESENT",
                     "assessment": "GOOD",
-                    "severity": "INFO",
+                    "severity": null,
                     "evidenceRationale": "The description states the purpose.",
                     "evidence": {}
                   }]

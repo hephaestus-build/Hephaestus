@@ -279,7 +279,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                 observation.getArtifactId(),
                 observation.getAgentJobId(),
                 observation.getObservedAt(),
-                observation.getAssessment(),
+                observation.getOutcome(),
                 observation.getSeverity());
     }
 
@@ -310,9 +310,9 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                     change.lastSeenAt() == null ? null : change.lastSeenAt().toString());
             node.put(
                     "assessment",
-                    change.latestAssessment() == null
+                    change.latestOutcome() == null
                             ? null
-                            : change.latestAssessment().name());
+                            : change.latestOutcome().name());
             node.put(
                     "severity",
                     change.latestSeverity() == null
@@ -398,6 +398,8 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                     o.getPractice() == null ? null : o.getPractice().getSlug());
             node.put("recurrenceKey", o.getRecurrenceKey());
             node.put("summary", o.getSummary());
+            node.put("assessmentStatus", o.getAssessmentStatus().name());
+            node.put("outcome", o.getOutcome() == null ? null : o.getOutcome().name());
             node.put(
                     "presence", o.getPresence() == null ? null : o.getPresence().name());
             node.put(

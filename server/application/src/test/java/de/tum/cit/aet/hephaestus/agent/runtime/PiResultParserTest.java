@@ -57,7 +57,7 @@ class PiResultParserTest extends BaseUnitTest {
     @Test
     void rebuildsFromReviewState() {
         String reviewState = """
-            {"observations":[{"practiceSlug":"x","title":"t","presence":"ABSENT","assessment":"BAD","severity":"MAJOR",
+            {"observations":[{"practiceSlug":"x","title":"t","assessmentStatus": "ASSESSED", "presence": "ABSENT","assessment":"GOOD","severity":"MAJOR",
             "evidence":{"citations":[]},"reasoning":"r"}]}""";
         var result = parser.parse(new SandboxResult(
                 1,

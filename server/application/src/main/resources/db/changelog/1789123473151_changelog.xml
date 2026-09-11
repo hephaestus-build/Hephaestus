@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1789123473151-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <sqlCheck expectedResult="0">SELECT count(*) FROM observation WHERE assessment = 'BAD' AND severity IS NULL</sqlCheck>
+        </preConditions>
+        <comment>Separate assessment eligibility from presence without inventing judgments or severity. Existing unassessed labels retain their meaning.</comment>
+        <addColumn tableName="observation">
+            <column name="assessment_status" type="VARCHAR(16)"/>
+        </addColumn>
+        <dropNotNullConstraint columnDataType="varchar(16)" columnName="presence" tableName="observation"/>
+        <sql><![CDATA[
+            ALTER TABLE observation DROP CONSTRAINT chk_observation_presence_assessment;
+            ALTER TABLE observation DROP CONSTRAINT chk_observation_presence;
+            UPDATE observation SET
+                assessment_status = CASE presence
+                    WHEN 'PRESENT' THEN 'ASSESSED'
+                    WHEN 'ABSENT' THEN 'ASSESSED'
+                    WHEN 'NOT_APPLICABLE' THEN 'NOT_APPLICABLE'
+                    WHEN 'INCONCLUSIVE' THEN 'UNDETERMINED'
+                END,
+                presence = CASE WHEN presence IN ('PRESENT', 'ABSENT') THEN presence ELSE NULL END,
+                severity = CASE WHEN assessment = 'BAD' THEN severity ELSE NULL END,
+                assessment = CASE WHEN presence = 'ABSENT' THEN CASE assessment WHEN 'GOOD' THEN 'BAD' WHEN 'BAD' THEN 'GOOD' END ELSE assessment END;
+            ALTER TABLE observation ADD CONSTRAINT chk_observation_assessment_status
+                CHECK (assessment_status IN ('ASSESSED', 'NOT_APPLICABLE', 'UNDETERMINED'));
+            ALTER TABLE observation ADD CONSTRAINT chk_observation_presence
+                CHECK (presence IS NULL OR presence IN ('PRESENT', 'ABSENT'));
+            ALTER TABLE observation ADD CONSTRAINT chk_observation_assessment_axes CHECK (
+                (assessment_status = 'ASSESSED' AND presence IS NOT NULL AND assessment IS NOT NULL)
+                OR (assessment_status IN ('NOT_APPLICABLE', 'UNDETERMINED') AND presence IS NULL AND assessment IS NULL)
+            );
+            ALTER TABLE observation ADD CONSTRAINT chk_observation_assessment_severity CHECK (
+                (COALESCE((presence = 'PRESENT') <> (assessment = 'GOOD'), FALSE)) = (severity IS NOT NULL)
+            );
+        ]]></sql>
+        <addNotNullConstraint columnDataType="varchar(16)" columnName="assessment_status" tableName="observation"/>
+    </changeSet>
+</databaseChangeLog>

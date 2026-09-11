@@ -6,12 +6,13 @@ import type {
 	ReviewObservation,
 	ReviewObservationCounts,
 } from "@/api/types.gen";
+import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import {
 	type ObservationResultFacts,
 	observationResult,
 } from "@/components/practice-vocabulary/observation-result";
-import { PRESENCE_DEFS } from "@/components/practice-vocabulary/presence-defs";
+import { derivedOutcome } from "@/components/practice-vocabulary/outcome-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 import type { StatusDef } from "@/components/practice-vocabulary/status-def";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
@@ -70,7 +71,11 @@ export function ObservationResultBadge({
 export function observationSeverity(
 	observation: ObservationResultFacts & Pick<ReviewObservation, "severity">,
 ): StatusDef | undefined {
-	return observation.assessment === "BAD" && observation.severity
+	return observation.assessmentStatus === "ASSESSED" &&
+		observation.presence &&
+		observation.assessment &&
+		derivedOutcome(observation.presence, observation.assessment) === "NEGATIVE" &&
+		observation.severity
 		? SEVERITY_DEFS[observation.severity]
 		: undefined;
 }
@@ -165,13 +170,13 @@ export function observationCountSlots(counts: ReviewObservationCounts): ReviewCo
 		},
 		{
 			key: "notApplicable",
-			label: PRESENCE_DEFS.NOT_APPLICABLE.label.toLowerCase(),
+			label: ASSESSMENT_STATUS_DEFS.NOT_APPLICABLE.label.toLowerCase(),
 			count: counts.notApplicable,
 		},
 		{
-			key: "inconclusive",
-			label: PRESENCE_DEFS.INCONCLUSIVE.label.toLowerCase(),
-			count: counts.inconclusive,
+			key: "undetermined",
+			label: ASSESSMENT_STATUS_DEFS.UNDETERMINED.label.toLowerCase(),
+			count: counts.undetermined,
 		},
 	];
 }

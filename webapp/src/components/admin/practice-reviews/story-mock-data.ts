@@ -290,6 +290,7 @@ interface FeedbackSpec {
 }
 
 interface ObservationSpec {
+	assessmentStatus: ReviewObservation["assessmentStatus"];
 	id: string;
 	summary: string;
 	evidenceRationale: string;
@@ -407,6 +408,7 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 					"The handler is three statements long: it binds the request, calls ReviewQueryService and maps the result. The caching decision that arrived with this change sits entirely inside the service, so it can be exercised without standing up HTTP.",
 				practiceSlug: "thin-controllers",
 				group: "code-quality",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				observedAt: "2026-07-28T13:40:00Z",
@@ -426,6 +428,7 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 					"findVisible returns an empty Optional both when the row does not exist and when the caller has no grant on the workspace, and the only caller turns either into a NotFoundException. Two situations that need different answers — retry the link, or ask for access — arrive as one.",
 				practiceSlug: "errors-carry-context",
 				group: "code-quality",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MAJOR",
@@ -457,6 +460,7 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 					"testCache1, testCache2 and testCache3 pin down a cold read, a warm read and an eviction after a membership change. The names carry none of that, so a red build names a file and a number rather than the behaviour that broke.",
 				practiceSlug: "tests-name-the-behaviour",
 				group: "testing",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MINOR",
@@ -477,8 +481,9 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 					"The body of the pull request is a bullet per changed file. Nothing in it says what was slow, how slow, or why a cache was the answer rather than a narrower query — the questions a reviewer who was not in that conversation has to ask before they can agree.",
 				practiceSlug: "the-change-explains-itself",
 				group: "documentation",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "BAD",
+				assessment: "GOOD",
 				severity: "INFO",
 				observedAt: "2026-07-28T13:37:00Z",
 				evidence: [
@@ -550,6 +555,7 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 					"The response field is called ledgerSeqNo, which is the column the number is stored in. Callers outside billing have to learn the storage layout to read an invoice, and the day the ledger is replaced the field is either wrong or frozen.",
 				practiceSlug: "product-language",
 				group: "architecture",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "CRITICAL",
@@ -577,7 +583,8 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 					"Everything in the merge request sits under the billing domain package. There is no request handler in the diff, so this practice has nothing to look at here.",
 				practiceSlug: "thin-controllers",
 				group: "code-quality",
-				presence: "NOT_APPLICABLE",
+				assessmentStatus: "NOT_APPLICABLE",
+				presence: undefined,
 				observedAt: "2026-07-27T09:14:00Z",
 				evidence: [
 					cited(
@@ -617,7 +624,10 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 					"Four people weighed two rollback strategies over eleven messages and the last one is a thumbs-up. Nothing in the thread states which strategy won, so a reader arriving tomorrow cannot tell agreement from the end of the working day.",
 				practiceSlug: "decisions-are-written-down",
 				group: "collaboration",
-				presence: "INCONCLUSIVE",
+				assessmentStatus: "ASSESSED",
+				presence: "ABSENT",
+				assessment: "GOOD",
+				severity: "MINOR",
 				claimCurrentness: "UNVERIFIABLE",
 				observedAt: "2026-07-26T16:02:00Z",
 				evidence: [
@@ -641,6 +651,7 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 					"Every message names the customer-visible effect — prices reverting, invoices reissuing — rather than the tables involved. Somebody paged at two in the morning could act on this thread without opening the schema.",
 				practiceSlug: "product-language",
 				group: "architecture",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				observedAt: "2026-07-26T16:01:00Z",
@@ -690,6 +701,7 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 					"Step one puts the workspace into maintenance before anything is restored, and the page says so in the first line rather than in a note at the bottom. A reader following the page top to bottom does the irreversible thing at the point where it is still safe.",
 				practiceSlug: "the-change-explains-itself",
 				group: "documentation",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				observedAt: "2026-07-25T11:30:00Z",
@@ -729,6 +741,7 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 					"When the backoff gives up, the handler writes a debug line and returns. Nothing increments a counter and nothing reaches the dead-letter subject, so a provider outage looks identical to a quiet afternoon on every dashboard the team has.",
 				practiceSlug: "errors-carry-context",
 				group: "code-quality",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MAJOR",
@@ -754,6 +767,7 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 					"Each of the four new tests is named for the behaviour it fixes in place — that the delay doubles, that it stops at the ceiling, that a success resets it, that a 4xx is not retried. A red build points straight at which of the four rules broke.",
 				practiceSlug: "tests-name-the-behaviour",
 				group: "testing",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				observedAt: "2026-07-29T08:11:00Z",
@@ -773,6 +787,7 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 					"The class, the metric and the log lines all say outbox. The property is hephaestus.webhook.retry-buffer.*, so an operator reading a dashboard and an operator editing configuration are looking for two different words for one thing.",
 				practiceSlug: "product-language",
 				group: "architecture",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MINOR",
@@ -916,6 +931,7 @@ function toObservation(run: RunSpec, spec: ObservationSpec): ReviewObservation {
 		origin: run.origin ?? "LIVE",
 		practiceName: practice.name,
 		practiceSlug: practice.slug,
+		assessmentStatus: spec.assessmentStatus,
 		presence: spec.presence,
 		severity: spec.severity,
 		subject: run.developer,
@@ -960,10 +976,22 @@ export const reviewRuns: ReviewRunSummary[] = allRuns
 		target: run.work,
 		createdAt: new Date(run.startedAt),
 		observations: {
-			strengths: run.observations.filter((o) => o.assessment === "GOOD").length,
-			problems: run.observations.filter((o) => o.assessment === "BAD").length,
-			notApplicable: run.observations.filter((o) => o.presence === "NOT_APPLICABLE").length,
-			inconclusive: run.observations.filter((o) => o.presence === "INCONCLUSIVE").length,
+			strengths: run.observations.filter(
+				(o) =>
+					o.assessmentStatus === "ASSESSED" &&
+					o.presence &&
+					o.assessment &&
+					(o.presence === "PRESENT") === (o.assessment === "GOOD"),
+			).length,
+			problems: run.observations.filter(
+				(o) =>
+					o.assessmentStatus === "ASSESSED" &&
+					o.presence &&
+					o.assessment &&
+					(o.presence === "PRESENT") !== (o.assessment === "GOOD"),
+			).length,
+			notApplicable: run.observations.filter((o) => o.assessmentStatus === "NOT_APPLICABLE").length,
+			undetermined: run.observations.filter((o) => o.assessmentStatus === "UNDETERMINED").length,
 		},
 		feedback: {
 			delivered: run.feedback.filter((f) => f.outcome === "DELIVERED").length,
@@ -1069,6 +1097,7 @@ export function feedbackDetail(feedbackId: string): ReviewFeedbackDetail {
 				ordinal,
 				practiceName: source.practiceName,
 				practiceSlug: source.practiceSlug,
+				assessmentStatus: source.assessmentStatus,
 				presence: source.presence,
 				role: ordinal === 0 ? "PRIMARY" : "SUPPORTING",
 				severity: source.severity,

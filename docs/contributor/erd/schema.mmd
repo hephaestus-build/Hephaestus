@@ -806,7 +806,7 @@ erDiagram
         BIGINT artifact_id "NOT NULL"
         BIGINT about_user_id FK "NOT NULL"
         VARCHAR(255) summary "NOT NULL"
-        VARCHAR(16) presence "NOT NULL"
+        VARCHAR(16) presence
         VARCHAR(16) severity
         JSONB evidence
         TEXT evidence_rationale
@@ -816,6 +816,7 @@ erDiagram
         VARCHAR(8) assessment
         VARCHAR(16) origin "NOT NULL"
         BIGINT workspace_id FK "NOT NULL"
+        VARCHAR(16) assessment_status "NOT NULL"
     }
 
     Organization {

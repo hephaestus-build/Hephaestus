@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.observation;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -52,11 +52,11 @@ public record ObservationDelta(List<LocusChange> loci) {
         NEW,
         /**
          * Seen in the newest run of its artifact and in an earlier one, and something moved — the
-         * assessment or the severity is not what it was. There is a change to point at.
+         * outcome or the severity is not what it was. There is a change to point at.
          */
         RECURRING,
         /**
-         * Seen in the newest run of its artifact and in an earlier one, with the same assessment and the
+         * Seen in the newest run of its artifact and in an earlier one, with the same outcome and the
          * same severity throughout. Nothing moved, so there is nothing new to say: a message about an
          * UNCHANGED locus must rest on a fact from the current run rather than on the fact that it is
          * still there.
@@ -87,14 +87,14 @@ public record ObservationDelta(List<LocusChange> loci) {
             @Nullable Long artifactId,
             @Nullable UUID runId,
             @Nullable Instant observedAt,
-            @Nullable Assessment assessment,
+            @Nullable Outcome outcome,
             @Nullable Severity severity) {}
 
     /**
      * One locus's verdict.
      *
      * @param runsSeen how many distinct runs in the window measured this locus
-     * @param latestAssessment the assessment at the newest run that measured it — for {@link Status#RESOLVED}
+     * @param latestOutcome the outcome at the newest run that measured it — for {@link Status#RESOLVED}
      *     that is the last run it was still a problem in, because it is absent from the newest one
      */
     public record LocusChange(
@@ -104,7 +104,7 @@ public record ObservationDelta(List<LocusChange> loci) {
             int runsSeen,
             @Nullable Instant firstSeenAt,
             @Nullable Instant lastSeenAt,
-            @Nullable Assessment latestAssessment,
+            @Nullable Outcome latestOutcome,
             @Nullable Severity latestSeverity) {}
 
     /**
@@ -203,14 +203,14 @@ public record ObservationDelta(List<LocusChange> loci) {
                     (int) runsSeen,
                     firstSeen,
                     lastSeen,
-                    any.assessment(),
+                    any.outcome(),
                     any.severity());
         }
         if (inNewestRun.isEmpty()) {
             Locus worst = worstOf(occurrences);
             // Only a vanished PROBLEM is resolved. A strength that was not re-observed is not a fix, and
             // saying so would hand somebody credit for work they did not do.
-            if (worst.assessment() != Assessment.BAD) {
+            if (worst.outcome() != Outcome.NEGATIVE) {
                 return null;
             }
             return new LocusChange(
@@ -220,7 +220,7 @@ public record ObservationDelta(List<LocusChange> loci) {
                     (int) runsSeen,
                     firstSeen,
                     lastSeen,
-                    worst.assessment(),
+                    worst.outcome(),
                     worst.severity());
         }
         Locus current = worstOf(inNewestRun);
@@ -232,14 +232,14 @@ public record ObservationDelta(List<LocusChange> loci) {
                     (int) runsSeen,
                     firstSeen,
                     lastSeen,
-                    current.assessment(),
+                    current.outcome(),
                     current.severity());
         }
         List<Locus> earlier = occurrences.stream()
                 .filter(locus -> !inNewestRun.contains(locus))
                 .toList();
         Locus prior = worstOf(earlier);
-        boolean moved = prior.assessment() != current.assessment() || prior.severity() != current.severity();
+        boolean moved = prior.outcome() != current.outcome() || prior.severity() != current.severity();
         return new LocusChange(
                 key,
                 current.practiceSlug(),
@@ -247,7 +247,7 @@ public record ObservationDelta(List<LocusChange> loci) {
                 (int) runsSeen,
                 firstSeen,
                 lastSeen,
-                current.assessment(),
+                current.outcome(),
                 current.severity());
     }
 

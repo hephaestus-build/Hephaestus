@@ -64,7 +64,7 @@ final class OpportunityBundler {
                 .filter(row -> latestJob.equals(row.getAgentJobId()))
                 .toList();
         OutcomeVector outcomes = latest.stream()
-                .map(row -> OutcomeVector.of(row.getPresence(), row.getAssessment()))
+                .map(row -> OutcomeVector.of(row.getAssessmentStatus(), row.getPresence(), row.getAssessment()))
                 .reduce(OutcomeVector.EMPTY, OutcomeVector::plus);
         Instant occurredAt = latest.stream()
                 .map(Observation::getObservedAt)

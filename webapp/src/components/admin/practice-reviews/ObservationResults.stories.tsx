@@ -50,18 +50,45 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** One row per observation, at every conclusion the model can reach. */
+/** The mixed observation list from the review fixtures. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		// A shortfall shows its assessment and its severity; a presence that ends the question shows
-		// only itself.
-		await expect(canvas.getAllByText("Needs improvement")).toHaveLength(6);
+		// Negative outcomes show severity; unassessed observations do not imply an outcome.
+		await expect(canvas.getAllByText("Negative outcome")).toHaveLength(7);
 		canvas.getByText("Critical");
+		canvas.getByText("Informational");
+		await expect(canvas.getAllByText("Minor")).toHaveLength(3);
 		canvas.getByText("Not applicable");
-		canvas.getByText("Could not be determined");
+		await expect(canvas.queryByText("Undetermined")).not.toBeInTheDocument();
 		await expect(canvas.getAllByText("From a review of past work")).toHaveLength(2);
 		await expect(canvas.getAllByText("Requested by hand")).toHaveLength(2);
 		await expect(canvas.queryAllByText("No result")).toHaveLength(0);
+	},
+};
+
+/** Captured evidence can remain ambiguous without implying a positive or negative outcome. */
+export const Undetermined: Story = {
+	args: {
+		state: {
+			status: "ready",
+			observations: [
+				{
+					...firstObservation,
+					assessmentStatus: "UNDETERMINED",
+					presence: undefined,
+					assessment: undefined,
+					outcome: undefined,
+					severity: undefined,
+					summary: "The captured discussion leaves the chosen approach ambiguous",
+				},
+			],
+		},
+	},
+	play: async ({ canvas }) => {
+		canvas.getByText("Undetermined");
+		await expect(canvas.queryByText("Positive outcome")).not.toBeInTheDocument();
+		await expect(canvas.queryByText("Negative outcome")).not.toBeInTheDocument();
+		await expect(canvas.queryByText("Critical")).not.toBeInTheDocument();
 	},
 };
 

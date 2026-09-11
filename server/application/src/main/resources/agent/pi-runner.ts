@@ -21,8 +21,16 @@ import {
 import { errorText } from "./pi-error-text.ts";
 import { buildGrepTool } from "./pi-grep-tool.ts";
 import {
+	ASSESSMENT_STATUS_VALUES,
+	ASSESSMENT_STATUS_DESCRIPTIONS,
+	PRESENCE_VALUES,
+	PRESENCE_DESCRIPTIONS,
+	ASSESSMENT_VALUES,
+	SEVERITY_VALUES,
+	deriveOutcome,
 	describeCitationMismatch,
 	dedupeKeyForObservation,
+	describeVocabulary,
 	isRecord,
 	type NormalizedObservation,
 	normalizeObservation,
@@ -428,7 +436,16 @@ const evidenceSchema = {
 const observationSchema = {
 	type: "object",
 	additionalProperties: false,
-	required: ["practiceSlug", "summary", "outcome", "evidence", "evidenceRationale"],
+	required: [
+		"practiceSlug",
+		"summary",
+		"assessmentStatus",
+		"presence",
+		"assessment",
+		"severity",
+		"evidence",
+		"evidenceRationale",
+	],
 	properties: {
 		practiceSlug: { type: "string", minLength: 1 },
 		summary: {
@@ -439,30 +456,33 @@ const observationSchema = {
 				"A short phrase naming what you observed, such as 'Debug print left in the request handler'. " +
 				"Never a single word and never the practice's own name.",
 		},
-		outcome: {
+		assessmentStatus: {
 			type: "string",
-			enum: [
-				"BEHAVIOR_PRESENT_GOOD",
-				"BEHAVIOR_PRESENT_BAD_MINOR",
-				"BEHAVIOR_PRESENT_BAD_MAJOR",
-				"BEHAVIOR_PRESENT_BAD_CRITICAL",
-				"BEHAVIOR_ABSENT_GOOD",
-				"BEHAVIOR_ABSENT_BAD_MINOR",
-				"BEHAVIOR_ABSENT_BAD_MAJOR",
-				"BEHAVIOR_ABSENT_BAD_CRITICAL",
-				"NO_REVIEW_OCCASION",
-				"INSUFFICIENT_EVIDENCE",
-			],
-			description:
-				"Choose a BEHAVIOR result whenever the practice has something to judge. An absent target behaviour is BEHAVIOR_ABSENT, never NO_REVIEW_OCCASION. NO_REVIEW_OCCASION means a prerequisite situation explicitly named by the practice did not occur.",
+			enum: ASSESSMENT_STATUS_VALUES,
+			description: describeVocabulary(ASSESSMENT_STATUS_VALUES, ASSESSMENT_STATUS_DESCRIPTIONS),
+		},
+		presence: {
+			type: ["string", "null"],
+			enum: [...PRESENCE_VALUES, null],
+			description: describeVocabulary(PRESENCE_VALUES, PRESENCE_DESCRIPTIONS),
+		},
+		assessment: {
+			type: ["string", "null"],
+			enum: [...ASSESSMENT_VALUES, null],
+			description: "GOOD or BAD only when ASSESSED; otherwise null.",
+		},
+		severity: {
+			type: ["string", "null"],
+			enum: [...SEVERITY_VALUES, null],
+			description: "Required for BAD, null otherwise.",
 		},
 		evidence: {
 			...evidenceSchema,
 			properties: {
 				citations: evidenceSchema.properties.citations,
-				exhaustiveSearch: searchSchema,
-				exclusion: inapplicabilitySchema,
-				missingEvidence: undecidabilitySchema,
+				search: searchSchema,
+				inapplicability: inapplicabilitySchema,
+				undecidability: undecidabilitySchema,
 			},
 		},
 		evidenceRationale: {
@@ -515,7 +535,7 @@ function appendObservations(observations: unknown[]): {
 	const seen = new Set(reviewState.observationKeys);
 	for (const rawObservation of observations) {
 		const observation = normalizeAndValidateObservation(rawObservation);
-		if (observation.assessment === "BAD") negatives++;
+		if (deriveOutcome(observation.presence, observation.assessment) === "NEGATIVE") negatives++;
 		const key = dedupeKeyForObservation(observation);
 		if (seen.has(key)) {
 			duplicates++;
@@ -930,9 +950,12 @@ interface LeanCitation {
 }
 
 interface LeanObservation {
+	assessmentStatus: unknown;
+	presence: unknown;
 	id: string;
 	practiceSlug: string;
 	assessment: unknown;
+	outcome: unknown;
 	severity: unknown;
 	anchorable: unknown;
 	citations: LeanCitation[];
@@ -1038,8 +1061,11 @@ function stagedPreparedTargets(): PreparedFeedbackTarget[] {
 function leanObservations(observations: readonly AdmittedObservation[]): LeanObservation[] {
 	return observations.map((observation) => ({
 		id: observation.id,
+		assessmentStatus: observation.assessmentStatus,
+		presence: observation.presence,
 		practiceSlug: observation.practiceSlug,
 		assessment: observation.assessment,
+		outcome: observation.outcome,
 		severity: observation.severity,
 		anchorable: observation.anchorable,
 		citations: observation.citations.map((citation): LeanCitation => ({
@@ -2018,7 +2044,7 @@ async function main() {
 									`observation as soon as it is supported; do not finish a group-wide evidence map first. Reuse evidence ` +
 									`already gathered when investigating the remaining practices. Persist at least one disposition for ` +
 									`every listed practice, plus any distinct material problems a practice exposes. Use ` +
-									`NO_REVIEW_OCCASION only after complete evidence proves the practice's explicit prerequisite did not ` +
+									`NOT_APPLICABLE only after complete evidence proves the practice's explicit prerequisite did not ` +
 									`occur; missing evidence is not an occasion that failed to happen. Do not skip a practice because its ` +
 									`behavior is absent.`,
 							),

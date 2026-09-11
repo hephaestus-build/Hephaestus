@@ -4,6 +4,7 @@ import { ASSESSMENT_DEFS } from "./assessment-defs";
 import { DASHBOARD_VISIBILITY_DEFS } from "./dashboard-visibility-defs";
 import { DELIVERY_STATE_DEFS } from "./delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "./delivery-place-defs";
+import { OUTCOME_DEFS } from "./outcome-defs";
 import { PRESENCE_DEFS } from "./presence-defs";
 import { REVIEW_STATUS_DEFS, SUMMARY_POST_DEFS } from "./review-status-defs";
 import { SEVERITY_DEFS } from "./severity-defs";
@@ -64,7 +65,8 @@ export const EveryRegistry: Story = {
 			<Gallery heading="Delivery place" defs={DELIVERY_PLACE_DEFS} />
 			<Gallery heading="Dashboard visibility" defs={DASHBOARD_VISIBILITY_DEFS} />
 			<Gallery heading="Why withheld" defs={WITHHOLDING_FAMILY_DEFS} />
-			<Gallery heading="Result" defs={ASSESSMENT_DEFS} />
+			<Gallery heading="Outcome" defs={OUTCOME_DEFS} />
+			<Gallery heading="Target assessment" defs={ASSESSMENT_DEFS} />
 			<Gallery heading="Severity" defs={SEVERITY_DEFS} />
 			<Gallery heading="Practice status" defs={PRESENCE_DEFS} />
 			<Gallery heading="Review status" defs={REVIEW_STATUS_DEFS} />
