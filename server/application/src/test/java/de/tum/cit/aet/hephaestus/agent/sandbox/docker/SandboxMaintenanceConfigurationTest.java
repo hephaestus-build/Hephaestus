@@ -46,6 +46,7 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
             .withUserConfiguration(
                     SandboxMaintenanceConfiguration.class, PropertiesConfiguration.class, ServerSchedulingConfig.class)
             .withBean(StdinWriteWatchdog.class, () -> watchdog)
+            .withBean(NativeGitVolumeReconciler.class, () -> mock(NativeGitVolumeReconciler.class))
             .withBean(
                     SandboxReconciler.class,
                     () -> new SandboxReconciler(

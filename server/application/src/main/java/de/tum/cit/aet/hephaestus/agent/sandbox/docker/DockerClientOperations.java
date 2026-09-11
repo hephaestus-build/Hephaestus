@@ -234,7 +234,7 @@ public class DockerClientOperations
     @Override
     public String createContainer(DockerOperations.ContainerSpec spec) {
         try {
-            HostConfig hostConfig = buildHostConfig(spec.hostConfig()).withNetworkMode(spec.networkId());
+            HostConfig hostConfig = hostConfig(spec.hostConfig()).withNetworkMode(spec.networkId());
 
             // Extra hosts (e.g. "host.docker.internal:host-gateway" for host access on Linux)
             if (spec.extraHosts() != null && !spec.extraHosts().isEmpty()) {
@@ -451,7 +451,7 @@ public class DockerClientOperations
 
     // Internal helpers
 
-    private HostConfig buildHostConfig(DockerOperations.HostConfigSpec spec) {
+    HostConfig hostConfig(DockerOperations.HostConfigSpec spec) {
         HostConfig hostConfig = HostConfig.newHostConfig()
                 .withMemory(spec.memoryBytes())
                 .withMemorySwap(spec.memorySwapBytes())

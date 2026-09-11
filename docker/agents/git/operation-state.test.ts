@@ -86,3 +86,37 @@ void test("snapshots reject malformed UTF-8 paths and refs instead of replacing 
 		rmSync(root, { recursive: true, force: true });
 	}
 });
+
+void test("a repository over the snapshot bound is refused before the snapshot volume is written", () => {
+	const root = mkdtempSync(join(tmpdir(), "git-bound-"));
+	const repository = join(root, "repository");
+	const git = (...args: string[]) =>
+		execFileSync("git", ["-C", repository, ...args], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+		}).trim();
+	const snapshot = (bound: number) =>
+		spawnSync(process.execPath, [new URL("./operation.ts", import.meta.url).pathname], {
+			input: JSON.stringify({ operation: "SNAPSHOT", revisions: [git("rev-parse", "HEAD")] }),
+			encoding: "utf8",
+			env: {
+				...process.env,
+				GIT_REPOSITORY_DIRECTORY: join(repository, ".git"),
+				GIT_SNAPSHOT_DIRECTORY: join(root, "snapshot"),
+				GIT_MAX_SNAPSHOT_BYTES: String(bound),
+			},
+		});
+	try {
+		execFileSync("git", ["init", "--template=", repository], { stdio: "ignore" });
+		writeFileSync(join(repository, "large.txt"), "x".repeat(100_000));
+		git("add", ".");
+		git("-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "large");
+		const refused = snapshot(50_000);
+		assert.equal(refused.status, 1);
+		assert.match(refused.stderr, /snapshot bound/);
+		assert.equal(spawnSync("test", ["-e", join(root, "snapshot", "large.txt")]).status, 1);
+		assert.equal(snapshot(50_000_000).status, 0);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});

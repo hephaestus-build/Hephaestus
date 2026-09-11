@@ -348,6 +348,8 @@ public class GitRepositoryManager {
                 if ((entry.getMode() & 0111) != 0 && !target.toFile().setExecutable(true, false))
                     throw new IOException("Cannot preserve executable file mode");
                 bytes = Math.addExact(bytes, Files.size(target));
+                if (bytes > properties.maxSnapshotBytes())
+                    throw new IOException("Repository snapshot exceeds hephaestus.git.max-snapshot-bytes");
                 if (!name.startsWith(".git/")) visited++;
             }
             Path entries = spool(repository, Operation.TREE_ENTRIES, List.of(resolved));

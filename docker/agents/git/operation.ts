@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess, type ChildProcessByStdio } from "node:child_process";
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, stat, rm, open } from "node:fs/promises";
+import { mkdir, open, readdir, rm, stat } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
@@ -11,6 +11,7 @@ import { scanSecrets } from "./secret-scan.ts";
 const repositoryDirectory = process.env.GIT_REPOSITORY_DIRECTORY ?? "/git/mirror.git";
 const snapshotDirectory = process.env.GIT_SNAPSHOT_DIRECTORY ?? "/snapshot";
 const temporaryDirectory = process.env.GIT_TEMP_DIRECTORY ?? "/tmp";
+const maxSnapshotBytes = Number(process.env.GIT_MAX_SNAPSHOT_BYTES ?? Number.MAX_SAFE_INTEGER);
 
 interface Request {
 	operation:
@@ -259,9 +260,10 @@ function startGit(args: string[], token: string | null = null, directory = repos
 		env[`GIT_CONFIG_KEY_${index}`] = key;
 		env[`GIT_CONFIG_VALUE_${index}`] = value;
 	});
+	// stderr is the operator's only diagnostic; the token travels as a config value, never in a message.
 	return spawn("git", [...(directory ? [`--git-dir=${directory}`] : []), ...args], {
 		env,
-		stdio: [inputDescriptor ?? "ignore", "pipe", "ignore"],
+		stdio: [inputDescriptor ?? "ignore", "pipe", "inherit"],
 	});
 }
 
@@ -393,7 +395,31 @@ async function validateUtf8(args: string[]): Promise<void> {
 	}
 }
 
+/**
+ * Checkout plus mirror objects, measured before anything is written: a repository over the bound is
+ * refused whole rather than captured in part, and never touches the snapshot volume.
+ */
+async function requireWithinSnapshotBound(revisions: string[]): Promise<void> {
+	let bytes = 0;
+	for await (const line of createInterface({
+		input: startGit(["ls-tree", "-r", "-l", "--full-tree", ...revisions]).stdout,
+	})) {
+		const size = Number(line.split("\t", 1)[0]?.split(/ +/)[3]);
+		if (Number.isFinite(size)) bytes += size;
+	}
+	const directories = [`${repositoryDirectory}/objects`];
+	for (const directory of directories) {
+		for (const entry of await readdir(directory, { withFileTypes: true })) {
+			const path = `${directory}/${entry.name}`;
+			if (entry.isDirectory()) directories.push(path);
+			else if (entry.isFile()) bytes += (await stat(path)).size;
+		}
+	}
+	if (bytes > maxSnapshotBytes) throw new Error("Repository exceeds the snapshot bound");
+}
+
 async function snapshot(request: Request): Promise<void> {
+	await requireWithinSnapshotBound(request.revisions);
 	await validateUtf8(["ls-tree", "-rz", "--name-only", ...request.revisions]);
 	await validateUtf8(["for-each-ref", "--format=%(refname)"]);
 	await runGit(["init", "--bare", "--template=", `${snapshotDirectory}/.git`], null, true, "");
@@ -511,12 +537,16 @@ async function citedBlobs(request: Request): Promise<void> {
 }
 
 export async function main(): Promise<void> {
-	process.stdin.setEncoding("utf8");
+	// One newline-terminated request: an attached container's stdin stays open after the client has
+	// written, so reading to EOF would wait out the deadline.
+	const lines = createInterface({ input: process.stdin });
 	let input = "";
-	for await (const chunk of process.stdin) {
-		input += String(chunk);
-		if (Buffer.byteLength(input) > 64 * 1024) throw new Error("Operation request too large");
+	for await (const line of lines) {
+		input = line;
+		break;
 	}
+	lines.close();
+	if (Buffer.byteLength(input) > 64 * 1024) throw new Error("Operation request too large");
 	const request = parseRequest(JSON.parse(input));
 	if (request.operation === "FETCH" || request.operation === "FETCH_COMMIT") {
 		await mkdir(repositoryDirectory, { recursive: true });
@@ -565,8 +595,8 @@ export async function main(): Promise<void> {
 if (import.meta.main) {
 	try {
 		await main();
-	} catch {
-		process.stderr.write("Git operation failed\n");
+	} catch (error) {
+		process.stderr.write(`${error instanceof Error ? error.message : "Git operation failed"}\n`);
 		process.exitCode = 1;
 	}
 }

@@ -29,6 +29,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 class GitRepositoryManagerTest extends BaseUnitTest {
     private static final String IMAGE = "ghcr.io/hephaestus-build/git-preparation:test";
+    private static final long LIMIT = 8L * 1024 * 1024 * 1024;
     private static final RepositoryKey KEY = new RepositoryKey(100L, 1L);
 
     @TempDir
@@ -43,7 +44,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         source = Files.createDirectory(temporary.resolve("source"));
         executor = new NativeGitTestExecutor(Files.createDirectory(temporary.resolve("native")));
         manager = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 2, IMAGE),
+                new GitRepositoryProperties(true, 2, IMAGE, LIMIT),
                 java.util.Optional.of(executor),
                 new FabricLayout(temporary.resolve("outputs").toString()));
     }
@@ -59,7 +60,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                         org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any());
         var unavailable = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 2, IMAGE),
+                new GitRepositoryProperties(true, 2, IMAGE, LIMIT),
                 java.util.Optional.of(failed),
                 new FabricLayout(temporary.toString()));
         assertThatThrownBy(() -> unavailable.isRepositoryCloned(KEY))
@@ -94,7 +95,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                         org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any());
         var bounded = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 2, IMAGE),
+                new GitRepositoryProperties(true, 2, IMAGE, LIMIT),
                 java.util.Optional.of(nativeGit),
                 new FabricLayout(temporary.toString()));
         List<String> captured = new ArrayList<>();
@@ -135,7 +136,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
     @Test
     void shouldNotReadRepositoryWhenDisabled() {
         var disabled = new GitRepositoryManager(
-                new GitRepositoryProperties(false, 2, IMAGE),
+                new GitRepositoryProperties(false, 2, IMAGE, LIMIT),
                 java.util.Optional.of(mock(NativeGitExecutor.class)),
                 new FabricLayout(temporary.toString()));
         assertThat(disabled.isEnabled()).isFalse();

@@ -11,6 +11,9 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.agent.job.WorkerRegistryRepository;
 import de.tum.cit.aet.hephaestus.agent.sandbox.AgentImagePinGuard;
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
@@ -220,6 +223,17 @@ public class DockerSandboxConfiguration {
     }
 
     @Bean
+    public NativeGitVolumeReconciler nativeGitVolumeReconciler(
+            DockerClientOperations docker,
+            DockerSandboxProperties properties,
+            WorkerProperties worker,
+            WorkerRegistryRepository workers,
+            RepositoryRepository repositories,
+            RepositoryToMonitorRepository monitors) {
+        return new NativeGitVolumeReconciler(docker, properties, worker, workers, repositories, monitors);
+    }
+
+    @Bean
     public SandboxVolumeManager sandboxVolumeManager(DockerClientOperations ops, DockerSandboxProperties properties) {
         return new SandboxVolumeManager(ops, properties);
     }
@@ -367,6 +381,7 @@ public class DockerSandboxConfiguration {
                 git.image(),
                 worker.resolvedWorkerId(),
                 sandbox.maxConcurrentContainers(),
+                git.maxSnapshotBytes(),
                 docker.owner(),
                 docker.containerRuntime());
     }
@@ -376,8 +391,9 @@ public class DockerSandboxConfiguration {
             DockerClientOperations docker,
             SandboxContainerManager containers,
             SandboxImageGuard images,
+            ContainerSecurityPolicy policy,
             ObjectMapper mapper,
             DockerNativeGitExecutor.Settings settings) {
-        return new DockerNativeGitExecutor(docker, containers, images, mapper, settings);
+        return new DockerNativeGitExecutor(docker, containers, images, policy, mapper, settings);
     }
 }

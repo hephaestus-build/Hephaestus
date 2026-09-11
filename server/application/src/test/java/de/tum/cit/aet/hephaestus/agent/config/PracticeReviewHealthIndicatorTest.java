@@ -72,6 +72,6 @@ class PracticeReviewHealthIndicatorTest extends BaseUnitTest {
     }
 
     private static GitRepositoryProperties git(boolean enabled) {
-        return new GitRepositoryProperties(enabled, 2, "ghcr.io/hephaestus-build/git-preparation:test");
+        return new GitRepositoryProperties(enabled, 2, "ghcr.io/hephaestus-build/git-preparation:test", 1L << 33);
     }
 }

@@ -2,21 +2,30 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.async.ResultCallback;
-import com.github.dockerjava.api.model.Capability;
 import com.github.dockerjava.api.model.Frame;
 import com.github.dockerjava.api.model.HostConfig;
 import com.github.dockerjava.api.model.LogConfig;
 import com.github.dockerjava.api.model.Mount;
 import com.github.dockerjava.api.model.MountType;
 import com.github.dockerjava.api.model.StreamType;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -38,15 +47,29 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
             String image,
             String workerId,
             int maxConcurrentOperations,
+            long maxSnapshotBytes,
             String owner,
             @Nullable String containerRuntime) {}
+
+    static final String OWNER_LABEL = "hephaestus.owner";
+    static final String COMPONENT_LABEL = "hephaestus.component";
+    static final String COMPONENT = "git-preparation";
+    static final String WORKER_LABEL = "hephaestus.worker";
+    static final String CREATED_AT_LABEL = "hephaestus.created-at";
+    static final String DEADLINE_LABEL = "hephaestus.deadline";
+    static final String WORKSPACE_LABEL = "hephaestus.workspace";
+    static final String REPOSITORY_LABEL = "hephaestus.repository";
+    private static final int STDERR_TAIL_BYTES = 4096;
+    private static final ResourceLimits LIMITS =
+            new ResourceLimits(2L * 1024 * 1024 * 1024, 2.0, 256, Duration.ofMinutes(15));
 
     private final Semaphore capacity;
     private final DockerClient docker;
     private final DockerClient streaming;
-    private final DockerVolumeOperations volumes;
+    private final DockerClientOperations operations;
     private final SandboxContainerManager containers;
     private final SandboxImageGuard images;
+    private final ContainerSecurityPolicy policy;
     private final ObjectMapper mapper;
     private final Settings settings;
     private final String workerNamespace;
@@ -55,14 +78,16 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
             DockerClientOperations docker,
             SandboxContainerManager containers,
             SandboxImageGuard images,
+            ContainerSecurityPolicy policy,
             ObjectMapper mapper,
             Settings settings) {
         this.capacity = new Semaphore(settings.maxConcurrentOperations());
         this.docker = docker.client();
         this.streaming = docker.streamingClient();
-        this.volumes = docker;
+        this.operations = docker;
         this.containers = containers;
         this.images = images;
+        this.policy = policy;
         this.mapper = mapper;
         this.settings = settings;
         this.workerNamespace = UUID.nameUUIDFromBytes(
@@ -112,31 +137,33 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
             long deadline,
             OutputStream output)
             throws InterruptedException {
-        String deadlineLabel = java.time.Instant.now().plus(remaining(deadline)).toString();
-        byte[] input = mapper.writeValueAsBytes(request);
-        if (input.length > 64 * 1024) throw new IllegalArgumentException("Git request exceeds protocol frame size");
+        String deadlineLabel = Instant.now().plus(remaining(deadline)).toString();
+        byte[] json = mapper.writeValueAsBytes(request);
+        if (json.length > 64 * 1024) throw new IllegalArgumentException("Git request exceeds protocol frame size");
+        byte[] input = Arrays.copyOf(json, json.length + 1);
+        input[json.length] = '\n';
         boolean fetch = request.operation() == Operation.FETCH || request.operation() == Operation.FETCH_COMMIT;
         images.ensurePresent(settings.image());
-        Map<String, String> labels = new java.util.HashMap<>();
-        labels.put("hephaestus.owner", settings.owner());
-        labels.put("hephaestus.component", "git-preparation");
-        labels.put("hephaestus.worker", settings.workerId());
-        labels.put("hephaestus.created-at", java.time.Instant.now().toString());
-        List<Mount> mounts = new java.util.ArrayList<>();
+        Map<String, String> labels = new HashMap<>();
+        labels.put(OWNER_LABEL, settings.owner());
+        labels.put(COMPONENT_LABEL, COMPONENT);
+        labels.put(WORKER_LABEL, settings.workerId());
+        labels.put(CREATED_AT_LABEL, Instant.now().toString());
+        List<Mount> mounts = new ArrayList<>();
         String verificationVolume = "hephaestus-git-verification-" + UUID.randomUUID();
         if (trustedRepository != null) {
-            volumes.createVolume(verificationVolume, labels);
+            operations.createVolume(verificationVolume, labels);
             mounts.add(new Mount()
                     .withType(MountType.VOLUME)
                     .withSource(verificationVolume)
                     .withTarget("/git"));
         } else {
-            var scope = java.util.Objects.requireNonNull(repository);
+            var scope = Objects.requireNonNull(repository);
             String volume = "hephaestus-git-" + settings.owner() + "-" + workerNamespace + "-" + scope.workspaceId()
                     + "-" + scope.repositoryId();
-            labels.put("hephaestus.workspace", Long.toString(scope.workspaceId()));
-            labels.put("hephaestus.repository", Long.toString(scope.repositoryId()));
-            volumes.createVolume(volume, labels);
+            labels.put(WORKSPACE_LABEL, Long.toString(scope.workspaceId()));
+            labels.put(REPOSITORY_LABEL, Long.toString(scope.repositoryId()));
+            operations.createVolume(volume, labels);
             mounts.add(new Mount()
                     .withType(MountType.VOLUME)
                     .withSource(volume)
@@ -146,35 +173,30 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
         String snapshotVolume = "hephaestus-git-snapshot-" + UUID.randomUUID();
         boolean snapshot = request.operation() == Operation.SNAPSHOT || request.operation() == Operation.REVIEW_DIFF;
         if (snapshot) {
-            volumes.createVolume(snapshotVolume, labels);
+            operations.createVolume(snapshotVolume, labels);
             mounts.add(new Mount()
                     .withType(MountType.VOLUME)
                     .withSource(snapshotVolume)
                     .withTarget("/snapshot"));
         }
-        HostConfig host = HostConfig.newHostConfig()
+        // The review sandbox's floor, with the provider reachable only while fetching.
+        HostConfig host = operations
+                .hostConfig(policy.buildHostConfig(
+                        SecurityProfile.DEFAULT, LIMITS, new NetworkPolicy(fetch, null, null)))
                 .withNetworkMode(fetch ? "bridge" : "none")
-                .withReadonlyRootfs(true)
-                .withPrivileged(false)
-                .withCapDrop(Capability.ALL)
-                .withSecurityOpts(List.of("no-new-privileges:true"))
-                .withMemory(2L * 1024 * 1024 * 1024)
-                .withMemorySwap(2L * 1024 * 1024 * 1024)
-                .withNanoCPUs(2_000_000_000L)
-                .withPidsLimit(256L)
-                .withTmpFs(Map.of("/tmp", "rw,nosuid,nodev,noexec,size=512m,uid=1000,gid=1000,mode=700"))
                 .withMounts(mounts)
                 .withLogConfig(new LogConfig(LogConfig.LoggingType.NONE));
-        if (settings.containerRuntime() != null) host.withRuntime(settings.containerRuntime());
-        labels.put("hephaestus.deadline", deadlineLabel);
+        labels.put(DEADLINE_LABEL, deadlineLabel);
         String container;
         try {
             container = docker.createContainerCmd(settings.image())
                     .withName("hephaestus-git-" + UUID.randomUUID())
                     .withLabels(labels)
                     .withUser("1000:1000")
+                    .withEnv("GIT_MAX_SNAPSHOT_BYTES=" + settings.maxSnapshotBytes())
                     .withHostConfig(host)
                     .withStdinOpen(true)
+                    .withStdInOnce(true)
                     .withAttachStdin(true)
                     .withAttachStdout(true)
                     .withAttachStderr(true)
@@ -191,15 +213,23 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
                     .exec()
                     .getId();
         } catch (RuntimeException failure) {
-            if (snapshot) volumes.removeVolume(snapshotVolume);
-            if (trustedRepository != null) volumes.removeVolume(verificationVolume);
+            if (snapshot) operations.removeVolume(snapshotVolume);
+            if (trustedRepository != null) operations.removeVolume(verificationVolume);
             throw failure;
         }
         AtomicReference<@Nullable Throwable> failure = new AtomicReference<>();
+        var diagnostics = new ByteArrayOutputStream();
         try (var stdin = new ByteArrayInputStream(input);
                 var callback = new ResultCallback.Adapter<Frame>() {
                     @Override
                     public void onNext(Frame frame) {
+                        if (frame.getStreamType() == StreamType.STDERR) {
+                            synchronized (diagnostics) {
+                                int room = STDERR_TAIL_BYTES - diagnostics.size();
+                                diagnostics.write(frame.getPayload(), 0, Math.max(0, Math.min(room, frame.getPayload().length)));
+                            }
+                            return;
+                        }
                         if (frame.getStreamType() != StreamType.STDOUT) return;
                         try {
                             output.write(frame.getPayload());
@@ -229,8 +259,14 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
             }
             containers.startContainer(container);
             var outcome = containers.waitForCompletion(container, remaining(deadline));
-            if (outcome.timedOut() || outcome.exitCode() != 0)
-                throw new IllegalStateException("Git operation failed or exhausted its resources");
+            if (outcome.timedOut()) throw new IllegalStateException("Git operation exceeded its deadline");
+            if (outcome.exitCode() != 0) {
+                String reason;
+                synchronized (diagnostics) {
+                    reason = diagnostics.toString(StandardCharsets.UTF_8).strip();
+                }
+                throw new IllegalStateException("Git operation failed: " + (reason.isEmpty() ? "no diagnostic" : reason));
+            }
             if (!callback.awaitCompletion(remaining(deadline).toMillis(), TimeUnit.MILLISECONDS)
                     || failure.get() != null) {
                 throw new IllegalStateException("Git output stream did not complete", failure.get());
@@ -241,8 +277,8 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
             try {
                 containers.forceRemove(container);
             } finally {
-                if (snapshot) volumes.removeVolume(snapshotVolume);
-                if (trustedRepository != null) volumes.removeVolume(verificationVolume);
+                if (snapshot) operations.removeVolume(snapshotVolume);
+                if (trustedRepository != null) operations.removeVolume(verificationVolume);
             }
         }
     }
@@ -290,14 +326,9 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
     @Override
     public void deleteRepository(long repositoryId) {
         if (repositoryId <= 0) throw new IllegalArgumentException("Invalid repository ID");
-        for (var volume : volumes.listVolumes(Map.of(
-                "hephaestus.owner",
-                settings.owner(),
-                "hephaestus.component",
-                "git-preparation",
-                "hephaestus.repository",
-                Long.toString(repositoryId)))) {
-            volumes.removeVolume(volume.name());
+        for (var volume : operations.listVolumes(Map.of(
+                OWNER_LABEL, settings.owner(), COMPONENT_LABEL, COMPONENT, REPOSITORY_LABEL, Long.toString(repositoryId)))) {
+            operations.removeVolume(volume.name());
         }
     }
 
