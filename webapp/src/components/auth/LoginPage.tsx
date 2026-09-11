@@ -58,8 +58,11 @@ export function LoginPage({ title = "Sign in to Hephaestus", error, ...signIn }:
 				<CardHeader>
 					<h1 className="text-xl font-semibold tracking-tight">{title}</h1>
 				</CardHeader>
-				<CardContent className="flex flex-col gap-4">
-					<div aria-live="assertive" aria-atomic="true">
+				{/* Margins rather than `gap` or `space-y`: the live region has to exist before an error
+				    lands in it or nothing is announced, and as a flex or space-y sibling its empty box
+				    would still claim a slot and push the buttons down on every ordinary sign-in. */}
+				<CardContent>
+					<div aria-live="assertive" aria-atomic="true" className="not-empty:mb-4">
 						{errorCopy ? (
 							<Alert variant="destructive">
 								<AlertTitle>{errorCopy.title}</AlertTitle>
@@ -68,7 +71,7 @@ export function LoginPage({ title = "Sign in to Hephaestus", error, ...signIn }:
 						) : null}
 					</div>
 					<SignInButtons {...signIn} />
-					<SignInNotice />
+					<SignInNotice className="mt-4" />
 				</CardContent>
 			</Card>
 		</div>
