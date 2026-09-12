@@ -12277,7 +12277,7 @@ components:
         sourceContractVersion:
           type: string
           description: Source contract these options describe
-          example: 1.0.0
+          example: 1.1.0
         workTypes:
           type: array
           items:
