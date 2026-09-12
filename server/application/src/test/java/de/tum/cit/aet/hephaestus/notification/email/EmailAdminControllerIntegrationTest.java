@@ -103,7 +103,11 @@ class EmailAdminControllerIntegrationTest extends BaseIntegrationTest {
                 .exchange()
                 .expectStatus()
                 .isBadRequest()
-                .expectBody(Void.class);
+                .expectHeader()
+                .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.status")
+                .isEqualTo(400);
         assertThat(mailSender.sent()).isEmpty();
     }
 

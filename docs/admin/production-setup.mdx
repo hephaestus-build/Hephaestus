@@ -329,16 +329,17 @@ transport is Spring Boot's `spring.mail.*`, so every variable is the property pa
 | `SPRING_MAIL_PORT` | `587` | Relay port. `587` is submission with STARTTLS; use `465` with `SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE=true` for implicit TLS. |
 | `SPRING_MAIL_USERNAME` / `SPRING_MAIL_PASSWORD` | *(unset)* | Relay credentials. Leave both unset for an unauthenticated internal relay and set `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=false`. |
 | `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH` | `true` | Authenticate with the credentials above. |
-| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE` / `_REQUIRED` | `true` / `true` | Upgrade the connection with STARTTLS and refuse a relay that cannot. Set both to `false` only for a relay inside a private network. |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE` / `_REQUIRED` | `true` / `true` | Upgrade the connection with STARTTLS and refuse a relay that cannot. Disable both only with implicit TLS, or for an unauthenticated relay inside a trusted private network (`SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=false` and no credentials). |
 | `HEPHAESTUS_EMAIL_FROM` | *(unset)* | Sender address, required once the host is set. The relay must be allowed to send for its domain (SPF/DKIM), or receivers reject or junk the mail. |
 | `HEPHAESTUS_EMAIL_FROM_NAME` | `Hephaestus` | Display name next to the sender address. |
 | `HEPHAESTUS_EMAIL_REPLY_TO` | *(unset)* | Where a human reply lands. Unset means replies go to the sender address, which nobody reads. |
 
 TLS verifies the relay certificate and hostname. For implicit TLS on port `465`, enable SSL and
-disable both STARTTLS settings; leave certificate verification enabled.
+disable both STARTTLS settings; leave certificate verification enabled. Authenticated SMTP without
+implicit TLS or required STARTTLS is rejected at startup to prevent credential exposure.
 
 Connection, read and write timeouts are fixed at 5 s / 10 s / 10 s; a relay that stops answering
-never blocks a request or a listener. Only the `application-server` container reads these
+cannot leave a socket operation waiting indefinitely. Only the `application-server` container reads these
 variables — the worker and webhook roles never send.
 
 A university or corporate relay typically wants port `587`, STARTTLS and a service account, and

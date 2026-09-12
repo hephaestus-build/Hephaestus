@@ -4,7 +4,7 @@
 
 Hephaestus can now send email. Set `SPRING_MAIL_HOST` (plus `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`,
 `SPRING_MAIL_PASSWORD` for an authenticated relay) and `HEPHAESTUS_EMAIL_FROM` on the application
-server to turn it on; leave the host unset and nothing changes. Instance admins verify the relay with
+server to turn it on; leave the host unset and nothing changes. Authenticated SMTP requires TLS. Instance admins verify the relay with
 **Instance settings → Email → Send test email**, which reports relay acceptance, configuration problems, or why a test was withheld.
 People whose account has a verified email address receive a confirmation when they delete their
 account, naming its scheduled deletion deadline. These confirmations are queued in the same transaction

@@ -6941,9 +6941,18 @@ export type AdminSendTestEmailData = {
   url: '/admin/email/test';
 };
 
+export type AdminSendTestEmailErrors = {
+  /**
+   * Malformed request or invalid recipient address
+   */
+  400: ProblemDetail;
+};
+
+export type AdminSendTestEmailError = AdminSendTestEmailErrors[keyof AdminSendTestEmailErrors];
+
 export type AdminSendTestEmailResponses = {
   /**
-   * OK
+   * Email delivery outcome
    */
   200: EmailTestResponse;
 };

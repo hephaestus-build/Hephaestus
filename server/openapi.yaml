@@ -478,7 +478,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EmailTestResponse"
-          description: OK
+          description: Email delivery outcome
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Malformed request or invalid recipient address
       summary: Send a test email
       tags:
       - Instance Email
