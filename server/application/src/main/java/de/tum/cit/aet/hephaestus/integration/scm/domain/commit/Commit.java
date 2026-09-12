@@ -160,8 +160,6 @@ public class Commit {
     @Column(name = "parent_count")
     private Integer parentCount;
 
-    // R2: Expanded signature fields
-
     /**
      * The signature verification state from GitHub's GitSignatureState enum.
      * Provides granular detail beyond the boolean {@link #signatureValid} flag,
@@ -187,8 +185,6 @@ public class Commit {
     @Column(name = "signature_signer_login", length = 255)
     private String signatureSignerLogin;
 
-    // R3: Parent commit SHAs
-
     /**
      * Comma-separated SHAs of parent commits (up to 3 parents fetched).
      * Enables merge commit analysis and history graph traversal without
@@ -198,8 +194,6 @@ public class Commit {
     @Column(name = "parent_shas", columnDefinition = "TEXT")
     private String parentShas;
 
-    // R4: CI status rollup
-
     /**
      * The aggregated CI status check rollup state for this commit.
      * One of: ERROR, EXPECTED, FAILURE, PENDING, SUCCESS.
@@ -207,8 +201,6 @@ public class Commit {
      */
     @Column(name = "status_check_rollup_state", length = 32)
     private String statusCheckRollupState;
-
-    // R6: Organizational attribution
 
     /**
      * The login of the organization on whose behalf this commit was made.

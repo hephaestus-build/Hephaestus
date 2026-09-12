@@ -137,7 +137,6 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
 
     @Test
     void shouldResolveTheTargetBranchOnceWhenTheProviderPinnedNoBase() {
-        // A GitLab merge request webhook carries no base SHA; the mirror's target branch stands in.
         pinNoBase("main");
         authorize();
         when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));

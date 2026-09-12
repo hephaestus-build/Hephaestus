@@ -21,9 +21,9 @@ public class ObservationVisibilityPolicy {
     }
 
     /**
-     * Returns observations measured against current review rules whose evidence remains authorized for the
-     * requested use. Currentness is checked first so stale claims do not trigger authorization reads; the
-     * remaining observations are authorized in one batch.
+     * The ids of the observations measured against a current practice revision whose evidence remains
+     * authorized for the requested use. Currentness is checked first so stale claims do not trigger
+     * authorization reads; the rest are authorized in one batch.
      */
     public Set<UUID> permitsAll(long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose) {
         return permitted(workspaceId, observations, purpose, false);

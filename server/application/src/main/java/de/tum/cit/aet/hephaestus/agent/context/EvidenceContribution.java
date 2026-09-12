@@ -29,13 +29,13 @@ public record EvidenceContribution(
          */
         Map<SourceKind, SourceCaptureState> stateOverrides,
         /**
-         * Content already materialised on disk, staged by path so its bytes never enter this process. A
-         * repository checkout is written once by the collector and read once by the archive writer.
+         * Content already materialised on disk, staged by path so its bytes never enter this process; the
+         * attempt folder takes a read-only copy and the workspace tar is streamed from there.
          */
         Map<String, Path> filesOnDisk,
         /**
-         * Releases whatever backs {@link #filesOnDisk}, or null when nothing needs releasing. The staging
-         * pipeline owns this and closes it once the sandbox has the files.
+         * Releases whatever backs {@link #filesOnDisk}, or null when nothing needs releasing. It joins the
+         * attempt's cleanups, which run after final admission or when the attempt ends without one.
          */
         @Nullable AutoCloseable cleanup,
         /**

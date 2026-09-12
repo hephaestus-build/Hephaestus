@@ -485,7 +485,6 @@ public class WorkspaceRepositoryMonitorService {
         repositoryRepository.findByNameWithOwner(nameWithOwner).ifPresent(repository -> {
             Long repoId = repository.getId();
 
-            // Clean up local git clone before deleting the DB entity
             gitRepositoryManager.deleteOrphanedRepository(repoId);
 
             // Synchronous publish — listeners run in this transaction so any vendor-

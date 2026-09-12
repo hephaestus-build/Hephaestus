@@ -70,7 +70,10 @@ public class DockerSandboxConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(DockerSandboxConfiguration.class);
 
-    /** RPC connections per container: create/start, logs, and a copy-out lease held while it is read. */
+    /**
+     * RPC connections per container: create/start, logs, and the archive upload a Git preparation holds open
+     * while it streams the canonical mirror in.
+     */
     private static final int RPC_CONNECTIONS_PER_CONTAINER = 3;
 
     private static final Duration HTTP_CONNECTION_TIMEOUT = Duration.ofSeconds(5);
@@ -92,7 +95,10 @@ public class DockerSandboxConfiguration {
      */
     static final Duration HTTP_STREAMING_RESPONSE_TIMEOUT = ResourceLimits.MAX_RUNTIME.plusMinutes(10);
 
-    /** Calls whose response body is the stream. One wait per container, and nothing else. */
+    /**
+     * Calls whose response body is the stream: the wait on every container, plus the stdin/stdout attach of
+     * a Git preparation.
+     */
     @Bean(name = "dockerStreamingClient", destroyMethod = "close")
     public DockerClient dockerStreamingClient(SandboxProperties properties, DockerSandboxProperties dockerProperties) {
         return buildClient(
@@ -382,8 +388,7 @@ public class DockerSandboxConfiguration {
                 worker.resolvedWorkerId(),
                 sandbox.maxConcurrentContainers(),
                 git.maxSnapshotBytes(),
-                docker.owner(),
-                docker.containerRuntime());
+                docker.owner());
     }
 
     @Bean

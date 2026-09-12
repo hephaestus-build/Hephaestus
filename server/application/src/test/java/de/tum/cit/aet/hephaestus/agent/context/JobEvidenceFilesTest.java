@@ -124,7 +124,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
 
     @Test
     void shouldRejectEscapingPathsAndSymbolicLinksDuringPreparation() throws Exception {
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock);
+        var layout = new FabricLayout(root.toString());
+        var files = new JobEvidenceFiles(layout, jobs, clock);
         assertThatThrownBy(() -> files.prepare(job(), PreparedJobInputs.filesOnly(Map.of("../escape", new byte[0]))))
                 .isInstanceOf(IllegalStateException.class);
         Path source = root.resolve("source");
@@ -133,7 +134,11 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         Files.createSymbolicLink(link, source);
         var raw = new PreparedJobInputs(Map.of(), Map.of("inputs/source", link), List.of(), List.of(), null, null);
         assertThatThrownBy(() -> files.prepare(job(), raw)).isInstanceOf(IllegalStateException.class);
-        assertThat(root.resolve("escape")).doesNotExist();
+        try (var paths = Files.walk(layout.jobsRoot())) {
+            assertThat(paths.filter(path -> path.getFileName().toString().contains(".preparing-")))
+                    .as("a failed preparation leaves no staging directory behind")
+                    .isEmpty();
+        }
     }
 
     @Test

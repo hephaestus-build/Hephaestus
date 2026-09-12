@@ -7,7 +7,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -66,10 +65,38 @@ class SandboxGatewayHandshakeInterceptorTest {
     }
 
     @Test
-    void shouldAnswerNotFoundWhenTheAuthorizationHeaderIsMissing() {
+    void shouldAnswerNotFoundWhenTheAuthorizationHeaderIsMissing() throws Exception {
+        try (var session = sessions.register("token", Files.writeString(temporary.resolve("in.tar"), ""), "out")) {
+            session.enableInteractive(1024);
+            var response = new MockHttpServletResponse();
+
+            assertThat(handshake(session.id().toString(), null, response, new HashMap<>()))
+                    .isFalse();
+
+            assertThat(response.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
+        }
+    }
+
+    @Test
+    void shouldAnswerNotFoundWhenTheSessionIsNotInteractive() throws Exception {
+        try (var session = sessions.register("token", Files.writeString(temporary.resolve("in.tar"), ""), "out")) {
+            var response = new MockHttpServletResponse();
+
+            assertThat(handshake(session.id().toString(), "Bearer token", response, new HashMap<>()))
+                    .isFalse();
+
+            assertThat(response.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
+        }
+    }
+
+    @Test
+    void shouldAnswerNotFoundWhenTheSessionIsClosed() throws Exception {
+        var session = sessions.register("token", Files.writeString(temporary.resolve("in.tar"), ""), "out");
+        session.enableInteractive(1024);
+        session.close();
         var response = new MockHttpServletResponse();
 
-        assertThat(handshake(UUID.randomUUID().toString(), null, response, new HashMap<>()))
+        assertThat(handshake(session.id().toString(), "Bearer token", response, new HashMap<>()))
                 .isFalse();
 
         assertThat(response.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());

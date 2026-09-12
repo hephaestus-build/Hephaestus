@@ -55,17 +55,8 @@ class PracticePiAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    void networkPolicyContract() {
-        var spec = adapter.buildSandboxSpec(proxyRequest());
-        var networkPolicy = spec.networkPolicy();
-        org.junit.jupiter.api.Assertions.assertNotNull(networkPolicy);
-        assertThat(networkPolicy.llmProxyToken()).isEqualTo("job-token-123");
-    }
-
-    @Test
-    void shouldKeepPracticeNetworkIsolated() {
-        var request = new PracticeAgentRequest("openai-completions", "model", null, null, false, "job-token-123", 600);
-        var policy = adapter.buildSandboxSpec(request).networkPolicy();
+    void shouldKeepPracticeNetworkIsolatedBehindTheLlmProxy() {
+        var policy = adapter.buildSandboxSpec(proxyRequest()).networkPolicy();
         org.junit.jupiter.api.Assertions.assertNotNull(policy);
         assertThat(policy.internetAccess()).isFalse();
         assertThat(policy.llmProxyToken()).isEqualTo("job-token-123");

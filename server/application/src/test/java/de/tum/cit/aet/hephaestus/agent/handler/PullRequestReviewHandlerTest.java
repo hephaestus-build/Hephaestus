@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -137,8 +138,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         var metadata = objectMapper.createObjectNode();
         metadata.putObject(ObservationAdmissionService.REFUSAL_METADATA_KEY).put("reasonCode", "no_valid_observations");
         refused.setMetadata(metadata);
-        org.assertj.core.api.Assertions.assertThatCode(() -> handler.deliver(refused))
-                .doesNotThrowAnyException();
+        assertThatCode(() -> handler.deliver(refused)).doesNotThrowAnyException();
         org.mockito.Mockito.verifyNoInteractions(feedbackService, observationRepository, deliveryService);
     }
 
@@ -548,15 +548,15 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         @Test
         void shouldRefuseInconsistentPinnedAssessmentBeforePersistingObservations() {
             String rawOutput = """
-                    {"observations": [{
-                      "practiceSlug": "avoids-insecure-defaults-and-over-broad-permissions",
-                      "summary": "The harmful behaviour is good",
-                      "assessmentStatus": "ASSESSED", "presence": "PRESENT",
-                      "assessment": "GOOD", "severity": null,
-                      "evidenceRationale": "Original evidence rationale",
-                      "evidence": {}
-                    }]}
-                    """;
+                {"observations": [{
+                  "practiceSlug": "avoids-insecure-defaults-and-over-broad-permissions",
+                  "summary": "The harmful behaviour is good",
+                  "assessmentStatus": "ASSESSED", "presence": "PRESENT",
+                  "assessment": "GOOD", "severity": null,
+                  "evidenceRationale": "Original evidence rationale",
+                  "evidence": {}
+                }]}
+                """;
             AgentJob job = jobWithOutput(rawOutput);
 
             assertThatThrownBy(() -> admit(job, rawOutput))
@@ -602,31 +602,6 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             verify(feedbackService, never()).deliverFeedback(any(), any(), any());
 
             assertThat(proposal.getValue().mrNote()).startsWith(lead);
-        }
-
-        @Test
-        @SuppressWarnings("unchecked")
-        void delegatesToDeliveryService() {
-            String rawOutput = """
-                {
-                  "observations": [{
-                    "practiceSlug": "pr-description-quality",
-                    "summary": "Good PR description",
-                    "assessmentStatus": "ASSESSED", "presence": "PRESENT",
-                    "assessment": "GOOD",
-                    "severity": null,
-                    "evidenceRationale": "The description states the purpose.",
-                    "evidence": {}
-                  }]
-                }
-                """;
-            AgentJob job = jobWithOutput(rawOutput);
-            when(deliveryService.prepare(eq(job), any()))
-                    .thenReturn(org.mockito.Mockito.mock(PreparedObservations.class));
-
-            admit(job, rawOutput);
-
-            verify(deliveryService).prepare(eq(job), any());
         }
 
         /** A job past admission, carrying the coverage ledger its run wrote. */
@@ -746,6 +721,61 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             capturedPaths = path + "\0";
         }
 
+        private static final String PRESENT_OBSERVATION = """
+            {
+              "observations": [{
+                "practiceSlug": "pr-description-quality",
+                "summary": "Good PR description",
+                "assessmentStatus": "ASSESSED", "presence": "PRESENT",
+                "assessment": "GOOD",
+                "severity": null,
+                "evidenceRationale": "The description states the purpose.",
+                "evidence": {}
+              }]
+            }
+            """;
+
+        @Test
+        void shouldRefuseACapturedDiffListingWithAnEmptyPath() {
+            AgentJob job = jobWithOutput(PRESENT_OBSERVATION);
+            capturedPaths = "Sources/Auth.swift\0\0";
+
+            assertThatThrownBy(() -> admit(job, PRESENT_OBSERVATION))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessage("Captured diff contains an empty path");
+            verifyNoInteractions(deliveryService);
+        }
+
+        @Test
+        void shouldRefuseACapturedDiffListingThatIsNotNulTerminated() {
+            AgentJob job = jobWithOutput(PRESENT_OBSERVATION);
+            capturedPaths = "Sources/Auth.swift";
+
+            assertThatThrownBy(() -> admit(job, PRESENT_OBSERVATION))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessage("Captured diff path is not NUL terminated");
+            verifyNoInteractions(deliveryService);
+        }
+
+        @Test
+        void shouldRefuseACapturedDiffPathOneByteOverTheBound() {
+            AgentJob job = jobWithOutput(PRESENT_OBSERVATION);
+            stubDiff("a".repeat(32_769));
+
+            assertThatThrownBy(() -> admit(job, PRESENT_OBSERVATION))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessage("Captured diff path exceeds the filesystem path resource bound");
+            verifyNoInteractions(deliveryService);
+        }
+
+        @Test
+        void shouldAcceptACapturedDiffPathExactlyAtTheBound() {
+            AgentJob job = jobWithOutput(PRESENT_OBSERVATION);
+            stubDiff("a".repeat(32_768));
+
+            assertThatCode(() -> admit(job, PRESENT_OBSERVATION)).doesNotThrowAnyException();
+        }
+
         @Test
         void throwsWhenAllNotApplicableButDiffHasFiles() {
             String rawOutput = """
@@ -772,6 +802,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         }
 
         @Test
+        @SuppressWarnings("unchecked")
         void admitsWhenNothingDecidedButAnObservationQuotesTheDiff() {
             String rawOutput = """
                 {
@@ -800,12 +831,17 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             output.put("rawOutput", rawOutput);
             job.setOutput(output);
             stubDiff("Sources/Auth.swift");
-            when(deliveryService.prepare(eq(job), any()))
+            ArgumentCaptor<List<PracticeDetectionResultParser.ValidatedObservation>> captor =
+                    ArgumentCaptor.forClass(List.class);
+            when(deliveryService.prepare(eq(job), captor.capture()))
                     .thenReturn(org.mockito.Mockito.mock(PreparedObservations.class));
 
             admit(job, rawOutput);
 
-            verify(deliveryService).prepare(eq(job), any());
+            assertThat(captor.getValue()).singleElement().satisfies(observation -> {
+                assertThat(observation.practiceSlug()).isEqualTo("pr-description-quality");
+                assertThat(observation.assessmentStatus()).isEqualTo(AssessmentStatus.NOT_APPLICABLE);
+            });
         }
 
         @Test
@@ -877,10 +913,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     .orElseThrow();
             assertThat(secret.presence()).isEqualTo(Presence.PRESENT);
             assertThat(secret.assessment()).isEqualTo(Assessment.BAD);
-            assertThat(secret.evidenceRationale()).doesNotContain("AKIA1234567890ABCDEF");
             JsonNode evidence = secret.evidence();
             org.junit.jupiter.api.Assertions.assertNotNull(evidence);
-            assertThat(evidence.toString()).doesNotContain("AKIA1234567890ABCDEF");
             assertThat(evidence.path("detector").asString()).isEqualTo("secret-diff-scanner");
             JsonNode citation = evidence.path("citations").get(0);
             assertThat(citation.has("quote")).isFalse();

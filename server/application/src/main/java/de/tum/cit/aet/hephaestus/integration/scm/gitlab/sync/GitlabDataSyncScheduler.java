@@ -685,8 +685,8 @@ public class GitlabDataSyncScheduler {
                 }
             }
 
-            // Commits — prefer native Git backfill (provides diff stats + file changes);
-            // fall back to REST API when git is not enabled
+            // Commits — the native Git backfill provides diff stats and file changes; the REST sync
+            // runs only when no backfill bean exists.
             if (commitBackfill != null) {
                 try {
                     SyncResult r = commitBackfill.backfillCommits(session.scopeId(), repo);

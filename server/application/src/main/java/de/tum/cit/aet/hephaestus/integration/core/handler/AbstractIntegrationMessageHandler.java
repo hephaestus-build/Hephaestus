@@ -131,11 +131,8 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
     protected abstract void handleEvent(T eventPayload);
 
     /**
-     * Subject-matching rule. Compares the trailing segment of the subject against the
-     * raw {@link #subjectEventToken} via last-dot extraction — exactly matching the
-     * GitLab legacy base's anti-{@code endsWith}-overlap guard. {@code "tag_push"}
-     * cannot pass as {@code "push"} because the last-segment comparison requires the
-     * full token to align.
+     * Compares the subject's last segment against {@link #subjectEventToken} by exact equality
+     * rather than {@code endsWith}, so {@code "tag_push"} cannot pass as {@code "push"}.
      */
     private boolean subjectMatchesExpectedEvent(String subject) {
         if (subject == null) {

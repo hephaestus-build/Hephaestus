@@ -661,8 +661,8 @@ public class AgentJobExecutor {
                         jobId, workerId, job.getRetryCount(), Instant.now(), output));
                 if (updated != null && updated == 1) {
                     recordPracticeReviewRefusal(job, "insufficient_evidence");
-                    // Keep the pre-existing execution-duration outcome label; the lifecycle contract
-                    // still records the committed terminal state as COMPLETED.
+                    // The metric outcome names the refusal; the lifecycle contract records the committed
+                    // terminal state as COMPLETED.
                     metricOutcome = "INSUFFICIENT_EVIDENCE";
                     jobTelemetry.terminal(job, AgentJobStatus.COMPLETED, AgentJobTelemetry.age(job));
                     log.info(
@@ -682,8 +682,8 @@ public class AgentJobExecutor {
         } catch (Exception e) {
             metricOutcome = handleExecutionFailure(jobId, job, e, sandboxExecutionStarted);
         } finally {
-            // The sandbox has whatever it was going to get by now, so the staging directories behind any
-            // disk-staged evidence are no longer referenced by anything.
+            // Admission and delivery are done by now, so the attempt's evidence can be retired: deleted
+            // once its observations were admitted, kept for the cleanup grace otherwise.
             if (stagedInputs != null) {
                 stagedInputs.close();
             }

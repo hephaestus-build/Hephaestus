@@ -49,9 +49,9 @@ sequenceDiagram
 - **The `agent_job` table is the queue.** There is no broker between server and worker. Submission is one
   row containing metadata and an idempotency key. NATS carries webhook ingress upstream and is not part of
   the review queue.
-- **Evidence capture runs on the claiming worker, not on the server.** The worker reads the repository clone
-  from its own disk, so a worker without checkout enabled or without the fabric volume records a degraded
-  tree in the manifest.
+- **Evidence capture runs on the claiming worker, not on the server.** The worker snapshots the repository
+  from its own mirror: with checkout disabled the manifest records the tree as not collected, and a
+  repository with no mirror on that worker is recorded as unavailable.
 - **`evidence_snapshot` and `review_readiness` are written before the container starts**, in their own
   transaction, and a failed write fails the run before any model cost accrues. The result is a separate,
   later transaction.

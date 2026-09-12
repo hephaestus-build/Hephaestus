@@ -2,15 +2,25 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.workdir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.ChangeType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Operation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Request;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.NativeGitTestExecutor;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -18,6 +28,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.IntStream;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import org.apache.commons.compress.archivers.tar.TarConstants;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.CommitBuilder;
 import org.eclipse.jgit.lib.ObjectId;
@@ -147,9 +161,9 @@ class GitRepositoryManagerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepSourceBinaryAndHistoryWithoutSnapshotSizeCutoffs() throws Exception {
+    void shouldStageFullSourceHistoryAndBinariesWhenReadingASnapshot() throws Exception {
         try (Git git = repository()) {
-            Files.writeString(source.resolve("large.txt"), "source\n".repeat(6_000_000));
+            Files.writeString(source.resolve("large.txt"), "source\n".repeat(300_000));
             Files.write(source.resolve("image.bin"), new byte[64 * 1024]);
             String sha = commit(git, "Add full source");
             prepare();
@@ -158,7 +172,9 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                 staging = snapshot.stagingDir();
                 assertThat(snapshot.complete()).isTrue();
                 assertThat(snapshot.commitSha()).isEqualTo(sha);
-                assertThat(snapshot.totalBytes()).isGreaterThan(32L * 1024 * 1024);
+                assertThat(snapshot.totalBytes())
+                        .isGreaterThanOrEqualTo(
+                                Files.size(source.resolve("large.txt")) + Files.size(source.resolve("image.bin")));
                 assertThat(staging.resolve(".git/HEAD")).isRegularFile();
                 assertThat(staging.resolve(".git/hephaestus-captured-refs")).isRegularFile();
                 assertThat(staging.resolve(".git/index")).isRegularFile();
@@ -245,14 +261,14 @@ class GitRepositoryManagerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldResumeMissingAncestorsAndFeatureBranchesAcrossMoreThanFiveThousandCommits() throws Exception {
+    void shouldResumeFromCapturedShasAfterAFailedWalk() throws Exception {
         try (Git git = repository()) {
             ObjectId tip = git.getRepository().resolve("HEAD");
             try (var inserter = git.getRepository().newObjectInserter();
                     var walk = new RevWalk(git.getRepository())) {
                 ObjectId tree = walk.parseCommit(tip).getTree().getId();
                 PersonIdent author = new PersonIdent("Test", "test@example.com");
-                for (int i = 0; i < 5001; i++) {
+                for (int i = 0; i < 601; i++) {
                     CommitBuilder commit = new CommitBuilder();
                     commit.setTreeId(tree);
                     commit.setParentId(tip);
@@ -289,13 +305,144 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                 assertThat(persisted.add(info.sha())).isTrue();
                 resumed.add(info.sha());
             });
-            assertThat(persisted).hasSize(5003).contains(mainTip, featureTip);
-            assertThat(resumed).hasSize(4998).doesNotContain(mainTip);
+            assertThat(persisted).hasSize(603).contains(mainTip, featureTip);
+            assertThat(resumed).hasSize(598).doesNotContain(mainTip);
             assertThat(pageSizes).contains(256).allMatch(size -> size <= 256);
             manager.forEachMissingCommit(KEY, existing, info -> {
                 throw new AssertionError("Reprocessed captured commit");
             });
         }
+    }
+
+    @Test
+    void shouldPauseTheWalkAtItsPageBudgetWhenMoreCommitsAreMissing() {
+        // GitRepositoryManager.PAGE_SIZE is 256 and MAX_DETAIL_PAGES_PER_WALK is 32.
+        List<String> ids = IntStream.range(0, 33 * 256)
+                .mapToObj(i -> String.format("%040x", i))
+                .toList();
+        var nativeGit = mock(NativeGitExecutor.class);
+        doAnswer(invocation -> {
+                    Request request = invocation.getArgument(1);
+                    OutputStream output = invocation.getArgument(3);
+                    if (request.operation() == Operation.COMMIT_IDS)
+                        output.write(String.join("\n", ids).concat("\n").getBytes(StandardCharsets.UTF_8));
+                    else writeDetails(output, request.revisions());
+                    return null;
+                })
+                .when(nativeGit)
+                .execute(eq(KEY), any(), any(), any());
+        var paged = new GitRepositoryManager(
+                new GitRepositoryProperties(true, 2, IMAGE, LIMIT),
+                java.util.Optional.of(nativeGit),
+                new FabricLayout(temporary.toString()));
+        List<String> seen = new ArrayList<>();
+        paged.forEachMissingCommit(KEY, page -> Set.of(), details -> seen.add(details.sha()));
+        assertThat(seen).hasSize(32 * 256).isEqualTo(ids.subList(0, 32 * 256));
+    }
+
+    private static void writeDetails(OutputStream output, List<String> shas) throws IOException {
+        var frames = new DataOutputStream(output);
+        for (String sha : shas) {
+            byte[] metadata = String.join(
+                            "\0",
+                            sha,
+                            "Test",
+                            "test@example.com",
+                            "2024-01-01T00:00:00Z",
+                            "Test",
+                            "test@example.com",
+                            "2024-01-01T00:00:00Z",
+                            "",
+                            "Commit")
+                    .getBytes(StandardCharsets.UTF_8);
+            frames.writeLong(metadata.length);
+            frames.write(metadata);
+            frames.writeLong(0);
+        }
+    }
+
+    @Test
+    void shouldRefuseTheSnapshotWhenAnArchivePathEscapesTheStagingDirectory() throws Exception {
+        var guarded = snapshotManager(archive(file("../x", 1)), LIMIT);
+        assertThatThrownBy(() -> guarded.readTreeSnapshot(KEY, "a".repeat(40)))
+                .isInstanceOf(GitRepositoryManager.GitOperationException.class)
+                .hasRootCauseMessage("Native snapshot contains an unsafe archive path");
+        assertThat(stagingDirectories()).isEmpty();
+    }
+
+    @Test
+    void shouldRefuseTheSnapshotWhenTheArchiveCarriesALink() throws Exception {
+        var link = new TarArchiveEntry("link", TarConstants.LF_SYMLINK);
+        link.setLinkName("README.md");
+        var guarded = snapshotManager(archive(link), LIMIT);
+        assertThatThrownBy(() -> guarded.readTreeSnapshot(KEY, "a".repeat(40)))
+                .isInstanceOf(GitRepositoryManager.GitOperationException.class)
+                .hasRootCauseMessage("Native snapshot contains an unexpected filesystem link");
+        assertThat(stagingDirectories()).isEmpty();
+    }
+
+    @Test
+    void shouldRefuseTheSnapshotWhenTheArchiveCarriesADeviceOrFifo() throws Exception {
+        var guarded = snapshotManager(archive(new TarArchiveEntry("pipe", TarConstants.LF_FIFO)), LIMIT);
+        assertThatThrownBy(() -> guarded.readTreeSnapshot(KEY, "a".repeat(40)))
+                .isInstanceOf(GitRepositoryManager.GitOperationException.class)
+                .hasRootCauseMessage("Native snapshot contains an unsupported archive entry");
+        assertThat(stagingDirectories()).isEmpty();
+    }
+
+    @Test
+    void shouldRefuseTheSnapshotWhenItExceedsMaxSnapshotBytes() throws Exception {
+        var guarded = snapshotManager(archive(file("README.md", 64)), 63);
+        assertThatThrownBy(() -> guarded.readTreeSnapshot(KEY, "a".repeat(40)))
+                .isInstanceOf(GitRepositoryManager.GitOperationException.class)
+                .hasRootCauseMessage("Repository snapshot exceeds hephaestus.git.max-snapshot-bytes");
+        assertThat(stagingDirectories()).isEmpty();
+    }
+
+    private GitRepositoryManager snapshotManager(byte[] archive, long maxSnapshotBytes) {
+        var nativeGit = mock(NativeGitExecutor.class);
+        doAnswer(invocation -> {
+                    Request request = invocation.getArgument(1);
+                    OutputStream output = invocation.getArgument(3);
+                    switch (request.operation()) {
+                        case RESOLVE -> output.write("a".repeat(40).getBytes(StandardCharsets.UTF_8));
+                        case TREE_ID -> output.write("b".repeat(40).getBytes(StandardCharsets.UTF_8));
+                        case SNAPSHOT -> output.write(archive);
+                        default -> {}
+                    }
+                    return null;
+                })
+                .when(nativeGit)
+                .execute(eq(KEY), any(), any(), any());
+        return new GitRepositoryManager(
+                new GitRepositoryProperties(true, 2, IMAGE, maxSnapshotBytes),
+                java.util.Optional.of(nativeGit),
+                new FabricLayout(temporary.resolve("outputs").toString()));
+    }
+
+    private List<Path> stagingDirectories() throws IOException {
+        try (var paths = Files.list(temporary.resolve("outputs"))) {
+            return paths.filter(path -> path.getFileName().toString().startsWith("git-snapshot-"))
+                    .toList();
+        }
+    }
+
+    private static TarArchiveEntry file(String name, long size) {
+        var entry = new TarArchiveEntry(name, TarConstants.LF_NORMAL, true);
+        entry.setSize(size);
+        return entry;
+    }
+
+    private static byte[] archive(TarArchiveEntry... entries) throws IOException {
+        var bytes = new ByteArrayOutputStream();
+        try (var tar = new TarArchiveOutputStream(bytes)) {
+            for (var entry : entries) {
+                tar.putArchiveEntry(entry);
+                tar.write(new byte[(int) entry.getSize()]);
+                tar.closeArchiveEntry();
+            }
+        }
+        return bytes.toByteArray();
     }
 
     @Test
@@ -325,13 +472,11 @@ class GitRepositoryManagerTest extends BaseUnitTest {
 
     @Test
     void shouldNotShareWorkspaceMirrors() throws Exception {
-        try (Git git = repository()) {
-            assertThat(git.getRepository().isBare()).isFalse();
-            prepare();
-            assertThat(manager.isRepositoryCloned(KEY)).isTrue();
-            assertThat(manager.isRepositoryCloned(new RepositoryKey(200L, 1L))).isFalse();
-            manager.deleteOrphanedRepository(1L);
-            assertThat(manager.isRepositoryCloned(KEY)).isFalse();
-        }
+        repository().close();
+        prepare();
+        assertThat(manager.isRepositoryCloned(KEY)).isTrue();
+        assertThat(manager.isRepositoryCloned(new RepositoryKey(200L, 1L))).isFalse();
+        manager.deleteOrphanedRepository(1L);
+        assertThat(manager.isRepositoryCloned(KEY)).isFalse();
     }
 }

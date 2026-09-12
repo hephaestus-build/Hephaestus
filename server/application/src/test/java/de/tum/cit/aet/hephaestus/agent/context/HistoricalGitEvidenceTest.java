@@ -100,6 +100,41 @@ class HistoricalGitEvidenceTest extends BaseUnitTest {
                 .isInstanceOf(JobDeliveryException.class);
     }
 
+    @Test
+    void shouldRejectArchiveWhenAnIndexArrivesTwice() {
+        doAnswer(invocation -> {
+                    try (var tar = new TarArchiveOutputStream((OutputStream) invocation.getArgument(3))) {
+                        entry(tar, "0", "quote\n");
+                        entry(tar, "0", "quote\n");
+                    }
+                    return null;
+                })
+                .when(git)
+                .executeInSnapshot(eq(repository), any(), any(), any());
+        var citation = new HistoricalGitEvidence.Citation("a".repeat(40), "one.java", "quote", 1, 1);
+        assertThatThrownBy(
+                        () -> verifier.verifyAll(job, "head-digest", "refs-digest", "b".repeat(40), List.of(citation)))
+                .isInstanceOf(JobDeliveryException.class)
+                .hasMessage("Unexpected or duplicate native citation blob");
+    }
+
+    @Test
+    void shouldRejectArchiveWhenAnIndexNamesNoRequestedBlob() {
+        doAnswer(invocation -> {
+                    try (var tar = new TarArchiveOutputStream((OutputStream) invocation.getArgument(3))) {
+                        entry(tar, "1", "quote\n");
+                    }
+                    return null;
+                })
+                .when(git)
+                .executeInSnapshot(eq(repository), any(), any(), any());
+        var citation = new HistoricalGitEvidence.Citation("a".repeat(40), "one.java", "quote", 1, 1);
+        assertThatThrownBy(
+                        () -> verifier.verifyAll(job, "head-digest", "refs-digest", "b".repeat(40), List.of(citation)))
+                .isInstanceOf(JobDeliveryException.class)
+                .hasMessage("Unexpected or duplicate native citation blob");
+    }
+
     private static void entry(TarArchiveOutputStream tar, String name, String text) throws java.io.IOException {
         byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
         var entry = new TarArchiveEntry(name);

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
+import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -103,23 +104,15 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
         verify(pullRequests, times(1)).prepareObservations(eq(job), any());
     }
 
-    @Test
-    void refusesJobThatIsNotRunning() {
-        job.setStatus(AgentJobStatus.COMPLETED);
-        assertThatThrownBy(
-                        () -> service.admit(identity, mapper.createArrayNode().add("one")))
-                .isInstanceOf(ObservationAdmissionService.StaleAttemptException.class);
-        verifyNoInteractions(pullRequests, issues);
-    }
-
     @ParameterizedTest
-    @ValueSource(strings = {"attempt", "worker", "workspace", "cancelled", "missing"})
+    @ValueSource(strings = {"attempt", "worker", "workspace", "cancelled", "completed", "missing"})
     void shouldRejectAdmissionAndRefusalWhenAuthenticatedOwnershipIsStale(String mismatch) {
         switch (mismatch) {
             case "attempt" -> job.setRetryCount(1);
             case "worker" -> job.setWorkerId("worker-2");
             case "workspace" -> job.getWorkspace().setId(2L);
             case "cancelled" -> job.setStatus(AgentJobStatus.CANCELLED);
+            case "completed" -> job.setStatus(AgentJobStatus.COMPLETED);
             case "missing" ->
                 when(jobs.findByIdWithWorkspaceForUpdate(job.getId())).thenReturn(Optional.empty());
             default -> throw new AssertionError(mismatch);
@@ -156,15 +149,6 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void dispatchesIssueAdmissionToIssueGuardPipeline() {
-        job.setJobType(AgentJobType.ISSUE_REVIEW);
-        ArrayNode payload = mapper.createArrayNode().add("one");
-        service.admit(identity, payload);
-        verify(issues).prepareObservations(job, payload);
-        verifyNoInteractions(pullRequests);
-    }
-
-    @Test
     void shouldRejectPublicationWhenOwnershipChangesDuringVerification() {
         when(pullRequests.prepareObservations(eq(job), any())).thenAnswer(invocation -> {
             job.setRetryCount(1);
@@ -177,14 +161,18 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"CONVERSATION_REVIEW", "DOCUMENT_REVIEW"})
-    void shouldUseFencedAdmissionForRepoLessReviews(String type) {
+    @ValueSource(strings = {"ISSUE_REVIEW", "CONVERSATION_REVIEW", "DOCUMENT_REVIEW"})
+    void shouldUseFencedAdmissionForEveryReviewedWorkKind(String type) {
         job.setJobType(AgentJobType.valueOf(type));
         ArrayNode payload = mapper.createArrayNode().add("observation");
         service.admit(identity, payload);
-        if (job.getJobType() == AgentJobType.CONVERSATION_REVIEW)
-            verify(conversations).prepareObservations(job, payload);
-        else verify(documents).prepareObservations(job, payload);
+        switch (job.getJobType()) {
+            case ISSUE_REVIEW -> verify(issues).prepareObservations(job, payload);
+            case CONVERSATION_REVIEW -> verify(conversations).prepareObservations(job, payload);
+            case DOCUMENT_REVIEW -> verify(documents).prepareObservations(job, payload);
+            default -> throw new AssertionError(type);
+        }
+        verifyNoInteractions(pullRequests);
         verify(delivery).publish(eq(job), any());
         assertThat(Objects.requireNonNull(job.getMetadata())
                         .path(ObservationAdmissionService.DIGEST_METADATA_KEY)
@@ -195,21 +183,23 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
     @Test
     void responseCarriesDurableIdentityAndFullEvidence() {
         job.setJobType(AgentJobType.ISSUE_REVIEW);
-        Observation observation = mock(Observation.class);
-        Practice practice = mock(Practice.class);
+        Practice practice = new Practice();
+        practice.setSlug("explains-why");
         ObjectNode evidence = mapper.createObjectNode();
         evidence.putArray("citations")
                 .addObject()
                 .put("sourceKind", "scm.issue.core")
                 .put("quote", "why");
-        when(observation.getId()).thenReturn(UUID.randomUUID());
-        when(observation.getPractice()).thenReturn(practice);
-        when(practice.getSlug()).thenReturn("explains-why");
-        when(observation.getSummary()).thenReturn("Explains the motivation");
-        when(observation.getPresence()).thenReturn(Presence.PRESENT);
-        org.mockito.Mockito.lenient().when(observation.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
-        when(observation.getEvidence()).thenReturn(evidence);
-        when(observation.getEvidenceRationale()).thenReturn("The issue states why.");
+        Observation observation = Observation.builder()
+                .id(UUID.randomUUID())
+                .practice(practice)
+                .summary("Explains the motivation")
+                .presence(Presence.PRESENT)
+                .assessment(Assessment.GOOD)
+                .assessmentStatus(AssessmentStatus.ASSESSED)
+                .evidence(evidence)
+                .evidenceRationale("The issue states why.")
+                .build();
         when(observations.findByAgentJobId(job.getId(), job.getWorkspace().getId()))
                 .thenReturn(List.of(observation));
 

@@ -242,6 +242,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
         String beforeSha = event.before();
         String afterSha = event.after();
         if (afterSha == null) {
+            processCommitsViaWebhook(event, repository, true);
             return;
         }
 
@@ -277,7 +278,6 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
                     e.getMessage());
             failed[0]++;
         }
-        // Webhook data keeps the row for a commit whose capture failed; COALESCE preserves the rest.
         if (failed[0] > 0) processCommitsViaWebhook(event, repository, true);
     }
 

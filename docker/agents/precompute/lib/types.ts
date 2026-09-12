@@ -55,8 +55,8 @@ export interface DiffHunk {
 }
 
 /**
- * Pull request metadata — matches the JSON produced by
- * PullRequestReviewHandler.buildPullRequestMetadata() on the server.
+ * Pull request metadata — the `metadata.json` written by
+ * PullRequestContentSource.buildPullRequestMetadata() on the server.
  * Scripts should import this instead of declaring ad-hoc types.
  */
 export interface PullRequestMetadata {

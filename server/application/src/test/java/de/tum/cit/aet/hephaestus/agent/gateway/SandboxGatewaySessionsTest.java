@@ -13,6 +13,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 @Tag("unit")
@@ -27,13 +28,18 @@ class SandboxGatewaySessionsTest {
         Path archive = Files.writeString(temporary.resolve("input.tar"), "exact bytes");
         try (var session = sessions.register("attempt-credential", archive, "out")) {
             assertThatThrownBy(() -> sessions.require(session.id(), "Bearer different-attempt"))
-                    .isInstanceOf(ResponseStatusException.class);
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
             assertThat(session.inputBytes()).isEqualTo(Files.size(archive));
             try (var downloaded =
                     sessions.require(session.id(), "Bearer attempt-credential").download()) {
                 assertThat(downloaded.readAllBytes()).isEqualTo(Files.readAllBytes(archive));
             }
-            assertThatThrownBy(session::download).isInstanceOf(ResponseStatusException.class);
+            assertThatThrownBy(session::download)
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
         }
         assertThat(archive).doesNotExist();
     }
@@ -46,8 +52,35 @@ class SandboxGatewaySessionsTest {
         session.close();
 
         assertThatThrownBy(() -> sessions.require(session.id(), "Bearer token"))
-                .isInstanceOf(ResponseStatusException.class);
-        assertThatThrownBy(session::download).isInstanceOf(ResponseStatusException.class);
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        assertThatThrownBy(session::download)
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    @Test
+    void shouldRefuseACredentialThatIsNotABearerToken() throws Exception {
+        Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
+        try (var session = sessions.register("token", archive, "out")) {
+            assertThatThrownBy(() -> sessions.require(session.id(), "Basic token"))
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        }
+    }
+
+    @Test
+    void shouldRefuseAnEmptyBearerToken() throws Exception {
+        Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
+        try (var session = sessions.register("token", archive, "out")) {
+            assertThatThrownBy(() -> sessions.require(session.id(), "Bearer "))
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        }
     }
 
     @Test
@@ -58,7 +91,9 @@ class SandboxGatewaySessionsTest {
 
             assertThat(session.result().get("observations.json")).isEqualTo("{}".getBytes(StandardCharsets.UTF_8));
             assertThatThrownBy(() -> session.upload(new ByteArrayInputStream(resultTar())))
-                    .isInstanceOf(ResponseStatusException.class);
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
             assertThat(session.result().get("observations.json")).isEqualTo("{}".getBytes(StandardCharsets.UTF_8));
         }
     }

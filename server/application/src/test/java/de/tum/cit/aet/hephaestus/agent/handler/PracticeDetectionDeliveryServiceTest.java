@@ -313,6 +313,15 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         verifyNoInteractions(observationRepository);
     }
 
+    @Test
+    void shouldRefusePublicationWhenTheJobChangedSincePreparation() {
+        var prepared = service.prepare(testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT)));
+        testJob.setRetryCount(1);
+        assertThatThrownBy(() -> service.publish(testJob, prepared))
+                .isInstanceOf(ObservationAdmissionService.StaleAttemptException.class);
+        verifyNoInteractions(observationRepository);
+    }
+
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
     void shouldAdmitRepositoryTextAgainstTheCapturedRepositoryIdentity(boolean historical) {
@@ -573,6 +582,12 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                     .extracting(ValidatedObservation::practiceSlug)
                     .containsExactly("pr-description-quality");
             assertThat(result.inserted()).isEqualTo(1);
+            JsonNode failures =
+                    java.util.Objects.requireNonNull(testJob.getMetadata()).path("citation_verification_failures");
+            assertThat(failures).hasSize(1);
+            assertThat(failures.get(0).path("observationIndex").asInt()).isEqualTo(1);
+            assertThat(failures.get(0).path("citationIndex").asInt()).isEqualTo(0);
+            assertThat(failures.get(0).path("reasonCode").asString()).isEqualTo("QUOTE_LOCATION_MISMATCH");
         }
 
         @Test
@@ -677,9 +692,17 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ((ObjectNode) evidenceOf(misquoted).withArray("citations").get(0)).put("quote", "fabricated quote");
 
             assertThatThrownBy(() -> publishVerified(testJob, List.of(misquoted)))
-                    .isInstanceOfSatisfying(
-                            ObservationsRefusedException.class,
-                            refusal -> assertThat(refusal.reasonCode()).isEqualTo("no_valid_observations"))
+                    .isInstanceOfSatisfying(ObservationsRefusedException.class, refusal -> {
+                        assertThat(refusal.reasonCode()).isEqualTo("no_valid_observations");
+                        JsonNode failures = refusal.verificationFailures();
+                        assertThat(failures).hasSize(1);
+                        assertThat(failures.get(0).path("observationIndex").asInt())
+                                .isZero();
+                        assertThat(failures.get(0).path("citationIndex").asInt())
+                                .isZero();
+                        assertThat(failures.get(0).path("reasonCode").asString())
+                                .isEqualTo("QUOTE_LOCATION_MISMATCH");
+                    })
                     .hasMessageContaining("No observation survived the evidence check");
             verifyNoInteractions(observationRepository);
         }
@@ -806,6 +829,72 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
             assertThat(publishVerified(testJob, List.of(observation)).inserted())
                     .isEqualTo(1);
+        }
+
+        @Test
+        void shouldAcceptAQuoteSpanningTwoDiffLines() {
+            capturedDiff = "diff --git a/src/Auth.java b/src/Auth.java\n"
+                    + "--- a/src/Auth.java\n"
+                    + "+++ b/src/Auth.java\n"
+                    + "@@ -10,2 +10,2 @@\n"
+                    + "[L10] + insecure();\n"
+                    + "[L11] + allowAll();\n";
+            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
+            ((ObjectNode) evidenceOf(observation).withArray("citations").get(0))
+                    .put("endLine", 11)
+                    .put("quote", "+ insecure();\n+ allowAll();");
+
+            assertThat(publishVerified(testJob, List.of(observation)).inserted())
+                    .isEqualTo(1);
+        }
+
+        @Test
+        void shouldRejectATwoLineQuoteWhoseSecondLineIsAltered() {
+            capturedDiff = "diff --git a/src/Auth.java b/src/Auth.java\n"
+                    + "--- a/src/Auth.java\n"
+                    + "+++ b/src/Auth.java\n"
+                    + "@@ -10,2 +10,2 @@\n"
+                    + "[L10] + insecure();\n"
+                    + "[L11] + allowAll();\n";
+            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
+            ((ObjectNode) evidenceOf(observation).withArray("citations").get(0))
+                    .put("endLine", 11)
+                    .put("quote", "+ insecure();\n+ allowSome();");
+
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessageContaining("does not match the cited diff location");
+            verifyNoInteractions(observationRepository);
+        }
+
+        @Test
+        void shouldAcceptTheNewPathOfARenamedFile() {
+            capturedDiff = "diff --git a/src/Old.java b/src/New.java\n"
+                    + "--- a/src/Old.java\n"
+                    + "+++ b/src/New.java\n"
+                    + "@@ -10 +10 @@\n"
+                    + "[L10] + insecure();\n";
+            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
+            ((ObjectNode) evidenceOf(observation).withArray("citations").get(0)).put("path", "src/New.java");
+
+            assertThat(publishVerified(testJob, List.of(observation)).inserted())
+                    .isEqualTo(1);
+        }
+
+        @Test
+        void shouldRejectTheOldPathOfARenamedFileForAnAddedLine() {
+            capturedDiff = "diff --git a/src/Old.java b/src/New.java\n"
+                    + "--- a/src/Old.java\n"
+                    + "+++ b/src/New.java\n"
+                    + "@@ -10 +10 @@\n"
+                    + "[L10] + insecure();\n";
+            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
+            ((ObjectNode) evidenceOf(observation).withArray("citations").get(0)).put("path", "src/Old.java");
+
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessageContaining("does not match the cited diff location");
+            verifyNoInteractions(observationRepository);
         }
 
         @Test

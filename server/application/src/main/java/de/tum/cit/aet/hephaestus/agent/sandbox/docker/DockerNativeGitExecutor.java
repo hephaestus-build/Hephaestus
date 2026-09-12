@@ -44,16 +44,11 @@ import tools.jackson.databind.ObjectMapper;
 public final class DockerNativeGitExecutor implements NativeGitExecutor {
     /**
      * What one worker's Git preparation is pinned to: the image, the worker that owns the mirrors it
-     * creates, how many operations may run at once, and the Docker owner scope and OCI runtime shared
-     * with the review sandboxes.
+     * creates, how many operations may run at once, the snapshot bound, and the Docker owner scope
+     * shared with the review sandboxes.
      */
     public record Settings(
-            String image,
-            String workerId,
-            int maxConcurrentOperations,
-            long maxSnapshotBytes,
-            String owner,
-            @Nullable String containerRuntime) {}
+            String image, String workerId, int maxConcurrentOperations, long maxSnapshotBytes, String owner) {}
 
     static final String OWNER_LABEL = "hephaestus.owner";
     static final String COMPONENT_LABEL = "hephaestus.component";

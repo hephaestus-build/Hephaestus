@@ -138,9 +138,11 @@ class does not gate collection — it records what treatment a source needs.
 
 Changing a source's meaning, selection scope, limit, mapping, identity policy, required capture quality,
 dependency, or normalization requires a new contract version. Contract `1.1.0` expands
-`scm.repository.tree` to include contextual access to reachable Git history under the source's governance
-and retention policies. The reviewed commit and tree identify the checkout; captured artifact digests
-additionally pin the exported refs and Git database, which can change between captures of the same commit.
+`scm.repository.tree` from a `.git`-free tree to a checkout with the Git history reachable from the
+reviewed commit and the mirrored branches and tags, under the source's governance and retention
+policies. The reviewed commit and tree identify the checkout; the manifest additionally digests the
+`inputs/sources/scm/repo/.git/HEAD` and captured-refs witnesses, which pin the exported refs — those can change between two
+captures of the same commit.
 
 ## Capture state
 
@@ -379,11 +381,15 @@ location is persisted. Delivery fails atomically on any mismatch.
 This proves traceable grounding, not model causality; evaluations requiring non-interference must still run
 practices in isolated evidence views.
 
-Git history can guide exploration, but a quote from `git show <commit>:<path>` is not verified merely
-because the corresponding object is present in a captured pack file. Citations must name a captured
-artifact containing the quoted text, such as the reviewed-commit file or pull-request diff; shell output
-does not become a new evidence artifact. Historical quotations without such an artifact cannot ground
-delivered feedback.
+A repository citation names `scm.repository.tree`, the captured `inputs/sources/scm/repo/.git/HEAD` witness as its
+`artifactPath`, a repository-relative `path`, the exact quote and line range, and optionally a
+`revision` — a full commit id from the captured history; omitted, it means the reviewed commit. The
+server answers every repository citation of a review from one native Git read of the snapshot it
+pins by the `inputs/sources/scm/repo/.git/HEAD` and captured-refs digests: a path that does not exist at that revision, or a
+quote that does not match those lines, withholds that observation and records
+`QUOTE_LOCATION_MISMATCH` against the citation. Shell output is not an artifact — a
+quote is verified against the Git object, never against what a command printed — and only
+`scm.repository.tree` citations may select a revision.
 
 The internal readiness report records whether each practice is ready or skipped, and it is the one document
 that stays server-side: it is persisted to `agent_job.review_readiness` and never staged. The **manifest is

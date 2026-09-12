@@ -41,13 +41,6 @@ class GitDiffOperationsNativeTest extends BaseUnitTest {
     private String baseSha;
     private String headSha;
 
-    /**
-     * Topology after setUp:
-     *   main:    baseSha
-     *   feature: baseSha → headSha
-     *   origin/main → refs/heads/main (= baseSha)
-     *   origin/feature → refs/heads/feature (= headSha)
-     */
     @BeforeEach
     void setUp() throws GitAPIException, IOException {
         nativeGit = new NativeGitTestExecutor(nativeDirectory);
@@ -64,28 +57,24 @@ class GitDiffOperationsNativeTest extends BaseUnitTest {
         write("a.txt", "line one\nline two changed\nline three\nline four added\n");
         write("b.txt", "brand new\n");
         headSha = commit("change a, add b");
-
-        repo.updateRef("refs/remotes/origin/main").link("refs/heads/main");
-        repo.updateRef("refs/remotes/origin/feature").link("refs/heads/feature");
     }
 
     @Test
-    void diffProducesUnifiedDiff() throws Exception {
+    void shouldProduceAUnifiedDiffWhenCapturingARange() throws Exception {
         String diff = diff(baseSha, headSha);
         assertThat(diff).isNotNull().contains("diff --git", "--- a/a.txt", "+++ b/a.txt", "@@ ");
         assertThat(diff).contains("+line two changed", "-line two", "+line four added", "+brand new");
     }
 
     @Test
-    void diffStatEmitsPerFileLines() throws Exception {
+    void shouldEmitOneStatLinePerFileWhenCapturingARange() throws Exception {
         String stat = stat(baseSha, headSha);
         assertThat(stat).isNotNull();
-        // a.txt: 1 line replaced + 1 line added = 3 (1 add, 1 delete, 1 add); b.txt: 1 add.
         assertThat(stat).containsPattern("a\\.txt\\s+\\|\\s+3").containsPattern("b\\.txt\\s+\\|\\s+1");
     }
 
     @Test
-    void diffStatEncodesRenames() throws GitAPIException, IOException {
+    void shouldEncodeARenameInTheStatWhenAFileMoves() throws GitAPIException, IOException {
         write("renamed-from.txt", "stable\n");
         String addSha = commit("add file");
 
@@ -112,11 +101,8 @@ class GitDiffOperationsNativeTest extends BaseUnitTest {
     }
 
     @Test
-    void resolveDiffRangeUsesMergeBaseWhenTargetAdvancedPastForkPoint() throws GitAPIException, IOException {
-        // The feature diverged at baseSha; then the TARGET branch advanced with its own change.
-        // A 2-dot range [origin/main tip, head] would surface main's later change as a
-        // phantom diff the developer never made. The range base MUST be the merge-base (baseSha), so the
-        // diff is exactly what THIS branch added (3-dot), never what the target branch changed afterwards.
+    void shouldResolveTheRangeFromTheMergeBaseWhenTheTargetAdvancedPastTheForkPoint()
+            throws GitAPIException, IOException {
         git.checkout().setName("main").call();
         write("target-only.txt", "added on the target branch after the fork\n");
         String advancedMain = commit("target advances past the fork point");
@@ -154,17 +140,6 @@ class GitDiffOperationsNativeTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldResolveDivergedHeadAgainstMergeBase() throws GitAPIException, IOException {
-        // Diverge main without merging — only the merge-base remains as a candidate.
-        git.checkout().setName("main").call();
-        write("main-only.txt", "main only\n");
-        commit("main only");
-
-        String[] range = resolveRange("main", headSha);
-        assertThat(range).isNotNull().containsExactly(baseSha, headSha);
-    }
-
-    @Test
     void shouldPreserveQuotedPathsDeletionAndBinaryMetadata() throws Exception {
         write("space and\ttab.txt", "before\n");
         Files.write(repoDir.resolve("image.bin"), new byte[] {0, 1, 2});
@@ -184,12 +159,9 @@ class GitDiffOperationsNativeTest extends BaseUnitTest {
     }
 
     @Test
-    void resolveDiffRangeNullWhenSourceAlreadyMergedIntoTarget() throws GitAPIException, IOException {
-        // Fast-forward main up to feature's head so feature is an ancestor of main: the merge-base equals
-        // head, so a 3-dot diff is legitimately empty and the range must be null (not a phantom 2-dot range).
+    void shouldResolveNoRangeWhenTheHeadIsAlreadyMergedIntoTheTarget() throws GitAPIException, IOException {
         git.checkout().setName("main").call();
         git.merge().include(repo.resolve("feature")).call();
-        repo.updateRef("refs/remotes/origin/main").link("refs/heads/main");
 
         assertThat(resolveRange("main", headSha)).isNull();
     }

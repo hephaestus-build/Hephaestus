@@ -646,8 +646,8 @@ public class GitLabWorkspaceInitializationService {
                             e);
                 }
             }
-            // Prefer native Git backfill (provides diff stats + file changes);
-            // fall back to REST API when git is not enabled
+            // The native Git backfill provides diff stats and file changes; the REST sync runs only
+            // when no backfill bean exists.
             if (commitBackfillService != null) {
                 try {
                     SyncResult r = commitBackfillService.backfillCommits(workspace.getId(), repo);

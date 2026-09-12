@@ -42,7 +42,7 @@ gh attestation verify "release-$VERSION.json" --owner hephaestus-build
 
 Follow the [rollback procedure](./install#rollback). It selects an earlier published lock without
 reconstructing metadata or resolving image tags. Production startup independently rejects a
-non-digest `agent-pi` reference.
+non-digest `agent-pi` or `git-preparation` reference.
 
 ## Runtime identity handoff
 

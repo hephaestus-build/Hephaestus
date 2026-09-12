@@ -210,7 +210,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
                 headRefOid,
                 baseRefOid,
                 mergedBy != null ? mergedBy.getId() : null,
-                null // mergeCommitSha — GitHub REST/webhook DTO does not supply it; GraphQL path can be wired later
+                null // mergeCommitSha: not written by this path; upsertMergeCommit upserts and links the merge commit
                 );
 
         // Fetch the PR to get a managed entity and handle relationships
@@ -484,7 +484,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
      * This piggybacks on data already fetched in the PR query (flat fields on Commit type)
      * so it costs zero additional rate limit points.
      * <p>
-     * R5: After upserting the commit, links it to the PR in the commit_pull_request join table
+     * After upserting the commit, links it to the PR in the commit_pull_request join table
      * so that the association is established immediately (not deferred to enrichment).
      */
     private void upsertMergeCommit(GitHubPullRequestDTO dto, Repository repository, ProcessingContext context) {
@@ -522,7 +522,6 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
                 info.committerEmail(),
                 null);
 
-        // R5: Link the merge commit to the PR in the join table
         var commitOpt = commitRepository.findByShaAndRepositoryId(info.sha(), repository.getId());
         if (commitOpt.isPresent()) {
             commitRepository.linkCommitToPullRequests(

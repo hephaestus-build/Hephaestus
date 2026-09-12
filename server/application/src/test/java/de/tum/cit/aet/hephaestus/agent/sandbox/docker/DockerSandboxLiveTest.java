@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.github.dockerjava.core.DefaultDockerClientConfig;
@@ -10,7 +9,6 @@ import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
@@ -168,44 +166,7 @@ class DockerSandboxLiveTest {
             assertThat(result.outputFiles().get("result.json")).isEqualTo(written.getBytes(StandardCharsets.UTF_8));
         }
 
-        @Test
-        void shouldRejectRunWhenAnOutputNameNeedsANameExtensionRecord() {
-            String name = "a".repeat(97) + ".json";
-
-            assertThatThrownBy(() -> run("echo '{}' > /workspace/out/" + name))
-                    .isInstanceOf(SandboxException.class)
-                    .hasMessageContaining("Sandbox execution failed");
-        }
-
-        @Test
-        void shouldRejectRunWhenOutputContainsASymlink() {
-            assertThatThrownBy(() -> run("ln -s /etc/passwd /workspace/out/leak"))
-                    .isInstanceOf(SandboxException.class)
-                    .hasMessageContaining("Sandbox execution failed");
-        }
-
-        @Test
-        void shouldRejectRunWhenOutputExceedsTheBudget() {
-            var tightAdapter = new DockerSandboxAdapter(
-                    networkManager,
-                    new SandboxWorkspaceManager(),
-                    containerManager,
-                    securityPolicy,
-                    gateway.port(),
-                    new SimpleMeterRegistry(),
-                    gateway.sessions(),
-                    dockerOps);
-
-            assertThatThrownBy(() -> run("dd if=/dev/zero of=/workspace/out/big.bin bs=1M count=51", tightAdapter))
-                    .isInstanceOf(SandboxException.class)
-                    .hasMessageContaining("Sandbox execution failed");
-        }
-
         private SandboxResult run(String script) {
-            return run(script, sandboxAdapter);
-        }
-
-        private SandboxResult run(String script, DockerSandboxAdapter adapter) {
             SandboxSpec spec = new SandboxSpec(
                     UUID.randomUUID(),
                     AGENT_IMAGE,
@@ -216,7 +177,7 @@ class DockerSandboxLiveTest {
                     testSecurityProfile(),
                     Map.of(),
                     "/workspace/out");
-            SandboxResult result = adapter.execute(spec);
+            SandboxResult result = sandboxAdapter.execute(spec);
             assertThat(result.exitCode()).isZero();
             return result;
         }

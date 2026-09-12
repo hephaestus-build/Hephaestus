@@ -129,9 +129,6 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         lenient().when(gitRepositoryManager.isEnabled()).thenReturn(true);
         lenient().when(gitRepositoryManager.isRepositoryCloned(REPOSITORY)).thenReturn(true);
         lenient()
-                .when(gitRepositoryManager.commitExists(REPOSITORY, "abc123def456"))
-                .thenReturn(true);
-        lenient()
                 .when(gitDiffOperations.resolveDiffRange(REPOSITORY, "a".repeat(40), "abc123def456"))
                 .thenReturn(new String[] {"a".repeat(40), "abc123def456"});
         lenient()

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
@@ -13,12 +14,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabPushEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.time.Instant;
-import java.util.Objects;
-import org.hibernate.Hibernate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -76,12 +74,6 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
         repository.setOrganization(organization);
         repository.setProvider(provider);
         Long repositoryId = repositories.save(repository).getId();
-        Long providerId = Objects.requireNonNull(provider.getId());
-        var detached = Objects.requireNonNull(transactions.execute(status ->
-                repositories.findByNativeIdAndProviderId(246765L, providerId).orElseThrow()));
-        assertThat(Hibernate.isInitialized(detached.getOrganization())).isFalse();
-        assertThat(TransactionSynchronizationManager.isActualTransactionActive())
-                .isFalse();
 
         GitLabPushEventDTO event;
         try (var input = new ClassPathResource("gitlab/push.json").getInputStream()) {
@@ -89,8 +81,16 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
         }
         handler.handleEvent(event);
 
-        assertThat(commits.findByShaAndRepositoryId("9c5dedd52046bb5213189afc25f75e608a98d462", repositoryId))
-                .isPresent();
+        transactions.executeWithoutResult(status -> {
+            var initial = commits.findByShaAndRepositoryId("9c5dedd52046bb5213189afc25f75e608a98d462", repositoryId)
+                    .orElseThrow();
+            assertThat(initial.getMessage()).isEqualTo("Initial commit");
+            assertThat(initial.getChangedFiles()).isEqualTo(1);
+            assertThat(initial.getFileChanges()).singleElement().satisfies(change -> {
+                assertThat(change.getFilename()).isEqualTo("README.md");
+                assertThat(change.getChangeType()).isEqualTo(CommitFileChange.ChangeType.ADDED);
+            });
+        });
         assertThat(commits.findByShaAndRepositoryId("a4bf10d93a2d136f1db911b6f1c03d26d835a44f", repositoryId))
                 .isPresent();
     }

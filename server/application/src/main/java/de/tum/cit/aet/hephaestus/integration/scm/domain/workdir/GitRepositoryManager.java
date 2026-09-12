@@ -366,7 +366,9 @@ public class GitRepositoryManager {
                     Files.createDirectories(target);
                     continue;
                 }
-                if (!entry.isFile()) throw new IOException("Native snapshot contains an unsupported archive entry");
+                // isFile() is true for FIFO and device entries too; each is asked for by name.
+                if (!entry.isFile() || entry.isFIFO() || entry.isCharacterDevice() || entry.isBlockDevice())
+                    throw new IOException("Native snapshot contains an unsupported archive entry");
                 Files.createDirectories(target.getParent());
                 try (OutputStream out = Files.newOutputStream(target)) {
                     tar.transferTo(out);

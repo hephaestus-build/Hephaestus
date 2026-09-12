@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
@@ -21,7 +22,10 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class SecretDiffScannerTest extends BaseUnitTest {
     private final JobEvidenceFiles files = mock(JobEvidenceFiles.class);
@@ -29,6 +33,7 @@ class SecretDiffScannerTest extends BaseUnitTest {
     private final JsonMapper mapper = new JsonMapper();
     private final SecretDiffScanner scanner = new SecretDiffScanner(files, git, mapper);
     private AgentJob job;
+    private ObjectNode snapshot;
 
     @TempDir
     private Path repository;
@@ -36,7 +41,7 @@ class SecretDiffScannerTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         job = new AgentJob();
-        var snapshot = mapper.createObjectNode();
+        snapshot = mapper.createObjectNode();
         var sources = snapshot.putObject("manifest").putArray("sources");
         var diff = sources.addObject().put("kind", "scm.pull-request.diff");
         diff.putObject("state")
@@ -96,5 +101,62 @@ class SecretDiffScannerTest extends BaseUnitTest {
                 .when(git)
                 .executeInSnapshot(eq(repository), any(), any(), any());
         assertThatThrownBy(() -> scanner.scan(job)).isInstanceOf(JobDeliveryException.class);
+    }
+
+    @Test
+    void shouldRejectVerdictsThatAreNotAnArray() {
+        doAnswer(invocation -> {
+                    OutputStream output = invocation.getArgument(3);
+                    output.write("{\"skipped\":[],\"verdicts\":{}}".getBytes(StandardCharsets.UTF_8));
+                    return null;
+                })
+                .when(git)
+                .executeInSnapshot(eq(repository), any(), any(), any());
+        assertThatThrownBy(() -> scanner.scan(job))
+                .isInstanceOf(JobDeliveryException.class)
+                .cause()
+                .hasMessage("Invalid secret scan verdicts");
+    }
+
+    @Test
+    void shouldRefuseToScanWhenTheCapturedDiffRangeIsMissing() {
+        snapshot.withObject("/manifest/sources/0/state/facts").remove("immutableIdentity");
+        assertThatThrownBy(() -> scanner.scan(job))
+                .isInstanceOf(JobDeliveryException.class)
+                .hasMessage("Secret scan requires the captured diff range and repository identity");
+        verifyNoInteractions(files, git);
+    }
+
+    @Test
+    void shouldRefuseToScanWhenTheCapturedDiffRangeIsNotAPairOfObjectIds() {
+        snapshot.withObject("/manifest/sources/0/state/facts").put("immutableIdentity", "main..feature");
+        assertThatThrownBy(() -> scanner.scan(job))
+                .isInstanceOf(JobDeliveryException.class)
+                .hasMessage("Secret scan requires the captured diff range and repository identity");
+        verifyNoInteractions(files, git);
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "src/test/fixtures/keys.txt",
+                "examples/demo.env",
+                "packages/sdk/examples/quickstart.ts",
+                "e2e/samples/seed.json",
+                "example/demo.env"
+            })
+    void shouldTreatTestAndSampleDirectoriesAsLowSignalAtAnyDepth(String path) {
+        assertThat(scanner.isLowSignalPath(path)).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "src/main/Weather.swift",
+                "src/main/java/com/example/util/CacheManager.java",
+                "app/src/main/kotlin/com/sample/Api.kt"
+            })
+    void shouldNotTreatAPackageNamedExampleAsLowSignal(String path) {
+        assertThat(scanner.isLowSignalPath(path)).isFalse();
     }
 }

@@ -52,9 +52,9 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * WSS control-channel client. Single outbound JDK {@link WebSocket} with exponential backoff and
- * silence-deadline reconnect. Two platform threads — outbound drain + inbound dispatch — so JDK
- * WebSocket callbacks (which pin virtual-thread carriers) don't OOM the carrier pool. Both
- * queues are bounded.
+ * silence-deadline reconnect. Three platform threads — outbound drain, inbound dispatch and the
+ * connection loop — so JDK WebSocket callbacks (which pin virtual-thread carriers) don't OOM the
+ * carrier pool. Both queues are bounded.
  */
 public class WorkerControlClient {
 
@@ -351,7 +351,7 @@ public class WorkerControlClient {
 
     private Duration nextBackoff(Duration current) {
         long doubled = Math.min(current.toMillis() * 2, MAX_BACKOFF.toMillis());
-        // ±20% jitter
+        // ±10% jitter
         long jitter = (long) (doubled * 0.2 * (random.nextDouble() - 0.5));
         return Duration.ofMillis(Math.max(MIN_BACKOFF.toMillis(), doubled + jitter));
     }
@@ -419,7 +419,6 @@ public class WorkerControlClient {
             try {
                 ws.sendClose(WebSocket.NORMAL_CLOSURE, reason);
             } catch (RuntimeException ignored) {
-                // best-effort
             }
         }
     }

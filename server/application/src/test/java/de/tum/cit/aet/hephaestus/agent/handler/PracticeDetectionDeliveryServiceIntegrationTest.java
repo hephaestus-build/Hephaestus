@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
@@ -329,38 +330,17 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
         }
 
         @Test
-        void shouldComposePersistedVerifiedObservationsAfterCapturedBytesAreDeleted() throws Exception {
+        void shouldKeepPublishedObservationsVerifiedAfterCapturedBytesAreDeleted() throws Exception {
             publishVerified(agentJob, List.of(observation("error-handling", Presence.ABSENT)));
-            var rows = observationRepository.findByAgentJobId(agentJob.getId(), workspace.getId());
-            assertThat(rows).hasSize(1);
-            var persisted = rows.getFirst();
-            CitationVerification.requireVerified(agentJob, persisted.getEvidence());
-            String sha = persisted
-                    .getEvidence()
-                    .path("citations")
-                    .get(0)
-                    .path("verification")
-                    .path("artifactSha256")
+            String sha = java.util.Objects.requireNonNull(agentJob.getEvidenceSnapshot())
+                    .at("/manifest/sources/0/artifacts/0/sha256")
                     .asString();
+
             deleteFixtureEvidence();
+
             assertThat(evidenceFiles.inspect(agentJob, "inputs/context/diff.patch", sha, reader -> Boolean.TRUE))
                     .isEmpty();
-            var admitted = new ValidatedObservation(
-                    persisted.getPractice().getSlug(),
-                    persisted.getSummary(),
-                    persisted.getAssessmentStatus(),
-                    persisted.getPresence(),
-                    persisted.getAssessment(),
-                    persisted.getSeverity(),
-                    persisted.getEvidence(),
-                    persisted.getEvidenceRationale());
-            CitationVerification.requireVerified(agentJob, persisted.getEvidence());
-            var delivery = DeliveryComposer.composeAdmitted(
-                    List.of(admitted), ArtifactKinds.PULL_REQUEST, Map.of(), List.of(), null);
-            assertThat(delivery).isNotNull();
-            if (delivery == null) throw new AssertionError("Expected feedback");
-            assertThat(delivery.diffNotes()).hasSize(1);
-            assertThat(delivery.diffNotes().getFirst().filePath()).isEqualTo("src/Auth.java");
+            assertThatCode(() -> deliveryService.requirePublished(agentJob)).doesNotThrowAnyException();
         }
 
         @Test

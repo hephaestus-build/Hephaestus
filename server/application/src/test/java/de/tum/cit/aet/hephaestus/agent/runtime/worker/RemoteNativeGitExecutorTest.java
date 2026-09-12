@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -27,6 +26,7 @@ import java.io.ByteArrayOutputStream;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import org.junit.jupiter.api.Tag;
@@ -38,6 +38,7 @@ class RemoteNativeGitExecutorTest {
     private static final RepositoryKey KEY = new RepositoryKey(7, 11);
     private static final Request FETCH =
             new Request(Operation.FETCH, List.of(), "https://example.com/team/repo.git", "private-token");
+    private static final Request QUERY = new Request(Operation.COMMIT_IDS, List.of(), null, null);
     private static final Duration TIMEOUT = Duration.ofSeconds(2);
 
     private final WorkerSession session = mock(WorkerSession.class);
@@ -107,28 +108,97 @@ class RemoteNativeGitExecutorTest {
                 .hasMessageContaining("dispatch");
     }
 
-    @Test
-    void shouldPlaceARepositoryOnALiveWorkerDeterministicallyWhenNoAffinityExists() {
+    private WorkerSession otherWorker() {
         var other = mock(WorkerSession.class);
         when(other.isOpen()).thenReturn(true);
         when(other.sessionId()).thenReturn("other-session");
         when(other.workerId()).thenReturn("worker-a");
+        return other;
+    }
+
+    private record Dispatch(WorkerSession worker, GitOperation operation) {}
+
+    /** Every dispatched operation succeeds at once; the returned list records where each one went. */
+    private List<Dispatch> answeringWorkers(WorkerSession... workers) {
+        List<Dispatch> dispatched = new CopyOnWriteArrayList<>();
+        for (var worker : workers)
+            when(worker.send(any())).thenAnswer(invocation -> {
+                if (invocation.getArgument(0) instanceof GitOperation operation) {
+                    dispatched.add(new Dispatch(worker, operation));
+                    receiver.get().accept(worker, new GitOutput(operation.operationId(), 0, "", true, true));
+                }
+                return true;
+            });
+        return dispatched;
+    }
+
+    @Test
+    void shouldKeepARepositoryOnTheWorkerItWasPlacedOn() {
+        var other = otherWorker();
         when(registry.sessions()).thenReturn(List.of(session, other));
-        var query = new Request(Operation.COMMIT_IDS, List.of(), null, null);
-        var sorted = List.of(other, session);
-        var expected = sorted.get(Math.floorMod(Long.hashCode(KEY.repositoryId()), sorted.size()));
-        var unexpected = expected == session ? other : session;
-        when(expected.send(any())).thenAnswer(invocation -> {
-            if (invocation.getArgument(0) instanceof GitOperation operation)
-                receiver.get().accept(expected, new GitOutput(operation.operationId(), 0, "", true, true));
-            return true;
-        });
+        var dispatched = answeringWorkers(session, other);
 
-        executor.execute(KEY, query, TIMEOUT, new ByteArrayOutputStream());
-        executor.execute(KEY, query, TIMEOUT, new ByteArrayOutputStream());
+        executor.execute(KEY, QUERY, TIMEOUT, new ByteArrayOutputStream());
+        executor.execute(KEY, QUERY, TIMEOUT, new ByteArrayOutputStream());
 
-        verify(expected, times(2)).send(any(GitOperation.class));
-        verify(unexpected, never()).send(any());
+        assertThat(dispatched)
+                .extracting(Dispatch::worker)
+                .hasSize(2)
+                .containsOnly(dispatched.getFirst().worker());
+    }
+
+    @Test
+    void shouldPlaceTheRepositoryAgainWhenItsWorkerSessionCloses() {
+        var other = otherWorker();
+        when(registry.sessions()).thenReturn(List.of(session, other));
+        var dispatched = answeringWorkers(session, other);
+        executor.execute(KEY, QUERY, TIMEOUT, new ByteArrayOutputStream());
+        var placed = dispatched.getFirst().worker();
+        when(placed.isOpen()).thenReturn(false);
+
+        executor.execute(KEY, QUERY, TIMEOUT, new ByteArrayOutputStream());
+
+        assertThat(dispatched).hasSize(2);
+        assertThat(dispatched.get(1).worker()).isNotSameAs(placed);
+    }
+
+    @Test
+    void shouldFailWhenNoWorkerIsConnected() {
+        when(registry.sessions()).thenReturn(List.of());
+        assertThatThrownBy(() -> executor.execute(KEY, QUERY, TIMEOUT, new ByteArrayOutputStream()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("No connected Git worker");
+    }
+
+    @Test
+    void shouldDeleteTheRepositoryOnEveryOpenWorkerAndStillServeItAfterwards() {
+        var other = otherWorker();
+        var closed = mock(WorkerSession.class);
+        when(closed.isOpen()).thenReturn(false);
+        when(registry.sessions()).thenReturn(List.of(session, other, closed));
+        var dispatched = answeringWorkers(session, other);
+        executor.execute(KEY, QUERY, TIMEOUT, new ByteArrayOutputStream());
+
+        executor.deleteRepository(KEY.repositoryId());
+
+        assertThat(dispatched)
+                .filteredOn(dispatch -> dispatch.operation().delete())
+                .allSatisfy(dispatch ->
+                        assertThat(dispatch.operation().repositoryId()).isEqualTo(KEY.repositoryId()))
+                .extracting(Dispatch::worker)
+                .containsExactlyInAnyOrder(session, other);
+        verify(closed, never()).send(any());
+        executor.execute(KEY, QUERY, TIMEOUT, new ByteArrayOutputStream());
+        assertThat(dispatched.getLast().operation().delete()).isFalse();
+        assertThat(dispatched.getLast().worker().isOpen()).isTrue();
+    }
+
+    @Test
+    void shouldFailTheOperationWhenTheDeadlinePassesWithoutAnAnswer() {
+        when(session.send(any())).thenReturn(true);
+        assertThatThrownBy(() -> executor.execute(KEY, QUERY, Duration.ofMillis(50), new ByteArrayOutputStream()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Git operation session or deadline expired");
     }
 
     @Test

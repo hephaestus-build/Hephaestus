@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.handler.AdmittedObservationFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
@@ -182,14 +183,14 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
         assertThat(authorization.permitsForNewDelivery(
                         7L, List.of(observation), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isEmpty();
-        org.springframework.test.util.ReflectionTestUtils.setField(
-                observation,
-                "evidence",
-                de.tum.cit.aet.hephaestus.agent.handler.AdmittedObservationFixtures.evidence(
-                        jobId, "scm.pull-request.diff"));
+        Observation verified = Observation.builder()
+                .id(observation.getId())
+                .agentJobId(jobId)
+                .evidence(AdmittedObservationFixtures.evidence(jobId, "scm.pull-request.diff"))
+                .build();
         assertThat(authorization.permitsForNewDelivery(
-                        7L, List.of(observation), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
-                .containsExactly(observation.getId());
+                        7L, List.of(verified), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .containsExactly(verified.getId());
     }
 
     private static Observation observation(String sourceKind) {

@@ -202,7 +202,6 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
                     e.getMessage());
             failed[0]++;
         }
-        // Webhook data keeps the row for a commit whose capture failed; COALESCE preserves the rest.
         if (failed[0] > 0) processCommitsViaWebhook(event, repository, true);
     }
 
@@ -255,9 +254,9 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
                     htmlUrl,
                     authoredAt,
                     authoredAt, // committedAt = authoredAt (webhook doesn't distinguish)
-                    asFallback ? null : 0, // additions: null preserves existing richer data on fallback
-                    asFallback ? null : 0, // deletions: null preserves existing richer data on fallback
-                    asFallback ? null : changedFiles, // changedFiles: null preserves on fallback
+                    asFallback ? null : 0,
+                    asFallback ? null : 0,
+                    asFallback ? null : changedFiles,
                     Instant.now(),
                     repository.getId(),
                     authorId,

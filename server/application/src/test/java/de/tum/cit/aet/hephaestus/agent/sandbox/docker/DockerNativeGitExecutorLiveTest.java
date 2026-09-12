@@ -35,6 +35,8 @@ class DockerNativeGitExecutorLiveTest {
     private static final String IMAGE =
             System.getenv().getOrDefault("HEPHAESTUS_IMAGE_GIT_PREPARATION", "hephaestus-git-preparation:local");
     private static final RepositoryKey KEY = new RepositoryKey(9_000_001L, 9_000_001L);
+    /** The same repository connected in a second workspace; one mirror per workspace. */
+    private static final RepositoryKey OTHER_WORKSPACE = new RepositoryKey(9_000_002L, KEY.repositoryId());
 
     private DockerClientOperations dockerOps;
     private ExecutorService dockerWaitExecutor;
@@ -64,7 +66,7 @@ class DockerNativeGitExecutorLiveTest {
                         new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "live-git"),
                         null),
                 new JsonMapper(),
-                new DockerNativeGitExecutor.Settings(IMAGE, "live-worker", 2, 1L << 33, "live-git", null));
+                new DockerNativeGitExecutor.Settings(IMAGE, "live-worker", 2, 1L << 33, "live-git"));
     }
 
     @AfterEach
@@ -87,5 +89,24 @@ class DockerNativeGitExecutorLiveTest {
         var output = new ByteArrayOutputStream();
         executor.execute(KEY, new Request(Operation.STATUS, List.of(), null, null), Duration.ofSeconds(60), output);
         assertThat(output.toString(StandardCharsets.UTF_8).strip()).isEqualTo("false");
+    }
+
+    @Test
+    void shouldFetchAPublicRepositoryAndKeepWorkspacesApart() {
+        var fetch = new Request(Operation.FETCH, List.of(), "https://github.com/octocat/Hello-World.git", null);
+        executor.execute(KEY, fetch, Duration.ofSeconds(120), OutputStream.nullOutputStream());
+
+        assertThat(answer(KEY, new Request(Operation.STATUS, List.of(), null, null)))
+                .isEqualTo("true");
+        assertThat(answer(KEY, new Request(Operation.RESOLVE, List.of("refs/remotes/origin/master"), null, null)))
+                .matches("[0-9a-f]{40}");
+        assertThat(answer(OTHER_WORKSPACE, new Request(Operation.STATUS, List.of(), null, null)))
+                .isEqualTo("false");
+    }
+
+    private String answer(RepositoryKey key, Request request) {
+        var output = new ByteArrayOutputStream();
+        executor.execute(key, request, Duration.ofSeconds(60), output);
+        return output.toString(StandardCharsets.UTF_8).strip();
     }
 }

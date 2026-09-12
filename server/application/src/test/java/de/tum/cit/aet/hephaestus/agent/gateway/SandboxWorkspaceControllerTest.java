@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.server.ResponseStatusException;
@@ -30,7 +31,9 @@ class SandboxWorkspaceControllerTest {
             assertThat(controller.capabilities(session.id(), "Bearer token").workspaceByteBudget())
                     .isEqualTo(Files.size(archive));
             assertThatThrownBy(() -> controller.workspace(session.id(), "Bearer other", response))
-                    .isInstanceOf(ResponseStatusException.class);
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
             controller.workspace(session.id(), "Bearer token", response);
             assertThat(response.getContentAsByteArray()).isEqualTo(Files.readAllBytes(archive));
             assertThat(response.getContentType()).isEqualTo("application/x-tar");
@@ -50,6 +53,28 @@ class SandboxWorkspaceControllerTest {
                             exception -> assertThat(exception.getStatusCode().value())
                                     .isEqualTo(400));
             assertThatThrownBy(session::result).isInstanceOf(IllegalStateException.class);
+        }
+    }
+
+    @Test
+    void shouldRefuseACredentialThatIsNotABearerToken() throws Exception {
+        var archive = Files.writeString(temporary.resolve("input.tar"), "input");
+        try (var session = sessions.register("token", archive, "out")) {
+            assertThatThrownBy(() -> controller.capabilities(session.id(), "Basic token"))
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        }
+    }
+
+    @Test
+    void shouldRefuseAnEmptyBearerToken() throws Exception {
+        var archive = Files.writeString(temporary.resolve("input.tar"), "input");
+        try (var session = sessions.register("token", archive, "out")) {
+            assertThatThrownBy(() -> controller.capabilities(session.id(), "Bearer "))
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
         }
     }
 }

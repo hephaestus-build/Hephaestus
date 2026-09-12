@@ -73,12 +73,11 @@ public class GitLabCommitBackfillService {
      * Backfills commits for a GitLab repository from its local git clone. Idempotent: a commit whose
      * details are captured is skipped, and a commit whose capture failed is retried next cycle.
      *
-     * @return sync result with the count of commits captured; an error result when local Git is
-     *     disabled so the caller falls through to REST
+     * @return sync result with the count of commits captured; an error result with count 0 when
+     *     native Git is disabled
      */
     public SyncResult backfillCommits(Long scopeId, Repository repository) {
         if (!gitRepositoryManager.isEnabled()) {
-            // An error result lets the caller use REST when local Git is disabled.
             log.warn(
                     "Skipped native Git commit backfill: reason=gitDisabled, repoId={}, repoName={} — caller should fall through to REST commit sync",
                     repository.getId(),
@@ -149,7 +148,7 @@ public class GitLabCommitBackfillService {
 
     /**
      * The REST-first path in {@link GitLabCommitSyncService} feeds the same columns from
-     * {@code parent_ids}; whichever runs first wins and the other is a no-op. A root commit writes
+     * {@code parent_ids}; both derive the same values, so order does not matter. A root commit writes
      * {@code parent_count = 0} so "no parents" is distinguishable from "not populated".
      */
     private void persistParents(Long repositoryId, CommitDetails details) {

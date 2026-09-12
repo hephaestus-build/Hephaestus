@@ -156,8 +156,10 @@ configuration are database-backed runtime configuration and are not deployment s
 
 ## Agent image
 
-Worker roles require digest enforcement and a SHA-256-pinned `hephaestus.agent.image.reference`. See
-[Release image lock](./release-image-lock).
+Worker roles require digest enforcement and a SHA-256-pinned `hephaestus.agent.image.reference`. The
+same enforcement covers `hephaestus.git.image` (`HEPHAESTUS_IMAGE_GIT_PREPARATION`), the
+`git-preparation` image every native Git operation runs in; the shipped Compose files take both from
+the release lock. See [Release image lock](./release-image-lock).
 
 ## Sandbox isolation
 

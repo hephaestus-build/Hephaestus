@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Production implementation of Docker operations using docker-java.
  *
- * <p>Implements all three focused operation interfaces. Each method is a thin delegate to {@link
+ * <p>Implements every focused operation interface. Each method is a thin delegate to {@link
  * DockerClient}, translating {@link DockerException} to {@link SandboxException}.
  */
 public class DockerClientOperations

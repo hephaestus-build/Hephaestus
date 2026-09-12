@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitAck;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitCancel;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOperation;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOutput;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor;
@@ -53,13 +54,17 @@ class WorkerGitOperationHandlerTest {
     }
 
     private GitOperation operation(Request request) {
+        return operation(request, Duration.ofSeconds(5));
+    }
+
+    private GitOperation operation(Request request, Duration deadline) {
         return new GitOperation(
                 UUID.randomUUID(),
                 "session",
                 7,
                 11,
                 new ObjectMapper().writeValueAsString(request),
-                System.currentTimeMillis() + Duration.ofSeconds(5).toMillis(),
+                System.currentTimeMillis() + deadline.toMillis(),
                 false);
     }
 
@@ -147,5 +152,71 @@ class WorkerGitOperationHandlerTest {
         handler.handle(foreign);
         assertThat(frames).isEmpty();
         verify(executor, org.mockito.Mockito.never()).execute(any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldStopTheRunningOperationWhenTheHubCancelsIt() throws Exception {
+        var started = new CountDownLatch(1);
+        doAnswer(invocation -> {
+                    started.countDown();
+                    try {
+                        new CountDownLatch(1).await();
+                    } catch (InterruptedException e) {
+                        throw new IllegalStateException("Cancelled", e);
+                    }
+                    return null;
+                })
+                .when(executor)
+                .execute(any(), any(), any(), any());
+        var operation = operation(new Request(Operation.COMMIT_IDS, List.of(), null, null));
+        handler.handle(operation);
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+
+        handler.handle(new GitCancel(operation.operationId()));
+
+        assertThat(terminal.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(frames).singleElement().satisfies(frame -> {
+            assertThat(frame.terminal()).isTrue();
+            assertThat(frame.success()).isFalse();
+        });
+    }
+
+    @Test
+    void shouldFailTheOperationWhenTheHubDoesNotAcknowledgeAFrameBeforeTheDeadline() throws Exception {
+        when(client.sendRequired(any(GitOutput.class))).thenAnswer(invocation -> {
+            GitOutput frame = invocation.getArgument(0);
+            frames.add(frame);
+            if (frame.terminal()) terminal.countDown();
+            return true;
+        });
+        doAnswer(invocation -> {
+                    OutputStream output = invocation.getArgument(3);
+                    output.write("abc\n".getBytes(StandardCharsets.UTF_8));
+                    return null;
+                })
+                .when(executor)
+                .execute(any(), any(), any(), any());
+        handler.handle(operation(new Request(Operation.COMMIT_IDS, List.of(), null, null), Duration.ofMillis(200)));
+        assertThat(terminal.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(frames).hasSize(2);
+        assertThat(frames.get(0).terminal()).isFalse();
+        assertThat(frames.get(1).success()).isFalse();
+    }
+
+    @Test
+    void shouldDeleteTheMirrorWhenTheHubAsksForDeletion() throws Exception {
+        handler.handle(new GitOperation(
+                UUID.randomUUID(),
+                "session",
+                0,
+                11,
+                "",
+                System.currentTimeMillis() + Duration.ofSeconds(5).toMillis(),
+                true));
+        assertThat(terminal.await(5, TimeUnit.SECONDS)).isTrue();
+        verify(executor).deleteRepository(11);
+        assertThat(frames)
+                .singleElement()
+                .satisfies(frame -> assertThat(frame.success()).isTrue());
     }
 }

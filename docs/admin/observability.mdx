@@ -146,23 +146,20 @@ start exporting application logs, private transcripts or a second metrics stream
 remain available through the existing endpoint.
 
 Each practice-review attempt starts a `practice_review.execute` span. Its trace ID can differ from
-the job's submission correlation ID, which is a separate span attribute rather than a parent span. Sandbox proxy requests propagate the
+the job's submission correlation ID, which is carried as the `hephaestus.job.submission_trace_id`
+attribute rather than as a parent span. Sandbox proxy requests propagate the
 execution trace's sampling decision. A `gen_ai.chat` span covers each authenticated model request,
 including streaming, and records the model, HTTP outcome and observed streaming token usage when
-available. Framework HTTP spans describe the transport. Prompts, tool results, headers and tokens
-used for authentication are not span attributes.
+available. Framework HTTP spans describe the transport. Prompts, tool results, request bodies,
+headers and tokens used for authentication are not span attributes.
 
 For streaming requests, `hephaestus.stream.outcome` records transport completion separately from
 the HTTP status. A client disconnect or stream failure marks the span as an error with a bounded
 `error.type`, even if HTTP 200 headers were already sent. No replacement response body is sent
 after the stream has been committed.
 
-For private capture, the actual outbound proxy request body is retained separately from the Pi
-request: the proxy may replace a model identifier or add usage-reporting options. The private
-request context links its Pi-request hash to the exported trace and span IDs. Both bodies are
-content-addressed; neither body is copied into telemetry.
-
-A trace ID is not proof of export. Verify that your collector received the execution root and model
-request spans, then compare request hashes with the native event journal. Sampling, exporter errors,
-collector retention and abrupt process termination can all leave partial coverage. Do not equate
-successful feedback delivery or a nonempty trace file with complete execution evidence.
+A trace ID is not proof of export. Sampling, exporter errors, collector retention and abrupt
+process termination can all leave partial coverage. A trace describes when calls happened and how
+they ended; it is not a record of what a review read or said. Beyond the diagnostic job output that
+`AGENT_PAYLOAD_RETENTION` strips, a review retains its admitted observations and their citation
+verdicts, not its inputs, model requests or session transcript.

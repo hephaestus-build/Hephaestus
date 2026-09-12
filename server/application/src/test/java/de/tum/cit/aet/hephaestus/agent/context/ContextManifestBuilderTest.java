@@ -39,7 +39,6 @@ import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -50,7 +49,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -65,9 +63,6 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     private static final SourceKind OUTLINE = new SourceKind("outline.documents");
     private static final SourceKind PROJECT_INVENTORY = new SourceKind("workspace.project-inventory");
     private static final Instant NOW = Instant.parse("2026-09-11T10:00:00Z");
-
-    @TempDir
-    Path root;
 
     private final JsonMapper mapper = JsonMapper.builder().build();
     private ContextManifestBuilder builder;
@@ -104,11 +99,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
         assertThat(diffSource.path("state").path("availability").asString()).isEqualTo("AVAILABLE");
         assertThat(diffSource.path("artifacts").get(0).path("path").asString()).isEqualTo("inputs/context/diff.patch");
         assertThat(diffSource.path("artifacts").get(0).path("sha256").asString())
-                .matches("[0-9a-f]{64}");
-
-        assertThat(diffSource.path("artifacts").get(0).path("sha256").asString())
                 .isEqualTo(de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest.sha256Hex(diff));
-        assertThat(root.resolve("jobs/job-42")).doesNotExist();
     }
 
     @Test
