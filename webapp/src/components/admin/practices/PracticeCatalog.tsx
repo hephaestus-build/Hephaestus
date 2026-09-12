@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { GripVertical, Library, ListChecks, MoreHorizontal, Plus } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
+import { cn } from "cn";
 import type {
 	CatalogPracticeSummary,
 	Practice,
@@ -62,7 +63,6 @@ import { Switch } from "@/components/ui/switch";
 import { Toggle } from "@/components/ui/toggle";
 import { artifactKindPluralLabel, type KnownArtifactKind } from "@/lib/artifact-kinds";
 import { autonomySourceOf } from "@/lib/practice-autonomy";
-import { cn } from "@/lib/utils";
 
 import { CatalogOriginBadge } from "./CatalogOriginBadge";
 

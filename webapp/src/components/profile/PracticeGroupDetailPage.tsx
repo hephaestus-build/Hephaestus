@@ -1,4 +1,5 @@
 import { PulseIcon } from "@primer/octicons-react";
+import { cn } from "cn";
 import { ArrowLeftIcon, ChevronDownIcon, CircleDashedIcon, InfoIcon } from "lucide-react";
 import { useState } from "react";
 import type {
@@ -25,7 +26,6 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import { PracticeNextStepCallout } from "./PracticeNextStepCallout";
 import { PracticeTrendChip } from "./PracticeTrendChip";
 import type { FeedbackResponse, ObservationDetailState } from "./review-runs";

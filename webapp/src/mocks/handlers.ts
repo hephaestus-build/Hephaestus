@@ -47,6 +47,8 @@ export const handlers = [
 			: new HttpResponse(null, { status: 400 }),
 	),
 
+	// --- product feedback --------------------------------------------------
+	http.get("*/workspaces/:workspaceSlug/product-feedback/surveys", () => HttpResponse.json([])),
 	// --- identity providers + linked identities -----------------------------
 	http.get("*/identity-providers", () => HttpResponse.json(identityProviders)),
 	http.get("*/user/identities", () => HttpResponse.json(linkedIdentities)),

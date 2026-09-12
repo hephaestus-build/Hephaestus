@@ -29,7 +29,11 @@ export default defineConfig({
 	optimizeDeps: {
 		noDiscovery: true,
 		include: [
-			...runtimeDeps.filter((dependency) => dependency !== "@monaco-editor/react"),
+			// `@shadcn/react` has no root export; only the subpath the app imports can be pre-bundled.
+			...runtimeDeps.filter(
+				(dependency) => dependency !== "@monaco-editor/react" && dependency !== "@shadcn/react",
+			),
+			"@shadcn/react/questionnaire",
 			"use-sync-external-store/shim",
 			"use-sync-external-store/shim/with-selector",
 		],

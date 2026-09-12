@@ -1,8 +1,8 @@
 import { ArrowRight } from "lucide-react";
 import type { ComponentPropsWithoutRef } from "react";
 
+import { cn } from "cn";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 type ButtonSize = ComponentPropsWithoutRef<typeof Button>["size"];
 

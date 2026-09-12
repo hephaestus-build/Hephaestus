@@ -10,9 +10,11 @@ import {
 	useNavigate,
 	useRouter,
 } from "@tanstack/react-router";
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, type ReactNode, Suspense, useEffect, useEffectEvent, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { getIntegrationCatalogOptions, listThreadsOptions } from "@/api/@tanstack/react-query.gen";
+import type { SurveyInvitation } from "@/api/types.gen";
 import { ImpersonationBanner } from "@/components/auth/ImpersonationBanner";
 import { LoginDialog } from "@/components/auth/LoginDialog";
 import { CookieConsentBanner } from "@/components/consent/CookieConsentBanner";
@@ -21,14 +23,25 @@ import Header from "@/components/core/Header";
 import { AppSidebar, type SidebarContext } from "@/components/core/sidebar/AppSidebar";
 import { SkipToContent } from "@/components/core/SkipToContent";
 import { StandardPageSurface } from "@/components/core/StandardPageSurface";
-import { ActiveSurveyDialog } from "@/components/feedback/ActiveSurveyDialog";
-import { ProductFeedbackDialog } from "@/components/feedback/ProductFeedbackDialog";
+import type { FeedbackKind } from "@/components/feedback/feedback-copy";
+import {
+	PAGE_PATH_MAX_LENGTH,
+	ProductFeedbackDialog,
+	USER_AGENT_MAX_LENGTH,
+} from "@/components/feedback/ProductFeedbackDialog";
+import { ProductFeedbackMenu } from "@/components/feedback/ProductFeedbackMenu";
+import { ProductSurveyDialog } from "@/components/feedback/ProductSurveyDialog";
+import {
+	EMPTY_SURVEY_RESPONSE_DRAFT,
+	type SurveyResponseDraft,
+	surveyEstimate,
+} from "@/components/feedback/survey-questions";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import environment from "@/environment";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
-import { useActiveSurvey, useSubmitProductFeedback } from "@/hooks/use-product-feedback";
+import { useProductSurveys, useSubmitProductFeedback } from "@/hooks/use-product-feedback";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
@@ -129,23 +142,101 @@ function RootLayout() {
 				</ErrorBoundary>
 			)}
 			<FeatureFlagDevTools />
-			{!isLoading && isAuthenticated ? <GlobalSurvey /> : null}
 		</>
 	);
 }
 
-function GlobalSurvey() {
-	const { workspaceSlug } = useActiveWorkspaceSlug();
-	const survey = useActiveSurvey(workspaceSlug);
+function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) {
+	const { pathname } = useLocation();
+	const feedback = useSubmitProductFeedback(workspaceSlug);
+	const surveys = useProductSurveys(workspaceSlug);
+	const [feedbackOpen, setFeedbackOpen] = useState(false);
+	const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>("FEEDBACK");
+	const [survey, setSurvey] = useState<SurveyInvitation>();
+	const [surveyOpen, setSurveyOpen] = useState(false);
+	const [drafts, setDrafts] = useState<Record<string, SurveyResponseDraft>>({});
+	const nudged = useRef(false);
+	const invitations = surveys.query.data ?? [];
+	const openSurvey = (surveyId: string) => {
+		const next = invitations.find((candidate) => candidate.id === surveyId);
+		if (!next) return;
+		setSurvey(next);
+		setSurveyOpen(true);
+	};
+	const closeSurvey = () => {
+		surveys.reset();
+		setSurveyOpen(false);
+	};
+	// The server remembers the acknowledgement, so a reload never nudges twice for one survey; the
+	// ref keeps a second unseen invitation from nudging in the same visit.
+	const unseen = invitations.find((candidate) => !candidate.seen);
+	const nudge = useEffectEvent((invitation: SurveyInvitation) => {
+		surveys.acknowledge(invitation.id);
+		toast(
+			invitation.purpose === "RESEARCH"
+				? `New research survey: ${invitation.title}`
+				: `New survey: ${invitation.title}`,
+			{
+				description: `${surveyEstimate(invitation.questions)}. It waits in the feedback menu.`,
+				duration: 12000,
+				action: { label: "Take survey", onClick: () => openSurvey(invitation.id) },
+			},
+		);
+	});
+	useEffect(() => {
+		if (!unseen || nudged.current) return;
+		nudged.current = true;
+		nudge(unseen);
+	}, [unseen]);
 	return (
-		<ActiveSurveyDialog
-			key={survey.survey?.id}
-			survey={survey.survey}
-			isSubmitting={survey.isSubmitting}
-			isDismissing={survey.isDismissing}
-			onSubmit={survey.submit}
-			onDismiss={survey.dismiss}
-		/>
+		<>
+			<ProductFeedbackMenu
+				invitations={invitations}
+				onSendFeedback={(kind) => {
+					setFeedbackKind(kind);
+					setFeedbackOpen(true);
+				}}
+				onOpenSurvey={openSurvey}
+			/>
+			<ProductFeedbackDialog
+				open={feedbackOpen}
+				onOpenChange={(open) => {
+					if (!open) feedback.reset();
+					setFeedbackOpen(open);
+				}}
+				kind={feedbackKind}
+				onKindChange={setFeedbackKind}
+				context={{
+					pagePath: pathname.slice(0, PAGE_PATH_MAX_LENGTH),
+					userAgent: navigator.userAgent.slice(0, USER_AGENT_MAX_LENGTH),
+				}}
+				isSubmitting={feedback.isPending}
+				error={feedback.error}
+				onSubmit={feedback.submit}
+			/>
+			{survey && (
+				<ProductSurveyDialog
+					survey={survey}
+					open={surveyOpen}
+					onOpenChange={(open) => {
+						if (!open) closeSurvey();
+					}}
+					draft={drafts[survey.id] ?? EMPTY_SURVEY_RESPONSE_DRAFT}
+					onDraftChange={(draft) => setDrafts((current) => ({ ...current, [survey.id]: draft }))}
+					isSubmitting={surveys.isPending}
+					error={surveys.error}
+					onSubmit={async (answers) => {
+						if (await surveys.submit(survey, answers)) {
+							setDrafts(({ [survey.id]: _sent, ...rest }) => rest);
+							closeSurvey();
+						}
+					}}
+					onDecline={async () => {
+						if (await surveys.decline(survey.id)) closeSurvey();
+					}}
+				/>
+			)}
+		</>
 	);
 }
 
@@ -171,8 +262,16 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 
 function HeaderContainer() {
 	const openLogin = useLoginNavigation();
-	const { isAuthenticated, isLoading, username, userProfile, logout, getUserProfilePictureUrl } =
-		useAuth();
+	const {
+		isAuthenticated,
+		isLoading,
+		username,
+		userProfile,
+		logout,
+		getUserProfilePictureUrl,
+		getUserId,
+		isImpersonating,
+	} = useAuth();
 	const {
 		chromeWorkspaceSlug,
 		userLogin: workspaceUserLogin,
@@ -182,8 +281,6 @@ function HeaderContainer() {
 	const effectiveUsername = workspaceUserLogin ?? username;
 	const effectiveName =
 		workspaceUserName ?? (userProfile && `${userProfile.firstName} ${userProfile.lastName}`);
-	// Accounts without a workspace still need to reach instance administrators.
-	const feedback = useSubmitProductFeedback(chromeWorkspaceSlug);
 
 	return (
 		<Header
@@ -199,12 +296,12 @@ function HeaderContainer() {
 			avatarUrl={getUserProfilePictureUrl()}
 			workspaceSlug={chromeWorkspaceSlug}
 			feedbackDialog={
-				<ProductFeedbackDialog
-					isSubmitting={feedback.isPending}
-					onSubmit={(kind, message) =>
-						feedback.submit({ kind, message, pagePath: window.location.pathname })
-					}
-				/>
+				!isLoading && isAuthenticated && !isImpersonating ? (
+					<ProductFeedbackControls
+						key={`${getUserId()}:${chromeWorkspaceSlug}`}
+						workspaceSlug={chromeWorkspaceSlug}
+					/>
+				) : null
 			}
 			onLogin={openLogin}
 			onLogout={() => void logout()}

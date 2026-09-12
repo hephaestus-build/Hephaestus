@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.domain;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -21,6 +22,9 @@ import org.springframework.stereotype.Repository;
 @WorkspaceAgnostic(
         "Account is the Hephaestus-native principal; it spans workspaces (membership lives on WorkspaceMembership)")
 public interface AccountRepository extends JpaRepository<Account, Long> {
+
+    List<Account> findAllByIdInAndStatusNot(Collection<Long> ids, Account.Status status);
+
     /**
      * Ids of accounts whose GDPR soft-delete cooldown has elapsed: {@code status = DELETING} and
      * {@code deleted_at} strictly older than {@code cutoff}, oldest first. Paged so a large erasure

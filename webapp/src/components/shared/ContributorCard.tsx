@@ -1,6 +1,6 @@
+import { cn } from "cn";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/avatar";
-import { cn } from "@/lib/utils";
 
 export interface Contributor {
 	id: number;

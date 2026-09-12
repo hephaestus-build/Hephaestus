@@ -11,19 +11,23 @@ import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
+/**
+ * One account's relationship with one survey. The invitation and the eventual response or decline
+ * share a row so a completion rate can be read from the table.
+ */
 @Entity
 @Table(
-        name = "product_survey_submission",
+        name = "product_survey_participation",
         uniqueConstraints =
                 @UniqueConstraint(
-                        name = "uk_survey_submission_account",
+                        name = "uk_survey_participation_account",
                         columnNames = {"survey_id", "account_id"}),
         // Account erasure filters on account_id alone, which the unique constraint above cannot serve:
         // its leading column is survey_id.
-        indexes = @Index(name = "idx_survey_submission_account", columnList = "account_id"))
+        indexes = @Index(name = "idx_survey_participation_account", columnList = "account_id"))
 @Getter
 @NoArgsConstructor
-public class SurveySubmission {
+public class SurveyParticipation {
     @Id
     private UUID id = UUID.randomUUID();
 
@@ -38,31 +42,47 @@ public class SurveySubmission {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
-    private Disposition disposition;
+    private Status status;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "answers_json", columnDefinition = "jsonb")
     private @Nullable JsonNode answers;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private @Nullable Instant createdAt;
+    @Column(name = "invited_at", nullable = false, updatable = false)
+    private @Nullable Instant invitedAt;
 
-    public SurveySubmission(
-            UUID surveyId,
-            Long accountId,
-            @Nullable Long workspaceId,
-            Disposition disposition,
-            @Nullable JsonNode answers) {
+    @Column(name = "decided_at")
+    private @Nullable Instant decidedAt;
+
+    public SurveyParticipation(UUID surveyId, Long accountId, @Nullable Long workspaceId) {
         this.surveyId = surveyId;
         this.accountId = accountId;
         this.workspaceId = workspaceId;
-        this.disposition = disposition;
-        this.answers = answers;
+        this.status = Status.INVITED;
     }
 
-    public enum Disposition {
+    public void respond(JsonNode answers, @Nullable Long workspaceId, Instant now) {
+        this.status = Status.RESPONDED;
+        this.answers = answers;
+        this.workspaceId = workspaceId;
+        this.decidedAt = now;
+    }
+
+    public void decline(@Nullable Long workspaceId, Instant now) {
+        this.status = Status.DECLINED;
+        this.workspaceId = workspaceId;
+        this.decidedAt = now;
+    }
+
+    public void reinvite() {
+        this.status = Status.INVITED;
+        this.decidedAt = null;
+    }
+
+    public enum Status {
+        INVITED,
         RESPONDED,
-        DISMISSED
+        DECLINED
     }
 }

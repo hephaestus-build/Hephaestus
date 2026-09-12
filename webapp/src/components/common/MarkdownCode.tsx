@@ -7,7 +7,7 @@ import {
 	useIsCodeFenceIncomplete,
 } from "streamdown";
 
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 type MarkdownCodeProps = JSX.IntrinsicElements["code"] &
 	ExtraProps & {
