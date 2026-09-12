@@ -27,6 +27,18 @@ const OWN_IMAGE_PREFIX = "ghcr.io/hephaestus-build/";
  * added to the reference and not considered here fails the build.
  */
 const DELIBERATELY_OMITTED = new Set([
+	// Previews send no email: no relay host, sender identity or production SMTP credentials.
+	"HEPHAESTUS_EMAIL_FROM",
+	"HEPHAESTUS_EMAIL_FROM_NAME",
+	"HEPHAESTUS_EMAIL_REPLY_TO",
+	"SPRING_MAIL_HOST",
+	"SPRING_MAIL_PORT",
+	"SPRING_MAIL_USERNAME",
+	"SPRING_MAIL_PASSWORD",
+	"SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH",
+	"SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE",
+	"SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE",
+	"SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED",
 	// A preview pins its own commit rather than a release lock: nothing to report, nothing to compare.
 	"HEPHAESTUS_RELEASE_COMMIT",
 	"HEPHAESTUS_IMAGE_APPLICATION_SERVER",

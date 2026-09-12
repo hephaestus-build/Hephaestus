@@ -23,7 +23,7 @@ recall a request already accepted by a provider. Stop ingress too when preservin
 
 | Control and location | What it stops | What it does not stop |
 | --- | --- | --- |
-| **Silent Mode**, instance settings | New SCM and Slack content writes through the egress gateway, including edits, inline comments, approvals, reactions, mentor replies, reminders, and retries | Review compute, persistence, reads/sync, in-app feedback, or declared OAuth, webhook-registration, and operator-alert exemptions |
+| **Silent Mode**, instance settings | New SCM, Slack and email writes through the egress gateway, including edits, inline comments, approvals, reactions, mentor replies, reminders, retries, and every email the notification module sends (a withheld email is final; it is not sent on release) | Review compute, persistence, reads/sync, in-app feedback, or declared OAuth, webhook-registration, and operator-alert exemptions |
 | `AGENT_ENABLED=false`, deployment environment on submitting servers and claiming workers | Queued review runtime; recreate affected containers to apply it | Already-running sandboxes, interactive mentor, sync, or every external write; not a runtime global AI stop |
 | Workspace **Review** controls: **Start from work activity**, **Start requested reviews** | Their respective review entry points | Other workspaces, existing work, or external delivery already in progress |
 | Workspace/group/practice autonomy **Off** | Reviewing those practices under the effective inherited policy | Other practices and other AI features; a workspace default does not override explicit group/practice choices |

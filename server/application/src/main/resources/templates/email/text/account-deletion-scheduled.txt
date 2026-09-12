@@ -1,0 +1,10 @@
+[(#{email.account-deletion-scheduled.subject})]
+
+We received the request to delete your account at [(${webappUrl})]. You are signed out on all devices.
+
+After [(${purgeAfter})] scheduled cleanup removes your sign-in details, linked identities, product-feedback submissions and survey responses, leaving an account record with its contact details cleared. There is no self-service undo.
+
+If you did not request this, contact your instance operator before that time.
+
+--
+[(#{email.footer(${webappUrl})})]

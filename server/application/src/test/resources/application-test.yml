@@ -48,6 +48,13 @@ spring:
     liquibase:
         enabled: false
 
+    # Liquibase is off, so the registry creates its own event_publication table (CREATE IF NOT EXISTS).
+    modulith:
+        events:
+            jdbc:
+                schema-initialization:
+                    enabled: true
+
     # Security configuration for tests (minimal config)
     security:
         oauth2:

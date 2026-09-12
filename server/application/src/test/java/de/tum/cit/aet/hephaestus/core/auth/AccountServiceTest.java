@@ -21,8 +21,10 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -30,6 +32,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -46,6 +49,7 @@ class AccountServiceTest extends BaseUnitTest {
     private final IdentityLinkRepository identityLinkRepository = mock(IdentityLinkRepository.class);
     private final IssuedJwtRepository issuedJwtRepository = mock(IssuedJwtRepository.class);
     private final AuthEventWriter auditWriter = mock(AuthEventWriter.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     private AccountService service;
@@ -57,6 +61,8 @@ class AccountServiceTest extends BaseUnitTest {
                 identityLinkRepository,
                 issuedJwtRepository,
                 new AuthEventLogger(auditWriter),
+                AuthPropertiesFixture.defaults(),
+                eventPublisher,
                 clock);
     }
 
@@ -243,6 +249,10 @@ class AccountServiceTest extends BaseUnitTest {
         assertThat(event.getValue().accountId()).isEqualTo(2L);
         // Self-service deletion: the victim acted, so no separate operator is attributed.
         assertThat(event.getValue().actingAccountId()).isNull();
+        // The confirmation email is owed once the cooldown started: purge date = now + cooldown.
+        verify(eventPublisher)
+                .publishEvent(
+                        new AccountDeletionScheduledEvent(2L, clock.instant().plus(Duration.ofHours(48))));
     }
 
     @Test
@@ -257,7 +267,7 @@ class AccountServiceTest extends BaseUnitTest {
         assertThat(account.getDeletedAt()).isEqualTo(cooldownStart);
         verify(accountRepository, never()).save(any());
         verify(issuedJwtRepository, never()).revokeAllForAccount(anyLong(), any(), any());
-        verifyNoInteractions(auditWriter);
+        verifyNoInteractions(auditWriter, eventPublisher);
     }
 
     @Test

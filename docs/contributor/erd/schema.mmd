@@ -386,6 +386,18 @@ erDiagram
         BIGINT label_id PK,FK
     }
 
+    EventPublication {
+        UUID id PK
+        TEXT listener_id "NOT NULL"
+        TEXT event_type "NOT NULL"
+        TEXT serialized_event "NOT NULL"
+        TIMESTAMPTZ publication_date "NOT NULL"
+        TIMESTAMPTZ completion_date
+        TEXT status
+        INTEGER completion_attempts
+        TIMESTAMPTZ last_resubmission_date
+    }
+
     Feedback {
         UUID id PK,UK
         UUID agent_job_id FK,UK "NOT NULL"

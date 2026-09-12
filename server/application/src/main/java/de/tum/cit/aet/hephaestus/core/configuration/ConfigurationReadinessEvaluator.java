@@ -218,6 +218,20 @@ public final class ConfigurationReadinessEvaluator {
                 this::validOptionalHttpsUri,
                 "Sentry is optional, but a configured DSN must be an HTTPS URI.",
                 "optional-observability");
+        // Email is on exactly when a relay host is set; the sender address is then the one thing that
+        // can still be missing, and its absence leaves every notification withheld as NOT_CONFIGURED.
+        boolean relayConfigured = notBlank(property("spring.mail.host"));
+        add(
+                facts,
+                "notification.email",
+                "spring.mail.host",
+                roles(RuntimeRole.SERVER),
+                ConfigurationRequirement.OPTIONAL,
+                server,
+                relayConfigured,
+                relayConfigured && notBlank(property("hephaestus.email.from")),
+                "Email is optional; with a relay host set, hephaestus.email.from must name the sender address.",
+                "email");
 
         verifyCatalogue(facts);
         return List.copyOf(facts);

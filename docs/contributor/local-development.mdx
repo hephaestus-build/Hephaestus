@@ -139,12 +139,24 @@ Every host-side port is configurable so multiple Hephaestus instances (or other 
 | PostgreSQL         | 5432    | `POSTGRES_PORT`    | `server/.env`   |
 | Application server | 8080    | `SERVER_PORT`      | `server/.env`   |
 | Sandbox gateway    | 8081    | `SANDBOX_API_PORT` | `server/.env`   |
+| Mailpit SMTP       | 1025    | `MAILPIT_SMTP_PORT`| `server/.env`   |
+| Mailpit UI         | 8025    | `MAILPIT_UI_PORT`  | `server/.env`   |
 | Webapp (Vite dev)  | 4200    | `WEBAPP_PORT`      | Shell env only  |
 
 :::tip Pre-flight check
-Run `vp run check:ports` before starting the stack. It checks the four ports above; a NATS
+Run `vp run check:ports` before starting the stack. It checks the six ports above; a NATS
 container binds 4222 as well, and a conflict there shows up only at boot.
 :::
+
+### Email
+
+The `local` profile sends every email to the Mailpit container from `server/compose.yaml`; nothing
+leaves your machine. Its SMTP and inbox ports bind to `127.0.0.1` only. Open [http://localhost:8025](http://localhost:8025) (`MAILPIT_UI_PORT`) to read
+what the server sent, with the HTML part, the plain-text alternative and the headers side by side.
+The quickest end-to-end check is the **Send test email** button on the instance settings page
+(`/admin/settings`); it goes through the same gateway as every notification, including Silent Mode.
+Templates live in `server/application/src/main/resources/templates/email/` — `html/` and `text/`
+hold the two parts of one message, and `messages.properties` holds the subjects.
 
 #### How it works
 

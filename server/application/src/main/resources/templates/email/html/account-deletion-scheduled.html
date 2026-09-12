@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{email/html/layout :: head(#{email.account-deletion-scheduled.subject})}"></head>
+<body style="margin: 0; padding: 0; background-color: #f3f4f6;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; background-color: #f3f4f6;">
+    <tr>
+        <td align="center" style="padding: 24px 12px;">
+            <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px;">
+                <tr><td th:replace="~{email/html/layout :: header}"></td></tr>
+                <tr>
+                    <td style="padding: 24px; font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px; color: #111827;">
+                        <h1 style="margin: 0 0 16px 0; font-size: 20px; line-height: 28px;" th:text="#{email.account-deletion-scheduled.subject}">Your Hephaestus account is scheduled for deletion</h1>
+                        <p style="margin: 0 0 16px 0;">We received the request to delete your account at <a th:href="${webappUrl}" th:text="${webappUrl}" style="color: #2563eb;">https://hephaestus.example</a>. You are signed out on all devices.</p>
+                        <p style="margin: 0 0 16px 0;">After <strong th:text="${purgeAfter}">1 January 2026 at 12:00:00 UTC</strong> scheduled cleanup removes your sign-in details, linked identities, product-feedback submissions and survey responses, leaving an account record with its contact details cleared. There is no self-service undo.</p>
+                        <p style="margin: 0;">If you did not request this, contact your instance operator before that time.</p>
+                    </td>
+                </tr>
+                <tr><td th:replace="~{email/html/layout :: footer}"></td></tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

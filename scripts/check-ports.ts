@@ -59,6 +59,14 @@ async function main(): Promise<void> {
 				name: "Sandbox gateway",
 				port: positivePort(value("SANDBOX_API_PORT", "8081"), "SANDBOX_API_PORT"),
 			},
+			{
+				name: "Mailpit SMTP",
+				port: positivePort(value("MAILPIT_SMTP_PORT", "1025"), "MAILPIT_SMTP_PORT"),
+			},
+			{
+				name: "Mailpit UI",
+				port: positivePort(value("MAILPIT_UI_PORT", "8025"), "MAILPIT_UI_PORT"),
+			},
 			{ name: "Webapp (Vite)", port: positivePort(value("WEBAPP_PORT", "4200"), "WEBAPP_PORT") },
 		];
 	} catch (error) {

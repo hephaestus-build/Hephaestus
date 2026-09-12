@@ -45,6 +45,8 @@ Compose maps `POSTGRES_PASSWORD` to `DATABASE_PASSWORD` and owns the runtime-rol
 | `hephaestus.agent.image.reference` | `HEPHAESTUS_AGENT_IMAGE_REFERENCE` |
 | `hephaestus.sandbox.docker.container-runtime` | `SANDBOX_DOCKER_CONTAINER_RUNTIME` |
 | `hephaestus.sentry.dsn` | `SENTRY_DSN` |
+| `spring.mail.host` | `SPRING_MAIL_HOST` |
+| `hephaestus.email.from` | `HEPHAESTUS_EMAIL_FROM` |
 
 ## Runtime roles
 
@@ -231,3 +233,12 @@ Sentry is optional. When configured, `hephaestus.sentry.dsn` must use HTTPS. The
 Frontend error rates include only browsers whose users accepted error monitoring. Treat them as
 consent-biased diagnostics, not as an availability metric or a basis for comparing deployments.
 Server-side error rates do not have this selection bias.
+
+## Email
+
+Email is optional. The fact `notification.email` is `NOT_CONFIGURED` until `spring.mail.host` names a
+relay, and `ACTION_REQUIRED` when a relay is set but `hephaestus.email.from` is blank: with no sender
+address every notification is withheld and recorded as `NOT_CONFIGURED`. It never prevents startup.
+Configuration and verification are in [Production setup → Email](./production-setup#email); activating
+email requires the processing review in the
+[processor checklist](./dsms/processor-checklist#follow-up-if-the-processing-surface-changes).

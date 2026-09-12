@@ -7,6 +7,12 @@ spring:
                 in-tests: true
     liquibase:
         enabled: false
+    # Artifact generation has no event_publication table and publishes nothing; keep the
+    # registry (which opens a connection to detect the database) out of the context.
+    autoconfigure:
+        exclude:
+            - org.springframework.modulith.events.jdbc.JdbcEventPublicationAutoConfiguration
+            - org.springframework.modulith.events.config.EventPublicationAutoConfiguration
     datasource:
         url: jdbc:h2:mem:hephaestus-specs;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;DATABASE_TO_LOWER=TRUE
         username: sa
@@ -45,9 +51,6 @@ hephaestus:
             enabled: false
     workspace:
         init-default: false
-    mail:
-        enabled: false
-        sender: noreply@example.com
     sync:
         nats:
             enabled: false

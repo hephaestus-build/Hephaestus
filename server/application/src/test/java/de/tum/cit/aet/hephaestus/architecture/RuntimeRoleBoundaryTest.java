@@ -93,6 +93,13 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             // Server-only so the worker and webhook pods never acquire an outbound dependency on
             // ecb.europa.eu — this fetcher is the only egress the display-currency feature has.
             Map.entry("de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateFetchScheduler", RuntimeRole.SERVER_PROPERTY),
+            // Email leaves the instance from the server role only: the gateway, the listeners that feed it,
+            // the redelivery sweep and the admin verification surface all boot with it.
+            Map.entry("de.tum.cit.aet.hephaestus.notification.email.EmailGateway", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.email.EmailAdminController", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.AccountDeletionEmailListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.NotificationRedeliveryJob", RuntimeRole.SERVER_PROPERTY),
             // ServerSchedulingConfig silences the @Scheduled tick off-server, but an ungated BEAN still
             // registers its gauges — permanent zeros in agent.queue.* / mentor.in_flight.* from pods that
             // never sample. Gate the bean, not just the tick.
@@ -305,7 +312,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
     /**
      * The {@code core.auth.spi} read-only query impls are the cross-role data-access part of auth
      * (account identity/role/name lookups), consumed by the connection-identity service, the
-     * workspace and notification modules, and product feedback's name resolution and erasure adapters
+     * workspace and practices modules, and product feedback's name resolution and erasure adapters
      * on every role. They carry no hard prod env and must stay ungated — unlike the web/OAuth/issuance
      * layer.
      */

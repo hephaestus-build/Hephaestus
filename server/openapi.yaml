@@ -117,6 +117,8 @@ tags:
   name: Teams
 - description: The developer's own prepared practice feedback
   name: In-App Feedback
+- description: Instance-wide email transport verification
+  name: Instance Email
 - description: "Workspace-scoped \"bring your own\" AI provider connections, models\
     \ and settings"
   name: Workspace LLM
@@ -460,6 +462,26 @@ paths:
       summary: Get redacted configuration readiness
       tags:
       - Configuration Readiness
+  /admin/email/test:
+    post:
+      description: "Sends a test email through the configured relay to the given address,\
+        \ or to the caller's verified address when none is given."
+      operationId: adminSendTestEmail
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailTestRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailTestResponse"
+          description: OK
+      summary: Send a test email
+      tags:
+      - Instance Email
   /admin/llm/connections:
     get:
       operationId: adminListLlmConnections
@@ -10201,6 +10223,42 @@ components:
       - practiceName
       - practiceSlug
       - totalObservations
+    EmailTestRequest:
+      type: object
+      properties:
+        to:
+          type: string
+          format: email
+          description: the mailbox to send the test email to; blank means the caller's
+            own verified address
+          maxLength: 254
+          minLength: 0
+    EmailTestResponse:
+      type: object
+      properties:
+        messageId:
+          type: string
+          description: "the accepted <code>Message-ID</code>, only for <code>SENT</code>;\
+            \ search for it in the relay's log"
+        outcome:
+          type: string
+          description: what became of the test email; <code>SENT</code> is the only
+            success
+          enum:
+          - SENT
+          - EXPIRED
+          - NOT_CONFIGURED
+          - SILENT_MODE
+          - NO_RECIPIENT
+          - INVALID_ADDRESS
+          - REJECTED
+          - UNAVAILABLE
+        to:
+          type: string
+          description: "the address it went to, or <code>null</code> when there was\
+            \ no recipient to resolve"
+      required:
+      - outcome
     EvidenceCitation:
       type: object
       description: A verified quote and its exact source location

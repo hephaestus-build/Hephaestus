@@ -157,7 +157,7 @@ Use Art. 13 GDPR as the outline. Hephaestus processes personal data in at least 
 
 - **Identity and authentication** — Hephaestus-native auth federating to GitHub / LRZ GitLab; per federated identity we store the provider, stable subject id, login, email-at-signup, and display name (ADR 0017).
 - **Repository synchronisation** — for every configured repository: pull/merge requests, issues, reviews, review comments, commit metadata, profile information of the authors. State the retention triggers: this mirrored copy is erased when the last workspace stops monitoring the source repository, when the workspace's integration is disconnected, or when the workspace is purged — see the erasure triggers in the [record of processing](./dsms/record-of-processing.md).
-- **Account settings and notification email** — user preferences, notification subscriptions, optional self-provided notification email.
+- **Account settings and email notifications** — user preferences, and the provider-verified primary email address used for account-lifecycle email (today the account-deletion confirmation) when the operator has configured a relay; name the relay operator as a recipient.
 - **AI-assisted features** — if enabled: messages sent to the configured LLM provider, persisted conversations, generated observations.
 - **Server logs** — IP address and request metadata.
 - **Error telemetry** — if you run a Sentry (or equivalent) instance, state so explicitly and link its retention policy.

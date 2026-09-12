@@ -108,7 +108,11 @@ describe("instance AI models route", () => {
 		).toBe(false);
 
 		releaseSlowToggle?.();
-		await waitFor(() => expect(slowToggleCalls).toBe(1));
+		await waitFor(() =>
+			expect(screen.getByRole("switch", { name: "Slow provider" }).getAttribute("aria-busy")).toBe(
+				"false",
+			),
+		);
 	});
 
 	it("lets the access dialog be dismissed while its save is still in flight", async () => {
@@ -149,7 +153,12 @@ describe("instance AI models route", () => {
 		).toBe(true);
 
 		releaseSlowSharing?.();
-		await waitFor(() => expect(sharingCalls).toBe(1));
+		await waitFor(() =>
+			expect(
+				screen.getByRole<HTMLButtonElement>("button", { name: "Manage access for GPT Test" })
+					.disabled,
+			).toBe(false),
+		);
 	});
 
 	it("asks for a fresh sign-in instead of reporting a refused connection as a failure", async () => {

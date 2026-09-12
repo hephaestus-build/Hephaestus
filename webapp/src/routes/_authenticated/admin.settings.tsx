@@ -6,8 +6,11 @@ import { toast } from "sonner";
 import {
 	adminGetInstanceSettingsOptions,
 	adminGetInstanceSettingsQueryKey,
+	adminSendTestEmailMutation,
 	adminUpdateSilentModeMutation,
 } from "@/api/@tanstack/react-query.gen";
+import { EMAIL_TEST_OUTCOME_DEFS } from "@/components/admin/instance/email-test-outcome-defs";
+import { InstanceEmailCard } from "@/components/admin/instance/InstanceEmailCard";
 import { SilentModeCard } from "@/components/admin/instance/SilentModeCard";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/core/PageHeader";
@@ -46,6 +49,21 @@ function AdminSettingsPage() {
 		},
 	});
 
+	const testEmailMutation = useMutation({
+		...adminSendTestEmailMutation(),
+		onSuccess: (data) => {
+			const def = EMAIL_TEST_OUTCOME_DEFS[data.outcome];
+			if (data.outcome === "SENT") {
+				toast.success(`Relay accepted test email to ${data.to ?? "your address"}`);
+			} else {
+				toast.warning(def.label, { description: def.description });
+			}
+		},
+		onError: (error) => {
+			toast.error(problemDetailOf(error, "Could not send the test email"));
+		},
+	});
+
 	return (
 		<PageLayout>
 			<PageHeader
@@ -54,38 +72,45 @@ function AdminSettingsPage() {
 				description="Instance-wide operator controls. These apply across every workspace and override workspace settings while active."
 			/>
 
-			{settingsQuery.data ? (
-				<div className="space-y-4">
-					{settingsQuery.isError ? (
-						<QueryErrorAlert
-							error={settingsQuery.error}
-							title="Couldn't verify the current instance settings"
-							onRetry={() => void settingsQuery.refetch()}
+			<div className="space-y-4">
+				{settingsQuery.data ? (
+					<>
+						{settingsQuery.isError ? (
+							<QueryErrorAlert
+								error={settingsQuery.error}
+								title="Couldn't verify the current instance settings"
+								onRetry={() => void settingsQuery.refetch()}
+							/>
+						) : null}
+						<SilentModeCard
+							key={settingsQuery.data.etag}
+							settings={settingsQuery.data}
+							isPending={silentModeMutation.isPending}
+							releaseDisabled={settingsQuery.isError}
+							onEngage={(reason) => silentModeMutation.mutate({ body: { engaged: true, reason } })}
+							onRelease={() =>
+								silentModeMutation.mutate({
+									headers: { "If-Match": settingsQuery.data.etag },
+									body: { engaged: false },
+								})
+							}
 						/>
-					) : null}
-					<SilentModeCard
-						key={settingsQuery.data.etag}
-						settings={settingsQuery.data}
-						isPending={silentModeMutation.isPending}
-						releaseDisabled={settingsQuery.isError}
-						onEngage={(reason) => silentModeMutation.mutate({ body: { engaged: true, reason } })}
-						onRelease={() =>
-							silentModeMutation.mutate({
-								headers: { "If-Match": settingsQuery.data.etag },
-								body: { engaged: false },
-							})
-						}
+					</>
+				) : settingsQuery.isError ? (
+					<QueryErrorAlert
+						error={settingsQuery.error}
+						title="Couldn't load instance settings"
+						onRetry={() => void settingsQuery.refetch()}
 					/>
-				</div>
-			) : settingsQuery.isError ? (
-				<QueryErrorAlert
-					error={settingsQuery.error}
-					title="Couldn't load instance settings"
-					onRetry={() => void settingsQuery.refetch()}
+				) : (
+					<Skeleton className="h-52 w-full rounded-xl" />
+				)}
+				<InstanceEmailCard
+					isPending={testEmailMutation.isPending}
+					result={testEmailMutation.data}
+					onSendTest={(to) => testEmailMutation.mutate({ body: { to } })}
 				/>
-			) : (
-				<Skeleton className="h-52 w-full rounded-xl" />
-			)}
+			</div>
 		</PageLayout>
 	);
 }

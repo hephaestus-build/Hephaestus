@@ -316,6 +316,59 @@ Reasoning tokens are retained as telemetry when the compatible endpoint reports 
 priced separately: OpenAI-compatible usage includes reasoning tokens in billable output tokens, so a
 second reasoning rate would double-count the same work.
 
+### Email
+
+Hephaestus sends email through one SMTP relay for the whole instance — today the account-deletion
+confirmation and the instance admin's test email; notifications join as they ship. Email is off until
+a relay host is set. There is no per-workspace mail configuration and no connection to authorise: the
+transport is Spring Boot's `spring.mail.*`, so every variable is the property path in upper case.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SPRING_MAIL_HOST` | *(unset — email off)* | Relay hostname. Setting it turns email on. |
+| `SPRING_MAIL_PORT` | `587` | Relay port. `587` is submission with STARTTLS; use `465` with `SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE=true` for implicit TLS. |
+| `SPRING_MAIL_USERNAME` / `SPRING_MAIL_PASSWORD` | *(unset)* | Relay credentials. Leave both unset for an unauthenticated internal relay and set `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=false`. |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH` | `true` | Authenticate with the credentials above. |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE` / `_REQUIRED` | `true` / `true` | Upgrade the connection with STARTTLS and refuse a relay that cannot. Set both to `false` only for a relay inside a private network. |
+| `HEPHAESTUS_EMAIL_FROM` | *(unset)* | Sender address, required once the host is set. The relay must be allowed to send for its domain (SPF/DKIM), or receivers reject or junk the mail. |
+| `HEPHAESTUS_EMAIL_FROM_NAME` | `Hephaestus` | Display name next to the sender address. |
+| `HEPHAESTUS_EMAIL_REPLY_TO` | *(unset)* | Where a human reply lands. Unset means replies go to the sender address, which nobody reads. |
+
+TLS verifies the relay certificate and hostname. For implicit TLS on port `465`, enable SSL and
+disable both STARTTLS settings; leave certificate verification enabled.
+
+Connection, read and write timeouts are fixed at 5 s / 10 s / 10 s; a relay that stops answering
+never blocks a request or a listener. Only the `application-server` container reads these
+variables — the worker and webhook roles never send.
+
+A university or corporate relay typically wants port `587`, STARTTLS and a service account, and
+caps the recipients per day; the defaults above fit that shape. Ask the relay operator which sender
+domains it signs, and set `HEPHAESTUS_EMAIL_FROM` inside one of them.
+
+**Verify it.** Open **Instance settings → Email** and select **Send test email**. The response names
+the outcome: `SENT` with the message id to look for in the relay's log, `SILENT_MODE` while the
+[emergency brake](./production-operations-runbook) is engaged — a fresh instance starts that way —
+`NOT_CONFIGURED`, `INVALID_ADDRESS`, `REJECTED` for a refused mailbox, or `UNAVAILABLE` when the
+relay could not be reached or refused the credentials. The
+[configuration readiness](./configuration-readiness#email) fact `notification.email` reports the
+same setting pair, and `/actuator/health` gains a `mail` indicator that opens a connection to the
+relay on each check. SMTP does not belong to the readiness or liveness group, and connection
+validation at startup is not required: a relay outage must not take the application offline.
+
+**Delivery.** A notification is written to the `event_publication` table in the same transaction as
+the change that caused it and sent right after the commit. If the relay was unreachable, the row
+stays `FAILED` and a job retries it every five minutes in batches of 50. An account-deletion
+confirmation expires at its purge deadline: its next attempt completes without sending, records
+`EXPIRED`, and deletes the registry row. Expiration is handled by the listener, not a batch filter. Silent Mode, a missing or unverified address and a mailbox the relay refuses
+are final: the row completes and the outcome is counted on the `notification.email.delivery` metric
+by `kind` and `outcome`. Logs carry the message id, never the address. Delivery is at-least-once:
+a crash after SMTP acceptance but before registry completion can produce a duplicate. `SENT` means
+the relay accepted the email, not that it reached the inbox.
+
+**Privacy.** The relay operator becomes a recipient of personal data (an address and the fact that
+its owner has an account). Before setting the host, complete the review in the
+[processor checklist](./dsms/processor-checklist#follow-up-if-the-processing-surface-changes).
+
 ### Data sync and backfill
 
 The sync scheduler fetches recent GitHub activity (issues, PRs, reviews) for monitored repositories. Backfill optionally syncs historical data in batches to avoid rate limit exhaustion.

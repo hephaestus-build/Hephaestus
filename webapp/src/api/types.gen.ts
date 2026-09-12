@@ -1388,6 +1388,28 @@ export type DeveloperPracticeSummary = {
   totalObservations: number;
 };
 
+export type EmailTestRequest = {
+  /**
+   * the mailbox to send the test email to; blank means the caller's own verified address
+   */
+  to?: string;
+};
+
+export type EmailTestResponse = {
+  /**
+   * the accepted <code>Message-ID</code>, only for <code>SENT</code>; search for it in the relay's log
+   */
+  messageId?: string;
+  /**
+   * what became of the test email; <code>SENT</code> is the only success
+   */
+  outcome: 'SENT' | 'EXPIRED' | 'NOT_CONFIGURED' | 'SILENT_MODE' | 'NO_RECIPIENT' | 'INVALID_ADDRESS' | 'REJECTED' | 'UNAVAILABLE';
+  /**
+   * the address it went to, or <code>null</code> when there was no recipient to resolve
+   */
+  to?: string;
+};
+
 /**
  * A verified quote and its exact source location
  */
@@ -6911,6 +6933,22 @@ export type AdminGetConfigurationReadinessResponses = {
 };
 
 export type AdminGetConfigurationReadinessResponse = AdminGetConfigurationReadinessResponses[keyof AdminGetConfigurationReadinessResponses];
+
+export type AdminSendTestEmailData = {
+  body?: EmailTestRequest;
+  path?: never;
+  query?: never;
+  url: '/admin/email/test';
+};
+
+export type AdminSendTestEmailResponses = {
+  /**
+   * OK
+   */
+  200: EmailTestResponse;
+};
+
+export type AdminSendTestEmailResponse = AdminSendTestEmailResponses[keyof AdminSendTestEmailResponses];
 
 export type AdminListLlmConnectionsData = {
   body?: never;

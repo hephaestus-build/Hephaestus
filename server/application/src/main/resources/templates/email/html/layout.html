@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<!--
+  Shared chrome for every HTML email. Layout tables with role="presentation", inline styles and a
+  600px column are what mail clients render reliably; the color-scheme meta lets dark-mode clients
+  invert the palette instead of painting white cards on black. Each template pulls `head`, `header`
+  and `footer` from here — the latter two are table cells that slot into the template's own column —
+  and supplies its content.
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(title)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
+    <title th:text="${title}">Hephaestus</title>
+</head>
+<body>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+        <td th:fragment="header" style="padding: 24px 24px 0 24px; font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+            <a th:href="${webappUrl}" style="font-size: 18px; font-weight: 700; color: #111827; text-decoration: none;">Hephaestus</a>
+        </td>
+    </tr>
+    <tr>
+        <td th:fragment="footer" style="padding: 24px; font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; line-height: 18px; color: #6b7280;">
+            <p style="margin: 0;" th:text="#{email.footer(${webappUrl})}">This email was sent by Hephaestus.</p>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

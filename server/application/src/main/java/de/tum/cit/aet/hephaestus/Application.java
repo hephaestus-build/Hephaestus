@@ -5,6 +5,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.metrics.buffering.BufferingApplicationStartup;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.boot.mail.autoconfigure.MailSenderAutoConfiguration;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.resilience.annotation.EnableResilientMethods;
 
@@ -18,8 +19,11 @@ import org.springframework.resilience.annotation.EnableResilientMethods;
  * {@code webhook-server} container (which sets {@code server.enabled=false}) must NOT fire any
  * {@code @Scheduled} methods, otherwise sync schedulers, zombie sweepers, and rate-limit eviction
  * would double-run alongside the {@code application-server} container. See ADR 0008.
+ *
+ * <p>{@link de.tum.cit.aet.hephaestus.notification.email.EmailTransportConfiguration} gates the
+ * excluded mail auto-configuration on a configured SMTP host and the server runtime role.
  */
-@SpringBootApplication
+@SpringBootApplication(exclude = MailSenderAutoConfiguration.class)
 @ConfigurationPropertiesScan
 @EnableCaching
 @EnableResilientMethods
