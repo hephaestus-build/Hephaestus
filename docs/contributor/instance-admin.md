@@ -112,8 +112,8 @@ would want the confirmation to unlock.
 
 **Instance admin → Workspaces → View users → View as user** discloses a workspace member's private
 practice pages and existing conversations to an instance administrator, whose own authentication is
-untouched ([authentication architecture](../auth-architecture.md)). The viewed user is the synced
-SCM user behind a human workspace membership ([auth glossary](../auth-glossary.md)); **Linked account** in the
+untouched ([authentication architecture](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/auth-architecture.md)). The viewed user is the synced
+SCM user behind a human workspace membership ([auth glossary](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/auth-glossary.md)); **Linked account** in the
 list reads `identity_link.external_actor_id`. The SPA takes the workspace's name and
 feature flags from `GET /workspaces/{slug}`, reached under
 [elevated access](#elevated-workspace-access).
@@ -147,7 +147,7 @@ viewed user's linked account or null, `viewed_user_id` = the viewed user, `works
 `viewed_user_id`, so it runs before that account's identity links are deleted. The read budget is
 a [setting](/admin/configuration-readiness#session-deadlines). Why this is a read projection
 and not Spring Security's `SwitchUserFilter` is explained in
-[ADR 0017](../decisions/0017-replace-keycloak-with-spring-native-auth.md#update--2026-09-11).
+[ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md#update--2026-09-11).
 
 ## Elevated workspace access
 
