@@ -14,6 +14,9 @@ import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.UUID;
+import org.eclipse.angus.mail.smtp.SMTPAddressFailedException;
+import org.eclipse.angus.mail.smtp.SMTPSendFailedException;
+import org.eclipse.angus.mail.smtp.SMTPSenderFailedException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -133,25 +136,43 @@ public class EmailGateway {
         return EmailDeliveryResult.of(outcome);
     }
 
-    /**
-     * A refused address is final; everything else (connection, TLS, credentials, a 4xx) may pass on a
-     * later attempt. Jakarta Mail reports refused mailboxes on {@link SendFailedException}, which the
-     * SMTP provider (a runtime-only dependency) subclasses per return code.
-     */
+    /** SMTP 5xx responses are final; connection, TLS, credentials and 4xx failures may recover. */
     private static Outcome classify(MailException e) {
         if (e instanceof MailAuthenticationException) {
             return Outcome.UNAVAILABLE;
         }
         if (e instanceof MailSendException sendException) {
             for (Exception failure : sendException.getMessageExceptions()) {
-                if (failure instanceof SendFailedException sendFailed
-                        && sendFailed.getInvalidAddresses() != null
-                        && sendFailed.getInvalidAddresses().length > 0) {
+                if (isPermanentFailure(failure)) {
                     return Outcome.REJECTED;
                 }
             }
         }
-        return Outcome.UNAVAILABLE;
+        return isPermanentFailure(e) ? Outcome.REJECTED : Outcome.UNAVAILABLE;
+    }
+
+    private static boolean isPermanentFailure(Throwable failure) {
+        for (Throwable current = failure; current != null; current = current.getCause()) {
+            int code =
+                    switch (current) {
+                        case SMTPSendFailedException smtp -> smtp.getReturnCode();
+                        case SMTPSenderFailedException smtp -> smtp.getReturnCode();
+                        case SMTPAddressFailedException smtp -> smtp.getReturnCode();
+                        default -> 0;
+                    };
+            if (code >= 400 && code < 600) {
+                return code >= 500;
+            }
+            if (current instanceof SendFailedException sendFailed
+                    && sendFailed.getInvalidAddresses() != null
+                    && sendFailed.getInvalidAddresses().length > 0) {
+                return true;
+            }
+            if (current.getCause() == current) {
+                break;
+            }
+        }
+        return false;
     }
 
     private static Throwable rootCause(Throwable throwable) {

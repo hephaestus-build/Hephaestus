@@ -21,8 +21,12 @@ import jakarta.mail.internet.MimeMessage;
 import java.net.ConnectException;
 import java.util.Map;
 import java.util.Optional;
+import org.eclipse.angus.mail.smtp.SMTPAddressFailedException;
+import org.eclipse.angus.mail.smtp.SMTPSendFailedException;
+import org.eclipse.angus.mail.smtp.SMTPSenderFailedException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
 import org.springframework.mail.MailAuthenticationException;
@@ -160,6 +164,36 @@ class EmailGatewayTest extends BaseUnitTest {
 
         assertThat(result.outcome()).isEqualTo(Outcome.REJECTED);
         assertThat(result.outcome().retryable()).isFalse();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"451, UNAVAILABLE", "554, REJECTED"})
+    void shouldClassifyDataFailureWithoutInvalidAddresses(int code, Outcome expected) {
+        var failure = new SMTPSendFailedException(".", code, "relay response", null, null, null, null);
+        sender.failWith(new MailSendException(Map.of(new MimeMessage((jakarta.mail.Session) null), failure)));
+
+        assertThat(configuredGateway().send(MESSAGE).outcome()).isEqualTo(expected);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"450, UNAVAILABLE", "550, REJECTED"})
+    void shouldClassifyNestedSenderFailure(int code, Outcome expected) throws MessagingException {
+        var failure = new SMTPSenderFailedException(
+                new InternetAddress("noreply@hephaestus.example"), "MAIL FROM", code, "relay response");
+        sender.failWith(new MailSendException(
+                Map.of(new MimeMessage((jakarta.mail.Session) null), new MessagingException("send failed", failure))));
+
+        assertThat(configuredGateway().send(MESSAGE).outcome()).isEqualTo(expected);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"450, UNAVAILABLE", "550, REJECTED"})
+    void shouldClassifyNestedRecipientFailure(int code, Outcome expected) throws MessagingException {
+        var failure = new SMTPAddressFailedException(
+                new InternetAddress("dev@example.org"), "RCPT TO", code, "relay response");
+        sender.failWith(new MailSendException("send failed", new MessagingException("recipient failed", failure)));
+
+        assertThat(configuredGateway().send(MESSAGE).outcome()).isEqualTo(expected);
     }
 
     @Test

@@ -1,5 +1,6 @@
 import { MailIcon, SendIcon } from "lucide-react";
 import { type SubmitEvent, useId, useState } from "react";
+import { useSpinDelay } from "spin-delay";
 
 import type { EmailTestResponse } from "@/api/types.gen";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
@@ -33,10 +34,12 @@ export interface InstanceEmailCardProps {
 export function InstanceEmailCard({ isPending, result, onSendTest }: InstanceEmailCardProps) {
 	const [to, setTo] = useState("");
 	const recipientId = useId();
+	const showSpinner = useSpinDelay(isPending, { delay: 1000, minDuration: 500 });
+	const isBusy = isPending || showSpinner;
 
 	const submit = (event: SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (isPending) return;
+		if (isBusy) return;
 		const trimmed = to.trim();
 		onSendTest(trimmed === "" ? undefined : trimmed);
 	};
@@ -76,7 +79,7 @@ export function InstanceEmailCard({ isPending, result, onSendTest }: InstanceEma
 								onChange={(event) => setTo(event.target.value)}
 								placeholder="Your verified address"
 								autoComplete="off"
-								disabled={isPending}
+								disabled={isBusy}
 							/>
 						</Field>
 					</FieldGroup>
@@ -102,9 +105,9 @@ export function InstanceEmailCard({ isPending, result, onSendTest }: InstanceEma
 					) : null}
 				</CardContent>
 				<CardFooter>
-					<Button type="submit" variant="outline" disabled={isPending}>
-						{isPending ? <Spinner aria-hidden /> : <SendIcon aria-hidden />}
-						{isPending ? "Sending…" : "Send test email"}
+					<Button type="submit" variant="outline" disabled={isBusy}>
+						{showSpinner ? <Spinner aria-hidden /> : <SendIcon aria-hidden />}
+						{showSpinner ? "Sending…" : "Send test email"}
 					</Button>
 				</CardFooter>
 			</form>

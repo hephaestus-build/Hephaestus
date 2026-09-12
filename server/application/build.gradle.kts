@@ -40,6 +40,7 @@ dependencies {
     implementation(libs.spring.boot.starter.logging)
     developmentOnly(libs.spring.boot.docker.compose)
     implementation(libs.spring.boot.starter.mail)
+    implementation(libs.angus.mail)
     implementation(libs.spring.boot.starter.thymeleaf)
     implementation(libs.spring.boot.starter.aspectj)
     runtimeOnly(libs.postgresql)
