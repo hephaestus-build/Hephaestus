@@ -273,7 +273,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 									Which AI may handle your work?
 								</QuestionnaireTitle>
 								<QuestionnaireDescription>
-									For you, in this workspace only. Each AI choice also allows in-house models.
+									For you, in this workspace only. Allowing a provider also allows in-house models.
 									Nothing outside your choice is used.
 								</QuestionnaireDescription>
 								<FactList facts={AI_FACTS} />
@@ -347,7 +347,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 																{rowDescription}
 															</ItemDescription>
 														</ItemContent>
-														<ItemActions>
+														<ItemActions className="w-full justify-end sm:w-auto">
 															{link.linked ? (
 																<Badge variant="secondary">
 																	<CheckIcon aria-hidden="true" /> Connected
@@ -358,13 +358,13 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 																	variant="outline"
 																	disabled={!link.available || !link.registrationId || saving}
 																	aria-describedby={descriptionId}
-																	aria-label={`Connect ${link.displayName}`}
+																	aria-label={`${changed ? "Save AI choice and connect" : "Connect"} ${link.displayName}`}
 																	onClick={() => {
 																		if (link.registrationId)
 																			state.onLink(link.registrationId, draft);
 																	}}
 																>
-																	Connect
+																	{changed ? "Save & connect" : "Connect"}
 																</Button>
 															)}
 														</ItemActions>

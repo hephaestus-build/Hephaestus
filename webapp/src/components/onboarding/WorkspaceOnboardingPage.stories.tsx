@@ -229,7 +229,10 @@ export const RequiredLinkOpen: Story = {
 		await expect(canvas.getByTitle("OutlineIcon")).toBeVisible();
 		await expect(canvas.queryByTitle("LinkIcon")).toBeNull();
 		await userEvent.click(canvas.getByRole("radio", { name: NOT_KEPT }));
-		await userEvent.click(canvas.getByRole("button", { name: "Connect Slack" }));
+		await expect(
+			canvas.getByRole("button", { name: "Save AI choice and connect Slack" }),
+		).toHaveTextContent("Save & connect");
+		await userEvent.click(canvas.getByRole("button", { name: "Save AI choice and connect Slack" }));
 		await expect(readyArgs(args).onLink).toHaveBeenCalledWith("slack", "NOT_KEPT_ONLY");
 	},
 };

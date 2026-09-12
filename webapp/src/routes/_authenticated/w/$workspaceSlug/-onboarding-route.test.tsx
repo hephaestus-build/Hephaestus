@@ -328,7 +328,7 @@ describe("workspace member onboarding route", () => {
 		renderRouteAtWithRouter("/w/acme/onboarding");
 		await screen.findByRole("heading", { name: "Welcome to Acme" }, ROUTE_RENDER_WAIT);
 		fireEvent.click(screen.getByRole("radio", { name: NOT_KEPT }));
-		fireEvent.click(screen.getByRole("button", { name: "Connect Slack" }));
+		fireEvent.click(screen.getByRole("button", { name: "Save AI choice and connect Slack" }));
 		await waitFor(() => expect(link).toHaveBeenCalledOnce());
 		expect(order).toStrictEqual(['ai-choice {"choice":"NOT_KEPT_ONLY"}', "linkAccount"]);
 		link.mockRestore();
@@ -345,7 +345,7 @@ describe("workspace member onboarding route", () => {
 		renderRouteAtWithRouter("/w/acme/onboarding");
 		await screen.findByRole("heading", { name: "Welcome to Acme" }, ROUTE_RENDER_WAIT);
 		fireEvent.click(screen.getByRole("radio", { name: NOT_KEPT }));
-		fireEvent.click(screen.getByRole("button", { name: "Connect Slack" }));
+		fireEvent.click(screen.getByRole("button", { name: "Save AI choice and connect Slack" }));
 		await screen.findByText("Your choice could not be saved.");
 		expect(link).not.toHaveBeenCalled();
 		link.mockRestore();

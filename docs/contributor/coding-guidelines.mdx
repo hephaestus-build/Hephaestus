@@ -43,16 +43,18 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 ### Onboarding and choice screens
 
 The sign-in setup page (`ConsentPage`) and the workspace setup page (`WorkspaceOnboardingPage`) are
-one product surface, and every screen that asks a developer to decide something follows the same
-rules. Each rule names the source it comes from.
+one product surface. These rules apply to that onboarding journey, not to every form or survey.
+Each rule names the source it comes from.
 
-- **One question per page; the heading is the question.** A screen carries one decision and zero or
-  more actions that are not decisions; actions go in a section below the answer, never on a second
-  page. — [GOV.UK question pages](https://design-system.service.gov.uk/patterns/question-pages/)
-- **No step counter, no progress bar.** A total is a claim about a flow the screen cannot see; a
-  `StepMarker` per section claims only "this part is answered". — GOV.UK question pages, and the
-  `ConsentPage` JSDoc.
-- **Never pre-select an answer.** `value={choice ?? null}` on a first visit. A saved answer shown
+- **Group the decision with its question.** Use the shared [shadcn questionnaire](https://ui.shadcn.com/docs/components/base/questionnaire)
+  for the workspace choice, with a native fieldset and legend. Account linking remains a separate
+  section below it; saving the AI choice never depends on linking an account. —
+  [W3C grouping controls](https://www.w3.org/WAI/tutorials/forms/grouping/)
+- **Do not invent a journey total.** Onboarding cannot count the sign-in stages that preceded it.
+  A survey with a defined question list can use the questionnaire's own progress component.
+  The workspace choice marker reports a saved answer, not an unsaved selection. —
+  [GOV.UK question pages](https://design-system.service.gov.uk/patterns/question-pages/)
+- **Never pre-select an answer.** Keep a first visit unanswered. A saved answer shown
   checked on a return visit is the current fact, not a default, and the copy says so. —
   [GOV.UK radios](https://design-system.service.gov.uk/components/radios/)
 - **Answers are equally weighted.** Same card, title plus one sentence, one same-size icon on every
@@ -70,7 +72,9 @@ rules. Each rule names the source it comes from.
 - **Optional stages say so in their heading; a stage with nothing in it is not rendered.** —
   [W3C multi-page forms](https://www.w3.org/WAI/tutorials/forms/multi-page/)
 - **One primary per state.** `Continue` when it moves the flow on, the specific verb when it does one
-  thing (`Connect Slack`, `Save`). Two primaries side by side is a wizard bug. —
+  thing (`Save AI choice`, `Save`). Keep connection actions compact: visible `Connect`, with the
+  integration name in the accessible label. Use `Save & connect` when that action also saves a
+  pending AI choice before the sign-in redirect. Two primaries side by side compete. —
   [NN/g wizards](https://www.nngroup.com/articles/wizards/)
 - **A disabled submit carries its reason in visible text wired through `aria-describedby`.** A native
   disabled button is out of the tab order, so the reason must be readable elsewhere. —
