@@ -112,36 +112,42 @@ would want the confirmation to unlock.
 
 **Instance admin → Workspaces → View users → View as user** discloses a workspace member's private
 practice pages and existing conversations to an instance administrator, whose own authentication is
-untouched (`docs/auth-architecture.md`). The viewed user is the synced SCM user behind a human
-workspace membership (`docs/auth-glossary.md`); **Linked account** in the
+untouched ([authentication architecture](../auth-architecture.md)). The viewed user is the synced
+SCM user behind a human workspace membership ([auth glossary](../auth-glossary.md)); **Linked account** in the
 list reads `identity_link.external_actor_id`. The SPA takes the workspace's name and
 feature flags from `GET /workspaces/{slug}`, reached under
 [elevated access](#elevated-workspace-access).
 
 The endpoints are the `User view` tag in `server/openapi.yaml`, all `GET` under
 `/workspaces/{slug}/user-view/users` and all `@PreAuthorize("hasAuthority('app_admin')")` like every
-instance-administrator controller — demotion and deletion revoke sessions, so nothing re-checks the
-administrator per request.
+instance-administrator controller. Each request checks the token's authority and session revocation;
+demotion and deletion revoke sessions.
 
 Every handler addressed at a `{userId}` carries `@UserViewRead` (`@RequiresRecentSignIn` +
 `@Audited(AUTH_EVENT, "USER_VIEW")`); `UserViewArchitectureTest` fails the build for a `/user-view`
-handler that is not a `GET` or discloses a user without it. `UserViewAuthorizationConfig` advises
+handler that is not a `GET` or names `{userId}` without it. `UserViewAuthorizationConfig` advises
 that annotation, ordered after the [recent sign-in gate](#recent-sign-in-gate) so a refused
-confirmation leaves no `USER_VIEW` success behind: before the handler runs it requires the
+confirmation leaves no successful `USER_VIEW` record: before the handler runs it requires the
 `X-User-View-Reason` header (percent-encoded UTF-8; `UserViewAccessService` accepts 1–500 decoded
 characters without control or format characters), resolves the viewed member through
 `ViewedUserService`, and commits the row, answering 503 when it does not commit.
 `OpenAPIConfiguration.userViewReasonHeader` declares the header on every such operation, so the
 generated client requires it.
 
-A `USER_VIEW` row carries `acting_account_id` = the instance administrator, `account_id` = the
+This view reads saved content, not a simulated login: it does not enter onboarding, change personal
+choices or apply account-level navigation gates. Disabled workspace features may hide that content
+on the user's own page; the view displays a notice in that case.
+
+A successful `USER_VIEW` row records authorization to attempt a read, not proof that the handler returned
+content: a missing observation or conversation can still produce a 404 after the row commits.
+The row carries `acting_account_id` = the instance administrator, `account_id` = the
 viewed user's linked account or null, `viewed_user_id` = the viewed user, `workspace_id`, and
 `details` = `{"reason": …, "read": "<request path?query>"}`. `AccountPurger` nulls `ip_inet`,
 `user_agent` and `details` where the erased account is either account or the one behind
 `viewed_user_id`, so it runs before that account's identity links are deleted. The read budget is
 a [setting](/admin/configuration-readiness#session-deadlines). Why this is a read projection
-and not Spring Security's `SwitchUserFilter`:
-`docs/decisions/0017-replace-keycloak-with-spring-native-auth.md`, update of 2026-09-11.
+and not Spring Security's `SwitchUserFilter` is explained in
+[ADR 0017](../decisions/0017-replace-keycloak-with-spring-native-auth.md#update--2026-09-11).
 
 ## Elevated workspace access
 

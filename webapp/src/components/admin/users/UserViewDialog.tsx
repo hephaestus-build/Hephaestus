@@ -20,7 +20,6 @@ const REASON_MAX_LENGTH = 500;
 export interface UserViewDialogProps {
 	name: string;
 	onClose: () => void;
-	/** Receives the reason trimmed; a reason of only whitespace never submits. */
 	onConfirm: (reason: string) => void;
 }
 

@@ -11,11 +11,7 @@ export interface UserViewBannerProps {
 	onExit: () => void;
 }
 
-/**
- * A region named by its own title rather than the primitive's live `alert` role: the banner mounts
- * with its text already inside, so a live region would announce nothing, while a landmark is where
- * a reader looks for whose data this is.
- */
+/** The viewed identity is a persistent landmark, not an urgent alert. */
 export function UserViewBanner({ name, workspace, hasAccount, onExit }: UserViewBannerProps) {
 	const titleId = useId();
 	return (

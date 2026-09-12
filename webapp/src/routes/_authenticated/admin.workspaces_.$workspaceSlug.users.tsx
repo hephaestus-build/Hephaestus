@@ -46,7 +46,6 @@ const userViewSearchSchema = z.object({
 
 type UserViewSearch = z.infer<typeof userViewSearchSchema>;
 
-/** Everything a view drilled into; a new selection or an exit starts from the top again. */
 const DRILL_IN_RESET: Partial<UserViewSearch> = {
 	section: undefined,
 	group: undefined,
@@ -59,7 +58,7 @@ const DRILL_IN_RESET: Partial<UserViewSearch> = {
 export const Route = createFileRoute("/_authenticated/admin/workspaces_/$workspaceSlug/users")({
 	head: instanceAdminHead("View as user"),
 	validateSearch: userViewSearchSchema,
-	remountDeps: ({ params }) => params,
+	remountDeps: ({ params, search }) => [params.workspaceSlug, search.user],
 	component: WorkspaceUsersRoute,
 });
 

@@ -27,10 +27,7 @@ import { stepUpChallengeOf } from "@/lib/problem-detail";
 export const USER_VIEW_PAGE_SIZE = 25;
 export const USER_VIEW_RUNS_PAGE_SIZE = 10;
 
-/**
- * A private read is answered once and forgotten: nothing survives the view that asked for it, a
- * reload asks for a new reason, and a refusal is not retried into a second audit row.
- */
+// Private data is discarded when unused; automatic retries must not duplicate refused audit attempts.
 const PRIVATE_READ = { gcTime: 0, staleTime: 0, retry: false } as const;
 
 export interface ViewedUser {
@@ -82,11 +79,6 @@ export function useUserPracticeView(viewed: ViewedUser): UserPracticeViewState {
 	return panelState(query, (summary) => ({ status: "ready", summary }));
 }
 
-/**
- * The three reads behind one practice group. The trend gates the page; the review-run feed and the
- * open observation fail inside it, as they do on the developer's own page — except a step-up
- * challenge, which is the group's refusal wherever it lands, so the route can answer it once.
- */
 export function useUserViewGroup(
 	viewed: ViewedUser,
 	selection: UserViewGroupSelection | undefined,

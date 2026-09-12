@@ -17,9 +17,6 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  * Transactional sink for {@link AuthEvent} rows. Separate bean (not a method on
  * {@link AuthEventLogger}) so the {@code REQUIRES_NEW} boundary is honoured — a
  * self-invocation from {@code AuthEventLogger.Draft} would bypass the proxy.
- *
- * <p>Allocates the id from the sequence, captures request IP + user agent, persists.
- * Swallows its own failures: an audit write must never break the business flow.
  */
 @ConditionalOnServerRole
 @Component
@@ -40,7 +37,7 @@ public class AuthEventWriter {
         this.clock = clock;
     }
 
-    /** @return whether the row was persisted; {@code false} means the trail has a gap here. */
+    /** @return whether persistence succeeded; the transaction proxy still has to commit before returning to the caller */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean write(AuthEventData data) {
         try {
@@ -48,12 +45,8 @@ public class AuthEventWriter {
             repository.save(event);
             return true;
         } catch (RuntimeException e) {
-            // Swallow — an audit write must never break the business flow — but make it observable:
-            // sequence.next() already consumed an id, so a failed save is a permanent gap in the
-            // append-only trail. The counter is the alertable signal; WARN (not ERROR) because the
-            // request itself succeeded.
             metrics.recordAuditWriteFailed();
-            log.warn("auth.audit: failed to persist {} event (sequence value lost — gap in trail)", data.type(), e);
+            log.warn("auth.audit: failed to persist {} event", data.type(), e);
             return false;
         }
     }
@@ -61,8 +54,6 @@ public class AuthEventWriter {
     @Nullable
     private static String captureIp() {
         HttpServletRequest req = currentRequest();
-        // null (not a fake "0.0.0.0" sentinel) for context-less events: ip_inet is nullable since the
-        // GDPR redaction redesign, and a sentinel would pollute ix_auth_event_failure_ip.
         return req == null ? null : req.getRemoteAddr();
     }
 

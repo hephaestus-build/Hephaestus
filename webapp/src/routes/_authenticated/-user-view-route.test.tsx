@@ -1,10 +1,12 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { UserPracticeSummary } from "@/api/types.gen";
+import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 20_000 });
 
@@ -128,6 +130,97 @@ describe("read-only user view", () => {
 		await user.click(screen.getByRole("button", { name: "Exit user view" }));
 		await user.click(await screen.findByRole("button", { name: "View as user: other-user" }));
 		expect(screen.getByRole("textbox", { name: "Reason for access" })).toHaveProperty("value", "");
+	});
+
+	it("ends the active view when navigation selects another user", async () => {
+		const reads = privateReads();
+		const { router } = renderRouteAtWithRouter("/admin/workspaces/engineering/users");
+		await openUserView("never-signed-in");
+		await screen.findByRole("region", BANNER);
+		await act(async () => {
+			await router.navigate({
+				to: "/admin/workspaces/$workspaceSlug/users",
+				params: { workspaceSlug: "engineering" },
+				search: { user: 12 },
+			});
+		});
+		const dialog = await screen.findByRole("dialog", { name: "View as Alex" });
+		expect(within(dialog).getByRole("textbox", { name: "Reason for access" })).toHaveProperty(
+			"value",
+			"",
+		);
+		expect(screen.queryByRole("region", BANNER)).toBeNull();
+		expect(reads.some((read) => read.path.includes("/users/12/"))).toBe(false);
+	});
+
+	it("cancels the previous user's pending read before showing another user", async () => {
+		privateReads();
+		let respond = (_response: Response) => {};
+		const response = new Promise<Response>((resolve) => {
+			respond = resolve;
+		});
+		const signals: AbortSignal[] = [];
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/user-view/users/11/practices", ({ request }) => {
+				signals.push(request.signal);
+				return response;
+			}),
+		);
+		const { router } = renderRouteAtWithRouter("/admin/workspaces/engineering/users");
+		const user = await openUserView("never-signed-in");
+		await waitFor(() => expect(signals).toHaveLength(1));
+		await act(async () => {
+			await router.navigate({
+				to: "/admin/workspaces/$workspaceSlug/users",
+				params: { workspaceSlug: "engineering" },
+				search: { user: 12 },
+			});
+		});
+		const dialog = await screen.findByRole("dialog", { name: "View as Alex" });
+		await user.type(
+			within(dialog).getByRole("textbox", { name: "Reason for access" }),
+			"Check Alex's profile",
+		);
+		await user.click(within(dialog).getByRole("button", { name: "View as user" }));
+		await screen.findByRole("region", { name: "Viewing Alex in Engineering — read-only" });
+		await screen.findByText("No practice groups are configured yet.");
+		await waitFor(() => expect(signals[0]?.aborted).toBe(true));
+		await act(async () => {
+			respond(
+				HttpResponse.json({
+					...summary,
+					groups: [
+						{
+							id: 1,
+							slug: "sam-only",
+							name: "Sam-only practice group",
+							displayOrder: 0,
+							visibleInPracticeDashboards: true,
+							autonomy: { effective: "AUTOMATIC", inherited: true, source: "WORKSPACE" },
+							createdAt: "2026-01-01T00:00:00Z",
+						},
+					],
+				} satisfies Wire<UserPracticeSummary>),
+			);
+		});
+		expect(screen.queryByText("Sam-only practice group")).toBeNull();
+		screen.getByText("No practice groups are configured yet.");
+	});
+
+	it("ends the view when browser history returns to the user list", async () => {
+		privateReads();
+		const { router } = renderRouteAtWithRouter([
+			"/admin/workspaces/engineering/users",
+			"/admin/workspaces/engineering/users?user=11",
+		]);
+		const user = userEvent.setup();
+		const dialog = await screen.findByRole("dialog", { name: "View as Sam" }, ROUTE_RENDER_WAIT);
+		await user.type(within(dialog).getByRole("textbox", { name: "Reason for access" }), REASON);
+		await user.click(within(dialog).getByRole("button", { name: "View as user" }));
+		await screen.findByRole("region", BANNER);
+		await act(async () => router.history.go(-1));
+		await screen.findByRole("button", { name: "View as user: never-signed-in" });
+		expect(screen.queryByRole("region", BANNER)).toBeNull();
 	});
 
 	it("discloses nothing when audit persistence fails", async () => {

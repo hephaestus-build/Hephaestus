@@ -185,6 +185,48 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(userViewRowsFor(viewed)).isZero();
     }
 
+    @Test
+    void shouldDenyPrivateContentToAWorkspaceOwnerWhoIsNotAnInstanceAdministrator() {
+        Account member = persistAccount("Workspace owner");
+        IdentityLink link = new IdentityLink();
+        link.setAccount(member);
+        link.setProviderId(Objects.requireNonNull(ensureGitHubProvider().getId()));
+        link.setSubject(String.valueOf(viewed.getNativeId()));
+        link.setExternalActorId(viewed.getId());
+        identityLinks.save(link);
+
+        client.get()
+                .uri("/workspaces/acme" + viewedPath() + "/practices")
+                .headers(h -> h.setBearerAuth("mock-jwt-member-" + member.getId()))
+                .header("X-User-View-Reason", "Support")
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+
+        assertThat(userViewRowsFor(viewed)).isZero();
+    }
+
+    @Test
+    void shouldNotDisclosePracticesWhenTheAuditInsertFails() {
+        jdbc.execute("ALTER TABLE auth_event ADD CONSTRAINT reject_user_view_test "
+                + "CHECK (event_type <> 'USER_VIEW' OR viewed_user_id <> " + viewed.getId() + ") NOT VALID");
+        try {
+            request(viewedPath() + "/practices")
+                    .exchange()
+                    .expectStatus()
+                    .isEqualTo(503)
+                    .expectBody()
+                    .jsonPath("$.groups")
+                    .doesNotExist()
+                    .jsonPath("$.status")
+                    .isEqualTo(503);
+            assertThat(userViewRowsFor(viewed)).isZero();
+        } finally {
+            jdbc.execute("ALTER TABLE auth_event DROP CONSTRAINT reject_user_view_test");
+        }
+    }
+
     private long userViewRowsFor(User user) {
         Long rows = jdbc.queryForObject(
                 "SELECT count(*) FROM auth_event WHERE event_type = 'USER_VIEW' AND viewed_user_id = ?",
