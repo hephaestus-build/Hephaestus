@@ -1,12 +1,12 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { AlertCircle, RotateCcw } from "lucide-react";
 
+import { cn } from "cn";
 import type { ChatMessageVote } from "@/api/types.gen";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import type { Attachment, ChatMessage } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 import { Messages } from "./Messages";
 import { MultimodalInput } from "./MultimodalInput";

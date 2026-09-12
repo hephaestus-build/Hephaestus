@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import type { CuratedPracticeDefinition, PracticeDefinitionOptions } from "@/api/types.gen";
 import { PracticeEvidenceSummary } from "@/components/admin/practice-catalog/PracticeEvidenceSummary";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
@@ -10,7 +11,6 @@ import {
 } from "@/components/ui/accordion";
 import { Separator } from "@/components/ui/separator";
 import { artifactKindLabel } from "@/lib/artifact-kinds";
-import { cn } from "@/lib/utils";
 
 export interface PracticeDefinitionPreviewProps {
 	definition: CuratedPracticeDefinition;

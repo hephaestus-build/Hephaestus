@@ -1,6 +1,7 @@
 import { ChevronsUpDownIcon, LockIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { cn } from "cn";
 import type { SlackChannelCandidate } from "@/api/types.gen";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -15,7 +16,6 @@ import {
 	ComboboxTrigger,
 	useComboboxFilter,
 } from "@/components/ui/combobox";
-import { cn } from "@/lib/utils";
 
 export interface SlackChannelComboboxProps {
 	id?: string;

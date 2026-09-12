@@ -1,7 +1,7 @@
+import { cn } from "cn";
 import type { CatalogOrigin } from "@/api/types.gen";
 import { badgeVariants } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 
 export interface CatalogOriginBadgeProps {
 	origin?: CatalogOrigin | null;

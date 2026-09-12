@@ -108,7 +108,7 @@ describe("AgentBindingsPage", () => {
 			reviews.getByText(term, { selector: "dt" }).nextElementSibling?.textContent;
 
 		expect(definitionAfter("Members who chose Only in-house")).toBe("→ Stays in-house: GPT Test");
-		expect(definitionAfter("Members who chose Any AI this workspace set up")).toBe(
+		expect(definitionAfter("Members who chose Allow storage for safety checks")).toBe(
 			"→ Stays in-house: GPT Test",
 		);
 		expect(definitionAfter("Members who haven't chosen")).toBe("→ nothing runs for them");

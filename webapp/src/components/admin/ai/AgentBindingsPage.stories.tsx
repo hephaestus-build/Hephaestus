@@ -123,10 +123,10 @@ export const TiersPartiallyCovered: Story = {
 			"→ Stays in-house: Local Llama (self-hosted)",
 		);
 		await expect(
-			previewRow(reviews, "Members who chose In-house, or a provider that keeps nothing"),
+			previewRow(reviews, "Members who chose Allow providers that keep nothing"),
 		).toHaveTextContent("→ Stays in-house: Local Llama (self-hosted)");
 		await expect(
-			previewRow(reviews, "Members who chose Any AI this workspace set up"),
+			previewRow(reviews, "Members who chose Allow storage for safety checks"),
 		).toHaveTextContent("→ Stays in-house: Local Llama (self-hosted)");
 		await expect(previewRow(reviews, UNCHOSEN_ROW)).toHaveTextContent(
 			"→ Not declared: My OpenAI key",
@@ -155,8 +155,8 @@ export const NothingCovered: Story = {
 		const reviews = purposeCard(canvas, "Practice reviews");
 		for (const term of [
 			"Members who chose Only in-house",
-			"Members who chose In-house, or a provider that keeps nothing",
-			"Members who chose Any AI this workspace set up",
+			"Members who chose Allow providers that keep nothing",
+			"Members who chose Allow storage for safety checks",
 		]) {
 			await expect(previewRow(reviews, term)).toHaveTextContent("→ nothing runs for them");
 		}
@@ -278,8 +278,8 @@ export const ProjectReviewsDisabled: Story = {
 		await expect(card.getByText("Practice reviews off")).toBeVisible();
 		for (const term of [
 			"Members who chose Only in-house",
-			"Members who chose In-house, or a provider that keeps nothing",
-			"Members who chose Any AI this workspace set up",
+			"Members who chose Allow providers that keep nothing",
+			"Members who chose Allow storage for safety checks",
 			UNCHOSEN_ROW,
 		]) {
 			await expect(previewRow(card, term)).toHaveTextContent(

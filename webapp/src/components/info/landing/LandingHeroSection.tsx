@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { CircleCheck, MessageSquare, Square } from "lucide-react";
 import { motion, stagger } from "motion/react";
 import { useMediaQuery } from "usehooks-ts";
@@ -5,7 +6,6 @@ import { LandingSignInCta } from "@/components/auth/LandingSignInCta";
 import { GithubIcon, GitlabIcon } from "@/components/icons/brand";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import {
 	LandingCluster,
 	LandingFeedbackCard,

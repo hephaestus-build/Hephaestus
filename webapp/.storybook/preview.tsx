@@ -143,7 +143,7 @@ const preview: Preview = {
 					"Instance admin",
 					"Practice trace",
 					"Profile",
-					"Surveys",
+					"Product feedback",
 					"Common",
 					"Shared",
 					"Provider",

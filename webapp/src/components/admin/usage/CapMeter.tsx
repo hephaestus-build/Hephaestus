@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
+import { cn } from "cn";
 import { Progress } from "@/components/ui/progress";
 import { formatCapUsd, formatCostUsd } from "@/lib/money";
-import { cn } from "@/lib/utils";
 
 import { BUDGET_WARN_PERCENT } from "./usage-utils";
 

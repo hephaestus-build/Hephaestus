@@ -1,8 +1,8 @@
 import { Progress as ProgressRoot } from "@base-ui/react/progress";
 import { ClockIcon } from "@primer/octicons-react";
 
+import { cn } from "cn";
 import { ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
-import { cn } from "@/lib/utils";
 
 export interface XpProgressProps {
 	currentXP: number;

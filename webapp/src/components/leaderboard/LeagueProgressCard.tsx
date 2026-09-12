@@ -1,9 +1,9 @@
 import { Progress as ProgressRoot } from "@base-ui/react/progress";
 import { Info, Star } from "lucide-react";
 
+import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
-import { cn } from "@/lib/utils";
 
 import { LeagueIcon } from "./LeagueIcon";
 import { getLeagueFromPoints } from "./utils";

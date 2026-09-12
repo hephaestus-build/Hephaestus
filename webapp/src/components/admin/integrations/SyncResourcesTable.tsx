@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { AlertCircleIcon, DatabaseIcon, SearchIcon, TriangleAlertIcon } from "lucide-react";
 import { Fragment, useState } from "react";
 
+import { cn } from "cn";
 import type { SyncResourceCount, SyncResourceState } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
@@ -29,7 +30,6 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { asDate } from "@/lib/dates";
-import { cn } from "@/lib/utils";
 
 import { freshnessTone, stateLabel } from "./sync-format";
 import { TableRowsSkeleton } from "./TableRowsSkeleton";

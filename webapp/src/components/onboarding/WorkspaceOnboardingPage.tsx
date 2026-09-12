@@ -28,13 +28,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-	Field,
-	FieldContent,
-	FieldDescription,
-	FieldLabel,
-	FieldTitle,
-} from "@/components/ui/field";
-import {
 	Item,
 	ItemActions,
 	ItemContent,
@@ -43,7 +36,15 @@ import {
 	ItemMedia,
 	ItemTitle,
 } from "@/components/ui/item";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+	Questionnaire,
+	QuestionnaireChoice,
+	QuestionnaireChoiceDescription,
+	QuestionnaireChoices,
+	QuestionnaireDescription,
+	QuestionnaireItem,
+	QuestionnaireTitle,
+} from "@/components/ui/questionnaire";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
@@ -97,7 +98,7 @@ const AI_FACTS: readonly Fact[] = [
 		icon: CircleOffIcon,
 		term: "No AI",
 		detail:
-			"No new practice reviews about you and no new conversations with Heph. A review already running finishes where it started.",
+			"Stops new practice reviews about you, new Heph requests and feedback delivery. Requests already sent cannot be recalled.",
 	},
 	{
 		icon: RefreshCwIcon,
@@ -137,13 +138,7 @@ function joinNames(names: readonly string[]): string {
 	return names.join(" and ");
 }
 
-/**
- * Page two of `ConsentPage`: the same frame, one question, and no step count — a total would be a
- * claim about a flow this screen cannot see. The four answers are a 2×2 grid of identical cards;
- * the `FactList` above them says what any answer means, so no card argues for itself. An answer the
- * workspace has not set up yet stays selectable — the answer is a ceiling, not a pick from today's
- * inventory — and says so in its own sentence, so it reads like the others with one more fact.
- */
+/** One workspace decision, with account linking kept separate from saving the answer. */
 export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPageProps) {
 	const [draft, setDraft] = useState<MemberAiChoice>();
 	const id = useId();
@@ -165,9 +160,8 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 	const openRequired = openRequiredLinks(links);
 	const openRequiredNames = joinNames(openRequired.map((link) => link.displayName));
 	const requiredSatisfied = openRequired.length === 0;
-	// Required links gate finishing setup, which only a first visit does; a return visit writes the
-	// answer alone, so an open link must never stand between a member and No AI.
-	const canSubmit = choice !== undefined && (firstVisit ? requiredSatisfied : changed);
+	// Saving an AI choice is independent of connecting accounts, even on a first visit.
+	const canSubmit = choice !== undefined && (changed || (firstVisit && requiredSatisfied));
 	const submission: OnboardingSubmission = ready?.submission ?? { status: "idle" };
 	const saving = submission.status === "saving";
 	const savingAction = submission.status === "saving" ? submission.action : undefined;
@@ -191,7 +185,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 				? `Welcome to ${data.workspaceName}`
 				: `Your AI choice in ${data.workspaceName}`;
 
-	const intro = `I read your work in ${data?.workspaceName ?? "this workspace"} only on your say-so: you choose which AI may handle it, or none.`;
+	const intro = `Choose how AI may handle your work in ${data?.workspaceName ?? "this workspace"}. This choice is separate from your account setup and applies only here.`;
 
 	// Heph narrates the reader's answers; the footer hint says the same thing factually and reaches
 	// the button through `aria-describedby`, so focusing it does not replay the line.
@@ -201,9 +195,11 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 			: state.status === "error"
 				? "I couldn't fetch your setup just now."
 				: changed && firstVisit
-					? "Noted. Press Continue and I'll remember that."
+					? requiredSatisfied
+						? "Noted. Press Continue and I'll remember that."
+						: "Save your AI choice now. You can connect your accounts separately."
 					: changed
-						? "Save and I'll follow your new answer from the next review on."
+						? "Save to apply your new choice. Requests already sent cannot be recalled."
 						: choice === undefined
 							? "One question: which AI may handle your work. Any answer is fine by me, including none."
 							: savedFullyUncovered
@@ -224,7 +220,9 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 					? "Choose an answer to continue."
 					: "Choose an answer, then save."
 				: firstVisit && openRequired.length > 0
-					? `Connect ${openRequiredNames} to finish setup.`
+					? changed
+						? `Save your AI choice now; connect ${openRequiredNames} to finish setup.`
+						: `Connect ${openRequiredNames} to finish setup.`
 					: !firstVisit && !changed
 						? "You can change this any time from the sidebar."
 						: undefined;
@@ -239,7 +237,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 
 	return (
 		<div className="min-h-svh bg-background">
-			<form onSubmit={submit}>
+			<Questionnaire onSubmit={submit}>
 				<PageLayout className="max-w-2xl px-6 py-10">
 					<HephaestusLogo markClassName="size-7" wordmarkClassName="text-lg" />
 
@@ -269,56 +267,43 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 						/>
 					) : (
 						<>
-							<Section
-								id={`${id}-ai`}
-								title={
-									<span className="flex items-start gap-3">
-										<StepMarker icon={SparklesIcon} done={choice !== undefined} />
-										<span className="min-w-0">Which AI may handle your work?</span>
-									</span>
-								}
-								description="For you, in this workspace only. Anything stricter than your answer also counts."
-							>
+							<QuestionnaireItem name="ai-choice" required disabled={saving}>
+								<QuestionnaireTitle className="flex items-start gap-3 text-lg">
+									<StepMarker icon={SparklesIcon} done={data?.aiChoice != null} />
+									Which AI may handle your work?
+								</QuestionnaireTitle>
+								<QuestionnaireDescription>
+									For you, in this workspace only. Each AI choice also allows in-house models.
+									Nothing outside your choice is used.
+								</QuestionnaireDescription>
 								<FactList facts={AI_FACTS} />
-
-								<RadioGroup
-									value={choice ?? null}
-									onValueChange={(value) => setDraft(value ?? undefined)}
-									// Base UI swallows Enter on a radio so that it cannot double as a click; a native
-									// radio submits its form on Enter, and a keyboard-only reader expects that.
-									onKeyDown={(event) => {
-										if (event.key === "Enter") event.currentTarget.closest("form")?.requestSubmit();
-									}}
-									disabled={saving}
-									aria-labelledby={`${id}-ai-title`}
-									aria-describedby={`${id}-ai-description`}
-									className="grid gap-3 sm:grid-cols-2"
-								>
+								<QuestionnaireChoices className="gap-3 sm:grid-cols-2">
 									{AI_CHOICES.map((value) => {
 										const { icon: Icon, label, description } = MEMBER_AI_CHOICE_DEFS[value];
 										const readiness = readinessSentence(state.data, value);
 										return (
-											<FieldLabel key={value} htmlFor={`${id}-${value}`}>
-												<Field orientation="horizontal" className="h-full">
+											<QuestionnaireChoice
+												key={value}
+												value={value}
+												checked={choice === value}
+												onChange={(event) => {
+													if (event.target.checked) setDraft(value);
+												}}
+												className="p-4"
+											>
+												<span className="mb-2 flex items-center gap-2 font-medium">
 													<Icon className="size-5 shrink-0 text-mentor" aria-hidden="true" />
-													<FieldContent>
-														<FieldTitle id={`${id}-${value}-title`}>{label}</FieldTitle>
-														<FieldDescription id={`${id}-${value}-detail`}>
-															{readiness ? `${description} ${readiness}` : description}
-														</FieldDescription>
-													</FieldContent>
-													<RadioGroupItem
-														id={`${id}-${value}`}
-														value={value}
-														aria-labelledby={`${id}-${value}-title`}
-														aria-describedby={`${id}-${value}-detail`}
-													/>
-												</Field>
-											</FieldLabel>
+													{label}
+												</span>{" "}
+												<QuestionnaireChoiceDescription>
+													{description}{" "}
+													{readiness && <span className="mt-2 block font-medium">{readiness}</span>}
+												</QuestionnaireChoiceDescription>
+											</QuestionnaireChoice>
 										);
 									})}
-								</RadioGroup>
-							</Section>
+								</QuestionnaireChoices>
+							</QuestionnaireItem>
 
 							{links.length > 0 && (
 								<>
@@ -331,13 +316,13 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 										id={`${id}-accounts`}
 										title={
 											<span className="flex items-start gap-3">
-												<StepMarker icon={Link2Icon} done={requiredSatisfied} />
+												<StepMarker icon={Link2Icon} done={links.every((link) => link.linked)} />
 												<span className="min-w-0">Connect your accounts</span>
 											</span>
 										}
 										description={
 											accountsRequired
-												? "Required to finish setup."
+												? "Connect the accounts marked Required to finish setup. Your AI choice can be saved without connecting them."
 												: "Optional. You can do this later from User settings."
 										}
 									>
@@ -356,7 +341,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 															<Icon aria-hidden="true" />
 														</ItemMedia>
 														<ItemContent>
-															<ItemTitle>{link.displayName}</ItemTitle>
+															<ItemTitle className="break-words">{link.displayName}</ItemTitle>
 															{/* The reason a link cannot be connected has to be readable in full. */}
 															<ItemDescription id={descriptionId} className="line-clamp-none">
 																{rowDescription}
@@ -373,12 +358,13 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 																	variant="outline"
 																	disabled={!link.available || !link.registrationId || saving}
 																	aria-describedby={descriptionId}
+																	aria-label={`Connect ${link.displayName}`}
 																	onClick={() => {
 																		if (link.registrationId)
 																			state.onLink(link.registrationId, draft);
 																	}}
 																>
-																	Connect {link.displayName}
+																	Connect
 																</Button>
 															)}
 														</ItemActions>
@@ -431,12 +417,19 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 											aria-describedby={hint ? `${id}-hint` : undefined}
 										>
 											{savingAction === "save" && <Spinner />}
-											{savingAction === "save" ? "Saving…" : firstVisit ? "Continue" : "Save"}
+											{savingAction === "save"
+												? "Saving…"
+												: firstVisit && !requiredSatisfied && changed
+													? "Save AI choice"
+													: firstVisit
+														? "Continue"
+														: "Save"}
 										</Button>
 									)}
 								</div>
 								<Button
 									type="button"
+									aria-describedby={firstVisit ? `${id}-skip-hint` : undefined}
 									variant="ghost"
 									disabled={saving}
 									onClick={state.onLeave}
@@ -450,12 +443,20 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 											: "Back to workspace"}
 								</Button>
 							</footer>
+							{firstVisit && (
+								<p id={`${id}-skip-hint`} className="text-sm text-muted-foreground">
+									Skipping does not save an answer selected above.{" "}
+									{data.aiChoice
+										? `Your saved choice (${memberAiChoiceTitle(data.aiChoice)}) stays in effect.`
+										: "AI stays off until you save a choice."}
+								</p>
+							)}
 						</>
 					)}
 
 					<LegalLinks />
 				</PageLayout>
-			</form>
+			</Questionnaire>
 		</div>
 	);
 }

@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { BrainCircuit, ChevronDown, CircleHelpIcon } from "lucide-react";
 import { type ReactNode, type SubmitEvent, useEffect, useId, useRef, useState } from "react";
 
+import { cn } from "cn";
 import type {
 	AgentBinding,
 	AgentBindingRequest,
@@ -42,7 +43,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
 
 import { BudgetExhaustedAlert } from "./BudgetExhaustedAlert";
 import { ModelPicker, type ModelSelection } from "./ModelPicker";

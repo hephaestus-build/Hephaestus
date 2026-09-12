@@ -4,7 +4,6 @@ import {
 	CircleOffIcon,
 	ClockIcon,
 	EyeIcon,
-	EyeOffIcon,
 	GraduationCapIcon,
 	HandshakeIcon,
 	LockIcon,
@@ -72,11 +71,6 @@ export const DATA_HANDLING_DEFS: Record<DataHandlingTier, DataHandlingDef> = {
 			PROVIDER_UNDER_TERMS,
 			{ icon: TimerOffIcon, term: "Kept after the reply", detail: "Nothing." },
 			NEVER_TRAINED,
-			{
-				icon: EyeOffIcon,
-				term: "Who reads it",
-				detail: "Automated safety checks may run; no person reads it.",
-			},
 		],
 	},
 	PROVIDER_KEPT: {
@@ -180,7 +174,7 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		ceiling: "IN_HOUSE",
 	},
 	NOT_KEPT_ONLY: {
-		label: "In-house, or a provider that keeps nothing",
+		label: "Allow providers that keep nothing",
 		icon: ShieldCheckIcon,
 		badgeVariant: "secondary",
 		description:
@@ -188,7 +182,7 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		ceiling: "PROVIDER_NOT_KEPT",
 	},
 	ANY_DECLARED: {
-		label: "Any AI this workspace set up",
+		label: "Allow storage for safety checks",
 		icon: ClockIcon,
 		badgeVariant: "secondary",
 		description:
@@ -199,7 +193,7 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		label: "No AI",
 		icon: CircleOffIcon,
 		badgeVariant: "secondary",
-		description: "No AI runs for you in this workspace.",
+		description: "No new practice reviews about you or new requests to Heph in this workspace.",
 		ceiling: null,
 	},
 };

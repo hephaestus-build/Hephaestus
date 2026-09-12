@@ -12,10 +12,10 @@ import {
 	type WorkspaceOnboardingPageProps,
 } from "./WorkspaceOnboardingPage";
 
-const IN_HOUSE = "Only in-house";
-const NOT_KEPT = "In-house, or a provider that keeps nothing";
-const ANY = "Any AI this workspace set up";
-const NO_AI = "No AI";
+const IN_HOUSE = /^Only in-house /;
+const NOT_KEPT = /^Allow providers that keep nothing /;
+const ANY = /^Allow storage for safety checks /;
+const NO_AI = /^No AI /;
 
 const slack = {
 	connectionId: 1,
@@ -63,23 +63,7 @@ const ready = {
 	onLeave: fn(),
 } satisfies WorkspaceOnboardingPageProps["state"];
 
-/**
- * The four answers are identical in shape — one same-size icon, a title and one sentence each,
- * No AI included. The icon keeps the answers symmetric rather than breaking it: what EDPB 03/2022
- * condemns is one answer carrying more weight than its neighbours, not an icon as such. Everything a
- * reader needs in order to decide sits in the fact list above the group, addressed to every answer
- * at once. Cards are a 2×2 grid because they are choices; facts are rows because they are text.
- *
- * Rejected along the way: an owner-authored welcome text (Heph introduces the page, and words
- * nobody maintains go stale); matching the answer to the model exactly (the answer is a ceiling,
- * so anything stricter also counts); disabling an answer the workspace has not set up (consent is
- * to a boundary, not to today's inventory — the card says what runs, and nothing substitutes); and
- * asking developers to pick data-handling facts themselves (that is the admin's declaration).
- *
- * There is no step count. This screen follows the consent page and may be revisited from the
- * sidebar, so "step 2 of n" would be a claim about a flow it cannot see; the marker beside each
- * section says only whether that section is answered, which it can know.
- */
+/** Equal, unselected choices; saving AI preferences never depends on connecting accounts. */
 const meta = {
 	title: "Onboarding/Workspace setup",
 	component: WorkspaceOnboardingPage,
@@ -208,11 +192,11 @@ export const AnswerAndContinue: Story = {
 export const NoAi: Story = {
 	args: { state: { ...ready, data: { ...welcome, links: [] } } },
 	play: async ({ canvas, userEvent, args }) => {
-		await expect(canvas.getByRole("radio", { name: NO_AI })).toHaveAccessibleDescription(
-			"No AI runs for you in this workspace.",
+		await expect(canvas.getByRole("radio", { name: NO_AI })).toHaveAccessibleName(
+			"No AI No new practice reviews about you or new requests to Heph in this workspace.",
 		);
-		await expect(canvas.getByRole("radio", { name: IN_HOUSE })).toHaveAccessibleDescription(
-			"Runs only on systems your organisation operates.",
+		await expect(canvas.getByRole("radio", { name: IN_HOUSE })).toHaveAccessibleName(
+			"Only in-house Runs only on systems your organisation operates.",
 		);
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
@@ -308,8 +292,8 @@ export const OptionUncovered: Story = {
 	},
 	play: async ({ canvas, userEvent, args }) => {
 		const inHouse = canvas.getByRole("radio", { name: IN_HOUSE });
-		await expect(inHouse).toHaveAccessibleDescription(
-			"Runs only on systems your organisation operates. Not set up here yet — nothing runs for you until a workspace owner adds a model.",
+		await expect(inHouse).toHaveAccessibleName(
+			"Only in-house Runs only on systems your organisation operates. Not set up here yet — nothing runs for you until a workspace owner adds a model.",
 		);
 		// A ceiling nobody has built up to is still a valid answer, so the card is not disabled.
 		await expect(inHouse).not.toHaveAttribute("aria-disabled");
@@ -343,13 +327,13 @@ export const HephNotCovered: Story = {
 				"Part of your choice isn't set up here yet. I won't switch you anywhere else.",
 			),
 		).toBeVisible();
-		await expect(canvas.getByRole("radio", { name: IN_HOUSE })).toHaveAccessibleDescription(
+		await expect(canvas.getByRole("radio", { name: IN_HOUSE })).toHaveAccessibleName(
 			/Heph isn't set up for this answer yet\.$/,
 		);
-		await expect(canvas.getByRole("radio", { name: NOT_KEPT })).toHaveAccessibleDescription(
+		await expect(canvas.getByRole("radio", { name: NOT_KEPT })).toHaveAccessibleName(
 			/Practice reviews aren't set up for this answer yet\.$/,
 		);
-		await expect(canvas.getByRole("radio", { name: ANY })).toHaveAccessibleDescription(
+		await expect(canvas.getByRole("radio", { name: ANY })).toHaveAccessibleName(
 			/safety checks, which its staff may read if flagged\.$/,
 		);
 	},
@@ -410,7 +394,7 @@ export const ReturnVisit: Story = {
 		);
 		await userEvent.click(canvas.getByRole("radio", { name: ANY }));
 		await expect(
-			canvas.getByText("Save and I'll follow your new answer from the next review on."),
+			canvas.getByText("Save to apply your new choice. Requests already sent cannot be recalled."),
 		).toBeVisible();
 		await userEvent.click(canvas.getByRole("radio", { name: IN_HOUSE }));
 		await userEvent.click(canvas.getByRole("button", { name: "Back to workspace" }));
@@ -439,7 +423,7 @@ export const ReturnVisitRequiredLinkOpen: Story = {
 		await expect(canvas.getByRole("button", { name: "Connect Slack" })).toBeEnabled();
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
 		await expect(
-			canvas.getByText("Save and I'll follow your new answer from the next review on."),
+			canvas.getByText("Save to apply your new choice. Requests already sent cannot be recalled."),
 		).toBeVisible();
 		await expect(save).toBeEnabled();
 		await expect(save).not.toHaveAccessibleDescription(/finish setup/);
@@ -467,10 +451,7 @@ export const Saving: Story = {
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Saving…" }));
-		// The checked radio keeps `tabindex="0"` inside a disabled group, so the press is the proof.
-		for (const radio of canvas.getAllByRole("radio"))
-			await expect(radio).toHaveAttribute("aria-disabled", "true");
-		await userEvent.click(canvas.getByRole("radio", { name: NOT_KEPT }));
+		for (const radio of canvas.getAllByRole("radio")) await expect(radio).toBeDisabled();
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toBeChecked();
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Skip for now" }));
 	},
@@ -564,7 +545,11 @@ export const Narrow: Story = {
 				...welcome,
 				workspaceName: "International engineering collaboration",
 				links: [
-					{ ...slack, teamName: "Platform, developer experience and internal tooling group" },
+					{
+						...slack,
+						displayName: "Engineering and product collaboration",
+						teamName: "Platform, developer experience and internal tooling group",
+					},
 					outline,
 				],
 			},
@@ -601,5 +586,33 @@ export const Dark: Story = {
 				links: [{ ...slack, linked: true }, outline],
 			},
 		},
+	},
+};
+
+export const SaveNoAiBeforeConnecting: Story = {
+	play: async ({ canvas, userEvent, args }) => {
+		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
+		await expect(readyArgs(args).onSubmit).not.toHaveBeenCalled();
+		await userEvent.click(canvas.getByRole("button", { name: "Save AI choice" }));
+		await expect(readyArgs(args).onSubmit).toHaveBeenCalledWith("NO_AI");
+		await expect(canvas.getByRole("radio", { name: NO_AI })).toBeChecked();
+		await expect(canvas.getByRole("button", { name: "Continue" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Connect Slack" })).toBeEnabled();
+		await expect(canvas.getByRole("button", { name: "Skip for now" })).toHaveAccessibleDescription(
+			"Skipping does not save an answer selected above. Your saved choice (No AI) stays in effect.",
+		);
+	},
+};
+
+export const SkipWithoutSaving: Story = {
+	play: async ({ canvas, userEvent, args }) => {
+		await userEvent.click(canvas.getByRole("radio", { name: ANY }));
+		const skip = canvas.getByRole("button", { name: "Skip for now" });
+		await expect(skip).toHaveAccessibleDescription(
+			"Skipping does not save an answer selected above. AI stays off until you save a choice.",
+		);
+		await userEvent.click(skip);
+		await expect(readyArgs(args).onSubmit).not.toHaveBeenCalled();
+		await expect(readyArgs(args).onLeave).toHaveBeenCalledOnce();
 	},
 };

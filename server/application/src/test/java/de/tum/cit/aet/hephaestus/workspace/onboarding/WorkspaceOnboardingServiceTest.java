@@ -207,8 +207,10 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         when(links.options(1L, 10L, List.of(9L)))
                 .thenReturn(List.of(new WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO(
                         9L, "Slack", "SLACK", null, null, true, false, false)));
-        service.complete(context, 10L, 3);
+        var result = service.complete(context, 10L, 3);
         assertThat(row.getCompletedAt()).isEqualTo(NOW);
+        assertThat(result.completed()).isTrue();
+        assertThat(result.needsWelcome()).isFalse();
         verify(members).save(row);
     }
 

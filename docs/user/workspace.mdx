@@ -75,9 +75,9 @@ anything stricter than your answer also counts, and nothing ever switches you to
 | Answer                                         | What it means                                                                                                            |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | **Only in-house**                              | Runs only on systems your organisation operates.                                                                         |
-| **In-house, or a provider that keeps nothing** | A provider under terms your organisation accepted may process it, never trains on it, and keeps nothing after the reply. |
-| **Any AI this workspace set up**               | Also a provider that keeps it for a limited time for safety checks, which its staff may read if flagged.                 |
-| **No AI**                                      | No AI runs for you in this workspace.                                                                                    |
+| **Allow providers that keep nothing** | A provider under terms your organisation accepted may process it, never trains on it, and keeps nothing after the reply. |
+| **Allow storage for safety checks**               | Also a provider that keeps it for a limited time for safety checks, which its staff may read if flagged.                 |
+| **No AI**                                      | No new practice reviews about you or new requests to Heph in this workspace.                                                                                    |
 
 On your first visit, nothing is preselected. Choose an answer and select **Continue**; on a return
 visit the button reads **Save**. You can choose any answer, including one your workspace has not set
@@ -86,8 +86,8 @@ another answer. Wait for a workspace owner to add a model, or change your answer
 
 Open **Your AI choice** in the sidebar to change your answer at any time. Existing feedback and
 earlier conversations with Heph remain readable. With **No AI**, there are no new practice reviews
-about you and no new conversations with Heph; a review already running finishes where it started, and
-you cannot send, edit, or retry a conversation message. Your choice does not remove your work from
+about you, new requests to Heph, or new feedback delivery. Requests already sent cannot be recalled.
+You cannot send, edit, or retry a conversation message. Your choice does not remove your work from
 shared repositories or change other members' choices. Research participation is a separate setting.
 
 ### Connect the accounts your workspace uses
@@ -97,8 +97,10 @@ to a different team or instance does not satisfy it. Connecting an account ident
 service; it does not enable AI.
 
 **Continue** finishes setup once you have chosen an answer and connected the required accounts. Your
-answer is saved when you select **Continue** or **Connect** for an account; **Skip for now** leaves
-without saving it, and the page waits for you under **Your AI choice**. On a return visit, **Save**
+answer is saved when you select **Continue**, **Save AI choice**, or **Connect** for an account.
+When required accounts are still open, **Save AI choice** saves your answer without finishing setup.
+This includes **No AI**: you never need to connect an account to opt out. **Skip for now** leaves
+without saving a new answer; an already saved answer stays in effect, and the page waits for you under **Your AI choice**. On a return visit, **Save**
 records a new answer whether or not the required accounts are connected, and **Back to workspace**
 leaves without saving. If a required account is unavailable right
 now, it does not hold you up; ask a workspace owner to repair it or remove the requirement. Optional

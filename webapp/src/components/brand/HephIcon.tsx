@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 import styles from "./HephIcon.module.css";
 
 interface HephIconProps {

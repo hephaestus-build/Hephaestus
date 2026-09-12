@@ -38,6 +38,12 @@ public class ProductFeedback {
     @Column(name = "page_path", length = 500)
     private @Nullable String pagePath;
 
+    @Column(name = "user_agent", length = 500)
+    private @Nullable String userAgent;
+
+    @Column(name = "app_version", length = 64)
+    private @Nullable String appVersion;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private @Nullable Instant createdAt;
@@ -45,17 +51,49 @@ public class ProductFeedback {
     @Column(name = "submission_minute", nullable = false, updatable = false)
     private Instant submissionMinute = Instant.now().truncatedTo(ChronoUnit.MINUTES);
 
+    @Column(name = "resolved_at")
+    private @Nullable Instant resolvedAt;
+
+    @Column(name = "resolved_by_account_id")
+    private @Nullable Long resolvedByAccountId;
+
     public ProductFeedback(
-            Long accountId, @Nullable Long workspaceId, Kind kind, String message, @Nullable String pagePath) {
+            Long accountId,
+            @Nullable Long workspaceId,
+            Kind kind,
+            String message,
+            @Nullable String pagePath,
+            @Nullable String userAgent,
+            String appVersion) {
         this.accountId = accountId;
         this.workspaceId = workspaceId;
         this.kind = kind;
         this.message = message;
         this.pagePath = pagePath;
+        this.userAgent = userAgent;
+        this.appVersion = appVersion;
+    }
+
+    public void resolve(Long accountId, Instant now) {
+        this.resolvedAt = now;
+        this.resolvedByAccountId = accountId;
+    }
+
+    public void reopen() {
+        this.resolvedAt = null;
+        this.resolvedByAccountId = null;
+    }
+
+    public boolean isResolved() {
+        return resolvedAt != null;
     }
 
     public enum Kind {
-        FEEDBACK,
-        BUG
+        /** A feature or change the sender would like. */
+        IDEA,
+        /** Something that broke or behaved unexpectedly. */
+        BUG,
+        /** Anything else: what works, what does not. */
+        FEEDBACK
     }
 }

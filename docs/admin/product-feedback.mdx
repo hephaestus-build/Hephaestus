@@ -1,0 +1,88 @@
+---
+title: Product feedback and surveys
+---
+
+# Product feedback and surveys
+
+Instance administrators read submissions and publish surveys under **Administration → Product
+feedback**, which has two pages: **Inbox** for ideas, bug reports and feedback, and **Surveys** for
+publishing surveys and reading their responses. Workspace administrator access alone does not grant
+access to either. Members see the readers described as *the Hephaestus team*.
+
+## Publish a survey
+
+On **Surveys**, choose **Create survey**. Write a title and an introduction — members read the
+introduction before the first question, so say why you are asking and what the answers will change.
+Pick an audience: one workspace or all workspaces.
+
+Where the instance names a [research organisation](legal-pages.mdx#the-optional-research-question),
+the composer also asks for a **purpose**:
+
+- **Product** surveys are read by the instance administrators — *the Hephaestus team* to members —
+  and are never research.
+- **Research** surveys are part of the study run by the named organisation. They are offered only to
+  members whose research consent is a current grant for that organisation, are labelled as research
+  on screen with a link to the setting that withdraws consent, and their answers are that study's
+  data. A member who leaves the study stops being asked; switching the programme off or renaming it
+  hides every research survey published for the old name. The purpose cannot be changed after
+  publishing.
+
+Without a research organisation, every survey is a product survey and the choice is not shown.
+
+Questions are optional unless you mark them required; keep most optional, because someone who
+cannot answer a required question leaves. Members see *(optional)* after every optional question,
+so the required ones are the unmarked ones. Each question is free text, single choice, multiple
+choice, a 1–5 rating with a label for each end of the scale, or a 0–10 recommendation question
+scored as a Net Promoter Score, which also turns off the keyboard answer shortcuts for the whole
+survey. Include “Not applicable” as a choice when appropriate, or allow **Something else** so a
+member can write an answer you did not list. Ask about what members did, not what they would do.
+**Preview** opens the very dialog members get, on your draft, and sends nothing; it refuses a draft
+that could not be published, for the same reasons.
+
+The schedule is entered in your device's timezone. A survey with no end stays open until you end
+it. Questions cannot be edited after publishing; publish a new survey if the wording needs changing.
+
+How members are invited and how they answer or decline is described in
+[Feedback and surveys](/user/product-feedback). From a survey's actions:
+
+- **Pause** makes a survey unavailable; **Resume** restores availability within the original
+  schedule. Resuming neither extends the end time nor resets responses or declines. A member who
+  is mid-answer when you pause is refused on send and keeps their draft.
+- **End now** closes an open survey at the current time. Members are no longer invited; responses
+  stay. A scheduled survey has not started, so it cannot be ended; delete it instead.
+- **Delete** removes the survey and every response and decline it collected. This cannot be undone.
+
+## Read survey results
+
+Open a survey from the table to see who was invited, who responded and who declined, a summary per
+question, and every response with the submitting account and workspace. **Export CSV** downloads
+the responses, up to 10,000 rows.
+
+Voluntary responses are not a representative satisfaction measurement. Declines are not negative
+ratings, and skipped questions are not zeroes. Do not reuse product responses for research; a
+research survey's results page reminds you whose data they are.
+
+## Act on feedback
+
+**Inbox** lists ideas, bug reports and feedback. Each shows who sent it, from which workspace, the
+page and browser when the sender chose to attach them, and the Hephaestus release that received it.
+**Mark resolved** moves an item out of the open list; **Reopen** brings it back. Nobody is notified
+either way, and there are no submission notifications, so check the inbox regularly and follow your
+team's process for acting on reports. An idea or a bug that concerns every instance is worth passing
+on to the [Hephaestus project](https://github.com/hephaestus-build/Hephaestus/issues); nothing does
+that for you.
+
+## Handle personal data
+
+Submissions are linked to accounts and stored on your instance. Users can choose to attach the
+displayed page path and their browser's user agent; query parameters, page contents and logs are
+never attached, and the Hephaestus release that received the report is recorded either way.
+Drafts never reach the server. Feedback is limited to one submission per account per minute. Each
+account can respond to a survey once; a survey records when its invitation was first shown to an
+account, so the results page can report a completion rate.
+
+Research survey answers are collected under the research consent and stay with the survey after a
+member withdraws; removing them means erasing the account or deleting the survey. Account erasure and
+workspace purge remove the corresponding submissions. There is no automatic age-based deletion:
+include product feedback in your retention and rights-request procedures. The
+[personal-data map](dsms/personal-data-map.md) describes erasure coverage.

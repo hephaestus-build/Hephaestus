@@ -1,6 +1,6 @@
 import { Loader2Icon } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 /**
  * An indeterminate spinner, for a control the reader just activated. A region gets a skeleton.

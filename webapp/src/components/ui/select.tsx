@@ -4,8 +4,8 @@ import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import type * as React from "react";
 
+import { cn } from "cn";
 import type { AccessibleNameProps } from "@/components/ui/accessible-name";
-import { cn } from "@/lib/utils";
 
 /**
  * `items` is required here, where Base UI leaves it optional.

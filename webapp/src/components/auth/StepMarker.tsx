@@ -1,6 +1,6 @@
 import { CheckIcon, type LucideIcon } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 /**
  * The step's own icon until it is answered, then a check. Both are decoration: the heading names the

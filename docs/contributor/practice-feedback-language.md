@@ -174,8 +174,8 @@ badge with a label and an icon everywhere a model appears:
 | `UNDECLARED` | **Not declared** | either fact missing | Never shown to developers; an admin to-do. |
 
 A developer's **AI choice** is a ceiling: the loosest tier they accept in one workspace, or **No
-AI**. The three AI answers are **Only in-house**, **In-house, or a provider that keeps nothing**
-and **Any AI this workspace set up**; anything stricter than the answer also counts, nothing ever
+AI**. The three AI answers are **Only in-house**, **Allow providers that keep nothing**
+and **Allow storage for safety checks**; anything stricter than the answer also counts, nothing ever
 switches a developer to a looser tier, and *Not declared* sits outside every ceiling. A member may
 choose any answer regardless of what the workspace has bound today: consent is to a boundary, not
 to the current inventory. The member-facing name for the choice is **your AI choice** on every
@@ -195,7 +195,8 @@ The sign-in and first-visit pages follow ten rules:
    sign-in setup page.
 2. Outside the bubble: plain second person, no "please", contractions allowed; alert titles start
    "Couldn't …".
-3. Buttons: **Continue** moves on, **Save** on a return visit, **Skip for now** defers, **Sign out**
+3. Buttons: **Continue** moves on, **Save AI choice** saves before required account links are complete,
+   **Save** on a return visit, **Skip for now** defers, **Sign out**
    only on the sign-in setup page, **Back to workspace** on a return visit; never Next, Finish,
    Submit or Done.
 4. Section titles are the question or the noun.

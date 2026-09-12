@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 import type { PracticeGroupReviewObservation } from "@/api/types.gen";
@@ -20,7 +21,6 @@ import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import { toEvidenceLocations } from "./evidence";
 import { EvidenceFileBlock } from "./EvidenceFileBlock";
 import { FeedbackComment } from "./FeedbackComment";

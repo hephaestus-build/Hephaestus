@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import type { AvailableLlmModel } from "@/api/types.gen";
 import {
 	DATA_HANDLING_DEFS,
@@ -14,7 +15,6 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { priceLabel } from "@/lib/llm-pricing";
-import { cn } from "@/lib/utils";
 
 export interface ModelSelection {
 	scope: "SHARED" | "WORKSPACE";

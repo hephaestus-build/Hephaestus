@@ -47,7 +47,7 @@ class WorkspaceOnboardingService {
         boolean completed = member != null
                 && member.getCompletedAt() != null
                 && linkOptions.stream()
-                        .filter(WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO::required)
+                        .filter(link -> link.required() && link.available())
                         .allMatch(WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO::linked);
         return new WorkspaceOnboardingDTO(
                 context.displayName(),
