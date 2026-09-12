@@ -40,6 +40,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageSourceType;
 import de.tum.cit.aet.hephaestus.agent.usage.PricingState;
+import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.mentor.ChatThread;
@@ -48,7 +49,6 @@ import de.tum.cit.aet.hephaestus.mentor.ThreadSurface;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -92,12 +92,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/**
- * Orchestration-level coverage for {@link MentorChatService}: wires the real translator + lock +
- * a recording SseEmitter against a fake {@link AttachedSandbox} so we drive the runner stream
- * synchronously and assert the full chunk sequence the webapp receives. Mocks the persistence
- * boundary to avoid pulling in JPA + the DB.
- */
+/** Uses a real translator and lock with a recording emitter and synchronous sandbox stream. */
 @MockitoSettings(strictness = Strictness.LENIENT)
 class MentorChatServiceTest extends BaseUnitTest {
 
@@ -105,12 +100,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     private static final long USER_ID = 99L;
     private static final UUID THREAD_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
-    /**
-     * Sends before the runner event stream starts: {@code Start}, {@code DataMentorStatus}, then the
-     * translator's {@code Start} + {@code StartStep} from Pi's first {@code message_start}. A disconnect
-     * scheduled at this index lands on the first mid-stream text chunk. Named so the intent survives a
-     * preamble refactor — a raw literal would silently move which frame throws.
-     */
+    /** The disconnect index follows the orchestrator preamble and translator start frames. */
     private static final int PREAMBLE_SEND_COUNT = 4;
 
     private final ObjectMapper mapper = new ObjectMapper();
@@ -176,31 +166,8 @@ class MentorChatServiceTest extends BaseUnitTest {
                         WORKSPACE_ID));
         emitter = new RecordingEmitter();
 
-        // Package-private constructors on the executor wrappers (see MentorChatExecutorConfig)
-        // let us inject deterministic delegates without reflection on final fields.
-        MentorChatExecutorConfig.MentorTurnExecutor turnExecutorBean =
-                new MentorChatExecutorConfig.MentorTurnExecutor(turnExec);
-        MentorChatExecutorConfig.MentorRunnerTimeoutScheduler schedulerBean =
-                new MentorChatExecutorConfig.MentorRunnerTimeoutScheduler(scheduler);
-
         meterRegistry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
-        service = new MentorChatService(
-                userRepository,
-                chatThreadRepository,
-                agentBindingRepository,
-                workspaceContextBuilder,
-                mentorPiAdapter,
-                sandboxServiceProvider(interactiveSandboxService),
-                translator,
-                turnLock,
-                persistence,
-                mapper,
-                turnExecutorBean,
-                schedulerBean,
-                new MentorChatMetrics(meterRegistry),
-                llmBudgetService,
-                llmAdmissionService,
-                proxyCredentialRegistry);
+        service = serviceWithExecutor(turnExec);
 
         when(llmBudgetService.decide(WORKSPACE_ID)).thenReturn(LlmBudgetDecision.ALLOWED);
 
@@ -216,9 +183,8 @@ class MentorChatServiceTest extends BaseUnitTest {
                         new LlmPriceSnapshot(
                                 FundingSource.INSTANCE, PricingState.NO_CHARGE, 3L, null, null, null, null, null)));
 
-        // Default happy-path collaborator wiring; individual tests override as needed.
         User user = new User();
-        replaceFinalField(user, "id", USER_ID, true);
+        user.setId(USER_ID);
         user.setLogin("octo");
         when(userRepository.getCurrentUserElseThrow()).thenReturn(user);
 
@@ -257,6 +223,53 @@ class MentorChatServiceTest extends BaseUnitTest {
                 .thenAnswer(inv -> inv.getArgument(0, UIMessageChunk.Finish.class));
     }
 
+    private MentorChatService serviceWithExecutor(ExecutorService executor) {
+        var turnExecutorBean = new MentorChatExecutorConfig.MentorTurnExecutor(executor);
+        var schedulerBean = new MentorChatExecutorConfig.MentorRunnerTimeoutScheduler(scheduler);
+        return new MentorChatService(
+                userRepository,
+                chatThreadRepository,
+                agentBindingRepository,
+                workspaceContextBuilder,
+                mentorPiAdapter,
+                sandboxServiceProvider(interactiveSandboxService),
+                translator,
+                turnLock,
+                persistence,
+                mapper,
+                turnExecutorBean,
+                schedulerBean,
+                new MentorChatMetrics(meterRegistry),
+                llmBudgetService,
+                llmAdmissionService,
+                proxyCredentialRegistry);
+    }
+
+    @Test
+    void shouldPreserveVerifiedActorAcrossAsyncWebTurnAndClearWorkerIdentity() throws Exception {
+        turnExec = Executors.newSingleThreadExecutor();
+        service = serviceWithExecutor(turnExec);
+        User expected = userRepository.getCurrentUserElseThrow();
+        var observedActorId = new AtomicReference<Optional<Long>>(Optional.empty());
+        when(userRepository.getCurrentUserElseThrow()).thenAnswer(invocation -> {
+            observedActorId.set(CurrentScmIdentityHolder.getUserId());
+            return expected;
+        });
+        scheduleHappyPathResponses(sandbox).run();
+
+        CurrentScmIdentityHolder.set(USER_ID, expected.getLogin());
+        try {
+            runTurnSync();
+        } finally {
+            CurrentScmIdentityHolder.clear();
+        }
+
+        assertThat(turnExec.submit(CurrentScmIdentityHolder::getUserId).get(10, TimeUnit.SECONDS))
+                .isEmpty();
+        assertThat(observedActorId.get()).contains(USER_ID);
+        assertThat(emitter.recordedTypes()).doesNotContain("error");
+    }
+
     @AfterEach
     void tearDown() {
         scheduler.shutdownNow();
@@ -264,17 +277,12 @@ class MentorChatServiceTest extends BaseUnitTest {
         sandbox.close(Duration.ZERO);
     }
 
-    // 1. Happy path: chunks in order + assistant persisted via finalise
-
     @Test
     void runTurn_happyPath_emitsStartThenChunksThenFinish() throws Exception {
         scheduleHappyPathResponses(sandbox).run();
 
         runTurnSync();
 
-        // Sequence: Start (orchestrator), DataMentorStatus, then translator chunks for
-        // message_start (Start+StartStep), text deltas (TextStart, TextDelta×3), turn_end
-        // (TextEnd + FinishStep), agent_end (Finish).
         List<String> types = emitter.recordedTypes();
         assertThat(types)
                 .containsSubsequence(
@@ -406,8 +414,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     void runTurn_prefersBoundEnabledMentorConfig_overFallback() throws Exception {
         Workspace boundWs = new Workspace();
         WorkspaceAgentBinding boundBinding = new WorkspaceAgentBinding();
-        // Deliberately not the id setUp's default binding carries, so asserting on identity actually
-        // proves the workspace-scoped finder's binding was used, not just "some binding was".
+        // A distinct binding id detects accidentally using the default fixture binding.
         boundBinding.setId(4242L);
         boundBinding.setPurpose(AgentPurpose.MENTOR);
         boundBinding.setEnabled(true);
@@ -644,8 +651,6 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertOutcomeRecorded(MentorChatMetrics.Outcome.SUCCESS);
     }
 
-    // 2. Client disconnect: runner draining, abort sent, finalise still runs
-
     @Test
     void runTurn_clientDisconnect_completesNormallyAndAbortsRunner() throws Exception {
         scheduleHappyPathResponses(sandbox).run();
@@ -668,8 +673,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     @Test
     void runTurn_clientDisconnectBeforeEventStream_stillAbortsAndFinalises() throws Exception {
         scheduleHappyPathResponses(sandbox).run();
-        // Disconnect on the translator's first chunk, before any text delta — proves abort + finalise
-        // still run this early, not only on a mid-text chunk.
+
         emitter.disconnectAfterCalls = 2;
 
         runTurnSync();
@@ -750,8 +754,6 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertOutcomeRecorded(poisoned ? MentorChatMetrics.Outcome.POISONED : MentorChatMetrics.Outcome.ERROR);
     }
 
-    // 3. Runner poisoned (-32002): sandbox evicted, lock released, row interrupted
-
     @Test
     void runTurn_runnerPoisoned_evictsSandbox() throws Exception {
         scheduleRunnerPoisoned(sandbox).run();
@@ -759,12 +761,12 @@ class MentorChatServiceTest extends BaseUnitTest {
         runTurnSync();
 
         assertThat(emitter.recordedTypes()).contains("error");
-        // Poisoned sandboxes are explicitly closed so the next turn rebuilds fresh.
+
         assertThat(sandbox.closed.get()).isTrue();
         verify(persistence).interrupt(any(), any(), any(Throwable.class));
         verify(persistence, never()).finalise(any(), any(), any(), any());
         assertThat(turnLock.activeKeys()).isZero();
-        // Poisoned is a distinct outcome from a generic error — the labels stay separate.
+
         assertOutcomeRecorded(MentorChatMetrics.Outcome.POISONED);
     }
 
@@ -775,7 +777,7 @@ class MentorChatServiceTest extends BaseUnitTest {
                 ProxyRouting.BilledAttempt attempt =
                         proxyCredentialRegistry.validate(token).orElseThrow().attempt();
                 if (attempt != null) {
-                    // 100k input tokens at the fixture's $10/M — a whole dollar of this turn's own spend.
+
                     proxyCredentialRegistry.accumulate(attempt.sourceId(), new ProxyTokenUsage(100_000, 0, 0, 0, 0));
                 }
                 seen.set(Objects.requireNonNull(
@@ -812,13 +814,10 @@ class MentorChatServiceTest extends BaseUnitTest {
 
         runTurnSync();
 
-        assertThat(duringPrompt.get()).as("the turn was billable while it ran").isNotNull();
+        assertThat(duringPrompt.get()).isNotNull();
         assertThat(duringPrompt.get().sourceType()).isEqualTo(LlmUsageSourceType.MENTOR_TURN);
-        assertThat(duringPrompt.get().spentUsd())
-                .as("and the gate could see what it had already spent")
-                .isEqualByComparingTo("1.00");
+        assertThat(duringPrompt.get().spentUsd()).isEqualByComparingTo("1.00");
         assertThat(proxyCredentialRegistry.validate(sessionToken).orElseThrow().attempt())
-                .as("it stops being billable when it ends")
                 .isNull();
     }
 
@@ -832,12 +831,10 @@ class MentorChatServiceTest extends BaseUnitTest {
         runTurnSync();
 
         verify(persistence).interrupt(any(), any(), any(Throwable.class));
-        assertThat(duringPrompt.get()).as("it was billable while it ran").isNotNull();
+        assertThat(duringPrompt.get()).isNotNull();
         assertThat(proxyCredentialRegistry.validate(sessionToken).orElseThrow().attempt())
                 .isNull();
     }
-
-    // 4. In-flight conflict from persistence → 409 chunk; no runner activity
 
     @Test
     @DisplayName("in-flight conflict: persistence throws; conflict chunk sent; sandbox never attached")
@@ -877,8 +874,6 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertThat(otherOutcomes).as("no other outcome counter bumped").isZero();
     }
 
-    // 5. JVM-lock conflict (LOCAL backstop) — distinct outcome from DB conflict
-
     @Test
     @DisplayName("in-flight conflict (LOCAL): JVM lock already held; persistence never invoked")
     void runTurn_inFlightConflict_LOCAL_distinctOutcome() throws Exception {
@@ -910,9 +905,6 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertOutcomeRecorded(MentorChatMetrics.Outcome.IN_FLIGHT_CONFLICT_LOCAL);
     }
 
-    // Helpers
-
-    /** Run a turn on the same thread as the test (deterministic) and block until the emitter completes. */
     private void runTurnSync() {
         runTurnSync("hello mentor", ThreadSurface.WEB);
     }
@@ -921,7 +913,6 @@ class MentorChatServiceTest extends BaseUnitTest {
         service.start(new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, message, null, surface), emitter);
     }
 
-    /** Minimal {@link ObjectProvider} that always yields the supplied sandbox-service mock. */
     private static ObjectProvider<InteractiveSandboxService> sandboxServiceProvider(InteractiveSandboxService svc) {
         return new ObjectProvider<>() {
             @Override
@@ -993,10 +984,6 @@ class MentorChatServiceTest extends BaseUnitTest {
                 Map.of());
     }
 
-    /**
-     * Push protocol responses + a normal Pi event stream onto the sandbox listener as the
-     * orchestrator sends each control frame. Used by the happy-path test.
-     */
     private Runnable scheduleHappyPathResponses(FakeSandbox sb) {
         return () -> sb.onSend = frame -> {
             String method = frame.path("method").asString("");
@@ -1006,7 +993,7 @@ class MentorChatServiceTest extends BaseUnitTest {
                     sb.push(jsonRpcResult(id, mapper.createObjectNode().put("protocolVersion", 1)));
                 case "open_thread" -> sb.push(jsonRpcResult(id, mapper.createObjectNode()));
                 case "prompt" -> {
-                    // Stream events in lockstep BEFORE acking the prompt — this is what real Pi does.
+                    // Pi emits events before acknowledging the prompt.
                     sb.push(event(
                             "message_start",
                             node -> node.putObject("message")
@@ -1041,7 +1028,6 @@ class MentorChatServiceTest extends BaseUnitTest {
                     sb.push(jsonRpcResult(id, mapper.createObjectNode().put("protocolVersion", 1)));
                 case "open_thread" -> sb.push(jsonRpcResult(id, mapper.createObjectNode()));
                 case "prompt" -> {
-                    // Runner returns the poisoning PI_ERROR — orchestrator must close the sandbox.
                     ObjectNode error = mapper.createObjectNode();
                     error.put("jsonrpc", "2.0");
                     error.put("id", id);
@@ -1098,35 +1084,11 @@ class MentorChatServiceTest extends BaseUnitTest {
         return frame;
     }
 
-    /**
-     * Reflection set used ONLY for the JPA-entity {@code User.id} (no setter and we don't want a
-     * Spring test slice here). The executor-bean wrappers take explicit constructor parameters, so
-     * they need no reflection.
-     */
-    private static void replaceFinalField(Object target, String name, Object value, boolean searchSuper)
-            throws Exception {
-        Class<?> cls = target.getClass();
-        while (cls != null) {
-            try {
-                Field f = cls.getDeclaredField(name);
-                f.setAccessible(true);
-                f.set(target, value);
-                return;
-            } catch (NoSuchFieldException e) {
-                if (!searchSuper) throw e;
-                cls = cls.getSuperclass();
-            }
-        }
-        throw new NoSuchFieldException(name + " on " + target.getClass());
-    }
-
-    // Recording SseEmitter — captures every chunk for assertion
-
     static final class RecordingEmitter extends SseEmitter {
 
         final List<String> rawData = new CopyOnWriteArrayList<>();
         volatile boolean clientGone = false;
-        /** Throw {@link IOException} after this many successful sends (0 = throw immediately). */
+        /** Throw IOException after this many successful sends (zero means immediately). */
         volatile int disconnectAfterCalls = -1;
 
         private int sendCount = 0;
@@ -1156,9 +1118,7 @@ class MentorChatServiceTest extends BaseUnitTest {
                 throw new IOException("client gone (simulated after " + disconnectAfterCalls + " sends)");
             }
             sendCount++;
-            // We don't have a Spring response; pull the data out of the builder by serialising
-            // the events. SseEmitter.SseEventBuilder.build() returns a Set<DataWithMediaType>;
-            // each element's getData() is the raw payload (string or chunk). We collect strings.
+            // Without a servlet response, read the SSE builder's serialized payloads directly.
             for (ResponseBodyEmitter.DataWithMediaType d : builder.build()) {
                 Object data = d.getData();
                 if (data instanceof String s) {
@@ -1187,8 +1147,6 @@ class MentorChatServiceTest extends BaseUnitTest {
         }
     }
 
-    // Fake AttachedSandbox — buffers sent frames, dispatches pushed frames to all listeners
-
     static final class FakeSandbox implements AttachedSandbox {
 
         private final UUID sessionId = UUID.randomUUID();
@@ -1196,7 +1154,6 @@ class MentorChatServiceTest extends BaseUnitTest {
         private final CopyOnWriteArrayList<Consumer<JsonNode>> listeners = new CopyOnWriteArrayList<>();
         final AtomicBoolean closed = new AtomicBoolean(false);
 
-        /** Called on every send — installed by the test driver to script responses. */
         volatile Consumer<JsonNode> onSend = f -> {};
 
         Runnable onSubscribe = () -> {};
@@ -1242,7 +1199,6 @@ class MentorChatServiceTest extends BaseUnitTest {
             }
         }
 
-        /** Collected `method` names of every frame the orchestrator sent — for verifying abort etc. */
         List<String> methodsSent() {
             List<String> out = new ArrayList<>();
             for (JsonNode frame : sent) {

@@ -37,40 +37,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Canonical GitHub install / uninstall / rename / scope-change write path.
+ * Owns workspace lifecycle mutations for {@code GitHubWorkspaceProvisioningAdapter} webhook events
+ * and {@code GitHubInstallationReconciler} reconciliation.
  *
- * <p>Canonical write path: the listener owns workspace creation, status updates,
- * NATS scope-consumer lifecycle, and account-rename retargeting. The two layers
- * above it are thin:
- * <ul>
- *   <li>{@code WorkspaceProvisioningAdapter} — implements the legacy
- *       {@code ProvisioningListener} SPI used by the GitHub webhook handler, and
- *       forwards every call here.</li>
- *   <li>{@code WorkspaceProvisioningService} — orchestrator that calls
- *       {@link #createOrUpdateFromInstallation} directly during {@code /app/installations}
- *       reconciliation.</li>
- * </ul>
- *
- * <p>SPI hook coverage (from {@link IntegrationLifecycleListener}):
- * <ul>
- *   <li>{@link #onInstanceInstalled} — parses installation id from
- *       {@link IntegrationRef#instanceKey()} and delegates to
- *       {@link #createOrUpdateFromInstallation(long, Long, String, AccountKind, String, RepositorySelection)}.</li>
- *   <li>{@link #onInstanceUninstalled} — runs the full workspace purge via
- *       {@link #purgeWorkspaceForInstallation}, which is the same
- *       {@code WorkspaceLifecycleService#purgeWorkspace} chain an admin deletion runs.</li>
- *   <li>{@link #onScopeChanged} — logs delta sizes for audit (repository membership
- *       reconciliation runs in {@code WorkspaceProvisioningAdapter} which has the
- *       monitor-service dependency; pure SPI dispatch arrives here without that
- *       context).</li>
- *   <li>{@link #onTenantRenamed} — full {@code handleAccountRename} body including
- *       monitor retargeting, repo renaming, and NATS subject rotation.</li>
- * </ul>
- *
- * <p>{@code install.suspended} / {@code install.unsuspended} are NOT SPI events —
- * they're state-machine transitions and stay as direct calls on the public helpers
- * ({@link #updateWorkspaceStatus}, {@link #stopNatsForInstallation},
- * {@link #startNatsForInstallation}).
+ * <p>Suspension and resumption use the status helpers, not installation lifecycle SPI events.
  */
 @Component
 public class GithubLifecycleListener implements IntegrationLifecycleListener {
@@ -140,7 +110,7 @@ public class GithubLifecycleListener implements IntegrationLifecycleListener {
      * installation id from {@link IntegrationRef#instanceKey()}.
      *
      * <p>The {@code initialResources} list is ignored: repository monitor creation lives
-     * in {@code WorkspaceProvisioningAdapter}, which holds the monitor-service dependency
+     * in {@code GitHubWorkspaceProvisioningAdapter}, which holds the monitor-service dependency
      * that plain SPI dispatch doesn't carry.
      */
     @Override
@@ -178,7 +148,7 @@ public class GithubLifecycleListener implements IntegrationLifecycleListener {
 
     /**
      * SPI hook: log scope delta sizes. The actual repository-monitor reconciliation
-     * runs in {@code WorkspaceProvisioningAdapter.onRepositoriesAdded/Removed} which
+     * runs in {@code GitHubWorkspaceProvisioningAdapter.onRepositoriesAdded/Removed} which
      * holds the monitor-service dependency. Empty deltas short-circuit so duplicate
      * webhook deliveries don't flap audit logs.
      */
@@ -209,29 +179,6 @@ public class GithubLifecycleListener implements IntegrationLifecycleListener {
     }
 
     // Public helpers — called by adapter / provisioning service (non-SPI)
-
-    /**
-     * Creates or updates a workspace from a GitHub App installation.
-     * <p>
-     * This method handles several scenarios:
-     * <ul>
-     *   <li>If a workspace already exists for the installation ID, it updates the workspace</li>
-     *   <li>If a PAT workspace exists for the account without a token, it promotes it to GitHub App mode</li>
-     *   <li>If a PAT workspace exists with a stored token, it skips linking to preserve the PAT configuration</li>
-     *   <li>If no workspace exists, it creates a new one</li>
-     * </ul>
-     *
-     * @param installationId      the GitHub App installation ID
-     * @param accountLogin        the GitHub account login (organization or user)
-     * @param repositorySelection the repository selection mode (ALL or SELECTED)
-     * @return the created or updated workspace, or null if workspace creation was skipped
-     */
-    @Transactional
-    public @Nullable Workspace createOrUpdateFromInstallation(
-            long installationId, String accountLogin, @Nullable RepositorySelection repositorySelection) {
-        return createOrUpdateFromInstallationInternal(
-                installationId, null, accountLogin, AccountKind.ORGANIZATION, null, repositorySelection);
-    }
 
     /**
      * Creates or updates a workspace from a GitHub App installation with full account info.
@@ -309,6 +256,14 @@ public class GithubLifecycleListener implements IntegrationLifecycleListener {
                             installationId);
                     existingByLogin = null;
                 }
+            }
+
+            if (existingByLogin != null && !matchesInstallationAccount(existingByLogin, accountId, accountKind)) {
+                log.info(
+                        "Kept matching-login workspace separate: reason=unverifiedInstallationAccount, workspaceId={}, installationId={}",
+                        existingByLogin.getId(),
+                        installationId);
+                existingByLogin = null;
             }
 
             if (existingByLogin != null) {
@@ -427,6 +382,17 @@ public class GithubLifecycleListener implements IntegrationLifecycleListener {
                 saved, installationId, accountLogin, "install-bind-" + installationId);
 
         return saved;
+    }
+
+    private boolean matchesInstallationAccount(Workspace workspace, @Nullable Long accountId, AccountKind accountKind) {
+        // Personal workspace owners can change, so memberships cannot prove the provider account.
+        Organization organization = workspace.getOrganization();
+        return accountId != null
+                && accountKind == AccountKind.ORGANIZATION
+                && organization != null
+                && accountId.equals(organization.getNativeId())
+                && organization.getProvider().getType() == IdentityProviderType.GITHUB
+                && "https://github.com".equals(organization.getProvider().getServerUrl());
     }
 
     /**
@@ -713,7 +679,7 @@ public class GithubLifecycleListener implements IntegrationLifecycleListener {
     }
 
     /**
-     * Looks up an existing user by login, or creates one from installation webhook account info.
+     * Upserts the installation account by its immutable GitHub identity; login is only profile metadata.
      *
      * @param installationId the GitHub App installation ID
      * @param accountId      the GitHub account database ID
@@ -728,15 +694,6 @@ public class GithubLifecycleListener implements IntegrationLifecycleListener {
             String accountLogin,
             AccountKind accountKind,
             @Nullable String avatarUrl) {
-        var existingUser = userRepository.findByLogin(accountLogin);
-        if (existingUser.isPresent()) {
-            log.info(
-                    "Found existing user for workspace ownership: userLogin={}, userId={}",
-                    LoggingUtils.sanitizeForLog(accountLogin),
-                    existingUser.get().getId());
-            return existingUser.get().getId();
-        }
-
         // Three-step upsert (lock, free conflicts, insert) avoids uk_user_login_lower
         // violations under concurrent installs.
         if (accountId != null) {
@@ -771,9 +728,10 @@ public class GithubLifecycleListener implements IntegrationLifecycleListener {
                     installationId);
             // upsertUser is a native INSERT that doesn't return the generated id; re-fetch for the PK.
             return userRepository
-                    .findByLogin(accountLogin)
+                    .findByNativeIdAndProviderId(accountId, providerId)
                     .map(User::getId)
-                    .orElseThrow(() -> new IllegalStateException("User not found after upsert: login=" + accountLogin));
+                    .orElseThrow(() ->
+                            new IllegalStateException("Installation account was not found after its identity upsert"));
         }
 
         log.warn(

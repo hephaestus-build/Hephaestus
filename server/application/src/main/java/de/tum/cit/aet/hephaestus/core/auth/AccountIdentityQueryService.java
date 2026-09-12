@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
@@ -10,13 +11,6 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * In-module implementation of {@link AccountIdentityQuery}. Lives in {@code core.auth} so it can
- * touch the {@code IdentityLink} domain entity directly; exposes only the narrow vendor-neutral
- * SPI to {@code integration}.
- *
- * @see AccountIdentityQuery for the {@code sub → Account → IdentityLink} provisioning rationale.
- */
 @Service
 @WorkspaceAgnostic("Identity links are user-scoped (account → IdentityLink)")
 public class AccountIdentityQueryService implements AccountIdentityQuery {
@@ -51,12 +45,15 @@ public class AccountIdentityQueryService implements AccountIdentityQuery {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<Long> resolveAccountIdForActor(Long externalActorId) {
-        if (externalActorId == null) {
+    public Optional<Long> resolveActiveAccountId(Long providerId, String subject, @Nullable String teamId) {
+        if (subject.isBlank()) {
             return Optional.empty();
         }
-        return identityLinkRepository.findActiveAccountIdsByExternalActorId(externalActorId).stream()
-                .findFirst();
+        return identityLinkRepository
+                .findActiveByProviderSubject(providerId, subject, teamId)
+                .map(IdentityLink::getAccount)
+                .filter(account -> account.getStatus() == Account.Status.ACTIVE)
+                .map(Account::getId);
     }
 
     @Override

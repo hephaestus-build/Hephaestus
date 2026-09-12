@@ -94,7 +94,7 @@ class SlackUserPreferencesServiceTest extends BaseUnitTest {
         var slackLink = link(SLACK_PROVIDER_ID, "U1", "T1", "Felix Slack");
         var gitLabLink = link(7L, "42", null, "ga84xah");
         when(accountIdentityQuery.activeLinksForAccount(ACCOUNT_ID)).thenReturn(List.of(slackLink, gitLabLink));
-        when(membershipQuery.membershipsForLogins(Set.of("ga84xah")))
+        when(membershipQuery.membershipsForAccount(ACCOUNT_ID))
                 .thenReturn(List.of(new AccountWorkspaceMembershipQuery.WorkspaceMembershipView(
                         1L, "acme", "Hephaestus", "MEMBER", 314L)));
         Connection visible = slackConnection(1L, "acme", "Hephaestus", "T1", "acme-slack");
@@ -151,8 +151,7 @@ class SlackUserPreferencesServiceTest extends BaseUnitTest {
         service.updateChannelMessagesAllowed(1L, ACCOUNT_ID, true);
 
         verify(participantConsentService).recordChannelMessageOptIn(1L, "U1");
-        // Deliberately unconstrained: pinning the arguments would let an erasure of SOMEONE ELSE'S data
-        // pass, which is the exact accident this forbids.
+        // Opt-in must not erase anyone, not merely the current person.
         verify(erasureService, never()).erasePerson(anyLong(), anyLong(), anyString());
     }
 

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener.AccountKind;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
@@ -12,6 +14,7 @@ import de.tum.cit.aet.hephaestus.workspace.dto.RenameWorkspaceSlugRequestDTO;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -32,6 +35,9 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Autowired
     private ConnectionService connectionService;
+
+    @Autowired
+    private OrganizationService organizationService;
 
     @Test
     @WithAdminUser
@@ -171,15 +177,19 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
     @WithAdminUser
     void installationCreationCollidingWithHistoryFailsFast() {
         User owner = persistUser("install-owner");
-        // Ensure a user exists with the installation account login so owner sync succeeds
-        persistUser("install-alpha");
+        User installationAccount = persistUser("install-alpha");
         Workspace workspace = createWorkspace("install-alpha", "Alpha", "alpha", AccountType.ORG, owner);
         ensureOwnerMembership(workspace);
 
         workspaceService.renameSlug(workspace.getId(), "install-alpha-renamed");
 
-        Workspace created =
-                githubLifecycleListener.createOrUpdateFromInstallation(999L, "install-alpha", RepositorySelection.ALL);
+        Workspace created = githubLifecycleListener.createOrUpdateFromInstallation(
+                999L,
+                installationAccount.getNativeId(),
+                "install-alpha",
+                AccountKind.USER,
+                null,
+                RepositorySelection.ALL);
 
         assertThat(created).as("workspace should be created with fallback slug").isNotNull();
         assertThat(created.getWorkspaceSlug()).isNotEqualTo("install-alpha");
@@ -192,16 +202,18 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Test
     @WithAdminUser
-    void installationCollisionDoesNotHijackExistingWorkspace() {
+    void installationWithTheSameOrganizationIdentityPreservesTheWorkspaceAndSlug() {
         User existingOwner = persistUser("existing-owner");
         Workspace existing = createWorkspace("collision", "Collision", "collision", AccountType.ORG, existingOwner);
         ensureOwnerMembership(existing);
+        existing.setOrganization(organizationService.upsertIdentity(
+                1112L,
+                "collision",
+                Objects.requireNonNull(ensureGitHubProvider().getId())));
+        workspaceRepository.saveAndFlush(existing);
 
-        persistUser("install-owner-collision");
-        persistUser("collision");
-
-        Workspace linked =
-                githubLifecycleListener.createOrUpdateFromInstallation(1111L, "collision", RepositorySelection.ALL);
+        Workspace linked = githubLifecycleListener.createOrUpdateFromInstallation(
+                1111L, 1112L, "collision", AccountKind.ORGANIZATION, null, RepositorySelection.ALL);
 
         assertThat(linked).isNotNull();
         assertThat(linked.getId()).isEqualTo(existing.getId());
