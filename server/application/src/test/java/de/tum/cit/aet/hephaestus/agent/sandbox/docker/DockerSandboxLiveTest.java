@@ -144,8 +144,7 @@ class DockerSandboxLiveTest {
                     new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofMinutes(1)),
                     testSecurityProfile(),
                     Map.of(),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             SandboxResult result = sandboxAdapter.execute(spec);
 
@@ -216,8 +215,7 @@ class DockerSandboxLiveTest {
                     new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofMinutes(1)),
                     testSecurityProfile(),
                     Map.of(),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
             SandboxResult result = adapter.execute(spec);
             assertThat(result.exitCode()).isZero();
             return result;
@@ -240,8 +238,7 @@ class DockerSandboxLiveTest {
                     new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofSeconds(3)),
                     testSecurityProfile(),
                     Map.of(),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             SandboxResult result = sandboxAdapter.execute(spec);
 
@@ -267,8 +264,7 @@ class DockerSandboxLiveTest {
                     new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofMinutes(1)),
                     testSecurityProfile(),
                     Map.of(".prompt", "injected content".getBytes()),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             SandboxResult result = sandboxAdapter.execute(spec);
 
@@ -294,8 +290,7 @@ class DockerSandboxLiveTest {
                     new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofMinutes(1)),
                     testSecurityProfile(),
                     Map.of(),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             sandboxAdapter.execute(spec);
 

@@ -27,6 +27,10 @@ import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -37,6 +41,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -142,7 +147,7 @@ public class ContextManifestBuilder {
 
     public ArtifactSourceManifest augment(
             Map<String, byte[]> files,
-            Map<String, java.nio.file.Path> filesOnDisk,
+            Map<String, Path> filesOnDisk,
             Map<String, SourceKind> pathKinds,
             String jobId,
             EvidencePlan plan,
@@ -294,7 +299,7 @@ public class ContextManifestBuilder {
         }
         Set<SourceKind> expectedKinds = catalogs.requireSourcesFor(manifest.contractVersion(), manifest.artifactKind());
         Set<SourceKind> capturedKinds =
-                manifest.sources().stream().map(SourceCapture::kind).collect(java.util.stream.Collectors.toSet());
+                manifest.sources().stream().map(SourceCapture::kind).collect(Collectors.toSet());
         if (!capturedKinds.equals(expectedKinds)) {
             throw new IllegalArgumentException(
                     "Manifest source captures do not match the sources its artifact kind applies to");
@@ -398,7 +403,7 @@ public class ContextManifestBuilder {
     private SourceCapture capture(
             SourceKind kind,
             Map<String, byte[]> files,
-            Map<String, java.nio.file.Path> filesOnDisk,
+            Map<String, Path> filesOnDisk,
             Map<String, SourceKind> pathKinds,
             EvidencePlan plan,
             Instant capturedAt,
@@ -501,31 +506,19 @@ public class ContextManifestBuilder {
         }
     }
 
-    private SourceArtifact artifact(String path, byte @Nullable [] bytes, java.nio.file.@Nullable Path onDisk) {
+    private SourceArtifact artifact(String path, byte @Nullable [] bytes, @Nullable Path onDisk) {
         if (onDisk != null) {
-            try {
+            try (var stream = Files.newInputStream(onDisk)) {
                 return new SourceArtifact(
-                        path, mediaType(path), artifactDigest(onDisk), java.nio.file.Files.size(onDisk));
-            } catch (java.io.IOException e) {
-                throw new java.io.UncheckedIOException("Evidence artifact unreadable: " + path, e);
+                        path, mediaType(path), ProvenanceDigest.sha256Hex(stream), Files.size(onDisk));
+            } catch (IOException e) {
+                throw new UncheckedIOException("Evidence artifact unreadable: " + path, e);
             }
         }
         if (bytes == null) {
             throw new IllegalStateException("Evidence artifact has null bytes: " + path);
         }
         return new SourceArtifact(path, mediaType(path), ProvenanceDigest.sha256Hex(bytes), bytes.length);
-    }
-
-    private static String artifactDigest(java.nio.file.Path path) throws java.io.IOException {
-        try {
-            var digest = java.security.MessageDigest.getInstance("SHA-256");
-            try (var stream = new java.security.DigestInputStream(java.nio.file.Files.newInputStream(path), digest)) {
-                stream.transferTo(java.io.OutputStream.nullOutputStream());
-            }
-            return java.util.HexFormat.of().formatHex(digest.digest());
-        } catch (java.security.NoSuchAlgorithmException exception) {
-            throw new IllegalStateException(exception);
-        }
     }
 
     private static SourceAbsenceState absenceState(SourceCaptureState state) {

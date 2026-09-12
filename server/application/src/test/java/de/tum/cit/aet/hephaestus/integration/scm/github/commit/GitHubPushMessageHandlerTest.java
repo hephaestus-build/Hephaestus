@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeserializer;
@@ -100,6 +101,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                 tokenService,
                 repositoryRepository,
                 commitRepository,
+                new CommitDetailsPersister(commitRepository, transactionTemplate, eventPublisher),
                 authorResolver,
                 eventPublisher,
                 scopeIdResolver,
@@ -211,6 +213,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
         }
 
@@ -270,6 +273,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
         }
 
@@ -322,6 +326,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
         }
     }
@@ -362,7 +367,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(), // committerId
                             any(), // authorEmail
                             any() // committerEmail
-                            );
+                            ,
+                            any());
         }
 
         @Test
@@ -392,6 +398,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(Integer.class),
                             any(),
                             eq(100L),
+                            any(),
                             any(),
                             any(),
                             any(),
@@ -428,6 +435,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             eq(100L),
                             eq(42L),
                             eq(43L),
+                            any(),
                             any(),
                             any());
         }
@@ -471,6 +479,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             eq(null),
                             eq(null),
                             any(),
+                            any(),
                             any());
         }
 
@@ -504,6 +513,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             eq(6), // 2 + 1 + 3
                             any(),
                             eq(100L),
+                            any(),
                             any(),
                             any(),
                             any(),
@@ -542,6 +552,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
         }
     }
@@ -567,7 +578,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             var key = new de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey(
                     1, 100);
             verify(gitRepositoryManager).ensureRepository(key, "https://github.com/owner/repo.git", "test-token");
-            verify(gitRepositoryManager).forEachCommitInRange(eq(key), eq("abc123"), eq("def456"), any());
+            verify(gitRepositoryManager).forEachCommitInRange(eq(key), eq("abc123"), eq("def456"), any(), any());
         }
 
         @Test
@@ -609,6 +620,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
         }
 
@@ -642,23 +654,19 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                     List.of(fileChange),
                     List.of());
             doAnswer(invocation -> {
-                        java.util.function.Consumer<CommitDetails> consumer = invocation.getArgument(3);
+                        java.util.function.Consumer<CommitDetails> consumer = invocation.getArgument(4);
                         consumer.accept(commitInfo);
                         return null;
                     })
                     .when(gitRepositoryManager)
-                    .forEachCommitInRange(any(), any(), any(), any());
-            when(commitRepository.existsByShaAndRepositoryIdAndGitDetailsCapturedAtIsNotNull(
-                            "sha1aabbccdd112233445566778899aabbccddeeff", 100L))
-                    .thenReturn(false);
-
-            // After upsertCommit, findByShaAndRepositoryId must return a Commit entity for file changes
-            // and for publishCommitCreated (which calls CommitData.from(commit))
+                    .forEachCommitInRange(any(), any(), any(), any(), any());
+            // Absent before the upsert, present after it: a new commit.
             var persistedCommit = TestEntities.commit(1L, "sha1aabbccdd112233445566778899aabbccddeeff");
             persistedCommit.setMessage("msg");
             persistedCommit.setAuthoredAt(Instant.parse("2024-01-15T10:30:00Z"));
             persistedCommit.setRepository(repo);
             when(commitRepository.findByShaAndRepositoryId("sha1aabbccdd112233445566778899aabbccddeeff", 100L))
+                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(persistedCommit));
 
             invokeHandleEvent(event);
@@ -680,11 +688,12 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
-            // Should fetch the persisted commit: once for file changes, once for publishCommitCreated
             verify(commitRepository, times(2))
                     .findByShaAndRepositoryId("sha1aabbccdd112233445566778899aabbccddeeff", 100L);
             verify(commitRepository).save(persistedCommit);
+            verify(eventPublisher).publishEvent(any(ScmDomainEvent.CommitCreated.class));
         }
 
         @Test
@@ -715,15 +724,16 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                     List.of(),
                     List.of());
             doAnswer(invocation -> {
-                        java.util.function.Consumer<CommitDetails> consumer = invocation.getArgument(3);
+                        java.util.function.Consumer<CommitDetails> consumer = invocation.getArgument(4);
                         consumer.accept(commitInfo);
                         return null;
                     })
                     .when(gitRepositoryManager)
-                    .forEachCommitInRange(any(), any(), any(), any());
-            when(commitRepository.existsByShaAndRepositoryIdAndGitDetailsCapturedAtIsNotNull(
-                            "sha1aabbccdd112233445566778899aabbccddeeff", 100L))
-                    .thenReturn(true);
+                    .forEachCommitInRange(any(), any(), any(), any(), any());
+            var captured = TestEntities.commit(1L, "sha1aabbccdd112233445566778899aabbccddeeff");
+            captured.setGitDetailsCapturedAt(Instant.now());
+            when(commitRepository.findByShaAndRepositoryId("sha1aabbccdd112233445566778899aabbccddeeff", 100L))
+                    .thenReturn(Optional.of(captured));
 
             invokeHandleEvent(event);
 
@@ -740,6 +750,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             anyLong(),
+                            any(),
                             any(),
                             any(),
                             any(),
@@ -777,6 +788,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                                             .RepositoryKey.class),
                             any(),
                             any(),
+                            any(),
                             any());
 
             // Should process via webhook instead (non-fallback: additions=0, not null)
@@ -793,6 +805,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             eq(1), // 1 added file
                             any(),
                             eq(100L),
+                            any(),
                             any(),
                             any(),
                             any(),
@@ -831,6 +844,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
         }
 
@@ -860,6 +874,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(Integer.class),
                             any(),
                             eq(100L),
+                            any(),
                             any(),
                             any(),
                             any(),

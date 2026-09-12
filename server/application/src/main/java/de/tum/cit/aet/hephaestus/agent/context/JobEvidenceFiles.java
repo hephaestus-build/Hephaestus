@@ -10,29 +10,55 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.Reader;
 import java.io.UncheckedIOException;
+import java.io.Writer;
+import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFilePermission;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HexFormat;
+import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.commons.io.FileUtils;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /** Worker-local evidence retained through admission or the failed-attempt cleanup grace. */
 @Component
 public class JobEvidenceFiles {
+    private static final Logger log = LoggerFactory.getLogger(JobEvidenceFiles.class);
+
+    /**
+     * Malformed input decodes to a lone surrogate, which no valid UTF-8 sequence produces and no quote
+     * survives {@code CitationVerification.quoteDigest} carrying, so a quote can only verify against
+     * bytes that decode and an undecodable byte elsewhere in the artifact costs nothing.
+     */
+    private static final String UNDECODABLE = "\uDC00";
+
     private final FabricLayout layout;
     private final AgentJobRepository jobs;
     private final Clock clock;
@@ -45,13 +71,9 @@ public class JobEvidenceFiles {
 
     public PreparedJobInputs prepare(AgentJob job, PreparedJobInputs inputs) {
         Path root = directory(job);
-        Path claim = root.resolveSibling(root.getFileName() + ".claim");
         Path staging = null;
-        boolean claimed = false;
         try {
             Files.createDirectories(root.getParent());
-            Files.createFile(claim);
-            claimed = true;
             if (Files.exists(root)) throw new IllegalStateException("Attempt evidence already exists");
             staging = Files.createTempDirectory(root.getParent(), "." + root.getFileName() + ".preparing-");
             var staged = new LinkedHashMap<String, Path>();
@@ -74,13 +96,8 @@ public class JobEvidenceFiles {
                 Path target = safePath(staging, entry.getKey());
                 Files.createDirectories(target.getParent());
                 byte[] bytes = entry.getValue().clone();
-                Files.write(
-                        target,
-                        bytes,
-                        java.nio.file.StandardOpenOption.CREATE_NEW,
-                        java.nio.file.StandardOpenOption.WRITE);
-                Files.setPosixFilePermissions(
-                        target, java.util.Set.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ));
+                Files.write(target, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+                Files.setPosixFilePermissions(target, Set.of(PosixFilePermission.OWNER_READ));
                 frozen.put(entry.getKey(), bytes);
             }
             for (var entry : inputs.filesOnDisk().entrySet()) {
@@ -109,10 +126,11 @@ public class JobEvidenceFiles {
                 }
                 staged.put(entry.getKey(), safePath(root, entry.getKey()));
             }
-            Files.move(staging, root, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            // rename(2) refuses a populated target, so two preparations of one attempt cannot both publish.
+            Files.move(staging, root, StandardCopyOption.ATOMIC_MOVE);
             staging = null;
             var cleanups = new ArrayList<>(inputs.cleanups());
-            var closed = new java.util.concurrent.atomic.AtomicBoolean();
+            var closed = new AtomicBoolean();
             cleanups.add(() -> {
                 if (closed.compareAndSet(false, true)) {
                     retire(root);
@@ -127,13 +145,6 @@ public class JobEvidenceFiles {
                     inputs.automatedReviewReadinessReport());
         } catch (IOException | RuntimeException exception) {
             if (staging != null) delete(staging);
-            if (claimed) {
-                try {
-                    Files.deleteIfExists(claim);
-                } catch (IOException cleanup) {
-                    exception.addSuppressed(cleanup);
-                }
-            }
             inputs.close();
             throw new IllegalStateException("Could not prepare attempt evidence: " + job.getId(), exception);
         }
@@ -143,66 +154,57 @@ public class JobEvidenceFiles {
         if (!Files.isDirectory(source, LinkOption.NOFOLLOW_LINKS) || Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
             throw new IllegalArgumentException("Invalid or overlapping prepared directory");
         }
-        Files.walkFileTree(source, new java.nio.file.SimpleFileVisitor<>() {
+        Files.walkFileTree(source, new SimpleFileVisitor<>() {
             @Override
-            public java.nio.file.FileVisitResult preVisitDirectory(
-                    Path directory, java.nio.file.attribute.BasicFileAttributes attributes) throws IOException {
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes)
+                    throws IOException {
                 Files.createDirectories(target.resolve(source.relativize(directory)));
-                return java.nio.file.FileVisitResult.CONTINUE;
+                return FileVisitResult.CONTINUE;
             }
 
             @Override
-            public java.nio.file.FileVisitResult visitFile(
-                    Path file, java.nio.file.attribute.BasicFileAttributes attributes) throws IOException {
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
                 if (!attributes.isRegularFile())
                     throw new IllegalArgumentException("Prepared directory contains a non-regular file");
                 Path destination = target.resolve(source.relativize(file));
                 Files.copy(file, destination);
                 makeReadOnly(destination, file);
-                return java.nio.file.FileVisitResult.CONTINUE;
+                return FileVisitResult.CONTINUE;
             }
         });
     }
 
     private static void makeReadOnly(Path target, Path source) throws IOException {
-        var permissions = java.util.EnumSet.of(
-                java.nio.file.attribute.PosixFilePermission.OWNER_READ,
-                java.nio.file.attribute.PosixFilePermission.GROUP_READ,
-                java.nio.file.attribute.PosixFilePermission.OTHERS_READ);
+        var permissions = EnumSet.of(
+                PosixFilePermission.OWNER_READ, PosixFilePermission.GROUP_READ, PosixFilePermission.OTHERS_READ);
         if (Files.isExecutable(source)) {
-            permissions.add(java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE);
-            permissions.add(java.nio.file.attribute.PosixFilePermission.GROUP_EXECUTE);
-            permissions.add(java.nio.file.attribute.PosixFilePermission.OTHERS_EXECUTE);
+            permissions.add(PosixFilePermission.OWNER_EXECUTE);
+            permissions.add(PosixFilePermission.GROUP_EXECUTE);
+            permissions.add(PosixFilePermission.OTHERS_EXECUTE);
         }
         Files.setPosixFilePermissions(target, permissions);
     }
 
     @FunctionalInterface
     public interface TextInspection<T> {
-        T inspect(java.io.Reader reader) throws IOException;
+        T inspect(Reader reader) throws IOException;
     }
 
     public <T> Optional<T> inspect(AgentJob job, String artifactPath, String sha, TextInspection<T> inspection) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            MessageDigest digest = ProvenanceDigest.sha256();
             T result;
             try (var reader = new InputStreamReader(
-                    new DigestInputStream(Files.newInputStream(artifact(job, artifactPath)), digest),
-                    StandardCharsets.UTF_8
-                            .newDecoder()
-                            .onMalformedInput(CodingErrorAction.REPORT)
-                            .onUnmappableCharacter(CodingErrorAction.REPORT))) {
+                    new DigestInputStream(Files.newInputStream(artifact(job, artifactPath)), digest), decoder())) {
                 result = inspection.inspect(reader);
-                reader.transferTo(java.io.Writer.nullWriter());
+                reader.transferTo(Writer.nullWriter());
             }
-            requireDigest(sha, HexFormat.of().formatHex(digest.digest()));
+            requireDigest(sha, ProvenanceDigest.hex(digest));
             return Optional.of(result);
         } catch (NoSuchFileException exception) {
             return Optional.empty();
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException(exception);
         }
     }
 
@@ -210,7 +212,7 @@ public class JobEvidenceFiles {
             AgentJob job, String artifactPath, String sha, String text, int startLine, int endLine) {
         try {
             QuoteMatch match = verifyUtf8AtLines(artifact(job, artifactPath), text, startLine, endLine);
-            requireDigest(sha, match.artifactSha256());
+            requireDigest(sha, Objects.requireNonNull(match.artifactSha256()));
             return Optional.of(match.matches());
         } catch (NoSuchFileException exception) {
             return Optional.empty();
@@ -232,43 +234,47 @@ public class JobEvidenceFiles {
         return directory(job).resolve(SandboxLayout.REPO_MOUNT_RELATIVE);
     }
 
-    public record QuoteMatch(boolean matches, String artifactSha256) {}
+    /** @param artifactSha256 digest of the raw bytes read, or null when the cited artifact does not exist */
+    public record QuoteMatch(boolean matches, @Nullable String artifactSha256) {
+        public static QuoteMatch absent() {
+            return new QuoteMatch(false, null);
+        }
+    }
 
     public static QuoteMatch verifyUtf8AtLines(Path file, String text, int startLine, int endLine) throws IOException {
         if (startLine < 1 || endLine < startLine || text.isEmpty())
             throw new IllegalArgumentException("Invalid citation quote or line range");
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            boolean found = false;
-            try (var reader = new InputStreamReader(
-                    new DigestInputStream(Files.newInputStream(file), digest),
-                    StandardCharsets.UTF_8
-                            .newDecoder()
-                            .onMalformedInput(CodingErrorAction.REPORT)
-                            .onUnmappableCharacter(CodingErrorAction.REPORT))) {
-                char[] buffer = new char[8192];
-                StringBuilder window = new StringBuilder();
-                long line = 1;
-                int read;
-                while ((read = reader.read(buffer)) != -1) {
-                    if (found) continue;
-                    for (int i = 0; i < read; i++) {
-                        char character = buffer[i];
-                        if (line >= startLine && line <= endLine) window.append(character);
-                        if (character == '\n') line++;
-                    }
-                    found = window.indexOf(text) >= 0;
-                    window.delete(0, Math.max(0, window.length() - text.length() + 1));
+        MessageDigest digest = ProvenanceDigest.sha256();
+        boolean found = false;
+        try (var reader = new InputStreamReader(new DigestInputStream(Files.newInputStream(file), digest), decoder())) {
+            char[] buffer = new char[8192];
+            StringBuilder window = new StringBuilder();
+            long line = 1;
+            int read;
+            while ((read = reader.read(buffer)) != -1) {
+                if (found) continue;
+                for (int i = 0; i < read; i++) {
+                    char character = buffer[i];
+                    if (line >= startLine && line <= endLine) window.append(character);
+                    if (character == '\n') line++;
                 }
+                found = window.indexOf(text) >= 0;
+                window.delete(0, Math.max(0, window.length() - text.length() + 1));
             }
-            return new QuoteMatch(found, HexFormat.of().formatHex(digest.digest()));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException(exception);
         }
+        return new QuoteMatch(found, ProvenanceDigest.hex(digest));
+    }
+
+    private static CharsetDecoder decoder() {
+        return StandardCharsets.UTF_8
+                .newDecoder()
+                .onMalformedInput(CodingErrorAction.REPLACE)
+                .onUnmappableCharacter(CodingErrorAction.REPLACE)
+                .replaceWith(UNDECODABLE);
     }
 
     private void retire(Path root) throws IOException {
-        if (!Files.exists(root) && !Files.exists(root.resolveSibling(root.getFileName() + ".claim"))) return;
+        if (!Files.exists(root)) return;
         var job = recordedJob(root);
         if (job.isPresent() && admitted(job.get()) && matches(root, job.get())) {
             deleteAttempt(root);
@@ -280,13 +286,13 @@ public class JobEvidenceFiles {
     public void cleanEndedAttempts() {
         if (!Files.isDirectory(layout.jobsRoot())) return;
         try (var paths = Files.walk(layout.jobsRoot(), 3)) {
-            var roots = new java.util.HashSet<Path>();
+            var roots = new HashSet<Path>();
             paths.filter(path -> layout.jobsRoot().relativize(path).getNameCount() == 3)
                     .forEach(path -> {
                         String name = path.getFileName().toString();
                         if (name.startsWith(".") && name.contains(".preparing-")) {
                             roots.add(path.resolveSibling(name.substring(1, name.indexOf(".preparing-"))));
-                        } else if (name.endsWith(".claim") || name.endsWith(".ended")) {
+                        } else if (name.endsWith(".ended")) {
                             roots.add(path.resolveSibling(name.substring(0, name.lastIndexOf('.'))));
                         } else if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
                             roots.add(path);
@@ -311,8 +317,7 @@ public class JobEvidenceFiles {
                         deleteAttempt(root);
                     }
                 } catch (RuntimeException | IOException exception) {
-                    org.slf4j.LoggerFactory.getLogger(JobEvidenceFiles.class)
-                            .warn("Could not clean attempt folder {}", root, exception);
+                    log.warn("Could not clean attempt folder {}", root, exception);
                 }
             }
         } catch (IOException exception) {
@@ -334,21 +339,17 @@ public class JobEvidenceFiles {
         return job.getWorkerId() != null && directory(job).equals(root);
     }
 
+    /** Evidence outlives admission only while the attempt that admitted it can still fail. */
     private static boolean admitted(AgentJob job) {
-        return job.getStatus() == AgentJobStatus.COMPLETED
-                && job.getMetadata() != null
-                && !job.getMetadata()
-                        .path(ObservationAdmissionService.DIGEST_METADATA_KEY)
-                        .asString()
-                        .isBlank();
+        return job.getStatus() == AgentJobStatus.COMPLETED && ObservationAdmissionService.isAdmitted(job);
     }
 
     private Path markEnded(Path root) throws IOException {
         Path ended = root.resolveSibling(root.getFileName() + ".ended");
         try {
             Files.createFile(ended);
-            Files.setLastModifiedTime(ended, java.nio.file.attribute.FileTime.from(clock.instant()));
-        } catch (java.nio.file.FileAlreadyExistsException ignored) {
+            Files.setLastModifiedTime(ended, FileTime.from(clock.instant()));
+        } catch (FileAlreadyExistsException ignored) {
         }
         return ended;
     }
@@ -361,7 +362,6 @@ public class JobEvidenceFiles {
                     .toList()) delete(staging);
         }
         Files.deleteIfExists(root.resolveSibling(root.getFileName() + ".ended"));
-        Files.deleteIfExists(root.resolveSibling(root.getFileName() + ".claim"));
     }
 
     private Path artifact(AgentJob job, String artifactPath) throws IOException {
@@ -404,7 +404,7 @@ public class JobEvidenceFiles {
 
     private static void delete(Path root) {
         try {
-            org.apache.commons.io.FileUtils.deleteDirectory(root.toFile());
+            FileUtils.deleteDirectory(root.toFile());
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         }

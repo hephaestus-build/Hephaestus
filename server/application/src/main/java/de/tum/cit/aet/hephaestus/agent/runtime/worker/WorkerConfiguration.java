@@ -161,8 +161,11 @@ public class WorkerConfiguration {
 
     @Bean
     WorkerGitOperationHandler workerGitOperationHandler(
-            WorkerControlClient client, NativeGitExecutor executor, ObjectMapper objectMapper) {
-        return new WorkerGitOperationHandler(client, executor, objectMapper);
+            WorkerControlClient client,
+            NativeGitExecutor executor,
+            ObjectMapper objectMapper,
+            MeterRegistry meterRegistry) {
+        return new WorkerGitOperationHandler(client, executor, objectMapper, meterRegistry);
     }
 
     @Bean

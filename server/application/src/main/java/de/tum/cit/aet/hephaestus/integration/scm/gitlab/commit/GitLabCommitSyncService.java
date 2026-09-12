@@ -212,7 +212,8 @@ public class GitLabCommitSyncService {
                 authorId,
                 committerId,
                 authorEmail,
-                committerEmail);
+                committerEmail,
+                null);
 
         // Persist parent metadata when the REST payload includes parent_ids.
         // Matches GitHub's CommitMetadataEnrichmentService which backfills the

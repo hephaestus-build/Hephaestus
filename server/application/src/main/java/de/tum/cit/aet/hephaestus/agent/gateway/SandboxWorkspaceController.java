@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -41,7 +42,7 @@ public class SandboxWorkspaceController {
             int protocolVersion,
             long workspaceByteBudget,
             long resultByteBudget,
-            @org.jspecify.annotations.Nullable Integer frameByteBudget) {}
+            @Nullable Integer frameByteBudget) {}
 
     @GetMapping("/workspace")
     public void workspace(
@@ -55,18 +56,13 @@ public class SandboxWorkspaceController {
         }
     }
 
+    /** Its declared length is bounded on the gateway chain before this is reached. */
     @PostMapping(value = "/result", consumes = "application/x-tar")
     public void result(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authorization,
             HttpServletRequest request,
             HttpServletResponse response) {
-        if (request.getContentLengthLong() < 0) {
-            throw new ResponseStatusException(HttpStatus.LENGTH_REQUIRED);
-        }
-        if (request.getContentLengthLong() > SandboxOutputArchive.MAX_OUTPUT_BYTES) {
-            throw new ResponseStatusException(HttpStatus.CONTENT_TOO_LARGE);
-        }
         try {
             sessions.require(id, authorization).upload(request.getInputStream());
             response.setStatus(HttpStatus.NO_CONTENT.value());

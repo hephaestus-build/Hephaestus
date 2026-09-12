@@ -12,9 +12,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryMan
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /** Authorizes repository identity before provider credentials cross into trusted Git preparation. */
 @Component
@@ -63,12 +65,12 @@ public class ReviewRepositoryPreparer {
         }
         String[] segments = repository.getNameWithOwner().split("/", -1);
         if (segments.length < 2
-                || java.util.Arrays.stream(segments)
+                || Arrays.stream(segments)
                         .anyMatch(segment -> segment.isEmpty() || segment.equals(".") || segment.equals(".."))) {
             throw new JobPreparationException("Repository has an invalid provider path");
         }
         segments[segments.length - 1] += ".git";
-        String cloneUrl = org.springframework.web.util.UriComponentsBuilder.fromUriString(serverUrl)
+        String cloneUrl = UriComponentsBuilder.fromUriString(serverUrl)
                 .pathSegment(segments)
                 .build()
                 .encode()

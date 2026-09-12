@@ -1,35 +1,41 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public record PreparedEvidence(
         Map<String, byte[]> files,
-        Map<String, java.nio.file.Path> filesOnDisk,
-        java.util.List<AutoCloseable> cleanups,
+        Map<String, Path> filesOnDisk,
+        List<AutoCloseable> cleanups,
         ArtifactSourceManifest manifest,
-        java.util.List<EvidenceDirectory> directories)
+        List<EvidenceDirectory> directories)
         implements AutoCloseable {
+    private static final Logger log = LoggerFactory.getLogger(PreparedEvidence.class);
+
     public PreparedEvidence(
             Map<String, byte[]> files,
-            Map<String, java.nio.file.Path> filesOnDisk,
-            java.util.List<AutoCloseable> cleanups,
+            Map<String, Path> filesOnDisk,
+            List<AutoCloseable> cleanups,
             ArtifactSourceManifest manifest) {
-        this(files, filesOnDisk, cleanups, manifest, java.util.List.of());
+        this(files, filesOnDisk, cleanups, manifest, List.of());
     }
 
     public PreparedEvidence(Map<String, byte[]> files, ArtifactSourceManifest manifest) {
-        this(files, Map.of(), java.util.List.of(), manifest);
+        this(files, Map.of(), List.of(), manifest);
     }
 
     public PreparedEvidence {
-        directories = java.util.List.copyOf(directories);
+        directories = List.copyOf(directories);
         files = Collections.unmodifiableMap(new LinkedHashMap<>(Objects.requireNonNull(files, "files")));
         filesOnDisk = Map.copyOf(Objects.requireNonNull(filesOnDisk, "filesOnDisk"));
-        cleanups = java.util.List.copyOf(Objects.requireNonNull(cleanups, "cleanups"));
+        cleanups = List.copyOf(Objects.requireNonNull(cleanups, "cleanups"));
         Objects.requireNonNull(manifest, "manifest");
     }
 
@@ -40,7 +46,7 @@ public record PreparedEvidence(
             try {
                 cleanup.close();
             } catch (Exception e) {
-                org.slf4j.LoggerFactory.getLogger(PreparedEvidence.class).warn("Could not release staged evidence", e);
+                log.warn("Could not release staged evidence", e);
             }
         }
     }

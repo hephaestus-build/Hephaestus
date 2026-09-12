@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeDetectionCompletedEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -46,6 +47,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -359,6 +361,62 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         verify(historicalGit).verifyAll(testJob, "d".repeat(64), "f".repeat(64), head, List.of(requested));
     }
 
+    @Test
+    void shouldWithholdOnlyTheCitationWhosePathIsAbsentAtItsRevision() {
+        String head = "b".repeat(40);
+        String headPath = de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD";
+        ObjectNode snapshot = (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot());
+        ObjectNode source = snapshot.withObject("manifest").withArray("sources").addObject();
+        source.put("kind", "scm.repository.tree");
+        source.putObject("state")
+                .put("availability", "AVAILABLE")
+                .putObject("facts")
+                .put("immutableIdentity", head + ":" + "c".repeat(40));
+        source.putArray("artifacts").addObject().put("path", headPath).put("sha256", "d".repeat(64));
+        source.withArray("artifacts")
+                .addObject()
+                .put(
+                        "path",
+                        de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout.REPO_MOUNT_RELATIVE
+                                + ".git/hephaestus-captured-refs")
+                .put("sha256", "f".repeat(64));
+        Practice second = new Practice();
+        ReflectionTestUtils.setField(second, "id", 20L);
+        second.setSlug("pr-scope");
+        second.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST));
+        second.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
+        admit(second, 21L);
+        var present = validObservation("pr-description-quality", Presence.PRESENT);
+        var missing = validObservation("pr-scope", Presence.PRESENT);
+        for (var pair : List.of(Map.entry(present, "kept.java"), Map.entry(missing, "gone.java"))) {
+            ObjectNode citation =
+                    (ObjectNode) evidenceOf(pair.getKey()).path("citations").get(0);
+            citation.put("sourceKind", "scm.repository.tree")
+                    .put("artifactPath", headPath)
+                    .put("path", pair.getValue())
+                    .put("quote", "old source")
+                    .put("startLine", 3)
+                    .put("endLine", 3);
+            citation.remove("side");
+        }
+        var kept = new de.tum.cit.aet.hephaestus.agent.context.HistoricalGitEvidence.Citation(
+                head, "kept.java", "old source", 3, 3);
+        var gone = new de.tum.cit.aet.hephaestus.agent.context.HistoricalGitEvidence.Citation(
+                head, "gone.java", "old source", 3, 3);
+        when(historicalGit.verifyAll(testJob, "d".repeat(64), "f".repeat(64), head, List.of(kept, gone)))
+                .thenReturn(Map.of(
+                        kept,
+                        new JobEvidenceFiles.QuoteMatch(true, "e".repeat(64)),
+                        gone,
+                        JobEvidenceFiles.QuoteMatch.absent()));
+
+        var result = publishVerified(testJob, List.of(present, missing));
+
+        assertThat(result.delivered())
+                .extracting(ValidatedObservation::practiceSlug)
+                .containsExactly("pr-description-quality");
+    }
+
     @Nested
     class EvidenceBoundary {
 
@@ -515,6 +573,77 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                     .extracting(ValidatedObservation::practiceSlug)
                     .containsExactly("pr-description-quality");
             assertThat(result.inserted()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("a line the diff cannot decode withholds only the claim that quotes it")
+        void shouldDeliverTheOtherObservationsWhenTheDiffHasALatin1Line(@TempDir Path evidenceRoot) {
+            Practice second = new Practice();
+            ReflectionTestUtils.setField(second, "id", 20L);
+            second.setSlug("pr-scope");
+            second.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST));
+            second.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
+            admit(second, 21L);
+            var diff = new java.io.ByteArrayOutputStream();
+            diff.writeBytes((capturedDiff + "[L11] + caf").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            diff.writeBytes(new byte[] {(byte) 0xe9, '\n'});
+            byte[] bytes = diff.toByteArray();
+            var files = new JobEvidenceFiles(
+                    new de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout(evidenceRoot.toString()),
+                    org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.class),
+                    java.time.Clock.systemUTC());
+            var service = new PracticeDetectionDeliveryService(
+                    practiceRevisionRepository,
+                    observationRepository,
+                    reviewTargets,
+                    conversationSourceLiveness,
+                    documentProjection,
+                    eventPublisher,
+                    objectMapper,
+                    files,
+                    sourceCatalogs,
+                    historicalGit);
+            testJob.setWorkerId("worker");
+            ObjectNode snapshot = (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot());
+            ((ObjectNode) snapshot.withObject("manifest")
+                            .withArray("sources")
+                            .get(0)
+                            .withArray("artifacts")
+                            .get(0))
+                    .put("sha256", de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest.sha256Hex(bytes));
+
+            ValidatedObservation sound = validObservation("pr-description-quality", Presence.PRESENT);
+            ValidatedObservation undecodable = validObservation("pr-scope", Presence.PRESENT);
+            ((ObjectNode) evidenceOf(undecodable).withArray("citations").get(0))
+                    .put("startLine", 11)
+                    .put("endLine", 11)
+                    .put("quote", "+ caf\uFFFD");
+
+            try (var prepared = files.prepare(
+                    testJob,
+                    de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs.filesOnly(
+                            Map.of("inputs/context/diff.patch", bytes)))) {
+                var result = service.publish(testJob, service.prepare(testJob, List.of(sound, undecodable)));
+                assertThat(result.delivered())
+                        .extracting(ValidatedObservation::practiceSlug)
+                        .containsExactly("pr-description-quality");
+                assertThat(prepared.files()).containsKey("inputs/context/diff.patch");
+            }
+        }
+
+        @Test
+        @DisplayName("a header the prefix cannot hold does not leave the previous file over the lines after it")
+        void shouldNotVerifyAQuoteAgainstThePreviousFileWhenTheNextHeaderOverflowsThePrefix() {
+            String longPath = "src/" + "deep/".repeat(60) + "Other.java";
+            capturedDiff = "diff --git a/src/Auth.java b/src/Auth.java\n"
+                    + "--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -9 +9 @@\n[L9] + other();\n"
+                    + "diff --git a/" + longPath + " b/" + longPath + "\n"
+                    + "--- a/" + longPath + "\n+++ b/" + longPath + "\n@@ -10 +10 @@\n[L10] + insecure();\n";
+            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
+
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                    .isInstanceOf(ObservationsRefusedException.class);
+            verifyNoInteractions(observationRepository);
         }
 
         @Test

@@ -44,17 +44,6 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
     @Query("DELETE FROM CommitFileChange f WHERE f.commit.repository.id = :repositoryId AND f.commit.sha = :sha")
     void deleteFileChanges(@Param("repositoryId") Long repositoryId, @Param("sha") String sha);
 
-    boolean existsByShaAndRepositoryIdAndGitDetailsCapturedAtIsNotNull(String sha, Long repositoryId);
-
-    @Modifying(flushAutomatically = true)
-    @Transactional
-    @Query(
-            "UPDATE Commit c SET c.gitDetailsCapturedAt = :capturedAt WHERE c.repository.id = :repositoryId AND c.sha = :sha")
-    void markGitDetailsCaptured(
-            @Param("repositoryId") Long repositoryId,
-            @Param("sha") String sha,
-            @Param("capturedAt") Instant capturedAt);
-
     @Query(
             "SELECT c.sha FROM Commit c WHERE c.repository.id = :repositoryId AND c.sha IN :shas AND c.gitDetailsCapturedAt IS NOT NULL")
     Set<String> findGitDetailsCapturedShas(@Param("repositoryId") Long repositoryId, @Param("shas") List<String> shas);
@@ -164,26 +153,30 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
     /**
      * Upsert a commit by SHA and repository_id.
      * <p>
-     * On conflict (same SHA in same repository), updates all mutable fields.
-     * Uses {@code COALESCE} for nullable fields so null parameters preserve
-     * existing database values (webhooks may provide less data than local git).
+     * On conflict (same SHA in same repository), updates the mutable fields. {@code COALESCE} keeps an
+     * existing value where the caller passes null, because a webhook or API payload carries less
+     * than native Git. What native Git captured — {@code git_details_captured_at} set — is never
+     * overwritten by a lesser source: the message, the timestamps and the statistics stay.
      */
     @Modifying
     @Transactional
     @Query(value = """
         INSERT INTO git_commit (sha, message, message_body, html_url, authored_at, committed_at,
             additions, deletions, changed_files, last_sync_at, created_at, updated_at,
-            repository_id, author_id, committer_id, author_email, committer_email)
+            repository_id, author_id, committer_id, author_email, committer_email, git_details_captured_at)
         VALUES (:sha, :message, :messageBody, :htmlUrl, :authoredAt, :committedAt,
             COALESCE(:additions, 0), COALESCE(:deletions, 0), COALESCE(:changedFiles, 0),
             :lastSyncAt, NOW(), NOW(),
-            :repositoryId, :authorId, :committerId, :authorEmail, :committerEmail)
+            :repositoryId, :authorId, :committerId, :authorEmail, :committerEmail, :gitDetailsCapturedAt)
         ON CONFLICT (sha, repository_id) DO UPDATE SET
-            message = EXCLUDED.message,
+            message = CASE WHEN git_commit.git_details_captured_at IS NOT NULL THEN git_commit.message
+                ELSE EXCLUDED.message END,
             message_body = COALESCE(EXCLUDED.message_body, git_commit.message_body),
             html_url = COALESCE(EXCLUDED.html_url, git_commit.html_url),
-            authored_at = EXCLUDED.authored_at,
-            committed_at = EXCLUDED.committed_at,
+            authored_at = CASE WHEN git_commit.git_details_captured_at IS NOT NULL THEN git_commit.authored_at
+                ELSE EXCLUDED.authored_at END,
+            committed_at = CASE WHEN git_commit.git_details_captured_at IS NOT NULL THEN git_commit.committed_at
+                ELSE EXCLUDED.committed_at END,
             additions = CASE WHEN git_commit.git_details_captured_at IS NOT NULL THEN git_commit.additions
                 ELSE COALESCE(EXCLUDED.additions, git_commit.additions) END,
             deletions = CASE WHEN git_commit.git_details_captured_at IS NOT NULL THEN git_commit.deletions
@@ -195,7 +188,8 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
             author_id = COALESCE(EXCLUDED.author_id, git_commit.author_id),
             committer_id = COALESCE(EXCLUDED.committer_id, git_commit.committer_id),
             author_email = COALESCE(EXCLUDED.author_email, git_commit.author_email),
-            committer_email = COALESCE(EXCLUDED.committer_email, git_commit.committer_email)
+            committer_email = COALESCE(EXCLUDED.committer_email, git_commit.committer_email),
+            git_details_captured_at = COALESCE(EXCLUDED.git_details_captured_at, git_commit.git_details_captured_at)
         """, nativeQuery = true)
     void upsertCommit(
             @Param("sha") String sha,
@@ -212,7 +206,8 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
             @Param("authorId") @Nullable Long authorId,
             @Param("committerId") @Nullable Long committerId,
             @Param("authorEmail") @Nullable String authorEmail,
-            @Param("committerEmail") @Nullable String committerEmail);
+            @Param("committerEmail") @Nullable String committerEmail,
+            @Param("gitDetailsCapturedAt") @Nullable Instant gitDetailsCapturedAt);
 
     /**
      * Find SHAs of commits that have no contributor rows yet.

@@ -132,7 +132,7 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
             AgentJob job = pr.job();
             ReviewRepositoryPreparer.PreparedReview prepared = null;
             if (gitRepositoryManager.isEnabled()) {
-                prepared = repositoryPreparer.prepare(job);
+                prepared = pr.preparation().prepare(repositoryPreparer, job);
             } else {
                 repositoryPreparer.authorize(job);
             }

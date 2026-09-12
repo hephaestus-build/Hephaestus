@@ -68,7 +68,7 @@ public class RepositoryTreeContentSource implements EvidenceSource {
             return new EvidenceContribution(Map.of(), Map.of());
         }
         if (gitRepositoryManager.isEnabled() && request instanceof ContextRequest.PracticeReviewRequest review)
-            repositoryPreparer.prepare(review.job());
+            review.preparation().prepare(repositoryPreparer, review.job());
         SourceCaptureState absence = absenceOrNull(request);
         if (absence != null) {
             return absent(absence);

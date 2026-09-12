@@ -1,11 +1,13 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers;
 
+import de.tum.cit.aet.hephaestus.agent.handler.CitationVerification;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Operation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Request;
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -23,7 +25,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class GitDiffOperations {
     private static final Duration TIMEOUT = Duration.ofMinutes(5);
-    private static final Set<String> FILES = Set.of("diff.patch", "diff_stat.txt", "diff_summary.md", "diff_paths.nul");
+    /** What one diff capture stages, and what {@code scm.pull-request.diff} owns among the staged files. */
+    public static final Set<String> FILES = Set.of("diff.patch", "diff_stat.txt", "diff_summary.md", "diff_paths.nul");
+
     private final NativeGitExecutor git;
 
     public GitDiffOperations(NativeGitExecutor git) {
@@ -31,7 +35,6 @@ public class GitDiffOperations {
     }
 
     public String @Nullable [] resolveDiffRange(RepositoryKey repository, String baseSha, String headSha) {
-        if (headSha.isBlank()) return null;
         var output = new ByteArrayOutputStream();
         git.execute(
                 repository,
@@ -42,7 +45,7 @@ public class GitDiffOperations {
         if (range.isEmpty()) return null;
         String[] commits = range.split("\\n");
         if (commits.length != 2
-                || !commits[0].matches("(?:[a-f0-9]{40}|[a-f0-9]{64})")
+                || !commits[0].matches(CitationVerification.GIT_OBJECT_ID)
                 || !commits[1].equals(headSha)) {
             throw new JobPreparationException("Native Git returned an invalid diff range");
         }
@@ -83,7 +86,7 @@ public class GitDiffOperations {
             }
             if (!files.keySet().equals(FILES)) throw new IOException("Incomplete diff archive");
             Files.delete(archive);
-            return new DiffCapture(directory, Map.copyOf(files), base, head);
+            return new DiffCapture(directory, Map.copyOf(files));
         } catch (IOException | RuntimeException exception) {
             try {
                 FileUtils.deleteDirectory(directory.toFile());
@@ -118,15 +121,14 @@ public class GitDiffOperations {
         }
     }
 
-    public record CommitCapture(Path path) implements java.io.Closeable {
+    public record CommitCapture(Path path) implements Closeable {
         @Override
         public void close() throws IOException {
             Files.deleteIfExists(path);
         }
     }
 
-    public record DiffCapture(Path directory, Map<String, Path> files, String base, String head)
-            implements java.io.Closeable {
+    public record DiffCapture(Path directory, Map<String, Path> files) implements Closeable {
         public boolean isEmpty() throws IOException {
             return Files.size(directory.resolve("diff.patch")) == 0;
         }

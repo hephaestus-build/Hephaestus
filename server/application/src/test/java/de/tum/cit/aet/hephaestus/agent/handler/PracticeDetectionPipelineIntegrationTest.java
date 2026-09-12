@@ -81,6 +81,9 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
     private JobTypeHandlerRegistry handlerRegistry;
 
     @Autowired
+    private PracticeDetectionDeliveryService deliveryService;
+
+    @Autowired
     private ObservationRepository observationRepository;
 
     @Autowired
@@ -294,13 +297,19 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         return admitAndSetOutput(job, rawOutput, true);
     }
 
+    /** The admission fence's own two steps, minus the ownership transaction it wraps them in. */
+    private void admit(AgentJob job, JsonNode observations) {
+        var pullRequests = (PullRequestReviewHandler) handler;
+        deliveryService.publish(job, pullRequests.prepareObservations(job, observations));
+    }
+
     /**
      * @param reachedEveryPractice the coverage ledger the run left behind, which decides whether this
      *     review is allowed to say it found nothing
      */
     private AgentJob admitAndSetOutput(AgentJob job, String rawOutput, boolean reachedEveryPractice) {
         JsonNode observations = OBJECT_MAPPER.readTree(withEvidence(rawOutput)).path("observations");
-        ((PullRequestReviewHandler) handler).admitObservations(job, observations);
+        admit(job, observations);
         String digest = "test-admission-digest";
         JsonNode jobMetadata = job.getMetadata();
         org.junit.jupiter.api.Assertions.assertNotNull(jobMetadata);
@@ -624,7 +633,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                 }""";
             JsonNode submitted = OBJECT_MAPPER.readTree(withEvidence(output)).path("observations");
 
-            assertThatThrownBy(() -> ((PullRequestReviewHandler) handler).admitObservations(agentJob, submitted))
+            assertThatThrownBy(() -> admit(agentJob, submitted))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("practice not admitted to the job");
 

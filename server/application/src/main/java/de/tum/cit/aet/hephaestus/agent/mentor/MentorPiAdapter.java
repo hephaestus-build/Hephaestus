@@ -102,8 +102,7 @@ public class MentorPiAdapter {
                 plan.networkPolicy(),
                 ResourceLimits.DEFAULT,
                 SecurityProfile.DEFAULT,
-                plan.inputFiles(),
-                Map.of());
+                plan.inputFiles());
     }
 
     /**

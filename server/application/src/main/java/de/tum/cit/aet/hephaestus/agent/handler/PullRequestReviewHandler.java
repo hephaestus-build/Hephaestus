@@ -342,10 +342,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 new ObservationKeys(observation.getOccurrenceKey(), observation.getRecurrenceKey()));
     }
 
-    public void admitObservations(AgentJob job, JsonNode observations) {
-        deliveryService.publish(job, prepareObservations(job, observations));
-    }
-
     public PracticeDetectionDeliveryService.PreparedObservations prepareObservations(
             AgentJob job, JsonNode observations) {
         ObjectNode output = objectMapper.createObjectNode();

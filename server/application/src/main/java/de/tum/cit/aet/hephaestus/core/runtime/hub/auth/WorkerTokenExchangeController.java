@@ -9,6 +9,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
@@ -130,8 +131,8 @@ public class WorkerTokenExchangeController {
         if (a == null || b == null) {
             return false;
         }
-        byte[] ba = a.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        byte[] bb = b.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] ba = a.getBytes(StandardCharsets.UTF_8);
+        byte[] bb = b.getBytes(StandardCharsets.UTF_8);
         return MessageDigest.isEqual(ba, bb);
     }
 

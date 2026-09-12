@@ -97,6 +97,7 @@ public final class AgentMetrics {
     public static final String WORKER_CONTROL_FRAMES_SENT = "worker.control.frames.sent";
     public static final String WORKER_CONTROL_RECONNECTS = "worker.control.reconnects";
     public static final String WORKER_DRAIN_ACTIVE = "worker.drain.active";
+    public static final String WORKER_GIT_OPERATIONS_FAILED = "worker.git.operations.failed";
     public static final String WORKER_HEARTBEATS_FAILED = "worker.heartbeats.failed";
     public static final String WORKER_HEARTBEATS_SENT = "worker.heartbeats.sent";
     public static final String WORKER_LIVENESS_HEARTBEAT_FAILURES = "worker.liveness.heartbeat.failures";

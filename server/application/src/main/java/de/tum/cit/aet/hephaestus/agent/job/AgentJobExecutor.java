@@ -878,8 +878,7 @@ public class AgentJobExecutor {
                 allInputFiles,
                 handlerFilesOnDisk,
                 handlerDirectories,
-                agentSpec.outputPath(),
-                agentSpec.volumeMounts());
+                agentSpec.outputPath());
     }
 
     private boolean handleCancellation(UUID jobId, AgentJob job) {

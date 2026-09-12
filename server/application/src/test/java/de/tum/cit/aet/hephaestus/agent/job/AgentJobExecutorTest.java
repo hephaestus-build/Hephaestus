@@ -2465,7 +2465,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 "/output",
                 SecurityProfile.DEFAULT,
                 new NetworkPolicy(false, null, "test-token"),
-                Map.of(),
                 "prompt-digest");
         when(practiceAgent.buildSandboxSpec(any())).thenReturn(agentSpec);
         when(practiceAgent.parseResult(any())).thenReturn(new AgentResult(true, Map.of("review", "LGTM")));
@@ -2483,7 +2482,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 "/output",
                 null,
                 null,
-                Map.of(),
                 "prompt-digest");
     }
 
@@ -2505,15 +2503,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
         when(handler.prepareInputs(any())).thenReturn(PreparedJobInputs.filesOnly(Map.of()));
 
         PracticeSandboxSpec agentSpec = new PracticeSandboxSpec(
-                "ghcr.io/agent:latest",
-                List.of("/bin/agent"),
-                Map.of(),
-                Map.of(),
-                "/output",
-                null,
-                null,
-                Map.of(),
-                null);
+                "ghcr.io/agent:latest", List.of("/bin/agent"), Map.of(), Map.of(), "/output", null, null, null);
         when(practiceAgent.buildSandboxSpec(any())).thenReturn(agentSpec);
 
         when(sandboxManager.execute(any())).thenThrow(exception);

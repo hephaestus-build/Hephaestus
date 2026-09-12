@@ -167,8 +167,7 @@ class RepositoryTreeStagingLiveTest {
                 Map.of(),
                 List.of(new de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory(
                         SandboxLayout.REPO_MOUNT_RELATIVE, staging)),
-                SandboxLayout.OUTPUT_PATH,
-                null);
+                SandboxLayout.OUTPUT_PATH);
 
         SandboxResult result = sandboxAdapter.execute(spec);
 

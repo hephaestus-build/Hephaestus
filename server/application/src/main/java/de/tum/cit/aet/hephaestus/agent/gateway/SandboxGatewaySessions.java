@@ -21,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Component
 @ConditionalOnProperty(name = RuntimeRole.WORKER_PROPERTY, havingValue = "true", matchIfMissing = true)
 public class SandboxGatewaySessions {
+    private static final String BEARER_PREFIX = "Bearer ";
     private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
 
     public Session register(String token, Path inputTar, String outputRoot) throws IOException {
@@ -29,14 +30,20 @@ public class SandboxGatewaySessions {
         return session;
     }
 
+    /** A wrong credential and an unknown session look the same to the caller. */
     public Session require(UUID id, String authorization) {
         var session = sessions.get(id);
-        if (session == null
-                || !authorization.startsWith("Bearer ")
-                || !MessageDigest.isEqual(session.tokenHash, tokenHash(authorization.substring(7)))) {
+        String token = bearerToken(authorization);
+        if (session == null || token == null || !MessageDigest.isEqual(session.tokenHash, tokenHash(token))) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         return session;
+    }
+
+    private static @Nullable String bearerToken(String authorization) {
+        if (!authorization.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length())) return null;
+        String token = authorization.substring(BEARER_PREFIX.length()).trim();
+        return token.isEmpty() ? null : token;
     }
 
     private static byte[] tokenHash(String token) {
@@ -71,12 +78,11 @@ public class SandboxGatewaySessions {
             return inputBytes;
         }
 
-        public synchronized GatewayInteractiveChannel enableInteractive(int maxFrameBytes, int writeTimeoutMs)
-                throws IOException {
+        public synchronized GatewayInteractiveChannel enableInteractive(int maxFrameBytes) throws IOException {
             if (interactive != null || closed) {
                 throw new IllegalStateException("Interactive session already initialized or closed");
             }
-            interactive = new GatewayInteractiveChannel(maxFrameBytes, writeTimeoutMs);
+            interactive = new GatewayInteractiveChannel(maxFrameBytes);
             return interactive;
         }
 
@@ -112,7 +118,7 @@ public class SandboxGatewaySessions {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Result already uploaded");
                 }
                 if (uploading) {
-                    throw new ResponseStatusException(HttpStatus.TOO_EARLY, "Result upload in progress");
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Result upload in progress");
                 }
                 uploading = true;
             }

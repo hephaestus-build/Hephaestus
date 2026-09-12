@@ -5,7 +5,7 @@ import { command, parseRequest } from "./operation.ts";
 const head = "a".repeat(40);
 const base = "b".repeat(40);
 
-await test("offline operations refuse credentials and unpinned revisions", () => {
+void test("offline operations refuse credentials and unpinned revisions", () => {
 	assert.throws(() =>
 		parseRequest({ operation: "REVIEW_DIFF", revisions: [base, head], token: "secret" }),
 	);
@@ -15,14 +15,21 @@ await test("offline operations refuse credentials and unpinned revisions", () =>
 	assert.throws(() => parseRequest({ operation: "COMMIT_METADATA", revisions: ["HEAD"] }));
 });
 
-await test("ref resolution treats an option-shaped ref as an operand", () => {
-	assert.deepEqual(
-		command(parseRequest({ operation: "RESOLVE", revisions: ["--upload-pack=evil"] })),
-		["rev-parse", "--verify", "--end-of-options", "--upload-pack=evil^{commit}"],
+void test("citation batches are odd-length pairs under a fixed ceiling", () => {
+	assert.throws(() => parseRequest({ operation: "CITED_BLOBS", revisions: [head, base] }));
+	assert.throws(() =>
+		parseRequest({
+			operation: "CITED_BLOBS",
+			revisions: [head, ...Array.from({ length: 257 }, () => [base, "file.txt"]).flat()],
+		}),
+	);
+	assert.equal(
+		parseRequest({ operation: "CITED_BLOBS", revisions: [head, base, "file.txt"] }).operation,
+		"CITED_BLOBS",
 	);
 });
 
-await test("fetch accepts only credential-free HTTPS URLs and keeps token out of argv", () => {
+void test("fetch accepts only credential-free HTTPS URLs and keeps token out of argv", () => {
 	for (const cloneUrl of [
 		"file:///etc",
 		"ext::evil",
@@ -43,4 +50,3 @@ await test("fetch accepts only credential-free HTTPS URLs and keeps token out of
 	);
 	assert.ok(command(request).includes("--no-recurse-submodules"));
 });
-

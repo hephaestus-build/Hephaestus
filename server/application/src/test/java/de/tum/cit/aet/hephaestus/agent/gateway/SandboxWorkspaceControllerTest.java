@@ -2,11 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
-import jakarta.servlet.http.HttpServletRequest;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Tag;
@@ -42,23 +38,11 @@ class SandboxWorkspaceControllerTest {
     }
 
     @Test
-    void shouldRejectMissingLengthOversizedAndMalformedResults() throws Exception {
+    void shouldRejectMalformedResults() throws Exception {
         var archive = Files.writeString(temporary.resolve("input.tar"), "input");
         try (var session = sessions.register("token", archive, "out")) {
             var request = new MockHttpServletRequest();
             var response = new MockHttpServletResponse();
-            assertThatThrownBy(() -> controller.result(session.id(), "Bearer token", request, response))
-                    .isInstanceOfSatisfying(
-                            ResponseStatusException.class,
-                            exception -> assertThat(exception.getStatusCode().value())
-                                    .isEqualTo(411));
-            var oversized = mock(HttpServletRequest.class);
-            when(oversized.getContentLengthLong()).thenReturn(SandboxOutputArchive.MAX_OUTPUT_BYTES + 1);
-            assertThatThrownBy(() -> controller.result(session.id(), "Bearer token", oversized, response))
-                    .isInstanceOfSatisfying(
-                            ResponseStatusException.class,
-                            exception -> assertThat(exception.getStatusCode().value())
-                                    .isEqualTo(413));
             request.setContent(new byte[] {1});
             assertThatThrownBy(() -> controller.result(session.id(), "Bearer token", request, response))
                     .isInstanceOfSatisfying(

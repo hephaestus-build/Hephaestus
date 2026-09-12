@@ -17,9 +17,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -30,6 +32,8 @@ import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.ObjectMapper;
 
@@ -90,8 +94,7 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
         this.policy = policy;
         this.mapper = mapper;
         this.settings = settings;
-        this.workerNamespace = UUID.nameUUIDFromBytes(
-                        settings.workerId().getBytes(java.nio.charset.StandardCharsets.UTF_8))
+        this.workerNamespace = UUID.nameUUIDFromBytes(settings.workerId().getBytes(StandardCharsets.UTF_8))
                 .toString();
     }
 
@@ -150,6 +153,7 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
         labels.put(WORKER_LABEL, settings.workerId());
         labels.put(CREATED_AT_LABEL, Instant.now().toString());
         List<Mount> mounts = new ArrayList<>();
+        boolean mirror = false;
         String verificationVolume = "hephaestus-git-verification-" + UUID.randomUUID();
         if (trustedRepository != null) {
             operations.createVolume(verificationVolume, labels);
@@ -163,12 +167,18 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
                     + "-" + scope.repositoryId();
             labels.put(WORKSPACE_LABEL, Long.toString(scope.workspaceId()));
             labels.put(REPOSITORY_LABEL, Long.toString(scope.repositoryId()));
-            operations.createVolume(volume, labels);
-            mounts.add(new Mount()
-                    .withType(MountType.VOLUME)
-                    .withSource(volume)
-                    .withTarget("/git")
-                    .withReadOnly(!fetch));
+            if (fetch) operations.createVolume(volume, labels);
+            // Only a fetch creates the mirror; a query on a worker without it sees an empty tree and
+            // answers "not cloned" rather than leaving an unlabelled volume behind.
+            mirror = fetch || mirrorExists(volume, scope);
+            mounts.add(
+                    mirror
+                            ? new Mount()
+                                    .withType(MountType.VOLUME)
+                                    .withSource(volume)
+                                    .withTarget("/git")
+                                    .withReadOnly(!fetch)
+                            : new Mount().withType(MountType.TMPFS).withTarget("/git"));
         }
         String snapshotVolume = "hephaestus-git-snapshot-" + UUID.randomUUID();
         boolean snapshot = request.operation() == Operation.SNAPSHOT || request.operation() == Operation.REVIEW_DIFF;
@@ -181,8 +191,8 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
         }
         // The review sandbox's floor, with the provider reachable only while fetching.
         HostConfig host = operations
-                .hostConfig(policy.buildHostConfig(
-                        SecurityProfile.DEFAULT, LIMITS, new NetworkPolicy(fetch, null, null)))
+                .hostConfig(
+                        policy.buildHostConfig(SecurityProfile.DEFAULT, LIMITS, new NetworkPolicy(fetch, null, null)))
                 .withNetworkMode(fetch ? "bridge" : "none")
                 .withMounts(mounts)
                 .withLogConfig(new LogConfig(LogConfig.LoggingType.NONE));
@@ -200,8 +210,9 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
                     .withAttachStdin(true)
                     .withAttachStdout(true)
                     .withAttachStderr(true)
+                    // The mirror's lock serialises a fetch against readers; an empty tree has nothing to lock.
                     .withCmd(
-                            trustedRepository == null
+                            mirror
                                     ? new String[] {
                                         "flock",
                                         fetch ? "--exclusive" : "--shared",
@@ -226,7 +237,8 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
                         if (frame.getStreamType() == StreamType.STDERR) {
                             synchronized (diagnostics) {
                                 int room = STDERR_TAIL_BYTES - diagnostics.size();
-                                diagnostics.write(frame.getPayload(), 0, Math.max(0, Math.min(room, frame.getPayload().length)));
+                                diagnostics.write(
+                                        frame.getPayload(), 0, Math.max(0, Math.min(room, frame.getPayload().length)));
                             }
                             return;
                         }
@@ -265,7 +277,8 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
                 synchronized (diagnostics) {
                     reason = diagnostics.toString(StandardCharsets.UTF_8).strip();
                 }
-                throw new IllegalStateException("Git operation failed: " + (reason.isEmpty() ? "no diagnostic" : reason));
+                throw new IllegalStateException(
+                        "Git operation failed: " + (reason.isEmpty() ? "no diagnostic" : reason));
             }
             if (!callback.awaitCompletion(remaining(deadline).toMillis(), TimeUnit.MILLISECONDS)
                     || failure.get() != null) {
@@ -288,22 +301,21 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
                 var output = new java.io.PipedOutputStream(input)) {
             AtomicReference<@Nullable Throwable> failure = new AtomicReference<>();
             Thread producer = Thread.ofVirtual().start(() -> {
-                try (var tar = new org.apache.commons.compress.archivers.tar.TarArchiveOutputStream(output);
+                try (var tar = new TarArchiveOutputStream(output);
                         var paths = java.nio.file.Files.walk(repository.resolve(".git"))) {
-                    tar.setLongFileMode(
-                            org.apache.commons.compress.archivers.tar.TarArchiveOutputStream.LONGFILE_POSIX);
+                    tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
                     for (var iterator = paths.iterator(); iterator.hasNext(); ) {
                         Path path = iterator.next();
-                        if (!java.nio.file.Files.isRegularFile(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) continue;
+                        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) continue;
                         String name = "mirror.git/"
                                 + repository.resolve(".git").relativize(path).toString();
-                        var entry = new org.apache.commons.compress.archivers.tar.TarArchiveEntry(name);
-                        entry.setSize(java.nio.file.Files.size(path));
+                        var entry = new TarArchiveEntry(name);
+                        entry.setSize(Files.size(path));
                         entry.setUserId(1000);
                         entry.setGroupId(1000);
                         entry.setMode(0400);
                         tar.putArchiveEntry(entry);
-                        java.nio.file.Files.copy(path, tar);
+                        Files.copy(path, tar);
                         tar.closeArchiveEntry();
                     }
                 } catch (IOException | RuntimeException e) {
@@ -327,9 +339,27 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
     public void deleteRepository(long repositoryId) {
         if (repositoryId <= 0) throw new IllegalArgumentException("Invalid repository ID");
         for (var volume : operations.listVolumes(Map.of(
-                OWNER_LABEL, settings.owner(), COMPONENT_LABEL, COMPONENT, REPOSITORY_LABEL, Long.toString(repositoryId)))) {
+                OWNER_LABEL,
+                settings.owner(),
+                COMPONENT_LABEL,
+                COMPONENT,
+                REPOSITORY_LABEL,
+                Long.toString(repositoryId)))) {
             operations.removeVolume(volume.name());
         }
+    }
+
+    private boolean mirrorExists(String volume, RepositoryKey scope) {
+        return operations
+                .listVolumes(Map.of(
+                        OWNER_LABEL,
+                        settings.owner(),
+                        WORKSPACE_LABEL,
+                        Long.toString(scope.workspaceId()),
+                        REPOSITORY_LABEL,
+                        Long.toString(scope.repositoryId())))
+                .stream()
+                .anyMatch(info -> info.name().equals(volume));
     }
 
     private static Duration remaining(long deadline) {

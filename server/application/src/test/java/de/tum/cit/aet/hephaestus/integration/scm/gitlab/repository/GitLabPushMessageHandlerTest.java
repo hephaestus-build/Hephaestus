@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
@@ -61,6 +62,9 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
 
     @Mock
     private CommitRepository commitRepository;
+
+    @Mock
+    private CommitDetailsPersister persister;
 
     @Mock
     private IdentityProviderRepository gitProviderRepository;
@@ -135,6 +139,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
                 organizationRepository,
                 repositoryRepository,
                 commitRepository,
+                persister,
                 gitProviderRepository,
                 properties,
                 gitRepositoryManager,

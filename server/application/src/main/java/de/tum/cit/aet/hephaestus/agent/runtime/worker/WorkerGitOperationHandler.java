@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.runtime.worker;
 
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitAck;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitCancel;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOperation;
@@ -9,7 +10,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecuto
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Operation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Request;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.time.Duration;
@@ -21,6 +25,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -29,16 +35,22 @@ import tools.jackson.databind.ObjectMapper;
  * executor's capacity bound applies here exactly as it does to the worker's local reviews.
  */
 public final class WorkerGitOperationHandler {
+    private static final Logger log = LoggerFactory.getLogger(WorkerGitOperationHandler.class);
     private static final int CHUNK_BYTES = RemoteNativeGitExecutor.CHUNK_BYTES;
     private final WorkerControlClient client;
     private final NativeGitExecutor executor;
     private final ObjectMapper mapper;
+    private final Counter failed;
     private final ConcurrentMap<UUID, Running> running = new ConcurrentHashMap<>();
 
-    public WorkerGitOperationHandler(WorkerControlClient client, NativeGitExecutor executor, ObjectMapper mapper) {
+    public WorkerGitOperationHandler(
+            WorkerControlClient client, NativeGitExecutor executor, ObjectMapper mapper, MeterRegistry meterRegistry) {
         this.client = client;
         this.executor = executor;
         this.mapper = mapper;
+        this.failed = Counter.builder(AgentMetrics.WORKER_GIT_OPERATIONS_FAILED)
+                .description("Hub-dispatched Git operations this worker reported as failed")
+                .register(meterRegistry);
         client.setGitHandler(this::handle, this::cancelRunning);
     }
 
@@ -68,36 +80,9 @@ public final class WorkerGitOperationHandler {
     }
 
     private void run(GitOperation operation, Running state) {
-        var stream = new OutputStream() {
-            long sequence;
-
-            @Override
-            public void write(int value) throws IOException {
-                write(new byte[] {(byte) value});
-            }
-
-            @Override
-            public void write(byte[] bytes, int offset, int length) throws IOException {
-                for (int index = 0; index < length; index += CHUNK_BYTES) {
-                    int count = Math.min(CHUNK_BYTES, length - index);
-                    String data = Base64.getEncoder()
-                            .encodeToString(Arrays.copyOfRange(bytes, offset + index, offset + index + count));
-                    if (state.cancelled
-                            || !client.sendRequired(
-                                    new GitOutput(operation.operationId(), sequence, data, false, true)))
-                        throw new IOException("Git control session lost");
-                    try {
-                        long remaining = operation.deadlineEpochMillis() - System.currentTimeMillis();
-                        Long ack = remaining > 0 ? state.acks.poll(remaining, TimeUnit.MILLISECONDS) : null;
-                        if (ack == null || ack != sequence) throw new IOException("Git output acknowledgement failed");
-                        sequence++;
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        throw new IOException("Git stream interrupted", e);
-                    }
-                }
-            }
-        };
+        var frames = new FrameStream(operation, state);
+        // One hub round trip per frame, so small writes are coalesced up to the frame size.
+        var output = new BufferedOutputStream(frames, CHUNK_BYTES);
         boolean success = false;
         try {
             long millis = operation.deadlineEpochMillis() - System.currentTimeMillis();
@@ -116,14 +101,58 @@ public final class WorkerGitOperationHandler {
                         new RepositoryKey(operation.workspaceId(), operation.repositoryId()),
                         request,
                         Duration.ofMillis(millis),
-                        stream);
+                        output);
             }
+            output.flush();
             success = true;
-        } catch (RuntimeException ignored) {
-            // The result deliberately carries no provider exception or credential-bearing request.
+        } catch (IOException | RuntimeException e) {
+            // The terminal frame carries no cause: the request may hold a token and the cause a provider URL.
+            failed.increment();
+            log.warn(
+                    "Git operation {} failed on this worker: {}",
+                    operation.operationId(),
+                    e.getClass().getSimpleName());
         } finally {
-            client.sendRequired(new GitOutput(operation.operationId(), stream.sequence, "", true, success));
+            client.sendRequired(new GitOutput(operation.operationId(), frames.sequence, "", true, success));
             running.remove(operation.operationId(), state);
+        }
+    }
+
+    /** Sends each write as one acknowledged {@link GitOutput} frame, at most {@link #CHUNK_BYTES} each. */
+    private final class FrameStream extends OutputStream {
+        private final GitOperation operation;
+        private final Running state;
+        long sequence;
+
+        FrameStream(GitOperation operation, Running state) {
+            this.operation = operation;
+            this.state = state;
+        }
+
+        @Override
+        public void write(int value) throws IOException {
+            write(new byte[] {(byte) value});
+        }
+
+        @Override
+        public void write(byte[] bytes, int offset, int length) throws IOException {
+            for (int index = 0; index < length; index += CHUNK_BYTES) {
+                int count = Math.min(CHUNK_BYTES, length - index);
+                String data = Base64.getEncoder()
+                        .encodeToString(Arrays.copyOfRange(bytes, offset + index, offset + index + count));
+                if (state.cancelled
+                        || !client.sendRequired(new GitOutput(operation.operationId(), sequence, data, false, true)))
+                    throw new IOException("Git control session lost");
+                try {
+                    long remaining = operation.deadlineEpochMillis() - System.currentTimeMillis();
+                    Long ack = remaining > 0 ? state.acks.poll(remaining, TimeUnit.MILLISECONDS) : null;
+                    if (ack == null || ack != sequence) throw new IOException("Git output acknowledgement failed");
+                    sequence++;
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Git stream interrupted", e);
+                }
+            }
         }
     }
 

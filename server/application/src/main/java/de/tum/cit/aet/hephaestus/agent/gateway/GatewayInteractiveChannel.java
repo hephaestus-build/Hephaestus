@@ -8,28 +8,35 @@ import java.nio.channels.Channels;
 import java.nio.channels.Pipe;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
-import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 
-/** Bridges the existing bounded JSONL pumps to the gateway's authenticated WebSocket. */
+/**
+ * Bridges the bounded JSONL pumps to the gateway's authenticated WebSocket. One virtual thread is the
+ * only sender on the socket, so the session needs no concurrent-send decorator.
+ */
 public final class GatewayInteractiveChannel implements AutoCloseable {
     private final Pipe commands;
     private final Pipe frames;
+    private final Reader stdout;
+    private final OutputStream stdin;
+    private final OutputStream received;
     private final CompletableFuture<Integer> exit = new CompletableFuture<>();
     private final AtomicBoolean closed = new AtomicBoolean();
     private final int maxFrameBytes;
-    private final int writeTimeoutMs;
     private @Nullable WebSocketSession connection;
 
-    public GatewayInteractiveChannel(int maxFrameBytes, int writeTimeoutMs) throws IOException {
-        if (maxFrameBytes <= 0 || writeTimeoutMs <= 0) {
-            throw new IllegalArgumentException("Interactive transport limits must be positive");
+    public GatewayInteractiveChannel(int maxFrameBytes) throws IOException {
+        if (maxFrameBytes <= 0) {
+            throw new IllegalArgumentException("Interactive frame limit must be positive");
         }
         commands = Pipe.open();
         try {
@@ -39,8 +46,10 @@ public final class GatewayInteractiveChannel implements AutoCloseable {
             commands.sink().close();
             throw exception;
         }
+        stdout = Channels.newReader(frames.source(), StandardCharsets.UTF_8);
+        stdin = Channels.newOutputStream(commands.sink());
+        received = Channels.newOutputStream(frames.sink());
         this.maxFrameBytes = maxFrameBytes;
-        this.writeTimeoutMs = writeTimeoutMs;
     }
 
     public int maxFrameBytes() {
@@ -48,11 +57,11 @@ public final class GatewayInteractiveChannel implements AutoCloseable {
     }
 
     public Reader stdout() {
-        return Channels.newReader(frames.source(), StandardCharsets.UTF_8);
+        return stdout;
     }
 
     public OutputStream stdin() {
-        return Channels.newOutputStream(commands.sink());
+        return stdin;
     }
 
     public synchronized boolean connect(WebSocketSession socket) {
@@ -60,13 +69,12 @@ public final class GatewayInteractiveChannel implements AutoCloseable {
             return false;
         }
         socket.setTextMessageSizeLimit(maxFrameBytes);
-        var sending = new ConcurrentWebSocketSessionDecorator(socket, writeTimeoutMs, maxFrameBytes);
-        connection = sending;
+        connection = socket;
         Thread.ofVirtual().name("sandbox-gateway-commands-" + socket.getId()).start(() -> {
             try (var reader = new BufferedReader(Channels.newReader(commands.source(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    sending.sendMessage(new TextMessage(line));
+                    socket.sendMessage(new TextMessage(line));
                 }
             } catch (IOException | RuntimeException exception) {
                 finish(1);
@@ -80,9 +88,8 @@ public final class GatewayInteractiveChannel implements AutoCloseable {
         if (closed.get() || bytes.length > maxFrameBytes) {
             throw new IOException("Interactive frame rejected");
         }
-        var output = Channels.newOutputStream(frames.sink());
-        output.write(bytes);
-        output.write('\n');
+        received.write(bytes);
+        received.write('\n');
     }
 
     public void finish(int code) {
@@ -104,7 +111,7 @@ public final class GatewayInteractiveChannel implements AutoCloseable {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return false;
-        } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException exception) {
+        } catch (ExecutionException | TimeoutException exception) {
             return false;
         }
     }
@@ -124,7 +131,7 @@ public final class GatewayInteractiveChannel implements AutoCloseable {
         }
         exit.complete(1);
         IOException failure = null;
-        for (var channel : java.util.List.of(commands.source(), commands.sink(), frames.sink())) {
+        for (var channel : List.of(commands.source(), commands.sink(), frames.sink())) {
             try {
                 channel.close();
             } catch (IOException exception) {

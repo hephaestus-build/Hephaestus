@@ -143,7 +143,7 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
         exit 1; \
     fi
 
-COPY pi/gateway-init.ts pi/gateway-run.ts pi/gateway-mentor.ts /opt/pi-sdk/
+COPY pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts pi/gateway-mentor.ts /opt/pi-sdk/
 RUN mkdir -p /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     chown -R 1000:1000 /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     ln -s /opt/pi-sdk/node_modules /workspace/node_modules

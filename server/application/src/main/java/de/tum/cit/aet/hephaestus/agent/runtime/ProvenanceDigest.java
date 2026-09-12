@@ -1,6 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.runtime;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -14,6 +18,22 @@ public final class ProvenanceDigest {
 
     public static String sha256Hex(byte[] bytes) {
         return HexFormat.of().formatHex(newSha256().digest(bytes));
+    }
+
+    /** Digest of everything left on {@code input}, which is consumed but not closed. */
+    public static String sha256Hex(InputStream input) throws IOException {
+        MessageDigest digest = newSha256();
+        new DigestInputStream(input, digest).transferTo(OutputStream.nullOutputStream());
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    /** A fresh SHA-256 for a caller that has to digest while it reads. */
+    public static MessageDigest sha256() {
+        return newSha256();
+    }
+
+    public static String hex(MessageDigest digest) {
+        return HexFormat.of().formatHex(digest.digest());
     }
 
     /**

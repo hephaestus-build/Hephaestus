@@ -418,35 +418,45 @@ public class DockerClientOperations
 
     @Override
     public void createVolume(String name, Map<String, String> labels) {
-        dockerClient.createVolumeCmd().withName(name).withLabels(labels).exec();
+        try {
+            dockerClient.createVolumeCmd().withName(name).withLabels(labels).exec();
+        } catch (DockerException e) {
+            throw new SandboxInfrastructureException("Failed to create volume: " + name, e);
+        }
     }
 
     @Override
     public void removeVolume(String name) {
         try {
             dockerClient.removeVolumeCmd(name).exec();
-        } catch (NotFoundException ignored) {
-            // Cleanup converges after interrupted initialization.
+        } catch (NotFoundException e) {
+            log.debug("Volume {} already removed", name);
+        } catch (DockerException e) {
+            throw new SandboxInfrastructureException("Failed to remove volume: " + name, e);
         }
     }
 
     @Override
     public List<DockerOperations.VolumeInfo> listVolumes(Map<String, String> labels) {
-        var volumes = dockerClient
-                .listVolumesCmd()
-                .withFilter(
-                        "label",
-                        labels.entrySet().stream()
-                                .map(entry -> entry.getKey() + "=" + entry.getValue())
-                                .toList())
-                .exec()
-                .getVolumes();
-        return volumes == null
-                ? List.of()
-                : volumes.stream()
-                        .map(volume -> new DockerOperations.VolumeInfo(
-                                volume.getName(), volume.getLabels() == null ? Map.of() : volume.getLabels()))
-                        .toList();
+        try {
+            var volumes = dockerClient
+                    .listVolumesCmd()
+                    .withFilter(
+                            "label",
+                            labels.entrySet().stream()
+                                    .map(entry -> entry.getKey() + "=" + entry.getValue())
+                                    .toList())
+                    .exec()
+                    .getVolumes();
+            return volumes == null
+                    ? List.of()
+                    : volumes.stream()
+                            .map(volume -> new DockerOperations.VolumeInfo(
+                                    volume.getName(), volume.getLabels() == null ? Map.of() : volume.getLabels()))
+                            .toList();
+        } catch (DockerException e) {
+            throw new SandboxInfrastructureException("Failed to list volumes", e);
+        }
     }
 
     // Internal helpers

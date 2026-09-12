@@ -66,8 +66,8 @@ class SecretDiffScannerTest extends BaseUnitTest {
                     assertThat(request.revisions()).containsExactly("a".repeat(40), "b".repeat(40));
                     OutputStream output = invocation.getArgument(3);
                     output.write(
-                            ("[{\"path\":\"source.java\",\"line\":3,\"ruleId\":\"aws-access-token\",\"lineHash\":\""
-                                            + "d".repeat(64) + "\"}]")
+                            ("{\"skipped\":[],\"verdicts\":[{\"path\":\"source.java\",\"line\":3,\"ruleId\":\"aws-access-token\",\"lineHash\":\""
+                                            + "d".repeat(64) + "\"}]}")
                                     .getBytes(StandardCharsets.UTF_8));
                     return null;
                 })
@@ -89,7 +89,8 @@ class SecretDiffScannerTest extends BaseUnitTest {
     void shouldRejectUnexpectedFieldsRatherThanAcceptRawSecretReports() {
         doAnswer(invocation -> {
                     OutputStream output = invocation.getArgument(3);
-                    output.write("[{\"Secret\":\"never accepted\"}]".getBytes(StandardCharsets.UTF_8));
+                    output.write("{\"skipped\":[],\"verdicts\":[{\"Secret\":\"never accepted\"}]}"
+                            .getBytes(StandardCharsets.UTF_8));
                     return null;
                 })
                 .when(git)

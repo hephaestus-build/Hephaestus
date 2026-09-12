@@ -28,6 +28,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.socket.BinaryMessage;
@@ -50,6 +51,8 @@ public class WorkerControlWebSocketHandler extends TextWebSocketHandler {
         t.setDaemon(true);
         return t;
     });
+    /** Wired by the application server's Git executor, which is the only consumer of worker Git output. */
+    private volatile BiConsumer<WorkerSession, GitOutput> gitOutputHandler = (session, output) -> {};
 
     public WorkerControlWebSocketHandler(
             WorkerSessionRegistry registry, FrameCodec codec, MeterRegistry meterRegistry) {
@@ -145,9 +148,7 @@ public class WorkerControlWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private java.util.function.BiConsumer<WorkerSession, GitOutput> gitOutputHandler = (session, output) -> {};
-
-    public void setGitOutputHandler(java.util.function.BiConsumer<WorkerSession, GitOutput> handler) {
+    public void setGitOutputHandler(BiConsumer<WorkerSession, GitOutput> handler) {
         this.gitOutputHandler = handler;
     }
 

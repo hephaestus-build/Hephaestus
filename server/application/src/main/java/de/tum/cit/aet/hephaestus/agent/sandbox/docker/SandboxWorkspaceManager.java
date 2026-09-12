@@ -21,6 +21,7 @@ import java.util.TreeSet;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.apache.commons.io.IOUtils;
+import org.jspecify.annotations.Nullable;
 
 /** Creates the trusted workspace archive streamed through the runtime gateway. */
 public class SandboxWorkspaceManager {
@@ -148,8 +149,7 @@ public class SandboxWorkspaceManager {
         }
     }
 
-    private static boolean coveredByDirectory(
-            String path, @org.jspecify.annotations.Nullable Path source, List<EvidenceDirectory> directories) {
+    private static boolean coveredByDirectory(String path, @Nullable Path source, List<EvidenceDirectory> directories) {
         for (var directory : directories) {
             if (path.startsWith(directory.target())) {
                 Path expected = directory

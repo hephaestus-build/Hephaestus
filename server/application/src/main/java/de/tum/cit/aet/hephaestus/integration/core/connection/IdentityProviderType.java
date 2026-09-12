@@ -12,10 +12,18 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
  * document authorship attribution) — neither has an SCM sync surface.
  */
 public enum IdentityProviderType {
-    GITHUB,
-    GITLAB,
-    SLACK,
-    OUTLINE;
+    GITHUB(IntegrationKind.GITHUB, true),
+    GITLAB(IntegrationKind.GITLAB, true),
+    SLACK(IntegrationKind.SLACK, false),
+    OUTLINE(IntegrationKind.OUTLINE, false);
+
+    private final IntegrationKind kind;
+    private final boolean scm;
+
+    IdentityProviderType(IntegrationKind kind, boolean scm) {
+        this.kind = kind;
+        this.scm = scm;
+    }
 
     /**
      * Narrow an {@link IntegrationKind} to the SCM-only subset. The dependency direction
@@ -25,22 +33,17 @@ public enum IdentityProviderType {
      * @throws IllegalArgumentException if {@code kind} is not an SCM kind
      */
     public static IdentityProviderType from(IntegrationKind kind) {
-        return switch (kind) {
-            case GITHUB -> GITHUB;
-            case GITLAB -> GITLAB;
-            case SLACK, OUTLINE ->
-                throw new IllegalArgumentException(
-                        "IntegrationKind " + kind + " is not an SCM kind and has no IdentityProviderType");
-        };
+        for (IdentityProviderType type : values()) {
+            if (type.kind == kind && type.scm) {
+                return type;
+            }
+        }
+        throw new IllegalArgumentException(
+                "IntegrationKind " + kind + " is not an SCM kind and has no IdentityProviderType");
     }
 
     /** The integration this provider is served by; the SPI vocabulary agent code dispatches on. */
     public IntegrationKind kind() {
-        return switch (this) {
-            case GITHUB -> IntegrationKind.GITHUB;
-            case GITLAB -> IntegrationKind.GITLAB;
-            case SLACK -> IntegrationKind.SLACK;
-            case OUTLINE -> IntegrationKind.OUTLINE;
-        };
+        return kind;
     }
 }

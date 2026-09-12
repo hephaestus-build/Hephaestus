@@ -280,11 +280,11 @@ public class IssueReviewHandler implements JobTypeHandler {
                     .toList();
             feedbackLedgerRecorder.recordProposal(
                     job,
-                    DeliveryComposer.compose(reviewPackage, ArtifactKinds.ISSUE, why, null, units, lead),
+                    DeliveryComposer.composeAdmitted(reviewPackage, ArtifactKinds.ISSUE, why, units, lead),
                     reviewPackage);
             return;
         }
-        var note = DeliveryComposer.compose(loudEnough, ArtifactKinds.ISSUE, why, null, units, lead);
+        var note = DeliveryComposer.composeAdmitted(loudEnough, ArtifactKinds.ISSUE, why, units, lead);
         postIssueNote(
                 job,
                 note,
@@ -304,10 +304,6 @@ public class IssueReviewHandler implements JobTypeHandler {
                 observation.getEvidence(),
                 observation.getEvidenceRationale(),
                 new ObservationKeys(observation.getOccurrenceKey(), observation.getRecurrenceKey()));
-    }
-
-    public void admitObservations(AgentJob job, JsonNode observations) {
-        deliveryService.publish(job, prepareObservations(job, observations));
     }
 
     public PracticeDetectionDeliveryService.PreparedObservations prepareObservations(

@@ -123,8 +123,7 @@ class DockerGatewayTransportTest extends BaseUnitTest {
                 SecurityProfile.DEFAULT,
                 Map.of("task.json", "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
                 onDisk,
-                "/workspace/out",
-                Map.of());
+                "/workspace/out");
     }
 
     @Test

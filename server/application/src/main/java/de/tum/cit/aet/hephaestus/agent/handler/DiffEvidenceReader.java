@@ -1,11 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.function.Consumer;
 
 /** Retains only the prefix a caller can compare, while consuming and hashing each complete line. */
@@ -16,7 +14,7 @@ final class DiffEvidenceReader {
 
     static void scan(Reader reader, int prefixLength, boolean hashContent, Consumer<Line> consumer) throws IOException {
         var prefix = new StringBuilder();
-        var digest = sha256();
+        var digest = ProvenanceDigest.sha256();
         boolean contentStarted = false;
         boolean annotated = false;
         boolean annotationDone = false;
@@ -30,12 +28,9 @@ final class DiffEvidenceReader {
             for (int i = 0; i < count; i++) {
                 char value = buffer[i];
                 if (value == '\n') {
-                    consumer.accept(new Line(
-                            prefix.toString(),
-                            length <= prefixLength,
-                            HexFormat.of().formatHex(digest.digest())));
+                    consumer.accept(new Line(prefix.toString(), length <= prefixLength, ProvenanceDigest.hex(digest)));
                     prefix.setLength(0);
-                    digest = sha256();
+                    digest = ProvenanceDigest.sha256();
                     contentStarted = false;
                     annotated = false;
                     annotationDone = false;
@@ -71,15 +66,6 @@ final class DiffEvidenceReader {
             }
         }
         if (length > 0)
-            consumer.accept(new Line(
-                    prefix.toString(), length <= prefixLength, HexFormat.of().formatHex(digest.digest())));
-    }
-
-    private static MessageDigest sha256() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException(exception);
-        }
+            consumer.accept(new Line(prefix.toString(), length <= prefixLength, ProvenanceDigest.hex(digest)));
     }
 }

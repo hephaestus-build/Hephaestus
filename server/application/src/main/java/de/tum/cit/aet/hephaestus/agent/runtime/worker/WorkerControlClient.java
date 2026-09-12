@@ -41,11 +41,13 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -91,6 +93,10 @@ public class WorkerControlClient {
      */
     private volatile @Nullable BiConsumer<UUID, String> cancelHandler;
 
+    private volatile String controlSessionId = "";
+    private volatile Consumer<WorkerControlFrame> gitHandler = frame -> {};
+    private volatile Runnable gitDisconnect = () -> {};
+
     public WorkerControlClient(
             WorkerProperties properties, FrameCodec codec, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
         this.properties = properties;
@@ -130,45 +136,35 @@ public class WorkerControlClient {
         if (!running.compareAndSet(true, false)) {
             return;
         }
-        try {
-            WebSocket ws = webSocket.getAndSet(null);
-            if (ws != null) {
-                ws.sendClose(WebSocket.NORMAL_CLOSURE, "worker shutdown");
-            }
-        } catch (RuntimeException ignored) {
-            // best-effort
-        }
-        connected.set(false);
-        outbound.removeIf(envelope -> envelope.payload() instanceof GitOutput);
-        gitDisconnect.run();
+        forceReconnect("worker shutdown");
         interrupt(outboundThread);
         interrupt(inboundThread);
         interrupt(connectionThread);
     }
 
     public void send(WorkerControlFrame frame) {
-        FrameEnvelope envelope = FrameEnvelope.of(frame);
-        if (!outbound.offer(envelope)) {
-            sendDropped.increment();
+        if (!enqueue(frame))
             log.warn("Outbound queue full; dropping frame {}", frame.getClass().getSimpleName());
-        }
     }
 
-    private volatile String controlSessionId = "";
-    private volatile java.util.function.Consumer<WorkerControlFrame> gitHandler = frame -> {};
-    private volatile Runnable gitDisconnect = () -> {};
+    /** Like {@link #send} but reports the drop to the caller, which owns the retry decision. */
+    public boolean sendRequired(WorkerControlFrame frame) {
+        return connected.get() && enqueue(frame);
+    }
 
-    public void setGitHandler(java.util.function.Consumer<WorkerControlFrame> handler, Runnable disconnect) {
+    private boolean enqueue(WorkerControlFrame frame) {
+        if (outbound.offer(FrameEnvelope.of(frame))) return true;
+        sendDropped.increment();
+        return false;
+    }
+
+    public void setGitHandler(Consumer<WorkerControlFrame> handler, Runnable disconnect) {
         this.gitHandler = handler;
         this.gitDisconnect = disconnect;
     }
 
     public String controlSessionId() {
         return controlSessionId;
-    }
-
-    public boolean sendRequired(WorkerControlFrame frame) {
-        return connected.get() && outbound.offer(FrameEnvelope.of(frame));
     }
 
     public boolean isConnected() {
@@ -377,8 +373,8 @@ public class WorkerControlClient {
         if (response.statusCode() != 200) {
             throw new IOException("token exchange failed: HTTP " + response.statusCode());
         }
-        tools.jackson.databind.JsonNode json = objectMapper.readTree(response.body());
-        tools.jackson.databind.JsonNode token = json.get("token");
+        JsonNode json = objectMapper.readTree(response.body());
+        JsonNode token = json.get("token");
         if (token == null
                 || token.isNull()
                 || !token.isString()
@@ -415,11 +411,10 @@ public class WorkerControlClient {
         }
     }
 
+    /** Closes the transport; the connection loop reconnects unless the client is stopping. */
     private void forceReconnect(String reason) {
         WebSocket ws = webSocket.getAndSet(null);
-        connected.set(false);
-        outbound.removeIf(envelope -> envelope.payload() instanceof GitOutput);
-        gitDisconnect.run();
+        onTransportLost();
         if (ws != null) {
             try {
                 ws.sendClose(WebSocket.NORMAL_CLOSURE, reason);
@@ -427,6 +422,16 @@ public class WorkerControlClient {
                 // best-effort
             }
         }
+    }
+
+    /**
+     * Git output frames are only meaningful to the session that dispatched the operation, so a lost
+     * transport drops the queued ones and cancels every running operation.
+     */
+    private void onTransportLost() {
+        connected.set(false);
+        outbound.removeIf(envelope -> envelope.payload() instanceof GitOutput);
+        gitDisconnect.run();
     }
 
     private static String httpBaseFrom(URI wsUri) {
@@ -483,18 +488,14 @@ public class WorkerControlClient {
         @Override
         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
             log.info("Worker control channel closed: code={}, reason={}", statusCode, reason);
-            connected.set(false);
-            outbound.removeIf(envelope -> envelope.payload() instanceof GitOutput);
-            gitDisconnect.run();
+            onTransportLost();
             return CompletableFuture.completedFuture(null);
         }
 
         @Override
         public void onError(WebSocket webSocket, Throwable error) {
             log.warn("Worker control channel error: {}", error.getClass().getSimpleName());
-            connected.set(false);
-            outbound.removeIf(envelope -> envelope.payload() instanceof GitOutput);
-            gitDisconnect.run();
+            onTransportLost();
         }
     }
 }

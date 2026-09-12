@@ -14,45 +14,59 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Serial;
+import java.nio.ByteBuffer;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.Semaphore;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.io.input.BoundedInputStream;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Service;
+import org.springframework.util.FileSystemUtils;
 
 @Service
 @EnableConfigurationProperties(GitRepositoryProperties.class)
 public class GitRepositoryManager {
     public static final String TREE_LIMITATION_SUBMODULE = "SUBMODULE_EXCLUDED";
     public static final String TREE_LIMITATION_UNSAFE_PATH = "UNSAFE_PATH_EXCLUDED";
+    private static final Logger log = LoggerFactory.getLogger(GitRepositoryManager.class);
     private static final Duration OPERATION_TIMEOUT = Duration.ofMinutes(15);
     private static final int DETAIL_FRAME_BYTES = 16 * 1024 * 1024;
+    private static final int PAGE_SIZE = 256;
+    /** Each page of details is one container; a walk stops here and the next cycle resumes from the captured set. */
+    private static final int MAX_DETAIL_PAGES_PER_WALK = 32;
+
     private final GitRepositoryProperties properties;
     private final @Nullable NativeGitExecutor executor;
     private final FabricLayout layout;
-    private final java.util.concurrent.Semaphore ingestionPermits;
+    private final Semaphore ingestionPermits;
 
     /** A runtime role without a Git executor — the webhook receiver — has Git disabled whatever is configured. */
     public GitRepositoryManager(
-            GitRepositoryProperties properties, java.util.Optional<NativeGitExecutor> executor, FabricLayout layout) {
+            GitRepositoryProperties properties, Optional<NativeGitExecutor> executor, FabricLayout layout) {
         this.properties = properties;
         this.executor = executor.orElse(null);
         this.layout = layout;
-        this.ingestionPermits = new java.util.concurrent.Semaphore(properties.maxConcurrentIngestions());
+        this.ingestionPermits = new Semaphore(properties.maxConcurrentIngestions());
     }
 
     public boolean isEnabled() {
@@ -96,10 +110,14 @@ public class GitRepositoryManager {
     }
 
     public void forEachCommitInRange(
-            RepositoryKey repository, @Nullable String fromSha, String toSha, Consumer<CommitDetails> consumer) {
+            RepositoryKey repository,
+            @Nullable String fromSha,
+            String toSha,
+            Function<List<String>, Set<String>> captured,
+            Consumer<CommitDetails> consumer) {
         if (!isEnabled()) return;
         List<String> revisions = fromSha == null ? List.of(toSha) : List.of(fromSha, toSha);
-        visitCommitIds(repository, Operation.COMMIT_RANGE, revisions, shas -> Set.of(), consumer);
+        visitCommitIds(repository, Operation.COMMIT_RANGE, revisions, captured, consumer);
     }
 
     public void forEachCommitSubject(RepositoryKey repository, String base, String head, Consumer<String> consumer) {
@@ -146,17 +164,23 @@ public class GitRepositoryManager {
             Consumer<CommitDetails> consumer) {
         Path ids = spool(repository, operation, revisions);
         try (var lines = Files.newBufferedReader(ids)) {
-            List<String> page = new ArrayList<>(256);
+            List<String> page = new ArrayList<>(PAGE_SIZE);
+            int spooled = 0;
             String sha;
             while ((sha = lines.readLine()) != null) {
                 checkInterrupted();
                 page.add(sha);
-                if (page.size() == 256) {
-                    visitDetails(repository, page, captured, consumer);
+                if (page.size() == PAGE_SIZE) {
+                    if (spooled == MAX_DETAIL_PAGES_PER_WALK) {
+                        log.info("Git walk paused at its page budget: repositoryId={}", repository.repositoryId());
+                        return;
+                    }
+                    if (visitDetails(repository, page, captured, consumer)) spooled++;
                     page.clear();
                 }
             }
-            if (!page.isEmpty()) visitDetails(repository, page, captured, consumer);
+            if (!page.isEmpty() && spooled < MAX_DETAIL_PAGES_PER_WALK)
+                visitDetails(repository, page, captured, consumer);
         } catch (IOException e) {
             throw new GitOperationException("Cannot read Git commit stream", e);
         } finally {
@@ -164,7 +188,8 @@ public class GitRepositoryManager {
         }
     }
 
-    private void visitDetails(
+    /** @return whether a details container ran for this page */
+    private boolean visitDetails(
             RepositoryKey repository,
             List<String> page,
             Function<List<String>, Set<String>> captured,
@@ -172,7 +197,7 @@ public class GitRepositoryManager {
         Set<String> existing = captured.apply(List.copyOf(page));
         List<String> missing =
                 page.stream().filter(sha -> !existing.contains(sha)).toList();
-        if (missing.isEmpty()) return;
+        if (missing.isEmpty()) return false;
         Path details = spool(repository, Operation.COMMIT_DETAILS, missing);
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(details)))) {
             for (String sha : missing) {
@@ -203,6 +228,7 @@ public class GitRepositoryManager {
                 }
             }
             if (input.read() != -1) throw new IOException("Unexpected Git stream trailer");
+            return true;
         } catch (IOException e) {
             throw new GitOperationException("Cannot decode Git commit details", e);
         } finally {
@@ -241,7 +267,7 @@ public class GitRepositoryManager {
 
     private static List<FileChange> parseFileChanges(InputStream input) throws IOException {
         Map<String, FileChange> changes = new LinkedHashMap<>();
-        Set<String> counted = new java.util.HashSet<>();
+        Set<String> counted = new HashSet<>();
         String field;
         while ((field = nulField(input)) != null) {
             if (field.startsWith(":")) {
@@ -295,8 +321,8 @@ public class GitRepositoryManager {
             if (value == 0)
                 return StandardCharsets.UTF_8
                         .newDecoder()
-                        .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
-                        .decode(java.nio.ByteBuffer.wrap(field.toByteArray()))
+                        .onMalformedInput(CodingErrorAction.REPORT)
+                        .decode(ByteBuffer.wrap(field.toByteArray()))
                         .toString();
             if (field.size() >= DETAIL_FRAME_BYTES)
                 throw new IOException("Git metadata field exceeds ingestion budget");
@@ -321,7 +347,7 @@ public class GitRepositoryManager {
         long bytes = 0;
         long visited = 0;
         try (var tar = new TarArchiveInputStream(Files.newInputStream(archive))) {
-            org.apache.commons.compress.archivers.tar.TarArchiveEntry entry;
+            TarArchiveEntry entry;
             while ((entry = tar.getNextEntry()) != null) {
                 checkInterrupted();
                 String name = entry.getName();
@@ -427,22 +453,7 @@ public class GitRepositoryManager {
 
     static void deleteTreeQuietly(Path root) {
         try {
-            Files.walkFileTree(root, new java.nio.file.SimpleFileVisitor<>() {
-                @Override
-                public java.nio.file.FileVisitResult visitFile(
-                        Path file, java.nio.file.attribute.BasicFileAttributes attributes) throws IOException {
-                    Files.delete(file);
-                    return java.nio.file.FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public java.nio.file.FileVisitResult postVisitDirectory(Path directory, @Nullable IOException failure)
-                        throws IOException {
-                    if (failure != null) throw failure;
-                    Files.delete(directory);
-                    return java.nio.file.FileVisitResult.CONTINUE;
-                }
-            });
+            FileSystemUtils.deleteRecursively(root);
         } catch (IOException ignored) {
         }
     }

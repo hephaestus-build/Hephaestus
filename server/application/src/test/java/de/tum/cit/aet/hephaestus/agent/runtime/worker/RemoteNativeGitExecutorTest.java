@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -13,6 +16,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.hub.WorkerDisconnectedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.WorkerSession;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.WorkerSessionRegistry;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitAck;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitCancel;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOperation;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOutput;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerControlFrame;
@@ -52,6 +56,7 @@ class RemoteNativeGitExecutorTest {
         when(registry.sessions()).thenReturn(List.of(session));
         when(session.isOpen()).thenReturn(true);
         when(session.sessionId()).thenReturn("session");
+        when(session.workerId()).thenReturn("worker-b");
         executor = new RemoteNativeGitExecutor(registry, hub, new ObjectMapper());
     }
 
@@ -103,12 +108,50 @@ class RemoteNativeGitExecutorTest {
     }
 
     @Test
-    void shouldRequireAFetchBeforeQueryingARepositoryNoWorkerHolds() {
+    void shouldPlaceARepositoryOnALiveWorkerDeterministicallyWhenNoAffinityExists() {
+        var other = mock(WorkerSession.class);
+        when(other.isOpen()).thenReturn(true);
+        when(other.sessionId()).thenReturn("other-session");
+        when(other.workerId()).thenReturn("worker-a");
+        when(registry.sessions()).thenReturn(List.of(session, other));
         var query = new Request(Operation.COMMIT_IDS, List.of(), null, null);
-        assertThatThrownBy(() -> executor.execute(KEY, query, TIMEOUT, new ByteArrayOutputStream()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("fetch");
-        verifyNoInteractions(session);
+        var sorted = List.of(other, session);
+        var expected = sorted.get(Math.floorMod(Long.hashCode(KEY.repositoryId()), sorted.size()));
+        var unexpected = expected == session ? other : session;
+        when(expected.send(any())).thenAnswer(invocation -> {
+            if (invocation.getArgument(0) instanceof GitOperation operation)
+                receiver.get().accept(expected, new GitOutput(operation.operationId(), 0, "", true, true));
+            return true;
+        });
+
+        executor.execute(KEY, query, TIMEOUT, new ByteArrayOutputStream());
+        executor.execute(KEY, query, TIMEOUT, new ByteArrayOutputStream());
+
+        verify(expected, times(2)).send(any(GitOperation.class));
+        verify(unexpected, never()).send(any());
+    }
+
+    @Test
+    void shouldNotCancelAnOperationThatCompleted() {
+        when(session.send(any())).thenAnswer(invocation -> {
+            if (invocation.getArgument(0) instanceof GitOperation operation)
+                deliver(new GitOutput(operation.operationId(), 0, "", true, true));
+            return true;
+        });
+        executor.execute(KEY, FETCH, TIMEOUT, new ByteArrayOutputStream());
+        verify(session, never()).send(any(GitCancel.class));
+    }
+
+    @Test
+    void shouldCancelAnOperationThatFailed() {
+        when(session.send(any())).thenAnswer(invocation -> {
+            if (invocation.getArgument(0) instanceof GitOperation operation)
+                deliver(new GitOutput(operation.operationId(), 0, "", true, false));
+            return true;
+        });
+        assertThatThrownBy(() -> executor.execute(KEY, FETCH, TIMEOUT, new ByteArrayOutputStream()))
+                .isInstanceOf(IllegalStateException.class);
+        verify(session).send(any(GitCancel.class));
     }
 
     @Test

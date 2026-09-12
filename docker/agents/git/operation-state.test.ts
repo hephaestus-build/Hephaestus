@@ -1,15 +1,16 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 void test("native state distinguishes missing mirrors and refs from corrupt repositories", () => {
 	const root = mkdtempSync(join(tmpdir(), "git-state-"));
 	const repository = join(root, "mirror.git");
 	const execute = (operation: string, revisions: string[]) =>
-		spawnSync(process.execPath, [new URL("./operation.ts", import.meta.url).pathname], {
+		spawnSync(process.execPath, [fileURLToPath(new URL("./operation.ts", import.meta.url))], {
 			input: JSON.stringify({ operation, revisions }),
 			encoding: "utf8",
 			env: { ...process.env, GIT_REPOSITORY_DIRECTORY: repository },
@@ -25,6 +26,9 @@ void test("native state distinguishes missing mirrors and refs from corrupt repo
 		const missingRef = execute("RESOLVE", ["refs/heads/missing"]);
 		assert.equal(missingRef.status, 0);
 		assert.equal(missingRef.stdout, "");
+		const optionShaped = execute("RESOLVE", ["--upload-pack=evil"]);
+		assert.equal(optionShaped.status, 0, optionShaped.stderr);
+		assert.equal(optionShaped.stdout, "");
 		writeFileSync(join(repository, "HEAD"), "invalid repository metadata");
 		assert.equal(execute("STATUS", []).status, 1);
 		assert.equal(execute("RESOLVE", ["refs/heads/missing"]).status, 1);
@@ -42,7 +46,7 @@ void test("snapshots reject malformed UTF-8 paths and refs instead of replacing 
 			stdio: ["ignore", "pipe", "ignore"],
 		}).trim();
 	const snapshot = (head: string) =>
-		spawnSync(process.execPath, [new URL("./operation.ts", import.meta.url).pathname], {
+		spawnSync(process.execPath, [fileURLToPath(new URL("./operation.ts", import.meta.url))], {
 			input: JSON.stringify({ operation: "SNAPSHOT", revisions: [head] }),
 			env: {
 				...process.env,
@@ -96,7 +100,7 @@ void test("a repository over the snapshot bound is refused before the snapshot v
 			stdio: ["ignore", "pipe", "ignore"],
 		}).trim();
 	const snapshot = (bound: number) =>
-		spawnSync(process.execPath, [new URL("./operation.ts", import.meta.url).pathname], {
+		spawnSync(process.execPath, [fileURLToPath(new URL("./operation.ts", import.meta.url))], {
 			input: JSON.stringify({ operation: "SNAPSHOT", revisions: [git("rev-parse", "HEAD")] }),
 			encoding: "utf8",
 			env: {
@@ -110,12 +114,36 @@ void test("a repository over the snapshot bound is refused before the snapshot v
 		execFileSync("git", ["init", "--template=", repository], { stdio: "ignore" });
 		writeFileSync(join(repository, "large.txt"), "x".repeat(100_000));
 		git("add", ".");
-		git("-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "large");
+		git(
+			"-c",
+			"user.name=fixture",
+			"-c",
+			"user.email=fixture@example.invalid",
+			"commit",
+			"-m",
+			"large",
+		);
+		git(
+			"-c",
+			"user.name=fixture",
+			"-c",
+			"user.email=fixture@example.invalid",
+			"tag",
+			"-a",
+			"-m",
+			"blob",
+			"blob-tag",
+			"HEAD:large.txt",
+		);
 		const refused = snapshot(50_000);
 		assert.equal(refused.status, 1);
 		assert.match(refused.stderr, /snapshot bound/);
 		assert.equal(spawnSync("test", ["-e", join(root, "snapshot", "large.txt")]).status, 1);
 		assert.equal(snapshot(50_000_000).status, 0);
+		assert.match(
+			readFileSync(join(root, "snapshot", ".git", "hephaestus-captured-refs"), "utf8"),
+			new RegExp(`^blob ${git("rev-parse", "HEAD:large.txt")} refs/tags/blob-tag$`, "m"),
+		);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

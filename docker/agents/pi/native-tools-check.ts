@@ -45,4 +45,4 @@ async function checkNativeTools() {
 	assert.match(JSON.stringify(find.content), /tracked.txt/);
 }
 
-void checkNativeTools();
+await checkNativeTools();

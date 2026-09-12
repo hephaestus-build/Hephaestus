@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, resolve as resolvePath } from "node:path";
 
 import {
 	type AgentSession,
@@ -165,7 +165,8 @@ function isAdmittedObservation(value: unknown): value is AdmittedObservation {
 }
 
 const WORKSPACE_ROOT = "/workspace";
-const PRACTICE_TOOLS = ["read", "write", "edit", "bash", "grep", "find", "ls"] as const;
+const EVIDENCE_TOOLS = ["read", "grep", "find", "ls"] as const;
+const PRACTICE_TOOLS = [...EVIDENCE_TOOLS, "write", "edit", "bash"] as const;
 const CWD = process.env.PI_RUNNER_CWD ?? WORKSPACE_ROOT;
 const ENVELOPE_MISMATCH_EXIT = 42;
 const SUPPORTED_KIND = "practice_review";
@@ -509,8 +510,37 @@ function persistReviewState() {
 
 function maybeWriteResultFile(): boolean {
 	if (reviewState.observations.length === 0) return false;
-	writeFileSync(RESULT_PATH, JSON.stringify({ observations: reviewState.observations }, null, 2));
+	writeFileSync(
+		RESULT_PATH,
+		JSON.stringify(
+			{
+				observations: reviewState.observations,
+				...(admissionDigest === null ? {} : { admissionDigest }),
+			},
+			null,
+			2,
+		),
+	);
 	return true;
+}
+
+// out/ is the sandbox's own claim, so the runner writes every file in it last, from memory, and
+// removes whatever else a session left there.
+function finalizeOutput(): void {
+	const written = new Set<string>();
+	const persist = (path: string, write: () => unknown) => {
+		if (write() !== false) written.add(path);
+	};
+	persist(REVIEW_STATE_PATH, persistReviewState);
+	persist(RESULT_PATH, maybeWriteResultFile);
+	persist(USAGE_PATH, persistUsage);
+	persist(RUNNER_DEBUG_PATH, persistRunnerDebug);
+	if (practiceCoverageLedger !== null) persist(PRACTICE_COVERAGE_PATH, persistPracticeCoverage);
+	if (compositionAdmitted) persist(FEEDBACK_PATH, persistComposedFeedback);
+	for (const entry of readdirSync(OUTPUT)) {
+		const path = `${OUTPUT}/${entry}`;
+		if (!written.has(path)) rmSync(path, { recursive: true, force: true });
+	}
 }
 
 function hasPersistedReviewState(): boolean {
@@ -557,10 +587,17 @@ function normalizeAndValidateObservation(rawObservation: unknown): NormalizedObs
 	);
 	validateInapplicabilityScope(observation, availableSourceKinds);
 	for (const citation of observation.evidence.citations) {
-		// Repository blobs are verified against the immutable Git capture by trusted admission.
-		if (citation.sourceKind === "scm.repository.tree") continue;
-		const content = readFileSync(`${CWD}/${citation.artifactPath}`, "utf8");
-		const mismatch = describeCitationMismatch(citation, content);
+		// A historical repository citation is verified against the immutable capture by admission; one
+		// at the captured HEAD is read from the checkout so the session gets its correction here.
+		if (citation.sourceKind === "scm.repository.tree" && citation.revision !== undefined) continue;
+		const content =
+			citation.sourceKind === "scm.repository.tree"
+				? readCheckoutFile(citation.path)
+				: readFileSync(`${CWD}/${citation.artifactPath}`, "utf8");
+		const mismatch =
+			content === null
+				? "no such file in the checkout"
+				: describeCitationMismatch(citation, content);
 		if (mismatch !== null) {
 			throw new Error(
 				`citation does not match ${citation.path}:${citation.startLine}-${citation.endLine} ` +
@@ -570,6 +607,17 @@ function normalizeAndValidateObservation(rawObservation: unknown): NormalizedObs
 		}
 	}
 	return observation;
+}
+
+/** The file at a repository-relative path in the checkout, or null when there is none. */
+function readCheckoutFile(path: string): string | null {
+	const file = resolvePath(INPUT_PATHS.repositoryRoot, path);
+	if (!file.startsWith(`${INPUT_PATHS.repositoryRoot}/`)) return null;
+	try {
+		return readFileSync(file, "utf8");
+	} catch {
+		return null;
+	}
 }
 
 let measurementClosed = false;
@@ -1679,7 +1727,6 @@ async function main() {
 		`[pi-runner] Budget: total=${AGENT_BUDGET_MS}ms, initial=${INITIAL_TIMEOUT_MS}ms, retry=${RETRY_TIMEOUT_MS}ms`,
 	);
 
-	// Pi filters custom tools through this allowlist; omit filesystem mutation tools.
 	// pi-agent-sandbox.ts has the rationale for running untrusted; both Pi runners in this image
 	// share it.
 	const settingsManager = SettingsManager.create(CWD, AGENT_DIR, SANDBOX_SETTINGS_MANAGER_OPTIONS);
@@ -1822,16 +1869,13 @@ async function main() {
 		measurementClosed = true;
 		await admitObservations();
 		persistComposedFeedback();
-		const parsed = parseJson(readFileSync(RESULT_PATH, "utf8"));
-		const result: Record<string, unknown> = isRecord(parsed) ? parsed : {};
-		result.admissionDigest = admissionDigest;
-		writeFileSync(RESULT_PATH, JSON.stringify(result));
+		maybeWriteResultFile();
 		if (!compositionRequest || !feedbackTool || admittedObservations.length === 0) return;
 		const { session: composerSession, extensionsResult: composerExtensions } =
 			await createAgentSession({
 				cwd: CWD,
 				agentDir: AGENT_DIR,
-				tools: [...PRACTICE_TOOLS, "report_feedback", "report_summary"],
+				tools: [...EVIDENCE_TOOLS, "report_feedback", "report_summary"],
 				customTools: [feedbackTool, buildSummaryTool()],
 				sessionManager: SessionManager.inMemory(),
 				settingsManager,
@@ -2073,13 +2117,13 @@ async function main() {
 		assistantMessages: initialUsage.assistantMessages,
 		stopReasons: initialUsage.stopReasons,
 		usage: initialUsage,
-		resultFilePresent: existsSync(RESULT_PATH),
+		resultFilePresent: hasPersistedReviewState(),
 	});
 	persistRunnerDebug();
 	persistUsage();
 
 	console.error(
-		`[pi-runner] Initial: ${(initialDurationMs / 1000).toFixed(1)}s, calls=${initialUsage.totalCalls}, softTimeout=${softTimeoutFired}, hardAbort=${hardAborted}, resultFile=${existsSync(RESULT_PATH)}, reviewState=${hasPersistedReviewState()}`,
+		`[pi-runner] Initial: ${(initialDurationMs / 1000).toFixed(1)}s, calls=${initialUsage.totalCalls}, softTimeout=${softTimeoutFired}, hardAbort=${hardAborted}, reviewState=${hasPersistedReviewState()}`,
 	);
 
 	const resultFileWritten = maybeWriteResultFile();
@@ -2094,6 +2138,7 @@ async function main() {
 			`[pi-runner] SUCCESS: composed result.json from persisted tool state after initial run`,
 		);
 		await completeWithAdmittedComposition([]);
+		finalizeOutput();
 		process.exit(0);
 	}
 
@@ -2224,13 +2269,13 @@ async function main() {
 		assistantMessages: retryUsage.assistantMessages,
 		stopReasons: retryUsage.stopReasons,
 		usage: retryUsage,
-		resultFilePresent: existsSync(RESULT_PATH),
+		resultFilePresent: hasPersistedReviewState(),
 	});
 	persistRunnerDebug();
 	persistUsage();
 
 	console.error(
-		`[pi-runner] Retry: ${(retryDurationMs / 1000).toFixed(1)}s, resultFile=${existsSync(RESULT_PATH)}, reviewState=${hasPersistedReviewState()}`,
+		`[pi-runner] Retry: ${(retryDurationMs / 1000).toFixed(1)}s, reviewState=${hasPersistedReviewState()}`,
 	);
 	const missingAfterRetry = missingPracticeSlugs(
 		allSlugs,
@@ -2255,6 +2300,7 @@ async function main() {
 				: `[pi-runner] SUCCESS: composed result.json from persisted tool state after retry`,
 		);
 		await completeWithAdmittedComposition(missingAfterRetry);
+		finalizeOutput();
 		process.exit(0);
 	}
 
@@ -2263,30 +2309,37 @@ async function main() {
 			`[pi-runner] UNREACHABLE: this review reached no practice, and ${providerFailures} model call(s) ` +
 				`went unanswered — the provider, not the work, is what this run could not read`,
 		);
+		finalizeOutput();
 		process.exit(PROVIDER_UNREACHABLE_EXIT);
 	}
 	console.error(`[pi-runner] FAILED: this review reached no practice at all`);
+	finalizeOutput();
 	process.exit(1);
+}
+
+function finalizeOutputQuietly() {
+	try {
+		finalizeOutput();
+	} catch (error) {
+		console.error(`[pi-runner] output could not be finalized: ${errorText(error)}`);
+	}
 }
 
 process.on("uncaughtException", (err) => {
 	console.error(`[pi-runner] FATAL: ${errorText(err)}`);
-	persistRunnerDebug();
-	persistUsage();
+	finalizeOutputQuietly();
 	process.exit(2);
 });
 
 process.on("unhandledRejection", (reason) => {
 	console.error(`[pi-runner] UNHANDLED REJECTION: ${errorText(reason)}`);
-	persistRunnerDebug();
-	persistUsage();
+	finalizeOutputQuietly();
 	process.exit(2);
 });
 
 main().catch((err: unknown) => {
 	console.error(`[pi-runner] FATAL: ${errorText(err)}\n${err instanceof Error ? err.stack : ""}`);
-	persistRunnerDebug();
-	persistUsage();
+	finalizeOutputQuietly();
 	// A server this container never reached is not a defect in the review, and the attempts above have
 	// already ridden out the failures that clear in place. Saying so distinctly is what lets the server
 	// try the same work again instead of ending it.

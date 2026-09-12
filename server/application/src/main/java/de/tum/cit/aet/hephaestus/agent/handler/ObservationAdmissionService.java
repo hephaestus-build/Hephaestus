@@ -119,6 +119,11 @@ public class ObservationAdmissionService {
         }));
     }
 
+    /** Whether this job's observations were admitted; the digest is the one durable trace of it. */
+    public static boolean isAdmitted(AgentJob job) {
+        return !admissionDigest(job).isBlank();
+    }
+
     private static String admissionDigest(AgentJob job) {
         return job.getMetadata() == null
                 ? ""

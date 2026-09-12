@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.adapter;
 
 import de.tum.cit.aet.hephaestus.agent.handler.CitationVerification;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
@@ -95,12 +94,8 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
         for (Citable entry : citable) {
             var row = contractVersions.get(entry.jobId());
             if (row == null || row.getContractVersion() == null) continue;
-            if (newDelivery) {
-                try {
-                    CitationVerification.requireVerifiedCitations(entry.jobId(), row.getAttempt(), entry.citations());
-                } catch (JobDeliveryException exception) {
-                    continue;
-                }
+            if (newDelivery && !CitationVerification.isVerified(entry.jobId(), row.getAttempt(), entry.citations())) {
+                continue;
             }
             if (permits(row.getContractVersion(), entry.citations(), requestedPurpose)) {
                 permitted.add(entry.observationId());

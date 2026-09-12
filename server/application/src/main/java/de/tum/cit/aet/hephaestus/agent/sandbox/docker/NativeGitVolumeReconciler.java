@@ -46,7 +46,8 @@ public class NativeGitVolumeReconciler {
         alive.add(worker.resolvedWorkerId());
         Instant cutoff = Instant.now().minus(Duration.ofMinutes(5));
         for (var container : containers.listContainersByLabel(DockerNativeGitExecutor.OWNER_LABEL, docker.owner())) {
-            if (!DockerNativeGitExecutor.COMPONENT.equals(container.labels().get(DockerNativeGitExecutor.COMPONENT_LABEL))) continue;
+            if (!DockerNativeGitExecutor.COMPONENT.equals(
+                    container.labels().get(DockerNativeGitExecutor.COMPONENT_LABEL))) continue;
             String owner = container.labels().get(DockerNativeGitExecutor.WORKER_LABEL);
             if (owner == null
                     || container.createdAt() == null

@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive;
 
+import de.tum.cit.aet.hephaestus.agent.gateway.GatewayInteractiveChannel;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.AttachedSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.AttachedSandboxState;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.EvictionReason;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxIdentity;
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -46,7 +48,7 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
     private final String networkId;
     private final InteractiveSandboxRuntimeKey runtimeKey;
 
-    private final PiProcessHandle process;
+    private final GatewayInteractiveChannel channel;
     private final JsonlStdoutPump pump;
     private final JsonlStdinWriter writer;
     private final FrameRingBuffer ring;
@@ -78,7 +80,7 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
             String containerId,
             String networkId,
             InteractiveSandboxRuntimeKey runtimeKey,
-            PiProcessHandle process,
+            GatewayInteractiveChannel channel,
             ObjectMapper mapper,
             FrameRingBuffer ring,
             int subscriberQueueCapacity,
@@ -95,7 +97,7 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
         this.containerId = containerId;
         this.networkId = networkId;
         this.runtimeKey = runtimeKey;
-        this.process = process;
+        this.channel = channel;
         this.ring = ring;
         this.metrics = metrics;
         this.lifecycle = lifecycle;
@@ -109,7 +111,7 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
         Map<String, String> mdcSnapshot = mdcContext();
         this.writer = new JsonlStdinWriter(
                 sessionId,
-                process.stdin(),
+                channel.stdin(),
                 mapper,
                 sendQueueCapacity,
                 stdinWriteTimeoutMs,
@@ -122,11 +124,11 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
                 mdcSnapshot);
         this.pump = new JsonlStdoutPump(
                 sessionId,
-                process.stdout(),
+                channel.stdout(),
                 mapper,
                 this::onFrame,
                 this::onEof,
-                process::exitValueOrAlive,
+                channel::exitValueOrAlive,
                 metrics.frameParseError,
                 maxLineChars,
                 mdcSnapshot);
@@ -228,8 +230,8 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
     @Override
     public void onWriteTimeout() {
         terminate(EvictionReason.ERROR);
-        // Closes stdin FD; interrupt() does not unblock OutputStream.write on Linux.
-        process.destroyForcibly();
+        // Closing the pipe is what unblocks a stalled write; interrupt() does not.
+        closeChannel();
     }
 
     /** Forced close with a specific reason and the configured default grace. Idempotent. */
@@ -306,16 +308,16 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
         }
     }
 
-    // The exec FD can close briefly before Process.exitValue() becomes available.
-    private static final Duration EOF_EXIT_WAIT = Duration.ofSeconds(2);
+    /** The channel completes its exit before it closes the frame pipe, so EOF always carries the code. */
+    private void onEof(int exitCode) {
+        terminate(exitCode == 0 ? EvictionReason.NATURAL_EXIT : EvictionReason.ERROR);
+    }
 
-    private void onEof(int initialExitCode) {
-        int exit = initialExitCode;
-        if (exit < 0) {
-            process.waitFor(EOF_EXIT_WAIT);
-            exit = process.exitValueOrAlive();
+    private void closeChannel() {
+        try {
+            channel.close();
+        } catch (IOException | RuntimeException ignored) {
         }
-        terminate(exit == 0 ? EvictionReason.NATURAL_EXIT : EvictionReason.ERROR);
     }
 
     private void runCloseAsync(Duration graceTimeout) {
@@ -348,9 +350,9 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
 
             // A lost close frame must not leave the pumps waiting after container shutdown.
             Duration waitBudget = graceTimeout.plusSeconds(5);
-            if (!process.waitFor(waitBudget)) {
+            if (!channel.waitFor(waitBudget)) {
                 log.warn("Gateway channel still open after container shutdown");
-                process.destroyForcibly();
+                closeChannel();
             }
 
             int subscriberCount = subscriptions.size();
@@ -375,10 +377,7 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
                 }
             }
 
-            try {
-                process.awaitExitAndClose(Duration.ofSeconds(2));
-            } catch (Exception ignored) {
-            }
+            closeChannel();
 
             metrics.lifetime.record(Duration.between(attachedAt, Instant.now()));
             metrics.subscribersAtClose.record(subscriberCount);

@@ -67,6 +67,24 @@ class HistoricalGitEvidenceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldAnswerACitationOfAMissingPathAsAbsentWhileVerifyingTheRest() {
+        var present = new HistoricalGitEvidence.Citation("a".repeat(40), "one.java", "same quote", 2, 2);
+        var missing = new HistoricalGitEvidence.Citation("a".repeat(40), "gone.java", "same quote", 1, 1);
+        doAnswer(invocation -> {
+                    try (var tar = new TarArchiveOutputStream((OutputStream) invocation.getArgument(3))) {
+                        entry(tar, "0", "other line\nsame quote\n");
+                    }
+                    return null;
+                })
+                .when(git)
+                .executeInSnapshot(eq(repository), any(), any(), any());
+        var result = verifier.verifyAll(job, "head-digest", "refs-digest", "c".repeat(40), List.of(present, missing));
+        assertThat(java.util.Objects.requireNonNull(result.get(present)).matches())
+                .isTrue();
+        assertThat(result.get(missing)).isEqualTo(JobEvidenceFiles.QuoteMatch.absent());
+    }
+
+    @Test
     void shouldRejectUnexpectedArchiveEntries() {
         doAnswer(invocation -> {
                     try (var tar = new TarArchiveOutputStream((OutputStream) invocation.getArgument(3))) {

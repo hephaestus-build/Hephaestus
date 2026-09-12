@@ -5,12 +5,15 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 
 public record EvidenceContribution(
         Map<String, byte[]> files,
@@ -29,12 +32,12 @@ public record EvidenceContribution(
          * Content already materialised on disk, staged by path so its bytes never enter this process. A
          * repository checkout is written once by the collector and read once by the archive writer.
          */
-        Map<String, java.nio.file.Path> filesOnDisk,
+        Map<String, Path> filesOnDisk,
         /**
          * Releases whatever backs {@link #filesOnDisk}, or null when nothing needs releasing. The staging
          * pipeline owns this and closes it once the sandbox has the files.
          */
-        @org.jspecify.annotations.Nullable AutoCloseable cleanup,
+        @Nullable AutoCloseable cleanup,
         /**
          * Per source, what the capture could not include — the same codes the collector would use to say
          * why it reported {@link SourceCompleteness#PARTIAL}. Reported here rather than inferred, because
@@ -51,8 +54,8 @@ public record EvidenceContribution(
             Map<SourceKind, Instant> sourceEffectiveAt,
             Map<SourceKind, SourceContentState> contentStates,
             Map<SourceKind, SourceCaptureState> stateOverrides,
-            Map<String, java.nio.file.Path> filesOnDisk,
-            @org.jspecify.annotations.Nullable AutoCloseable cleanup,
+            Map<String, Path> filesOnDisk,
+            @Nullable AutoCloseable cleanup,
             Map<SourceKind, List<String>> captureLimitations) {
         this(
                 files,
@@ -166,8 +169,7 @@ public record EvidenceContribution(
         stateOverrides = Map.copyOf(Objects.requireNonNull(stateOverrides, "stateOverrides"));
         contentStates = Map.copyOf(Objects.requireNonNull(contentStates, "contentStates"));
         captureLimitations = Objects.requireNonNull(captureLimitations, "captureLimitations").entrySet().stream()
-                .collect(java.util.stream.Collectors.toUnmodifiableMap(
-                        Map.Entry::getKey, e -> List.copyOf(e.getValue())));
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> List.copyOf(e.getValue())));
     }
 
     /** For a collector that stages files on disk but reports no limitation. */
@@ -179,8 +181,8 @@ public record EvidenceContribution(
             Map<SourceKind, Instant> sourceEffectiveAt,
             Map<SourceKind, SourceContentState> contentStates,
             Map<SourceKind, SourceCaptureState> stateOverrides,
-            Map<String, java.nio.file.Path> filesOnDisk,
-            @org.jspecify.annotations.Nullable AutoCloseable cleanup) {
+            Map<String, Path> filesOnDisk,
+            @Nullable AutoCloseable cleanup) {
         this(
                 files,
                 completeness,

@@ -519,7 +519,8 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
                 authorId,
                 committerId,
                 info.authorEmail(),
-                info.committerEmail());
+                info.committerEmail(),
+                null);
 
         // R5: Link the merge commit to the PR in the join table
         var commitOpt = commitRepository.findByShaAndRepositoryId(info.sha(), repository.getId());

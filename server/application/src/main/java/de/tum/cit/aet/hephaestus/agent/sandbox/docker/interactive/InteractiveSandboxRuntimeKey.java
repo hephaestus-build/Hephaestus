@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -14,14 +15,13 @@ import org.jspecify.annotations.Nullable;
 /** Non-secret identity of everything frozen into a reusable interactive sandbox. */
 record InteractiveSandboxRuntimeKey(
         String image,
-        java.util.List<String> command,
+        List<String> command,
         Map<String, String> environment,
         boolean internetAccess,
         @Nullable String proxyUrl,
         ResourceLimits resourceLimits,
         SecurityProfile securityProfile,
         Map<String, String> inputDigests,
-        Map<String, String> volumeMounts,
         @Nullable RoutingKey routing) {
     static InteractiveSandboxRuntimeKey of(InteractiveSandboxSpec spec, @Nullable ProxyRouting routing) {
         Map<String, String> inputDigests = spec.inputFiles().entrySet().stream()
@@ -43,7 +43,6 @@ record InteractiveSandboxRuntimeKey(
                 spec.resourceLimits(),
                 spec.securityProfile(),
                 inputDigests,
-                spec.volumeMounts(),
                 routing != null ? RoutingKey.from(routing) : null);
     }
 

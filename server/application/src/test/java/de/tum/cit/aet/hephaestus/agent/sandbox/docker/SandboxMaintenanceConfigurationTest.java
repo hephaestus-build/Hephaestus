@@ -97,7 +97,7 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
                     assertThat(context).hasNotFailed();
                     assertThat(context.getBeansOfType(ScheduledTaskHolder.class).values().stream()
                                     .flatMap(holder -> holder.getScheduledTasks().stream()))
-                            .hasSize(3);
+                            .hasSize(4);
                     await().atMost(Duration.ofSeconds(3)).untilTrue(interrupted);
                 });
     }
@@ -166,7 +166,7 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
                 .values()
                 .forEach(registrar -> tasks.addAll(registrar.getScheduledTasks())));
         assertThat(tasks)
-                .hasSize(3)
+                .hasSize(4)
                 .allSatisfy(task -> assertThat(task.nextExecution()).isNull());
     }
 

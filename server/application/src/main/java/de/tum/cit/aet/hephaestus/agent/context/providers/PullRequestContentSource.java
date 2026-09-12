@@ -23,16 +23,17 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
+import java.io.Closeable;
+import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.commons.io.IOUtils;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
@@ -63,14 +64,9 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
     @Override
     public SourceKind sourceKindFor(String path) {
         if (path.endsWith("comments.json")) return COMMENTS;
-        if (path.endsWith("diff.patch")
-                || path.endsWith("diff_stat.txt")
-                || path.endsWith("diff_summary.md")
-                || path.endsWith("diff_paths.nul")) return DIFF;
+        if (GitDiffOperations.FILES.stream().anyMatch(path::endsWith)) return DIFF;
         return CORE;
     }
-
-    private static final Logger log = LoggerFactory.getLogger(PullRequestContentSource.class);
 
     static final int MAX_COMMENTS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
 
@@ -107,18 +103,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
     }
 
     @Override
-    public void contributeSelected(ContextRequest request, Set<SourceKind> selectedKinds, Map<String, byte[]> files) {
-        if (readsClone(selectedKinds))
-            throw new UnsupportedOperationException("Repository capture requires disk-backed inputs");
-        files.putAll(captureSelected(request, selectedKinds).files());
-    }
-
-    @Override
     public EvidenceContribution capture(ContextRequest request, Set<SourceKind> selectedKinds) {
-        return captureSelected(request, selectedKinds);
-    }
-
-    private EvidenceContribution captureSelected(ContextRequest request, Set<SourceKind> selectedKinds) {
         if (!(request instanceof ContextRequest.PracticeReviewRequest practiceReview)) {
             throw new IllegalStateException("PullRequestContentSource.contribute called with unsupported variant: "
                     + request.getClass().getSimpleName());
@@ -130,26 +115,22 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         }
         long repositoryId = requireLong(metadata, "repository_id");
         long pullRequestId = requireLong(metadata, "pull_request_id");
-        boolean prepareGit = readsClone(selectedKinds) && gitRepositoryManager.isEnabled();
-        if (!pullRequestRepository.existsByIdAndDeletedAtIsNull(pullRequestId)) {
-            return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
-        }
-        ReviewRepositoryPreparer.PreparedReview prepared = null;
-        if (prepareGit) {
-            prepared = repositoryPreparer.prepare(job);
-        } else {
-            repositoryPreparer.authorize(job);
-        }
         PullRequest pullRequest = pullRequestRepository
                 .findByIdWithAuthorAndRepository(pullRequestId)
                 .orElse(null);
         if (pullRequest == null || pullRequest.getDeletedAt() != null) {
             return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
         }
+        ReviewRepositoryPreparer.PreparedReview prepared = null;
+        if (readsClone(selectedKinds) && gitRepositoryManager.isEnabled()) {
+            prepared = practiceReview.preparation().prepare(repositoryPreparer, job);
+        } else {
+            repositoryPreparer.authorize(job);
+        }
         Map<String, byte[]> files = new HashMap<>();
         Map<SourceKind, SourceCompleteness> completeness = new HashMap<>();
         Map<SourceKind, String> identities = new HashMap<>();
-        Map<SourceKind, java.time.Instant> observedAt = new HashMap<>();
+        Map<SourceKind, Instant> observedAt = new HashMap<>();
         Map<SourceKind, SourceContentState> contentStates = new HashMap<>();
 
         if (readsClone(selectedKinds)) {
@@ -169,11 +150,11 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             contentStates.put(
                     COMMENTS, comments.comments().isEmpty() ? SourceContentState.EMPTY : SourceContentState.NON_EMPTY);
         }
-        if (readsClone(selectedKinds)) {
+        if (prepared != null) {
             var key = new RepositoryKey(job.getWorkspace().getId(), repositoryId);
             String[] range = resolveChangeRange(key, prepared);
             Map<String, Path> onDisk = new HashMap<>();
-            List<java.io.Closeable> captures = new ArrayList<>();
+            List<Closeable> captures = new ArrayList<>();
             try {
                 if (selectedKinds.contains(CORE)) {
                     var commits = gitDiffOperations.captureCommits(key, range[0], range[1]);
@@ -198,12 +179,12 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
                         contentStates,
                         Map.of(),
                         onDisk,
-                        () -> org.apache.commons.io.IOUtils.close(captures.toArray(java.io.Closeable[]::new)),
+                        () -> IOUtils.close(captures.toArray(Closeable[]::new)),
                         Map.of());
-            } catch (java.io.IOException | RuntimeException exception) {
+            } catch (IOException | RuntimeException exception) {
                 try {
-                    org.apache.commons.io.IOUtils.close(captures.toArray(java.io.Closeable[]::new));
-                } catch (java.io.IOException cleanup) {
+                    IOUtils.close(captures.toArray(Closeable[]::new));
+                } catch (IOException cleanup) {
                     exception.addSuppressed(cleanup);
                 }
                 throw new JobPreparationException("Could not stage reviewed change", exception);
@@ -311,9 +292,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
 
     private record CommentCapture(List<PullRequestReviewComment> comments, boolean complete) {}
 
-    private String[] resolveChangeRange(
-            RepositoryKey repository, ReviewRepositoryPreparer.@Nullable PreparedReview prepared) {
-        if (prepared == null) throw new JobPreparationException("Repository evidence requires Git preparation");
+    private String[] resolveChangeRange(RepositoryKey repository, ReviewRepositoryPreparer.PreparedReview prepared) {
         String[] range = gitDiffOperations.resolveDiffRange(repository, prepared.target(), prepared.head());
         if (range == null) throw new JobPreparationException("The pinned review diff range is unavailable");
         return range;

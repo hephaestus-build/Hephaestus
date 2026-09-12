@@ -4,7 +4,9 @@ Remove the retired `SANDBOX_DOCKER_CLI` setting; runtime transfers use the authe
 
 Remove `GIT_TREE_MAX_FILES`, `GIT_TREE_MAX_TOTAL_SIZE`, and `GIT_TREE_MAX_FILE_SIZE` from deployment
 configuration. Provision storage for complete captures, including reachable history, staging, and
-sandbox input archives; the former 32 MiB default is no longer a capacity estimate.
+sandbox input archives; the former 32 MiB default is no longer a capacity estimate. A repository whose
+checkout plus history exceeds `GIT_MAX_SNAPSHOT_BYTES` (8 GiB by default) is refused whole rather than
+captured in part; raise it for larger monorepos.
 
 Deploy matching server, worker, preparation and agent images with runtime contract 3. Sandboxes reach
 the authenticated worker gateway, not the application server or a host-mounted context directory.

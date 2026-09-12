@@ -32,7 +32,7 @@ class GatewayInteractiveChannelTest {
                 })
                 .when(socket)
                 .sendMessage(any());
-        try (var channel = new GatewayInteractiveChannel(1024, 1000)) {
+        try (var channel = new GatewayInteractiveChannel(1024)) {
             assertThat(channel.connect(socket)).isTrue();
             channel.stdin().write("{\"type\":\"prompt\"}\n".getBytes(StandardCharsets.UTF_8));
             var command = sent.poll(5, TimeUnit.SECONDS);
@@ -46,7 +46,7 @@ class GatewayInteractiveChannelTest {
 
     @Test
     void shouldDrainFinalFrameBeforeReportingEndOfStream() throws Exception {
-        try (var channel = new GatewayInteractiveChannel(1024, 1000)) {
+        try (var channel = new GatewayInteractiveChannel(1024)) {
             channel.receive(new TextMessage("final"));
             channel.finish(42);
             var reader = new BufferedReader(channel.stdout());
@@ -60,7 +60,7 @@ class GatewayInteractiveChannelTest {
 
     @Test
     void shouldRejectOversizedAndClosedInputWithoutAcceptingPartialFrames() throws Exception {
-        try (var channel = new GatewayInteractiveChannel(4, 1000)) {
+        try (var channel = new GatewayInteractiveChannel(4)) {
             assertThatIOException().isThrownBy(() -> channel.receive(new TextMessage("12345")));
             assertThatIOException().isThrownBy(() -> channel.receive(new TextMessage("€€")));
             channel.receive(new TextMessage("ok"));
@@ -74,7 +74,7 @@ class GatewayInteractiveChannelTest {
 
     @Test
     void shouldWakeWaitersWhenClosedBeforeConnection() throws Exception {
-        var channel = new GatewayInteractiveChannel(1024, 1000);
+        var channel = new GatewayInteractiveChannel(1024);
         assertThat(channel.waitFor(Duration.ZERO)).isFalse();
         channel.close();
         assertThat(channel.waitFor(Duration.ofMillis(10))).isTrue();

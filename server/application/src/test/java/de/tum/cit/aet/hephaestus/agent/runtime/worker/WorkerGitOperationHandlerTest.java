@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitAck;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOperation;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOutput;
@@ -15,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecuto
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Operation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Request;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -34,8 +36,9 @@ class WorkerGitOperationHandlerTest {
     private final NativeGitExecutor executor = mock(NativeGitExecutor.class);
     private final List<GitOutput> frames = new CopyOnWriteArrayList<>();
     private final CountDownLatch terminal = new CountDownLatch(1);
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private final WorkerGitOperationHandler handler =
-            new WorkerGitOperationHandler(client, executor, new ObjectMapper());
+            new WorkerGitOperationHandler(client, executor, new ObjectMapper(), meterRegistry);
 
     WorkerGitOperationHandlerTest() {
         when(client.isConnected()).thenReturn(true);
@@ -94,6 +97,28 @@ class WorkerGitOperationHandlerTest {
             assertThat(frame.success()).isFalse();
             assertThat(frame.data()).isEmpty();
         });
+        assertThat(meterRegistry
+                        .get(AgentMetrics.WORKER_GIT_OPERATIONS_FAILED)
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldCoalesceSmallWritesIntoOneFrame() throws Exception {
+        var request = new Request(Operation.COMMIT_IDS, List.of(), null, null);
+        doAnswer(invocation -> {
+                    OutputStream output = invocation.getArgument(3);
+                    for (int line = 0; line < 100; line++) output.write("line\n".getBytes(StandardCharsets.UTF_8));
+                    return null;
+                })
+                .when(executor)
+                .execute(any(), any(), any(), any());
+        handler.handle(operation(request));
+        assertThat(terminal.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(frames).hasSize(2);
+        assertThat(new String(Base64.getDecoder().decode(frames.get(0).data()), StandardCharsets.UTF_8))
+                .isEqualTo("line\n".repeat(100));
     }
 
     @Test

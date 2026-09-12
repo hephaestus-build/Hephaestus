@@ -120,11 +120,6 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
     }
 
     private SandboxSpec createSpec(boolean allowInternet) {
-        return createSpec(allowInternet, null);
-    }
-
-    private SandboxSpec createSpec(
-            boolean allowInternet, @org.jspecify.annotations.Nullable Map<String, String> volumeMounts) {
         return new SandboxSpec(
                 JOB_ID,
                 "alpine:latest",
@@ -134,8 +129,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                 ResourceLimits.DEFAULT,
                 SecurityProfile.DEFAULT,
                 Map.of(".prompt", "test prompt".getBytes()),
-                "/workspace/out",
-                volumeMounts);
+                "/workspace/out");
     }
 
     private void setupHappyPath() throws Exception {
@@ -206,8 +200,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(".prompt", "test".getBytes()),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             sandboxAdapter.execute(spec);
 
@@ -244,8 +237,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(".prompt", "test".getBytes()),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             sandboxAdapter.execute(spec);
 
@@ -270,8 +262,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(".prompt", "test".getBytes()),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             sandboxAdapter.execute(spec);
 
@@ -295,8 +286,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(".prompt", "test".getBytes()),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             sandboxAdapter.execute(spec);
 
@@ -346,8 +336,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(".prompt", "test".getBytes()),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             sandboxAdapter.execute(spec);
 
@@ -398,8 +387,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     SecurityProfile.DEFAULT,
                     Map.of(),
                     files,
-                    "/workspace/out",
-                    Map.of());
+                    "/workspace/out");
 
             sandboxAdapter.execute(spec);
 
@@ -421,8 +409,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             sandboxAdapter.execute(specWithoutFiles);
 
@@ -442,8 +429,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(),
-                    "/workspace/out",
-                    Map.of());
+                    "/workspace/out");
             assertThatThrownBy(() -> sandboxAdapter.execute(spec)).isInstanceOf(SandboxException.class);
         }
 
@@ -460,8 +446,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(),
-                    "/custom/output",
-                    Map.of());
+                    "/custom/output");
             assertThatThrownBy(() -> sandboxAdapter.execute(spec)).isInstanceOf(SandboxException.class);
         }
     }
@@ -625,8 +610,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     ResourceLimits.DEFAULT,
                     null,
                     Map.of(),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             SandboxResult result = sandboxAdapter.execute(specWithNullSecurity);
             assertThat(result.exitCode()).isZero();
@@ -1003,15 +987,6 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                 assertThat(env.get("GIT_CONFIG_KEY_" + i)).isEqualTo(expected.getKey());
                 assertThat(env.get("GIT_CONFIG_VALUE_" + i)).isEqualTo(expected.getValue());
             }
-        }
-
-        @Test
-        void shouldRefuseHostDirectoryInjection() {
-            when(networkManager.createJobNetwork(JOB_ID, false)).thenReturn(NETWORK_ID);
-            when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
-            assertThatThrownBy(() -> sandboxAdapter.execute(createSpec(false, Map.of("/host/repo", "/workspace/repo"))))
-                    .isInstanceOf(SandboxException.class)
-                    .hasMessageContaining("host-directory injection");
         }
 
         @Test

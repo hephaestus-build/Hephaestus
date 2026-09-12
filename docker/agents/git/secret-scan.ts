@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, isAbsolute } from "node:path";
 import type { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { fragments, records } from "./lines.ts";
 
 type Git = (args: string[]) => ChildProcessByStdio<null, Readable, null>;
 interface Finding {
@@ -19,6 +20,14 @@ interface Verdict {
 	ruleId: string;
 	lineHash: string;
 }
+export interface SecretScan {
+	verdicts: Verdict[];
+	/** Changed files left out of the scan because their blob is over the ceiling. */
+	skipped: string[];
+}
+
+/** A blob above this is not materialised; the scanner's own limit is disabled for what it does read. */
+export const MAX_BLOB_BYTES = 8 * 1024 * 1024;
 
 function completed(child: ReturnType<Git>) {
 	return new Promise<void>((resolve, reject) => {
@@ -27,23 +36,6 @@ function completed(child: ReturnType<Git>) {
 			code === 0 ? resolve() : reject(new Error("Secret scan Git operation failed")),
 		);
 	});
-}
-
-async function* records(source: Readable, separator: number) {
-	let fragments: Buffer[] = [];
-	for await (const chunk of source) {
-		if (!Buffer.isBuffer(chunk)) throw new Error("Expected Git bytes");
-		let start = 0;
-		let end: number;
-		while ((end = chunk.indexOf(separator, start)) !== -1) {
-			const part = chunk.subarray(start, end);
-			yield fragments.length === 0 ? part : Buffer.concat([...fragments, part]);
-			fragments = [];
-			start = end + 1;
-		}
-		if (start < chunk.length) fragments.push(chunk.subarray(start));
-	}
-	if (fragments.length !== 0) yield Buffer.concat(fragments);
 }
 
 export async function addedSecretVerdicts(
@@ -77,33 +69,26 @@ export async function addedSecretVerdicts(
 		hash = undefined;
 		matched = [];
 	}
-	for await (const chunk of source) {
-		if (!Buffer.isBuffer(chunk)) throw new Error("Expected Git bytes");
-		let start = 0;
-		while (start < chunk.length) {
-			const newline = chunk.indexOf(10, start);
-			const end = newline === -1 ? chunk.length : newline;
-			const part = chunk.subarray(start, end);
-			const beginning = first === -1 && part.length !== 0;
-			if (beginning) {
-				first = part[0] ?? -1;
-				if (first === 43 && line !== undefined) {
-					const number = line;
-					matched = matches.filter((match) => number >= match.StartLine && number <= match.EndLine);
-					if (matched.length !== 0) hash = createHash("sha256");
-				}
+	for await (const fragment of fragments(source)) {
+		const part = fragment.bytes;
+		const beginning = fragment.start && part.length !== 0;
+		if (beginning) {
+			first = part[0] ?? -1;
+			if (first === 43 && line !== undefined) {
+				const number = line;
+				matched = matches.filter((match) => number >= match.StartLine && number <= match.EndLine);
+				if (matched.length !== 0) hash = createHash("sha256");
 			}
-			const copied = part.copy(
-				prefix,
-				prefixLength,
-				0,
-				Math.min(part.length, prefix.length - prefixLength),
-			);
-			prefixLength += copied;
-			hash?.update(beginning ? part.subarray(1) : part);
-			if (newline !== -1) finishLine();
-			start = end + 1;
 		}
+		const copied = part.copy(
+			prefix,
+			prefixLength,
+			0,
+			Math.min(part.length, prefix.length - prefixLength),
+		);
+		prefixLength += copied;
+		hash?.update(beginning ? part.subarray(1) : part);
+		if (fragment.end) finishLine();
 	}
 	if (first !== -1) finishLine();
 	return verdicts;
@@ -139,7 +124,35 @@ function findings(value: unknown): Finding[] {
 	});
 }
 
-export async function scanSecrets(revisions: string[], git: Git): Promise<Verdict[]> {
+/** The size of every listed path's blob at `revision`, from one tree listing. */
+export async function blobSizes(
+	git: Git,
+	revision: string,
+	paths: ReadonlySet<string>,
+): Promise<Map<string, number>> {
+	const sizes = new Map<string, number>();
+	const tree = git(["ls-tree", "-r", "-l", "-z", "--full-tree", revision]);
+	const finished = completed(tree);
+	for await (const { bytes } of records(tree.stdout, 0)) {
+		const tab = bytes.indexOf(9);
+		if (tab === -1) throw new Error("Invalid tree listing");
+		const path = bytes.subarray(tab + 1).toString("utf8");
+		if (!paths.has(path)) continue;
+		const size = /^\d{6} blob [a-f0-9]+ +(\d+)$/.exec(bytes.subarray(0, tab).toString("utf8"))?.[1];
+		if (size === undefined) throw new Error("Changed source path is not a blob");
+		sizes.set(path, Number(size));
+	}
+	await finished;
+	for (const path of paths)
+		if (!sizes.has(path)) throw new Error("Changed source path is not in the tree");
+	return sizes;
+}
+
+export async function scanSecrets(
+	revisions: string[],
+	git: Git,
+	maxBlobBytes = MAX_BLOB_BYTES,
+): Promise<SecretScan> {
 	const directory = await mkdtemp(join(process.env.GIT_TEMP_DIRECTORY ?? "/tmp", "secret-scan-"));
 	const sources = join(directory, "sources");
 	const files: string[] = [];
@@ -159,7 +172,7 @@ export async function scanSecrets(revisions: string[], git: Git): Promise<Verdic
 		const exited = completed(changes);
 		let regular = false;
 		let metadata = true;
-		for await (const record of records(changes.stdout, 0)) {
+		for await (const { bytes: record } of records(changes.stdout, 0)) {
 			if (metadata) {
 				regular = /^:\d{6} 100(?:644|755) /.test(record.toString("utf8"));
 			} else if (regular) {
@@ -176,8 +189,13 @@ export async function scanSecrets(revisions: string[], git: Git): Promise<Verdic
 		}
 		await exited;
 		if (!metadata) throw new Error("Incomplete changed source record");
-		if (files.length === 0) return [];
-		for (const path of files) {
+		const head = revisions[1];
+		if (head === undefined) throw new Error("Missing scan head");
+		const sizes = await blobSizes(git, head, new Set(files));
+		const skipped = files.filter((path) => (sizes.get(path) ?? 0) > maxBlobBytes);
+		const scanned = files.filter((path) => !skipped.includes(path));
+		if (scanned.length === 0) return { verdicts: [], skipped };
+		for (const path of scanned) {
 			const destination = join(sources, path);
 			await mkdir(dirname(destination), { recursive: true });
 			const blob = git(["cat-file", "blob", `${revisions[1]}:${path}`]);
@@ -220,7 +238,7 @@ export async function scanSecrets(revisions: string[], git: Git): Promise<Verdic
 		});
 		const detected = findings(JSON.parse(await readFile(report, "utf8")));
 		const byPath = new Map<string, Finding[]>();
-		const capturedPaths = new Set(files);
+		const capturedPaths = new Set(scanned);
 		for (const finding of detected) {
 			const path = isAbsolute(finding.File) ? relative(sources, finding.File) : finding.File;
 			if (!capturedPaths.has(path)) throw new Error("Secret scanner returned an uncaptured path");
@@ -243,14 +261,13 @@ export async function scanSecrets(revisions: string[], git: Git): Promise<Verdic
 				"--",
 				path,
 			]);
-			const finished = completed(diff);
 			const [, added] = await Promise.all([
-				finished,
+				completed(diff),
 				addedSecretVerdicts(path, matches, diff.stdout),
 			]);
 			for (const verdict of added) verdicts.push(verdict);
 		}
-		return verdicts;
+		return { verdicts, skipped };
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}

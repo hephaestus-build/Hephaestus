@@ -1,8 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.spi;
 
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
-import java.util.Collections;
-import java.util.LinkedHashMap;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -24,7 +23,6 @@ import org.jspecify.annotations.Nullable;
  * @param resourceLimits CPU, memory, PID, and timeout constraints
  * @param inputFiles files to inject into /workspace (relative path → content)
  * @param outputPath container path to collect results from after execution
- * @param volumeMounts host bind mounts (host path → container path); mounted read-only
  */
 public record SandboxSpec(
         UUID jobId,
@@ -36,10 +34,9 @@ public record SandboxSpec(
         @Nullable SecurityProfile securityProfile,
         Map<String, byte[]> inputFiles,
         /** Inputs staged by host path and streamed into the container, never read into this process. */
-        Map<String, java.nio.file.Path> inputFilesOnDisk,
+        Map<String, Path> inputFilesOnDisk,
         List<EvidenceDirectory> inputDirectories,
-        String outputPath,
-        Map<String, String> volumeMounts) {
+        String outputPath) {
     /** For runs whose inputs are all held in memory. */
     public SandboxSpec(
             UUID jobId,
@@ -50,8 +47,7 @@ public record SandboxSpec(
             ResourceLimits resourceLimits,
             @Nullable SecurityProfile securityProfile,
             @Nullable Map<String, byte[]> inputFiles,
-            String outputPath,
-            @Nullable Map<String, String> volumeMounts) {
+            String outputPath) {
         this(
                 jobId,
                 image,
@@ -62,8 +58,7 @@ public record SandboxSpec(
                 securityProfile,
                 inputFiles,
                 Map.of(),
-                outputPath,
-                volumeMounts);
+                outputPath);
     }
 
     public SandboxSpec(
@@ -75,9 +70,8 @@ public record SandboxSpec(
             ResourceLimits resourceLimits,
             @Nullable SecurityProfile securityProfile,
             @Nullable Map<String, byte[]> inputFiles,
-            @Nullable Map<String, java.nio.file.Path> inputFilesOnDisk,
-            String outputPath,
-            @Nullable Map<String, String> volumeMounts) {
+            @Nullable Map<String, Path> inputFilesOnDisk,
+            String outputPath) {
         this(
                 jobId,
                 image,
@@ -89,8 +83,7 @@ public record SandboxSpec(
                 inputFiles,
                 inputFilesOnDisk,
                 List.of(),
-                outputPath,
-                volumeMounts);
+                outputPath);
     }
 
     public SandboxSpec(
@@ -102,10 +95,9 @@ public record SandboxSpec(
             ResourceLimits resourceLimits,
             @Nullable SecurityProfile securityProfile,
             @Nullable Map<String, byte[]> inputFiles,
-            @Nullable Map<String, java.nio.file.Path> inputFilesOnDisk,
+            @Nullable Map<String, Path> inputFilesOnDisk,
             List<EvidenceDirectory> inputDirectories,
-            String outputPath,
-            @Nullable Map<String, String> volumeMounts) {
+            String outputPath) {
         this.jobId = Objects.requireNonNull(jobId, "jobId must not be null");
         this.image = Objects.requireNonNull(image, "image must not be null");
         this.resourceLimits = Objects.requireNonNull(resourceLimits, "resourceLimits must not be null");
@@ -123,7 +115,5 @@ public record SandboxSpec(
         this.inputFiles = inputFiles != null ? Map.copyOf(inputFiles) : Map.of();
         this.inputFilesOnDisk = inputFilesOnDisk != null ? Map.copyOf(inputFilesOnDisk) : Map.of();
         this.inputDirectories = List.copyOf(inputDirectories);
-        this.volumeMounts =
-                volumeMounts != null ? Collections.unmodifiableMap(new LinkedHashMap<>(volumeMounts)) : Map.of();
     }
 }

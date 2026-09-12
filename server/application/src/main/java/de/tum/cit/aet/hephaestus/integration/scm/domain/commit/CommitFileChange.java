@@ -39,6 +39,7 @@ import org.jspecify.annotations.Nullable;
 @ToString
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class CommitFileChange {
+    public static final int FILENAME_LENGTH = 1024;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -49,7 +50,7 @@ public class CommitFileChange {
      * The filename/path of the changed file.
      */
     @NonNull
-    @Column(length = 1024, nullable = false)
+    @Column(length = FILENAME_LENGTH, nullable = false)
     private String filename;
 
     /**
@@ -78,7 +79,7 @@ public class CommitFileChange {
     /**
      * The previous filename, if the file was renamed.
      */
-    @Column(length = 1024)
+    @Column(length = FILENAME_LENGTH)
     private @Nullable String previousFilename;
 
     // Relationships

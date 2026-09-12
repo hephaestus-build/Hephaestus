@@ -514,7 +514,10 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         }
 
         private void admit(AgentJob job, String rawOutputJson) {
-            handler.admitObservations(job, objectMapper.readTree(rawOutputJson).path("observations"));
+            deliveryService.publish(
+                    job,
+                    handler.prepareObservations(
+                            job, objectMapper.readTree(rawOutputJson).path("observations")));
         }
 
         private de.tum.cit.aet.hephaestus.practices.model.Observation persisted(

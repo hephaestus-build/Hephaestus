@@ -2,12 +2,14 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.core.web.PayloadSizeFilter;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -62,14 +64,16 @@ class LlmProxySecurityConfig {
             WorkerProperties workerProperties)
             throws Exception {
         var paths = PathPatternRequestMatcher.withDefaults();
-        RequestMatcher capabilities = new OrRequestMatcher(
+        RequestMatcher modelCalls = new OrRequestMatcher(
                 paths.matcher(HttpMethod.POST, "/internal/llm/chat/completions"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/responses"),
-                paths.matcher(HttpMethod.POST, "/internal/llm/admit-observations"),
+                paths.matcher(HttpMethod.POST, "/internal/llm/admit-observations"));
+        RequestMatcher runtimeReads = new OrRequestMatcher(
                 paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}"),
                 paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}/workspace"),
-                paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}/frames"),
-                paths.matcher(HttpMethod.POST, "/internal/llm/runtime/{id}/result"));
+                paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}/frames"));
+        RequestMatcher resultUpload = paths.matcher(HttpMethod.POST, "/internal/llm/runtime/{id}/result");
+        RequestMatcher capabilities = new OrRequestMatcher(modelCalls, runtimeReads, resultUpload);
         var limit = new AuthRateLimitProperties.Limit(gatewayProperties.requestsPerMinute(), Duration.ofMinutes(1));
 
         http.securityMatcher(new AndRequestMatcher(onGatewayConnector(gatewayProperties), capabilities))
@@ -87,13 +91,9 @@ class LlmProxySecurityConfig {
                                 workerProperties.resolvedWorkerId()),
                         UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(
-                        new PayloadSizeFilter(gatewayProperties.maxRequestBytes()) {
-                            @Override
-                            protected boolean shouldNotFilter(jakarta.servlet.http.HttpServletRequest request) {
-                                return request.getMethod().equals("GET")
-                                        || request.getRequestURI().matches("/internal/llm/runtime/[^/]+/result");
-                            }
-                        },
+                        bounded(gatewayProperties.maxRequestBytes(), modelCalls), JobTokenAuthenticationFilter.class)
+                .addFilterBefore(
+                        bounded(SandboxOutputArchive.MAX_OUTPUT_BYTES, resultUpload),
                         JobTokenAuthenticationFilter.class)
                 .addFilterAfter(
                         new SandboxGatewayRateLimitFilter(limit, bucketResolver, objectMapper, accounting),
@@ -113,6 +113,16 @@ class LlmProxySecurityConfig {
     @Order(Ordered.HIGHEST_PRECEDENCE + 3)
     SecurityFilterChain blockLlmProxyOnOtherConnectors(HttpSecurity http) throws Exception {
         return hidden(http, PathPatternRequestMatcher.withDefaults().matcher("/internal/llm/**"));
+    }
+
+    /** The body bound over the requests one matcher selects, so each capability states its own. */
+    private static PayloadSizeFilter bounded(long maxBytes, RequestMatcher requests) {
+        return new PayloadSizeFilter(maxBytes) {
+            @Override
+            protected boolean shouldNotFilter(HttpServletRequest request) {
+                return !requests.matches(request);
+            }
+        };
     }
 
     /** Written once so the two connector-matched chains provably claim the same requests. */

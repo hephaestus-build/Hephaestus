@@ -13,10 +13,15 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
+import org.apache.commons.io.FileUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 final class SecretDiffScanner {
+    private static final Logger log = LoggerFactory.getLogger(SecretDiffScanner.class);
+
     record SecretHit(String path, int newLine, String lineHash, String ruleId) {}
 
     private static final Pattern LOW_SIGNAL_PATH =
@@ -60,9 +65,9 @@ final class SecretDiffScanner {
         }
         String[] revisions = range.split(":", -1);
         if (revisions.length != 2
-                || !range.matches("(?:[0-9a-f]{40}|[0-9a-f]{64}):(?:[0-9a-f]{40}|[0-9a-f]{64})")
-                || !headHash.matches("[0-9a-f]{64}")
-                || !refsHash.matches("[0-9a-f]{64}")) {
+                || !range.matches(CitationVerification.GIT_OBJECT_ID + ":" + CitationVerification.GIT_OBJECT_ID)
+                || !headHash.matches(CitationVerification.SHA256_HEX)
+                || !refsHash.matches(CitationVerification.SHA256_HEX)) {
             throw new JobDeliveryException("Secret scan requires the captured diff range and repository identity");
         }
         Path repository = evidence.repositoryForVerification(job, headHash, refsHash);
@@ -80,11 +85,22 @@ final class SecretDiffScanner {
             if (Files.size(report) > SandboxOutputArchive.MAX_SINGLE_FILE_BYTES) {
                 throw new JobDeliveryException("Secret scan verdicts exceed the result resource budget");
             }
-            JsonNode rows;
+            JsonNode result;
             try (var input = Files.newInputStream(report)) {
-                rows = mapper.readTree(input);
+                result = mapper.readTree(input);
             }
-            if (rows == null || !rows.isArray()) throw new JobDeliveryException("Invalid secret scan verdicts");
+            JsonNode rows = result == null ? null : result.path("verdicts");
+            JsonNode skipped = result == null ? null : result.path("skipped");
+            if (rows == null || !rows.isArray() || skipped == null || !skipped.isArray())
+                throw new JobDeliveryException("Invalid secret scan verdicts");
+            if (!skipped.isEmpty()) {
+                // An unscanned file is an omission the review cannot see; the paths carry no secret.
+                log.warn(
+                        "Secret scan skipped {} oversized file(s): jobId={}, paths={}",
+                        skipped.size(),
+                        job.getId(),
+                        skipped);
+            }
             List<SecretHit> hits = new ArrayList<>();
             for (JsonNode row : rows) {
                 if (!row.isObject()
@@ -95,7 +111,7 @@ final class SecretDiffScanner {
                         || row.path("line").asInt() < 1
                         || !row.path("ruleId").isString()
                         || row.path("ruleId").asString().isBlank()
-                        || !row.path("lineHash").asString().matches("[0-9a-f]{64}")) {
+                        || !row.path("lineHash").asString().matches(CitationVerification.SHA256_HEX)) {
                     throw new JobDeliveryException("Invalid secret scan verdict");
                 }
                 hits.add(new SecretHit(
@@ -108,13 +124,7 @@ final class SecretDiffScanner {
         } catch (IOException | RuntimeException exception) {
             throw new JobDeliveryException("Secret scan failed; review observations were not admitted", exception);
         } finally {
-            if (report != null) {
-                try {
-                    Files.deleteIfExists(report);
-                } catch (IOException exception) {
-                    throw new JobDeliveryException("Secret scan verdict cleanup failed", exception);
-                }
-            }
+            if (report != null) FileUtils.deleteQuietly(report.toFile());
         }
     }
 

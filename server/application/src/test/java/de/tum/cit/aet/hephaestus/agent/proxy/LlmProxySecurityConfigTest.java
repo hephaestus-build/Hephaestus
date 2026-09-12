@@ -128,6 +128,21 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 .isEqualTo(413);
     }
 
+    /** The result upload is bounded by the archive budget, not by the model-call bound. */
+    @Test
+    void boundsTheResultUploadByTheOutputArchiveBudget() throws Exception {
+        String path = "/internal/llm/runtime/" + UUID.randomUUID() + "/result";
+        MockHttpServletRequest tooLarge = request("POST", path, GATEWAY_PORT);
+        tooLarge.setContent(new byte[GATEWAY.maxRequestBytes() + 1]);
+        MockHttpServletRequest undeclared = new MockHttpServletRequest("POST", path);
+        undeclared.setLocalPort(GATEWAY_PORT);
+
+        assertThat(answerTo(tooLarge))
+                .as("a small archive is not held to the model-call bound")
+                .isEqualTo(401);
+        assertThat(answerTo(undeclared)).isEqualTo(411);
+    }
+
     /**
      * The one status the gateway does not hide. A sandbox is told where the capabilities are, so a
      * credential that has expired mid-job has to say so — a {@code 404} there would send an operator

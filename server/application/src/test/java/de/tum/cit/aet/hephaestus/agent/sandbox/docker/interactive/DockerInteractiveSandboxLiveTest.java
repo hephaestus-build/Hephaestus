@@ -204,8 +204,7 @@ class DockerInteractiveSandboxLiveTest {
                 new NetworkPolicy(true, null, "live-gateway-token"),
                 new ResourceLimits(512 * 1024 * 1024, 1.0, 256, Duration.ofMinutes(5)),
                 sec,
-                Map.of(".runner/pi-mentor-runner.ts", runnerBytes),
-                Map.of());
+                Map.of(".runner/pi-mentor-runner.ts", runnerBytes));
     }
 
     private InteractiveSandboxSpec buildSpecWithProxyRoute(
@@ -225,8 +224,7 @@ class DockerInteractiveSandboxLiveTest {
                 new NetworkPolicy(true, null, minted),
                 base.resourceLimits(),
                 base.securityProfile(),
-                base.inputFiles(),
-                base.volumeMounts());
+                base.inputFiles());
     }
 
     private static InteractiveSandboxSpec withContextSnapshot(InteractiveSandboxSpec base, String snapshot) {
@@ -242,8 +240,7 @@ class DockerInteractiveSandboxLiveTest {
                 base.networkPolicy(),
                 base.resourceLimits(),
                 base.securityProfile(),
-                inputs,
-                base.volumeMounts());
+                inputs);
     }
 
     private static JsonNode ping() {
@@ -539,8 +536,7 @@ class DockerInteractiveSandboxLiveTest {
                     new NetworkPolicy(true, null, "live-gateway-token"),
                     new ResourceLimits(512 * 1024 * 1024, 1.0, 256, Duration.ofMinutes(5)),
                     sec,
-                    Map.of(".runner/pi-mentor-runner.ts", runnerBytes),
-                    Map.of());
+                    Map.of(".runner/pi-mentor-runner.ts", runnerBytes));
             AttachedSandbox sb = adapter.attach(piSpec);
             assertThat(((DockerAttachedSandboxAdapter) sb).state()).isEqualTo(AttachedSandboxState.ATTACHED);
             sb.close(Duration.ofSeconds(2));
@@ -566,8 +562,7 @@ class DockerInteractiveSandboxLiveTest {
                     base.networkPolicy(),
                     base.resourceLimits(),
                     base.securityProfile(),
-                    base.inputFiles(),
-                    base.volumeMounts());
+                    base.inputFiles());
             Assertions.assertThatThrownBy(() -> adapter.attach(brokenSpec))
                     .isInstanceOf(InteractiveSandboxException.class);
             // Must distinguish runner-crash from flow-control timeout for dashboards.
@@ -612,8 +607,7 @@ class DockerInteractiveSandboxLiveTest {
                 plan.networkPolicy(),
                 ResourceLimits.DEFAULT,
                 SecurityProfile.DEFAULT,
-                plan.inputFiles(),
-                Map.of());
+                plan.inputFiles());
     }
 
     @Nested

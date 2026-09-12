@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,12 @@ public class HistoricalGitEvidence {
 
     private record Blob(String revision, String path) {}
 
+    /**
+     * Every submitted citation answered from one native transfer. The archive names each blob by the
+     * index of its (revision, path) pair in the request and carries no entry for a pair that does not
+     * exist at its revision, so such a citation comes back as {@link JobEvidenceFiles.QuoteMatch#absent()}
+     * rather than costing the whole batch.
+     */
     public Map<Citation, JobEvidenceFiles.QuoteMatch> verifyAll(
             AgentJob job, String headDigest, String refsDigest, String pinnedHead, List<Citation> submitted) {
         if (submitted.isEmpty()) return Map.of();
@@ -56,7 +63,7 @@ public class HistoricalGitEvidence {
                         output);
             }
             Map<Citation, JobEvidenceFiles.QuoteMatch> verified = new LinkedHashMap<>();
-            var received = new java.util.HashSet<Integer>();
+            var received = new HashSet<Integer>();
             try (var input = new TarArchiveInputStream(Files.newInputStream(archive))) {
                 for (var entry = input.getNextEntry(); entry != null; entry = input.getNextEntry()) {
                     if (!entry.isFile()
@@ -89,19 +96,14 @@ public class HistoricalGitEvidence {
                     Files.delete(blob);
                 }
             }
-            if (verified.size() != citations.size())
-                throw new JobDeliveryException("Native citation archive is incomplete");
+            for (Citation citation : citations) {
+                verified.putIfAbsent(citation, JobEvidenceFiles.QuoteMatch.absent());
+            }
             return Map.copyOf(verified);
         } catch (IOException exception) {
             throw new JobDeliveryException("Repository citations could not be verified", exception);
         } finally {
-            if (directory != null) {
-                try {
-                    FileUtils.deleteDirectory(directory.toFile());
-                } catch (IOException exception) {
-                    throw new JobDeliveryException("Repository citation cleanup failed", exception);
-                }
-            }
+            if (directory != null) FileUtils.deleteQuietly(directory.toFile());
         }
     }
 }

@@ -14,13 +14,14 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -90,8 +91,7 @@ public class DockerSandboxAdapter implements SandboxManager {
     private final SandboxContainerManager containerManager;
     private final ContainerSecurityPolicy securityPolicy;
     private final int gatewayPort;
-    private final SandboxGatewaySessions gatewaySessions;
-    private final DockerVolumeOperations volumeOperations;
+    private final SandboxAttemptLauncher launcher;
 
     private final Counter executionsSuccess;
     private final Counter executionsFailed;
@@ -120,8 +120,7 @@ public class DockerSandboxAdapter implements SandboxManager {
         this.containerManager = containerManager;
         this.securityPolicy = securityPolicy;
         this.gatewayPort = gatewayPort;
-        this.gatewaySessions = gatewaySessions;
-        this.volumeOperations = volumeOperations;
+        this.launcher = new SandboxAttemptLauncher(containerManager, gatewaySessions, volumeOperations, gatewayPort);
 
         this.executionsSuccess = Counter.builder(AgentMetrics.SANDBOX_EXECUTIONS)
                 .tag("outcome", "success")
@@ -157,9 +156,7 @@ public class DockerSandboxAdapter implements SandboxManager {
 
         String networkId = null;
         String containerId = null;
-        String initializerId = null;
-        DockerAttemptWorkspace attemptWorkspace = null;
-        SandboxGatewaySessions.Session gatewaySession = null;
+        SandboxAttemptLauncher.Attempt attempt = null;
         Instant startTime = Instant.now();
 
         MDC.put(MDC_JOB_ID, jobId.toString());
@@ -173,13 +170,11 @@ public class DockerSandboxAdapter implements SandboxManager {
                     spec.networkPolicy() != null && spec.networkPolicy().internetAccess();
             networkId = networkManager.createJobNetwork(jobId, allowInternet);
 
-            // Connect app-server to the job network (multi-homing) and get its IP.
-            // Returns null when the app-server runs on the host (not in Docker).
+            // Null when the app-server runs on the host rather than in Docker.
             String appServerIp = networkManager.connectAppServer(networkId);
             List<String> extraHosts = List.of();
             if (appServerIp == null) {
-                // App-server is on the host — use host.docker.internal with host-gateway mapping.
-                // Requires allowInternet=true (non-internal network) so the container can reach the host.
+                // host.docker.internal is reachable only from a non-internal network.
                 if (!allowInternet) {
                     throw new SandboxException(
                             "App-server is not in Docker and network is internal (allowInternet=false). "
@@ -192,77 +187,51 @@ public class DockerSandboxAdapter implements SandboxManager {
 
             checkCancelled(cancelled, jobId);
 
-            if (!spec.volumeMounts().isEmpty()) {
-                throw new SandboxException(
-                        "Prepare directory inputs before launching a sandbox; host-directory injection is unsupported");
-            }
             if (!spec.outputPath().equals(SandboxLayout.OUTPUT_PATH)) {
                 throw new SandboxException("Sandbox results must use the runtime output directory");
             }
-            String token = Objects.requireNonNull(spec.networkPolicy(), "Gateway network policy required")
-                    .llmProxyToken();
-            if (token == null || token.isBlank()) {
-                throw new SandboxException("Gateway credential required");
-            }
-            gatewaySession = gatewaySessions.register(
-                    token,
+            Map<String, String> labels = securityPolicy.buildLabels(jobId);
+            attempt = launcher.open(
+                    spec.networkPolicy(),
                     workspaceManager.createInputTar(
                             spec.inputFiles(), spec.inputFilesOnDisk(), spec.inputDirectories()),
-                    "out");
+                    labels);
             Map<String, String> environment = buildEnvironment(spec, appServerIp);
-            environment.put(
-                    "SANDBOX_RUNTIME_URL",
-                    "http://" + appServerIp + ":" + gatewayPort + "/internal/llm/runtime/" + gatewaySession.id());
+            environment.put("SANDBOX_RUNTIME_URL", attempt.runtimeUrl(appServerIp));
 
             var secProfile = spec.securityProfile() != null ? spec.securityProfile() : SecurityProfile.DEFAULT;
-            DockerOperations.HostConfigSpec hostConfig =
-                    securityPolicy.buildHostConfig(secProfile, spec.resourceLimits(), spec.networkPolicy());
-            Map<String, String> labels = securityPolicy.buildLabels(jobId);
-
-            attemptWorkspace = new DockerAttemptWorkspace(volumeOperations, gatewaySession.id(), labels);
-            initializerId = containerManager.createContainer(new DockerOperations.ContainerSpec(
+            DockerOperations.ContainerSpec template = new DockerOperations.ContainerSpec(
                     spec.image(),
-                    List.of("node", "/opt/pi-sdk/gateway-init.ts"),
+                    List.of(),
                     environment,
                     networkId,
                     CONTAINER_HOSTNAME,
                     CONTAINER_USER,
                     labels,
-                    attemptWorkspace.configure(hostConfig, true),
-                    extraHosts));
-            activeContainers.put(jobId, initializerId);
-            checkCancelled(cancelled, jobId);
-            containerManager.startContainer(initializerId);
-            var initialized = containerManager.waitForCompletion(initializerId, remaining(startTime, spec));
+                    securityPolicy.buildHostConfig(secProfile, spec.resourceLimits(), spec.networkPolicy()),
+                    extraHosts);
+            var initialized = attempt.initialize(template, remaining(startTime, spec), initializerId -> {
+                activeContainers.put(jobId, initializerId);
+                checkCancelled(cancelled, jobId);
+            });
+            activeContainers.remove(jobId);
             checkCancelled(cancelled, jobId);
             if (initialized.timedOut()) {
                 executionsTimedOut.increment();
                 return new SandboxResult(
                         initialized.exitCode(),
                         Map.of(),
-                        containerManager.getLogs(initializerId, WHOLE_TRANSCRIPT),
+                        initialized.transcript(),
                         true,
                         Duration.between(startTime, Instant.now()));
             }
-            if (initialized.exitCode() != 0) {
-                captureLogsOnError(initializerId);
+            if (!initialized.succeeded()) {
+                logTranscriptTail(initialized.transcript());
                 throw new SandboxException("Sandbox workspace initialization failed");
             }
-            containerManager.forceRemove(initializerId);
-            initializerId = null;
-            activeContainers.remove(jobId);
             var command = new ArrayList<>(List.of("node", "/opt/pi-sdk/gateway-run.ts"));
             command.addAll(spec.command());
-            DockerOperations.ContainerSpec containerSpec = new DockerOperations.ContainerSpec(
-                    spec.image(),
-                    command,
-                    environment,
-                    networkId,
-                    CONTAINER_HOSTNAME,
-                    CONTAINER_USER,
-                    labels,
-                    attemptWorkspace.configure(hostConfig, false),
-                    extraHosts);
+            DockerOperations.ContainerSpec containerSpec = attempt.runtime(template, command);
 
             containerId = containerManager.createContainer(containerSpec);
             activeContainers.put(jobId, containerId);
@@ -283,7 +252,7 @@ public class DockerSandboxAdapter implements SandboxManager {
 
             Map<String, byte[]> outputFiles;
             try {
-                outputFiles = gatewaySession.result();
+                outputFiles = attempt.session().result();
             } catch (RuntimeException exception) {
                 if (!waitOutcome.timedOut() && waitOutcome.exitCode() != SandboxLayout.EXIT_ENVELOPE_MISMATCH) {
                     throw exception;
@@ -329,21 +298,16 @@ public class DockerSandboxAdapter implements SandboxManager {
             // Unregister before removal so cancellation cannot race cleanup with stopContainer().
             activeContainers.remove(jobId);
             executionDuration.record(Duration.between(startTime, Instant.now()));
-            if (initializerId != null) {
-                String failedInitializer = initializerId;
-                suppressAndLog("remove initializer", jobId, () -> containerManager.forceRemove(failedInitializer));
-            }
             cleanup(jobId, containerId, networkId);
-            if (attemptWorkspace != null) {
-                var completedWorkspace = attemptWorkspace;
-                suppressAndLog("remove attempt volumes", jobId, completedWorkspace::close);
-            }
-            if (gatewaySession != null) {
-                try {
-                    gatewaySession.close();
-                } catch (java.io.IOException exception) {
-                    log.warn("Could not delete workspace transfer: jobId={}", jobId, exception);
-                }
+            if (attempt != null) {
+                var completedAttempt = attempt;
+                suppressAndLog("remove attempt volumes", jobId, () -> {
+                    try {
+                        completedAttempt.close();
+                    } catch (IOException exception) {
+                        throw new UncheckedIOException(exception);
+                    }
+                });
             }
             cancellationFlags.remove(jobId);
             MDC.remove(MDC_JOB_ID);
@@ -399,14 +363,8 @@ public class DockerSandboxAdapter implements SandboxManager {
         }
         addTraceEnvironment(env);
 
-        // Injected whether or not a volume mount is present, because the agent can clone a repository at
-        // runtime and carry a hostile .git/config in with it.
+        // The agent can clone a repository at runtime and carry a hostile .git/config in with it.
         int idx = 0;
-        for (String containerPath : spec.volumeMounts().values()) {
-            env.put("GIT_CONFIG_KEY_" + idx, "safe.directory");
-            env.put("GIT_CONFIG_VALUE_" + idx, containerPath);
-            idx++;
-        }
         for (var gitConfig : GIT_SECURITY_CONFIGS) {
             env.put("GIT_CONFIG_KEY_" + idx, gitConfig.getKey());
             env.put("GIT_CONFIG_VALUE_" + idx, gitConfig.getValue());
@@ -459,18 +417,20 @@ public class DockerSandboxAdapter implements SandboxManager {
             return;
         }
         try {
-            String logs = containerManager.getLogs(containerId, ERROR_ECHO_TAIL_LINES);
-            if (logs != null && !logs.isEmpty()) {
-                String truncated = logs.length() > MAX_LOG_EVENT_CHARS
-                        ? logs.substring(0, MAX_LOG_EVENT_CHARS) + "\n... [truncated, "
-                                + logs.length()
-                                + " characters total]"
-                        : logs;
-                log.warn("Container logs before cleanup:\n{}", truncated);
-            }
+            logTranscriptTail(containerManager.getLogs(containerId, ERROR_ECHO_TAIL_LINES));
         } catch (Exception e) {
             log.debug("Could not capture container logs on error path: {}", e.getMessage());
         }
+    }
+
+    private static void logTranscriptTail(@Nullable String logs) {
+        if (logs == null || logs.isEmpty()) {
+            return;
+        }
+        String truncated = logs.length() > MAX_LOG_EVENT_CHARS
+                ? logs.substring(0, MAX_LOG_EVENT_CHARS) + "\n... [truncated, " + logs.length() + " characters total]"
+                : logs;
+        log.warn("Container logs before cleanup:\n{}", truncated);
     }
 
     private void checkCancelled(AtomicBoolean flag, UUID jobId) {

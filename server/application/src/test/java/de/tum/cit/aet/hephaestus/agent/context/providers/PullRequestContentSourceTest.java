@@ -75,7 +75,6 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        lenient().when(pullRequestRepository.existsByIdAndDeletedAtIsNull(456L)).thenReturn(true);
         lenient()
                 .when(pullRequestRepository.findByIdWithAuthorAndRepository(456L))
                 .thenReturn(Optional.of(new PullRequest()));
@@ -163,7 +162,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                 Files.writeString(file, entry.getValue());
                 files.put(entry.getKey(), file);
             }
-            return new GitDiffOperations.DiffCapture(directory, files, "base", "abc123def456");
+            return new GitDiffOperations.DiffCapture(directory, files);
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         }
@@ -423,7 +422,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
     @Test
     void shouldReportUnavailableThenAllowCaptureWhenArtifactReturns() {
-        when(pullRequestRepository.existsByIdAndDeletedAtIsNull(456L)).thenReturn(false);
+        when(pullRequestRepository.findByIdWithAuthorAndRepository(456L)).thenReturn(Optional.empty());
         for (var kind : provider.sourceKinds()) {
             var captured = provider.capture(request(sampleMetadata()), Set.of(kind));
             assertThat(captured.files()).isEmpty();
@@ -435,7 +434,6 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         }
         verifyNoInteractions(reviewCommentRepository, gitDiffOperations, repositoryPreparer);
         var artifact = new PullRequest();
-        when(pullRequestRepository.existsByIdAndDeletedAtIsNull(456L)).thenReturn(true);
         when(pullRequestRepository.findByIdWithAuthorAndRepository(456L)).thenReturn(Optional.of(artifact));
         var restored = provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
         assertThat(restored.stateOverrides()).isEmpty();
@@ -444,30 +442,42 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
     @Test
     void shouldSkipGitPreparationWhenTheParentIsUnavailable() {
-        when(pullRequestRepository.existsByIdAndDeletedAtIsNull(456L)).thenReturn(false);
-        when(gitRepositoryManager.isEnabled()).thenReturn(true);
+        var deleted = new PullRequest();
+        deleted.setDeletedAt(Instant.parse("2026-09-05T00:00:00Z"));
+        when(pullRequestRepository.findByIdWithAuthorAndRepository(456L)).thenReturn(Optional.of(deleted));
 
-        provider.capture(request(sampleMetadata()), Set.of(DIFF));
+        var captured = provider.capture(request(sampleMetadata()), Set.of(DIFF));
 
-        verifyNoInteractions(gitDiffOperations, repositoryPreparer);
+        assertThat(captured.stateOverrides())
+                .containsEntry(DIFF, new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND));
+        verifyNoInteractions(gitRepositoryManager, gitDiffOperations, repositoryPreparer);
     }
 
     @Test
-    void shouldRecheckAvailabilityAfterGitPreparation() {
+    void shouldPrepareTheRepositoryOnceForEverySourceOfOneRequest() {
+        stubGit();
+        var request = request(sampleMetadata());
+
+        for (var kind : provider.sourceKinds()) provider.capture(request, Set.of(kind));
+
+        org.mockito.Mockito.verify(repositoryPreparer, org.mockito.Mockito.times(1))
+                .prepare(any());
+    }
+
+    @Test
+    void shouldHandTheSamePreparationFailureToEverySourceOfOneRequest() {
         when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        var deleted = new PullRequest();
-        deleted.setDeletedAt(Instant.parse("2026-09-05T00:00:00Z"));
-        org.mockito.Mockito.doAnswer(invocation -> {
-                    when(pullRequestRepository.findByIdWithAuthorAndRepository(456L))
-                            .thenReturn(Optional.of(deleted));
-                    return PREPARED;
-                })
-                .when(repositoryPreparer)
-                .prepare(org.mockito.ArgumentMatchers.any());
-        var captured = provider.capture(request(sampleMetadata()), Set.of(DIFF));
-        assertThat(captured.files()).isEmpty();
-        assertThat(captured.stateOverrides())
-                .containsEntry(DIFF, new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND));
+        when(repositoryPreparer.prepare(any()))
+                .thenThrow(new JobPreparationException("SCM credentials are unavailable"));
+        var request = request(sampleMetadata());
+
+        for (var kind : List.of(CORE, DIFF)) {
+            assertThatThrownBy(() -> provider.capture(request, Set.of(kind)))
+                    .isInstanceOf(JobPreparationException.class)
+                    .hasMessage("SCM credentials are unavailable");
+        }
+        org.mockito.Mockito.verify(repositoryPreparer, org.mockito.Mockito.times(1))
+                .prepare(any());
     }
 
     @Test

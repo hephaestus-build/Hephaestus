@@ -1,13 +1,14 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive;
 
+import de.tum.cit.aet.hephaestus.agent.gateway.GatewayInteractiveChannel;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.ContainerSecurityPolicy;
-import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerAttemptWorkspace;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerOperations;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerVolumeOperations;
+import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxAttemptLauncher;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxContainerManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxEnvBlocklist;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxLabels;
@@ -24,6 +25,7 @@ import io.micrometer.core.instrument.Timer;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,9 +56,8 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
     private final InteractiveSandboxRegistry registry;
     private final InteractiveSandboxMetrics metrics;
     private final ObjectMapper mapper;
-    private final SandboxGatewaySessions gatewaySessions;
-    private final DockerVolumeOperations volumeOperations;
-    private final Map<UUID, Resources> resources = new ConcurrentHashMap<>();
+    private final SandboxAttemptLauncher launcher;
+    private final Map<UUID, SandboxAttemptLauncher.Attempt> resources = new ConcurrentHashMap<>();
     private final String owner;
     private final int gatewayPort;
     private final Executor closeExecutor;
@@ -87,12 +88,11 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
         this.metrics = metrics;
         this.mapper = mapper;
         this.closeExecutor = closeExecutor;
-        this.gatewaySessions = gatewaySessions;
-        this.volumeOperations = volumeOperations;
+        this.launcher = new SandboxAttemptLauncher(containerManager, gatewaySessions, volumeOperations, gatewayPort);
         this.owner = dockerProperties.owner();
         this.gatewayPort = gatewayPort;
         this.mentorProxyCredentialRegistry = mentorProxyCredentialRegistry;
-        java.util.Arrays.setAll(attachLocks, ignored -> new Object());
+        Arrays.setAll(attachLocks, ignored -> new Object());
     }
 
     @Override
@@ -124,9 +124,9 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
         Timer.Sample sample = Timer.start();
         String networkId = null;
         String containerId = null;
-        String initializerId = null;
-        PiProcessHandle process = null;
+        GatewayInteractiveChannel channel = null;
         DockerAttachedSandboxAdapter sandbox = null;
+        boolean owned = false;
         boolean registered = false;
         try {
             boolean allowInternet =
@@ -145,8 +145,6 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
 
             SecurityProfile secProfile =
                     spec.securityProfile() != null ? spec.securityProfile() : SecurityProfile.DEFAULT;
-            DockerOperations.HostConfigSpec hostConfig =
-                    securityPolicy.buildHostConfig(secProfile, spec.resourceLimits(), spec.networkPolicy());
             Map<String, String> labels = Map.of(
                     SandboxLabels.OWNER,
                     owner,
@@ -156,66 +154,37 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
                     spec.sessionId().toString());
             Map<String, String> runnerEnv = buildRunnerEnvironment(spec, appServerIp);
 
-            if (!spec.volumeMounts().isEmpty()) {
-                throw new InteractiveSandboxException(
-                        "Prepare workspace files before attach; host-directory injection is unsupported");
+            var attempt = launcher.open(
+                    spec.networkPolicy(), workspaceManager.createInputTar(spec.inputFiles(), Map.of()), labels);
+            // The previous sandbox for this session still owns its volumes until its close completes.
+            if (resources.putIfAbsent(spec.sessionId(), attempt) != null) {
+                attempt.close();
+                throw new InteractiveSandboxException("Previous sandbox for this session is still closing");
             }
-            String token =
-                    spec.networkPolicy() == null ? null : spec.networkPolicy().llmProxyToken();
-            if (token == null || token.isBlank()) {
-                throw new InteractiveSandboxException("Gateway credential required");
-            }
-            var gatewaySession = gatewaySessions.register(
-                    token, workspaceManager.createInputTar(spec.inputFiles(), Map.of()), "out");
-            DockerAttemptWorkspace workspace;
-            try {
-                workspace = new DockerAttemptWorkspace(volumeOperations, gatewaySession.id(), labels);
-            } catch (RuntimeException exception) {
-                gatewaySession.close();
-                throw exception;
-            }
-            resources.put(spec.sessionId(), new Resources(gatewaySession, workspace));
-            var channel =
-                    gatewaySession.enableInteractive(properties.maxFrameChars(), properties.stdinWriteTimeoutMs());
-            runnerEnv.put(
-                    "SANDBOX_RUNTIME_URL",
-                    "http://" + appServerIp + ":" + gatewayPort + "/internal/llm/runtime/" + gatewaySession.id());
-            initializerId = containerManager.createContainer(new DockerOperations.ContainerSpec(
+            owned = true;
+            channel = attempt.session().enableInteractive(properties.maxFrameChars());
+            runnerEnv.put("SANDBOX_RUNTIME_URL", attempt.runtimeUrl(appServerIp));
+            DockerOperations.ContainerSpec template = new DockerOperations.ContainerSpec(
                     spec.image(),
-                    List.of("node", "/opt/pi-sdk/gateway-init.ts"),
+                    List.of(),
                     runnerEnv,
                     networkId,
                     CONTAINER_HOSTNAME,
                     CONTAINER_USER,
                     labels,
-                    workspace.configure(hostConfig, true),
-                    extraHosts));
-            containerManager.startContainer(initializerId);
-            var initialized = containerManager.waitForCompletion(
-                    initializerId, spec.resourceLimits().maxRuntime());
-            if (initialized.timedOut() || initialized.exitCode() != 0) {
+                    securityPolicy.buildHostConfig(secProfile, spec.resourceLimits(), spec.networkPolicy()),
+                    extraHosts);
+            if (!attempt.initialize(template, spec.resourceLimits().maxRuntime(), initializerId -> {})
+                    .succeeded()) {
                 throw new InteractiveSandboxException("Mentor workspace initialization failed");
             }
-            containerManager.forceRemove(initializerId);
-            initializerId = null;
             var command = new ArrayList<>(List.of("node", "/opt/pi-sdk/gateway-mentor.ts"));
             command.addAll(spec.command());
-            DockerOperations.ContainerSpec containerSpec = new DockerOperations.ContainerSpec(
-                    spec.image(),
-                    command,
-                    runnerEnv,
-                    networkId,
-                    CONTAINER_HOSTNAME,
-                    CONTAINER_USER,
-                    labels,
-                    workspace.configure(hostConfig, false),
-                    extraHosts);
-            containerId = containerManager.createContainer(containerSpec);
-            process = new PiProcessHandle(channel);
+            containerId = containerManager.createContainer(attempt.runtime(template, command));
             containerManager.startContainer(containerId);
 
             // Build + await first frame BEFORE register: a stillborn runner never becomes visible.
-            sandbox = buildSandbox(spec, runtimeKey, containerId, networkId, process);
+            sandbox = buildSandbox(spec, runtimeKey, containerId, networkId, channel);
             sandbox.start();
 
             Duration firstFrameTimeout = Duration.ofSeconds(properties.attachFirstFrameTimeoutSeconds());
@@ -237,7 +206,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
                     log.debug("Concurrent attach lost the race; returning existing sandbox");
                     DockerAttachedSandboxAdapter winner = registry.findLive(spec.userId(), spec.workspaceId());
                     if (winner != null) {
-                        // Loser leaks container/network/process/pump/writer VTs unless we tear it down.
+                        // Loser leaks container/network/channel/pump/writer VTs unless we tear it down.
                         // Fire-and-forget: don't block the caller for grace+5s.
                         sandbox.terminate(EvictionReason.ERROR);
                         if (!winner.hasRuntimeKey(runtimeKey)) {
@@ -263,26 +232,19 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             return sandbox;
         } catch (InteractiveSandboxException e) {
             if (!registered) {
-                tearDownPartial(sandbox, process, networkId, containerId);
+                tearDownPartial(sandbox, channel, networkId, containerId);
             }
             throw e;
         } catch (Exception e) {
             metrics.attachFailureOther.increment();
             if (!registered) {
-                tearDownPartial(sandbox, process, networkId, containerId);
+                tearDownPartial(sandbox, channel, networkId, containerId);
             }
             throw new InteractiveSandboxException("attach() failed: " + e.getMessage(), e);
         } finally {
-            if (initializerId != null) {
-                try {
-                    containerManager.forceRemove(initializerId);
-                } catch (RuntimeException exception) {
-                    log.warn("Could not remove mentor initializer", exception);
-                }
-            }
             if (!registered && sandbox == null) {
                 mentorProxyCredentialRegistry.revoke(spec.sessionId());
-                closeResources(spec.sessionId());
+                if (owned) closeResources(spec.sessionId());
             }
             MDC.remove(MDC_SESSION_ID);
         }
@@ -328,7 +290,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             InteractiveSandboxRuntimeKey runtimeKey,
             String containerId,
             String networkId,
-            PiProcessHandle process) {
+            GatewayInteractiveChannel channel) {
         FrameRingBuffer ring = new FrameRingBuffer(properties.ringBufferFrames(), metrics.ringBufferDropped);
         DockerAttachedSandboxAdapter.LifecycleOps lifecycleOps = new DockerAttachedSandboxAdapter.LifecycleOps() {
             @Override
@@ -357,7 +319,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
                 containerId,
                 networkId,
                 runtimeKey,
-                process,
+                channel,
                 mapper,
                 ring,
                 properties.subscriberQueueCapacity(),
@@ -399,21 +361,9 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
         }
     }
 
-    private record Resources(SandboxGatewaySessions.Session gateway, DockerAttemptWorkspace workspace)
-            implements AutoCloseable {
-        @Override
-        public void close() throws IOException {
-            try {
-                workspace.close();
-            } finally {
-                gateway.close();
-            }
-        }
-    }
-
     private void tearDownPartial(
             @Nullable DockerAttachedSandboxAdapter sandbox,
-            @Nullable PiProcessHandle process,
+            @Nullable GatewayInteractiveChannel channel,
             @Nullable String networkId,
             @Nullable String containerId) {
         // Pump/writer threads may already be running; terminate() drives the full close path.
@@ -422,10 +372,10 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             sandbox.awaitClosed(Duration.ofSeconds(properties.graceTimeoutSeconds() + 5L));
             return;
         }
-        if (process != null) {
+        if (channel != null) {
             try {
-                process.destroyForcibly();
-            } catch (Exception ignored) {
+                channel.close();
+            } catch (IOException | RuntimeException ignored) {
             }
         }
         if (containerId != null) {

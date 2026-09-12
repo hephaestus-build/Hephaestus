@@ -100,7 +100,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         String content = "repeated quote\nwrong line\nrepeated quote\n";
         Files.writeString(source, content);
         String sha = ProvenanceDigest.sha256Hex(content.getBytes(StandardCharsets.UTF_8));
-        var raw = new PreparedJobInputs(Map.of(), Map.of("inputs/context/source.txt", source), List.of(), null, null);
+        var raw = new PreparedJobInputs(
+                Map.of(), Map.of("inputs/context/source.txt", source), List.of(), List.of(), null, null);
         try (var prepared = files.prepare(job, raw)) {
             Files.writeString(source, "upstream changed");
             assertThat(read(files, job, "inputs/context/source.txt", sha))
@@ -130,7 +131,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         Files.writeString(source, "private");
         Path link = root.resolve("link");
         Files.createSymbolicLink(link, source);
-        var raw = new PreparedJobInputs(Map.of(), Map.of("inputs/source", link), List.of(), null, null);
+        var raw = new PreparedJobInputs(Map.of(), Map.of("inputs/source", link), List.of(), List.of(), null, null);
         assertThatThrownBy(() -> files.prepare(job(), raw)).isInstanceOf(IllegalStateException.class);
         assertThat(root.resolve("escape")).doesNotExist();
     }
@@ -199,34 +200,47 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldCleanOrphanedPreparationAndClaimAfterTheGracePeriod() throws Exception {
+    void shouldCleanOrphanedPreparationAfterTheGracePeriod() throws Exception {
         var layout = new FabricLayout(root.toString());
         var files = new JobEvidenceFiles(layout, jobs, clock);
         var job = job();
         Path parent = layout.jobsRoot().resolve("1").resolve(job.getId().toString());
         Files.createDirectories(parent);
         String identity = "0-" + ProvenanceDigest.sha256Hex("worker".getBytes(StandardCharsets.UTF_8));
-        Path claim = Files.createFile(parent.resolve(identity + ".claim"));
         Path staging = Files.createTempDirectory(parent, "." + identity + ".preparing-");
         Files.writeString(staging.resolve("partial"), "not published");
         files.cleanEndedAttempts();
         assertThat(staging).exists();
         new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1))).cleanEndedAttempts();
         assertThat(staging).doesNotExist();
-        assertThat(claim).doesNotExist();
     }
 
     @Test
-    void shouldRejectMalformedUtf8RatherThanVerifyReplacementCharacters() {
+    void shouldVerifyDecodableLinesWhenAnotherLineIsNotUtf8() {
         var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock);
         var job = job();
-        byte[] bytes = {(byte) 0xc3, 0x28};
+        byte[] bytes = concat(
+                "caf".getBytes(StandardCharsets.UTF_8),
+                new byte[] {(byte) 0xe9, '\n'},
+                "clean line\n".getBytes(StandardCharsets.UTF_8));
         String sha = ProvenanceDigest.sha256Hex(bytes);
         try (var prepared = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("inputs/source", bytes)))) {
-            assertThatThrownBy(() -> files.containsUtf8AtLines(job, "inputs/source", sha, "�", 1, 1))
-                    .isInstanceOf(java.io.UncheckedIOException.class);
+            assertThat(files.containsUtf8AtLines(job, "inputs/source", sha, "clean line", 2, 2))
+                    .contains(true);
+            assertThat(files.containsUtf8AtLines(job, "inputs/source", sha, "caf\uFFFD", 1, 1))
+                    .as("a replacement character is not the byte that was there")
+                    .contains(false);
+            assertThat(read(files, job, "inputs/source", sha))
+                    .as("the digest is over the raw bytes, however they decode")
+                    .isPresent();
             assertThat(prepared.files()).containsKey("inputs/source");
         }
+    }
+
+    private static byte[] concat(byte[]... parts) {
+        var out = new java.io.ByteArrayOutputStream();
+        for (byte[] part : parts) out.writeBytes(part);
+        return out.toByteArray();
     }
 
     private static AgentJob job() {

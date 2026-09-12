@@ -31,6 +31,11 @@ import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeDetectionCompletedEvent;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.Reader;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -313,7 +318,6 @@ public class PracticeDetectionDeliveryService {
         boolean hasNegative = false;
         Instant observedAt = Instant.now();
 
-        // Carries the keys each observation was persisted under.
         List<ValidatedObservation> deliveredObservations = new ArrayList<>(admittedObservations.size());
 
         for (int i = 0; i < admittedObservations.size(); i++) {
@@ -501,7 +505,7 @@ public class PracticeDetectionDeliveryService {
                         .path("immutableIdentity")
                         .asString()
                         .split(":", 2)[0];
-                if (head.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) return head;
+                if (head.matches(CitationVerification.GIT_OBJECT_ID)) return head;
             }
         }
         throw new JobDeliveryException("Captured repository has no pinned commit identity");
@@ -515,7 +519,7 @@ public class PracticeDetectionDeliveryService {
         int end = citation.path("endLine").asInt(start);
         if (!(SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD")
                         .equals(citation.path("artifactPath").asString())
-                || !revision.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")
+                || !revision.matches(CitationVerification.GIT_OBJECT_ID)
                 || !citation.path("path").isString()
                 || !citation.path("quote").isString()
                 || path.isBlank()
@@ -586,7 +590,7 @@ public class PracticeDetectionDeliveryService {
                             && "scm.pull-request.diff".equals(sourceKind.asString())
                             && quote.isMissingNode()
                             && quoteSha256.isString()
-                            && quoteSha256.asString().matches("[0-9a-f]{64}");
+                            && quoteSha256.asString().matches(CitationVerification.SHA256_HEX);
             if (!citation.isObject()
                     || !sourceKind.isString()
                     || !artifactPath.isString()
@@ -631,6 +635,8 @@ public class PracticeDetectionDeliveryService {
                                 + ", jobId="
                                 + job.getId());
             }
+            String quoteDigest =
+                    redactedSecretCitation ? quoteSha256.asString() : CitationVerification.quoteDigest(exactQuote);
             JsonNode gitRevision = citation.path("revision");
             if ("scm.repository.tree".equals(kind.value()) || !gitRevision.isMissingNode()) {
                 if (!"scm.repository.tree".equals(kind.value()))
@@ -639,14 +645,14 @@ public class PracticeDetectionDeliveryService {
                 ((ObjectNode) citation).put("revision", requested.revision());
                 var match = repositoryQuotes.get(requested);
                 if (match == null) throw new JobDeliveryException("Repository citation has no prepared verification");
+                String blobDigest = match.artifactSha256();
+                if (blobDigest == null)
+                    throw new EvidenceQuoteUnverifiedException(
+                            "Cited path does not exist at the cited revision", citationIndex);
                 if (!match.matches())
                     throw new EvidenceQuoteUnverifiedException(
                             "Historical quote does not match the cited revision and lines", citationIndex);
-                CitationVerification.record(
-                        (ObjectNode) citation,
-                        job,
-                        match.artifactSha256(),
-                        CitationVerification.quoteDigest(exactQuote));
+                CitationVerification.record((ObjectNode) citation, job, blobDigest, quoteDigest);
                 continue;
             }
             if (!"scm.pull-request.diff".equals(kind.value())) {
@@ -669,8 +675,7 @@ public class PracticeDetectionDeliveryService {
                                     + ", jobId=" + job.getId(),
                             citationIndex);
                 }
-                CitationVerification.record(
-                        (ObjectNode) citation, job, artifact.sha256(), CitationVerification.quoteDigest(exactQuote));
+                CitationVerification.record((ObjectNode) citation, job, artifact.sha256(), quoteDigest);
                 continue;
             }
             boolean matches = evidenceFiles
@@ -696,11 +701,7 @@ public class PracticeDetectionDeliveryService {
                                 + job.getId(),
                         citationIndex);
             }
-            CitationVerification.record(
-                    (ObjectNode) citation,
-                    job,
-                    artifact.sha256(),
-                    redactedSecretCitation ? quoteSha256.asString() : CitationVerification.quoteDigest(exactQuote));
+            CitationVerification.record((ObjectNode) citation, job, artifact.sha256(), quoteDigest);
         }
         return evidence;
     }
@@ -841,14 +842,14 @@ public class PracticeDetectionDeliveryService {
     }
 
     private static boolean diffContainsCitation(
-            java.io.Reader reader,
+            Reader reader,
             String citedPath,
             String citedSide,
             int start,
             int end,
             String quote,
             @Nullable String redactedDigest)
-            throws java.io.IOException {
+            throws IOException {
         List<String> expected = quote.lines().toList();
         if (redactedDigest == null && expected.size() != (long) end - start + 1) return false;
         @Nullable String[] paths = new String[2];
@@ -857,8 +858,16 @@ public class PracticeDetectionDeliveryService {
         DiffEvidenceReader.scan(reader, prefixLength, redactedDigest != null, stored -> {
             String line = stored.prefix();
             if (!line.startsWith("[L")) {
-                if (stored.complete() && line.startsWith("--- ")) paths[0] = parseDiffPath(line.substring(4));
-                if (stored.complete() && line.startsWith("+++ ")) paths[1] = parseDiffPath(line.substring(4));
+                // A header the prefix could not hold names a file no citation can, and must not leave the
+                // previous file's name standing over the lines that follow it.
+                if (line.startsWith("diff --git")) {
+                    paths[0] = null;
+                    paths[1] = null;
+                } else if (line.startsWith("--- ")) {
+                    paths[0] = stored.complete() ? parseDiffPath(line.substring(4)) : null;
+                } else if (line.startsWith("+++ ")) {
+                    paths[1] = stored.complete() ? parseDiffPath(line.substring(4)) : null;
+                }
                 return;
             }
             int annotationEnd = line.indexOf("] ");
@@ -894,7 +903,7 @@ public class PracticeDetectionDeliveryService {
         String path = value;
         if (path.startsWith("\"")) {
             if (!path.endsWith("\"")) throw new JobDeliveryException("Malformed quoted Git path");
-            var bytes = new java.io.ByteArrayOutputStream();
+            var bytes = new ByteArrayOutputStream();
             for (int i = 1; i < path.length() - 1; i++) {
                 char character = path.charAt(i);
                 if (character != '\\') {
@@ -932,9 +941,9 @@ public class PracticeDetectionDeliveryService {
             try {
                 path = StandardCharsets.UTF_8
                         .newDecoder()
-                        .decode(java.nio.ByteBuffer.wrap(bytes.toByteArray()))
+                        .decode(ByteBuffer.wrap(bytes.toByteArray()))
                         .toString();
-            } catch (java.nio.charset.CharacterCodingException exception) {
+            } catch (CharacterCodingException exception) {
                 throw new JobDeliveryException("Git path is not valid UTF-8", exception);
             }
         }
@@ -969,7 +978,7 @@ public class PracticeDetectionDeliveryService {
                 for (JsonNode artifact : sourceArtifacts) {
                     String path = artifact.path("path").asString();
                     String sha256 = artifact.path("sha256").asString();
-                    if (path.isBlank() || !sha256.matches("[0-9a-f]{64}")) {
+                    if (path.isBlank() || !sha256.matches(CitationVerification.SHA256_HEX)) {
                         throw new JobDeliveryException(
                                 "Available source has an invalid artifact: jobId=" + job.getId());
                     }

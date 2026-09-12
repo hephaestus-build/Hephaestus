@@ -14,6 +14,8 @@ import java.io.OutputStream;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -25,7 +27,11 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * The application server's Git executor when the worker runs in its own container: each operation is
  * dispatched over the control channel to the worker that holds the repository's mirror and streamed
- * back frame by frame. A lost control session fails its operation; ingestion retries from persisted
+ * back frame by frame. A repository stays on the worker it was placed on while that session lives;
+ * once the session is gone it is placed again by hashing the repository over the live workers, so a
+ * hub restart or worker reconnect lands every repository on the same worker again as long as the
+ * set of workers is unchanged. A query on a worker without the mirror answers "not cloned" and the
+ * caller fetches; a lost control session fails its operation and ingestion retries from persisted
  * commit checkpoints.
  */
 public final class RemoteNativeGitExecutor implements NativeGitExecutor {
@@ -48,15 +54,8 @@ public final class RemoteNativeGitExecutor implements NativeGitExecutor {
                 || request.operation() == Operation.HISTORICAL_BLOB
                 || request.operation() == Operation.SCAN_SECRETS)
             throw new IllegalArgumentException("Historical reads require canonical job evidence");
-        WorkerSession session = affinity.compute(key, (ignored, previous) -> {
-            if (previous != null && previous.isOpen()) return previous;
-            if (request.operation() != Operation.FETCH && request.operation() != Operation.FETCH_COMMIT)
-                throw new IllegalStateException("Repository worker session was lost; fetch must be retried");
-            return registry.sessions().stream()
-                    .filter(WorkerSession::isOpen)
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalStateException("No connected Git worker"));
-        });
+        WorkerSession session = affinity.compute(
+                key, (ignored, previous) -> previous != null && previous.isOpen() ? previous : place(key));
         remote(
                 session,
                 key.workspaceId(),
@@ -65,6 +64,15 @@ public final class RemoteNativeGitExecutor implements NativeGitExecutor {
                 false,
                 timeout,
                 output);
+    }
+
+    private WorkerSession place(RepositoryKey key) {
+        List<WorkerSession> live = registry.sessions().stream()
+                .filter(WorkerSession::isOpen)
+                .sorted(Comparator.comparing(WorkerSession::workerId))
+                .toList();
+        if (live.isEmpty()) throw new IllegalStateException("No connected Git worker");
+        return live.get(Math.floorMod(Long.hashCode(key.repositoryId()), live.size()));
     }
 
     @Override
@@ -94,6 +102,7 @@ public final class RemoteNativeGitExecutor implements NativeGitExecutor {
         long deadline = System.currentTimeMillis() + timeout.toMillis();
         Pending state = new Pending(session);
         pending.put(id, state);
+        boolean completed = false;
         try {
             if (!session.send(
                     new GitOperation(id, session.sessionId(), workspaceId, repositoryId, json, deadline, delete)))
@@ -109,6 +118,7 @@ public final class RemoteNativeGitExecutor implements NativeGitExecutor {
                     if (!frame.success()
                             || frame.sequence() != sequence
                             || !frame.data().isEmpty()) throw new IllegalStateException("Git worker operation failed");
+                    completed = true;
                     return;
                 }
                 if (frame.sequence() != sequence++) throw new IllegalStateException("Git output sequence mismatch");
@@ -127,7 +137,7 @@ public final class RemoteNativeGitExecutor implements NativeGitExecutor {
             throw new IllegalStateException("Git operation interrupted", e);
         } finally {
             pending.remove(id);
-            session.send(new GitCancel(id));
+            if (!completed) session.send(new GitCancel(id));
         }
     }
 

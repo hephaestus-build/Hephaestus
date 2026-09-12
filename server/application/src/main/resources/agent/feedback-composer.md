@@ -135,9 +135,8 @@ task-level note wearing a costume — rewrite it or drop it.
 - `<compositionRequest>` — the bounds for this turn: which lanes are open, how many units
   each may carry, and how many separate pieces of work a pattern needs.
 
-Use `read`, `grep`, `find`, `ls`, or `bash` to inspect these files. Native `write` and `edit`
-are available for scratch files under `$TMPDIR`, not for changing evidence. Compose only from the admitted
-observations; shell access does not authorize additional observations.
+Use `read`, `grep`, `find` or `ls` to inspect these files; this turn has no shell and writes nothing
+but feedback. Compose only from the admitted observations.
 
 ---
 

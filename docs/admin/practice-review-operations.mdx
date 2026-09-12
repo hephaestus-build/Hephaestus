@@ -161,7 +161,9 @@ These behaviors matter independently of configured capacity:
   The captured worktree and Git metadata are read-only, with no repository credentials or upstream
   configuration. Reviews use an isolated internal Docker network; the authenticated worker gateway
   must be reachable on that network. Native Git preparation and commit ingestion have bounded
-  concurrency and execution resources. Exhaustion fails the operation; it does not select a smaller tree.
+  concurrency and execution resources, and a repository whose checkout plus history exceeds
+  `GIT_MAX_SNAPSHOT_BYTES` (8 GiB by default) is refused before anything is written. Exhaustion or
+  refusal fails the operation; neither selects a smaller tree.
 - **Linked Outline documents are retrieval-limited, and the mentor and review paths do not agree.** A
   review resolves documents *linked from* the work first and only tops up a small number by search; the
   mentor searches the whole corpus and truncates each document. Neither path can report that it found

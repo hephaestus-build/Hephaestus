@@ -54,7 +54,7 @@ const group = (dependsOn: readonly string[]) => ({
 
 const webappSources = "'webapp/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
 const agentSources =
-	"'server/application/src/{main,test}/resources/agent/**/*.ts' 'server/application/src/main/resources/practices/precompute/**/*.ts' 'docker/agents/{precompute,pi}/**/*.ts' 'scripts/**/*.ts'";
+	"'server/application/src/{main,test}/resources/agent/**/*.ts' 'server/application/src/main/resources/practices/precompute/**/*.ts' 'docker/agents/{precompute,pi,git}/**/*.ts' 'scripts/**/*.ts'";
 const loadSources = "'load-tests/**/*.js'";
 const docsSources = "'docs/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
 // Two passes: a negation applies to the whole invocation, so `!*/**` would also drop the nested set.

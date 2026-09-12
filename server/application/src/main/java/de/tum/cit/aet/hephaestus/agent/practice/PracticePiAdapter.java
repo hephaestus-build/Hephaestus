@@ -43,7 +43,6 @@ public class PracticePiAdapter {
                 SandboxLayout.OUTPUT_PATH,
                 null,
                 plan.networkPolicy(),
-                Map.of(),
                 plan.promptDigest());
     }
 

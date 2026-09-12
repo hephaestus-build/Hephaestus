@@ -3,17 +3,13 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
-import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
-import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
-import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitContributor;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitContributorRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister.Outcome;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.util.CommitUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
@@ -21,22 +17,20 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
-import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /** Backfills missing commits across fetched branches without holding a transaction during Git I/O. */
 @Service
@@ -56,38 +50,31 @@ public class GitLabCommitBackfillService {
     private final GitRepositoryManager gitRepositoryManager;
     private final GitLabTokenService tokenService;
     private final CommitRepository commitRepository;
+    private final CommitDetailsPersister persister;
     private final CommitContributorRepository contributorRepository;
     private final CommitAuthorResolver authorResolver;
-    private final ApplicationEventPublisher eventPublisher;
-    private final TransactionTemplate transactionTemplate;
 
     public GitLabCommitBackfillService(
             GitRepositoryManager gitRepositoryManager,
             GitLabTokenService tokenService,
             CommitRepository commitRepository,
+            CommitDetailsPersister persister,
             CommitContributorRepository contributorRepository,
-            CommitAuthorResolver authorResolver,
-            ApplicationEventPublisher eventPublisher,
-            TransactionTemplate transactionTemplate) {
+            CommitAuthorResolver authorResolver) {
         this.gitRepositoryManager = gitRepositoryManager;
         this.tokenService = tokenService;
         this.commitRepository = commitRepository;
+        this.persister = persister;
         this.contributorRepository = contributorRepository;
         this.authorResolver = authorResolver;
-        this.eventPublisher = eventPublisher;
-        this.transactionTemplate = transactionTemplate;
     }
 
     /**
-     * Backfills commits for a GitLab repository from its local git clone.
+     * Backfills commits for a GitLab repository from its local git clone. Idempotent: a commit whose
+     * details are captured is skipped, and a commit whose capture failed is retried next cycle.
      *
-     * <p>Idempotent: commits already in the database are skipped via
-     * {@code existsByShaAndRepositoryId} fast-path. Returns immediately with
-     * count 0 when local git is disabled.
-     *
-     * @param scopeId    the workspace scope ID (for token resolution)
-     * @param repository the repository entity
-     * @return sync result with count of new commits persisted
+     * @return sync result with the count of commits captured; an error result when local Git is
+     *     disabled so the caller falls through to REST
      */
     public SyncResult backfillCommits(Long scopeId, Repository repository) {
         if (!gitRepositoryManager.isEnabled()) {
@@ -125,18 +112,28 @@ public class GitLabCommitBackfillService {
                 return SyncResult.abortedError(0);
             }
 
-            int[] processed = {0};
-            gitRepositoryManager.forEachMissingCommit(
-                    key, shas -> commitRepository.findGitDetailsCapturedShas(repoId, shas), info -> {
-                        if (processCommitInfo(info, repository, scopeId, serverUrl)) {
-                            processed[0]++;
-                        }
+            Long providerId = Objects.requireNonNull(repository.getProvider().getId());
+            var origin = new CommitDetailsPersister.Origin(
+                    scopeId,
+                    DataSource.GRAPHQL_SYNC,
+                    IdentityProviderType.GITLAB,
+                    sha -> CommitUtils.buildGitLabCommitUrl(serverUrl, repository.getNameWithOwner(), sha),
+                    email -> authorResolver.resolveAndBackfillByEmail(email, providerId),
+                    (commit, details, authorId, committerId) -> {
+                        persistParents(repoId, details);
+                        upsertContributors(commit.getId(), details, authorId, committerId, providerId);
                     });
+            Map<Outcome, Integer> outcomes = new EnumMap<>(Outcome.class);
+            gitRepositoryManager.forEachMissingCommit(
+                    key,
+                    shas -> commitRepository.findGitDetailsCapturedShas(repoId, shas),
+                    info -> outcomes.merge(persister.persist(info, repository, origin), 1, Integer::sum));
             log.info(
-                    "Completed commit backfill: repoId={}, capturedCommits={}, scope=all-branches",
+                    "Completed commit backfill: repoId={}, capturedCommits={}, failedCommits={}, scope=all-branches",
                     repoId,
-                    processed[0]);
-            return SyncResult.completed(processed[0]);
+                    outcomes.getOrDefault(Outcome.CAPTURED, 0),
+                    outcomes.getOrDefault(Outcome.FAILED, 0));
+            return SyncResult.completed(outcomes.getOrDefault(Outcome.CAPTURED, 0));
         } catch (GitRepositoryManager.GitOperationException e) {
             log.error(
                     "Commit backfill failed (git operation): repoId={}, repoName={}, error={}",
@@ -150,84 +147,15 @@ public class GitLabCommitBackfillService {
         }
     }
 
-    private boolean processCommitInfo(CommitDetails info, Repository repository, Long scopeId, String serverUrl) {
-        Boolean result = transactionTemplate.execute(status -> {
-            if (commitRepository.existsByShaAndRepositoryIdAndGitDetailsCapturedAtIsNotNull(
-                    info.sha(), repository.getId())) {
-                return false;
-            }
-
-            boolean newCommit = !commitRepository.existsByShaAndRepositoryId(info.sha(), repository.getId());
-
-            Long providerId = Objects.requireNonNull(
-                    repository.getProvider() != null
-                            ? Objects.requireNonNull(repository.getProvider().getId())
-                            : null);
-            Long authorId = authorResolver.resolveAndBackfillByEmail(info.authorEmail(), providerId);
-            Long committerId = authorResolver.resolveAndBackfillByEmail(info.committerEmail(), providerId);
-
-            String message = info.message() != null ? info.message() : "";
-            String htmlUrl = CommitUtils.buildGitLabCommitUrl(serverUrl, repository.getNameWithOwner(), info.sha());
-
-            commitRepository.upsertCommit(
-                    info.sha(),
-                    message,
-                    info.messageBody(),
-                    htmlUrl,
-                    info.authoredAt(),
-                    info.committedAt(),
-                    info.additions(),
-                    info.deletions(),
-                    info.changedFiles(),
-                    Instant.now(),
-                    repository.getId(),
-                    authorId,
-                    committerId,
-                    info.authorEmail(),
-                    info.committerEmail());
-
-            // Persist parent topology from the local clone walk. The REST-first
-            // path in GitLabCommitSyncService also sets these via the
-            // parent_ids field; both paths feed the same columns so whichever
-            // runs first wins and subsequent runs are COALESCE-idempotent.
-            if (info.parentShas() != null && !info.parentShas().isEmpty()) {
-                commitRepository.updateParentMetadataBySha(
-                        repository.getId(), info.sha(), info.parentShas().size(), String.join(",", info.parentShas()));
-            } else if (info.parentShas() != null) {
-                // Root commit (parent_count = 0). Write the count so downstream
-                // queries can distinguish "populated=0 parents" from "unpopulated".
-                commitRepository.updateParentMetadataBySha(repository.getId(), info.sha(), 0, null);
-            }
-
-            Commit commit = commitRepository
-                    .findByShaAndRepositoryId(info.sha(), repository.getId())
-                    .orElse(null);
-            if (commit == null) {
-                throw new IllegalStateException("Commit missing after upsert");
-            }
-
-            commit.getFileChanges().clear();
-            if (!info.fileChanges().isEmpty()) {
-                for (CommitDetails.FileChange fc : info.fileChanges()) {
-                    CommitFileChange fileChange = new CommitFileChange();
-                    fileChange.setFilename(fc.filename());
-                    fileChange.setChangeType(fc.changeType());
-                    fileChange.setAdditions(fc.additions());
-                    fileChange.setDeletions(fc.deletions());
-                    fileChange.setChanges(fc.changes());
-                    fileChange.setPreviousFilename(fc.previousFilename());
-                    commit.addFileChange(fileChange);
-                }
-                commitRepository.save(commit);
-            }
-
-            upsertContributors(commit.getId(), info, authorId, committerId, providerId);
-
-            commitRepository.markGitDetailsCaptured(repository.getId(), info.sha(), Instant.now());
-            if (newCommit) publishCommitCreated(commit, repository, scopeId);
-            return true;
-        });
-        return Boolean.TRUE.equals(result);
+    /**
+     * The REST-first path in {@link GitLabCommitSyncService} feeds the same columns from
+     * {@code parent_ids}; whichever runs first wins and the other is a no-op. A root commit writes
+     * {@code parent_count = 0} so "no parents" is distinguishable from "not populated".
+     */
+    private void persistParents(Long repositoryId, CommitDetails details) {
+        List<String> parents = details.parentShas();
+        commitRepository.updateParentMetadataBySha(
+                repositoryId, details.sha(), parents.size(), parents.isEmpty() ? null : String.join(",", parents));
     }
 
     /**
@@ -308,19 +236,4 @@ public class GitLabCommitBackfillService {
     }
 
     private record CoAuthor(@Nullable String name, String email) {}
-
-    private void publishCommitCreated(Commit commit, Repository repository, Long scopeId) {
-        ScmEventPayload.CommitData commitData = ScmEventPayload.CommitData.from(commit);
-        EventContext context = new EventContext(
-                UUID.randomUUID(),
-                Instant.now(),
-                scopeId,
-                Objects.requireNonNull(RepositoryRef.from(repository)),
-                DataSource.GRAPHQL_SYNC,
-                null,
-                UUID.randomUUID().toString(),
-                IdentityProviderType.GITLAB);
-
-        eventPublisher.publishEvent(new ScmDomainEvent.CommitCreated(commitData, context));
-    }
 }

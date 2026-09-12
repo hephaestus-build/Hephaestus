@@ -142,7 +142,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         assertThat(disabled.isEnabled()).isFalse();
         assertThat(disabled.isRepositoryCloned(KEY)).isFalse();
         List<CommitDetails> commits = new ArrayList<>();
-        disabled.forEachCommitInRange(KEY, null, "a".repeat(40), commits::add);
+        disabled.forEachCommitInRange(KEY, null, "a".repeat(40), shas -> Set.of(), commits::add);
         assertThat(commits).isEmpty();
     }
 
@@ -204,7 +204,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             String head = commit(git, "Third");
             prepare();
             List<String> received = new ArrayList<>();
-            assertThatThrownBy(() -> manager.forEachCommitInRange(KEY, null, head, details -> {
+            assertThatThrownBy(() -> manager.forEachCommitInRange(KEY, null, head, shas -> Set.of(), details -> {
                         received.add(details.sha());
                         throw new IllegalStateException("Persistence failed");
                     }))
@@ -212,7 +212,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                     .hasMessage("Persistence failed");
             assertThat(received).hasSize(1);
             received.clear();
-            manager.forEachCommitInRange(KEY, null, head, details -> received.add(details.sha()));
+            manager.forEachCommitInRange(KEY, null, head, shas -> Set.of(), details -> received.add(details.sha()));
             assertThat(received).hasSize(3).contains(head);
         }
     }
@@ -228,7 +228,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             String head = commit(git, "Rename\n\nBody");
             prepare();
             List<CommitDetails> commits = new ArrayList<>();
-            manager.forEachCommitInRange(KEY, parent, head, commits::add);
+            manager.forEachCommitInRange(KEY, parent, head, shas -> Set.of(), commits::add);
             assertThat(commits).hasSize(1);
             var captured = commits.getFirst();
             assertThat(captured.sha()).isEqualTo(head);

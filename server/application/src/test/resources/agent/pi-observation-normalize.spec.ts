@@ -730,7 +730,7 @@ void test("an UNDETERMINED observation must say what it could not settle", () =>
 	assert.equal(ok.evidence.undecidability?.wouldSettleIt, "The linked issue's body");
 });
 
-await test("historical citations preserve a full revision for trusted admission", () => {
+void test("historical citations preserve a full revision for trusted admission", () => {
 	const citation = {
 		sourceKind: "scm.repository.tree",
 		artifactPath: "inputs/scm/repo/.git/HEAD",

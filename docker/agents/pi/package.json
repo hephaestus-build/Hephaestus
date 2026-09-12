@@ -9,8 +9,5 @@
 	},
 	"engines": {
 		"pnpm": "12.3.4"
-	},
-	"devDependencies": {
-		"@types/ws": "8.18.1"
 	}
 }

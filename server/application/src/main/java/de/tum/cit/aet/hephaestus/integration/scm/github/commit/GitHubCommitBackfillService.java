@@ -3,16 +3,11 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.commit;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
-import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
-import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
-import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister.Outcome;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.util.CommitUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
@@ -20,14 +15,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
-import java.time.Instant;
-import java.util.UUID;
+import java.util.EnumMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /** Backfills missing commits across fetched branches without holding a transaction during Git I/O. */
 @Service
@@ -38,23 +31,14 @@ public class GitHubCommitBackfillService {
     private final GitRepositoryManager gitRepositoryManager;
     private final GitHubAppTokenService tokenService;
     private final CommitRepository commitRepository;
+    private final CommitDetailsPersister persister;
     private final CommitAuthorResolver authorResolver;
-    private final ApplicationEventPublisher eventPublisher;
-    private final TransactionTemplate transactionTemplate;
 
     /**
-     * Backfills commits for a repository from its local bare git clone.
-     * <p>
-     * This method is safe to call repeatedly — it is idempotent. Commits that
-     * already exist are skipped via the {@code existsByShaAndRepositoryId} fast-path.
-     * <p>
-     * Git clone/fetch operations run OUTSIDE any transaction to avoid holding
-     * database connections during potentially slow I/O.
+     * Backfills commits for a repository from its local bare git clone. Idempotent: a commit whose
+     * details are captured is skipped, and a commit whose capture failed is retried next cycle.
      *
-     * @param syncTarget the sync target (provides auth info)
-     * @param repository the repository entity (provides ID, name, default branch)
-     * @param scopeId    the scope ID for event context
-     * @return number of new commits persisted, or -1 if skipped (disabled/error)
+     * @return number of commits captured, or -1 if skipped (disabled/error)
      */
     public int backfillCommits(SyncTarget syncTarget, Repository repository, Long scopeId) {
         if (!gitRepositoryManager.isEnabled()) {
@@ -86,18 +70,24 @@ public class GitHubCommitBackfillService {
                 return -1;
             }
 
-            int[] processed = {0};
+            Long providerId = repository.getProvider().getId();
+            var origin = new CommitDetailsPersister.Origin(
+                    scopeId,
+                    DataSource.GRAPHQL_SYNC,
+                    IdentityProviderType.GITHUB,
+                    sha -> CommitUtils.buildCommitUrl(repository.getNameWithOwner(), sha),
+                    email -> authorResolver.resolveByEmail(email, providerId));
+            Map<Outcome, Integer> outcomes = new EnumMap<>(Outcome.class);
             gitRepositoryManager.forEachMissingCommit(
-                    key, shas -> commitRepository.findGitDetailsCapturedShas(repoId, shas), info -> {
-                        if (processCommitInfo(info, repository, scopeId)) {
-                            processed[0]++;
-                        }
-                    });
+                    key,
+                    shas -> commitRepository.findGitDetailsCapturedShas(repoId, shas),
+                    info -> outcomes.merge(persister.persist(info, repository, origin), 1, Integer::sum));
             log.info(
-                    "Completed commit backfill: repoId={}, capturedCommits={}, scope=all-branches",
+                    "Completed commit backfill: repoId={}, capturedCommits={}, failedCommits={}, scope=all-branches",
                     repoId,
-                    processed[0]);
-            return processed[0];
+                    outcomes.getOrDefault(Outcome.CAPTURED, 0),
+                    outcomes.getOrDefault(Outcome.FAILED, 0));
+            return outcomes.getOrDefault(Outcome.CAPTURED, 0);
         } catch (GitRepositoryManager.GitOperationException e) {
             log.error(
                     "Commit backfill failed (git operation): repoId={}, repoName={}, error={}",
@@ -131,102 +121,5 @@ public class GitHubCommitBackfillService {
             }
         }
         return null;
-    }
-
-    private boolean processCommitInfo(CommitDetails info, Repository repository, Long scopeId) {
-        Boolean result = transactionTemplate.execute(status -> {
-            // Fast-path: skip if already persisted
-            if (commitRepository.existsByShaAndRepositoryIdAndGitDetailsCapturedAtIsNotNull(
-                    info.sha(), repository.getId())) {
-                return false;
-            }
-
-            boolean newCommit = !commitRepository.existsByShaAndRepositoryId(info.sha(), repository.getId());
-
-            // Resolve author/committer IDs by email (with noreply fallback)
-            Long providerId = repository.getProvider().getId();
-            Long authorId = authorResolver.resolveByEmail(info.authorEmail(), providerId);
-            Long committerId = authorResolver.resolveByEmail(info.committerEmail(), providerId);
-
-            // Upsert commit via native SQL (no exception on conflict)
-            // Defense-in-depth: git_commit.message is NOT NULL; default to empty string
-            String message = info.message() != null ? info.message() : "";
-            commitRepository.upsertCommit(
-                    info.sha(),
-                    message,
-                    info.messageBody(),
-                    buildCommitUrl(repository.getNameWithOwner(), info.sha()),
-                    info.authoredAt(),
-                    info.committedAt(),
-                    info.additions(),
-                    info.deletions(),
-                    info.changedFiles(),
-                    Instant.now(),
-                    repository.getId(),
-                    authorId,
-                    committerId,
-                    info.authorEmail(),
-                    info.committerEmail());
-
-            commitRepository.deleteFileChanges(repository.getId(), info.sha());
-
-            // Attach file changes if present
-            if (!info.fileChanges().isEmpty()) {
-                Commit commit = commitRepository
-                        .findByShaAndRepositoryId(info.sha(), repository.getId())
-                        .orElseThrow(() -> new IllegalStateException("Commit missing after upsert"));
-                if (commit != null) {
-                    commit.getFileChanges().clear();
-                    for (CommitDetails.FileChange fc : info.fileChanges()) {
-                        CommitFileChange fileChange = new CommitFileChange();
-                        fileChange.setFilename(fc.filename());
-                        fileChange.setChangeType(fc.changeType());
-                        fileChange.setAdditions(fc.additions());
-                        fileChange.setDeletions(fc.deletions());
-                        fileChange.setChanges(fc.changes());
-                        fileChange.setPreviousFilename(fc.previousFilename());
-                        commit.addFileChange(fileChange);
-                    }
-                    commitRepository.save(commit);
-                }
-            }
-
-            // Publish CommitCreated event (fires after transaction commits)
-            commitRepository.markGitDetailsCaptured(repository.getId(), info.sha(), Instant.now());
-            if (newCommit) publishCommitCreated(info.sha(), repository, scopeId);
-
-            return true;
-        });
-        return Boolean.TRUE.equals(result);
-    }
-
-    /**
-     * Publishes a {@link ScmDomainEvent.CommitCreated} event for a newly persisted commit.
-     */
-    private void publishCommitCreated(String sha, Repository repository, Long scopeId) {
-        Commit commit = commitRepository
-                .findByShaAndRepositoryId(sha, repository.getId())
-                .orElse(null);
-        if (commit == null) {
-            log.debug("Cannot publish CommitCreated: commit not found after upsert: sha={}", sha);
-            return;
-        }
-
-        ScmEventPayload.CommitData commitData = ScmEventPayload.CommitData.from(commit);
-        EventContext context = new EventContext(
-                UUID.randomUUID(),
-                Instant.now(),
-                scopeId,
-                RepositoryRef.from(repository),
-                DataSource.GRAPHQL_SYNC,
-                null,
-                UUID.randomUUID().toString(),
-                IdentityProviderType.GITHUB);
-
-        eventPublisher.publishEvent(new ScmDomainEvent.CommitCreated(commitData, context));
-    }
-
-    private String buildCommitUrl(String nameWithOwner, String sha) {
-        return CommitUtils.buildCommitUrl(nameWithOwner, sha);
     }
 }

@@ -184,11 +184,6 @@ class GitDiffOperationsNativeTest extends BaseUnitTest {
     }
 
     @Test
-    void resolveDiffRangeNullForBlankHead() throws Exception {
-        assertThat(resolveRange("main", "")).isNull();
-    }
-
-    @Test
     void resolveDiffRangeNullWhenSourceAlreadyMergedIntoTarget() throws GitAPIException, IOException {
         // Fast-forward main up to feature's head so feature is an ancestor of main: the merge-base equals
         // head, so a 3-dot diff is legitimately empty and the range must be null (not a phantom 2-dot range).
