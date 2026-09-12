@@ -98,6 +98,16 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             // never sample. Gate the bean, not just the tick.
             Map.entry("de.tum.cit.aet.hephaestus.agent.job.AgentQueueHealthSampler", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.agent.job.AgentJobRetentionService", RuntimeRole.SERVER_PROPERTY),
+            // Product feedback is a member- and admin-facing web surface, and SurveyService reads research
+            // consent through a port only the server role implements.
+            Map.entry("de.tum.cit.aet.hephaestus.productfeedback.FeedbackController", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.productfeedback.InstanceFeedbackController",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.productfeedback.FeedbackAdminController", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.productfeedback.SurveyAdminController", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.productfeedback.FeedbackService", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.productfeedback.SurveyService", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorInFlightReaper", RuntimeRole.SERVER_PROPERTY),
             // ADR 0006: the LLM proxy runs beside the sandbox on the WORKER, and only there.
             Map.entry("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxyController", RuntimeRole.WORKER_PROPERTY),
@@ -293,14 +303,16 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
     }
 
     /**
-     * The two {@code core.auth.spi} read-only query impls are the cross-role data-access part of auth
-     * (account identity/role lookups), consumed by the connection-identity service and the workspace /
-     * notification modules on every role. They carry no hard prod env and must stay ungated — unlike the
-     * web/OAuth/issuance layer.
+     * The {@code core.auth.spi} read-only query impls are the cross-role data-access part of auth
+     * (account identity/role/name lookups), consumed by the connection-identity service, the
+     * workspace and notification modules, and product feedback's name resolution and erasure adapters
+     * on every role. They carry no hard prod env and must stay ungated — unlike the web/OAuth/issuance
+     * layer.
      */
     private static final List<String> CROSS_ROLE_AUTH_SPI_IMPLS = List.of(
             "de.tum.cit.aet.hephaestus.core.auth.AccountIdentityQueryService",
-            "de.tum.cit.aet.hephaestus.core.auth.AccountRoleQueryService");
+            "de.tum.cit.aet.hephaestus.core.auth.AccountRoleQueryService",
+            "de.tum.cit.aet.hephaestus.core.auth.AccountSummaryQueryService");
 
     @Test
     void allAuthStereotypeBeansAreServerGated() {

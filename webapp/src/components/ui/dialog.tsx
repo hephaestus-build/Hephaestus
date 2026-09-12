@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
  * 1. `DialogContent` is height-bound and scrollable: upstream's popup is `fixed` with no
  *    `max-height`, and a fixed element taller than the viewport cannot be scrolled back into view
  *    (WCAG 2.2 SC 1.4.10).
- * 2. `DialogBody`, the opt-in scrollable middle.
+ * 2. `DialogBody`, the opt-in scrollable middle, keyboard-focusable for the same reason as
+ *    `DrawerBody`: a submitting form disables everything inside it.
  * 3. `DialogForm`, the `display: contents` form wrapper.
  */
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
@@ -104,6 +105,8 @@ function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
 		<div
 			data-slot="dialog-body"
 			className={cn("-mx-4 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4", className)}
+			// oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The scroll region must stay keyboard-reachable when nothing inside it is.
+			tabIndex={0}
 			{...props}
 		/>
 	);

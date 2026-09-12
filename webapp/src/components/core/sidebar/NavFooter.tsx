@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Bug, ShieldCheck, Sparkles, UserRoundCog } from "lucide-react";
+import { ShieldCheck, UserRoundCog } from "lucide-react";
 
 import {
 	SidebarMenu,
@@ -33,30 +33,6 @@ export function NavFooter({ isAppAdmin = false }: NavFooterProps) {
 					<SidebarMenuButton tooltip="User settings" render={<Link to="/settings" />}>
 						<UserRoundCog />
 						<span>User&nbsp;settings</span>
-					</SidebarMenuButton>
-				</SidebarMenuItem>
-			</SidebarMenu>
-			<SidebarSeparator />
-			<SidebarMenu>
-				<SidebarMenuItem>
-					<SidebarMenuButton
-						tooltip="Report issue"
-						render={<a href="https://github.com/hephaestus-build/Hephaestus/issues/new/choose" />}
-					>
-						<Bug />
-						<span>Report&nbsp;issue</span>
-					</SidebarMenuButton>
-				</SidebarMenuItem>
-				<SidebarMenuItem>
-					<SidebarMenuButton
-						tooltip="Request a feature"
-						className="text-provider-upsell-foreground hover:text-provider-upsell-foreground hover:bg-provider-upsell-foreground/10 dark:hover:bg-provider-upsell-foreground/10"
-						render={
-							<a href="https://github.com/hephaestus-build/Hephaestus/discussions/new/choose" />
-						}
-					>
-						<Sparkles />
-						<span>Request&nbsp;a&nbsp;feature</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
 			</SidebarMenu>

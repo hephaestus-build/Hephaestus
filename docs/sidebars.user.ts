@@ -12,7 +12,7 @@ const sidebars: SidebarsConfig = {
 			type: "category",
 			label: "Using Hephaestus",
 			collapsed: false,
-			items: ["ai-code-review", "ai-mentor", "workspace"],
+			items: ["ai-code-review", "ai-mentor", "workspace", "product-feedback"],
 		},
 		{
 			type: "category",

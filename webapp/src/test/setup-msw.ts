@@ -50,6 +50,13 @@ if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
 // Layout and scrolling are covered in browser tests, not this DOM-only environment.
 window.scrollTo = () => {};
 
+// jsdom has no pointer capture; sonner asks for it on pointerdown to track a toast swipe.
+if (typeof Element.prototype.setPointerCapture !== "function") {
+	Element.prototype.setPointerCapture = () => {};
+	Element.prototype.releasePointerCapture = () => {};
+	Element.prototype.hasPointerCapture = () => false;
+}
+
 // jsdom has no scrollIntoView either; Base UI calls it to keep the highlighted option in view.
 if (typeof Element.prototype.scrollIntoView !== "function") {
 	Element.prototype.scrollIntoView = () => {};

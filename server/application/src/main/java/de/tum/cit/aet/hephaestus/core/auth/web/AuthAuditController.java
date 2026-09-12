@@ -3,10 +3,12 @@ package de.tum.cit.aet.hephaestus.core.auth.web;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthAuditService;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.Csv;
 import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
@@ -128,23 +130,24 @@ public class AuthAuditController {
         for (AuthEvent e : data.events().getContent()) {
             AuthAuditService.AccountRef account = AuthAuditService.refOf(e.getAccountId(), identities);
             AuthAuditService.AccountRef actor = AuthAuditService.refOf(e.getActingAccountId(), identities);
-            appendCsvRow(
+            Csv.appendRow(
                     csv,
-                    e.getId().getOccurredAt().toString(),
-                    e.getEventType().name(),
-                    e.getResult().name(),
-                    str(e.getAccountId()),
-                    account == null ? "" : account.displayName(),
-                    account == null ? "" : account.email(),
-                    str(e.getActingAccountId()),
-                    actor == null ? "" : actor.displayName(),
-                    actor == null ? "" : actor.email(),
-                    e.getFailureReason(),
-                    str(e.getWorkspaceId()),
-                    e.getIpInet(),
-                    e.getUserAgent(),
-                    e.getDetails(),
-                    Boolean.toString(e.isElevatedViaInstanceAdmin()));
+                    Arrays.<@Nullable String>asList(
+                            e.getId().getOccurredAt().toString(),
+                            e.getEventType().name(),
+                            e.getResult().name(),
+                            str(e.getAccountId()),
+                            account == null ? "" : account.displayName(),
+                            account == null ? "" : account.email(),
+                            str(e.getActingAccountId()),
+                            actor == null ? "" : actor.displayName(),
+                            actor == null ? "" : actor.email(),
+                            e.getFailureReason(),
+                            str(e.getWorkspaceId()),
+                            e.getIpInet(),
+                            e.getUserAgent(),
+                            e.getDetails(),
+                            Boolean.toString(e.isElevatedViaInstanceAdmin())));
         }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"audit-log.csv\"")
@@ -154,30 +157,6 @@ public class AuthAuditController {
 
     private static String str(@Nullable Long value) {
         return value == null ? "" : value.toString();
-    }
-
-    /**
-     * Append one RFC-4180 CSV row: quote every field, escape embedded quotes, normalize newlines, and
-     * neutralize spreadsheet formula injection. Audit cells carry user-controlled text (display names,
-     * emails, user-agents, raw details) and the consumer is a privileged admin double-clicking the
-     * export — so a value starting with {@code = + - @ TAB CR} would execute as a formula in
-     * Excel/Sheets/LibreOffice. Prefix those with a single quote so they render as inert text.
-     * See <a href="https://owasp.org/www-community/attacks/CSV_Injection">OWASP CSV Injection</a>.
-     */
-    private static void appendCsvRow(StringBuilder out, @Nullable String... fields) {
-        for (int i = 0; i < fields.length; i++) {
-            if (i > 0) {
-                out.append(',');
-            }
-            String value = fields[i] == null ? "" : fields[i];
-            if (!value.isEmpty() && "=+-@\t\r".indexOf(value.charAt(0)) >= 0) {
-                value = "'" + value;
-            }
-            out.append('"')
-                    .append(value.replace("\"", "\"\"").replace("\r\n", " ").replace('\n', ' '))
-                    .append('"');
-        }
-        out.append('\n');
     }
 
     private static AuthEventViewDTO toView(AuthEvent e, Map<Long, AuthAuditService.AccountRef> identities) {
