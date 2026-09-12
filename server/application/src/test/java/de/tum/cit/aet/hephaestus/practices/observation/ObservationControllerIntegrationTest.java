@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.observation;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
@@ -20,6 +22,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationDetailDTO;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -29,6 +32,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -170,6 +174,74 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 .createdAt(createdAt)
                 .build());
         feedbackObservationRepository.insertIfAbsent(feedback.getId(), findingId, "PRIMARY", 0);
+    }
+
+    @Test
+    @WithUser
+    void shouldGiveAnInstanceAdminTheSameObservationProjectionAsTheDeveloper() {
+        Long accountId = Objects.requireNonNull(
+                persistInstanceAdmin("Observation view operator").getId());
+        UUID own = insertFinding(
+                practiceA,
+                developer,
+                "Missing context",
+                "ABSENT",
+                "MINOR",
+                0.9f,
+                "scm.pull_request",
+                1L,
+                Instant.now());
+        deliverFeedbackFor(own, "Explain the motivation.", Instant.now());
+        var self = webTestClient
+                .get()
+                .uri(BASE_URI + "/" + own, workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(ObservationDetailDTO.class)
+                .returnResult()
+                .getResponseBody();
+        var viewed = webTestClient
+                .get()
+                .uri("/workspaces/" + workspace.getWorkspaceSlug() + "/user-view/users/" + developer.getId()
+                        + "/practices/observations/" + own)
+                .headers(h -> h.setBearerAuth("mock-jwt-sub-" + accountId))
+                .header("X-User-View-Reason", "Verify practice feedback")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(ObservationDetailDTO.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(viewed).isEqualTo(self);
+    }
+
+    @Test
+    @WithUser
+    void shouldNotDiscloseAnotherDevelopersObservationThroughAUserView() {
+        Long accountId = Objects.requireNonNull(
+                persistInstanceAdmin("Observation view operator").getId());
+        UUID foreign = insertFinding(
+                practiceA,
+                persistUser("someone-else"),
+                "Other person's feedback",
+                "ABSENT",
+                "MINOR",
+                0.9f,
+                "scm.pull_request",
+                2L,
+                Instant.now());
+        webTestClient
+                .get()
+                .uri("/workspaces/" + workspace.getWorkspaceSlug() + "/user-view/users/" + developer.getId()
+                        + "/practices/observations/" + foreign)
+                .headers(h -> h.setBearerAuth("mock-jwt-sub-" + accountId))
+                .header("X-User-View-Reason", "Verify practice feedback")
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     // GET /practices/observations

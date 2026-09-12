@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.domain;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -104,6 +105,16 @@ public interface IdentityLinkRepository extends JpaRepository<IdentityLink, Long
          ORDER BY il.id
         """)
     List<Long> findActiveAccountIdsByExternalActorId(@Param("externalActorId") Long externalActorId);
+
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.core.auth.domain.LinkedAccountRow(
+                   il.externalActorId, il.account.id, il.account.status)
+          FROM IdentityLink il
+         WHERE il.externalActorId IN :externalActorIds
+           AND il.disabledAt IS NULL
+        """)
+    List<LinkedAccountRow> findLinkedAccountsByExternalActorIds(
+            @Param("externalActorIds") Collection<Long> externalActorIds);
 
     /**
      * Wire an {@link IdentityLink} to its git-provider actor mirror, but only when it is not already

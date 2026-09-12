@@ -4,19 +4,16 @@ import { ShieldCheck, ShieldOff, UserCog, Users } from "lucide-react";
 import { useDeferredValue, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
-import { withSessionMutationLock } from "@/integrations/auth/session-mutation";
 
 import {
 	adminListUsersInfiniteOptions,
 	adminListUsersQueryKey,
 	adminRevokeUserSessionsMutation,
 	adminUpdateUserMutation,
-	impersonateMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { AdminAccountView } from "@/api/types.gen";
 import { AdminUsersTable } from "@/components/admin/users/AdminUsersTable";
 import { ChangeRoleDialog } from "@/components/admin/users/ChangeRoleDialog";
-import { ImpersonateDialog } from "@/components/admin/users/ImpersonateDialog";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { PageHeader } from "@/components/core/PageHeader";
 import { PageLayout } from "@/components/core/PageLayout";
@@ -59,7 +56,6 @@ function AdminUsersPage() {
 	const deferredSearch = useDeferredValue(search);
 
 	const [roleTarget, setRoleTarget] = useState<DialogTarget>(null);
-	const [impersonateTarget, setImpersonateTarget] = useState<DialogTarget>(null);
 	const [signOutTarget, setSignOutTarget] = useState<DialogTarget>(null);
 
 	const listQuery = useInfiniteQuery({
@@ -100,7 +96,6 @@ function AdminUsersPage() {
 		const stepUp = stepUpChallengeOf(error);
 		if (!stepUp) return false;
 		setRoleTarget(null);
-		setImpersonateTarget(null);
 		setSignOutTarget(null);
 		setChallenge(stepUp);
 		return true;
@@ -113,11 +108,6 @@ function AdminUsersPage() {
 			toast.success(`Role updated to ${variables.body.appRole}.`);
 			setRoleTarget(null);
 		},
-		onError: openConfirmAccess,
-	});
-
-	const impersonate = useMutation({
-		...withSessionMutationLock(impersonateMutation()),
 		onError: openConfirmAccess,
 	});
 
@@ -148,19 +138,6 @@ function AdminUsersPage() {
 	const handleConfirmRole = (user: AdminAccountView, nextRole: string) => {
 		if (user.id == null) return;
 		updateRole.mutate({ path: { id: user.id }, body: { appRole: nextRole } });
-	};
-
-	const handleConfirmImpersonate = (user: AdminAccountView, reason: string) => {
-		if (user.id == null) return;
-		impersonate.mutate(
-			{ body: { targetAccountId: user.id, reason } },
-			{
-				onSuccess: () => {
-					setImpersonateTarget(null);
-					window.location.assign("/");
-				},
-			},
-		);
 	};
 
 	return (
@@ -205,10 +182,6 @@ function AdminUsersPage() {
 					updateRole.reset();
 					setRoleTarget({ user });
 				}}
-				onImpersonate={(user) => {
-					impersonate.reset();
-					setImpersonateTarget({ user });
-				}}
 				onForceSignOut={(user) => setSignOutTarget({ user })}
 			/>
 
@@ -228,23 +201,6 @@ function AdminUsersPage() {
 					}
 				}}
 				onConfirm={handleConfirmRole}
-			/>
-
-			<ImpersonateDialog
-				user={impersonateTarget?.user ?? null}
-				isPending={impersonate.isPending}
-				errorMessage={
-					impersonate.isError
-						? problemDetailOf(impersonate.error, "Couldn't start impersonation.")
-						: undefined
-				}
-				onOpenChange={(open) => {
-					if (!open) {
-						setImpersonateTarget(null);
-						impersonate.reset();
-					}
-				}}
-				onConfirm={handleConfirmImpersonate}
 			/>
 
 			<ConfirmAccessDialog
@@ -276,8 +232,7 @@ function AdminUsersPage() {
 						</AlertDialogTitle>
 						<AlertDialogDescription>
 							This revokes all of the account's active sessions immediately — they'll have to sign
-							in again, and any in-progress impersonation of this account ends. This can't be
-							undone.
+							in again. This can't be undone.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

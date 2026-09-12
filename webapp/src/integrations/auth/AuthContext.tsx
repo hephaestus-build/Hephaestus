@@ -25,8 +25,6 @@ export interface AuthContextType {
 	getUserProfilePictureUrl: () => string;
 	hasGitLabIdentity: boolean;
 	linkedProviders: Array<{ type: string; serverUrl?: string }>;
-	isImpersonating: boolean;
-	impersonatedDisplayName: string | undefined;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -110,8 +108,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		getUserProfilePictureUrl,
 		hasGitLabIdentity: user?.hasGitLabIdentity ?? false,
 		linkedProviders: userProfile?.linkedProviders ?? [],
-		isImpersonating: user?.impersonating ?? false,
-		impersonatedDisplayName: user?.displayName ?? undefined,
 	};
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

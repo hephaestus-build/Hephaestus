@@ -46,7 +46,6 @@ public final class AuthPropertiesFixture {
                 providers,
                 List.of(),
                 "",
-                Duration.ofHours(1),
                 Duration.ofDays(7),
                 stepUpMaxAge,
                 false,

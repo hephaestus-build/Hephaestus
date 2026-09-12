@@ -39,6 +39,7 @@ public class AuthEventLogger {
         private final AuthEvent.EventType type;
         private final AuthEvent.Result result;
         private @Nullable Long accountId;
+        private @Nullable Long viewedUserId;
         private @Nullable Long actingAccountId;
         private @Nullable String failureReason;
         private @Nullable Long gitProviderId;
@@ -49,6 +50,11 @@ public class AuthEventLogger {
         private Draft(AuthEvent.EventType type, AuthEvent.Result result) {
             this.type = type;
             this.result = result;
+        }
+
+        public Draft viewedUser(@Nullable Long id) {
+            this.viewedUserId = id;
+            return this;
         }
 
         public Draft account(@Nullable Long id) {
@@ -98,6 +104,7 @@ public class AuthEventLogger {
                         type,
                         result,
                         accountId,
+                        viewedUserId,
                         actingAccountId,
                         failureReason,
                         gitProviderId,

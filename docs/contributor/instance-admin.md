@@ -35,16 +35,15 @@ is not a security boundary.
 
 ## Endpoints
 
-All under `/admin`, all gated by `hasAuthority('app_admin')`:
+Instance metadata endpoints under `/admin`, all gated by `hasAuthority('app_admin')`:
 
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /admin/users` (`adminListUsers`) | Paged account list |
 | `PATCH /admin/users/{id}` (`adminUpdateUser`) | Change an account's app role (last-admin guard; can't self-demote) |
-| `DELETE /admin/users/{id}/sessions` (`adminRevokeUserSessions`) | **Force sign-out**: revoke all of an account's active sessions. Because an impersonation token carries the target's account id as its subject, this also ends any in-flight impersonation **of** that account. Audited as `JWT_REVOKED`. |
-| `POST /auth/impersonate` (`impersonate`) | Begin impersonating an account (mandatory reason; no self / no admin→admin; read-only by default via `ImpersonationGuard`) |
-| `GET /admin/workspaces` (`adminListWorkspaces`) | **Metadata-only** overview of every workspace (slug, status, provider, owner login, member count, created-at). Cross-tenant via `@WorkspaceAgnostic`; this endpoint itself returns **no tenant content**. Content is reached either by impersonating a member or by opening the workspace directly under [elevated access](#elevated-workspace-access); both are audited, and they are different things. |
-| `GET /admin/audit` (`adminListAuthEvents`) | Read-only viewer over the append-only `auth_event` log (logins, impersonation, role changes, deletions). Paged, newest-first, filterable by event type; surfaces the `(account_id, acting_account_id)` pair so impersonated actions stay attributable. |
+| `DELETE /admin/users/{id}/sessions` (`adminRevokeUserSessions`) | **Force sign-out**: revoke all of an account's active sessions. Audited as `JWT_REVOKED`. |
+| `GET /admin/workspaces` (`adminListWorkspaces`) | **Metadata-only** overview of every workspace (slug, status, provider, owner login, member count, created-at). Cross-tenant via `@WorkspaceAgnostic`; this endpoint itself returns **no tenant content**. Private user content is reached through [read-only user views](#read-only-user-views). |
+| `GET /admin/audit` (`adminListAuthEvents`) | Read-only viewer over the append-only `auth_event` log (logins, user views, role changes, deletions). Paged, newest-first, filterable by event type; [read-only user views](#read-only-user-views) says what a `USER_VIEW` row carries. |
 | `GET /admin/config-audit` (`adminListConfigAuditEvents`) | Read-only viewer over `config_audit_event` — who changed which workspace setting, when, and from what to what. Rows are immutable inside the retention window (DB trigger); `ConfigAuditRetentionJob` is the only way one leaves. |
 | `/admin/llm/connections*` (`adminListLlmConnections`, `adminCreateLlmConnection`, `adminGetLlmConnection`, `adminUpdateLlmConnection`, `adminDeleteLlmConnection`, `adminProbeLlmConnection`, `adminProbeLlmConnectionDraft`) | The instance LLM connection catalog. Routing identity (base URL, wire API, auth mode) is immutable after create; probe tests a saved or draft connection before anything is enabled. |
 | `/admin/llm/models*` (`adminListLlmModels`, `adminCreateLlmModel`, `adminGetLlmModel`, `adminUpdateLlmModel`, `adminDeleteLlmModel`, `adminUpdateLlmModelPrice`, `adminUpdateLlmModelSharing`) | Models under a connection, their prices (temporal supersede-on-insert into `llm_model_price`), and who may use them — public, or granted per workspace. |
@@ -72,7 +71,7 @@ Silent Mode is engaged.
 ## Recent sign-in gate
 
 An instance-admin action that changes who can reach what — an app-role change, force sign-out,
-beginning an impersonation, any login-provider mutation, registering or removing an LLM connection —
+a user view, any login-provider mutation, registering or removing an LLM connection —
 runs only for a caller whose last completed sign-in is younger than
 `hephaestus.auth.step-up-max-age` (`HEPHAESTUS_AUTH_STEP_UP_MAX_AGE`, default 5m). Attaching a new
 identity to an account is gated the same way, for every user, because a new link is a permanent
@@ -109,36 +108,40 @@ A refused action is never replayed after the confirmation. The SPA reopens the a
 operator reviews it and submits it again — a queued privileged write is exactly what an attacker
 would want the confirmation to unlock.
 
-## Impersonation time-box
+## Read-only user views
 
-`begin` stamps an absolute ceiling `imp_exp` (`hephaestus.auth.impersonation-max-lifetime`, default
-1h); the issuer caps each token's `exp` at `min(now + accessTtl, imp_exp, session_exp)`, and
-`refresh` drops the `act` claim (auto-exit) when the exit-skew window before it is reached, not only
-once it has fully passed — see below. `imp_exp` is the binding limit: the webapp
-keeps the session alive across access-token expiry (`use-session-keep-alive.ts`, mounted from
-`main.tsx`), so an impersonation ends at the ceiling rather than at `accessTtl`.
+**Instance admin → Workspaces → View users → View as user** discloses a workspace member's private
+practice pages and existing conversations to an instance administrator, whose own authentication is
+untouched (`docs/auth-architecture.md`). The viewed user is the synced SCM user behind a human
+workspace membership (`docs/auth-glossary.md`); **Linked account** in the
+list reads `identity_link.external_actor_id`. The SPA takes the workspace's name and
+feature flags from `GET /workspaces/{slug}`, reached under
+[elevated access](#elevated-workspace-access).
 
-Rotation is where an impersonation ends, so `refresh` is where the rest of the bounds live:
+The endpoints are the `User view` tag in `server/openapi.yaml`, all `GET` under
+`/workspaces/{slug}/user-view/users` and all `@PreAuthorize("hasAuthority('app_admin')")` like every
+instance-administrator controller — demotion and deletion revoke sessions, so nothing re-checks the
+administrator per request.
 
-- **A minute before the ceiling**, not at it. A token minted at `imp_exp` would be born expired, so
-  the operator would be signed out rather than returned to their own session. The window is
-  `IMPERSONATION_EXIT_SKEW` and must stay at or above the SPA's `REFRESH_SKEW_MS`, which decides when
-  the rotation happens at all.
-- **The operator's own session bounds it.** `begin` carries the operator's `session_exp` onto the
-  impersonation token and `refresh` refuses to rotate past it, so acting as someone else can never
-  outlive the session that started it. A token with no ceiling at all predates the ceiling and is
-  ended rather than renewed.
-- **The operator must still be one.** Demoting or suspending an operator revokes their own sessions,
-  but an impersonation token's subject is the *target*, so it survives that sweep; `refresh` re-reads
-  the operator and ends the session when they are no longer an active instance admin.
-- **A target promoted mid-session exits.** `begin` refuses admin-to-admin impersonation, and a
-  rotation must not be a way around that refusal; the auto-exit is audited with reason
-  `TARGET_PROMOTED` rather than `EXPIRED`.
+Every handler addressed at a `{userId}` carries `@UserViewRead` (`@RequiresRecentSignIn` +
+`@Audited(AUTH_EVENT, "USER_VIEW")`); `UserViewArchitectureTest` fails the build for a `/user-view`
+handler that is not a `GET` or discloses a user without it. `UserViewAuthorizationConfig` advises
+that annotation, ordered after the [recent sign-in gate](#recent-sign-in-gate) so a refused
+confirmation leaves no `USER_VIEW` success behind: before the handler runs it requires the
+`X-User-View-Reason` header (percent-encoded UTF-8; `UserViewAccessService` accepts 1–500 decoded
+characters without control or format characters), resolves the viewed member through
+`ViewedUserService`, and commits the row, answering 503 when it does not commit.
+`OpenAPIConfiguration.userViewReasonHeader` declares the header on every such operation, so the
+generated client requires it.
 
-Both auto-exits are audited as `IMPERSONATION_END` with the `(target, operator)` pair and counted as
-`auth.impersonation.auto_exit{reason}`. Exiting by hand refuses (401) when the impersonation was
-already ended by any of these paths, rather than minting a session something else deliberately
-closed.
+A `USER_VIEW` row carries `acting_account_id` = the instance administrator, `account_id` = the
+viewed user's linked account or null, `viewed_user_id` = the viewed user, `workspace_id`, and
+`details` = `{"reason": …, "read": "<request path?query>"}`. `AccountPurger` nulls `ip_inet`,
+`user_agent` and `details` where the erased account is either account or the one behind
+`viewed_user_id`, so it runs before that account's identity links are deleted. The read budget is
+a [setting](/admin/configuration-readiness#session-deadlines). Why this is a read projection
+and not Spring Security's `SwitchUserFilter`:
+`docs/decisions/0017-replace-keycloak-with-spring-native-auth.md`, update of 2026-09-11.
 
 ## Elevated workspace access
 
@@ -154,7 +157,7 @@ neither forget it nor assert one it did not earn.
 
 - `auth_event` gains a **`WORKSPACE_ELEVATION`** row. It marks an access *window*, not a request:
   `WorkspaceElevationAuditAdapter` de-duplicates per `(account, workspace)` for 15 minutes in a
-  bounded per-process cache, so browsing one workspace does not bury the impersonation and
+  bounded per-process cache, so browsing one workspace does not bury the user-view and
   role-change events the viewer exists for. The cache is claimed only after a row is actually
   written, and eviction or a second replica may add a duplicate marker — over-reporting a window is
   harmless, losing one is not.
@@ -162,13 +165,11 @@ neither forget it nor assert one it did not earn.
   `workspaceId`, so an instance-scoped change with no workspace is never mis-tagged. Configuration
   changes are not de-duplicated; every one carries its own bit.
 
-Both admin consoles surface it, and `GET /admin/audit/export` carries it as the **last** CSV column
-so a parser keyed on column order keeps working.
+Both admin consoles surface it, and `GET /admin/audit/export` carries it alongside the viewed-user identifier in CSV exports.
 
-Two things the flag does not mean. Impersonation is not elevation — it is attributable through the
-`(account_id, acting_account_id)` pair, and an impersonated session that is also elevated carries
-both. And `false` means "no elevation recorded", not "the actor was a member": rows written before
-the flag existed all read `false`.
+The flag does not replace the viewed-user identifier: elevated workspace administration and a
+private user view are different permissions. `false` means "no elevation recorded", not "the actor
+was a member": rows written before the flag existed all read `false`.
 
 ## Deferred / follow-up
 

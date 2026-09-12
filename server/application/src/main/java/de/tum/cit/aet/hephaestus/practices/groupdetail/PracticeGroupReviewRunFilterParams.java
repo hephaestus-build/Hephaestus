@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.practices.groupdetail;
 
-import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.web.QueryFilterSupport;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -37,7 +36,8 @@ public record PracticeGroupReviewRunFilterParams(
         return QueryFilterSupport.pageable(page, size, DEFAULT_PAGE_SIZE);
     }
 
-    public @Nullable List<ArtifactKind> kinds() {
-        return QueryFilterSupport.artifactKinds(artifactKinds);
+    public PracticeGroupReviewRunService.RunFilters runFilters() {
+        return new PracticeGroupReviewRunService.RunFilters(
+                practiceSlug, QueryFilterSupport.artifactKinds(artifactKinds), severities);
     }
 }

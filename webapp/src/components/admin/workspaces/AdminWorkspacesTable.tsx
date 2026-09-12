@@ -1,9 +1,9 @@
-import { Building2, LogInIcon } from "lucide-react";
+import { Building2, Users } from "lucide-react";
 
 import type { AdminWorkspaceView } from "@/api/types.gen";
+import { TableRowsSkeleton } from "@/components/admin/integrations/TableRowsSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import {
 	Table,
 	TableBody,
@@ -19,7 +19,7 @@ export interface AdminWorkspacesTableProps {
 	isLoading: boolean;
 	isError: boolean;
 	hasSearch: boolean;
-	onImpersonateOwner: (workspace: AdminWorkspaceView) => void;
+	onViewUsers: (workspace: AdminWorkspaceView) => void;
 }
 
 function statusVariant(status: string): "secondary" | "destructive" | "outline" {
@@ -32,16 +32,36 @@ function formatDate(value: AdminWorkspaceView["createdAt"]): string {
 	return asDate(value)?.toLocaleDateString() ?? "–";
 }
 
-/**
- * Read-only, metadata-only table of every workspace (instance-admin overview). Pure/presentational.
- * No tenant content — reaching a workspace's content is done via audited impersonation of a member.
- */
+const SKELETON_COLUMNS = ["w-28", "w-24", "w-16", "w-14", "w-20", "w-8", "w-20", null];
+
+function WorkspacesTableHeader() {
+	return (
+		<TableHeader>
+			<TableRow>
+				<TableHead scope="col">Name</TableHead>
+				<TableHead scope="col">Slug</TableHead>
+				<TableHead scope="col">Status</TableHead>
+				<TableHead scope="col">Provider</TableHead>
+				<TableHead scope="col">Owner</TableHead>
+				<TableHead scope="col" className="text-right">
+					Members
+				</TableHead>
+				<TableHead scope="col">Created</TableHead>
+				<TableHead scope="col" className="text-right">
+					<span className="sr-only">Support access</span>
+				</TableHead>
+			</TableRow>
+		</TableHeader>
+	);
+}
+
+/** Metadata only: a workspace's content is reached through a user view, never listed here. */
 export function AdminWorkspacesTable({
 	workspaces,
 	isLoading,
 	isError,
 	hasSearch,
-	onImpersonateOwner,
+	onViewUsers,
 }: AdminWorkspacesTableProps) {
 	if (isError) {
 		return (
@@ -52,8 +72,11 @@ export function AdminWorkspacesTable({
 	}
 	if (isLoading) {
 		return (
-			<div className="flex items-center justify-center py-12">
-				<Spinner />
+			<div className="rounded-md border">
+				<Table>
+					<WorkspacesTableHeader />
+					<TableRowsSkeleton columns={SKELETON_COLUMNS} />
+				</Table>
 			</div>
 		);
 	}
@@ -69,22 +92,7 @@ export function AdminWorkspacesTable({
 	return (
 		<div className="rounded-md border">
 			<Table>
-				<TableHeader>
-					<TableRow>
-						<TableHead scope="col">Name</TableHead>
-						<TableHead scope="col">Slug</TableHead>
-						<TableHead scope="col">Status</TableHead>
-						<TableHead scope="col">Provider</TableHead>
-						<TableHead scope="col">Owner</TableHead>
-						<TableHead scope="col" className="text-right">
-							Members
-						</TableHead>
-						<TableHead scope="col">Created</TableHead>
-						<TableHead scope="col" className="text-right">
-							<span className="sr-only">Support access</span>
-						</TableHead>
-					</TableRow>
-				</TableHeader>
+				<WorkspacesTableHeader />
 				<TableBody>
 					{workspaces.map((ws) => (
 						<TableRow key={ws.id}>
@@ -113,17 +121,18 @@ export function AdminWorkspacesTable({
 								<Button
 									variant="outline"
 									size="sm"
-									disabled={ws.ownerAccountId == null}
-									title={
-										ws.ownerAccountId == null
-											? "The workspace owner has not signed in, so there is no account to impersonate."
-											: `View ${ws.displayName} as ${ws.ownerLogin ?? "its owner"}`
-									}
-									onClick={() => onImpersonateOwner(ws)}
+									aria-label={`View users of ${ws.displayName}`}
+									disabled={ws.status !== "ACTIVE"}
+									onClick={() => onViewUsers(ws)}
 								>
-									<LogInIcon aria-hidden />
-									View as owner
+									<Users aria-hidden />
+									View users
 								</Button>
+								{ws.status !== "ACTIVE" && (
+									<span className="sr-only">
+										This workspace is {ws.status.toLowerCase()}, so its users cannot be viewed.
+									</span>
+								)}
 							</TableCell>
 						</TableRow>
 					))}

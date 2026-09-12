@@ -19,18 +19,16 @@
  *       Lookup is <em>always</em> by {@code (provider, subject)}, never email (nOAuth defense).
  *       Mirrors to the SCM actor via the optional {@code external_actor_id} FK.</li>
  *   <li><b>{@link de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent AuthEvent}</b>
- *       — append-only auth / impersonation event. Monthly RANGE-partitioned on
+ *       — append-only authentication and privileged-access event. Monthly RANGE-partitioned on
  *       {@code occurred_at}, managed by pg_partman (run_maintenance_proc via AuthEventPartitionMaintenance)
- *       (create-ahead + 12-month retention) on stock Postgres — no {@code pg_partman}.
- *       Records the impersonation pair {@code (account_id, acting_account_id)} per
- *       impersonation ({@code act}-claim) action.</li>
+ *       (create-ahead + 12-month retention) on stock Postgres — no {@code pg_partman}.</li>
  * </ul>
  *
  * <h2>JWT format</h2>
  * Claims: {@code iss}, {@code sub}, {@code aud}, {@code jti}, {@code iat}, {@code exp},
  * {@code preferred_username} (standard OIDC), {@code roles} (flat string array,
  * Hephaestus-specific — read by the authority converter), {@code given_name} (when known),
- * and {@code act} (RFC 8693; only when impersonating). Signed ES256 with a DB-backed
+ * and session deadlines. Signed ES256 with a DB-backed
  * {@code JWKSource}; the public keys are published at {@code /.well-known/jwks.json}. See
  * {@code HephaestusJwtIssuer} for the authoritative shape.
  *

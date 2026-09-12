@@ -280,10 +280,10 @@ hephaestus:
             refresh:
                 capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_REFRESH_CAPACITY:60}
                 period: ${HEPHAESTUS_AUTH_RATE_LIMIT_REFRESH_PERIOD:1m}
-            # POST /auth/impersonate — keyed by admin account, IP fallback
-            impersonate:
-                capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_IMPERSONATE_CAPACITY:10}
-                period: ${HEPHAESTUS_AUTH_RATE_LIMIT_IMPERSONATE_PERIOD:1m}
+            # Read-only user view — keyed by admin account, IP fallback
+            user-view:
+                capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_CAPACITY:120}
+                period: ${HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_PERIOD:1m}
             # DELETE /user — keyed by account, IP fallback
             delete-user:
                 capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_DELETE_USER_CAPACITY:3}

@@ -48,18 +48,41 @@ public class PracticeGroupReviewRunService {
 
     @Transactional(readOnly = true)
     public PracticeGroupReviewRunsPageDTO list(
-            WorkspaceContext workspaceContext,
-            String groupSlug,
-            @Nullable String practiceSlug,
-            @Nullable List<ArtifactKind> artifactKinds,
-            @Nullable List<Severity> severities,
-            Pageable pageable) {
-        practiceGroupService.getGroup(workspaceContext, groupSlug);
+            WorkspaceContext workspaceContext, String groupSlug, RunFilters filter, Pageable pageable) {
         var currentDeveloperId = currentDeveloperLookup.currentDeveloperId();
         if (currentDeveloperId.isEmpty()) {
+            practiceGroupService.getGroup(workspaceContext, groupSlug);
             return new PracticeGroupReviewRunsPageDTO(
                     List.of(), pageable.getPageNumber(), pageable.getPageSize(), false);
         }
+        return loadRuns(workspaceContext, currentDeveloperId.get(), groupSlug, filter, pageable);
+    }
+
+    public record RunFilters(
+            @Nullable String practiceSlug,
+            @Nullable List<ArtifactKind> artifactKinds,
+            @Nullable List<Severity> severities) {}
+
+    @Transactional(readOnly = true)
+    public PracticeGroupReviewRunsPageDTO list(
+            WorkspaceContext workspaceContext,
+            long developerId,
+            String groupSlug,
+            RunFilters filter,
+            Pageable pageable) {
+        return loadRuns(workspaceContext, developerId, groupSlug, filter, pageable);
+    }
+
+    private PracticeGroupReviewRunsPageDTO loadRuns(
+            WorkspaceContext workspaceContext,
+            long developerId,
+            String groupSlug,
+            RunFilters filter,
+            Pageable pageable) {
+        practiceGroupService.getGroup(workspaceContext, groupSlug);
+        var practiceSlug = filter.practiceSlug();
+        var artifactKinds = filter.artifactKinds();
+        var severities = filter.severities();
 
         String artifactFilter = artifactKinds == null || artifactKinds.isEmpty()
                 ? null
@@ -75,15 +98,14 @@ public class PracticeGroupReviewRunService {
         boolean moreCandidates;
         do {
             Slice<ReviewRunRow> runs = observationRepository.findPracticeGroupReviewRuns(
-                    currentDeveloperId.get(),
+                    developerId,
                     workspaceContext.id(),
                     groupSlug,
                     practiceSlug,
                     artifactFilter,
                     severityFilter,
                     PageRequest.of(candidatePage++, Math.max(pageable.getPageSize(), 50)));
-            visibleRuns.addAll(
-                    toVisibleRuns(workspaceContext.id(), currentDeveloperId.get(), runs.getContent(), groupSlug));
+            visibleRuns.addAll(toVisibleRuns(workspaceContext.id(), developerId, runs.getContent(), groupSlug));
             moreCandidates = runs.hasNext();
         } while (visibleRuns.size() < required && moreCandidates);
 

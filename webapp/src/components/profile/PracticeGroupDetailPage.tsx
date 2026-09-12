@@ -26,6 +26,7 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { ContributingPractice } from "@/lib/practice-standing";
 import { PracticeNextStepCallout } from "./PracticeNextStepCallout";
 import { PracticeTrendChip } from "./PracticeTrendChip";
 import type { FeedbackResponse, ObservationDetailState } from "./review-runs";
@@ -56,16 +57,6 @@ const EMPTY_FEED: ReviewRunFeedState = {
 	isLoadingMore: false,
 	onLoadMore: () => undefined,
 };
-export interface ContributingPractice {
-	slug: string;
-	name: string;
-	whyItMatters?: string;
-	whatGoodLooksLike?: string;
-	standing?: PracticeStanding["standing"];
-	trend?: PracticeTrend;
-	nextStep?: string;
-}
-
 export interface PracticeGroupDetailPageProps {
 	group?: PracticeGroup;
 	standing?: PracticeGroupStanding;

@@ -9,6 +9,7 @@ import { DetailRow } from "@/components/common/DetailRow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
 	Sheet,
 	SheetContent,
@@ -180,17 +181,17 @@ export function ConfigAuditDetailSheet({
 									{oldRaw && (
 										<div>
 											<p className="mb-1 text-xs text-muted-foreground">Before</p>
-											<pre className="max-h-48 overflow-auto rounded bg-muted p-2 text-xs">
-												{oldRaw}
-											</pre>
+											<ScrollArea viewportClassName="max-h-48">
+												<pre className="rounded bg-muted p-2 text-xs">{oldRaw}</pre>
+											</ScrollArea>
 										</div>
 									)}
 									{newRaw && (
 										<div>
 											<p className="mb-1 text-xs text-muted-foreground">After</p>
-											<pre className="max-h-48 overflow-auto rounded bg-muted p-2 text-xs">
-												{newRaw}
-											</pre>
+											<ScrollArea viewportClassName="max-h-48">
+												<pre className="rounded bg-muted p-2 text-xs">{newRaw}</pre>
+											</ScrollArea>
 										</div>
 									)}
 								</CollapsibleContent>

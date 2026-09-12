@@ -95,7 +95,6 @@ export type AdminWorkspaceView = {
   displayName: string;
   id: number;
   memberCount: number;
-  ownerAccountId?: number;
   ownerLogin?: string;
   providerType?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
   status: string;
@@ -336,6 +335,7 @@ export type AuthEventView = {
   occurredAt: Date;
   result: string;
   userAgent?: string;
+  viewedUserId?: number;
   workspaceId?: number;
 };
 
@@ -1307,8 +1307,6 @@ export type CurrentUserView = {
   hasGitLabIdentity?: boolean;
   id?: number;
   identityProvider?: string;
-  impersonating?: boolean;
-  impersonatorId?: number;
   linkedProviders?: Array<LinkedProvider>;
   primaryEmail?: string;
   profileUrl?: string;
@@ -1726,11 +1724,6 @@ export type IdentityView = {
   providerType?: string;
   subject?: string;
   username?: string;
-};
-
-export type ImpersonateRequest = {
-  reason: string;
-  targetAccountId: number;
 };
 
 /**
@@ -2600,6 +2593,25 @@ export type PageResponseDtoAuthEventView = {
  *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
  *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
  */
+export type PageResponseDtoChatThreadSummary = {
+  content?: Array<ChatThreadSummary>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
 export type PageResponseDtoConfigAuditEntryView = {
   content?: Array<ConfigAuditEntryView>;
   empty?: boolean;
@@ -2640,6 +2652,25 @@ export type PageResponseDtoObservationList = {
  */
 export type PageResponseDtoSyncJob = {
   content?: Array<SyncJob>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoUserViewUser = {
+  content?: Array<UserViewUser>;
   empty?: boolean;
   first?: boolean;
   last?: boolean;
@@ -5754,6 +5785,13 @@ export type UserInfo = {
   name: string;
 };
 
+export type UserPracticeSummary = {
+  groupStandings: Array<PracticeGroupStanding>;
+  groups: Array<PracticeGroup>;
+  practices: Array<ReviewedPractice>;
+  standings: Array<PracticeStanding>;
+};
+
 /**
  * User preferences and settings
  */
@@ -5776,6 +5814,14 @@ export type UserTeams = {
   name: string;
   teams: Array<TeamSummary>;
   url: string;
+};
+
+export type UserViewUser = {
+  accountId?: number;
+  accountStatus?: string;
+  login: string;
+  name?: string;
+  userId: number;
 };
 
 /**
@@ -6803,6 +6849,13 @@ export type ReviewObservationDetailWritable = {
   summary: string;
 };
 
+export type UserPracticeSummaryWritable = {
+  groupStandings: Array<PracticeGroupStandingWritable>;
+  groups: Array<PracticeGroup>;
+  practices: Array<ReviewedPractice>;
+  standings: Array<PracticeStandingWritable>;
+};
+
 export type GetJwksData = {
   body?: never;
   path?: never;
@@ -6829,7 +6882,7 @@ export type AdminListAuthEventsData = {
     size?: number;
     accountId?: number;
     actingAccountId?: number;
-    eventType?: Array<'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
+    eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
     result?: Array<'SUCCESS' | 'FAILURE'>;
     from?: Date;
     to?: Date;
@@ -6852,7 +6905,7 @@ export type AdminExportAuthEventsData = {
   query?: {
     accountId?: number;
     actingAccountId?: number;
-    eventType?: Array<'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
+    eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
     result?: Array<'SUCCESS' | 'FAILURE'>;
     from?: Date;
     to?: Date;
@@ -8217,34 +8270,6 @@ export type AdminUpdateWorkspaceLlmBudgetResponses = {
 };
 
 export type AdminUpdateWorkspaceLlmBudgetResponse = AdminUpdateWorkspaceLlmBudgetResponses[keyof AdminUpdateWorkspaceLlmBudgetResponses];
-
-export type ImpersonateData = {
-  body: ImpersonateRequest;
-  path?: never;
-  query?: never;
-  url: '/auth/impersonate';
-};
-
-export type ImpersonateResponses = {
-  /**
-   * OK
-   */
-  200: unknown;
-};
-
-export type ExitImpersonationData = {
-  body?: never;
-  path?: never;
-  query?: never;
-  url: '/auth/impersonate:exit';
-};
-
-export type ExitImpersonationResponses = {
-  /**
-   * OK
-   */
-  200: unknown;
-};
 
 export type LogoutData = {
   body?: never;
@@ -13035,6 +13060,220 @@ export type UpdateTokenResponses = {
 };
 
 export type UpdateTokenResponse = UpdateTokenResponses[keyof UpdateTokenResponses];
+
+export type ListUserViewUsersData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: {
+    page?: number;
+    size?: number;
+  };
+  url: '/workspaces/{workspaceSlug}/user-view/users';
+};
+
+export type ListUserViewUsersResponses = {
+  /**
+   * OK
+   */
+  200: PageResponseDtoUserViewUser;
+};
+
+export type ListUserViewUsersResponse = ListUserViewUsersResponses[keyof ListUserViewUsersResponses];
+
+export type ListUserViewConversationsData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+  };
+  query?: {
+    page?: number;
+    size?: number;
+  };
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/conversations';
+};
+
+export type ListUserViewConversationsResponses = {
+  /**
+   * OK
+   */
+  200: PageResponseDtoChatThreadSummary;
+};
+
+export type ListUserViewConversationsResponse = ListUserViewConversationsResponses[keyof ListUserViewConversationsResponses];
+
+export type GetUserViewConversationData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+    threadId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/conversations/{threadId}';
+};
+
+export type GetUserViewConversationResponses = {
+  /**
+   * OK
+   */
+  200: ChatThreadDetail;
+};
+
+export type GetUserViewConversationResponse = GetUserViewConversationResponses[keyof GetUserViewConversationResponses];
+
+export type GetUserPracticeViewData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices';
+};
+
+export type GetUserPracticeViewResponses = {
+  /**
+   * OK
+   */
+  200: UserPracticeSummary;
+};
+
+export type GetUserPracticeViewResponse = GetUserPracticeViewResponses[keyof GetUserPracticeViewResponses];
+
+export type ListUserViewRunsData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+    groupSlug: string;
+  };
+  query?: {
+    practiceSlug?: string;
+    /**
+     * Only reviews of these artifact kinds, e.g. scm.pull_request (repeatable)
+     */
+    artifactKinds?: Array<string>;
+    severities?: Array<'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO'>;
+    /**
+     * Zero-based page, at most 100
+     */
+    page?: number;
+    /**
+     * Page size from 1 to 50
+     */
+    size?: number;
+  };
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/runs';
+};
+
+export type ListUserViewRunsResponses = {
+  /**
+   * OK
+   */
+  200: PracticeGroupReviewRunsPage;
+};
+
+export type ListUserViewRunsResponse = ListUserViewRunsResponses[keyof ListUserViewRunsResponses];
+
+export type GetUserViewTrendData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+    groupSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/trend';
+};
+
+export type GetUserViewTrendResponses = {
+  /**
+   * OK
+   */
+  200: PracticeGroupTrend;
+};
+
+export type GetUserViewTrendResponse = GetUserViewTrendResponses[keyof GetUserViewTrendResponses];
+
+export type GetUserViewObservationData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+    observationId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices/observations/{observationId}';
+};
+
+export type GetUserViewObservationResponses = {
+  /**
+   * OK
+   */
+  200: ObservationDetail;
+};
+
+export type GetUserViewObservationResponse = GetUserViewObservationResponses[keyof GetUserViewObservationResponses];
 
 export type GetUsersWithTeamsData = {
   body?: never;

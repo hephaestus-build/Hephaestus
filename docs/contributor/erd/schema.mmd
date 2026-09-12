@@ -133,6 +133,7 @@ erDiagram
         VARCHAR(512) user_agent
         JSONB details
         BOOLEAN elevated_via_instance_admin "NOT NULL"
+        BIGINT viewed_user_id FK
     }
 
     AuthRateLimitBucket {
@@ -1582,6 +1583,7 @@ erDiagram
     Account ||--o{ AuthEvent : acting_account_id
     IdentityProvider ||--o{ AuthEvent : references
     IdentityLink ||--o{ AuthEvent : has
+    User ||--o{ AuthEvent : has
     Workspace ||--o{ AuthEvent : has
     ChatThread ||--o{ ChatMessage : has
     ChatMessage ||--o{ ChatMessage : references

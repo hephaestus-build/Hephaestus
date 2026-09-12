@@ -22,9 +22,9 @@ import org.jspecify.annotations.Nullable;
  * The Hephaestus-native principal. One row per human (and, post-MVP, per service principal)
  * that has authenticated through any {@link IdentityLink}.
  *
- * <p>This is the entity that {@code WorkspaceMembership.account_id}, {@code AccountFeature.account_id},
+ * <p>This is the entity that {@code AccountFeature.account_id},
  * preferences, sessions, exports, and audit rows reference. The git-provider mirror
- * ({@code ExternalActor} in {@code gitprovider.actor.*}) is a separate, read-only entity
+ * ({@code User} in {@code integration.scm.domain.user}) is a separate, read-only entity
  * that records activity authorship — bots and organizations live there, not here.
  *
  * <h2>Email — contact only, never auth</h2>

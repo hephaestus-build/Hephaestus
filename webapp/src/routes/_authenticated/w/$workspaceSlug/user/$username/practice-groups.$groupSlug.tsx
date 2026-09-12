@@ -14,7 +14,6 @@ import {
 	listReviewedPracticesOptions,
 	replaceFeedbackResponseMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { PracticeStanding } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import {
 	PracticeGroupDetailPage,
@@ -27,8 +26,9 @@ import {
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { resolveCurrentUser } from "@/integrations/auth/guard";
 import { loadedPages } from "@/integrations/tanstack-query/spring-page";
+import { contributingPractices } from "@/lib/practice-standing";
 import { problemDetailOf } from "@/lib/problem-detail";
-import { useSearchState } from "@/lib/search-params";
+import { useSearchPatch } from "@/lib/search-params";
 
 const ACTIVITY_PAGE_SIZE = 10;
 
@@ -36,15 +36,6 @@ const practiceGroupDetailSearchSchema = z.object({
 	practice: z.string().optional(),
 	observation: z.string().optional(),
 });
-function nextStepOf(practiceStanding?: PracticeStanding): string | undefined {
-	const firstAction = practiceStanding?.toWorkOn[0];
-	if (!firstAction) return undefined;
-	const deliveredGuidance = firstAction.deliveredFeedback?.trim();
-	const observationTitle = firstAction.title.trim();
-	const distinctTitle =
-		observationTitle !== practiceStanding.name.trim() ? observationTitle : undefined;
-	return [deliveredGuidance, distinctTitle].find((value) => value !== undefined && value !== "");
-}
 
 export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/user/$username/practice-groups/$groupSlug",
@@ -97,9 +88,7 @@ function PracticeGroupDetail() {
 	const { practice: selectedPracticeSlug, observation: openObservationId } = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
 	const queryClient = useQueryClient();
-	const setSearch = useSearchState();
-	const updateSelection = (search: { practice?: string; observation?: string }) =>
-		void setSearch((previous) => ({ ...previous, ...search }));
+	const updateSelection = useSearchPatch<{ practice?: string; observation?: string }>();
 
 	const groupsQuery = useQuery({
 		...listGroupsOptions({
@@ -156,25 +145,14 @@ function PracticeGroupDetail() {
 
 	const group = groupsQuery.data?.find((candidate) => candidate.slug === groupSlug);
 	const standing = statusesQuery.data?.find((candidate) => candidate.groupSlug === groupSlug);
-	const standingsBySlug = new Map(
-		(standingsQuery.data ?? [])
-			.filter((practice) => practice.groupSlug === groupSlug)
-			.map((practice) => [practice.slug, practice]),
-	);
-	const trendsBySlug = new Map(
-		(trendQuery.data?.practices ?? []).map((practiceTrend) => [practiceTrend.slug, practiceTrend]),
-	);
 	const practices = practicesQuery.data
-		?.filter((practice) => practice.groupSlug === groupSlug)
-		.map((practice) => {
-			const practiceStanding = standingsBySlug.get(practice.slug);
-			return {
-				...practice,
-				standing: practiceStanding?.standing,
-				trend: trendsBySlug.get(practice.slug),
-				nextStep: nextStepOf(practiceStanding),
-			};
-		});
+		? contributingPractices(
+				groupSlug,
+				practicesQuery.data,
+				standingsQuery.data ?? [],
+				trendQuery.data,
+			)
+		: undefined;
 	const reviewRunFeed: ReviewRunFeedState = activityQuery.isPending
 		? { status: "loading" }
 		: activityQuery.error

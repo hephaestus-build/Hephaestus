@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1789140289208-1" author="hephaestus">
+        <addColumn tableName="auth_event">
+            <column name="viewed_user_id" type="BIGINT"/>
+        </addColumn>
+        <addForeignKeyConstraint baseTableName="auth_event" baseColumnNames="viewed_user_id" constraintName="sfk_auth_event_viewed_user_id" referencedTableName="user" referencedColumnNames="id" onDelete="SET NULL"/>
+        <!-- Retain historical event types: old audit evidence remains readable. -->
+        <sql>ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (((event_type)::text = ANY (ARRAY[('USER_VIEW'::character varying)::text, ('LOGIN'::character varying)::text, ('LOGIN_FAILED'::character varying)::text, ('LOGOUT'::character varying)::text, ('TOKEN_REFRESH'::character varying)::text, ('JWT_REVOKED'::character varying)::text, ('IDENTITY_LINKED'::character varying)::text, ('IDENTITY_UNLINKED'::character varying)::text, ('IMPERSONATION_BEGIN'::character varying)::text, ('IMPERSONATION_END'::character varying)::text, ('ACCOUNT_DELETED'::character varying)::text, ('EXPORT_REQUESTED'::character varying)::text, ('APP_ROLE_CHANGED'::character varying)::text, ('RESEARCH_CONSENT_REVOKED'::character varying)::text, ('WORKSPACE_ELEVATION'::character varying)::text, ('LLM_CONNECTION_CREATED'::character varying)::text, ('LLM_CONNECTION_UPDATED'::character varying)::text, ('LLM_CONNECTION_DELETED'::character varying)::text, ('LLM_MODEL_CREATED'::character varying)::text, ('LLM_MODEL_UPDATED'::character varying)::text, ('LLM_MODEL_DELETED'::character varying)::text, ('LLM_MODEL_PRICE_CHANGED'::character varying)::text, ('LLM_MODEL_SHARING_CHANGED'::character varying)::text, ('LLM_SETTINGS_CHANGED'::character varying)::text, ('LOGIN_PROVIDER_CREATED'::character varying)::text, ('LOGIN_PROVIDER_UPDATED'::character varying)::text, ('LOGIN_PROVIDER_DELETED'::character varying)::text, ('SILENT_MODE_CHANGED'::character varying)::text])));</sql>
+    </changeSet>
+    <changeSet id="1789140289208-2" author="hephaestus">
+        <comment>Sign-in wires new links to the git-provider user they denote by the provider's numeric id; this backfills the existing ones.</comment>
+        <sql>UPDATE identity_link il
+   SET external_actor_id = u.id
+  FROM "user" u
+ WHERE il.external_actor_id IS NULL
+   AND il.subject ~ '^[0-9]{1,18}$'
+   AND u.provider_id = il.provider_id
+   AND u.native_id = il.subject::bigint;</sql>
+    </changeSet>
+</databaseChangeLog>

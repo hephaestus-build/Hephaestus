@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -36,6 +38,9 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
     @Autowired
     protected WorkspaceMembershipRepository workspaceMembershipRepository;
 
+    @Autowired
+    protected AccountRepository accountRepository;
+
     private final AtomicLong userIdGenerator = new AtomicLong(50_000);
 
     @BeforeEach
@@ -55,6 +60,16 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
                 .findByTypeAndServerUrl(IdentityProviderType.GITLAB, "https://gitlab.com")
                 .orElseGet(() -> gitProviderRepository.save(
                         new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.com")));
+    }
+
+    protected Account persistAccount(String displayName) {
+        return accountRepository.save(new Account(displayName));
+    }
+
+    protected Account persistInstanceAdmin(String displayName) {
+        Account account = new Account(displayName);
+        account.setAppRole(Account.AppRole.APP_ADMIN);
+        return accountRepository.save(account);
     }
 
     protected User persistUser(String login) {

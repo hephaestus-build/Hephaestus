@@ -13,7 +13,6 @@ function makeCurrentUser(overrides: CurrentUserView = {}): CurrentUserView {
 		status: "ACTIVE",
 		roles: ["user"],
 		hasGitLabIdentity: false,
-		impersonating: false,
 		...overrides,
 	};
 }
@@ -129,7 +128,7 @@ describe("authClient.login — returnTo forwarding (safeReturnTo guard)", () => 
 	});
 });
 
-describe("applyStateChangingHeaders (app-wide CSRF + impersonation guard)", () => {
+describe("applyStateChangingHeaders (app-wide CSRF)", () => {
 	function setCookie(raw: string) {
 		Object.defineProperty(document, "cookie", { configurable: true, get: () => raw });
 	}
@@ -141,33 +140,19 @@ describe("applyStateChangingHeaders (app-wide CSRF + impersonation guard)", () =
 
 	it("adds the CSRF double-submit header on state-changing methods", () => {
 		setCookie("__Host-XSRF-TOKEN=tok-123");
-		const r = applyStateChangingHeaders(req("POST"), false);
+		const r = applyStateChangingHeaders(req("POST"));
 		expect(r.headers.get("X-XSRF-TOKEN")).toBe("tok-123");
-		expect(r.headers.get("X-Impersonation-Allow-Writes")).toBeNull();
 	});
 
 	it("sends NO CSRF header on safe methods", () => {
 		setCookie("__Host-XSRF-TOKEN=tok-123");
-		expect(applyStateChangingHeaders(req("GET"), true).headers.get("X-XSRF-TOKEN")).toBeNull();
-		expect(applyStateChangingHeaders(req("HEAD"), true).headers.get("X-XSRF-TOKEN")).toBeNull();
-	});
-
-	it("adds X-Impersonation-Allow-Writes only when write-mode is on, and only on writes", () => {
-		setCookie("__Host-XSRF-TOKEN=tok-123");
-		expect(
-			applyStateChangingHeaders(req("DELETE"), true).headers.get("X-Impersonation-Allow-Writes"),
-		).toBe("true");
-		expect(
-			applyStateChangingHeaders(req("DELETE"), false).headers.get("X-Impersonation-Allow-Writes"),
-		).toBeNull();
-		expect(
-			applyStateChangingHeaders(req("GET"), true).headers.get("X-Impersonation-Allow-Writes"),
-		).toBeNull();
+		expect(applyStateChangingHeaders(req("GET")).headers.get("X-XSRF-TOKEN")).toBeNull();
+		expect(applyStateChangingHeaders(req("HEAD")).headers.get("X-XSRF-TOKEN")).toBeNull();
 	});
 
 	it("omits the CSRF header (fail-safe) when the token cookie is absent", () => {
 		setCookie("");
-		expect(applyStateChangingHeaders(req("POST"), false).headers.get("X-XSRF-TOKEN")).toBeNull();
+		expect(applyStateChangingHeaders(req("POST")).headers.get("X-XSRF-TOKEN")).toBeNull();
 	});
 });
 

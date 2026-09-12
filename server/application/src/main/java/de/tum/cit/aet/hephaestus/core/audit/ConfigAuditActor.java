@@ -26,7 +26,7 @@ record ConfigAuditActor(
      * confusion {@code actor_kind} exists to prevent.
      *
      * <p>So: no authentication at all means SYSTEM (a seeder, scheduler, or platform-event handler).
-     * An authenticated principal is a USER (or IMPERSONATED) even if the subject cannot be resolved to
+     * An authenticated principal is a USER even if the subject cannot be resolved to
      * an account id, in which case the id is left null — honest about who acted and honest about what
      * we failed to resolve. Production subjects are always numeric ({@code HephaestusJwtIssuer} writes
      * {@code String.valueOf(accountId)}), so the unresolved case is not reachable there.
@@ -44,10 +44,6 @@ record ConfigAuditActor(
         }
         boolean elevated = WorkspaceElevationContext.isElevated(workspaceId);
         Long accountId = CurrentAccount.idOrNull();
-        Long impersonator = CurrentAccount.impersonatorId();
-        if (impersonator != null) {
-            return new ConfigAuditActor(ConfigAuditActorKind.IMPERSONATED, accountId, impersonator, elevated);
-        }
         return new ConfigAuditActor(ConfigAuditActorKind.USER, accountId, null, elevated);
     }
 }

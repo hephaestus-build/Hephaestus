@@ -42,3 +42,9 @@ export function useSearchState() {
 		state?: NonNullable<Parameters<typeof navigate>[0]>["state"],
 	) => navigate({ to: ".", search: update, state, resetScroll: false });
 }
+
+/** `useSearchState` for a patch: the keys given replace their current values, the rest stay. */
+export function useSearchPatch<TSearch extends object>() {
+	const setSearch = useSearchState();
+	return (patch: Partial<TSearch>) => void setSearch((previous) => ({ ...previous, ...patch }));
+}
