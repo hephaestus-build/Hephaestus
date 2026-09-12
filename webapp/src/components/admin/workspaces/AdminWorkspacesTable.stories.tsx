@@ -2,10 +2,12 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, userEvent } from "storybook/test";
 
 import type { AdminWorkspaceView } from "@/api/types.gen";
+import { expectGenuinelyDisabled } from "@/test/controls";
+import { expectNoPageOverflow } from "@/test/reflow";
 
 import { AdminWorkspacesTable } from "./AdminWorkspacesTable";
 
-const workspaceWithOwner: AdminWorkspaceView = {
+const activeWorkspace: AdminWorkspaceView = {
 	id: 1,
 	workspaceSlug: "aet",
 	displayName: "AET",
@@ -13,12 +15,11 @@ const workspaceWithOwner: AdminWorkspaceView = {
 	accountLogin: "aet-org",
 	providerType: "GITHUB",
 	ownerLogin: "octocat",
-	ownerAccountId: 101,
 	memberCount: 42,
 	createdAt: new Date("2026-01-15T00:00:00Z"),
 };
 
-const workspaceWithoutOwner: AdminWorkspaceView = {
+const suspendedWorkspace: AdminWorkspaceView = {
 	id: 2,
 	workspaceSlug: "intro-course",
 	displayName: "Intro Course",
@@ -29,7 +30,7 @@ const workspaceWithoutOwner: AdminWorkspaceView = {
 	createdAt: new Date("2026-03-01T00:00:00Z"),
 };
 
-const workspaces = [workspaceWithOwner, workspaceWithoutOwner];
+const workspaces = [activeWorkspace, suspendedWorkspace];
 
 const meta = {
 	component: AdminWorkspacesTable,
@@ -40,36 +41,36 @@ const meta = {
 		isLoading: false,
 		isError: false,
 		hasSearch: false,
-		onImpersonateOwner: fn(),
+		onViewUsers: fn(),
 	},
 } satisfies Meta<typeof AdminWorkspacesTable>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Metadata-only rows: provider, owner, member count, status. */
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
-		canvas.getByText("AET");
-		canvas.getByText("SUSPENDED");
-		// Owner falls back to an em dash when there is no OWNER member.
-		canvas.getByText("octocat");
-		const [ownedAction, ownerlessAction] = canvas.getAllByRole("button", {
-			name: "View as owner",
-		});
-		if (!ownedAction || !ownerlessAction) {
-			throw new Error("Every workspace row renders an owner action");
-		}
-		await userEvent.click(ownedAction);
-		await expect(args.onImpersonateOwner).toHaveBeenCalledWith(workspaceWithOwner);
-		await expect(ownerlessAction).toBeDisabled();
+		await userEvent.click(canvas.getByRole("button", { name: "View users of AET" }));
+		await expect(args.onViewUsers).toHaveBeenCalledWith(activeWorkspace);
+		await expectGenuinelyDisabled(
+			canvas.getByRole("button", { name: "View users of Intro Course" }),
+		);
+		canvas.getByText("This workspace is suspended, so its users cannot be viewed.");
 	},
 };
 
-/** Empty state under an active search filter. */
+export const Loading: Story = {
+	args: { isLoading: true },
+};
+
 export const EmptyWithSearch: Story = {
 	args: { workspaces: [], hasSearch: true },
 	play: async ({ canvas }) => {
 		canvas.getByText("No matching workspaces.");
 	},
+};
+
+export const Reflow: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: expectNoPageOverflow,
 };

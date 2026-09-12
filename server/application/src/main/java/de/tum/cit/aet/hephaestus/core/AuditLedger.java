@@ -14,7 +14,7 @@ public enum AuditLedger {
     /** {@code config_audit_event} — admin configuration changes, per workspace or instance-curated. */
     CONFIG_AUDIT(ConfigAuditEntityType.values()),
 
-    /** {@code auth_event} — authentication, impersonation, and instance-level administration. */
+    /** {@code auth_event} — authentication, private user access, and instance-level administration. */
     AUTH_EVENT(AuthEvent.EventType.values()),
 
     /** {@code connection_audit} — integration connection lifecycle. */

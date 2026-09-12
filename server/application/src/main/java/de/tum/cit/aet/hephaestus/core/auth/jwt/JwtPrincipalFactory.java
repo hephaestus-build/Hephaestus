@@ -18,7 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 /**
  * Builds the {@link JwtPrincipal} (login + roles + given name) for an account at token-issue
  * time. Centralises the "what goes into the JWT claims" logic so the issuer
- * stays a thin signer and every issue path (login, refresh, impersonation) is consistent.
+ * stays a thin signer and every issue path (login and refresh) is consistent.
  *
  * <h2>Login resolution</h2>
  * The {@code preferred_username} must remain the git-provider login that the existing
@@ -73,7 +73,7 @@ public class JwtPrincipalFactory {
 
     private JwtPrincipal createPrincipal(Account account) {
         // Defense-in-depth account-status gate (ADR 0017). Every JWT-issue path funnels through here
-        // (login success handler, token refresh, impersonation). A SUSPENDED / DELETING / DELETED
+        // (login success handler and token refresh). A SUSPENDED / DELETING / DELETED
         // account must never be minted a principal — even if a caller forgot the upstream check. The
         // OAuth success handler rejects earlier with a friendly redirect; this is the last line.
         if (account.getStatus() != Account.Status.ACTIVE) {

@@ -8,7 +8,6 @@ import { currentUserQueryOptions } from "./guard";
 import { redirectToLogin } from "./session-expiry";
 import { refreshAccessToken } from "./session-refresh";
 
-// Must not exceed AuthSessionService.IMPERSONATION_EXIT_SKEW: renewal also triggers operator restoration.
 const REFRESH_SKEW_MS = 60_000;
 const MAX_RENEWAL_DELAY_MS = 60 * 60_000;
 const ACTIVITY_THROTTLE_MS = 10_000;

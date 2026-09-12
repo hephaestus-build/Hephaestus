@@ -6,6 +6,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -28,7 +30,9 @@ public class ChatThreadService {
     @Transactional(readOnly = true)
     public List<ChatThreadSummaryDTO> listSummariesForCurrentUser(Long workspaceId) {
         User user = userRepository.getCurrentUserElseThrow();
-        return chatThreadRepository.findSummariesByWorkspaceAndUser(workspaceId, user.getId());
+        return chatThreadRepository
+                .findSummariesByWorkspaceAndUser(workspaceId, user.getId(), Pageable.unpaged())
+                .getContent();
     }
 
     /**
@@ -43,13 +47,13 @@ public class ChatThreadService {
 
     private ChatThread requireOwnedThread(Long workspaceId, UUID threadId) {
         User user = userRepository.getCurrentUserElseThrow();
-        ChatThread thread = chatThreadRepository
-                .findByIdAndWorkspaceId(threadId, workspaceId)
+        return requireUserThread(workspaceId, user.getId(), threadId);
+    }
+
+    private ChatThread requireUserThread(Long workspaceId, Long userId, UUID threadId) {
+        return chatThreadRepository
+                .findByIdAndWorkspaceIdAndUserId(threadId, workspaceId, userId)
                 .orElseThrow(() -> new EntityNotFoundException("ChatThread", threadId.toString()));
-        if (thread.getUser() == null || !thread.getUser().getId().equals(user.getId())) {
-            throw new EntityNotFoundException("ChatThread", threadId.toString());
-        }
-        return thread;
     }
 
     /** Delete a thread (cascades to messages, votes). Owner-scoped via {@link #getOwnedThread}. */
@@ -66,6 +70,20 @@ public class ChatThreadService {
     @Transactional(readOnly = true)
     public ThreadDetail loadOwnedThreadDetail(Long workspaceId, UUID threadId) {
         ChatThread thread = requireOwnedThread(workspaceId, threadId);
+        return detail(thread);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ChatThreadSummaryDTO> listSummariesForUser(Long workspaceId, Long userId, Pageable pageable) {
+        return chatThreadRepository.findSummariesByWorkspaceAndUser(workspaceId, userId, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public ThreadDetail loadUserThreadDetail(Long workspaceId, Long userId, UUID threadId) {
+        return detail(requireUserThread(workspaceId, userId, threadId));
+    }
+
+    private ThreadDetail detail(ChatThread thread) {
         List<ChatMessageDTO> messages = thread.getAllMessages().stream()
                 .map(msg -> ChatMessageDTO.from(msg, msg.getParts(), objectMapper))
                 .toList();

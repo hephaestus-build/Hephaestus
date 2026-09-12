@@ -15,6 +15,7 @@ public record AuthEventData(
         AuthEvent.EventType type,
         AuthEvent.Result result,
         @Nullable Long accountId,
+        @Nullable Long viewedUserId,
         @Nullable Long actingAccountId,
         @Nullable String failureReason,
         @Nullable Long gitProviderId,

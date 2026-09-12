@@ -35,7 +35,6 @@ class ChatThreadServiceTest extends BaseUnitTest {
 
     private static final Long WORKSPACE_ID = 42L;
     private static final Long OWNER_USER_ID = 7L;
-    private static final Long OTHER_USER_ID = 99L;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
@@ -47,21 +46,9 @@ class ChatThreadServiceTest extends BaseUnitTest {
     void getOwnedThread_missingThreadThrows() {
         UUID threadId = UUID.randomUUID();
         when(userRepository.getCurrentUserElseThrow()).thenReturn(stubUser(OWNER_USER_ID));
-        when(chatThreadRepository.findByIdAndWorkspaceId(threadId, WORKSPACE_ID))
+        when(chatThreadRepository.findByIdAndWorkspaceIdAndUserId(threadId, WORKSPACE_ID, OWNER_USER_ID))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownByEnityNotFound(() -> service.getOwnedThread(WORKSPACE_ID, threadId));
-    }
-
-    @Test
-    void getOwnedThread_foreignOwnerHidden() {
-        UUID threadId = UUID.randomUUID();
-        ChatThread thread = stubThread(threadId, stubUser(OTHER_USER_ID));
-        when(userRepository.getCurrentUserElseThrow()).thenReturn(stubUser(OWNER_USER_ID));
-        when(chatThreadRepository.findByIdAndWorkspaceId(threadId, WORKSPACE_ID))
-                .thenReturn(Optional.of(thread));
-
-        // We expose foreign threads as 404, not 403 — non-owners must not learn of existence.
         assertThatThrownByEnityNotFound(() -> service.getOwnedThread(WORKSPACE_ID, threadId));
     }
 
@@ -71,7 +58,7 @@ class ChatThreadServiceTest extends BaseUnitTest {
         User owner = stubUser(OWNER_USER_ID);
         ChatThread thread = stubThread(threadId, owner);
         when(userRepository.getCurrentUserElseThrow()).thenReturn(owner);
-        when(chatThreadRepository.findByIdAndWorkspaceId(threadId, WORKSPACE_ID))
+        when(chatThreadRepository.findByIdAndWorkspaceIdAndUserId(threadId, WORKSPACE_ID, OWNER_USER_ID))
                 .thenReturn(Optional.of(thread));
 
         ChatThread resolved = service.getOwnedThread(WORKSPACE_ID, threadId);

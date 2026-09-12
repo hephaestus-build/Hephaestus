@@ -65,14 +65,9 @@ public class AccountService {
      * the account's personal/auth child rows (identity_link, account_feature, issued_jwt,
      * account_export) and flips the row to DELETED. Retained, lawful-basis audit data (auth_event,
      * Art. 30) and the read-only git-activity mirror (Art. 17(3)) are intentionally kept.
-     *
-     * @param actingAccountId the impersonating operator's id when this runs under an {@code act} claim,
-     *     else {@code null} for a genuine self-service deletion. Stamped on the audit row so an
-     *     operator-driven erasure records the (target, operator) pair instead of reading as the victim
-     *     self-deleting — non-repudiation on the highest-risk action.
      */
     @Transactional
-    public void softDelete(Long accountId, @Nullable Long actingAccountId) {
+    public void softDelete(Long accountId) {
         Account account = requireById(accountId);
         if (account.getStatus() == Account.Status.DELETING || account.getStatus() == Account.Status.DELETED) {
             // Idempotent: only ACTIVE/SUSPENDED → DELETING starts the Art.17 cooldown. A re-invocation
@@ -86,7 +81,6 @@ public class AccountService {
         authEventLogger
                 .event(AuthEvent.EventType.ACCOUNT_DELETED, AuthEvent.Result.SUCCESS)
                 .account(accountId)
-                .actingAccount(actingAccountId)
                 .record();
     }
 
@@ -101,13 +95,9 @@ public class AccountService {
      * </ul>
      * Reversible: re-linking only requires signing in with that provider again. The current session
      * is account-scoped (not identity-scoped), so unlinking never logs the user out.
-     *
-     * @param actingAccountId the impersonating operator's id when this runs under an {@code act} claim,
-     *     else {@code null} for a self-service unlink. Stamped on the audit row for operator attribution
-     *     (see {@link #softDelete}).
      */
     @Transactional
-    public void unlinkIdentity(Long accountId, Long identityLinkId, @Nullable Long actingAccountId) {
+    public void unlinkIdentity(Long accountId, Long identityLinkId) {
         // Write-lock the account's active links so two concurrent unlinks of different identities
         // serialize — otherwise both pass the last-identity guard below and drain the account to zero.
         List<IdentityLink> active = identityLinkRepository.findActiveByAccountIdForUpdate(accountId);
@@ -130,7 +120,6 @@ public class AccountService {
         authEventLogger
                 .event(AuthEvent.EventType.IDENTITY_UNLINKED, AuthEvent.Result.SUCCESS)
                 .account(accountId)
-                .actingAccount(actingAccountId)
                 .gitProvider(gitProviderId)
                 .record();
     }
@@ -197,9 +186,7 @@ public class AccountService {
     }
 
     /**
-     * Instance-admin force sign-out: revoke all of {@code accountId}'s active sessions. Also ends any
-     * in-flight impersonation OF this account — an impersonation token's subject is the target's id, so
-     * its row is revoked here too; the operator's own session is a separate jti and is untouched.
+     * Instance-admin force sign-out: revoke all of {@code accountId}'s active sessions.
      * Audited as {@code JWT_REVOKED}.
      */
     @Transactional

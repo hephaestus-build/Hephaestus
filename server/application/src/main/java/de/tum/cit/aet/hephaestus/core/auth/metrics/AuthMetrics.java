@@ -123,7 +123,7 @@ public class AuthMetrics {
 
     /**
      * Count one rate-limit 429. {@code bucket} is the endpoint namespace
-     * ({@code oauth-authz}/{@code refresh}/{@code impersonate}/{@code delete-user}) — bounded, no PII.
+     * ({@code oauth-authz}/{@code refresh}/{@code user-view}/{@code delete-user}) — bounded, no PII.
      * The per-(bucket) Counter is registered lazily; the namespace set is tiny so this is effectively
      * a fixed handful of meters.
      */
@@ -190,20 +190,6 @@ public class AuthMetrics {
         Counter.builder(CoreMetrics.AUTH_STEP_UP_DENIED)
                 .description("Instance-admin actions refused for want of a recent sign-in, tagged by action.")
                 .tag("action", action)
-                .register(registry)
-                .increment();
-    }
-
-    /**
-     * Count one impersonation ended by a rotation rather than by the operator. {@code reason} is a fixed
-     * set ({@code expired}, {@code target_promoted}), so cardinality stays bounded. A rising
-     * {@code target_promoted} rate is worth looking at: it means operators are promoting the accounts
-     * they are impersonating.
-     */
-    public void recordImpersonationAutoExit(String reason) {
-        Counter.builder(CoreMetrics.AUTH_IMPERSONATION_AUTO_EXIT)
-                .description("Impersonations ended by a token rotation, tagged by reason.")
-                .tag("reason", reason)
                 .register(registry)
                 .increment();
     }

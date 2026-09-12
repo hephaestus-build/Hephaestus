@@ -28,8 +28,6 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *                        Use a stable subject where usernames can be reclaimed; email is never matched.
  * @param bootstrapToken optional deployment-controlled token for recovering an instance with no active
  *                       admin; blank disables the endpoint
- * @param impersonationMaxLifetime absolute impersonation deadline; see
- *                                 {@code docs/contributor/instance-admin.md}
  * @param sessionMaxLifetime absolute session deadline set at login and preserved through refresh
  * @param stepUpMaxAge maximum sign-in age for sensitive actions; refresh does not reset sign-in time
  * @param devLoginEnabled passwordless local sign-in; rejected under the production profile and unsafe
@@ -49,7 +47,6 @@ public record AuthProperties(
         Map<String, LoginProviderSeed> loginProviders,
         @DefaultValue List<String> bootstrapAdmins,
         @DefaultValue("") String bootstrapToken,
-        @DefaultValue("1h") Duration impersonationMaxLifetime,
         @DefaultValue("7d") Duration sessionMaxLifetime,
         @DefaultValue("5m") Duration stepUpMaxAge,
         @DefaultValue("false") boolean devLoginEnabled,

@@ -17,7 +17,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
@@ -109,7 +108,7 @@ class ConfigAuditRecorderTest {
     @Test
     void aSignedInCallerIsRecordedAsUser() {
         inTransaction(false);
-        authenticate("42", null);
+        authenticate("42");
         recorder.record(entry(new Snap(30), new Snap(10)));
 
         ConfigAuditEvent saved = captureSaved();
@@ -123,25 +122,12 @@ class ConfigAuditRecorderTest {
         // Filing a signed-in human as SYSTEM would be the exact confusion actor_kind exists to prevent,
         // so the kind follows authentication and only the id goes unresolved.
         inTransaction(false);
-        authenticate("not-an-account-id", null);
+        authenticate("not-an-account-id");
         recorder.record(entry(new Snap(30), new Snap(10)));
 
         ConfigAuditEvent saved = captureSaved();
         assertThat(saved.getActorKind()).isEqualTo(ConfigAuditActorKind.USER);
         assertThat(saved.getActorAccountId()).isNull();
-    }
-
-    @Test
-    void impersonationRecordsBothTheSubjectAndTheOperator() {
-        // An operator acting as someone else must stay attributable, or impersonation launders it.
-        inTransaction(false);
-        authenticate("42", "7");
-        recorder.record(entry(new Snap(30), new Snap(10)));
-
-        ConfigAuditEvent saved = captureSaved();
-        assertThat(saved.getActorKind()).isEqualTo(ConfigAuditActorKind.IMPERSONATED);
-        assertThat(saved.getActorAccountId()).isEqualTo(42L);
-        assertThat(saved.getActingAccountId()).isEqualTo(7L);
     }
 
     private ConfigAuditEvent captureSaved() {
@@ -159,12 +145,9 @@ class ConfigAuditRecorderTest {
         TransactionSynchronizationManager.setCurrentTransactionReadOnly(readOnly);
     }
 
-    private static void authenticate(String subject, @Nullable String impersonatorId) {
+    private static void authenticate(String subject) {
         Jwt.Builder jwt =
                 Jwt.withTokenValue("t").header("alg", "none").subject(subject).claim("sub", subject);
-        if (impersonatorId != null) {
-            jwt.claim("act", Map.of("sub", impersonatorId));
-        }
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt.build(), List.of()));
     }
 }

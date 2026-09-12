@@ -1,9 +1,10 @@
 package de.tum.cit.aet.hephaestus.mentor;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -20,15 +21,17 @@ public interface ChatThreadRepository extends JpaRepository<ChatThread, UUID> {
      */
     @Query("SELECT new de.tum.cit.aet.hephaestus.mentor.ChatThreadSummaryDTO(t.id, t.title, t.createdAt) "
             + "FROM ChatThread t WHERE t.workspace.id = :workspaceId AND t.user.id = :userId "
-            + "ORDER BY t.createdAt DESC")
-    List<ChatThreadSummaryDTO> findSummariesByWorkspaceAndUser(
-            @Param("workspaceId") Long workspaceId, @Param("userId") Long userId);
+            + "ORDER BY t.createdAt DESC, t.id DESC")
+    Page<ChatThreadSummaryDTO> findSummariesByWorkspaceAndUser(
+            @Param("workspaceId") Long workspaceId, @Param("userId") Long userId, Pageable pageable);
 
     /**
      * Resolve a thread within a workspace; returns empty when the thread either does not
      * exist or belongs to a different workspace.
      */
     Optional<ChatThread> findByIdAndWorkspaceId(UUID id, Long workspaceId);
+
+    Optional<ChatThread> findByIdAndWorkspaceIdAndUserId(UUID id, Long workspaceId, Long userId);
 
     /** Projection: avoids materialising the full entity to fetch the JSONL blob. Empty when missing or NULL. */
     @WorkspaceAgnostic("Caller has already resolved thread ownership via findByIdAndWorkspaceId")

@@ -7,16 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-/**
- * Fluent front door for writing {@link AuthEvent} rows. Delegates the actual persistence
- * to {@link AuthEventWriter} (a separate bean, so the {@code REQUIRES_NEW} transaction
- * boundary is not bypassed by self-invocation).
- *
- * <p>Usage:
- * <pre>{@code
- * authEventLogger.event(LOGIN, SUCCESS).account(accountId).gitProvider(providerId).record();
- * }</pre>
- */
+/** Builds audit events; {@link AuthEventWriter} owns their independent transaction. */
 @ConditionalOnServerRole
 @Component
 public class AuthEventLogger {
@@ -33,12 +24,12 @@ public class AuthEventLogger {
         return new Draft(type, result);
     }
 
-    /** Fluent, null-tolerant builder. Terminal {@link #record()} persists via the writer. */
     public final class Draft {
 
         private final AuthEvent.EventType type;
         private final AuthEvent.Result result;
         private @Nullable Long accountId;
+        private @Nullable Long viewedUserId;
         private @Nullable Long actingAccountId;
         private @Nullable String failureReason;
         private @Nullable Long gitProviderId;
@@ -49,6 +40,11 @@ public class AuthEventLogger {
         private Draft(AuthEvent.EventType type, AuthEvent.Result result) {
             this.type = type;
             this.result = result;
+        }
+
+        public Draft viewedUser(@Nullable Long id) {
+            this.viewedUserId = id;
+            return this;
         }
 
         public Draft account(@Nullable Long id) {
@@ -87,10 +83,7 @@ public class AuthEventLogger {
         }
 
         /**
-         * Persists the drafted event. Never throws.
-         *
-         * @return whether the row reached the database — a caller that de-duplicates its own writes
-         *     must not claim success on {@code false}
+         * @return whether the event committed; callers decide whether a failed audit must block their operation
          */
         public boolean record() {
             try {
@@ -98,6 +91,7 @@ public class AuthEventLogger {
                         type,
                         result,
                         accountId,
+                        viewedUserId,
                         actingAccountId,
                         failureReason,
                         gitProviderId,
@@ -108,11 +102,8 @@ public class AuthEventLogger {
                         // flag or assert one it did not earn.
                         WorkspaceElevationContext.isElevated(workspaceId)));
             } catch (RuntimeException e) {
-                // An audit write must NEVER break the caller's business transaction. AuthEventWriter
-                // already swallows the insert failure, but its REQUIRES_NEW boundary can still surface an
-                // UnexpectedRollbackException at commit when the failed statement aborted that inner tx
-                // (the inner tx is independent, so the caller's tx stays intact once we absorb this).
-                log.warn("auth.audit: {} event could not be persisted; suppressed to protect the request", type, e);
+                // Commit failures arise outside the writer method, at its transaction proxy.
+                log.warn("auth.audit: {} event could not be committed", type, e);
                 return false;
             }
         }

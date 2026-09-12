@@ -28,7 +28,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -71,12 +70,18 @@ public class PracticeStandingService {
     }
 
     public StandingSnapshot getStandingSnapshot(Long workspaceId) {
-        Optional<Long> currentDeveloperId = currentDeveloperLookup.currentDeveloperId();
-        if (currentDeveloperId.isEmpty()) {
-            return StandingSnapshot.EMPTY;
-        }
+        return currentDeveloperLookup
+                .currentDeveloperId()
+                .map(developerId -> loadStandingSnapshot(workspaceId, developerId))
+                .orElse(StandingSnapshot.EMPTY);
+    }
+
+    public StandingSnapshot getStandingSnapshot(Long workspaceId, Long developerId) {
+        return loadStandingSnapshot(workspaceId, developerId);
+    }
+
+    private StandingSnapshot loadStandingSnapshot(Long workspaceId, Long developerId) {
         Instant since = clock.instant().minus(LOOKBACK_DAYS, ChronoUnit.DAYS);
-        Long developerId = currentDeveloperId.get();
         List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
                 developerId,
                 workspaceId,

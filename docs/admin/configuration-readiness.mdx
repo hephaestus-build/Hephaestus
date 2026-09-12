@@ -98,7 +98,7 @@ satisfy sign-in readiness. Worker and webhook roles do not load login providers.
 
 ### Recent sign-in for sensitive actions
 
-Changing an account's role, forcing an account out of all its sessions, starting an impersonation,
+Changing an account's role, forcing an account out of all its sessions, viewing as a user,
 changing a login provider, registering an LLM connection, and linking an identity all require a
 sign-in from the last few minutes. `HEPHAESTUS_AUTH_STEP_UP_MAX_AGE` sets that window; it defaults to
 `5m` and must be a positive duration shorter than the absolute session lifetime, or the gate can
@@ -109,7 +109,7 @@ multi-factor authentication: an identity provider that still holds a session may
 asking for anything, so enforce MFA at the provider. A refused action is not replayed once access is
 confirmed — review it and submit it again.
 
-### Session and impersonation deadlines
+### Session deadlines
 
 The access cookie lasts `24h` by default (`HEPHAESTUS_AUTH_ACCESS_TTL`). The browser renews it
 approximately hourly while active, before expiry, or when returning to a tab whose renewal is due.
@@ -119,12 +119,10 @@ Secure, host-only, SameSite=Lax cookies in production; they are never stored in 
 
 A session ends at `hephaestus.auth.session-max-lifetime` (default `7d`, configurable with
 `HEPHAESTUS_AUTH_SESSION_MAX_LIFETIME`) no matter how active it is;
-renewing an access token rolls within that deadline and never past it. An impersonation ends at
-`hephaestus.auth.impersonation-max-lifetime` (default `1h`), or sooner — when its time-box is reached
-or when the account being impersonated is promoted to instance admin, both of which return the
-operator to their own session and record an `IMPERSONATION_END` entry in the audit viewer; neither
-requires anyone to sign in again. The operator's own session ending, or the operator no longer being
-an instance admin, ends the impersonation outright instead — there is no session left to return to.
+renewing an access token rolls within that deadline and never past it. Reads through a
+[user view](/contributor/instance-admin#read-only-user-views) are budgeted per instance
+administrator: `HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_CAPACITY` per
+`HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_PERIOD`, 120 per minute by default.
 
 ### Choosing session limits
 

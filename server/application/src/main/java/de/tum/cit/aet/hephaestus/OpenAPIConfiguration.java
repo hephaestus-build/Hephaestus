@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus;
 
+import de.tum.cit.aet.hephaestus.account.userview.UserViewAuthorizationConfig;
+import de.tum.cit.aet.hephaestus.core.UserViewRead;
 import io.swagger.v3.core.converter.ModelConverters;
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
@@ -14,6 +16,7 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
+import io.swagger.v3.oas.models.parameters.HeaderParameter;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,6 +30,7 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springdoc.core.customizers.OpenApiCustomizer;
+import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -136,6 +140,20 @@ public class OpenAPIConfiguration {
     private static final String DECIMAL_FORMAT = "decimal";
 
     private static final String NUMBER_TYPE = "number";
+
+    @Bean
+    public OperationCustomizer userViewReasonHeader() {
+        return (operation, handler) -> {
+            if (handler.hasMethodAnnotation(UserViewRead.class)) {
+                operation.addParametersItem(new HeaderParameter()
+                        .name(UserViewAuthorizationConfig.REASON_HEADER)
+                        .required(true)
+                        .schema(new StringSchema())
+                        .description("Why the administrator views this user: percent-encoded UTF-8, 1–500 characters"));
+            }
+            return operation;
+        };
+    }
 
     @Bean
     public OpenApiCustomizer schemaCustomizer(

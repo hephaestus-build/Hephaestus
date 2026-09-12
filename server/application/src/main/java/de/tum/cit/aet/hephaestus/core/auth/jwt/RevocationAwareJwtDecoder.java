@@ -17,7 +17,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimNames;
@@ -76,7 +79,12 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
                 iss -> iss != null && iss.equals(properties.issuer().toString()));
         OAuth2TokenValidator<Jwt> audience = new JwtClaimValidator<List<String>>(
                 JwtClaimNames.AUD, aud -> aud != null && aud.contains(properties.audience()));
-        return new DelegatingOAuth2TokenValidator<>(defaults, issuer, audience);
+        // A delegated token names one account as acting for another; nothing here may act for anyone.
+        OAuth2TokenValidator<Jwt> notDelegated = jwt -> jwt.hasClaim("act")
+                ? OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                        OAuth2ErrorCodes.INVALID_TOKEN, "delegated account sessions are not supported", null))
+                : OAuth2TokenValidatorResult.success();
+        return new DelegatingOAuth2TokenValidator<>(defaults, issuer, audience, notDelegated);
     }
 
     @Override

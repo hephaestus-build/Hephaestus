@@ -58,6 +58,8 @@ tags:
   name: Auth
 - description: Workspace-scoped practice-review policy
   name: Practice Review Settings
+- description: Instance-admin-only read-only access to users
+  name: User view
 - description: Workspace integration connection management
   name: Connections
 - description: Up/down votes on mentor assistant messages
@@ -198,6 +200,7 @@ paths:
           items:
             type: string
             enum:
+            - USER_VIEW
             - LOGIN
             - LOGIN_FAILED
             - LOGOUT
@@ -281,6 +284,7 @@ paths:
           items:
             type: string
             enum:
+            - USER_VIEW
             - LOGIN
             - LOGIN_FAILED
             - LOGOUT
@@ -1912,30 +1916,6 @@ paths:
       summary: Set or clear a workspace's monthly cap on host-funded LLM spend
       tags:
       - Admin
-  /auth/impersonate:
-    post:
-      operationId: impersonate
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ImpersonateRequest"
-        required: true
-      responses:
-        "200":
-          description: OK
-      summary: Begin impersonating another account
-      tags:
-      - Auth
-  /auth/impersonate:exit:
-    post:
-      operationId: exitImpersonation
-      responses:
-        "200":
-          description: OK
-      summary: "Exit impersonation, restore operator session"
-      tags:
-      - Auth
   /auth/logout:
     post:
       operationId: logout
@@ -7837,6 +7817,332 @@ paths:
       summary: Update workspace Personal Access Token
       tags:
       - workspace
+  /workspaces/{workspaceSlug}/user-view/users:
+    get:
+      operationId: listUserViewUsers
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 25
+          maximum: 100
+          minimum: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageResponseDTOUserViewUser"
+          description: OK
+      summary: List workspace users and their linked account status
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/conversations:
+    get:
+      operationId: listUserViewConversations
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 25
+          maximum: 100
+          minimum: 1
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageResponseDTOChatThreadSummary"
+          description: OK
+      summary: View a user's existing private conversations
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/conversations/{threadId}:
+    get:
+      operationId: getUserViewConversation
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: path
+        name: threadId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatThreadDetail"
+          description: OK
+      summary: Read a user's private conversation without changing it
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices:
+    get:
+      operationId: getUserPracticeView
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPracticeSummary"
+          description: OK
+      summary: View a user's existing private practice profile without signing in
+        as them
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/runs:
+    get:
+      operationId: listUserViewRuns
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: path
+        name: groupSlug
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: practiceSlug
+        required: false
+        schema:
+          type: string
+      - description: "Only reviews of these artifact kinds, e.g. scm.pull_request\
+          \ (repeatable)"
+        in: query
+        name: artifactKinds
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+      - in: query
+        name: severities
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - CRITICAL
+            - MAJOR
+            - MINOR
+            - INFO
+      - description: "Zero-based page, at most 100"
+        in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+          maximum: 100
+          minimum: 0
+      - description: Page size from 1 to 50
+        in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          maximum: 50
+          minimum: 1
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeGroupReviewRunsPage"
+          description: OK
+      summary: View a user's private practice review history
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/trend:
+    get:
+      operationId: getUserViewTrend
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: path
+        name: groupSlug
+        required: true
+        schema:
+          type: string
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeGroupTrend"
+          description: OK
+      summary: View a user's private practice group trend
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices/observations/{observationId}:
+    get:
+      operationId: getUserViewObservation
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: path
+        name: observationId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObservationDetail"
+          description: OK
+      summary: View a user's private observation and feedback
+      tags:
+      - User view
   /workspaces/{workspaceSlug}/users:
     get:
       operationId: getUsersWithTeams
@@ -7998,9 +8304,6 @@ components:
           type: integer
           format: int64
         memberCount:
-          type: integer
-          format: int64
-        ownerAccountId:
           type: integer
           format: int64
         ownerLogin:
@@ -8349,6 +8652,9 @@ components:
           type: string
         userAgent:
           type: string
+        viewedUserId:
+          type: integer
+          format: int64
         workspaceId:
           type: integer
           format: int64
@@ -9982,11 +10288,6 @@ components:
           format: int64
         identityProvider:
           type: string
-        impersonating:
-          type: boolean
-        impersonatorId:
-          type: integer
-          format: int64
         linkedProviders:
           type: array
           items:
@@ -10688,18 +10989,6 @@ components:
           type: string
         username:
           type: string
-    ImpersonateRequest:
-      type: object
-      properties:
-        reason:
-          type: string
-          minLength: 1
-        targetAccountId:
-          type: integer
-          format: int64
-      required:
-      - reason
-      - targetAccountId
     InAppEvidence:
       type: object
       description: One piece of work the pattern was observed on
@@ -11856,6 +12145,42 @@ components:
         totalPages:
           type: integer
           format: int32
+    PageResponseDTOChatThreadSummary:
+      type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatThreadSummary"
+        empty:
+          type: boolean
+        first:
+          type: boolean
+        last:
+          type: boolean
+        number:
+          type: integer
+          format: int32
+        numberOfElements:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageable"
+        size:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/Sort"
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
     PageResponseDTOConfigAuditEntryView:
       type: object
       description: |-
@@ -11939,6 +12264,42 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SyncJob"
+        empty:
+          type: boolean
+        first:
+          type: boolean
+        last:
+          type: boolean
+        number:
+          type: integer
+          format: int32
+        numberOfElements:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageable"
+        size:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/Sort"
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    PageResponseDTOUserViewUser:
+      type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserViewUser"
         empty:
           type: boolean
         first:
@@ -16559,6 +16920,30 @@ components:
       - id
       - login
       - name
+    UserPracticeSummary:
+      type: object
+      properties:
+        groupStandings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeGroupStanding"
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeGroup"
+        practices:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewedPractice"
+        standings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeStanding"
+      required:
+      - groupStandings
+      - groups
+      - practices
+      - standings
     UserSettings:
       type: object
       description: User preferences and settings
@@ -16601,6 +16986,24 @@ components:
       - name
       - teams
       - url
+    UserViewUser:
+      type: object
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        accountStatus:
+          type: string
+        login:
+          type: string
+        name:
+          type: string
+        userId:
+          type: integer
+          format: int64
+      required:
+      - login
+      - userId
     Workspace:
       type: object
       description: Complete workspace information including configuration and settings

@@ -240,23 +240,21 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
     }
 
     @Test
-    void impersonateBeginIsRateLimitedButExitIsNot() throws Exception {
+    void shouldKeyEveryUserViewReadOnTheOperatorWhenTheyBrowseSeveralUsersAndWorkspaces() throws Exception {
         authenticateAs("99");
-        AuthRateLimitProperties p = props();
-        AuthRateLimitFilter f = filter(p);
+        AuthRateLimitFilter f = filter(props());
 
-        MockHttpServletRequest begin = new MockHttpServletRequest("POST", "/auth/impersonate");
-        f.doFilter(begin, new MockHttpServletResponse(), mock(FilterChain.class));
-        assertThat(store).containsOnlyKeys("impersonate:acct:99");
+        f.doFilter(
+                new MockHttpServletRequest("GET", "/workspaces/example/user-view/users/1/practices"),
+                new MockHttpServletResponse(),
+                mock(FilterChain.class));
+        f.doFilter(
+                new MockHttpServletRequest("GET", "/workspaces/other/user-view/users/2/conversations"),
+                new MockHttpServletResponse(),
+                mock(FilterChain.class));
+        f.doFilter(new MockHttpServletRequest("GET", "/user"), new MockHttpServletResponse(), mock(FilterChain.class));
 
-        // exit verb must NOT be matched (separate path, equals-not-startsWith guard)
-        MockHttpServletRequest exit = new MockHttpServletRequest("POST", "/auth/impersonate:exit");
-        MockHttpServletResponse exitRes = new MockHttpServletResponse();
-        FilterChain exitChain = mock(FilterChain.class);
-        f.doFilter(exit, exitRes, exitChain);
-
-        verify(exitChain, times(1)).doFilter(exit, exitRes);
-        assertThat(store).containsOnlyKeys("impersonate:acct:99"); // no new bucket for exit
+        assertThat(store).containsOnlyKeys("user-view:acct:99");
     }
 
     @Test

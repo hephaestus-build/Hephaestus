@@ -29,8 +29,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Read-only instance-admin viewer over the append-only {@code auth_event} log (see {@link AuthEvent}).
- * Guarded by the namespaced {@code app_admin} authority. Surfaces the {@code (account_id,
- * acting_account_id)} pair so impersonated actions stay attributable to their operator.
+ * Guarded by the namespaced {@code app_admin} authority. Surfaces the acting account and the viewed
+ * user so administrative actions and user views stay attributable to the administrator.
  */
 @ConditionalOnServerRole
 @RestController
@@ -89,6 +89,7 @@ public class AuthAuditController {
             @NonNull boolean elevatedViaInstanceAdmin,
             @Nullable Long accountId,
             @Nullable Long actingAccountId,
+            @Nullable Long viewedUserId,
             // Resolved identities for accountId / actingAccountId (null when the account no longer exists);
             // the raw ids stay for back-compat and so deleted-account rows are still attributable by id.
             @Nullable AccountRefDTO account,
@@ -126,7 +127,7 @@ public class AuthAuditController {
         // working, and one keyed on the header picks the new column up.
         csv.append("occurred_at_utc,event_type,result,account_id,account_name,account_email,"
                 + "acting_account_id,actor_name,actor_email,failure_reason,workspace_id,ip_address,user_agent,details,"
-                + "elevated_via_instance_admin\n");
+                + "elevated_via_instance_admin,viewed_user_id\n");
         for (AuthEvent e : data.events().getContent()) {
             AuthAuditService.AccountRef account = AuthAuditService.refOf(e.getAccountId(), identities);
             AuthAuditService.AccountRef actor = AuthAuditService.refOf(e.getActingAccountId(), identities);
@@ -147,7 +148,8 @@ public class AuthAuditController {
                             e.getIpInet(),
                             e.getUserAgent(),
                             e.getDetails(),
-                            Boolean.toString(e.isElevatedViaInstanceAdmin())));
+                            Boolean.toString(e.isElevatedViaInstanceAdmin()),
+                            str(e.getViewedUserId())));
         }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"audit-log.csv\"")
@@ -168,6 +170,7 @@ public class AuthAuditController {
                 e.isElevatedViaInstanceAdmin(),
                 e.getAccountId(),
                 e.getActingAccountId(),
+                e.getViewedUserId(),
                 toRef(AuthAuditService.refOf(e.getAccountId(), identities)),
                 toRef(AuthAuditService.refOf(e.getActingAccountId(), identities)),
                 e.getFailureReason(),

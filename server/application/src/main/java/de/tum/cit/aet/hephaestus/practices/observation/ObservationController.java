@@ -2,11 +2,9 @@ package de.tum.cit.aet.hephaestus.practices.observation;
 
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
-import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.DeveloperPracticeSummaryDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationListDTO;
-import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,7 +41,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 public class ObservationController {
 
     private final ObservationService observationService;
-    private final EvidenceAuthorization evidenceAuthorization;
 
     @GetMapping
     @Operation(
@@ -89,17 +86,7 @@ public class ObservationController {
             content = @Content(schema = @Schema(hidden = true)))
     public ResponseEntity<ObservationDetailDTO> getObservation(
             WorkspaceContext workspaceContext, @PathVariable UUID observationId) {
-        var observation = observationService.getObservation(workspaceContext.id(), observationId);
-        String deliveredFeedback = observationService
-                .getDeliveredGuidance(workspaceContext.id(), observationId)
-                .orElse(null);
-        String artifactUrl = observationService
-                .getArtifactUrl(workspaceContext.id(), observation)
-                .orElse(null);
-        boolean includeEvidence = evidenceAuthorization.permits(
-                workspaceContext.id(), observation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
-        return ResponseEntity.ok(
-                ObservationDetailDTO.from(observation, deliveredFeedback, artifactUrl, includeEvidence));
+        return ResponseEntity.ok(observationService.getObservationDetail(workspaceContext.id(), observationId));
     }
 
     @GetMapping("/pull-request/{prId}")

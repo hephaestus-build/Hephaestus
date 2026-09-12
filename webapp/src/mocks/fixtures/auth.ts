@@ -32,7 +32,6 @@ export const currentUser: CurrentUserView = {
 		{ type: "GITHUB", serverUrl: "https://github.com" },
 		{ type: "GITLAB", serverUrl: "https://gitlab.lrz.de" },
 	],
-	impersonating: false,
 };
 
 export const identityProviders: IdentityProviderView[] = [

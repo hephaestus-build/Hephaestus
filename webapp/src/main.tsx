@@ -16,7 +16,6 @@ import { useCookieConsent } from "@/integrations/consent";
 import { TanstackDevtools } from "@/integrations/devtools/TanstackDevtools";
 import { disableSentry, initSentry } from "@/integrations/sentry";
 import { ThemeProvider } from "@/integrations/theme";
-import { useImpersonationStore } from "@/stores/impersonation-store";
 
 import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
 import { routeTree } from "./routeTree.gen";
@@ -37,9 +36,7 @@ client.setConfig({
 	document.head.appendChild(manifestLink);
 }
 
-client.interceptors.request.use((request) =>
-	applyStateChangingHeaders(request, useImpersonationStore.getState().writesEnabled),
-);
+client.interceptors.request.use((request) => applyStateChangingHeaders(request));
 
 client.interceptors.response.use((response) => {
 	handlePossibleSessionExpiry(response, TanstackQuery.getContext().queryClient);

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.spi;
 
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -48,4 +49,10 @@ public interface GitProviderRegistry {
      */
     @Nullable
     String providerServerUrl(@Nullable Long gitProviderId);
+
+    /**
+     * The synced git-provider user an identity denotes, matched on the provider's stable numeric id and
+     * never on a login, which a developer can rename. Empty when nobody synced that user yet.
+     */
+    Optional<Long> findActorId(long gitProviderId, String subject);
 }

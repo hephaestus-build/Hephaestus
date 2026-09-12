@@ -39,6 +39,17 @@ public interface WorkspaceMembershipRepository extends JpaRepository<WorkspaceMe
         """)
     Page<WorkspaceMembership> findAllByWorkspace_Id(@Param("workspaceId") Long workspaceId, Pageable pageable);
 
+    @Query(value = """
+            SELECT wm FROM WorkspaceMembership wm
+            JOIN FETCH wm.user
+            WHERE wm.workspace.id = :workspaceId AND wm.user.type = 'USER'
+            ORDER BY wm.user.login
+        """, countQuery = """
+            SELECT count(wm) FROM WorkspaceMembership wm
+            WHERE wm.workspace.id = :workspaceId AND wm.user.type = 'USER'
+        """)
+    Page<WorkspaceMembership> findHumanMembers(@Param("workspaceId") Long workspaceId, Pageable pageable);
+
     @Query("""
             SELECT wm FROM WorkspaceMembership wm
             JOIN FETCH wm.user

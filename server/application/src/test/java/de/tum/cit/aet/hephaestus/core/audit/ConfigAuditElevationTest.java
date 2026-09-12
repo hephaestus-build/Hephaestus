@@ -13,7 +13,6 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventWriter;
 import de.tum.cit.aet.hephaestus.core.security.WorkspaceElevationContext;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -32,7 +31,7 @@ class ConfigAuditElevationTest extends BaseUnitTest {
 
     @Test
     void shouldTagOnlyTheElevatedWorkspaceInBothLedgers() {
-        authenticate(false);
+        authenticate();
         WorkspaceElevationContext.set(7L);
 
         assertThat(ConfigAuditActor.fromSecurityContext(7L).elevatedViaInstanceAdmin())
@@ -59,24 +58,11 @@ class ConfigAuditElevationTest extends BaseUnitTest {
 
     @Test
     void shouldNotTagAnythingOnceTheRequestHasCleared() {
-        authenticate(false);
+        authenticate();
         WorkspaceElevationContext.set(7L);
         WorkspaceElevationContext.clear();
 
         assertThat(ConfigAuditActor.fromSecurityContext(7L).elevatedViaInstanceAdmin())
-                .isFalse();
-    }
-
-    @Test
-    void shouldNotConfuseImpersonationWithElevation() {
-        authenticate(true);
-
-        ConfigAuditActor actor = ConfigAuditActor.fromSecurityContext(7L);
-
-        assertThat(actor.kind()).isEqualTo(ConfigAuditActorKind.IMPERSONATED);
-        assertThat(actor.actingAccountId()).isEqualTo(99L);
-        assertThat(actor.elevatedViaInstanceAdmin())
-                .as("impersonation is attributable through the actor pair, not through elevation")
                 .isFalse();
     }
 
@@ -90,11 +76,8 @@ class ConfigAuditElevationTest extends BaseUnitTest {
         assertThat(actor.elevatedViaInstanceAdmin()).isFalse();
     }
 
-    private static void authenticate(boolean impersonating) {
+    private static void authenticate() {
         Jwt.Builder builder = Jwt.withTokenValue("test").header("alg", "none").subject("42");
-        if (impersonating) {
-            builder.claim("act", Map.of("sub", "99"));
-        }
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(builder.build()));
     }
 }

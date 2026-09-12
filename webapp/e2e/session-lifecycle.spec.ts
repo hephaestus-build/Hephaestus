@@ -220,72 +220,36 @@ test("a cold identity outage shows the existing retry screen instead of signing 
 	await expect(page.getByRole("heading", { name: "User settings", exact: true })).toBeVisible();
 });
 
-test("exiting impersonation waits for a delayed renewal and restores the operator", async ({
-	page,
-	context,
-	browser,
-	request,
-}) => {
-	const target = await browser.newContext();
-	let targetId: number;
-	try {
-		expect(
-			(
-				await target.request.post(`${serverUrl}/auth/dev-login`, {
-					data: { username: "session-impersonated", admin: false },
-				})
-			).status(),
-		).toBe(204);
-		targetId = z
-			.object({ id: z.number() })
-			.parse(await (await target.request.get(`${serverUrl}/user`)).json()).id;
-		const notice = z
-			.object({ noticeVersion: z.string(), researchOrganization: z.string().optional() })
-			.parse(await (await target.request.get(`${serverUrl}/user/consent`)).json());
-		// This instance names no research organisation, so setup is the terms alone and a research
-		// answer would be an answer to a question it never put.
-		expect(notice.researchOrganization).toBeUndefined();
-		const targetCsrf = await accessCookie(target, "XSRF-TOKEN");
-		expect(
-			(
-				await target.request.put(`${serverUrl}/user/consent`, {
-					headers: { "X-XSRF-TOKEN": decodeURIComponent(targetCsrf.value) },
-					data: { noticeVersion: notice.noticeVersion, termsAccepted: true },
-				})
-			).status(),
-		).toBe(200);
-	} finally {
-		await target.close();
-	}
-	await loginAsDevAdmin(page, "session-operator");
-	const operator = z
+async function postRetiredEndpoint(page: Page, context: BrowserContext, path: string) {
+	await loginAsDevAdmin(page, "session-administrator");
+	const administrator = z
 		.object({ id: z.number() })
 		.parse(await (await context.request.get(`${serverUrl}/user`)).json());
 	const csrf = await accessCookie(context, "XSRF-TOKEN");
-	expect(
-		(
-			await context.request.post(`${serverUrl}/auth/impersonate`, {
-				headers: { "X-XSRF-TOKEN": decodeURIComponent(csrf.value) },
-				data: { targetAccountId: targetId, reason: "Verify session transition isolation" },
-			})
-		).status(),
-	).toBe(204);
-	const held = await holdRenewal(page, request);
-	await scheduleRenewal(page);
-	await page.clock.fastForward(61_000);
-	await held.processed;
-	try {
-		await page
-			.getByRole("button", { name: "Stop impersonating and restore your account", exact: true })
-			.click();
-	} finally {
-		held.release();
-	}
-	await expect(
-		page.getByRole("button", { name: "Stop impersonating and restore your account", exact: true }),
-	).toBeHidden();
-	const restored = z
-		.object({ id: z.number(), impersonating: z.boolean() })
+	const response = await context.request.post(`${serverUrl}${path}`, {
+		headers: { "X-XSRF-TOKEN": decodeURIComponent(csrf.value) },
+		data: { targetAccountId: administrator.id, reason: "Retired endpoint regression" },
+	});
+	const signedIn = z
+		.object({ id: z.number() })
 		.parse(await (await context.request.get(`${serverUrl}/user`)).json());
-	expect(restored).toMatchObject({ id: operator.id, impersonating: false });
+	return { status: response.status(), administratorId: administrator.id, signedInId: signedIn.id };
+}
+
+test("the retired impersonate endpoint cannot switch the signed-in account", async ({
+	page,
+	context,
+}) => {
+	const result = await postRetiredEndpoint(page, context, "/auth/impersonate");
+	expect(result.status).toBe(404);
+	expect(result.signedInId).toBe(result.administratorId);
+});
+
+test("the retired impersonate-exit endpoint cannot switch the signed-in account", async ({
+	page,
+	context,
+}) => {
+	const result = await postRetiredEndpoint(page, context, "/auth/impersonate:exit");
+	expect(result.status).toBe(404);
+	expect(result.signedInId).toBe(result.administratorId);
 });
