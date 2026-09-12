@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -21,7 +20,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResol
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister.Outcome;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeserializer;
@@ -48,7 +46,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.transaction.support.TransactionTemplate;
 
 class GitHubPushMessageHandlerTest extends BaseUnitTest {
 
@@ -79,17 +76,14 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
     @Mock
     private NatsMessageDeserializer deserializer;
 
-    private final TransactionTemplate transactionTemplate = new PassThroughTransactionTemplate();
+    @Mock
+    private CommitDetailsPersister persister;
 
     private GitHubPushMessageHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = handlerWith(new CommitDetailsPersister(commitRepository, transactionTemplate, eventPublisher));
-    }
-
-    private GitHubPushMessageHandler handlerWith(CommitDetailsPersister persister) {
-        return new GitHubPushMessageHandler(
+        handler = new GitHubPushMessageHandler(
                 gitRepositoryManager,
                 tokenService,
                 repositoryRepository,
@@ -100,7 +94,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                 scopeIdResolver,
                 syncTargetProvider,
                 deserializer,
-                transactionTemplate);
+                new PassThroughTransactionTemplate());
     }
 
     /** Feeds the walk the way native Git does: ask which shas are captured, then hand over each commit. */
@@ -640,7 +634,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldProcessCommitInfoFromLocalGitWithFileChanges() {
+        void shouldHandEachCapturedCommitToThePersisterWithoutTouchingTheWebhookPath() {
             var commit = createPushCommit(
                     "sha1aabbccdd112233445566778899aabbccddeeff", "msg", List.of(), List.of(), List.of());
             var event = createBasicPushEvent("refs/heads/main", false, List.of(commit));
@@ -650,57 +644,32 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             mockActiveScopeForRepo("owner/repo");
             when(gitRepositoryManager.isEnabled()).thenReturn(true);
             when(tokenService.isConfigured()).thenReturn(false);
-
-            var fileChange =
-                    new CommitDetails.FileChange("src/main.java", CommitFileChange.ChangeType.ADDED, 10, 0, 10, null);
-            var commitInfo = new CommitDetails(
-                    "sha1aabbccdd112233445566778899aabbccddeeff",
-                    "msg",
-                    null,
-                    "Author",
-                    "author@test.com",
-                    Instant.parse("2024-01-15T10:30:00Z"),
-                    "Committer",
-                    "committer@test.com",
-                    Instant.parse("2024-01-15T10:30:00Z"),
-                    10,
-                    0,
-                    1,
-                    List.of(fileChange),
-                    List.of());
+            when(persister.persist(any(), any(), any())).thenReturn(Outcome.CAPTURED);
+            CommitDetails commitInfo = createCommitInfo("sha1aabbccdd112233445566778899aabbccddeeff");
             stubCommitRange(List.of(commitInfo));
-            // Absent before the upsert, present after it: a new commit.
-            var persistedCommit = TestEntities.commit(1L, "sha1aabbccdd112233445566778899aabbccddeeff");
-            persistedCommit.setMessage("msg");
-            persistedCommit.setAuthoredAt(Instant.parse("2024-01-15T10:30:00Z"));
-            persistedCommit.setRepository(repo);
-            when(commitRepository.findByShaAndRepositoryId("sha1aabbccdd112233445566778899aabbccddeeff", 100L))
-                    .thenReturn(Optional.empty())
-                    .thenReturn(Optional.of(persistedCommit));
 
             handler.handleEvent(event);
 
-            // Should upsert the commit via native SQL
-            verify(commitRepository)
+            verify(persister).persist(eq(commitInfo), eq(repo), any());
+            verify(commitRepository, never())
                     .upsertCommit(
-                            eq("sha1aabbccdd112233445566778899aabbccddeeff"),
-                            eq("msg"),
-                            any(),
+                            anyString(),
                             anyString(),
                             any(),
                             any(),
-                            eq(10),
-                            eq(0),
-                            eq(1),
                             any(),
-                            eq(100L),
+                            any(),
+                            any(),
+                            any(),
+                            any(),
+                            any(),
+                            anyLong(),
                             any(),
                             any(),
                             any(),
                             any(),
                             any());
-            verify(commitRepository).save(persistedCommit);
-            verify(eventPublisher).publishEvent(any(ScmDomainEvent.CommitCreated.class));
+            verify(eventPublisher, never()).publishEvent(any(Object.class));
         }
 
         @Test
@@ -714,9 +683,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             mockActiveScopeForRepo("owner/repo");
             when(gitRepositoryManager.isEnabled()).thenReturn(true);
             when(tokenService.isConfigured()).thenReturn(false);
+            when(persister.persist(any(), any(), any())).thenReturn(Outcome.CAPTURED);
             stubCommitRange(List.of(createCommitInfo("first"), createCommitInfo("second")));
-            when(commitRepository.findByShaAndRepositoryId(anyString(), eq(100L)))
-                    .thenAnswer(invocation -> Optional.of(TestEntities.commit(1L, invocation.getArgument(0))));
 
             handler.handleEvent(event);
 
@@ -725,7 +693,6 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
 
         @Test
         void shouldHandAWebhookOriginToThePersisterWhenWalking() {
-            CommitDetailsPersister persister = mock(CommitDetailsPersister.class);
             when(persister.persist(any(), any(), any())).thenReturn(Outcome.CAPTURED);
             var commit = createPushCommit(
                     "sha1aabbccdd112233445566778899aabbccddeeff", "msg", List.of(), List.of(), List.of());
@@ -740,7 +707,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             CommitDetails commitInfo = createCommitInfo("sha1aabbccdd112233445566778899aabbccddeeff");
             stubCommitRange(List.of(commitInfo));
 
-            handlerWith(persister).handleEvent(event);
+            handler.handleEvent(event);
 
             ArgumentCaptor<CommitDetailsPersister.Origin> origin =
                     ArgumentCaptor.forClass(CommitDetailsPersister.Origin.class);
@@ -756,7 +723,6 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
 
         @Test
         void shouldFallBackToWebhookWithNullStatsWhenOneCommitCaptureFails() {
-            CommitDetailsPersister persister = mock(CommitDetailsPersister.class);
             when(persister.persist(any(), any(), any()))
                     .thenAnswer(invocation -> "broken"
                                     .equals(invocation
@@ -774,7 +740,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(tokenService.isConfigured()).thenReturn(false);
             stubCommitRange(List.of(createCommitInfo("fine"), createCommitInfo("broken")));
 
-            handlerWith(persister).handleEvent(event);
+            handler.handleEvent(event);
 
             verify(commitRepository)
                     .upsertCommit(

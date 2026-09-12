@@ -8,10 +8,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecuto
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.ToDoubleFunction;
 import org.springframework.beans.factory.SmartInitializingSingleton;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -159,13 +161,15 @@ public class WorkerConfiguration {
         return () -> executor.ifPresent(e -> client.setCancelHandler(e::cancelLocalJob));
     }
 
+    /** The pool is the Docker sandbox configuration's, sized with the executor it drives. */
     @Bean
     WorkerGitOperationHandler workerGitOperationHandler(
             WorkerControlClient client,
             NativeGitExecutor executor,
+            @Qualifier("gitOperationExecutor") ExecutorService gitOperationExecutor,
             ObjectMapper objectMapper,
             MeterRegistry meterRegistry) {
-        return new WorkerGitOperationHandler(client, executor, objectMapper, meterRegistry);
+        return new WorkerGitOperationHandler(client, executor, gitOperationExecutor, objectMapper, meterRegistry);
     }
 
     @Bean

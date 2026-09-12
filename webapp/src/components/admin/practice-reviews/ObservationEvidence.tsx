@@ -10,7 +10,6 @@ import {
 	type EvidenceSourceGroup,
 	groupCitationsBySource,
 } from "@/components/practice-vocabulary/evidence-source-defs";
-import { EvidenceRevision } from "@/components/practice-vocabulary/EvidenceRevision";
 import { Badge } from "@/components/ui/badge";
 
 export interface ObservationEvidenceProps {
@@ -90,7 +89,6 @@ function EvidenceSourceSection({
 						className="overflow-hidden rounded-lg border"
 					>
 						<CitationHeader citation={citation} locator={def.locator} />
-						<EvidenceRevision revision={citation.revision} />
 						{citation.quoteRedacted ? (
 							<RedactedQuote fromSecretScanner={fromSecretScanner} />
 						) : (
@@ -112,21 +110,23 @@ function CitationHeader({
 	citation: EvidenceCitation;
 	locator: EvidenceSourceGroup["def"]["locator"];
 }) {
-	if (locator === "code") {
-		return (
-			<div className="flex flex-wrap items-center gap-2 border-b bg-muted/50 px-3 py-2">
-				<code className="min-w-0 text-xs break-all">{codeCitationLocator(citation)}</code>
-				{citation.side && (
-					<Badge variant="outline" className="shrink-0">
-						{DIFF_SIDE_LABELS[citation.side]}
-					</Badge>
-				)}
-			</div>
-		);
-	}
 	return (
-		<div className="border-b bg-muted/50 px-3 py-2">
-			<p className="text-xs break-words text-muted-foreground">{citation.path}</p>
+		<div className="flex flex-wrap items-center gap-2 border-b bg-muted/50 px-3 py-2">
+			{locator === "code" ? (
+				<code className="min-w-0 text-xs break-all">{codeCitationLocator(citation)}</code>
+			) : (
+				<p className="min-w-0 text-xs break-words text-muted-foreground">{citation.path}</p>
+			)}
+			{locator === "code" && citation.side && (
+				<Badge variant="outline" className="shrink-0">
+					{DIFF_SIDE_LABELS[citation.side]}
+				</Badge>
+			)}
+			{citation.revision && (
+				<Badge variant="outline" className="shrink-0" title={citation.revision}>
+					<code>{citation.revision.slice(0, 7)}</code>
+				</Badge>
+			)}
 		</div>
 	);
 }

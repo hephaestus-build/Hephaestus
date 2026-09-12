@@ -35,11 +35,14 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
 
 /**
  * Provider credentials enter only the trusted fetch process, through its private stdin stream. Each
- * operation is one container, so the sandbox's container bound is what limits concurrent Git work.
+ * operation is one container, admitted by {@link Settings#maxConcurrentOperations()} in addition to
+ * the review sandboxes' own bound.
  */
 public final class DockerNativeGitExecutor implements NativeGitExecutor {
     /**
@@ -50,15 +53,11 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
     public record Settings(
             String image, String workerId, int maxConcurrentOperations, long maxSnapshotBytes, String owner) {}
 
-    static final String OWNER_LABEL = "hephaestus.owner";
-    static final String COMPONENT_LABEL = "hephaestus.component";
-    static final String COMPONENT = "git-preparation";
-    static final String WORKER_LABEL = "hephaestus.worker";
-    static final String CREATED_AT_LABEL = "hephaestus.created-at";
-    static final String DEADLINE_LABEL = "hephaestus.deadline";
-    static final String WORKSPACE_LABEL = "hephaestus.workspace";
-    static final String REPOSITORY_LABEL = "hephaestus.repository";
+    private static final Logger log = LoggerFactory.getLogger(DockerNativeGitExecutor.class);
+
+    /** Git's last {@code fatal:} line is the diagnosis, so the tail of stderr is what is kept. */
     private static final int STDERR_TAIL_BYTES = 4096;
+
     private static final ResourceLimits LIMITS =
             new ResourceLimits(2L * 1024 * 1024 * 1024, 2.0, 256, Duration.ofMinutes(15));
 
@@ -89,6 +88,8 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
         this.policy = policy;
         this.mapper = mapper;
         this.settings = settings;
+        // A volume name admits only [a-zA-Z0-9][a-zA-Z0-9_.-]* and a worker id is any operator-chosen
+        // string, so the id enters the name as its hash.
         this.workerNamespace = UUID.nameUUIDFromBytes(settings.workerId().getBytes(StandardCharsets.UTF_8))
                 .toString();
     }
@@ -100,9 +101,7 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
 
     @Override
     public void executeInSnapshot(Path trustedRepository, Request request, Duration timeout, OutputStream output) {
-        if (request.operation() != Operation.CITED_BLOBS
-                && request.operation() != Operation.HISTORICAL_BLOB
-                && request.operation() != Operation.SCAN_SECRETS)
+        if (!request.operation().readsCanonicalEvidence())
             throw new IllegalArgumentException("Unsupported snapshot operation");
         execute(null, trustedRepository, request, timeout, output);
     }
@@ -137,16 +136,17 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
             throws InterruptedException {
         String deadlineLabel = Instant.now().plus(remaining(deadline)).toString();
         byte[] json = mapper.writeValueAsBytes(request);
-        if (json.length > 64 * 1024) throw new IllegalArgumentException("Git request exceeds protocol frame size");
+        if (json.length > MAX_REQUEST_BYTES)
+            throw new IllegalArgumentException("Git request exceeds protocol frame size");
         byte[] input = Arrays.copyOf(json, json.length + 1);
         input[json.length] = '\n';
         boolean fetch = request.operation() == Operation.FETCH || request.operation() == Operation.FETCH_COMMIT;
         images.ensurePresent(settings.image());
         Map<String, String> labels = new HashMap<>();
-        labels.put(OWNER_LABEL, settings.owner());
-        labels.put(COMPONENT_LABEL, COMPONENT);
-        labels.put(WORKER_LABEL, settings.workerId());
-        labels.put(CREATED_AT_LABEL, Instant.now().toString());
+        labels.put(SandboxLabels.GIT_OWNER, settings.owner());
+        labels.put(SandboxLabels.GIT_COMPONENT, SandboxLabels.GIT_COMPONENT_PREPARATION);
+        labels.put(SandboxLabels.GIT_WORKER, settings.workerId());
+        labels.put(SandboxLabels.CREATED_AT, Instant.now().toString());
         List<Mount> mounts = new ArrayList<>();
         boolean mirror = false;
         String verificationVolume = "hephaestus-git-verification-" + UUID.randomUUID();
@@ -160,11 +160,13 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
             var scope = Objects.requireNonNull(repository);
             String volume = "hephaestus-git-" + settings.owner() + "-" + workerNamespace + "-" + scope.workspaceId()
                     + "-" + scope.repositoryId();
-            labels.put(WORKSPACE_LABEL, Long.toString(scope.workspaceId()));
-            labels.put(REPOSITORY_LABEL, Long.toString(scope.repositoryId()));
+            labels.put(SandboxLabels.GIT_WORKSPACE, Long.toString(scope.workspaceId()));
+            labels.put(SandboxLabels.GIT_REPOSITORY, Long.toString(scope.repositoryId()));
             if (fetch) operations.createVolume(volume, labels);
             // Only a fetch creates the mirror; a query on a worker without it sees an empty tree and
-            // answers "not cloned" rather than leaving an unlabelled volume behind.
+            // answers "not cloned" rather than leaving an unlabelled volume behind. Docker copies the
+            // image's /git into an empty named volume on its first mount, which is where the /git/lock
+            // file the command below flocks comes from.
             mirror = fetch || mirrorExists(volume, scope);
             mounts.add(
                     mirror
@@ -191,7 +193,7 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
                 .withNetworkMode(fetch ? "bridge" : "none")
                 .withMounts(mounts)
                 .withLogConfig(new LogConfig(LogConfig.LoggingType.NONE));
-        labels.put(DEADLINE_LABEL, deadlineLabel);
+        labels.put(SandboxLabels.GIT_DEADLINE, deadlineLabel);
         String container;
         try {
             container = docker.createContainerCmd(settings.image())
@@ -225,15 +227,19 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
         }
         AtomicReference<@Nullable Throwable> failure = new AtomicReference<>();
         var diagnostics = new ByteArrayOutputStream();
+        Throwable primary = null;
         try (var stdin = new ByteArrayInputStream(input);
                 var callback = new ResultCallback.Adapter<Frame>() {
                     @Override
                     public void onNext(Frame frame) {
                         if (frame.getStreamType() == StreamType.STDERR) {
                             synchronized (diagnostics) {
-                                int room = STDERR_TAIL_BYTES - diagnostics.size();
-                                diagnostics.write(
-                                        frame.getPayload(), 0, Math.max(0, Math.min(room, frame.getPayload().length)));
+                                diagnostics.write(frame.getPayload(), 0, frame.getPayload().length);
+                                if (diagnostics.size() > STDERR_TAIL_BYTES) {
+                                    byte[] all = diagnostics.toByteArray();
+                                    diagnostics.reset();
+                                    diagnostics.write(all, all.length - STDERR_TAIL_BYTES, STDERR_TAIL_BYTES);
+                                }
                             }
                             return;
                         }
@@ -253,6 +259,9 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
                     }
                 }) {
             if (trustedRepository != null) copyCanonicalGit(container, trustedRepository);
+            // The attach holds a docker-java connection open for the container's life inside the
+            // client's synchronized blocks, so this must run on a platform thread: a virtual thread
+            // would pin its carrier for the whole operation.
             streaming
                     .attachContainerCmd(container)
                     .withStdIn(stdin)
@@ -280,15 +289,38 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
                 throw new IllegalStateException("Git output stream did not complete", failure.get());
             }
         } catch (IOException e) {
-            throw new IllegalStateException("Git output stream failed", e);
+            IllegalStateException wrapped = new IllegalStateException("Git output stream failed", e);
+            primary = wrapped;
+            throw wrapped;
+        } catch (RuntimeException | InterruptedException e) {
+            primary = e;
+            throw e;
         } finally {
+            List<Runnable> steps = new ArrayList<>();
+            steps.add(() -> containers.forceRemove(container));
+            if (snapshot) steps.add(() -> operations.removeVolume(snapshotVolume));
+            if (trustedRepository != null) steps.add(() -> operations.removeVolume(verificationVolume));
+            release(container, primary, steps);
+        }
+    }
+
+    /**
+     * Every step runs. A failure never replaces the operation's own: with a {@code primary} it is
+     * attached as suppressed, otherwise the first one is thrown once the rest have run.
+     */
+    private static void release(String container, @Nullable Throwable primary, List<Runnable> steps) {
+        RuntimeException leftover = null;
+        for (Runnable step : steps) {
             try {
-                containers.forceRemove(container);
-            } finally {
-                if (snapshot) operations.removeVolume(snapshotVolume);
-                if (trustedRepository != null) operations.removeVolume(verificationVolume);
+                step.run();
+            } catch (RuntimeException failure) {
+                log.warn("Git preparation container {} could not be released fully", container, failure);
+                if (primary != null) primary.addSuppressed(failure);
+                else if (leftover == null) leftover = failure;
+                else leftover.addSuppressed(failure);
             }
         }
+        if (leftover != null) throw leftover;
     }
 
     private void copyCanonicalGit(String container, Path repository) throws IOException, InterruptedException {
@@ -334,11 +366,11 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
     public void deleteRepository(long repositoryId) {
         if (repositoryId <= 0) throw new IllegalArgumentException("Invalid repository ID");
         for (var volume : operations.listVolumes(Map.of(
-                OWNER_LABEL,
+                SandboxLabels.GIT_OWNER,
                 settings.owner(),
-                COMPONENT_LABEL,
-                COMPONENT,
-                REPOSITORY_LABEL,
+                SandboxLabels.GIT_COMPONENT,
+                SandboxLabels.GIT_COMPONENT_PREPARATION,
+                SandboxLabels.GIT_REPOSITORY,
                 Long.toString(repositoryId)))) {
             operations.removeVolume(volume.name());
         }
@@ -347,11 +379,11 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
     private boolean mirrorExists(String volume, RepositoryKey scope) {
         return operations
                 .listVolumes(Map.of(
-                        OWNER_LABEL,
+                        SandboxLabels.GIT_OWNER,
                         settings.owner(),
-                        WORKSPACE_LABEL,
+                        SandboxLabels.GIT_WORKSPACE,
                         Long.toString(scope.workspaceId()),
-                        REPOSITORY_LABEL,
+                        SandboxLabels.GIT_REPOSITORY,
                         Long.toString(scope.repositoryId())))
                 .stream()
                 .anyMatch(info -> info.name().equals(volume));

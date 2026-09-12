@@ -10,18 +10,23 @@ import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
+/** Brings the installed practice catalog up to what this release ships, once, as the server starts. */
 @Component
 @Slf4j
-@Profile("!test & !specs")
+@Profile("!test & !specs & !cds-training")
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 class CatalogProvenanceBackfillStartup implements ApplicationRunner, HealthIndicator {
 
+    private final SourceContractPolicyMigration policyMigration;
     private final CatalogProvenanceBackfill backfill;
     private volatile boolean failed;
 
     @Override
     public void run(ApplicationArguments arguments) {
+        // Not caught, unlike the repair below: an installed policy this release cannot upgrade aborts the
+        // boot rather than leaving a server up that reviews against a contract it no longer ships.
+        policyMigration.run();
         try {
             backfill.run();
         } catch (RuntimeException exception) {

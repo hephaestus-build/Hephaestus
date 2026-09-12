@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 import { EvidenceFileBlock } from "./EvidenceFileBlock";
 
 const meta = {
@@ -167,5 +168,10 @@ export const HistoricalSource: Story = {
 			snippet: "return previousValue;",
 			redacted: false,
 		},
+	},
+	play: async ({ canvas }) => {
+		const revision = canvas.getByText("b".repeat(7));
+		await expect(revision).toBeVisible();
+		await expect(revision.closest("[title]")).toHaveAttribute("title", "b".repeat(40));
 	},
 };

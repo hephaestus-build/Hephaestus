@@ -36,7 +36,7 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
         /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
         /usr/local/bin/yarn /usr/local/bin/yarnpkg
 COPY --from=gitleaks /usr/bin/gitleaks /usr/bin/gitleaks
-COPY git/operation.ts git/lines.ts git/review-diff.ts git/review-commits.ts git/secret-scan.ts /opt/git/
+COPY git/operation.ts git/lines.ts git/process.ts git/review-diff.ts git/review-commits.ts git/secret-scan.ts /opt/git/
 LABEL hephaestus.component="git-preparation"
 USER 1000:1000
 WORKDIR /git

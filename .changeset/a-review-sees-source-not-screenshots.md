@@ -6,4 +6,6 @@ Practice reviews can use bash, Git, ripgrep, and file-discovery tools to inspect
 
 Private execution archives are no longer collected. Reviews retain verified citation results rather than copies of complete inputs, model requests, and session transcripts.
 
-**Operators:** deploy the new `git-preparation` image with matching server and agent images, remove the retired repository size limits and execution-capture settings, and review the expanded repository-history scope with your privacy owner. The migration guide has the steps.
+Internet access is a Heph setting only: practice reviews always run on an internal network, so the switch no longer appears for them and a request that turns it on for practice reviews is rejected.
+
+**Operators:** deploy the new `git-preparation` image with matching server and agent images, remove the retired repository size limits, `SANDBOX_DOCKER_CLI`, `HEPHAESTUS_FABRIC_GC_RETENTION_DAYS` and the execution-capture setting, and review the expanded repository-history scope with your privacy owner. The migration guide has the steps.

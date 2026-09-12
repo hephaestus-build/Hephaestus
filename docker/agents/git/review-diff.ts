@@ -1,19 +1,13 @@
-import { spawn, type ChildProcessByStdio } from "node:child_process";
+import { spawn, type ChildProcess, type ChildProcessByStdio } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { records } from "./lines.ts";
+import { succeeded } from "./process.ts";
 
-function exit(child: ChildProcessByStdio<null, Readable, null>) {
-	return new Promise<void>((resolve, reject) => {
-		child.once("error", reject);
-		child.once("close", (code) =>
-			code === 0 ? resolve() : reject(new Error("Diff preparation failed")),
-		);
-	});
-}
+const exit = (child: ChildProcess) => succeeded(child, "Diff preparation failed");
 
 const NEWLINE = Buffer.from("\n");
 

@@ -1,31 +1,23 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import static de.tum.cit.aet.hephaestus.agent.handler.spi.JobMetadataReader.requireMetadata;
+
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
-import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
-import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
-import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
-import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.conversation.ChatSignals;
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedObservations;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.Task;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
-import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
-import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Practice;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -49,8 +41,7 @@ public class ConversationReviewHandler implements JobTypeHandler {
     private static final Logger log = LoggerFactory.getLogger(ConversationReviewHandler.class);
 
     private final JsonMapper objectMapper;
-    private final WorkspaceContextBuilder workspaceContextBuilder;
-    private final TaskEnvelopeWriter taskEnvelopeWriter;
+    private final PracticeReviewPreparation preparation;
     private final PracticeCatalogInjector practiceCatalogInjector;
     private final PracticeDetectionResultParser resultParser;
     private final PracticeDetectionDeliveryService deliveryService;
@@ -59,16 +50,14 @@ public class ConversationReviewHandler implements JobTypeHandler {
 
     ConversationReviewHandler(
             JsonMapper objectMapper,
-            WorkspaceContextBuilder workspaceContextBuilder,
-            TaskEnvelopeWriter taskEnvelopeWriter,
+            PracticeReviewPreparation preparation,
             PracticeCatalogInjector practiceCatalogInjector,
             PracticeDetectionResultParser resultParser,
             PracticeDetectionDeliveryService deliveryService,
             ApplicationEventPublisher eventPublisher,
             TransactionTemplate transactionTemplate) {
         this.objectMapper = objectMapper;
-        this.workspaceContextBuilder = workspaceContextBuilder;
-        this.taskEnvelopeWriter = taskEnvelopeWriter;
+        this.preparation = preparation;
         this.practiceCatalogInjector = practiceCatalogInjector;
         this.resultParser = resultParser;
         this.deliveryService = deliveryService;
@@ -120,60 +109,21 @@ public class ConversationReviewHandler implements JobTypeHandler {
 
     @Override
     public PreparedJobInputs prepareInputs(AgentJob job) {
-        JsonNode metadata = job.getMetadata();
-        if (metadata == null || metadata.isNull() || metadata.isMissingNode()) {
-            throw new JobPreparationException("Job has no metadata: jobId=" + job.getId());
-        }
+        JsonNode metadata = requireMetadata(job);
         if (job.getWorkspace() == null) {
             throw new JobPreparationException("Job has no workspace: jobId=" + job.getId());
         }
-        SignalName signal = PracticeCatalogInjector.signalOf(job);
-        List<Practice> practices =
-                practiceCatalogInjector.resolveEligiblePractices(job, ArtifactKinds.CONVERSATION_THREAD);
-        PreparedEvidence prepared = workspaceContextBuilder.prepare(
-                new ContextRequest.ConversationReviewRequest(job), EvidencePlan.compile(practices));
-        var artifactSourceManifest = prepared.manifest();
-        var readiness = workspaceContextBuilder.prepareAutomatedReviewReadiness(
-                prepared.manifest(), practices, job.getId().toString(), job.getCreatedAt(), signal, prepared.files());
-        List<Practice> eligible = practices;
-        practices = readiness.readyPractices();
-        // A practice not put to the model leaves no trace in the delivered review, so a reader cannot
-        // distinguish it from one that was assessed and produced no observations. The readiness report
-        // records why — evidence we could not read, or a subject that was not in this work — and both the
-        // administration surface and the artifact trace read it back from there.
-        if (practices.size() < eligible.size()) {
-            log.info(
-                    "Not asking {} of {} practice(s): jobId={}, skipped={}",
-                    eligible.size() - practices.size(),
-                    eligible.size(),
-                    job.getId(),
-                    readiness.report().decisions().stream()
-                            .filter(decision -> !decision.ready())
-                            .map(decision -> decision.practiceSlug() + decision.reasonCodes())
-                            .toList());
-        }
-        if (practices.isEmpty()) {
-            throw new InsufficientEvidenceException(
-                    "No practice has sufficient evidence: jobId=" + job.getId(),
-                    new PreparedJobInputs(
-                            prepared.files(),
-                            prepared.filesOnDisk(),
-                            prepared.directories(),
-                            prepared.cleanups(),
-                            artifactSourceManifest,
-                            readiness.report()));
-        }
-        Map<String, byte[]> files = new LinkedHashMap<>(prepared.files());
-        files.put(SandboxLayout.TASK_ENVELOPE_FILENAME, taskEnvelopeWriter.write(buildTaskEnvelope(job, metadata)));
-        practiceCatalogInjector.inject(files, job, ArtifactKinds.CONVERSATION_THREAD, practices);
-        log.info("Conversation context preparation complete: {} files, jobId={}", files.size(), job.getId());
-        return new PreparedJobInputs(
-                files,
-                prepared.filesOnDisk(),
-                prepared.directories(),
-                prepared.cleanups(),
-                artifactSourceManifest,
-                readiness.report());
+        PreparedJobInputs inputs = preparation.prepare(
+                job,
+                ArtifactKinds.CONVERSATION_THREAD,
+                new ContextRequest.ConversationReviewRequest(job),
+                () -> buildTaskEnvelope(job, metadata),
+                files -> {});
+        log.info(
+                "Conversation context preparation complete: {} files, jobId={}",
+                inputs.files().size(),
+                job.getId());
+        return inputs;
     }
 
     private TaskEnvelope buildTaskEnvelope(AgentJob job, JsonNode metadata) {
@@ -202,16 +152,9 @@ public class ConversationReviewHandler implements JobTypeHandler {
         return prompt;
     }
 
-    public PracticeDetectionDeliveryService.PreparedObservations prepareObservations(
-            AgentJob job, JsonNode observations) {
-        ObjectNode output = objectMapper.createObjectNode();
-        output.put(
-                "rawOutput",
-                objectMapper
-                        .createObjectNode()
-                        .set("observations", observations)
-                        .toString());
-        var parsed = resultParser.parse(output);
+    @Override
+    public PreparedObservations prepareObservations(AgentJob job, JsonNode observations) {
+        var parsed = resultParser.parseObservations(observations);
         if (!parsed.discarded().isEmpty()) {
             log.info(
                     "Discarded {} observations during parsing: jobId={}",
@@ -219,16 +162,18 @@ public class ConversationReviewHandler implements JobTypeHandler {
                     job.getId());
         }
         if (parsed.validObservations().isEmpty()) {
-            throw new JobDeliveryException("No valid observations in agent output: jobId=" + job.getId()
-                    + ", discarded="
-                    + parsed.discarded().size());
+            throw new ObservationsRefusedException(
+                    "no_valid_observations",
+                    "No valid observations in agent output: jobId=" + job.getId()
+                            + ", discarded="
+                            + parsed.discarded().size());
         }
         // Coherence coercion: defect-detector GOOD → NOT_APPLICABLE + severity sentinel.
-        Set<String> defectDetectorSlugs = practiceCatalogInjector.defectDetectorSlugs(job);
-        List<PracticeDetectionResultParser.ValidatedObservation> coercedObservations =
-                PracticeDetectionResultParser.coerceCoherence(parsed.validObservations(), defectDetectorSlugs);
-
-        return deliveryService.prepare(job, coercedObservations);
+        var admissible = deliveryService.prepare(
+                job,
+                PracticeDetectionResultParser.coerceCoherence(
+                        parsed.validObservations(), practiceCatalogInjector.defectDetectorSlugs(job)));
+        return admitted -> deliveryService.publish(admitted, admissible);
     }
 
     @Override

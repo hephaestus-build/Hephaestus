@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -10,6 +9,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -25,6 +25,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 class AgentImagePullBootstrapperTest extends BaseUnitTest {
 
     private static final String IMAGE = "ghcr.io/hephaestus-build/agent-pi:0.73.2";
+    private static final String GIT_IMAGE = "ghcr.io/hephaestus-build/git-preparation:0.73.2";
+    private static final GitRepositoryProperties GIT = new GitRepositoryProperties(true, 2, GIT_IMAGE, 1L << 33);
 
     @Mock
     private DockerImageOperations imageOps;
@@ -33,6 +35,7 @@ class AgentImagePullBootstrapperTest extends BaseUnitTest {
         return new AgentImagePullBootstrapper(
                 imageOps,
                 new AgentImageProperties(IMAGE, policy),
+                GIT,
                 registry,
                 new AgentImageContractVerifier(imageOps, registry));
     }
@@ -47,6 +50,7 @@ class AgentImagePullBootstrapperTest extends BaseUnitTest {
                 .withUserConfiguration(AgentImagePullBootstrapper.class)
                 .withBean(DockerImageOperations.class, () -> imageOps)
                 .withBean(AgentImageProperties.class, () -> new AgentImageProperties(IMAGE, ImagePullPolicy.ALWAYS))
+                .withBean(GitRepositoryProperties.class, () -> GIT)
                 .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
                 .withBean(AgentImageContractVerifier.class)
                 .run(context -> assertThat(context.getBeansOfType(AgentImagePullBootstrapper.class))
@@ -60,14 +64,14 @@ class AgentImagePullBootstrapperTest extends BaseUnitTest {
 
         bootstrapperWith(ImagePullPolicy.ALWAYS, registry).pullOnStartup();
 
-        verify(imageOps).ping();
+        verify(imageOps, Mockito.times(2)).ping();
         verify(imageOps).imageLabels(IMAGE);
         verifyNoMoreInteractions(imageOps);
         assertThat(registry.get("agent.image.pull.skipped")
                         .tag("reason", "docker_unreachable")
                         .counter()
                         .count())
-                .isEqualTo(1d);
+                .isEqualTo(2d);
     }
 
     @ParameterizedTest(name = "ALWAYS pull returns {0} → outcome={1}, failure-counter={2}")
@@ -77,21 +81,23 @@ class AgentImagePullBootstrapperTest extends BaseUnitTest {
         var registry = new SimpleMeterRegistry();
         when(imageOps.ping()).thenReturn(true);
         when(imageOps.pullImage(IMAGE)).thenReturn(pullSucceeds);
+        when(imageOps.pullImage(GIT_IMAGE)).thenReturn(pullSucceeds);
 
         bootstrapperWith(ImagePullPolicy.ALWAYS, registry).pullOnStartup();
 
         verify(imageOps, never()).imageIsPresent(IMAGE);
         verify(imageOps).pullImage(IMAGE);
+        verify(imageOps).pullImage(GIT_IMAGE);
         assertThat(registry.get("agent.image.pull.duration")
                         .tag("outcome", outcomeTag)
                         .timer()
                         .count())
-                .isEqualTo(1L);
+                .isEqualTo(2L);
         if (expectedFailureCount == 0) {
             assertThat(registry.find("agent.image.pull.failure").counter()).isNull();
         } else {
             assertThat(registry.get("agent.image.pull.failure").counter().count())
-                    .isEqualTo(expectedFailureCount);
+                    .isEqualTo(2d * expectedFailureCount);
         }
     }
 
@@ -99,17 +105,22 @@ class AgentImagePullBootstrapperTest extends BaseUnitTest {
     @CsvSource({"true, 0", "false, 1"})
     void shouldHonourCacheWhenPolicyIsIfNotPresent(boolean alreadyPresent, int expectedPulls) {
         when(imageOps.imageIsPresent(IMAGE)).thenReturn(alreadyPresent);
+        when(imageOps.imageIsPresent(GIT_IMAGE)).thenReturn(alreadyPresent);
         if (!alreadyPresent) {
             when(imageOps.ping()).thenReturn(true);
             when(imageOps.pullImage(IMAGE)).thenReturn(true);
+            when(imageOps.pullImage(GIT_IMAGE)).thenReturn(true);
         }
 
         bootstrapperWith(ImagePullPolicy.IF_NOT_PRESENT, new SimpleMeterRegistry())
                 .pullOnStartup();
 
         verify(imageOps).imageIsPresent(IMAGE);
+        verify(imageOps).imageIsPresent(GIT_IMAGE);
         verify(imageOps, alreadyPresent ? never() : Mockito.times(expectedPulls))
                 .pullImage(IMAGE);
+        verify(imageOps, alreadyPresent ? never() : Mockito.times(expectedPulls))
+                .pullImage(GIT_IMAGE);
     }
 
     @Test
@@ -132,7 +143,8 @@ class AgentImagePullBootstrapperTest extends BaseUnitTest {
     void shouldOnlyProbePresenceWhenPolicyIsNever() {
         bootstrapperWith(ImagePullPolicy.NEVER, new SimpleMeterRegistry()).pullOnStartup();
 
-        verify(imageOps).imageIsPresent(any());
+        verify(imageOps).imageIsPresent(IMAGE);
+        verify(imageOps).imageIsPresent(GIT_IMAGE);
         verify(imageOps).imageLabels(IMAGE);
         verifyNoMoreInteractions(imageOps);
     }

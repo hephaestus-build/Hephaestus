@@ -47,9 +47,8 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
 
     private static final Logger log = LoggerFactory.getLogger(ClasspathArtifactSourceCatalogRegistry.class);
 
-    static final SourceContractVersion CURRENT_VERSION = new SourceContractVersion("1.1.0");
-    static final String CATALOG_RESOURCE = "contracts/artifact-source/1.1.0/catalog.json";
-    static final String USE_DECISIONS_RESOURCE = "contracts/artifact-source/1.1.0/source-use-decisions.json";
+    static final String CATALOG_RESOURCE = catalogResource(CURRENT_VERSION);
+    static final String USE_DECISIONS_RESOURCE = useDecisionsResource(CURRENT_VERSION);
     private final ArtifactSourceCatalog catalog;
     private final String catalogDigest;
     private final Map<String, SourceUseDecision> useDecisions;
@@ -64,11 +63,9 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
         this.catalogDigest = sha256(catalogBytes);
         this.useDecisions = parseUseDecisions(read(objectMapper, USE_DECISIONS_RESOURCE));
         validateUseDecisions(catalog, useDecisions);
-        SourceContractVersion historicalVersion = new SourceContractVersion("1.0.0");
-        this.historicalCatalog =
-                parse(read(objectMapper, "contracts/artifact-source/1.0.0/catalog.json"), historicalVersion);
-        this.historicalUseDecisions = parseUseDecisions(
-                read(objectMapper, "contracts/artifact-source/1.0.0/source-use-decisions.json"), historicalVersion);
+        this.historicalCatalog = parse(read(objectMapper, catalogResource(PREVIOUS_VERSION)), PREVIOUS_VERSION);
+        this.historicalUseDecisions =
+                parseUseDecisions(read(objectMapper, useDecisionsResource(PREVIOUS_VERSION)), PREVIOUS_VERSION);
         validateUseDecisions(historicalCatalog, historicalUseDecisions);
         useDecisions.values().stream()
                 .map(SourceUseDecision::expiresAt)
@@ -83,6 +80,14 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
                                 expiry);
                     }
                 });
+    }
+
+    private static String catalogResource(SourceContractVersion version) {
+        return "contracts/artifact-source/" + version.value() + "/catalog.json";
+    }
+
+    private static String useDecisionsResource(SourceContractVersion version) {
+        return "contracts/artifact-source/" + version.value() + "/source-use-decisions.json";
     }
 
     @Override

@@ -82,7 +82,7 @@ overlay's value where the overlay pins one, otherwise the base default.
 | `hephaestus.runtime.webhook.enabled` | true | **false** | true | profile overlay |
 | `hephaestus.workspace.init-default` | false | false | false | `prod` profile |
 | `hephaestus.git.enabled` | false | false | false | env default |
-| `hephaestus.git.image` | `git-preparation:<app version>` tag | same | — | env default (`HEPHAESTUS_IMAGE_GIT_PREPARATION`); the shipped Compose files require the release lock's digest |
+| `hephaestus.git.image` | `ghcr.io/hephaestus-build/git-preparation:<app version>` | same | — | env default (`HEPHAESTUS_IMAGE_GIT_PREPARATION`); the shipped Compose files require the release lock's digest |
 | `hephaestus.sync.nats.enabled` | false | **false** | **true** | env default / profile overlay |
 | `hephaestus.agent.enabled` | false | false | false | env default |
 | `hephaestus.integration.outline.allowed-origins` | empty | empty | empty | env default |

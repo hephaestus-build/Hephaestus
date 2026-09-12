@@ -261,13 +261,94 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
 
             PreparedEvidence prepared = builder.prepare(request, plan);
 
-            var capture = prepared.manifest().sources().stream()
+            var capture = java.util.Objects.requireNonNull(prepared.manifest()).sources().stream()
                     .filter(source -> source.kind().equals(comments))
                     .findFirst()
                     .orElseThrow();
             assertThat(capture.state())
                     .isEqualTo(new SourceCaptureState.CollectionError(SourceAbsenceReason.PROVIDER_FAILURE));
             assertThat(prepared.files()).containsKey("inputs/manifest.json");
+        }
+
+        /**
+         * What an earlier collector staged on disk has no owner once a later one fails the build; the
+         * builder is the only party that ever held its cleanup.
+         */
+        @Test
+        void shouldReleaseEarlierCapturesWhenALaterProviderFailsTheBuild() {
+            SourceKind diff = new SourceKind("scm.pull-request.diff");
+            SourceKind comments = new SourceKind("scm.pull-request.comments");
+            var released = new java.util.concurrent.atomic.AtomicBoolean();
+            EvidenceSource staged = new EvidenceSource() {
+                @Override
+                public Set<SourceKind> sourceKinds() {
+                    return Set.of(diff);
+                }
+
+                @Override
+                public SourceKind sourceKindFor(String path) {
+                    return diff;
+                }
+
+                @Override
+                public EvidenceContribution capture(ContextRequest request, Set<SourceKind> selectedKinds) {
+                    return new EvidenceContribution(
+                            Map.of("inputs/context/diff.patch", new byte[] {1}),
+                            Map.of(diff, SourceCompleteness.COMPLETE),
+                            Map.of(),
+                            Map.of(),
+                            Map.of(),
+                            Map.of(diff, SourceContentState.NON_EMPTY),
+                            Map.of(),
+                            Map.of(),
+                            () -> released.set(true));
+                }
+
+                @Override
+                public boolean supports(ContextRequest request) {
+                    return true;
+                }
+
+                @Override
+                public void contribute(ContextRequest request, Map<String, byte[]> files) {}
+            };
+            EvidenceSource clashing = new EvidenceSource() {
+                @Override
+                public Set<SourceKind> sourceKinds() {
+                    return Set.of(comments);
+                }
+
+                @Override
+                public SourceKind sourceKindFor(String path) {
+                    return comments;
+                }
+
+                @Override
+                public EvidenceContribution capture(ContextRequest request, Set<SourceKind> selectedKinds) {
+                    // The same path the first source already owns: a wiring bug the build must refuse.
+                    return new EvidenceContribution(
+                            Map.of("inputs/context/diff.patch", new byte[] {2}),
+                            Map.of(comments, SourceCompleteness.COMPLETE));
+                }
+
+                @Override
+                public boolean supports(ContextRequest request) {
+                    return true;
+                }
+
+                @Override
+                public void contribute(ContextRequest request, Map<String, byte[]> files) {}
+            };
+            ContextManifestBuilder manifests = mock(ContextManifestBuilder.class);
+            when(manifests.isSourceUsePermitted(any(), any())).thenReturn(true);
+            when(manifests.stagedSources(any())).thenReturn(Set.of(diff, comments));
+            var builder = new WorkspaceContextBuilder(List.of(staged, clashing), new SimpleMeterRegistry(), manifests);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.PULL_REQUEST);
+
+            assertThatThrownBy(() -> builder.prepare(reviewRequest(), plan))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Duplicate workspace key");
+            assertThat(released).isTrue();
         }
 
         @Test
@@ -312,10 +393,14 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
             EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.PULL_REQUEST);
 
-            var capture = builder.prepare(reviewRequest(), plan).manifest().sources().stream()
-                    .filter(source -> source.kind().equals(diff))
-                    .findFirst()
-                    .orElseThrow();
+            var capture =
+                    java.util.Objects.requireNonNull(
+                                    builder.prepare(reviewRequest(), plan).manifest())
+                            .sources()
+                            .stream()
+                            .filter(source -> source.kind().equals(diff))
+                            .findFirst()
+                            .orElseThrow();
 
             assertThat(capture.kind()).isEqualTo(diff);
             assertThat(capture.state())

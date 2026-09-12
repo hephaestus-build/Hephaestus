@@ -135,26 +135,16 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         metadata.put("repository_full_name", "owner/repo");
         metadata.put("pr_number", 42);
         testJob.setMetadata(metadata);
-        ObjectNode snapshot = objectMapper.createObjectNode();
-        var sources =
-                snapshot.putObject("manifest").put("contractVersion", "1.1.0").putArray("sources");
-        var source = sources.addObject().put("kind", "scm.pull-request.diff");
-        source.putObject("state").put("availability", "AVAILABLE").put("content", "NON_EMPTY");
-        source.putArray("artifacts")
-                .addObject()
-                .put("path", "inputs/context/diff.patch")
-                .put("sha256", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-        var coreSource = sources.addObject().put("kind", "scm.pull-request.core");
-        coreSource.putObject("state").put("availability", "AVAILABLE").put("content", "NON_EMPTY");
-        coreSource
-                .putArray("artifacts")
-                .addObject()
-                .put("path", "inputs/context/pull_request.json")
-                .put("sha256", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
-        snapshot.putArray("practices")
-                .addObject()
-                .put("slug", "pr-description-quality")
-                .put("revisionId", 11L);
+        ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(objectMapper);
+        EvidenceSnapshotFixtures.artifact(
+                EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.diff", null),
+                "inputs/context/diff.patch",
+                "a".repeat(64));
+        EvidenceSnapshotFixtures.artifact(
+                EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.core", null),
+                "inputs/context/pull_request.json",
+                "b".repeat(64));
+        EvidenceSnapshotFixtures.admittedPractice(snapshot, "pr-description-quality", 11L);
         testJob.setEvidenceSnapshot(snapshot);
 
         PracticeRevision revision = org.mockito.Mockito.mock(PracticeRevision.class);
@@ -300,7 +290,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(revision));
     }
 
-    private PracticeDetectionDeliveryService.DeliveryResult publishVerified(
+    private PracticeDetectionDeliveryService.RecordedObservations publishVerified(
             AgentJob job, List<PracticeDetectionResultParser.ValidatedObservation> submitted) {
         return service.publish(job, service.prepare(job, submitted));
     }
@@ -329,20 +319,14 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         String revision = historical ? "a".repeat(40) : head;
         String headPath = de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD";
         ObjectNode snapshot = (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot());
-        ObjectNode source = snapshot.withObject("manifest").withArray("sources").addObject();
-        source.put("kind", "scm.repository.tree");
-        source.putObject("state")
-                .put("availability", "AVAILABLE")
-                .putObject("facts")
-                .put("immutableIdentity", head + ":" + "c".repeat(40));
-        source.putArray("artifacts").addObject().put("path", headPath).put("sha256", "d".repeat(64));
-        source.withArray("artifacts")
-                .addObject()
-                .put(
-                        "path",
-                        de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout.REPO_MOUNT_RELATIVE
-                                + ".git/hephaestus-captured-refs")
-                .put("sha256", "f".repeat(64));
+        ObjectNode source =
+                EvidenceSnapshotFixtures.availableSource(snapshot, "scm.repository.tree", head + ":" + "c".repeat(40));
+        EvidenceSnapshotFixtures.artifact(source, headPath, "d".repeat(64));
+        EvidenceSnapshotFixtures.artifact(
+                source,
+                de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout.REPO_MOUNT_RELATIVE
+                        + ".git/hephaestus-captured-refs",
+                "f".repeat(64));
         var observation = validObservation("pr-description-quality", Presence.PRESENT);
         ObjectNode citation =
                 (ObjectNode) evidenceOf(observation).path("citations").get(0);
@@ -361,7 +345,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 .thenReturn(Map.of(requested, new JobEvidenceFiles.QuoteMatch(true, "e".repeat(64))));
         var result = publishVerified(testJob, List.of(observation));
         var stored = java.util.Objects.requireNonNull(
-                        result.delivered().getFirst().evidence())
+                        result.recorded().getFirst().evidence())
                 .path("citations")
                 .get(0);
         assertThat(stored.path("verification").path("artifactSha256").asString())
@@ -375,20 +359,14 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         String head = "b".repeat(40);
         String headPath = de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD";
         ObjectNode snapshot = (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot());
-        ObjectNode source = snapshot.withObject("manifest").withArray("sources").addObject();
-        source.put("kind", "scm.repository.tree");
-        source.putObject("state")
-                .put("availability", "AVAILABLE")
-                .putObject("facts")
-                .put("immutableIdentity", head + ":" + "c".repeat(40));
-        source.putArray("artifacts").addObject().put("path", headPath).put("sha256", "d".repeat(64));
-        source.withArray("artifacts")
-                .addObject()
-                .put(
-                        "path",
-                        de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout.REPO_MOUNT_RELATIVE
-                                + ".git/hephaestus-captured-refs")
-                .put("sha256", "f".repeat(64));
+        ObjectNode source =
+                EvidenceSnapshotFixtures.availableSource(snapshot, "scm.repository.tree", head + ":" + "c".repeat(40));
+        EvidenceSnapshotFixtures.artifact(source, headPath, "d".repeat(64));
+        EvidenceSnapshotFixtures.artifact(
+                source,
+                de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout.REPO_MOUNT_RELATIVE
+                        + ".git/hephaestus-captured-refs",
+                "f".repeat(64));
         Practice second = new Practice();
         ReflectionTestUtils.setField(second, "id", 20L);
         second.setSlug("pr-scope");
@@ -421,7 +399,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
         var result = publishVerified(testJob, List.of(present, missing));
 
-        assertThat(result.delivered())
+        assertThat(result.recorded())
                 .extracting(ValidatedObservation::practiceSlug)
                 .containsExactly("pr-description-quality");
     }
@@ -489,15 +467,16 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("a citation to a staged source the practice's bindings did not name is accepted")
         void acceptsAStagedSourceOutsideThePracticeDeclaration() {
-            var inventory = ((ObjectNode) testJob.getEvidenceSnapshot().path("manifest"))
-                    .withArray("sources")
-                    .addObject()
-                    .put("kind", "workspace.project-inventory");
-            inventory.putObject("state").put("availability", "AVAILABLE").put("content", "NON_EMPTY");
+            var inventory = EvidenceSnapshotFixtures.availableSource(
+                    (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
+                    "workspace.project-inventory",
+                    null);
             inventory
-                    .putArray("artifacts")
+                    .withArray("artifacts")
                     .addObject()
                     .put("path", "inputs/context/project_inventory.json")
+                    .put("mediaType", "application/json")
+                    .put("bytes", 0)
                     .put("sha256", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
             when(cas.containsUtf8AtLines(
                             testJob,
@@ -577,7 +556,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
             var result = publishVerified(testJob, List.of(sound, misquoted));
 
-            assertThat(result.delivered())
+            assertThat(result.recorded())
                     .as("the claim that verified is the one persisted, and it is the only one")
                     .extracting(ValidatedObservation::practiceSlug)
                     .containsExactly("pr-description-quality");
@@ -634,15 +613,17 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                     .put("endLine", 11)
                     .put("quote", "+ caf\uFFFD");
 
-            try (var prepared = files.prepare(
+            var prepared = files.prepare(
                     testJob,
                     de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs.filesOnly(
-                            Map.of("inputs/context/diff.patch", bytes)))) {
+                            Map.of("inputs/context/diff.patch", bytes)));
+            try {
                 var result = service.publish(testJob, service.prepare(testJob, List.of(sound, undecodable)));
-                assertThat(result.delivered())
+                assertThat(result.recorded())
                         .extracting(ValidatedObservation::practiceSlug)
                         .containsExactly("pr-description-quality");
-                assertThat(prepared.files()).containsKey("inputs/context/diff.patch");
+            } finally {
+                prepared.close();
             }
         }
 
@@ -899,12 +880,10 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
         @Test
         void rejectsACitationToAnUnavailableSource() {
-            ((ObjectNode) testJob.getEvidenceSnapshot()
-                            .path("manifest")
-                            .path("sources")
-                            .get(0)
-                            .path("state"))
-                    .put("availability", "UNAVAILABLE");
+            EvidenceSnapshotFixtures.unavailable((ObjectNode) testJob.getEvidenceSnapshot()
+                    .path("manifest")
+                    .path("sources")
+                    .get(0));
 
             assertThatThrownBy(() -> publishVerified(
                             testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT))))
@@ -1157,15 +1136,13 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         private static final String HISTORY_SHA = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 
         private void stageHistory(String body) {
-            var source = ((ObjectNode) testJob.getEvidenceSnapshot().path("manifest"))
-                    .withArray("sources")
-                    .addObject()
-                    .put("kind", "hephaestus.observation-history");
-            source.putObject("state").put("availability", "AVAILABLE").put("content", "NON_EMPTY");
-            source.putArray("artifacts")
-                    .addObject()
-                    .put("path", "inputs/history/observations.json")
-                    .put("sha256", HISTORY_SHA);
+            EvidenceSnapshotFixtures.artifact(
+                    EvidenceSnapshotFixtures.availableSource(
+                            (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
+                            "hephaestus.observation-history",
+                            null),
+                    "inputs/history/observations.json",
+                    HISTORY_SHA);
             when(cas.containsUtf8AtLines(
                             eq(testJob),
                             eq("inputs/history/observations.json"),
@@ -1229,7 +1206,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
             // The recurrence_key written to the row MUST equal the fingerprint the result map returns —
             // they are the single supersession identity, so any drift between them silently breaks re-review.
-            var keys = result.delivered().get(0).keys();
+            var keys = result.recorded().get(0).keys();
             assertThat(keys).isNotNull();
             assertThat(fingerprintCaptor.getValue())
                     .as("persisted recurrence_key matches the returned findingFingerprint")
@@ -1271,8 +1248,18 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             metadata.put("review_id", 77L);
             metadata.put("about_user_id", 999L);
             metadata.put("subject_role", "REVIEWER");
+            Practice reviewing = new Practice();
+            ReflectionTestUtils.setField(reviewing, "id", 30L);
+            reviewing.setSlug("reviews-with-care");
+            reviewing.setBindings(List.of(new de.tum.cit.aet.hephaestus.practices.PracticeBinding(
+                    List.of(PracticeTestEvidence.defaultSignal(ArtifactKinds.PULL_REQUEST)),
+                    PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+                    false,
+                    de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.REVIEWER)));
+            reviewing.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
+            admit(reviewing, 31L);
 
-            publishVerified(testJob, List.of());
+            publishVerified(testJob, List.of(validObservation("reviews-with-care", Presence.PRESENT)));
 
             verify(eventPublisher).publishEvent(eventCaptor.capture());
             assertThat(eventCaptor.getValue().developerId()).isEqualTo(999L);

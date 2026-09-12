@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOperation;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOutput;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerControlFrame;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Operation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Request;
 import io.micrometer.core.instrument.Counter;
@@ -23,6 +22,8 @@ import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -39,14 +40,24 @@ public final class WorkerGitOperationHandler {
     private static final int CHUNK_BYTES = RemoteNativeGitExecutor.CHUNK_BYTES;
     private final WorkerControlClient client;
     private final NativeGitExecutor executor;
+    private final Executor threads;
     private final ObjectMapper mapper;
     private final Counter failed;
     private final ConcurrentMap<UUID, Running> running = new ConcurrentHashMap<>();
 
+    /**
+     * @param threads platform threads, as many as the executor admits at once: an operation attaches to
+     *     its container through docker-java, which pins a virtual thread's carrier for the whole run
+     */
     public WorkerGitOperationHandler(
-            WorkerControlClient client, NativeGitExecutor executor, ObjectMapper mapper, MeterRegistry meterRegistry) {
+            WorkerControlClient client,
+            NativeGitExecutor executor,
+            Executor threads,
+            ObjectMapper mapper,
+            MeterRegistry meterRegistry) {
         this.client = client;
         this.executor = executor;
+        this.threads = threads;
         this.mapper = mapper;
         this.failed = Counter.builder(AgentMetrics.WORKER_GIT_OPERATIONS_FAILED)
                 .description("Hub-dispatched Git operations this worker reported as failed")
@@ -73,10 +84,12 @@ public final class WorkerGitOperationHandler {
         if (!client.isConnected() || !operation.sessionId().equals(client.controlSessionId())) return;
         var state = new Running();
         if (running.putIfAbsent(operation.operationId(), state) != null) return;
-        Thread thread = Thread.ofVirtual().unstarted(() -> run(operation, state));
-        state.thread = thread;
-        thread.start();
-        if (state.cancelled) thread.interrupt();
+        try {
+            threads.execute(() -> run(operation, state));
+        } catch (RejectedExecutionException shuttingDown) {
+            running.remove(operation.operationId(), state);
+            client.sendRequired(new GitOutput(operation.operationId(), 0, "", true, false));
+        }
     }
 
     private void run(GitOperation operation, Running state) {
@@ -85,17 +98,14 @@ public final class WorkerGitOperationHandler {
         var output = new BufferedOutputStream(frames, CHUNK_BYTES);
         boolean success = false;
         try {
+            state.claim(Thread.currentThread());
             long millis = operation.deadlineEpochMillis() - System.currentTimeMillis();
             if (millis <= 0 || millis > Duration.ofHours(2).toMillis())
                 throw new IllegalArgumentException("Invalid Git deadline");
             if (operation.delete()) executor.deleteRepository(operation.repositoryId());
             else {
-                if (operation.requestJson().length() > 64 * 1024)
-                    throw new IllegalArgumentException("Git request too large");
                 Request request = mapper.readValue(operation.requestJson(), Request.class);
-                if (request.operation() == Operation.CITED_BLOBS
-                        || request.operation() == Operation.HISTORICAL_BLOB
-                        || request.operation() == Operation.SCAN_SECRETS)
+                if (request.operation().readsCanonicalEvidence())
                     throw new IllegalArgumentException("Canonical evidence cannot be remotely selected");
                 executor.execute(
                         new RepositoryKey(operation.workspaceId(), operation.repositoryId()),
@@ -105,7 +115,7 @@ public final class WorkerGitOperationHandler {
             }
             output.flush();
             success = true;
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | RuntimeException | InterruptedException e) {
             // The terminal frame carries no cause: the request may hold a token and the cause a provider URL.
             failed.increment();
             log.warn(
@@ -115,6 +125,7 @@ public final class WorkerGitOperationHandler {
         } finally {
             client.sendRequired(new GitOutput(operation.operationId(), frames.sequence, "", true, success));
             running.remove(operation.operationId(), state);
+            state.release();
         }
     }
 
@@ -163,15 +174,27 @@ public final class WorkerGitOperationHandler {
 
     private static final class Running {
         final ArrayBlockingQueue<Long> acks = new ArrayBlockingQueue<>(1);
-        volatile @Nullable Thread thread;
+        private @Nullable Thread thread;
         volatile boolean cancelled;
+
+        /** The pool thread is shared with later operations, so a cancel may only reach it while claimed. */
+        synchronized void claim(Thread current) throws InterruptedException {
+            if (cancelled) throw new InterruptedException("Cancelled before it started");
+            thread = current;
+        }
+
+        synchronized void release() {
+            thread = null;
+            Thread.interrupted();
+        }
 
         void cancel() {
             cancelled = true;
             acks.clear();
             acks.offer(-1L);
-            var current = thread;
-            if (current != null) current.interrupt();
+            synchronized (this) {
+                if (thread != null) thread.interrupt();
+            }
         }
     }
 }

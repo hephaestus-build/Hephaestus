@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.SecretScan;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -633,8 +634,7 @@ public class AgentJobExecutor {
             // reviewed work: the review finished and could not admit it, because the sandbox holds an
             // address the server has since moved away from; or no practice was reached at all because
             // every model call went unanswered. Neither leaves anything to deliver, and neither is a
-            // fact a second attempt would repeat. Past the retry cap both fall through and terminalize
-            // exactly as they did before.
+            // fact a second attempt would repeat. Past the retry cap both fall through and terminalize.
             String unreachable = unreachableReason(result.exitCode());
             if (unreachable != null && requeueForAnotherAttempt(jobId, job, unreachable, true, result.logs())) {
                 metricOutcome = "REQUEUED";
@@ -654,8 +654,9 @@ public class AgentJobExecutor {
         } catch (SandboxCancelledException e) {
             metricOutcome = handleCancellation(jobId, job) ? AgentJobStatus.CANCELLED.name() : "OWNERSHIP_LOST";
         } catch (InsufficientEvidenceException e) {
-            try {
-                persistRefusedEvidence(jobId, job.getJobType(), job.getRetryCount(), e.preparedInputs());
+            // The evidence it carries was never staged for an attempt, so nothing else releases it.
+            try (PreparedJobInputs refused = e.preparedInputs()) {
+                persistRefusedEvidence(jobId, job.getJobType(), job.getRetryCount(), refused);
                 ObjectNode output = objectMapper.createObjectNode().put("outcome", "INSUFFICIENT_EVIDENCE");
                 Integer updated = transactionTemplate.execute(status -> jobRepository.transitionToEvidenceRefused(
                         jobId, workerId, job.getRetryCount(), Instant.now(), output));
@@ -784,7 +785,8 @@ public class AgentJobExecutor {
                     agentSpec.promptDigest(),
                     sandboxSpec.inputFiles(),
                     job.getRetryCount(),
-                    preparedInputs.automatedReviewReadinessReport());
+                    preparedInputs.automatedReviewReadinessReport(),
+                    preparedInputs.secretScan());
             return new PreparedSandbox(sandboxSpec, preparedInputs);
         } catch (RuntimeException exception) {
             preparedInputs.close();
@@ -800,7 +802,8 @@ public class AgentJobExecutor {
                 null,
                 preparedInputs.files(),
                 retryCount,
-                preparedInputs.automatedReviewReadinessReport());
+                preparedInputs.automatedReviewReadinessReport(),
+                preparedInputs.secretScan());
     }
 
     /**
@@ -813,9 +816,10 @@ public class AgentJobExecutor {
             @Nullable String promptDigest,
             Map<String, byte[]> inputFiles,
             int retryCount,
-            @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport) {
+            @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport,
+            @Nullable SecretScan secretScan) {
         String inputsDigest = ProvenanceDigest.inputsDigestHex(inputFiles, jobId);
-        JsonNode evidenceSnapshot = evidenceSnapshot(inputFiles, automatedReviewReadinessReport);
+        JsonNode evidenceSnapshot = evidenceSnapshot(inputFiles, automatedReviewReadinessReport, secretScan);
         Integer updated = transactionTemplate.execute(status -> jobRepository.updateProvenanceDigests(
                 jobId,
                 workerId,
@@ -833,8 +837,14 @@ public class AgentJobExecutor {
         log.debug("Provenance digests: jobId={}, prompt={}, inputs={}", jobId, promptDigest, inputsDigest);
     }
 
+    /**
+     * The manifest and admitted practices as the sandbox sees them, plus what preparation established
+     * about the capture and only admission reads: the secret verdicts, which never enter the sandbox.
+     */
     private @Nullable JsonNode evidenceSnapshot(
-            Map<String, byte[]> inputFiles, @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport) {
+            Map<String, byte[]> inputFiles,
+            @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport,
+            @Nullable SecretScan secretScan) {
         byte[] manifest = inputFiles.get(SandboxLayout.MANIFEST_PATH);
         byte[] practices = inputFiles.get(SandboxLayout.PRACTICES_PREFIX + "index.json");
         // Java null, not NullNode: NullNode serializes to the JSON value null, which is a non-SQL-NULL
@@ -844,9 +854,12 @@ public class AgentJobExecutor {
             throw new IllegalStateException("Practice review inputs have an incomplete evidence snapshot");
         }
         ObjectNode snapshot = objectMapper.createObjectNode();
-        if (manifest != null) snapshot.set("manifest", objectMapper.readTree(manifest));
+        snapshot.set("manifest", objectMapper.readTree(manifest));
         if (practices != null) {
             snapshot.set("practices", objectMapper.readTree(practices));
+        }
+        if (secretScan != null) {
+            snapshot.set(SecretScan.SNAPSHOT_NODE, objectMapper.valueToTree(secretScan));
         }
         return snapshot;
     }

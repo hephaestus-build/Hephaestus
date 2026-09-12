@@ -61,8 +61,8 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
     void setUp() {
         handler = new DocumentReviewHandler(
                 objectMapper,
-                workspaceContextBuilder,
-                new TaskEnvelopeWriter(objectMapper),
+                new PracticeReviewPreparation(
+                        workspaceContextBuilder, practiceCatalogInjector, new TaskEnvelopeWriter(objectMapper)),
                 practiceCatalogInjector,
                 new PracticeDetectionResultParser(objectMapper),
                 deliveryService);
@@ -219,6 +219,51 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
             assertThat(files).containsKey(SandboxLayout.TASK_ENVELOPE_FILENAME);
             assertThat(files).doesNotContainKey(SandboxLayout.SCM_SOURCE_KEEP);
             assertThat(files.keySet()).noneMatch(k -> k.startsWith(SandboxLayout.SOURCES_PREFIX));
+        }
+    }
+
+    @Nested
+    class PrepareObservations {
+
+        private static final String OBSERVATION = """
+            [{
+              "practiceSlug": "explains-why",
+              "summary": "States the motivation",
+              "assessmentStatus": "ASSESSED", "presence": "PRESENT",
+              "assessment": "GOOD",
+              "severity": null,
+              "evidenceRationale": "The text says why.",
+              "evidence": {}
+            }]
+            """;
+
+        @Test
+        void shouldRefuseRatherThanFailWhenNothingSubmittedIsAnObservation() {
+            var job = new AgentJob();
+            job.setId(UUID.randomUUID());
+
+            assertThatThrownBy(
+                            () -> handler.prepareObservations(job, objectMapper.readTree("[{\"practiceSlug\": \"\"}]")))
+                    .isInstanceOfSatisfying(
+                            de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException.class,
+                            e -> assertThat(e.reasonCode()).isEqualTo("no_valid_observations"));
+            org.mockito.Mockito.verifyNoInteractions(deliveryService);
+        }
+
+        @Test
+        void shouldRecordThroughTheDeliveryServiceOnlyWhenAsked() {
+            var job = new AgentJob();
+            job.setId(UUID.randomUUID());
+            var admissible = mock(PracticeDetectionDeliveryService.PreparedObservations.class);
+            when(deliveryService.prepare(org.mockito.ArgumentMatchers.eq(job), any()))
+                    .thenReturn(admissible);
+
+            var prepared = handler.prepareObservations(job, objectMapper.readTree(OBSERVATION));
+            org.mockito.Mockito.verify(deliveryService, org.mockito.Mockito.never())
+                    .publish(any(), any());
+
+            prepared.record(job);
+            org.mockito.Mockito.verify(deliveryService).publish(job, admissible);
         }
     }
 }

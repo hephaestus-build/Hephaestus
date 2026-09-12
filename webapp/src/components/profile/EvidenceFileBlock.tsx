@@ -5,7 +5,6 @@ import {
 	DIFF_SIDE_LABELS,
 	evidenceSourceDef,
 } from "@/components/practice-vocabulary/evidence-source-defs";
-import { EvidenceRevision } from "@/components/practice-vocabulary/EvidenceRevision";
 import { Badge } from "@/components/ui/badge";
 import { type EvidenceLocation, evidenceLineRangeLabel, splitPath } from "./evidence";
 const SECRET_SCANNER = "secret-diff-scanner";
@@ -58,6 +57,11 @@ export function EvidenceFileBlock({
 						{DIFF_SIDE_LABELS.OLD}
 					</Badge>
 				)}
+				{location.revision && (
+					<Badge variant="outline" className="shrink-0" title={location.revision}>
+						<code>{location.revision.slice(0, 7)}</code>
+					</Badge>
+				)}
 
 				{hasSnippet && (
 					<button
@@ -74,7 +78,6 @@ export function EvidenceFileBlock({
 					</button>
 				)}
 			</figcaption>
-			<EvidenceRevision revision={location.revision} />
 			{location.redacted && (
 				<p className="flex items-start gap-2 border-t p-3 text-sm text-muted-foreground">
 					<ShieldAlertIcon className="mt-0.5 size-4 shrink-0" aria-hidden />

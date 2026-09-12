@@ -668,6 +668,81 @@ class AgentJobExecutorTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldRecordTheSecretVerdictsBesideTheManifestWhenPreparationScannedTheChange() {
+            when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
+                    .thenReturn(Optional.of(job));
+            when(bindingRepository.findByWorkspaceIdAndPurpose(99L, AgentPurpose.PRACTICE_REVIEW))
+                    .thenReturn(Optional.of(binding));
+            when(jobRepository.countByWorkspaceIdAndPurposeAndStatusIn(
+                            eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
+                    .thenReturn(0L);
+            when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            Instant now = Instant.parse("2026-08-03T10:00:00Z");
+            SourceContractVersion version = new SourceContractVersion("1.1.0");
+            SourceKind source = new SourceKind("scm.pull-request.diff");
+            ArtifactSourceManifest manifest = new ArtifactSourceManifest(
+                    version,
+                    "a".repeat(64),
+                    "scm.pull_request",
+                    now,
+                    List.of(new SourceCapture(
+                            source, new SourceCaptureState.NotCollected(SourceAbsenceReason.DISABLED), List.of())));
+            AutomatedReviewReadinessReport readiness = new AutomatedReviewReadinessReport(
+                    version,
+                    "a".repeat(64),
+                    "scm.pull_request",
+                    now,
+                    now,
+                    List.of(new AutomatedReviewReadinessDecision(
+                            "example",
+                            now,
+                            false,
+                            List.of(),
+                            List.of(new SourceReadinessCheck(
+                                    source,
+                                    version,
+                                    now,
+                                    now,
+                                    false,
+                                    List.of(SourceReadinessReason.SOURCE_NOT_AVAILABLE))))));
+            var scan = new de.tum.cit.aet.hephaestus.agent.context.SecretScan(
+                    "inputs/context/diff.patch",
+                    "b".repeat(64),
+                    List.of(new de.tum.cit.aet.hephaestus.agent.context.SecretScan.Hit(
+                            "src/Config.java", 3, "c".repeat(64), "aws-access-token")));
+            JobTypeHandler handler = mock(JobTypeHandler.class);
+            when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
+            when(handler.prepareInputs(any()))
+                    .thenReturn(new PreparedJobInputs(
+                            new de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence(
+                                    Map.of(SandboxLayout.MANIFEST_PATH, "{}".getBytes()), manifest),
+                            readiness,
+                            scan));
+            when(practiceAgent.buildSandboxSpec(any())).thenReturn(minimalSpec());
+            when(jobRepository.updateProvenanceDigests(any(), any(), anyInt(), any()))
+                    .thenReturn(1);
+            when(jobRepository.markExecutionStarted(any(), any(), any())).thenReturn(0);
+
+            executor.processJob(jobId);
+
+            ArgumentCaptor<AgentJobRepository.ProvenanceStamp> stamp =
+                    ArgumentCaptor.forClass(AgentJobRepository.ProvenanceStamp.class);
+            verify(jobRepository).updateProvenanceDigests(eq(jobId), isNull(), eq(0), stamp.capture());
+            var snapshot = stamp.getValue().evidenceSnapshot();
+            org.junit.jupiter.api.Assertions.assertNotNull(snapshot);
+            assertThat(snapshot.path(de.tum.cit.aet.hephaestus.agent.context.SecretScan.SNAPSHOT_NODE)
+                            .path("artifactSha256")
+                            .asString())
+                    .isEqualTo("b".repeat(64));
+            assertThat(snapshot.path(de.tum.cit.aet.hephaestus.agent.context.SecretScan.SNAPSHOT_NODE)
+                            .path("hits")
+                            .get(0)
+                            .path("ruleId")
+                            .asString())
+                    .isEqualTo("aws-access-token");
+        }
+
+        @Test
         void aWriteMatchingNoJobRow_failsTheRunRatherThanBurningTheLlmBudget() {
             when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
                     .thenReturn(Optional.of(job));
@@ -720,8 +795,14 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     now,
                     List.of(new AutomatedReviewReadinessDecision(
                             "example", now, false, List.of(), List.of(assessment))));
-            PreparedJobInputs inputs =
-                    new PreparedJobInputs(Map.of(SandboxLayout.MANIFEST_PATH, "{}".getBytes()), manifest, readiness);
+            var released = new java.util.concurrent.atomic.AtomicBoolean();
+            PreparedJobInputs inputs = new PreparedJobInputs(
+                    new de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence(
+                            Map.of(SandboxLayout.MANIFEST_PATH, "{}".getBytes()),
+                            Map.of(),
+                            List.of(() -> released.set(true)),
+                            manifest),
+                    readiness);
             when(handler.prepareInputs(any()))
                     .thenThrow(new InsufficientEvidenceException("No practice has sufficient evidence", inputs));
             when(jobRepository.updateProvenanceDigests(any(), any(), anyInt(), any()))
@@ -764,6 +845,8 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             .count())
                     .isOne();
             verify(sandboxManager, never()).execute(any());
+            // Never staged for an attempt, so nothing else would ever release what the capture put on disk.
+            assertThat(released).isTrue();
         }
 
         @ParameterizedTest

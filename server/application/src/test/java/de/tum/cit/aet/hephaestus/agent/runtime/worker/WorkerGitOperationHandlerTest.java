@@ -4,7 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecuto
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Operation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Request;
+import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -26,31 +28,45 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
 import tools.jackson.databind.ObjectMapper;
 
-@Tag("unit")
-class WorkerGitOperationHandlerTest {
-    private final WorkerControlClient client = mock(WorkerControlClient.class);
-    private final NativeGitExecutor executor = mock(NativeGitExecutor.class);
+class WorkerGitOperationHandlerTest extends BaseUnitTest {
+    @Mock
+    private WorkerControlClient client;
+
+    @Mock
+    private NativeGitExecutor executor;
+
     private final List<GitOutput> frames = new CopyOnWriteArrayList<>();
     private final CountDownLatch terminal = new CountDownLatch(1);
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-    private final WorkerGitOperationHandler handler =
-            new WorkerGitOperationHandler(client, executor, new ObjectMapper(), meterRegistry);
+    private final ExecutorService threads = Executors.newFixedThreadPool(2);
+    private WorkerGitOperationHandler handler;
 
-    WorkerGitOperationHandlerTest() {
+    @BeforeEach
+    void connect() {
+        handler = new WorkerGitOperationHandler(client, executor, threads, new ObjectMapper(), meterRegistry);
         when(client.isConnected()).thenReturn(true);
         when(client.controlSessionId()).thenReturn("session");
-        when(client.sendRequired(any(GitOutput.class))).thenAnswer(invocation -> {
+        lenient().when(client.sendRequired(any(GitOutput.class))).thenAnswer(invocation -> {
             GitOutput frame = invocation.getArgument(0);
             frames.add(frame);
             if (frame.terminal()) terminal.countDown();
             else handler.handle(new GitAck(frame.operationId(), frame.sequence()));
             return true;
         });
+    }
+
+    @AfterEach
+    void stop() {
+        threads.shutdownNow();
     }
 
     private GitOperation operation(Request request) {
@@ -135,11 +151,19 @@ class WorkerGitOperationHandlerTest {
         assertThat(frames)
                 .singleElement()
                 .satisfies(frame -> assertThat(frame.success()).isFalse());
-        verify(executor, org.mockito.Mockito.never()).execute(any(), any(), any(), any());
+        verify(executor, never()).execute(any(), any(), any(), any());
     }
 
     @Test
-    void shouldIgnoreOperationsAddressedToAnotherControlSession() {
+    void shouldIgnoreOperationsAddressedToAnotherControlSession() throws Exception {
+        var started = new CountDownLatch(1);
+        lenient()
+                .doAnswer(invocation -> {
+                    started.countDown();
+                    return null;
+                })
+                .when(executor)
+                .execute(any(), any(), any(), any());
         var request = new Request(Operation.COMMIT_IDS, List.of(), null, null);
         var foreign = new GitOperation(
                 UUID.randomUUID(),
@@ -150,8 +174,8 @@ class WorkerGitOperationHandlerTest {
                 Long.MAX_VALUE,
                 false);
         handler.handle(foreign);
+        assertThat(started.await(500, TimeUnit.MILLISECONDS)).isFalse();
         assertThat(frames).isEmpty();
-        verify(executor, org.mockito.Mockito.never()).execute(any(), any(), any(), any());
     }
 
     @Test

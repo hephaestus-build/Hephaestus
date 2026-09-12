@@ -2,11 +2,13 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout.REPO_MOUNT_RELATIVE;
 
+import de.tum.cit.aet.hephaestus.agent.context.providers.RepositoryTreeContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DeliveryContent;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DiffNote;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeveloperTextSanitizer;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
@@ -422,11 +424,6 @@ class DeliveryComposer {
         }
     }
 
-    /**
-     * The one place every finding is visible at once. It survives a force-push, which the notes on the diff
-     * do not, so a finding that carries its own comment is still named here.
-     */
-
     /** The runner bounds the lead too, but that output is the model's; re-apply the bound rather than trust it. */
     private static String openingOf(Rendering rendering) {
         String lead = clampToSentenceBudget(
@@ -588,7 +585,8 @@ class DeliveryComposer {
         JsonNode first = citations.get(0);
         if (!first.isObject()) return null;
         String sourceKind = first.path("sourceKind").asString();
-        if (!sourceKind.equals("scm.pull-request.diff") && !sourceKind.equals("scm.repository.tree")) return null;
+        if (!sourceKind.equals(PracticeSubjectClause.DIFF_SOURCE.value())
+                && !sourceKind.equals(RepositoryTreeContentSource.KIND.value())) return null;
         JsonNode pathNode = first.get("path");
         if (pathNode == null || !pathNode.isString()) return null;
         String path = repoRelative(pathNode.asString());
@@ -683,7 +681,9 @@ class DeliveryComposer {
     private static boolean verifiedAnchor(
             JsonNode citation, String path, int line, ComposedFeedbackUnit.@Nullable ResolvedAnchor selected) {
         return "VERIFIED".equals(citation.path("verification").path("status").asString())
-                && "scm.pull-request.diff".equals(citation.path("sourceKind").asString())
+                && PracticeSubjectClause.DIFF_SOURCE
+                        .value()
+                        .equals(citation.path("sourceKind").asString())
                 && "NEW".equals(citation.path("side").asString())
                 && repoRelative(path).equals(repoRelative(citation.path("path").asString()))
                 && line == citation.path("startLine").asInt()

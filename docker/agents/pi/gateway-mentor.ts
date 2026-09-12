@@ -3,29 +3,26 @@ import { once } from "node:events";
 import { constants } from "node:os";
 import { WebSocket } from "ws";
 import { discoverCapabilities } from "./gateway-capabilities.ts";
+import { fragments } from "./lines.ts";
 
 class LineOverBudget extends Error {}
 
-/** The runner's newline-terminated lines, refused as soon as one grows past the frame budget. */
+/**
+ * The runner's newline-terminated lines, refused as soon as one grows past the frame budget — before
+ * it is held whole, which is why this reads fragments rather than records. A trailing line the
+ * runner never terminated is not a frame and is not forwarded.
+ */
 async function* boundedLines(source: AsyncIterable<unknown>, maxBytes: number) {
 	let pending: Buffer[] = [];
 	let pendingBytes = 0;
-	for await (const chunk of source) {
-		if (!Buffer.isBuffer(chunk)) throw new Error("Runner output must be bytes");
-		let start = 0;
-		let end: number;
-		while ((end = chunk.indexOf(10, start)) !== -1) {
-			if (pendingBytes + end - start > maxBytes) throw new LineOverBudget("Line over budget");
-			yield Buffer.concat([...pending, chunk.subarray(start, end)]).toString("utf8");
-			pending = [];
-			pendingBytes = 0;
-			start = end + 1;
-		}
-		if (start < chunk.length) {
-			pendingBytes += chunk.length - start;
-			if (pendingBytes > maxBytes) throw new LineOverBudget("Line over budget");
-			pending.push(chunk.subarray(start));
-		}
+	for await (const fragment of fragments(source)) {
+		pendingBytes += fragment.bytes.length;
+		if (pendingBytes > maxBytes) throw new LineOverBudget("Line over budget");
+		pending.push(fragment.bytes);
+		if (!fragment.end) continue;
+		yield Buffer.concat(pending).toString("utf8");
+		pending = [];
+		pendingBytes = 0;
 	}
 }
 

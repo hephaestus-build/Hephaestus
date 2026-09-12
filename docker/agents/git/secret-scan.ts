@@ -6,6 +6,7 @@ import { dirname, join, relative, isAbsolute } from "node:path";
 import type { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { fragments, records } from "./lines.ts";
+import { exited, succeeded } from "./process.ts";
 
 type Git = (args: string[]) => ChildProcessByStdio<null, Readable, null>;
 interface Finding {
@@ -27,16 +28,9 @@ export interface SecretScan {
 }
 
 /** A blob above this is not materialised; the scanner's own limit is disabled for what it does read. */
-export const MAX_BLOB_BYTES = 8 * 1024 * 1024;
+const MAX_BLOB_BYTES = 8 * 1024 * 1024;
 
-function completed(child: ReturnType<Git>) {
-	return new Promise<void>((resolve, reject) => {
-		child.once("error", reject);
-		child.once("close", (code) =>
-			code === 0 ? resolve() : reject(new Error("Secret scan Git operation failed")),
-		);
-	});
-}
+const completed = (child: ReturnType<Git>) => succeeded(child, "Secret scan Git operation failed");
 
 export async function addedSecretVerdicts(
 	path: string,
@@ -169,7 +163,7 @@ export async function scanSecrets(
 			...revisions,
 			"--",
 		]);
-		const exited = completed(changes);
+		const listed = completed(changes);
 		let regular = false;
 		let metadata = true;
 		for await (const { bytes: record } of records(changes.stdout, 0)) {
@@ -187,7 +181,7 @@ export async function scanSecrets(
 			}
 			metadata = !metadata;
 		}
-		await exited;
+		await listed;
 		if (!metadata) throw new Error("Incomplete changed source record");
 		const head = revisions[1];
 		if (head === undefined) throw new Error("Missing scan head");
@@ -230,12 +224,8 @@ export async function scanSecrets(
 				env: { PATH: process.env.PATH, HOME: directory },
 			},
 		);
-		await new Promise<void>((resolve, reject) => {
-			scanner.once("error", reject);
-			scanner.once("close", (code) =>
-				code === 0 || code === 10 ? resolve() : reject(new Error("Secret scanner failed")),
-			);
-		});
+		const code = await exited(scanner);
+		if (code !== 0 && code !== 10) throw new Error("Secret scanner failed");
 		const detected = findings(JSON.parse(await readFile(report, "utf8")));
 		const byPath = new Map<string, Finding[]>();
 		const capturedPaths = new Set(scanned);

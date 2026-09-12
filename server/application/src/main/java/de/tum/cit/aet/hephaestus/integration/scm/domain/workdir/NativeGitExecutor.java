@@ -9,6 +9,12 @@ import org.jspecify.annotations.Nullable;
 
 /** Executes trusted Git operations outside the application process; output is never silently truncated. */
 public interface NativeGitExecutor {
+    /**
+     * The most a serialized {@link Request} may occupy, in UTF-8 bytes; the helper in
+     * {@code docker/agents/git/operation.ts} refuses the same size on its stdin.
+     */
+    int MAX_REQUEST_BYTES = 64 * 1024;
+
     void execute(RepositoryKey repository, Request request, Duration timeout, OutputStream output);
 
     /** The integration adapter authorizes both IDs before dispatch; callers never choose a storage path. */
@@ -39,7 +45,16 @@ public interface NativeGitExecutor {
         SNAPSHOT,
         RESOLVE_DIFF_RANGE,
         REVIEW_DIFF,
-        REVIEW_COMMITS
+        REVIEW_COMMITS;
+
+        /**
+         * Whether the operation reads a job's canonical evidence rather than a mirror: only
+         * {@link #executeInSnapshot(Path, Request, Duration, OutputStream)} may run it, and never on
+         * behalf of another server.
+         */
+        public boolean readsCanonicalEvidence() {
+            return this == CITED_BLOBS || this == HISTORICAL_BLOB || this == SCAN_SECRETS;
+        }
     }
 
     record Request(

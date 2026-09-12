@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.curated;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
@@ -17,8 +18,8 @@ import org.springframework.transaction.support.TransactionOperations;
 @ConditionalOnServerRole
 @WorkspaceAgnostic("Upgrades installed source-contract policies without rewriting historical revisions")
 public class SourceContractPolicyMigration {
-    private static final SourceContractVersion PREVIOUS = new SourceContractVersion("1.0.0");
-    private static final SourceContractVersion CURRENT = new SourceContractVersion("1.1.0");
+    private static final SourceContractVersion PREVIOUS = ArtifactSourceCatalogRegistry.PREVIOUS_VERSION;
+    private static final SourceContractVersion CURRENT = ArtifactSourceCatalogRegistry.CURRENT_VERSION;
 
     private final PracticeRepository practiceRepository;
     private final PracticeRevisionService revisionService;

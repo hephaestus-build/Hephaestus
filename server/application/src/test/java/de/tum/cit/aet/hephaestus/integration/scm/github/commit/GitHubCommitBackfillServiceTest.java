@@ -2,24 +2,18 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.commit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister;
@@ -32,24 +26,23 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryMan
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import de.tum.cit.aet.hephaestus.testconfig.PassThroughTransactionTemplate;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.springframework.context.ApplicationEventPublisher;
 
 class GitHubCommitBackfillServiceTest extends BaseUnitTest {
+
+    private static final RepositoryKey KEY = new RepositoryKey(100L, 1L);
 
     @Mock
     private GitRepositoryManager gitRepositoryManager;
@@ -61,23 +54,13 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
     private CommitRepository commitRepository;
 
     @Mock
-    private CommitAuthorResolver authorResolver;
+    private CommitDetailsPersister persister;
 
     @Mock
-    private ApplicationEventPublisher eventPublisher;
+    private CommitAuthorResolver authorResolver;
 
+    @InjectMocks
     private GitHubCommitBackfillService service;
-
-    @BeforeEach
-    void setUp() {
-        service = serviceWith(
-                new CommitDetailsPersister(commitRepository, new PassThroughTransactionTemplate(), eventPublisher));
-    }
-
-    private GitHubCommitBackfillService serviceWith(CommitDetailsPersister persister) {
-        return new GitHubCommitBackfillService(
-                gitRepositoryManager, tokenService, commitRepository, persister, authorResolver);
-    }
 
     /** Feeds the walk the way native Git does: ask which shas are captured, then hand over each commit. */
     private void stubCommits(List<CommitDetails> commits) {
@@ -89,7 +72,12 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
                     return null;
                 })
                 .when(gitRepositoryManager)
-                .forEachMissingCommit(eq(new RepositoryKey(100L, 1L)), any(), any());
+                .forEachMissingCommit(eq(KEY), any(), any());
+    }
+
+    private void stubWalkableRepository() {
+        when(gitRepositoryManager.isEnabled()).thenReturn(true);
+        when(gitRepositoryManager.resolveBranchHead(KEY, "main")).thenReturn("head");
     }
 
     private static SyncTarget createSyncTarget(AuthMode authMode) {
@@ -127,17 +115,6 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
                 List.of(new CommitDetails.FileChange(
                         "src/Main.java", CommitFileChange.ChangeType.MODIFIED, 10, 5, 15, null)),
                 List.of());
-    }
-
-    private static Commit createMockCommit(String sha, Long repoId) {
-        Commit commit = TestEntities.commit(1L, sha);
-        commit.setMessage("test");
-        commit.setAuthoredAt(Instant.parse("2024-01-15T10:00:00Z"));
-        commit.setAdditions(0);
-        commit.setDeletions(0);
-        commit.setChangedFiles(0);
-        commit.setRepository(TestEntities.repository(repoId, "owner/repository"));
-        return commit;
     }
 
     @Nested
@@ -183,8 +160,7 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
         @DisplayName("should return -1 when HEAD cannot be resolved")
         void shouldReturnNegativeOneWhenHeadUnresolvable() {
             when(gitRepositoryManager.isEnabled()).thenReturn(true);
-            when(gitRepositoryManager.resolveBranchHead(new RepositoryKey(100L, 1L), "main"))
-                    .thenReturn(null);
+            when(gitRepositoryManager.resolveBranchHead(KEY, "main")).thenReturn(null);
             Repository repo = createMockRepository(1L, "owner/repo", "main");
             SyncTarget target = createSyncTarget(AuthMode.INSTALLATION_APP);
 
@@ -195,89 +171,33 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldContinueTheWalkWhenOneCommitFailsToPersist() {
-        when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitRepositoryManager.resolveBranchHead(new RepositoryKey(100L, 1L), "main"))
-                .thenReturn("head");
-        when(commitRepository.findByShaAndRepositoryId(anyString(), eq(1L)))
-                .thenAnswer(invocation -> Optional.of(createMockCommit(invocation.getArgument(0), 1L)));
-        doAnswer(invocation -> {
-                    if ("broken".equals(invocation.getArgument(0)))
-                        throw new org.springframework.dao.DataIntegrityViolationException("too long");
-                    return null;
-                })
-                .when(commitRepository)
-                .upsertCommit(
-                        anyString(),
-                        anyString(),
-                        any(),
-                        anyString(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        eq(1L),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any());
-        stubCommits(List.of(
+    void shouldCountOnlyCapturedCommitsAndContinueTheWalkWhenOneFailsToPersist() {
+        stubWalkableRepository();
+        when(persister.persist(any(), any(), any())).thenAnswer(invocation -> switch (invocation
+                .<CommitDetails>getArgument(0)
+                .sha()) {
+            case "broken" -> Outcome.FAILED;
+            case "existing" -> Outcome.ALREADY_CAPTURED;
+            default -> Outcome.CAPTURED;
+        });
+        List<CommitDetails> commits = List.of(
                 createCommitInfo("first", "Commit"),
                 createCommitInfo("broken", "Commit"),
-                createCommitInfo("last", "Commit")));
+                createCommitInfo("existing", "Commit"),
+                createCommitInfo("last", "Commit"));
+        stubCommits(commits);
+        Repository repo = createMockRepository(1L, "owner/repo", "main");
 
-        int result = service.backfillCommits(
-                createSyncTarget(AuthMode.PERSONAL_ACCESS_TOKEN), createMockRepository(1L, "owner/repo", "main"), 100L);
+        int result = service.backfillCommits(createSyncTarget(AuthMode.PERSONAL_ACCESS_TOKEN), repo, 100L);
 
         assertThat(result).isEqualTo(2);
-        verify(commitRepository).save(argThat(commit -> "last".equals(commit.getSha())));
-    }
-
-    @Test
-    void shouldCompleteAnExistingWebhookStubWithoutPublishingAnotherCreatedEvent() {
-        when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitRepositoryManager.resolveBranchHead(new RepositoryKey(100L, 1L), "main"))
-                .thenReturn("head");
-        when(commitRepository.findByShaAndRepositoryId("stub", 1L))
-                .thenReturn(Optional.of(createMockCommit("stub", 1L)));
-        stubCommits(List.of(createCommitInfo("stub", "Commit")));
-
-        assertThat(service.backfillCommits(
-                        createSyncTarget(AuthMode.PERSONAL_ACCESS_TOKEN),
-                        createMockRepository(1L, "owner/repo", "main"),
-                        100L))
-                .isEqualTo(1);
-        verify(commitRepository)
-                .upsertCommit(
-                        eq("stub"),
-                        anyString(),
-                        any(),
-                        anyString(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        eq(1L),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(Instant.class));
-        verify(eventPublisher, never()).publishEvent(any(Object.class));
+        for (CommitDetails commit : commits) verify(persister).persist(eq(commit), eq(repo), any());
     }
 
     @Test
     void shouldAskTheRepositoryWhichShasAreCapturedWhenWalking() {
-        when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitRepositoryManager.resolveBranchHead(new RepositoryKey(100L, 1L), "main"))
-                .thenReturn("head");
-        when(commitRepository.findByShaAndRepositoryId(anyString(), eq(1L)))
-                .thenAnswer(invocation -> Optional.of(createMockCommit(invocation.getArgument(0), 1L)));
+        stubWalkableRepository();
+        when(persister.persist(any(), any(), any())).thenReturn(Outcome.CAPTURED);
         stubCommits(List.of(createCommitInfo("first", "Commit"), createCommitInfo("second", "Commit")));
 
         service.backfillCommits(
@@ -288,18 +208,15 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
 
     @Test
     void shouldHandAGraphqlSyncOriginToThePersisterWhenWalking() {
-        CommitDetailsPersister persister = mock(CommitDetailsPersister.class);
+        stubWalkableRepository();
         when(persister.persist(any(), any(), any())).thenReturn(Outcome.CAPTURED);
-        when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitRepositoryManager.resolveBranchHead(new RepositoryKey(100L, 1L), "main"))
-                .thenReturn("head");
         when(authorResolver.resolveByEmail("author@test.com", 1L)).thenReturn(10L);
+        when(authorResolver.resolveByEmail("nobody@test.com", 1L)).thenReturn(null);
         CommitDetails commitInfo = createCommitInfo("commit1", "Commit");
         stubCommits(List.of(commitInfo));
         Repository repo = createMockRepository(1L, "owner/repo", "main");
 
-        int result =
-                serviceWith(persister).backfillCommits(createSyncTarget(AuthMode.PERSONAL_ACCESS_TOKEN), repo, 100L);
+        int result = service.backfillCommits(createSyncTarget(AuthMode.PERSONAL_ACCESS_TOKEN), repo, 100L);
 
         assertThat(result).isEqualTo(1);
         ArgumentCaptor<CommitDetailsPersister.Origin> origin =
@@ -311,155 +228,19 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
         assertThat(origin.getValue().commitUrl().apply("commit1"))
                 .isEqualTo("https://github.com/owner/repo/commit/commit1");
         assertThat(origin.getValue().userIdByEmail().apply("author@test.com")).isEqualTo(10L);
+        assertThat(origin.getValue().userIdByEmail().apply("nobody@test.com")).isNull();
     }
 
     @Test
-    void shouldWalkAllCommitsWhenNoPreviousCommits() {
-        when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitRepositoryManager.resolveBranchHead(new RepositoryKey(100L, 1L), "main"))
-                .thenReturn("head123");
+    void shouldReturnZeroWhenTheWalkHandsOverNoCommit() {
+        stubWalkableRepository();
+        stubCommits(List.of());
 
-        CommitDetails commitInfo = createCommitInfo("commit1", "First commit");
-        stubCommits(List.of(commitInfo));
+        int result = service.backfillCommits(
+                createSyncTarget(AuthMode.INSTALLATION_APP), createMockRepository(1L, "owner/repo", "main"), 100L);
 
-        Commit mockCommit = createMockCommit("commit1", 1L);
-        when(commitRepository.findByShaAndRepositoryId("commit1", 1L))
-                .thenReturn(Optional.empty())
-                .thenReturn(Optional.of(mockCommit));
-
-        Repository repo = createMockRepository(1L, "owner/repo", "main");
-        SyncTarget target = createSyncTarget(AuthMode.INSTALLATION_APP);
-
-        int result = service.backfillCommits(target, repo, 100L);
-
-        assertThat(result).isEqualTo(1);
-        verify(gitRepositoryManager).forEachMissingCommit(eq(new RepositoryKey(100L, 1L)), any(), any());
-        verify(commitRepository)
-                .upsertCommit(
-                        eq("commit1"),
-                        eq("First commit"),
-                        any(),
-                        eq("https://github.com/owner/repo/commit/commit1"),
-                        any(),
-                        any(),
-                        eq(10),
-                        eq(5),
-                        eq(1),
-                        any(),
-                        eq(1L),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any());
-    }
-
-    @Test
-    void shouldPublishCommitCreatedEvent() {
-        when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitRepositoryManager.resolveBranchHead(new RepositoryKey(100L, 1L), "main"))
-                .thenReturn("head123");
-
-        CommitDetails commitInfo = createCommitInfo("commit1", "First commit");
-        stubCommits(List.of(commitInfo));
-        Commit mockCommit = createMockCommit("commit1", 1L);
-        when(commitRepository.findByShaAndRepositoryId("commit1", 1L))
-                .thenReturn(Optional.empty())
-                .thenReturn(Optional.of(mockCommit));
-
-        Repository repo = createMockRepository(1L, "owner/repo", "main");
-        SyncTarget target = createSyncTarget(AuthMode.INSTALLATION_APP);
-
-        service.backfillCommits(target, repo, 100L);
-
-        ArgumentCaptor<ScmDomainEvent.CommitCreated> eventCaptor =
-                ArgumentCaptor.forClass(ScmDomainEvent.CommitCreated.class);
-        verify(eventPublisher).publishEvent(eventCaptor.capture());
-
-        ScmDomainEvent.CommitCreated event = eventCaptor.getValue();
-        assertThat(event.context().scopeId()).isEqualTo(100L);
-    }
-
-    @Nested
-    class DuplicateHandling {
-
-        @Test
-        void shouldSkipExistingCommits() {
-            when(gitRepositoryManager.isEnabled()).thenReturn(true);
-            when(gitRepositoryManager.resolveBranchHead(new RepositoryKey(100L, 1L), "main"))
-                    .thenReturn("head123");
-
-            CommitDetails existingCommit = createCommitInfo("existing", "Old commit");
-            CommitDetails newCommit = createCommitInfo("newone", "New commit");
-            stubCommits(List.of(existingCommit, newCommit));
-
-            Commit captured = createMockCommit("existing", 1L);
-            captured.setGitDetailsCapturedAt(Instant.parse("2024-01-15T10:00:00Z"));
-            when(commitRepository.findByShaAndRepositoryId("existing", 1L)).thenReturn(Optional.of(captured));
-
-            Commit mockCommit = createMockCommit("newone", 1L);
-            when(commitRepository.findByShaAndRepositoryId("newone", 1L))
-                    .thenReturn(Optional.empty())
-                    .thenReturn(Optional.of(mockCommit));
-
-            Repository repo = createMockRepository(1L, "owner/repo", "main");
-            SyncTarget target = createSyncTarget(AuthMode.INSTALLATION_APP);
-
-            int result = service.backfillCommits(target, repo, 100L);
-
-            assertThat(result).isEqualTo(1);
-            verify(commitRepository, times(1))
-                    .upsertCommit(
-                            eq("newone"),
-                            anyString(),
-                            any(),
-                            anyString(),
-                            any(),
-                            any(),
-                            any(Integer.class),
-                            any(Integer.class),
-                            any(Integer.class),
-                            any(),
-                            anyLong(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any());
-        }
-
-        @Test
-        void shouldReturnZeroWhenWalkReturnsEmpty() {
-            when(gitRepositoryManager.isEnabled()).thenReturn(true);
-            when(gitRepositoryManager.resolveBranchHead(new RepositoryKey(100L, 1L), "main"))
-                    .thenReturn("head123");
-            stubCommits(List.of());
-
-            Repository repo = createMockRepository(1L, "owner/repo", "main");
-            SyncTarget target = createSyncTarget(AuthMode.INSTALLATION_APP);
-
-            int result = service.backfillCommits(target, repo, 100L);
-
-            assertThat(result).isEqualTo(0);
-            verify(commitRepository, never())
-                    .upsertCommit(
-                            anyString(),
-                            anyString(),
-                            any(),
-                            anyString(),
-                            any(),
-                            any(),
-                            any(Integer.class),
-                            any(Integer.class),
-                            any(Integer.class),
-                            any(),
-                            anyLong(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any());
-        }
+        assertThat(result).isEqualTo(0);
+        verify(persister, never()).persist(any(), any(), any());
     }
 
     @Nested
@@ -467,11 +248,9 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void shouldUseInstallationTokenForGitHubApp() {
-            when(gitRepositoryManager.isEnabled()).thenReturn(true);
+            stubWalkableRepository();
             when(tokenService.isConfigured()).thenReturn(true);
             when(tokenService.getInstallationToken(42L)).thenReturn("ghs_install_token");
-            when(gitRepositoryManager.resolveBranchHead(new RepositoryKey(100L, 1L), "main"))
-                    .thenReturn("head123");
             stubCommits(List.of());
 
             Repository repo = createMockRepository(1L, "owner/repo", "main");
@@ -480,15 +259,12 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
             service.backfillCommits(target, repo, 100L);
 
             verify(gitRepositoryManager)
-                    .ensureRepository(
-                            new RepositoryKey(100L, 1L), "https://github.com/owner/repo.git", "ghs_install_token");
+                    .ensureRepository(KEY, "https://github.com/owner/repo.git", "ghs_install_token");
         }
 
         @Test
         void shouldUsePATForPersonalAccessTokenAuth() {
-            when(gitRepositoryManager.isEnabled()).thenReturn(true);
-            when(gitRepositoryManager.resolveBranchHead(new RepositoryKey(100L, 1L), "main"))
-                    .thenReturn("head123");
+            stubWalkableRepository();
             stubCommits(List.of());
 
             Repository repo = createMockRepository(1L, "owner/repo", "main");
@@ -496,9 +272,7 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
 
             service.backfillCommits(target, repo, 100L);
 
-            verify(gitRepositoryManager)
-                    .ensureRepository(
-                            new RepositoryKey(100L, 1L), "https://github.com/owner/repo.git", "ghp_test_token");
+            verify(gitRepositoryManager).ensureRepository(KEY, "https://github.com/owner/repo.git", "ghp_test_token");
         }
     }
 
@@ -537,11 +311,9 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void shouldReturnNegativeOneWhenTokenServiceFails() {
-            when(gitRepositoryManager.isEnabled()).thenReturn(true);
+            stubWalkableRepository();
             when(tokenService.isConfigured()).thenReturn(true);
             when(tokenService.getInstallationToken(42L)).thenThrow(new RuntimeException("Token error"));
-            when(gitRepositoryManager.resolveBranchHead(new RepositoryKey(100L, 1L), "main"))
-                    .thenReturn("head123");
             stubCommits(List.of());
 
             Repository repo = createMockRepository(1L, "owner/repo", "main");
@@ -551,96 +323,7 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
 
             // A token failure is not fatal: the backfill proceeds with a null token.
             assertThat(result).isEqualTo(0);
-            verify(gitRepositoryManager)
-                    .ensureRepository(new RepositoryKey(100L, 1L), "https://github.com/owner/repo.git", null);
-        }
-    }
-
-    @Nested
-    class UserResolution {
-
-        @Test
-        void shouldResolveUserIdsByEmail() {
-            when(gitRepositoryManager.isEnabled()).thenReturn(true);
-            when(gitRepositoryManager.resolveBranchHead(new RepositoryKey(100L, 1L), "main"))
-                    .thenReturn("head123");
-
-            CommitDetails commitInfo = createCommitInfo("commit1", "Test commit");
-            stubCommits(List.of(commitInfo));
-
-            when(authorResolver.resolveByEmail(eq("author@test.com"), any())).thenReturn(10L);
-            when(authorResolver.resolveByEmail(eq("committer@test.com"), any())).thenReturn(20L);
-
-            Commit mockCommit = createMockCommit("commit1", 1L);
-            when(commitRepository.findByShaAndRepositoryId("commit1", 1L))
-                    .thenReturn(Optional.empty())
-                    .thenReturn(Optional.of(mockCommit));
-
-            Repository repo = createMockRepository(1L, "owner/repo", "main");
-            SyncTarget target = createSyncTarget(AuthMode.INSTALLATION_APP);
-
-            service.backfillCommits(target, repo, 100L);
-
-            verify(commitRepository)
-                    .upsertCommit(
-                            eq("commit1"),
-                            anyString(),
-                            any(),
-                            anyString(),
-                            any(),
-                            any(),
-                            any(Integer.class),
-                            any(Integer.class),
-                            any(Integer.class),
-                            any(),
-                            eq(1L),
-                            eq(10L),
-                            eq(20L),
-                            any(),
-                            any(),
-                            any());
-        }
-
-        @Test
-        void shouldPassNullIdsWhenUsersNotFound() {
-            when(gitRepositoryManager.isEnabled()).thenReturn(true);
-            when(gitRepositoryManager.resolveBranchHead(new RepositoryKey(100L, 1L), "main"))
-                    .thenReturn("head123");
-
-            CommitDetails commitInfo = createCommitInfo("commit1", "Test commit");
-            stubCommits(List.of(commitInfo));
-
-            when(authorResolver.resolveByEmail(eq("author@test.com"), any())).thenReturn(null);
-            when(authorResolver.resolveByEmail(eq("committer@test.com"), any())).thenReturn(null);
-
-            Commit mockCommit = createMockCommit("commit1", 1L);
-            when(commitRepository.findByShaAndRepositoryId("commit1", 1L))
-                    .thenReturn(Optional.empty())
-                    .thenReturn(Optional.of(mockCommit));
-
-            Repository repo = createMockRepository(1L, "owner/repo", "main");
-            SyncTarget target = createSyncTarget(AuthMode.INSTALLATION_APP);
-
-            service.backfillCommits(target, repo, 100L);
-
-            verify(commitRepository)
-                    .upsertCommit(
-                            eq("commit1"),
-                            anyString(),
-                            any(),
-                            anyString(),
-                            any(),
-                            any(),
-                            any(Integer.class),
-                            any(Integer.class),
-                            any(Integer.class),
-                            any(),
-                            eq(1L),
-                            eq(null),
-                            eq(null),
-                            any(),
-                            any(),
-                            any());
+            verify(gitRepositoryManager).ensureRepository(KEY, "https://github.com/owner/repo.git", null);
         }
     }
 }

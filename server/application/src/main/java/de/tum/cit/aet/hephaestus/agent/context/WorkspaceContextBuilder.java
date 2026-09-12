@@ -70,11 +70,13 @@ public class WorkspaceContextBuilder {
         long startNs = System.nanoTime();
         try {
             BuildResult result = buildInputs(request, evidencePlan);
-            if (result.manifest() == null) {
+            var prepared = new PreparedEvidence(
+                    result.files(), result.filesOnDisk(), result.cleanups(), result.manifest(), result.directories());
+            if (prepared.manifest() == null) {
+                prepared.close();
                 throw new IllegalStateException("Detector evidence was prepared without a source manifest");
             }
-            return new PreparedEvidence(
-                    result.files(), result.filesOnDisk(), result.cleanups(), result.manifest(), result.directories());
+            return prepared;
         } finally {
             meterRegistry
                     .timer(
@@ -147,131 +149,144 @@ public class WorkspaceContextBuilder {
         Map<String, java.nio.file.Path> filesOnDisk = new LinkedHashMap<>();
         List<EvidenceDirectory> directories = new ArrayList<>();
         List<AutoCloseable> cleanups = new ArrayList<>();
-        int contributed = 0;
-        for (ContentSource provider : providers) {
-            if (!provider.supports(request)) {
-                continue;
-            }
-            if (evidencePlan != null && !(provider instanceof EvidenceSource)) {
-                throw new IllegalStateException("Detector context provider must declare source kinds: "
-                        + provider.getClass().getSimpleName());
-            }
-            String providerName = provider.getClass().getSimpleName();
-            Map<String, byte[]> contributionFiles;
-            if (evidencePlan != null && provider instanceof EvidenceSource evidenceSource) {
-                // A collector whose kinds do not apply to this artifact kind at all — the Slack thread
-                // reader on a pull-request review — has nothing to say here. The manifest already reports
-                // only the kinds that apply, so there is no absence to record for it either.
-                if (evidenceSource.sourceKinds().stream().noneMatch(stagedSources::contains)) {
+        try {
+            int contributed = 0;
+            for (ContentSource provider : providers) {
+                if (!provider.supports(request)) {
                     continue;
                 }
-                contributionFiles = captureIndependently(
-                        request,
-                        evidencePlan,
-                        stagedSources,
-                        evidenceSource,
-                        providerName,
-                        completeness,
-                        contentStates,
-                        immutableIdentities,
-                        observedAt,
-                        sourceEffectiveAt,
-                        stateOverrides,
-                        captureLimitations,
-                        attemptedKinds,
-                        filesOnDisk,
-                        directories,
-                        cleanups);
-            } else {
-                try {
-                    Map<String, byte[]> localFiles = new LinkedHashMap<>();
-                    provider.contribute(request, localFiles);
-                    contributionFiles = localFiles;
-                } catch (JobPreparationException e) {
-                    throw e;
-                } catch (RuntimeException e) {
-                    if (!(e instanceof EvidenceCollectionException)) throw e;
-                    if (provider.required()) {
-                        meterRegistry
-                                .counter(
-                                        AgentMetrics.AGENT_CONTEXT_PROVIDER_REQUIRED_FAILURE,
-                                        Tags.of("provider", providerName))
-                                .increment();
-                        throw new JobPreparationException("Required content provider failed: " + providerName, e);
+                if (evidencePlan != null && !(provider instanceof EvidenceSource)) {
+                    throw new IllegalStateException("Detector context provider must declare source kinds: "
+                            + provider.getClass().getSimpleName());
+                }
+                String providerName = provider.getClass().getSimpleName();
+                Map<String, byte[]> contributionFiles;
+                if (evidencePlan != null && provider instanceof EvidenceSource evidenceSource) {
+                    // A collector whose kinds do not apply to this artifact kind at all — the Slack thread
+                    // reader on a pull-request review — has nothing to say here. The manifest already reports
+                    // only the kinds that apply, so there is no absence to record for it either.
+                    if (evidenceSource.sourceKinds().stream().noneMatch(stagedSources::contains)) {
+                        continue;
                     }
-                    log.warn("Optional content provider failed, continuing: {} — {}", providerName, e.getMessage());
-                    continue;
+                    contributionFiles = captureIndependently(
+                            request,
+                            evidencePlan,
+                            stagedSources,
+                            evidenceSource,
+                            providerName,
+                            completeness,
+                            contentStates,
+                            immutableIdentities,
+                            observedAt,
+                            sourceEffectiveAt,
+                            stateOverrides,
+                            captureLimitations,
+                            attemptedKinds,
+                            filesOnDisk,
+                            directories,
+                            cleanups);
+                } else {
+                    try {
+                        Map<String, byte[]> localFiles = new LinkedHashMap<>();
+                        provider.contribute(request, localFiles);
+                        contributionFiles = localFiles;
+                    } catch (JobPreparationException e) {
+                        throw e;
+                    } catch (RuntimeException e) {
+                        if (!(e instanceof EvidenceCollectionException)) throw e;
+                        if (provider.required()) {
+                            meterRegistry
+                                    .counter(
+                                            AgentMetrics.AGENT_CONTEXT_PROVIDER_REQUIRED_FAILURE,
+                                            Tags.of("provider", providerName))
+                                    .increment();
+                            throw new JobPreparationException("Required content provider failed: " + providerName, e);
+                        }
+                        log.warn("Optional content provider failed, continuing: {} — {}", providerName, e.getMessage());
+                        continue;
+                    }
                 }
-            }
-            Set<String> contributedKeys = new LinkedHashSet<>(contributionFiles.keySet());
-            for (var onDisk : filesOnDisk.entrySet()) {
-                if (!keyOwner.containsKey(onDisk.getKey())) {
-                    contributedKeys.add(onDisk.getKey());
+                Set<String> contributedKeys = new LinkedHashSet<>(contributionFiles.keySet());
+                for (var onDisk : filesOnDisk.entrySet()) {
+                    if (!keyOwner.containsKey(onDisk.getKey())) {
+                        contributedKeys.add(onDisk.getKey());
+                    }
                 }
-            }
-            for (String key : contributedKeys) {
-                byte[] value = contributionFiles.get(key);
-                if (files.containsKey(key)) {
-                    throw new IllegalStateException("Duplicate workspace key " + key
-                            + ": written by both "
-                            + keyOwner.get(key)
-                            + " and "
-                            + providerName);
-                }
-                if (!provider.ownsPath(key)) {
-                    throw new IllegalStateException(
-                            providerName + " wrote file outside its declared input namespace: " + key);
-                }
-                keyOwner.put(key, providerName);
-                if (provider instanceof EvidenceSource evidenceSource) {
-                    SourceKind kind = evidenceSource.sourceKindFor(key);
-                    if (!evidenceSource.sourceKinds().contains(kind)) {
+                for (String key : contributedKeys) {
+                    byte[] value = contributionFiles.get(key);
+                    if (files.containsKey(key)) {
+                        throw new IllegalStateException("Duplicate workspace key " + key
+                                + ": written by both "
+                                + keyOwner.get(key)
+                                + " and "
+                                + providerName);
+                    }
+                    if (!provider.ownsPath(key)) {
                         throw new IllegalStateException(
-                                providerName + " mapped output to undeclared source kind " + kind);
+                                providerName + " wrote file outside its declared input namespace: " + key);
                     }
-                    if (evidencePlan != null && !stagedSources.contains(kind)) {
-                        throw new IllegalStateException(providerName + " emitted source kind " + kind
-                                + ", which does not apply to this artifact");
+                    keyOwner.put(key, providerName);
+                    if (provider instanceof EvidenceSource evidenceSource) {
+                        SourceKind kind = evidenceSource.sourceKindFor(key);
+                        if (!evidenceSource.sourceKinds().contains(kind)) {
+                            throw new IllegalStateException(
+                                    providerName + " mapped output to undeclared source kind " + kind);
+                        }
+                        if (evidencePlan != null && !stagedSources.contains(kind)) {
+                            throw new IllegalStateException(providerName + " emitted source kind " + kind
+                                    + ", which does not apply to this artifact");
+                        }
+                        keySourceKind.put(key, kind);
+                    } else if (evidencePlan != null) {
+                        throw new IllegalStateException(providerName + " emitted undocumented detector input " + key);
                     }
-                    keySourceKind.put(key, kind);
-                } else if (evidencePlan != null) {
-                    throw new IllegalStateException(providerName + " emitted undocumented detector input " + key);
+                    if (value == null) {
+                        // Staged from disk: the bytes are never read by this process.
+                        continue;
+                    }
+                    files.put(key, value.clone());
                 }
-                if (value == null) {
-                    // Staged from disk: the bytes are never read by this process.
-                    continue;
+                contributed++;
+            }
+            ArtifactSourceManifest manifest = null;
+            if (manifestBuilder != null && evidencePlan != null) {
+                AgentJob job = reviewJob(request);
+                if (job != null) {
+                    manifest = manifestBuilder.augment(
+                            files,
+                            filesOnDisk,
+                            keySourceKind,
+                            String.valueOf(job.getId()),
+                            evidencePlan,
+                            new ContextManifestBuilder.CaptureMetadata(
+                                    completeness,
+                                    contentStates,
+                                    immutableIdentities,
+                                    observedAt,
+                                    sourceEffectiveAt,
+                                    stateOverrides,
+                                    captureLimitations,
+                                    attemptedKinds));
                 }
-                files.put(key, value.clone());
             }
-            contributed++;
-        }
-        ArtifactSourceManifest manifest = null;
-        if (manifestBuilder != null && evidencePlan != null) {
-            AgentJob job = reviewJob(request);
-            if (job != null) {
-                manifest = manifestBuilder.augment(
-                        files,
-                        filesOnDisk,
-                        keySourceKind,
-                        String.valueOf(job.getId()),
-                        evidencePlan,
-                        new ContextManifestBuilder.CaptureMetadata(
-                                completeness,
-                                contentStates,
-                                immutableIdentities,
-                                observedAt,
-                                sourceEffectiveAt,
-                                stateOverrides,
-                                captureLimitations,
-                                attemptedKinds));
+            log.debug(
+                    "Workspace context built: {} files ({} staged from disk) from {} provider(s)",
+                    files.size() + filesOnDisk.size(),
+                    filesOnDisk.size(),
+                    contributed);
+            return new BuildResult(files, filesOnDisk, directories, cleanups, manifest);
+        } catch (RuntimeException exception) {
+            // A later provider or the manifest failing must not strand what earlier collectors staged on
+            // disk: nobody else will ever hold these cleanups.
+            for (AutoCloseable cleanup : cleanups) {
+                try {
+                    cleanup.close();
+                } catch (Exception failure) {
+                    exception.addSuppressed(failure);
+                }
             }
+            throw exception;
         }
-        log.debug(
-                "Workspace context built: {} files ({} staged from disk) from {} provider(s)",
-                files.size() + filesOnDisk.size(),
-                filesOnDisk.size(),
-                contributed);
-        return new BuildResult(files, filesOnDisk, directories, cleanups, manifest);
     }
 
     private Map<String, byte[]> captureIndependently(
@@ -326,6 +341,10 @@ public class WorkspaceContextBuilder {
                         e.getMessage());
                 continue;
             }
+            // Held before the checks below so a rejected contribution is released with the rest.
+            if (contribution.cleanup() != null) {
+                cleanups.add(contribution.cleanup());
+            }
             validateContribution(source, Set.of(kind), contribution);
             contribution.files().forEach((path, bytes) -> {
                 if (files.put(path, bytes) != null) {
@@ -344,9 +363,6 @@ public class WorkspaceContextBuilder {
                                         || directory.target().startsWith(existing.target())))
                     throw new IllegalStateException(providerName + " emitted an overlapping or unauthorized directory");
                 directories.add(directory);
-            }
-            if (contribution.cleanup() != null) {
-                cleanups.add(contribution.cleanup());
             }
             completeness.putAll(contribution.completeness());
             contentStates.putAll(contribution.contentStates());

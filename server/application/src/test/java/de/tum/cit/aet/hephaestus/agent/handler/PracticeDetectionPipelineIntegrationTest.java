@@ -81,9 +81,6 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
     private JobTypeHandlerRegistry handlerRegistry;
 
     @Autowired
-    private PracticeDetectionDeliveryService deliveryService;
-
-    @Autowired
     private ObservationRepository observationRepository;
 
     @Autowired
@@ -300,7 +297,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
     /** The admission fence's own two steps, minus the ownership transaction it wraps them in. */
     private void admit(AgentJob job, JsonNode observations) {
         var pullRequests = (PullRequestReviewHandler) handler;
-        deliveryService.publish(job, pullRequests.prepareObservations(job, observations));
+        pullRequests.prepareObservations(job, observations).record(job);
     }
 
     /**
@@ -356,50 +353,33 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
     }
 
     private ObjectNode evidenceSnapshot(Practice... practices) {
-        ObjectNode snapshot = OBJECT_MAPPER.createObjectNode();
-        var sources =
-                snapshot.putObject("manifest").put("contractVersion", "1.1.0").putArray("sources");
+        ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(OBJECT_MAPPER);
         addArtifact(
-                sources.addObject().put("kind", "scm.pull-request.core"),
+                EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.core", null),
                 "inputs/context/metadata.json",
                 "{\"body\":\"Test body\"}");
-        var diff = sources.addObject().put("kind", "scm.pull-request.diff");
+        var diff = EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.diff", "pipelinesha");
         addArtifact(
                 diff,
                 "inputs/context/diff.patch",
                 "diff --git a/src/Main.java b/src/Main.java\n+++ b/src/Main.java\n@@ -10 +10 @@\n[L10] + insecure();\n");
         // The changed paths travel as their own NUL-terminated artifact, as native capture writes them.
         addArtifact(diff, "inputs/context/diff_paths.nul", "src/Main.java\0");
-        var admitted = snapshot.putArray("practices");
         for (Practice practice : practices) {
-            admitted.addObject()
-                    .put("slug", practice.getSlug())
-                    .put("revisionId", practice.getCurrentRevision().getId());
+            EvidenceSnapshotFixtures.admittedPractice(
+                    snapshot,
+                    practice.getSlug(),
+                    java.util.Objects.requireNonNull(
+                            practice.getCurrentRevision().getId()));
         }
         return snapshot;
     }
 
     private void addArtifact(ObjectNode source, String path, String content) {
-        if (!source.has("state")) {
-            var facts = source.putObject("state")
-                    .put("availability", "AVAILABLE")
-                    .put("content", "NON_EMPTY")
-                    .put("completeness", "COMPLETE")
-                    .putObject("facts")
-                    .put("capturedAt", "2026-08-03T00:00:00Z");
-            if ("scm.pull-request.diff".equals(source.path("kind").asString())) {
-                facts.put("immutableIdentity", "pipelinesha");
-            } else {
-                facts.put("sourceEffectiveAt", "2026-08-03T00:00:00Z");
-            }
-        }
         byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
         capturedFiles.put(path, bytes);
-        source.withArrayProperty("artifacts")
-                .addObject()
-                .put("path", path)
+        EvidenceSnapshotFixtures.artifact(source, path, ProvenanceDigest.sha256Hex(bytes))
                 .put("mediaType", path.endsWith(".json") ? "application/json" : "text/x-diff")
-                .put("sha256", ProvenanceDigest.sha256Hex(bytes))
                 .put("bytes", bytes.length);
     }
 

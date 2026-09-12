@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, open, readdir, rm, stat } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { exited, succeeded } from "./process.ts";
 import { reviewCommits } from "./review-commits.ts";
 import { reviewDiff } from "./review-diff.ts";
 import { scanSecrets } from "./secret-scan.ts";
@@ -16,6 +17,8 @@ const maxSnapshotBytes = Number(process.env.GIT_MAX_SNAPSHOT_BYTES ?? Number.MAX
 const OBJECT_ID = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
 const MAX_COMMIT_PAGE = 256;
 const MAX_CITATION_PAIRS = 256;
+// NativeGitExecutor.MAX_REQUEST_BYTES on the server side: what it sends is what is accepted here.
+const MAX_REQUEST_BYTES = 64 * 1024;
 
 /** Every operation and the revision count it accepts, as an inclusive range. */
 const OPERATIONS = {
@@ -264,17 +267,6 @@ function startGit(
 	});
 }
 
-function exited(child: ChildProcess): Promise<number | null> {
-	return new Promise((resolve, reject) => {
-		child.once("error", reject);
-		child.once("close", resolve);
-	});
-}
-
-async function succeeded(child: ChildProcess, failure: string): Promise<void> {
-	if ((await exited(child)) !== 0) throw new Error(failure);
-}
-
 async function runGit(
 	args: string[],
 	token: string | null = null,
@@ -391,12 +383,13 @@ async function validateUtf8(args: string[]): Promise<void> {
 // Measured before anything is written: a repository over the bound never touches the snapshot volume.
 async function requireWithinSnapshotBound(revisions: string[]): Promise<void> {
 	let bytes = 0;
-	for await (const line of createInterface({
-		input: startGit(["ls-tree", "-r", "-l", "--full-tree", ...revisions]).stdout,
-	})) {
+	const listing = startGit(["ls-tree", "-r", "-l", "--full-tree", ...revisions]);
+	const listed = succeeded(listing, "Snapshot size listing failed");
+	for await (const line of createInterface({ input: listing.stdout })) {
 		const size = Number(line.split("\t", 1)[0]?.split(/ +/)[3]);
 		if (Number.isFinite(size)) bytes += size;
 	}
+	await listed;
 	const directories = [`${repositoryDirectory}/objects`];
 	for (const directory of directories) {
 		for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -652,7 +645,7 @@ export async function main(): Promise<void> {
 	const lines = createInterface({ input: process.stdin });
 	const input = (await lines[Symbol.asyncIterator]().next()).value ?? "";
 	lines.close();
-	if (Buffer.byteLength(input) > 64 * 1024) throw new Error("Operation request too large");
+	if (Buffer.byteLength(input) > MAX_REQUEST_BYTES) throw new Error("Operation request too large");
 	const request = parseRequest(JSON.parse(input));
 	if (request.operation === "FETCH" || request.operation === "FETCH_COMMIT") {
 		await mkdir(repositoryDirectory, { recursive: true });

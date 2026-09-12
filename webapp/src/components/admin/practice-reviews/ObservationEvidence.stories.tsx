@@ -155,7 +155,7 @@ export const EverySource: Story = {
 				"The pull request itself",
 				"The code changes",
 				"Comments on the pull request",
-				"Files in the repository",
+				"Files and history in the repository",
 				"The issue itself",
 				"Comments on the issue",
 				"The document itself",
@@ -271,6 +271,8 @@ export const HistoricalSource: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("b".repeat(40))).toBeVisible();
+		const revision = canvas.getByText("b".repeat(7));
+		await expect(revision).toBeVisible();
+		await expect(revision.closest("[title]")).toHaveAttribute("title", "b".repeat(40));
 	},
 };

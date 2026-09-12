@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -22,6 +23,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerControlFrame
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Operation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Request;
+import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.ByteArrayOutputStream;
 import java.time.Duration;
 import java.util.Base64;
@@ -29,35 +31,42 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
-import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
 import tools.jackson.databind.ObjectMapper;
 
-@Tag("unit")
-class RemoteNativeGitExecutorTest {
+class RemoteNativeGitExecutorTest extends BaseUnitTest {
     private static final RepositoryKey KEY = new RepositoryKey(7, 11);
     private static final Request FETCH =
             new Request(Operation.FETCH, List.of(), "https://example.com/team/repo.git", "private-token");
     private static final Request QUERY = new Request(Operation.COMMIT_IDS, List.of(), null, null);
     private static final Duration TIMEOUT = Duration.ofSeconds(2);
 
-    private final WorkerSession session = mock(WorkerSession.class);
-    private final WorkerSessionRegistry registry = mock(WorkerSessionRegistry.class);
-    private final AtomicReference<BiConsumer<WorkerSession, GitOutput>> receiver = new AtomicReference<>();
-    private final RemoteNativeGitExecutor executor;
+    @Mock
+    private WorkerSession session;
 
-    RemoteNativeGitExecutorTest() {
-        var hub = mock(WorkerControlWebSocketHandler.class);
+    @Mock
+    private WorkerSessionRegistry registry;
+
+    @Mock
+    private WorkerControlWebSocketHandler hub;
+
+    private final AtomicReference<BiConsumer<WorkerSession, GitOutput>> receiver = new AtomicReference<>();
+    private RemoteNativeGitExecutor executor;
+
+    @BeforeEach
+    void connectOneWorker() {
         doAnswer(invocation -> {
                     receiver.set(invocation.getArgument(0));
                     return null;
                 })
                 .when(hub)
                 .setGitOutputHandler(any());
-        when(registry.sessions()).thenReturn(List.of(session));
-        when(session.isOpen()).thenReturn(true);
-        when(session.sessionId()).thenReturn("session");
-        when(session.workerId()).thenReturn("worker-b");
+        lenient().when(registry.sessions()).thenReturn(List.of(session));
+        lenient().when(session.isOpen()).thenReturn(true);
+        lenient().when(session.sessionId()).thenReturn("session");
+        lenient().when(session.workerId()).thenReturn("worker-b");
         executor = new RemoteNativeGitExecutor(registry, hub, new ObjectMapper());
     }
 
@@ -110,9 +119,9 @@ class RemoteNativeGitExecutorTest {
 
     private WorkerSession otherWorker() {
         var other = mock(WorkerSession.class);
-        when(other.isOpen()).thenReturn(true);
-        when(other.sessionId()).thenReturn("other-session");
-        when(other.workerId()).thenReturn("worker-a");
+        lenient().when(other.isOpen()).thenReturn(true);
+        lenient().when(other.sessionId()).thenReturn("other-session");
+        lenient().when(other.workerId()).thenReturn("worker-a");
         return other;
     }
 
@@ -122,7 +131,7 @@ class RemoteNativeGitExecutorTest {
     private List<Dispatch> answeringWorkers(WorkerSession... workers) {
         List<Dispatch> dispatched = new CopyOnWriteArrayList<>();
         for (var worker : workers)
-            when(worker.send(any())).thenAnswer(invocation -> {
+            lenient().when(worker.send(any())).thenAnswer(invocation -> {
                 if (invocation.getArgument(0) instanceof GitOperation operation) {
                     dispatched.add(new Dispatch(worker, operation));
                     receiver.get().accept(worker, new GitOutput(operation.operationId(), 0, "", true, true));
@@ -191,6 +200,29 @@ class RemoteNativeGitExecutorTest {
         executor.execute(KEY, QUERY, TIMEOUT, new ByteArrayOutputStream());
         assertThat(dispatched.getLast().operation().delete()).isFalse();
         assertThat(dispatched.getLast().worker().isOpen()).isTrue();
+    }
+
+    /** Repository 12 hashes onto worker-a, so a placement on worker-b can only be the remembered one. */
+    @Test
+    void shouldAskEveryOpenWorkerToDeleteAndForgetThePlacementWhenOneWorkerFails() {
+        var key = new RepositoryKey(7, 12);
+        var other = otherWorker();
+        var dispatched = answeringWorkers(session, other);
+        executor.execute(key, QUERY, TIMEOUT, new ByteArrayOutputStream());
+        assertThat(dispatched.getFirst().worker()).isSameAs(session);
+        when(registry.sessions()).thenReturn(List.of(session, other));
+        when(session.send(any(GitOperation.class))).thenReturn(false);
+
+        assertThatThrownBy(() -> executor.deleteRepository(key.repositoryId()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Git dispatch failed");
+
+        assertThat(dispatched)
+                .filteredOn(dispatch -> dispatch.operation().delete())
+                .extracting(Dispatch::worker)
+                .containsExactly(other);
+        executor.execute(key, QUERY, TIMEOUT, new ByteArrayOutputStream());
+        assertThat(dispatched.getLast().worker()).isSameAs(other);
     }
 
     @Test

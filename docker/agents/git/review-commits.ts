@@ -2,19 +2,11 @@ import type { ChildProcessByStdio } from "node:child_process";
 import { once } from "node:events";
 import type { Readable } from "node:stream";
 import { records } from "./lines.ts";
+import { succeeded } from "./process.ts";
 
 type StartGit = (args: string[]) => ChildProcessByStdio<null, Readable, null>;
 
 const FIELD_COUNT = 6;
-
-function completion(child: ChildProcessByStdio<null, Readable, null>) {
-	return new Promise<void>((resolve, reject) => {
-		child.once("error", reject);
-		child.once("close", (code) =>
-			code === 0 ? resolve() : reject(new Error("Commit context extraction failed")),
-		);
-	});
-}
 
 async function write(value: string) {
 	if (!process.stdout.write(value)) await once(process.stdout, "drain");
@@ -73,7 +65,7 @@ export async function reviewCommits(revisions: string[], startGit: StartGit) {
 		`${revisions[0]}..${revisions[1]}`,
 		"--",
 	]);
-	const finished = completion(log);
+	const finished = succeeded(log, "Commit context extraction failed");
 	const decoder = new TextDecoder("utf-8", { fatal: true });
 	await write('{\n"commits": [\n');
 	let first = true;

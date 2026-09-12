@@ -378,7 +378,7 @@ delta can say. A strength that simply was not re-observed is not `RESOLVED`.
 | Occurrence state             | —                                  | `SignalState`                              | `artifact_signal.state`                                                       |
 | Source-use purpose           | `purpose`                          | `SourceUsePurpose`                         | source-use decisions                                                          |
 | Source absence state         | `supportedAbsenceStates`           | `SourceAbsenceState`                       | source catalog                                                                |
-| Materialization              | `artifacts`                        | `SourceArtifact`                           | manifest and content-addressed storage metadata                               |
+| Materialization              | `artifacts`                        | `SourceArtifact`                           | manifest and the attempt's staged input files                                 |
 | Practice autonomy            | `autonomy`                         | `PracticeAutonomy`                         | `practice.autonomy`, `practice_group.autonomy` (both nullable)                 |
 | Effective autonomy           | `autonomy.effective`               | `EffectiveAutonomy`                        | resolved, never stored                                                        |
 | Autonomy source              | `autonomy.source`                  | `AutonomySource`                           | resolved, never stored                                                        |

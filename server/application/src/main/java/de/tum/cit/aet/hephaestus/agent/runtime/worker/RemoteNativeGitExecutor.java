@@ -50,9 +50,7 @@ public final class RemoteNativeGitExecutor implements NativeGitExecutor {
 
     @Override
     public void execute(RepositoryKey key, Request request, Duration timeout, OutputStream output) {
-        if (request.operation() == Operation.CITED_BLOBS
-                || request.operation() == Operation.HISTORICAL_BLOB
-                || request.operation() == Operation.SCAN_SECRETS)
+        if (request.operation().readsCanonicalEvidence())
             throw new IllegalArgumentException("Historical reads require canonical job evidence");
         WorkerSession session = affinity.compute(
                 key, (ignored, previous) -> previous != null && previous.isOpen() ? previous : place(key));
@@ -80,13 +78,25 @@ public final class RemoteNativeGitExecutor implements NativeGitExecutor {
         throw new IllegalStateException("Canonical evidence belongs to its worker");
     }
 
+    /** Every open worker is asked, whichever of them fails; the first failure is the one reported. */
     @Override
     public void deleteRepository(long repositoryId) {
         if (repositoryId <= 0) throw new IllegalArgumentException("Invalid repository");
-        for (var session : registry.sessions())
-            if (session.isOpen())
-                remote(session, 0, repositoryId, "", true, Duration.ofMinutes(2), OutputStream.nullOutputStream());
-        affinity.keySet().removeIf(key -> key.repositoryId() == repositoryId);
+        RuntimeException failure = null;
+        try {
+            for (var session : registry.sessions()) {
+                if (!session.isOpen()) continue;
+                try {
+                    remote(session, 0, repositoryId, "", true, Duration.ofMinutes(2), OutputStream.nullOutputStream());
+                } catch (RuntimeException e) {
+                    if (failure == null) failure = e;
+                    else failure.addSuppressed(e);
+                }
+            }
+        } finally {
+            affinity.keySet().removeIf(key -> key.repositoryId() == repositoryId);
+        }
+        if (failure != null) throw failure;
     }
 
     private void remote(

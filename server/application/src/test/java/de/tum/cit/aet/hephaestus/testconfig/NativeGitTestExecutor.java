@@ -13,7 +13,13 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import tools.jackson.databind.ObjectMapper;
 
-/** Real native Git/Node fixture; production always uses the isolated workload adapter. */
+/**
+ * Real native Git/Node fixture; production always uses the isolated workload adapter. Every
+ * operation runs the shipped helper except the two fetches: the helper accepts only an {@code https}
+ * clone URL and disables the file transport, and a fixture only has a {@code file://} source. Those
+ * two fetch by hand and keep the helper's semantics — the same fetch flags, and a
+ * {@code FETCH_COMMIT} that fails unless the fetched ref carries the pinned commit.
+ */
 public final class NativeGitTestExecutor implements NativeGitExecutor {
     private final Path root;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -63,9 +69,22 @@ public final class NativeGitTestExecutor implements NativeGitExecutor {
                 git(List.of(
                         "--git-dir=" + mirrorPath(key),
                         "fetch",
+                        "--force",
+                        "--no-tags",
+                        "--no-recurse-submodules",
                         Path.of(URI.create(java.util.Objects.requireNonNull(request.cloneUrl())))
                                 .toString(),
                         request.revisions().getFirst()));
+                String expected = request.revisions().get(1);
+                String fetched = git(List.of(
+                        "--git-dir=" + mirrorPath(key),
+                        "rev-parse",
+                        "--quiet",
+                        "--verify",
+                        "--end-of-options",
+                        expected + "^{commit}"));
+                if (!fetched.equals(expected))
+                    throw new IllegalStateException("Fetched ref does not carry the pinned commit");
                 return;
             }
             Path operation = Files.createTempDirectory(root, "operation-");
@@ -129,16 +148,21 @@ public final class NativeGitTestExecutor implements NativeGitExecutor {
         }
     }
 
-    private static void git(List<String> arguments) throws IOException, InterruptedException {
+    /** @return the command's trimmed stdout; a non-zero exit fails the fixture */
+    private static String git(List<String> arguments) throws IOException, InterruptedException {
         List<String> command = new ArrayList<>(List.of("git", "-c", "commit.gpgsign=false"));
         command.addAll(arguments);
         Process process = new ProcessBuilder(command)
-                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                 .redirectError(ProcessBuilder.Redirect.INHERIT)
                 .start();
         try {
+            String output;
+            try (var stdout = process.getInputStream()) {
+                output = new String(stdout.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).strip();
+            }
             if (!process.waitFor(30, TimeUnit.SECONDS) || process.exitValue() != 0)
                 throw new IllegalStateException("Git fixture preparation failed");
+            return output;
         } finally {
             process.destroyForcibly();
         }

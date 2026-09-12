@@ -61,7 +61,7 @@ import {
 	promptTokens,
 	type RecordingPace,
 } from "./pi-runner-recording-pace.ts";
-import { isRetryableStatus, retrying } from "./pi-runner-retry.ts";
+import { isRetryableStatus, isTimeoutAbort, retrying } from "./pi-runner-retry.ts";
 import {
 	armRetryWindow,
 	deriveCompositionWindow,
@@ -203,6 +203,9 @@ const PROCESS_START_MS = Date.now();
 
 setTimeout(() => {
 	console.error(`[pi-runner] Watchdog: ${AGENT_BUDGET_MS + 30_000}ms elapsed, hard-exiting`);
+	// First, because finalizing removes from out/ whatever the session left there — which would
+	// include the marker written next.
+	finalizeOutputQuietly();
 	try {
 		writeFileSync(
 			WATCHDOG_PATH,
@@ -1553,21 +1556,13 @@ function causeText(error: unknown): string {
  * so a server that came back somewhere else is not something waiting can reach — and a deployment
  * outlasts any wait that fits here anyway, its healthcheck allowing itself 90s to come up. These
  * attempts buy the failures that clear in place: a reset connection, a socket refused while the
- * process is coming back. Their 15s is already half the watchdog's grace, which still has to cover
- * the composer session this run builds next.
+ * process is coming back. An attempt that is merely slow is not repeated — it is the server working.
  */
 const ADMISSION_ATTEMPTS = 4;
 
-/**
- * How long one attempt may take before it counts as not arriving. A server that closes the socket
- * fails immediately; one that goes silent without closing it would otherwise hold the attempt for
- * Node's own five-minute default, and the watchdog would end the run before a second attempt existed.
- *
- * Four attempts at five seconds, waiting one second then doubling, is at most 27 seconds — inside the
- * 30 seconds of grace the watchdog leaves after the budget. A slow answer that is really coming is
- * retried rather than lost: the same observations replay against the digest the server already holds.
- */
-const ADMISSION_ATTEMPT_TIMEOUT_MS = 5_000;
+// Admission verifies every cited blob against the Git object, in a container the server starts, so
+// one attempt may take minutes; the cap only bounds a server that went silent without closing.
+const ADMISSION_ATTEMPT_TIMEOUT_MS = 10 * 60_000;
 
 /**
  * What the server said about an answer it refused, as text a reader can act on. A body that cannot be
@@ -1599,6 +1594,13 @@ async function postAdmission(): Promise<unknown> {
 			body: JSON.stringify({ schemaVersion: 1, observations: reviewState.observations }),
 		});
 	} catch (error) {
+		if (isTimeoutAbort(error)) {
+			// The server is still verifying; a second attempt would only queue the same work behind it.
+			throw new Error(
+				`observation admission did not answer within ${ADMISSION_ATTEMPT_TIMEOUT_MS}ms`,
+				{ cause: error },
+			);
+		}
 		// Node reports every transport failure as `TypeError: fetch failed`; only the cause says which
 		// one it was, and a report that has just the message cannot tell a restart from a wrong URL.
 		throw new AdmissionUnreachable(

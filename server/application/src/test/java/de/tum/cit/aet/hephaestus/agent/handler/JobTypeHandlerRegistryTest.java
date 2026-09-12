@@ -39,16 +39,24 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
 
     private final JsonMapper objectMapper = JsonMapper.builder().build();
 
+    private PracticeCatalogInjector practiceCatalogInjector() {
+        return new PracticeCatalogInjector(
+                objectMapper, practiceRepository, InContextDeliveryGateFixtures.workspaceDefaults());
+    }
+
+    private PracticeReviewPreparation preparation(PracticeCatalogInjector practiceCatalogInjector) {
+        return new PracticeReviewPreparation(
+                workspaceContextBuilder, practiceCatalogInjector, new TaskEnvelopeWriter(objectMapper));
+    }
+
     private JobTypeHandler prReviewHandler() {
         var parser = new PracticeDetectionResultParser(objectMapper);
-        var envelopeWriter = new TaskEnvelopeWriter(objectMapper);
+        var practiceCatalogInjector = practiceCatalogInjector();
         return new PullRequestReviewHandler(
                 objectMapper,
                 cas,
-                new PracticeCatalogInjector(
-                        objectMapper, practiceRepository, InContextDeliveryGateFixtures.workspaceDefaults()),
-                workspaceContextBuilder,
-                envelopeWriter,
+                practiceCatalogInjector,
+                preparation(practiceCatalogInjector),
                 parser,
                 new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
                 deliveryService,
@@ -65,13 +73,11 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
 
     private JobTypeHandler issueReviewHandler() {
         var parser = new PracticeDetectionResultParser(objectMapper);
-        var envelopeWriter = new TaskEnvelopeWriter(objectMapper);
+        var practiceCatalogInjector = practiceCatalogInjector();
         return new IssueReviewHandler(
                 objectMapper,
-                workspaceContextBuilder,
-                envelopeWriter,
-                new PracticeCatalogInjector(
-                        objectMapper, practiceRepository, InContextDeliveryGateFixtures.workspaceDefaults()),
+                preparation(practiceCatalogInjector),
+                practiceCatalogInjector,
                 parser,
                 new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
                 deliveryService,
@@ -92,13 +98,11 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
 
     private JobTypeHandler conversationReviewHandler() {
         var parser = new PracticeDetectionResultParser(objectMapper);
-        var envelopeWriter = new TaskEnvelopeWriter(objectMapper);
+        var practiceCatalogInjector = practiceCatalogInjector();
         return new ConversationReviewHandler(
                 objectMapper,
-                workspaceContextBuilder,
-                envelopeWriter,
-                new PracticeCatalogInjector(
-                        objectMapper, practiceRepository, InContextDeliveryGateFixtures.workspaceDefaults()),
+                preparation(practiceCatalogInjector),
+                practiceCatalogInjector,
                 parser,
                 deliveryService,
                 org.mockito.Mockito.mock(ApplicationEventPublisher.class),
@@ -107,15 +111,9 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
 
     private JobTypeHandler documentReviewHandler() {
         var parser = new PracticeDetectionResultParser(objectMapper);
-        var envelopeWriter = new TaskEnvelopeWriter(objectMapper);
+        var practiceCatalogInjector = practiceCatalogInjector();
         return new DocumentReviewHandler(
-                objectMapper,
-                workspaceContextBuilder,
-                envelopeWriter,
-                new PracticeCatalogInjector(
-                        objectMapper, practiceRepository, InContextDeliveryGateFixtures.workspaceDefaults()),
-                parser,
-                deliveryService);
+                objectMapper, preparation(practiceCatalogInjector), practiceCatalogInjector, parser, deliveryService);
     }
 
     /** A registry with the full handler set (every {@link AgentJobType} mapped). */

@@ -7,14 +7,21 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * What one capture staged for a sandbox.
+ *
+ * @param manifest the source manifest of a practice review; null for evidence built without a source
+ *     contract, which only the mentor chat and a files-only test fixture do
+ */
 public record PreparedEvidence(
         Map<String, byte[]> files,
         Map<String, Path> filesOnDisk,
         List<AutoCloseable> cleanups,
-        ArtifactSourceManifest manifest,
+        @Nullable ArtifactSourceManifest manifest,
         List<EvidenceDirectory> directories)
         implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(PreparedEvidence.class);
@@ -23,11 +30,11 @@ public record PreparedEvidence(
             Map<String, byte[]> files,
             Map<String, Path> filesOnDisk,
             List<AutoCloseable> cleanups,
-            ArtifactSourceManifest manifest) {
+            @Nullable ArtifactSourceManifest manifest) {
         this(files, filesOnDisk, cleanups, manifest, List.of());
     }
 
-    public PreparedEvidence(Map<String, byte[]> files, ArtifactSourceManifest manifest) {
+    public PreparedEvidence(Map<String, byte[]> files, @Nullable ArtifactSourceManifest manifest) {
         this(files, Map.of(), List.of(), manifest);
     }
 
@@ -36,7 +43,11 @@ public record PreparedEvidence(
         files = Collections.unmodifiableMap(new LinkedHashMap<>(Objects.requireNonNull(files, "files")));
         filesOnDisk = Map.copyOf(Objects.requireNonNull(filesOnDisk, "filesOnDisk"));
         cleanups = List.copyOf(Objects.requireNonNull(cleanups, "cleanups"));
-        Objects.requireNonNull(manifest, "manifest");
+    }
+
+    /** The same capture with {@code files} in place of this one's; disk-staged content and cleanups are shared. */
+    public PreparedEvidence withFiles(Map<String, byte[]> files) {
+        return new PreparedEvidence(files, filesOnDisk, cleanups, manifest, directories);
     }
 
     /** Releases every staging directory backing {@link #filesOnDisk}. Safe to call more than once. */

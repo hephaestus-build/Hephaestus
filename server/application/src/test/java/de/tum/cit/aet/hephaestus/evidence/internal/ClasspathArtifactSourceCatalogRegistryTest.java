@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.evidence.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.evidence.PrivacyClass;
@@ -13,6 +12,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUseBasis;
 import de.tum.cit.aet.hephaestus.evidence.SourceUseOutcome;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Clock;
@@ -20,22 +20,24 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Stream;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
 import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-@Tag("unit")
-class ClasspathArtifactSourceCatalogRegistryTest {
+class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
 
     private final JsonMapper objectMapper = JsonMapper.builder().build();
+
+    @Mock
+    private Clock clock;
 
     @Test
     void shouldLoadCurrentCatalogAndGovernanceDecisions() throws IOException {
         var registry = new ClasspathArtifactSourceCatalogRegistry(objectMapper, java.time.Clock.systemUTC());
 
-        assertThat(registry.current().version()).isEqualTo(new SourceContractVersion("1.1.0"));
+        assertThat(registry.current().version()).isEqualTo(ClasspathArtifactSourceCatalogRegistry.CURRENT_VERSION);
         assertThat(registry.catalogDigest())
                 .isEqualTo(read("contracts/artifact-source/1.1.0/artifact-source-manifest.schema.json")
                         .path("properties")
@@ -56,7 +58,7 @@ class ClasspathArtifactSourceCatalogRegistryTest {
     void shouldReadARetiredContractForTheFeedbackRecordedUnderIt() {
         var registry = new ClasspathArtifactSourceCatalogRegistry(
                 objectMapper, Clock.fixed(Instant.parse("2026-09-11T12:00:00Z"), java.time.ZoneOffset.UTC));
-        var previous = new SourceContractVersion("1.0.0");
+        var previous = ClasspathArtifactSourceCatalogRegistry.PREVIOUS_VERSION;
         var source = new SourceKind("scm.repository.tree");
 
         assertThat(registry.isSourceUsePermitted(previous, source, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
@@ -125,7 +127,6 @@ class ClasspathArtifactSourceCatalogRegistryTest {
 
     @Test
     void shouldRecheckApprovalExpiryWhenASourceIsRequested() {
-        Clock clock = mock(Clock.class);
         when(clock.instant()).thenReturn(Instant.parse("2026-08-03T12:00:00Z"));
         var registry = new ClasspathArtifactSourceCatalogRegistry(objectMapper, clock);
         when(clock.instant()).thenReturn(Instant.parse("2027-08-03T00:00:00Z"));

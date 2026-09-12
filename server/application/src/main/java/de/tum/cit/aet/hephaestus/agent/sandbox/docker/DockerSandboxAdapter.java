@@ -177,8 +177,8 @@ public class DockerSandboxAdapter implements SandboxManager {
                 // host.docker.internal is reachable only from a non-internal network.
                 if (!allowInternet) {
                     throw new SandboxException(
-                            "App-server is not in Docker and network is internal (allowInternet=false). "
-                                    + "Set allow_internet=true on the agent config, or run the app-server in Docker.");
+                            "Practice reviews run on an internal network; run the app server in Docker "
+                                    + "or set SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID");
                 }
                 appServerIp = "host.docker.internal";
                 extraHosts = List.of("host.docker.internal:host-gateway");
@@ -428,7 +428,8 @@ public class DockerSandboxAdapter implements SandboxManager {
             return;
         }
         String truncated = logs.length() > MAX_LOG_EVENT_CHARS
-                ? logs.substring(0, MAX_LOG_EVENT_CHARS) + "\n... [truncated, " + logs.length() + " characters total]"
+                ? "[" + logs.length() + " characters total, tail follows] ...\n"
+                        + logs.substring(logs.length() - MAX_LOG_EVENT_CHARS)
                 : logs;
         log.warn("Container logs before cleanup:\n{}", truncated);
     }

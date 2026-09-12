@@ -48,6 +48,10 @@ import org.springframework.util.FileSystemUtils;
 public class GitRepositoryManager {
     public static final String TREE_LIMITATION_SUBMODULE = "SUBMODULE_EXCLUDED";
     public static final String TREE_LIMITATION_UNSAFE_PATH = "UNSAFE_PATH_EXCLUDED";
+    /** Name prefixes of what this manager creates under the fabric root, so a sweep can tell its leftovers apart. */
+    public static final String GIT_SNAPSHOT_PREFIX = "git-snapshot-";
+
+    public static final String GIT_OUTPUT_PREFIX = "git-output-";
     private static final Logger log = LoggerFactory.getLogger(GitRepositoryManager.class);
     private static final Duration OPERATION_TIMEOUT = Duration.ofMinutes(15);
     private static final int DETAIL_FRAME_BYTES = 16 * 1024 * 1024;
@@ -124,16 +128,8 @@ public class GitRepositoryManager {
         if (!isEnabled()) return;
         Path subjects = spool(repository, Operation.COMMIT_SUBJECTS, List.of(base, head));
         try (InputStream input = new BufferedInputStream(Files.newInputStream(subjects))) {
-            while (true) {
-                acquireIngestionPermit();
-                try {
-                    String subject = nulField(input);
-                    if (subject == null) break;
-                    consumer.accept(subject);
-                } finally {
-                    ingestionPermits.release();
-                }
-            }
+            String subject;
+            while ((subject = nulField(input)) != null) consumer.accept(subject);
         } catch (IOException failure) {
             throw new GitOperationException("Cannot read Git commit subjects", failure);
         } finally {
@@ -141,6 +137,7 @@ public class GitRepositoryManager {
         }
     }
 
+    /** Bounds the commit rows written at once, not what is read from Git. */
     private void acquireIngestionPermit() {
         try {
             ingestionPermits.acquire();
@@ -338,7 +335,7 @@ public class GitRepositoryManager {
         Path archive = spool(repository, Operation.SNAPSHOT, List.of(resolved));
         Path directory;
         try {
-            directory = Files.createTempDirectory(layout.root(), "git-snapshot-");
+            directory = Files.createTempDirectory(layout.root(), GIT_SNAPSHOT_PREFIX);
         } catch (IOException e) {
             deleteFile(archive);
             throw new GitOperationException("Cannot create snapshot directory", e);
@@ -371,13 +368,12 @@ public class GitRepositoryManager {
                     throw new IOException("Native snapshot contains an unsupported archive entry");
                 Files.createDirectories(target.getParent());
                 try (OutputStream out = Files.newOutputStream(target)) {
-                    tar.transferTo(out);
+                    bytes = Math.addExact(bytes, tar.transferTo(out));
                 }
-                if ((entry.getMode() & 0111) != 0 && !target.toFile().setExecutable(true, false))
-                    throw new IOException("Cannot preserve executable file mode");
-                bytes = Math.addExact(bytes, Files.size(target));
                 if (bytes > properties.maxSnapshotBytes())
                     throw new IOException("Repository snapshot exceeds hephaestus.git.max-snapshot-bytes");
+                if ((entry.getMode() & 0111) != 0 && !target.toFile().setExecutable(true, false))
+                    throw new IOException("Cannot preserve executable file mode");
                 if (!name.startsWith(".git/")) visited++;
             }
             Path entries = spool(repository, Operation.TREE_ENTRIES, List.of(resolved));
@@ -389,6 +385,9 @@ public class GitRepositoryManager {
                 deleteFile(entries);
             }
             return new GitTreeSnapshot(directory, resolved, tree, bytes, visited, limitations.isEmpty(), limitations);
+        } catch (GitOperationException e) {
+            deleteTreeQuietly(directory);
+            throw e;
         } catch (IOException | RuntimeException e) {
             deleteTreeQuietly(directory);
             throw new GitOperationException("Cannot prepare Git snapshot", e);
@@ -410,13 +409,16 @@ public class GitRepositoryManager {
     }
 
     private Path spool(RepositoryKey repository, Operation operation, List<String> revisions) {
-        Path file = temporary("git-output-");
+        Path file = temporary(GIT_OUTPUT_PREFIX);
         try (OutputStream output = Files.newOutputStream(file)) {
             execute(repository, new Request(operation, revisions, null, null), output);
             return file;
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException e) {
             deleteFile(file);
-            throw new GitOperationException("Git operation failed", e);
+            throw new GitOperationException("Cannot spool Git output", e);
+        } catch (RuntimeException e) {
+            deleteFile(file);
+            throw e;
         }
     }
 
@@ -456,7 +458,8 @@ public class GitRepositoryManager {
     static void deleteTreeQuietly(Path root) {
         try {
             FileSystemUtils.deleteRecursively(root);
-        } catch (IOException ignored) {
+        } catch (IOException e) {
+            log.warn("Could not remove Git snapshot directory {}", root, e);
         }
     }
 

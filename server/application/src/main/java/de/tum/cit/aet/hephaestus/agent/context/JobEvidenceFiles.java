@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -58,6 +59,9 @@ public class JobEvidenceFiles {
      * bytes that decode and an undecodable byte elsewhere in the artifact costs nothing.
      */
     private static final String UNDECODABLE = "\uDC00";
+
+    /** How long an ended attempt, or a Git spool entry nobody released, stays before it is deleted. */
+    static final Duration RETENTION_GRACE = Duration.ofHours(1);
 
     private final FabricLayout layout;
     private final AgentJobRepository jobs;
@@ -137,12 +141,9 @@ public class JobEvidenceFiles {
                 }
             });
             return new PreparedJobInputs(
-                    frozen,
-                    staged,
-                    directories,
-                    cleanups,
-                    inputs.artifactSourceManifest(),
-                    inputs.automatedReviewReadinessReport());
+                    new PreparedEvidence(frozen, staged, cleanups, inputs.artifactSourceManifest(), directories),
+                    inputs.automatedReviewReadinessReport(),
+                    inputs.secretScan());
         } catch (IOException | RuntimeException exception) {
             if (staging != null) delete(staging);
             inputs.close();
@@ -284,6 +285,7 @@ public class JobEvidenceFiles {
     }
 
     public void cleanEndedAttempts() {
+        cleanStaleGitSpool();
         if (!Files.isDirectory(layout.jobsRoot())) return;
         try (var paths = Files.walk(layout.jobsRoot(), 3)) {
             var roots = new HashSet<Path>();
@@ -312,12 +314,45 @@ public class JobEvidenceFiles {
                     Path ended = markEnded(root);
                     if (!Files.getLastModifiedTime(ended)
                             .toInstant()
-                            .plus(Duration.ofHours(1))
+                            .plus(RETENTION_GRACE)
                             .isAfter(clock.instant())) {
                         deleteAttempt(root);
                     }
                 } catch (RuntimeException | IOException exception) {
                     log.warn("Could not clean attempt folder {}", root, exception);
+                }
+            }
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+    }
+
+    /**
+     * A Git snapshot or spooled output survives its preparation only when the process died holding it.
+     * The grace is the one an ended attempt gets, so a preparation still running is never swept from
+     * under itself.
+     */
+    private void cleanStaleGitSpool() {
+        if (!Files.isDirectory(layout.root())) return;
+        try (var entries = Files.list(layout.root())) {
+            for (Path entry : entries.toList()) {
+                String name = entry.getFileName().toString();
+                if (!name.startsWith(GitRepositoryManager.GIT_SNAPSHOT_PREFIX)
+                        && !name.startsWith(GitRepositoryManager.GIT_OUTPUT_PREFIX)) continue;
+                try {
+                    if (Files.getLastModifiedTime(entry, LinkOption.NOFOLLOW_LINKS)
+                            .toInstant()
+                            .plus(RETENTION_GRACE)
+                            .isAfter(clock.instant())) {
+                        continue;
+                    }
+                    if (Files.isDirectory(entry, LinkOption.NOFOLLOW_LINKS)) {
+                        delete(entry);
+                    } else {
+                        Files.deleteIfExists(entry);
+                    }
+                } catch (RuntimeException | IOException exception) {
+                    log.warn("Could not clean stale Git spool entry {}", entry, exception);
                 }
             }
         } catch (IOException exception) {

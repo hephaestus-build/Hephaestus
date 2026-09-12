@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
@@ -211,35 +212,23 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
         metadata.put("repository_full_name", repo.getNameWithOwner());
         metadata.put("pr_number", 42);
         agentJob.setMetadata(metadata);
-        ObjectNode snapshot = OBJECT_MAPPER.createObjectNode();
-        var source = snapshot.putObject("manifest")
-                .put("contractVersion", "1.1.0")
-                .putArray("sources")
-                .addObject()
-                .put("kind", "scm.pull-request.diff");
-        source.putObject("state")
-                .put("availability", "AVAILABLE")
-                .put("content", "NON_EMPTY")
-                .put("completeness", "COMPLETE")
-                .putObject("facts")
-                .put("capturedAt", "2026-08-03T00:00:00Z")
-                .put("immutableIdentity", "abc123");
+        ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(OBJECT_MAPPER);
+        var source = EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.diff", "abc123");
         byte[] diff =
                 "diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] + insecure();\n"
                         .getBytes(StandardCharsets.UTF_8);
-        source.putArray("artifacts")
-                .addObject()
-                .put("path", "inputs/context/diff.patch")
+        EvidenceSnapshotFixtures.artifact(source, "inputs/context/diff.patch", ProvenanceDigest.sha256Hex(diff))
                 .put("mediaType", "text/x-diff")
-                .put("sha256", ProvenanceDigest.sha256Hex(diff))
                 .put("bytes", diff.length);
-        var admitted = snapshot.putArray("practices");
-        admitted.addObject()
-                .put("slug", description.getSlug())
-                .put("revisionId", description.getCurrentRevision().getId());
-        admitted.addObject()
-                .put("slug", errors.getSlug())
-                .put("revisionId", errors.getCurrentRevision().getId());
+        EvidenceSnapshotFixtures.admittedPractice(
+                snapshot,
+                description.getSlug(),
+                java.util.Objects.requireNonNull(
+                        description.getCurrentRevision().getId()));
+        EvidenceSnapshotFixtures.admittedPractice(
+                snapshot,
+                errors.getSlug(),
+                java.util.Objects.requireNonNull(errors.getCurrentRevision().getId()));
         preparedEvidence.add(evidenceFiles.prepare(
                 agentJob, PreparedJobInputs.filesOnly(Map.of("inputs/context/diff.patch", diff))));
         agentJob.setEvidenceSnapshot(snapshot);
@@ -303,7 +292,7 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
         return evidence;
     }
 
-    private PracticeDetectionDeliveryService.DeliveryResult publishVerified(
+    private PracticeDetectionDeliveryService.RecordedObservations publishVerified(
             AgentJob job, List<PracticeDetectionResultParser.ValidatedObservation> submitted) {
         return deliveryService.publish(job, deliveryService.prepare(job, submitted));
     }
@@ -352,7 +341,7 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
 
             var result = publishVerified(agentJob, observations);
 
-            assertThat(result.delivered().stream().map(o -> o.recurrenceKey()).toList())
+            assertThat(result.recorded().stream().map(o -> o.recurrenceKey()).toList())
                     .as("one stable key returned per delivered observation")
                     .hasSize(2)
                     .allMatch(k -> k != null && k.matches("[0-9a-f]{64}"));
@@ -362,7 +351,7 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
                     .toList();
             assertThat(persistedKeys)
                     .as("every returned fingerprint is persisted as a recurrence_key, and vice versa")
-                    .containsExactlyInAnyOrderElementsOf(result.delivered().stream()
+                    .containsExactlyInAnyOrderElementsOf(result.recorded().stream()
                             .map(o -> o.recurrenceKey())
                             .toList());
         }
@@ -475,19 +464,11 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
         }
 
         @Test
-        void emptyFindingsPublishesZeroEvent() {
-            var result = publishVerified(agentJob, List.of());
-
-            assertThat(result.inserted()).isZero();
-            assertThat(result.hasNegative()).isFalse();
-
-            List<PracticeDetectionCompletedEvent> events = applicationEvents.stream(
-                            PracticeDetectionCompletedEvent.class)
-                    .toList();
-            assertThat(events).hasSize(1);
-            assertThat(events.get(0).observationsInserted()).isZero();
-            assertThat(events.get(0).observationsDiscarded()).isZero();
-            assertThat(events.get(0).hasNegative()).isFalse();
+        void shouldRefuseRatherThanPublishWhenNoObservationSurvived() {
+            assertThatThrownBy(() -> publishVerified(agentJob, List.of()))
+                    .isInstanceOf(ObservationsRefusedException.class);
+            assertThat(applicationEvents.stream(PracticeDetectionCompletedEvent.class))
+                    .isEmpty();
         }
     }
 

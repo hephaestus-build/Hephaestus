@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import de.tum.cit.aet.hephaestus.agent.context.HistoricalGitEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.DocumentContentSource;
+import de.tum.cit.aet.hephaestus.agent.context.providers.RepositoryTreeContentSource;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
 import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
@@ -12,7 +13,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
-import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.ReviewTargetQuery;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
@@ -127,25 +128,15 @@ public class PracticeDetectionDeliveryService {
     }
 
     public PreparedObservations prepare(AgentJob job, List<ValidatedObservation> validObservations) {
-        Long workspaceId = job.getWorkspace().getId();
         JsonNode metadata = job.getMetadata();
         if (metadata == null) {
             throw new JobDeliveryException("Missing job metadata: jobId=" + job.getId());
         }
 
-        EvidenceBoundary evidenceBoundary = evidenceBoundary(job);
-        for (SourceKind kind : evidenceBoundary.allowedSources()) {
-            if (!sourceCatalogs.isSourceUsePermitted(
-                    evidenceBoundary.contractVersion(), kind, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)) {
-                throw new JobDeliveryException(
-                        "Evidence source authorization was withdrawn before delivery: source=" + kind
-                                + ", jobId="
-                                + job.getId());
-            }
-        }
-        resolveTarget(job, metadata);
-        Map<String, PracticeRevision> revisionsBySlug = admittedRevisions(job, workspaceId);
-        var repositoryQuotes = verifyRepositoryQuotes(job, validObservations, evidenceBoundary);
+        Admissible admissible = requireAdmissible(job, metadata);
+        CapturedEvidence captured = admissible.evidence();
+        Map<String, PracticeRevision> revisionsBySlug = admissible.revisionsBySlug();
+        var repositoryQuotes = verifyRepositoryQuotes(job, validObservations, captured);
         // A quote that does not verify discredits its own claim, and only EvidenceQuoteUnverifiedException
         // means that. Every other refusal here — an unstaged source, a malformed citation, work attributed
         // to the wrong person — impugns the run, so it stays fatal.
@@ -200,8 +191,7 @@ public class PracticeDetectionDeliveryService {
 
             enforceAttribution(observation, revision, job);
             try {
-                var verifiedEvidence =
-                        enforceEvidenceBoundary(observation, revision, evidenceBoundary, job, repositoryQuotes);
+                var verifiedEvidence = enforceEvidenceBoundary(observation, revision, captured, job, repositoryQuotes);
                 observation = new ValidatedObservation(
                         observation.practiceSlug(),
                         observation.summary(),
@@ -252,8 +242,7 @@ public class PracticeDetectionDeliveryService {
                         job.getId());
             }
         }
-        // Only when there was something to admit: a review that found nothing still publishes its zero.
-        if (admittedObservations.isEmpty() && !validObservations.isEmpty()) {
+        if (admittedObservations.isEmpty()) {
             throw new ObservationsRefusedException(
                     "no_valid_observations",
                     "No observation survived the evidence check, so there is nothing to deliver: jobId=" + job.getId()
@@ -276,7 +265,7 @@ public class PracticeDetectionDeliveryService {
     }
 
     @Transactional
-    public DeliveryResult publish(AgentJob job, PreparedObservations prepared) {
+    public RecordedObservations publish(AgentJob job, PreparedObservations prepared) {
         if (!prepared.jobId.equals(job.getId())
                 || prepared.attempt != job.getRetryCount()
                 || !Objects.equals(prepared.workerId, job.getWorkerId())
@@ -286,15 +275,11 @@ public class PracticeDetectionDeliveryService {
         }
         Long workspaceId = job.getWorkspace().getId();
         JsonNode metadata = Objects.requireNonNull(job.getMetadata());
-        EvidenceBoundary boundary = evidenceBoundary(job);
-        for (SourceKind kind : boundary.allowedSources()) {
-            if (!sourceCatalogs.isSourceUsePermitted(
-                    boundary.contractVersion(), kind, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)) {
-                throw new JobDeliveryException("Evidence source authorization was withdrawn before publication");
-            }
-        }
-        Target target = resolveTarget(job, metadata);
-        Map<String, PracticeRevision> revisionsBySlug = admittedRevisions(job, workspaceId);
+        // Asked again under the ownership fence: what was admissible when the submission was verified
+        // may have been withdrawn, erased or reassigned since.
+        Admissible admissible = requireAdmissible(job, metadata);
+        Target target = admissible.target();
+        Map<String, PracticeRevision> revisionsBySlug = admissible.revisionsBySlug();
         List<ValidatedObservation> admittedObservations = prepared.observations;
         List<Integer> admittedIndexes = prepared.indexes;
         for (ValidatedObservation observation : admittedObservations) {
@@ -318,7 +303,7 @@ public class PracticeDetectionDeliveryService {
         boolean hasNegative = false;
         Instant observedAt = Instant.now();
 
-        List<ValidatedObservation> deliveredObservations = new ArrayList<>(admittedObservations.size());
+        List<ValidatedObservation> recordedObservations = new ArrayList<>(admittedObservations.size());
 
         for (int i = 0; i < admittedObservations.size(); i++) {
             ValidatedObservation observation = admittedObservations.get(i);
@@ -353,7 +338,7 @@ public class PracticeDetectionDeliveryService {
                     artifactId,
                     aboutUserId,
                     firstLocationPath(observation.evidence()));
-            deliveredObservations.add(observation.withKeys(new ObservationKeys(occurrenceKey, recurrenceKey)));
+            recordedObservations.add(observation.withKeys(new ObservationKeys(occurrenceKey, recurrenceKey)));
 
             Long practiceRevisionId = Objects.requireNonNull(revision.getId(), "Practice revision must be persisted");
 
@@ -401,7 +386,7 @@ public class PracticeDetectionDeliveryService {
         }
 
         log.info(
-                "Practice reviews delivery: inserted={}, duplicate={}, jobId={}",
+                "Recorded this review's observations: inserted={}, duplicate={}, jobId={}",
                 inserted,
                 discardedDuplicate,
                 job.getId());
@@ -416,7 +401,27 @@ public class PracticeDetectionDeliveryService {
                 discardedDuplicate,
                 hasNegative));
 
-        return new DeliveryResult(inserted, discardedDuplicate, hasNegative, deliveredObservations);
+        return new RecordedObservations(inserted, discardedDuplicate, hasNegative, recordedObservations);
+    }
+
+    /** What one admission may record against: the capture, the person and work it names, and its practices. */
+    private record Admissible(
+            CapturedEvidence evidence, Target target, Map<String, PracticeRevision> revisionsBySlug) {}
+
+    private Admissible requireAdmissible(AgentJob job, JsonNode metadata) {
+        CapturedEvidence evidence = CapturedEvidence.of(job, objectMapper);
+        for (SourceKind kind : evidence.availableSources()) {
+            if (!sourceCatalogs.isSourceUsePermitted(
+                    evidence.contractVersion(), kind, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)) {
+                throw new JobDeliveryException(
+                        "Evidence source authorization was withdrawn before delivery: source=" + kind
+                                + ", jobId="
+                                + job.getId());
+            }
+        }
+        Target target = resolveTarget(job, metadata);
+        return new Admissible(
+                evidence, target, admittedRevisions(job, job.getWorkspace().getId()));
     }
 
     public static final class PreparedObservations {
@@ -467,48 +472,29 @@ public class PracticeDetectionDeliveryService {
     }
 
     private Map<HistoricalGitEvidence.Citation, JobEvidenceFiles.QuoteMatch> verifyRepositoryQuotes(
-            AgentJob job, List<ValidatedObservation> observations, EvidenceBoundary boundary) {
+            AgentJob job, List<ValidatedObservation> observations, CapturedEvidence captured) {
         List<JsonNode> candidates = new ArrayList<>();
         for (ValidatedObservation observation : observations) {
             JsonNode evidence = observation.evidence();
             if (evidence == null) continue;
             for (JsonNode citation : evidence.path("citations")) {
-                if ("scm.repository.tree".equals(citation.path("sourceKind").asString())) {
+                if (RepositoryTreeContentSource.KIND
+                        .value()
+                        .equals(citation.path("sourceKind").asString())) {
                     candidates.add(citation);
                 }
             }
         }
         if (candidates.isEmpty()) return Map.of();
-        SourceKind kind = new SourceKind("scm.repository.tree");
+        SourceKind kind = RepositoryTreeContentSource.KIND;
         String root = SandboxLayout.REPO_MOUNT_RELATIVE;
-        SourceArtifactRef head = boundary.artifacts().get(root + ".git/HEAD");
-        SourceArtifactRef refs = boundary.artifacts().get(root + ".git/hephaestus-captured-refs");
-        if (!boundary.allowedSources().contains(kind)
-                || head == null
-                || refs == null
-                || !head.kind().equals(kind)
-                || !refs.kind().equals(kind)) {
-            throw new JobDeliveryException("Unavailable or misattributed evidence source scm.repository.tree");
-        }
-        String pinnedHead = pinnedRepositoryHead(job);
+        CapturedEvidence.Artifact head = captured.requireArtifact(kind, root + ".git/HEAD");
+        CapturedEvidence.Artifact refs = captured.requireArtifact(kind, root + ".git/hephaestus-captured-refs");
+        String pinnedHead = captured.pinnedHead();
         var requested = candidates.stream()
                 .map(citation -> repositoryCitation(citation, pinnedHead))
                 .toList();
         return historicalGit.verifyAll(job, head.sha256(), refs.sha256(), pinnedHead, requested);
-    }
-
-    private static String pinnedRepositoryHead(AgentJob job) {
-        for (JsonNode source : requireEvidenceSnapshot(job).path("manifest").path("sources")) {
-            if ("scm.repository.tree".equals(source.path("kind").asString())) {
-                String head = source.path("state")
-                        .path("facts")
-                        .path("immutableIdentity")
-                        .asString()
-                        .split(":", 2)[0];
-                if (head.matches(CitationVerification.GIT_OBJECT_ID)) return head;
-            }
-        }
-        throw new JobDeliveryException("Captured repository has no pinned commit identity");
     }
 
     private static HistoricalGitEvidence.Citation repositoryCitation(JsonNode citation, String pinnedHead) {
@@ -540,7 +526,7 @@ public class PracticeDetectionDeliveryService {
     private JsonNode enforceEvidenceBoundary(
             ValidatedObservation observation,
             PracticeRevision revision,
-            EvidenceBoundary boundary,
+            CapturedEvidence captured,
             AgentJob job,
             Map<HistoricalGitEvidence.Citation, JobEvidenceFiles.QuoteMatch> repositoryQuotes) {
         if (revision.getAutomatedReviewPolicy() == null || revision.getBindings() == null) {
@@ -573,8 +559,9 @@ public class PracticeDetectionDeliveryService {
                         exhaustive.add(need.sourceKind());
                     }
                 });
-        enforceRecordedSearch(observation, exhaustive, boundary, job);
-        enforceStatedInapplicability(observation, boundary, job);
+        enforceRecordedSearch(observation, exhaustive, captured, job);
+        enforceStatedInapplicability(observation, captured, job);
+        String diffSource = PracticeSubjectClause.DIFF_SOURCE.value();
         for (int citationIndex = 0; citationIndex < citations.size(); citationIndex++) {
             JsonNode citation = citations.get(citationIndex);
             JsonNode sourceKind = citation.path("sourceKind");
@@ -587,7 +574,7 @@ public class PracticeDetectionDeliveryService {
             JsonNode quoteSha256 = citation.path("quoteSha256");
             boolean redactedSecretCitation =
                     "secret-diff-scanner".equals(evidence.path("detector").asString())
-                            && "scm.pull-request.diff".equals(sourceKind.asString())
+                            && diffSource.equals(sourceKind.asString())
                             && quote.isMissingNode()
                             && quoteSha256.isString()
                             && quoteSha256.asString().matches(CitationVerification.SHA256_HEX);
@@ -595,9 +582,9 @@ public class PracticeDetectionDeliveryService {
                     || !sourceKind.isString()
                     || !artifactPath.isString()
                     || !path.isString()
-                    || ("scm.pull-request.diff".equals(sourceKind.asString())
+                    || (diffSource.equals(sourceKind.asString())
                             && (!side.isString() || !("OLD".equals(side.asString()) || "NEW".equals(side.asString()))))
-                    || (!"scm.pull-request.diff".equals(sourceKind.asString()) && !side.isMissingNode())
+                    || (!diffSource.equals(sourceKind.asString()) && !side.isMissingNode())
                     || !startLine.isIntegralNumber()
                     || startLine.asInt() < 1
                     || (!endLine.isMissingNode()
@@ -618,8 +605,8 @@ public class PracticeDetectionDeliveryService {
                                 + job.getId(),
                         e);
             }
-            SourceArtifactRef artifact = boundary.artifacts().get(artifactPath.asString());
-            if (!boundary.allowedSources().contains(kind)
+            CapturedEvidence.Artifact artifact = captured.artifact(artifactPath.asString());
+            if (!captured.availableSources().contains(kind)
                     || artifact == null
                     || !artifact.kind().equals(kind)) {
                 throw new JobDeliveryException("Observation cited unavailable or misattributed evidence source " + kind
@@ -638,10 +625,10 @@ public class PracticeDetectionDeliveryService {
             String quoteDigest =
                     redactedSecretCitation ? quoteSha256.asString() : CitationVerification.quoteDigest(exactQuote);
             JsonNode gitRevision = citation.path("revision");
-            if ("scm.repository.tree".equals(kind.value()) || !gitRevision.isMissingNode()) {
-                if (!"scm.repository.tree".equals(kind.value()))
+            if (RepositoryTreeContentSource.KIND.equals(kind) || !gitRevision.isMissingNode()) {
+                if (!RepositoryTreeContentSource.KIND.equals(kind))
                     throw new JobDeliveryException("Only repository citations may select a revision");
-                var requested = repositoryCitation(citation, pinnedRepositoryHead(job));
+                var requested = repositoryCitation(citation, captured.pinnedHead());
                 ((ObjectNode) citation).put("revision", requested.revision());
                 var match = repositoryQuotes.get(requested);
                 if (match == null) throw new JobDeliveryException("Repository citation has no prepared verification");
@@ -655,7 +642,7 @@ public class PracticeDetectionDeliveryService {
                 CitationVerification.record((ObjectNode) citation, job, blobDigest, quoteDigest);
                 continue;
             }
-            if (!"scm.pull-request.diff".equals(kind.value())) {
+            if (!PracticeSubjectClause.DIFF_SOURCE.equals(kind)) {
                 // The path of a serialized source is a label for the reader; the artifact and its lines
                 // are what the quote is verified against.
                 boolean containsQuote = evidenceFiles
@@ -708,7 +695,7 @@ public class PracticeDetectionDeliveryService {
 
     /** Requires NOT_APPLICABLE claims to identify the subject, exclusion reason, and consulted sources. */
     private void enforceStatedInapplicability(
-            ValidatedObservation observation, EvidenceBoundary boundary, AgentJob job) {
+            ValidatedObservation observation, CapturedEvidence captured, AgentJob job) {
         if (observation.assessmentStatus() != AssessmentStatus.NOT_APPLICABLE) {
             return;
         }
@@ -747,7 +734,7 @@ public class PracticeDetectionDeliveryService {
                                 + job.getId(),
                         e);
             }
-            if (!boundary.allowedSources().contains(sourceKind)) {
+            if (!captured.availableSources().contains(sourceKind)) {
                 throw new JobDeliveryException(
                         "Stated inapplicability claims a source this run did not stage " + sourceKind
                                 + ": slug="
@@ -760,7 +747,7 @@ public class PracticeDetectionDeliveryService {
 
     /** Requires an exhaustive search for ABSENT claims and a bounded corpus for ABSENT strengths. */
     private void enforceRecordedSearch(
-            ValidatedObservation observation, Set<SourceKind> exhaustive, EvidenceBoundary boundary, AgentJob job) {
+            ValidatedObservation observation, Set<SourceKind> exhaustive, CapturedEvidence captured, AgentJob job) {
         if (observation.presence() != Presence.ABSENT) {
             return;
         }
@@ -808,7 +795,7 @@ public class PracticeDetectionDeliveryService {
             }
             // Same boundary the citations answer to: a source not staged for this run cannot have been
             // searched or read, so claiming otherwise is fabrication either way.
-            if (!boundary.allowedSources().contains(sourceKind)) {
+            if (!captured.availableSources().contains(sourceKind)) {
                 throw new JobDeliveryException("Recorded search claims a source this run did not stage " + sourceKind
                         + ": slug="
                         + observation.practiceSlug()
@@ -951,46 +938,6 @@ public class PracticeDetectionDeliveryService {
         return path.startsWith("a/") || path.startsWith("b/") ? path.substring(2) : path;
     }
 
-    private EvidenceBoundary evidenceBoundary(AgentJob job) {
-        JsonNode manifest = requireEvidenceSnapshot(job).path("manifest");
-        SourceContractVersion contractVersion;
-        try {
-            contractVersion =
-                    new SourceContractVersion(manifest.path("contractVersion").asString());
-        } catch (IllegalArgumentException e) {
-            throw new JobDeliveryException(
-                    "Job evidence snapshot has an invalid contract version: jobId=" + job.getId(), e);
-        }
-        JsonNode sources = manifest.path("sources");
-        if (!sources.isArray()) {
-            throw new JobDeliveryException("Job evidence snapshot has no source manifest: jobId=" + job.getId());
-        }
-        Set<SourceKind> available = new HashSet<>();
-        Map<String, SourceArtifactRef> artifacts = new HashMap<>();
-        for (JsonNode source : sources) {
-            if ("AVAILABLE".equals(source.path("state").path("availability").asString())) {
-                SourceKind kind = new SourceKind(source.path("kind").asString());
-                available.add(kind);
-                JsonNode sourceArtifacts = source.path("artifacts");
-                if (!sourceArtifacts.isArray()) {
-                    throw new JobDeliveryException("Available source has no artifact inventory: jobId=" + job.getId());
-                }
-                for (JsonNode artifact : sourceArtifacts) {
-                    String path = artifact.path("path").asString();
-                    String sha256 = artifact.path("sha256").asString();
-                    if (path.isBlank() || !sha256.matches(CitationVerification.SHA256_HEX)) {
-                        throw new JobDeliveryException(
-                                "Available source has an invalid artifact: jobId=" + job.getId());
-                    }
-                    if (artifacts.put(path, new SourceArtifactRef(kind, sha256)) != null) {
-                        throw new JobDeliveryException("Evidence artifact belongs to multiple sources: path=" + path);
-                    }
-                }
-            }
-        }
-        return new EvidenceBoundary(contractVersion, Set.copyOf(available), Map.copyOf(artifacts));
-    }
-
     private Map<String, PracticeRevision> admittedRevisions(AgentJob job, Long workspaceId) {
         JsonNode practices = requireEvidenceSnapshot(job).path("practices");
         if (!practices.isArray() || practices.isEmpty()) {
@@ -1027,13 +974,6 @@ public class PracticeDetectionDeliveryService {
         }
         return snapshot;
     }
-
-    private record SourceArtifactRef(SourceKind kind, String sha256) {}
-
-    private record EvidenceBoundary(
-            SourceContractVersion contractVersion,
-            Set<SourceKind> allowedSources,
-            Map<String, SourceArtifactRef> artifacts) {}
 
     /** Checked against executable review kinds by {@link JobTypeReviewExecutionCatalog} at startup. */
     static final Set<ArtifactKind> ROUTABLE_KINDS = Set.of(
@@ -1169,7 +1109,7 @@ public class PracticeDetectionDeliveryService {
         return path != null && path.isString() ? path.asString() : null;
     }
 
-    /** @param delivered what this call persisted, each carrying the keys it was stored under. */
-    public record DeliveryResult(
-            int inserted, int discardedDuplicate, boolean hasNegative, List<ValidatedObservation> delivered) {}
+    /** @param recorded what this call persisted, each carrying the keys it was stored under. */
+    public record RecordedObservations(
+            int inserted, int discardedDuplicate, boolean hasNegative, List<ValidatedObservation> recorded) {}
 }

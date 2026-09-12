@@ -148,3 +148,28 @@ void test("a repository over the snapshot bound is refused before the snapshot v
 		rmSync(root, { recursive: true, force: true });
 	}
 });
+
+void test("a snapshot whose size cannot be listed is refused rather than measured as empty", () => {
+	const root = mkdtempSync(join(tmpdir(), "git-unlisted-"));
+	const repository = join(root, "repository");
+	try {
+		execFileSync("git", ["init", "--template=", repository], { stdio: "ignore" });
+		const unlisted = spawnSync(
+			process.execPath,
+			[fileURLToPath(new URL("./operation.ts", import.meta.url))],
+			{
+				input: JSON.stringify({ operation: "SNAPSHOT", revisions: ["c".repeat(40)] }),
+				encoding: "utf8",
+				env: {
+					...process.env,
+					GIT_REPOSITORY_DIRECTORY: join(repository, ".git"),
+					GIT_SNAPSHOT_DIRECTORY: join(root, "snapshot"),
+				},
+			},
+		);
+		assert.equal(unlisted.status, 1);
+		assert.match(unlisted.stderr, /Snapshot size listing failed/);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});

@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.AgentImagePinGuard;
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.DockerInteractiveSandboxAdapter;
@@ -38,7 +37,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -96,21 +94,31 @@ public class DockerSandboxConfiguration {
     static final Duration HTTP_STREAMING_RESPONSE_TIMEOUT = ResourceLimits.MAX_RUNTIME.plusMinutes(10);
 
     /**
-     * Calls whose response body is the stream: the wait on every container, plus the stdin/stdout attach of
-     * a Git preparation.
+     * Calls whose response body is the stream: the wait on every container, and for a Git preparation
+     * the stdin/stdout attach as well, so each of those holds two connections for its whole run.
      */
     @Bean(name = "dockerStreamingClient", destroyMethod = "close")
-    public DockerClient dockerStreamingClient(SandboxProperties properties, DockerSandboxProperties dockerProperties) {
+    public DockerClient dockerStreamingClient(
+            SandboxProperties properties,
+            DockerSandboxProperties dockerProperties,
+            DockerNativeGitExecutor.Settings gitPreparationSettings) {
         return buildClient(
-                dockerProperties, HTTP_STREAMING_RESPONSE_TIMEOUT, properties.maxConcurrentContainers(), "streaming");
+                dockerProperties,
+                HTTP_STREAMING_RESPONSE_TIMEOUT,
+                properties.maxConcurrentContainers() + 2 * gitPreparationSettings.maxConcurrentOperations(),
+                "streaming");
     }
 
     @Bean(destroyMethod = "close")
-    public DockerClient dockerClient(SandboxProperties properties, DockerSandboxProperties dockerProperties) {
+    public DockerClient dockerClient(
+            SandboxProperties properties,
+            DockerSandboxProperties dockerProperties,
+            DockerNativeGitExecutor.Settings gitPreparationSettings) {
         return buildClient(
                 dockerProperties,
                 HTTP_RESPONSE_TIMEOUT,
-                properties.maxConcurrentContainers() * RPC_CONNECTIONS_PER_CONTAINER,
+                (properties.maxConcurrentContainers() + gitPreparationSettings.maxConcurrentOperations())
+                        * RPC_CONNECTIONS_PER_CONTAINER,
                 "rpc");
     }
 
@@ -138,7 +146,8 @@ public class DockerSandboxConfiguration {
 
         DockerClient client = DockerClientImpl.getInstance(config, new ResponseOwnedDockerHttpClient(httpClient));
         log.info(
-                "Docker sandbox client configured: kind={}, host={}, tlsVerify={}, responseTimeout={}, maxConnections={}",
+                "Docker sandbox client configured: kind={}, host={}, tlsVerify={}, responseTimeout={},"
+                        + " maxConnections={}",
                 kind,
                 properties.host(),
                 properties.tlsVerify(),
@@ -171,16 +180,30 @@ public class DockerSandboxConfiguration {
     }
 
     /**
-     * Dedicated platform thread pool for Docker blocking wait operations.
+     * Dedicated platform thread pool for Docker blocking wait operations: one thread per sandbox and
+     * one per Git preparation that may run at once.
      *
      * <p>docker-java's Apache HttpClient5 has {@code synchronized} blocks that pin virtual threads in
      * Java 21, causing cascading failures. A dedicated bounded pool of platform threads avoids this.
      */
     @Bean(destroyMethod = "shutdownNow")
-    public ExecutorService dockerWaitExecutor(SandboxProperties properties) {
+    public ExecutorService dockerWaitExecutor(
+            SandboxProperties properties, DockerNativeGitExecutor.Settings gitPreparationSettings) {
         return Executors.newFixedThreadPool(
-                properties.maxConcurrentContainers(),
+                properties.maxConcurrentContainers() + gitPreparationSettings.maxConcurrentOperations(),
                 Thread.ofPlatform().name("docker-wait-", 0).daemon(true).factory());
+    }
+
+    /**
+     * Platform threads for the Git operations the hub dispatches to this worker, one per operation the
+     * executor admits: each attaches to its container through docker-java, which would pin a virtual
+     * thread's carrier for the whole run.
+     */
+    @Bean(name = "gitOperationExecutor", destroyMethod = "shutdownNow")
+    public ExecutorService gitOperationExecutor(DockerNativeGitExecutor.Settings gitPreparationSettings) {
+        return Executors.newFixedThreadPool(
+                gitPreparationSettings.maxConcurrentOperations(),
+                Thread.ofPlatform().name("git-operation-", 0).daemon(true).factory());
     }
 
     @Bean
@@ -375,14 +398,13 @@ public class DockerSandboxConfiguration {
         }
     }
 
+    /** The image guards in {@code agent.sandbox} check {@code git.image()} exactly as they do the agent image. */
     @Bean
     public DockerNativeGitExecutor.Settings gitPreparationSettings(
             GitRepositoryProperties git,
             WorkerProperties worker,
             SandboxProperties sandbox,
-            DockerSandboxProperties docker,
-            @Value("${hephaestus.agent.image.require-digest:false}") boolean requireDigest) {
-        if (requireDigest) AgentImagePinGuard.requireDigest(git.image(), "hephaestus.git.image");
+            DockerSandboxProperties docker) {
         return new DockerNativeGitExecutor.Settings(
                 git.image(),
                 worker.resolvedWorkerId(),

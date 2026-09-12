@@ -58,10 +58,11 @@ const EVIDENCE_SOURCE_DEFS: Record<string, EvidenceSourceDef> = {
 		locator: "object",
 	},
 	"scm.repository.tree": {
-		label: "Files in the repository",
+		label: "Files and history in the repository",
 		icon: FolderTreeIcon,
 		badgeVariant: "outline",
-		description: "Files that were not changed, read for context around the work.",
+		description:
+			"Any file at the reviewed commit or at an earlier one in its history, read for context around the work.",
 		locator: "code",
 	},
 	"scm.issue.core": {

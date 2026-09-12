@@ -56,11 +56,12 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var files =
                 new JobEvidenceFiles(new FabricLayout(root.resolve("evidence").toString()), jobs, clock);
         var inputs = new PreparedJobInputs(
-                java.util.Map.of(),
-                java.util.Map.of("repo/.git/HEAD", head),
-                java.util.List.of(new EvidenceDirectory("repo/", checkout)),
-                java.util.List.of(),
-                null,
+                new PreparedEvidence(
+                        Map.of(),
+                        Map.of("repo/.git/HEAD", head),
+                        List.of(),
+                        null,
+                        List.of(new EvidenceDirectory("repo/", checkout))),
                 null);
         try (var captured = files.prepare(job(), inputs)) {
             assertThat(captured.filesOnDisk()).hasSize(1);
@@ -83,11 +84,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var files =
                 new JobEvidenceFiles(new FabricLayout(root.resolve("evidence").toString()), jobs, clock);
         var inputs = new PreparedJobInputs(
-                java.util.Map.of(),
-                java.util.Map.of(),
-                java.util.List.of(new EvidenceDirectory("repo/", checkout)),
-                java.util.List.of(),
-                null,
+                new PreparedEvidence(
+                        Map.of(), Map.of(), List.of(), null, List.of(new EvidenceDirectory("repo/", checkout))),
                 null);
         assertThatThrownBy(() -> files.prepare(job(), inputs)).isInstanceOf(IllegalStateException.class);
     }
@@ -101,7 +99,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         Files.writeString(source, content);
         String sha = ProvenanceDigest.sha256Hex(content.getBytes(StandardCharsets.UTF_8));
         var raw = new PreparedJobInputs(
-                Map.of(), Map.of("inputs/context/source.txt", source), List.of(), List.of(), null, null);
+                new PreparedEvidence(Map.of(), Map.of("inputs/context/source.txt", source), List.of(), null), null);
         try (var prepared = files.prepare(job, raw)) {
             Files.writeString(source, "upstream changed");
             assertThat(read(files, job, "inputs/context/source.txt", sha))
@@ -132,7 +130,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         Files.writeString(source, "private");
         Path link = root.resolve("link");
         Files.createSymbolicLink(link, source);
-        var raw = new PreparedJobInputs(Map.of(), Map.of("inputs/source", link), List.of(), List.of(), null, null);
+        var raw = new PreparedJobInputs(
+                new PreparedEvidence(Map.of(), Map.of("inputs/source", link), List.of(), null), null);
         assertThatThrownBy(() -> files.prepare(job(), raw)).isInstanceOf(IllegalStateException.class);
         try (var paths = Files.walk(layout.jobsRoot())) {
             assertThat(paths.filter(path -> path.getFileName().toString().contains(".preparing-")))
@@ -148,12 +147,14 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         String quote = "é😀\n" + "quoted line\n".repeat(1000);
         byte[] bytes = ("x".repeat(8191) + quote).getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
-        try (var prepared = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("inputs/source", bytes)))) {
+        var prepared = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("inputs/source", bytes)));
+        try {
             assertThat(files.containsUtf8AtLines(job, "inputs/source", sha, quote, 1, 1001))
                     .contains(true);
             assertThatThrownBy(() -> read(files, job, "inputs/source", "a".repeat(64)))
                     .isInstanceOf(IllegalStateException.class);
-            assertThat(prepared.files()).containsKey("inputs/source");
+        } finally {
+            prepared.close();
         }
     }
 
@@ -165,7 +166,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         byte[] bytes = "source".getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
-        try (var prepared = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("inputs/source", bytes)))) {
+        var prepared = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("inputs/source", bytes)));
+        try {
             files.cleanEndedAttempts();
             var later = new JobEvidenceFiles(
                     new FabricLayout(root.toString()), jobs, Clock.offset(clock, Duration.ofHours(2)));
@@ -177,7 +179,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
             new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.offset(clock, Duration.ofHours(3)))
                     .cleanEndedAttempts();
             assertThat(read(files, job, "inputs/source", sha)).isEmpty();
-            assertThat(prepared.files()).containsKey("inputs/source");
+        } finally {
+            prepared.close();
         }
     }
 
@@ -197,10 +200,12 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var first = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("inputs/source", bytes)));
         first.close();
         assertThat(read(files, job, "inputs/source", sha)).isEmpty();
-        try (var replacement = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("inputs/source", bytes)))) {
+        var replacement = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("inputs/source", bytes)));
+        try {
             first.close();
             assertThat(read(files, job, "inputs/source", sha)).contains(bytes);
-            assertThat(replacement.files()).containsKey("inputs/source");
+        } finally {
+            replacement.close();
         }
     }
 
@@ -221,6 +226,27 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldSweepGitSnapshotsAndSpooledOutputsNobodyReleasedAfterTheGracePeriod() throws Exception {
+        var layout = new FabricLayout(root.toString());
+        Path snapshot = Files.createDirectories(layout.root().resolve("git-snapshot-abandoned"));
+        Files.writeString(snapshot.resolve("README.md"), "left behind");
+        Path output = Files.writeString(layout.root().resolve("git-output-abandoned.tmp"), "spool");
+        Path unrelated = Files.createDirectories(layout.root().resolve("repositories"));
+        for (Path entry : List.of(snapshot, output, unrelated)) {
+            Files.setLastModifiedTime(entry, java.nio.file.attribute.FileTime.from(clock.instant()));
+        }
+
+        new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofMinutes(59))).cleanEndedAttempts();
+        assertThat(snapshot).as("a preparation may still be running").exists();
+        assertThat(output).exists();
+
+        new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1))).cleanEndedAttempts();
+        assertThat(snapshot).doesNotExist();
+        assertThat(output).doesNotExist();
+        assertThat(unrelated).as("only the Git spool is swept").exists();
+    }
+
+    @Test
     void shouldVerifyDecodableLinesWhenAnotherLineIsNotUtf8() {
         var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock);
         var job = job();
@@ -229,7 +255,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                 new byte[] {(byte) 0xe9, '\n'},
                 "clean line\n".getBytes(StandardCharsets.UTF_8));
         String sha = ProvenanceDigest.sha256Hex(bytes);
-        try (var prepared = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("inputs/source", bytes)))) {
+        var prepared = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("inputs/source", bytes)));
+        try {
             assertThat(files.containsUtf8AtLines(job, "inputs/source", sha, "clean line", 2, 2))
                     .contains(true);
             assertThat(files.containsUtf8AtLines(job, "inputs/source", sha, "caf\uFFFD", 1, 1))
@@ -238,7 +265,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
             assertThat(read(files, job, "inputs/source", sha))
                     .as("the digest is over the raw bytes, however they decode")
                     .isPresent();
-            assertThat(prepared.files()).containsKey("inputs/source");
+        } finally {
+            prepared.close();
         }
     }
 

@@ -101,7 +101,8 @@ public class HistoricalGitEvidence {
             }
             return Map.copyOf(verified);
         } catch (IOException exception) {
-            throw new JobDeliveryException("Repository citations could not be verified", exception);
+            // The verifier, not the submission, failed: a 5xx the runner repeats, never a refusal.
+            throw new IllegalStateException("Repository citations could not be verified", exception);
         } finally {
             if (directory != null) FileUtils.deleteQuietly(directory.toFile());
         }

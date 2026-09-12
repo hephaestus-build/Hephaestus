@@ -31,7 +31,8 @@ import tools.jackson.databind.JsonNode;
 @RequiredArgsConstructor
 public class RepositoryTreeContentSource implements EvidenceSource {
 
-    private static final SourceKind KIND = new SourceKind("scm.repository.tree");
+    /** The captured repository checkout, cited by the HEAD witness it was pinned at. */
+    public static final SourceKind KIND = new SourceKind("scm.repository.tree");
 
     @Override
     public Set<SourceKind> sourceKinds() {

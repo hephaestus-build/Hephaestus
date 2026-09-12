@@ -148,6 +148,22 @@ class GitRepositoryManagerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldFetchAPinnedCommitFromItsRefAndRefuseARefThatDoesNotCarryIt() throws Exception {
+        try (Git git = repository()) {
+            prepare();
+            git.checkout().setCreateBranch(true).setName("feature").call();
+            Files.writeString(source.resolve("feature.txt"), "feature\n");
+            String head = commit(git, "Feature");
+
+            assertThat(manager.fetchRemoteCommit(KEY, source.toUri().toString(), "refs/heads/feature", head, null))
+                    .isTrue();
+            assertThatThrownBy(() -> manager.fetchRemoteCommit(
+                            KEY, source.toUri().toString(), "refs/heads/main", "b".repeat(40), null))
+                    .isInstanceOf(GitRepositoryManager.GitOperationException.class);
+        }
+    }
+
+    @Test
     void shouldNotReadRepositoryWhenDisabled() {
         var disabled = new GitRepositoryManager(
                 new GitRepositoryProperties(false, 2, IMAGE, LIMIT),

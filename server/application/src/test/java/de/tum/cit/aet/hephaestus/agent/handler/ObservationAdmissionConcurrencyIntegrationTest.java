@@ -120,7 +120,7 @@ class ObservationAdmissionConcurrencyIntegrationTest extends BaseIntegrationTest
                             .isFalse();
                     verifying.countDown();
                     await(release);
-                    return org.mockito.Mockito.mock(PracticeDetectionDeliveryService.PreparedObservations.class);
+                    return (de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedObservations) admitted -> {};
                 })
                 .when(reviewHandler)
                 .prepareObservations(

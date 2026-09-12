@@ -836,7 +836,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                     diffCapture("job-subject-absent", "diff --git a/src/App.java b/src/App.java\n@@ -1 +1 @@\n+x\n");
 
             AutomatedReviewReadinessResult result = builder.checkAutomatedReviewReadiness(
-                    prepared.manifest(),
+                    java.util.Objects.requireNonNull(prepared.manifest()),
                     List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject())),
                     NOW,
                     null,
@@ -858,7 +858,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
             var prepared = diffCapture("job-subject-present", "diff --git a/pom.xml b/pom.xml\n@@ -1 +1 @@\n+<dep/>\n");
 
             AutomatedReviewReadinessResult result = builder.checkAutomatedReviewReadiness(
-                    prepared.manifest(),
+                    java.util.Objects.requireNonNull(prepared.manifest()),
                     List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject())),
                     NOW,
                     null,
@@ -877,7 +877,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
             var prepared = diffCapture("job-no-bytes", "diff --git a/src/App.java b/src/App.java\n@@ -1 +1 @@\n+x\n");
 
             AutomatedReviewReadinessResult result = builder.checkAutomatedReviewReadinessAsOfNow(
-                    prepared.manifest(),
+                    java.util.Objects.requireNonNull(prepared.manifest()),
                     List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject())));
 
             assertThat(result.readyPractices()).hasSize(1);
