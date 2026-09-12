@@ -2,11 +2,13 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout.REPO_MOUNT_RELATIVE;
 
+import de.tum.cit.aet.hephaestus.agent.context.providers.RepositoryTreeContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DeliveryContent;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DiffNote;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeveloperTextSanitizer;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
@@ -70,36 +72,15 @@ class DeliveryComposer {
     @Nullable
     static DeliveryContent compose(
             @Nullable List<ValidatedObservation> observations, ArtifactKind artifact, Map<String, String> whyBySlug) {
-        return compose(observations, artifact, whyBySlug, GroundingContext.none(), List.of(), null);
+        return composeAdmitted(observations, artifact, whyBySlug, List.of(), null);
     }
 
+    /** Only a citation the admission verified at its exact diff location may carry a note onto that line. */
     @Nullable
-    static DeliveryContent compose(
+    static DeliveryContent composeAdmitted(
             @Nullable List<ValidatedObservation> observations,
             ArtifactKind artifact,
             Map<String, String> whyBySlug,
-            @Nullable String unifiedDiff) {
-        return compose(observations, artifact, whyBySlug, unifiedDiff, List.of(), null);
-    }
-
-    @Nullable
-    static DeliveryContent compose(
-            @Nullable List<ValidatedObservation> observations,
-            ArtifactKind artifact,
-            Map<String, String> whyBySlug,
-            @Nullable String unifiedDiff,
-            List<ComposedFeedbackUnit> composed,
-            @Nullable String lead) {
-        return compose(
-                observations, artifact, whyBySlug, GroundingContext.fromDiff(artifact, unifiedDiff), composed, lead);
-    }
-
-    @Nullable
-    private static DeliveryContent compose(
-            @Nullable List<ValidatedObservation> observations,
-            ArtifactKind artifact,
-            Map<String, String> whyBySlug,
-            GroundingContext grounding,
             List<ComposedFeedbackUnit> composed,
             @Nullable String lead) {
         if (observations == null || observations.isEmpty()) {
@@ -181,7 +162,7 @@ class DeliveryComposer {
         // The notes on the diff are built first, because a finding that could not be placed on a line —
         // capped, or its anchor no longer in the diff — has to fall back into the summary rather than
         // vanish between the two surfaces.
-        var placed = collectDiffNotes(inlinable, rendering, grounding);
+        var placed = collectDiffNotes(inlinable, rendering);
         List<ValidatedObservation> summarised = new ArrayList<>(nonInlinable);
         summarised.addAll(placed.unplaced());
         summarised.sort(ObservationOrder.worstFirstUnstored());
@@ -443,11 +424,6 @@ class DeliveryComposer {
         }
     }
 
-    /**
-     * The one place every finding is visible at once. It survives a force-push, which the notes on the diff
-     * do not, so a finding that carries its own comment is still named here.
-     */
-
     /** The runner bounds the lead too, but that output is the model's; re-apply the bound rather than trust it. */
     private static String openingOf(Rendering rendering) {
         String lead = clampToSentenceBudget(
@@ -609,7 +585,8 @@ class DeliveryComposer {
         JsonNode first = citations.get(0);
         if (!first.isObject()) return null;
         String sourceKind = first.path("sourceKind").asString();
-        if (!sourceKind.equals("scm.pull-request.diff") && !sourceKind.equals("scm.repository.tree")) return null;
+        if (!sourceKind.equals(PracticeSubjectClause.DIFF_SOURCE.value())
+                && !sourceKind.equals(RepositoryTreeContentSource.KIND.value())) return null;
         JsonNode pathNode = first.get("path");
         if (pathNode == null || !pathNode.isString()) return null;
         String path = repoRelative(pathNode.asString());
@@ -635,8 +612,7 @@ class DeliveryComposer {
     /** What landed on a line, and what has to fall back to the summary because it could not. */
     record PlacedNotes(List<DiffNote> notes, List<ValidatedObservation> unplaced) {}
 
-    private static PlacedNotes collectDiffNotes(
-            List<ValidatedObservation> negatives, Rendering rendering, GroundingContext grounding) {
+    private static PlacedNotes collectDiffNotes(List<ValidatedObservation> negatives, Rendering rendering) {
         List<DiffNote> notes = new ArrayList<>();
         List<ValidatedObservation> unplaced = new ArrayList<>();
 
@@ -683,8 +659,7 @@ class DeliveryComposer {
                 continue;
             }
 
-            String snippet = citation.path("quote").asString(null);
-            if (!grounding.anchorIsGrounded(path, snippet)) {
+            if (!verifiedAnchor(citation, path, startLine, selected)) {
                 unplaced.add(f);
                 continue;
             }
@@ -701,6 +676,20 @@ class DeliveryComposer {
         }
 
         return new PlacedNotes(notes, unplaced);
+    }
+
+    private static boolean verifiedAnchor(
+            JsonNode citation, String path, int line, ComposedFeedbackUnit.@Nullable ResolvedAnchor selected) {
+        return "VERIFIED".equals(citation.path("verification").path("status").asString())
+                && PracticeSubjectClause.DIFF_SOURCE
+                        .value()
+                        .equals(citation.path("sourceKind").asString())
+                && "NEW".equals(citation.path("side").asString())
+                && repoRelative(path).equals(repoRelative(citation.path("path").asString()))
+                && line == citation.path("startLine").asInt()
+                && (selected == null
+                        || selected.endLine() == null
+                        || selected.endLine() == citation.path("endLine").asInt(line));
     }
 
     private static @Nullable Integer integerAtLeast(@Nullable JsonNode value, int minimum) {
@@ -787,71 +776,5 @@ class DeliveryComposer {
 
     private static String clamp(String text, int maxLength) {
         return text.length() <= maxLength ? text : text.substring(0, maxLength).strip();
-    }
-
-    /** Server-derived diff content used to validate model-selected inline anchors. */
-    record GroundingContext(boolean active, boolean forceNoLocus, Map<String, String> hunkByFile) {
-        static GroundingContext none() {
-            return new GroundingContext(false, false, Map.of());
-        }
-
-        static GroundingContext fromDiff(ArtifactKind artifact, @Nullable String unifiedDiff) {
-            if (ArtifactKinds.ISSUE.equals(artifact)) {
-                return new GroundingContext(true, true, Map.of());
-            }
-            if (unifiedDiff == null || unifiedDiff.isBlank()) {
-                return none();
-            }
-            return new GroundingContext(true, false, parseHunksByFile(unifiedDiff));
-        }
-
-        boolean anchorIsGrounded(@Nullable String path, @Nullable String snippet) {
-            if (!active) return true;
-            if (forceNoLocus) return false;
-            if (path == null || path.isBlank()) return false;
-            String key = repoRelative(path);
-            String hunk = hunkByFile.get(key);
-            if (hunk == null) {
-                return false;
-            }
-            if (snippet == null || snippet.isBlank()) {
-                return true;
-            }
-            return hunk.contains(normalizeForMatch(snippet));
-        }
-
-        private static Map<String, String> parseHunksByFile(String diff) {
-            Map<String, StringBuilder> acc = new HashMap<>();
-            String currentFile = null;
-            for (String raw : diff.split("\n", -1)) {
-                String line = raw;
-                if (line.startsWith("[L") && line.contains("] ")) {
-                    line = line.substring(line.indexOf("] ") + 2);
-                }
-                if (line.startsWith("diff --git")) {
-                    int bIdx = line.lastIndexOf(" b/");
-                    currentFile = bIdx > 0 ? line.substring(bIdx + 3) : null;
-                    if (currentFile != null) acc.putIfAbsent(currentFile, new StringBuilder());
-                    continue;
-                }
-                if (currentFile == null) continue;
-                // New-side only: skip hunk headers, file markers, and deletions.
-                if (line.startsWith("@@") || line.startsWith("+++") || line.startsWith("---")) continue;
-                if (line.startsWith("+") || line.startsWith(" ")) {
-                    acc.computeIfAbsent(currentFile, ignored -> new StringBuilder())
-                            .append(normalizeForMatch(line.substring(1)))
-                            .append('\n');
-                }
-            }
-            Map<String, String> out = new HashMap<>(acc.size());
-            for (Map.Entry<String, StringBuilder> e : acc.entrySet()) {
-                out.put(e.getKey(), e.getValue().toString());
-            }
-            return out;
-        }
-
-        private static String normalizeForMatch(String s) {
-            return s.replaceAll("\\s+", " ").strip();
-        }
     }
 }

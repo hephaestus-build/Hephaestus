@@ -82,6 +82,7 @@ overlay's value where the overlay pins one, otherwise the base default.
 | `hephaestus.runtime.webhook.enabled` | true | **false** | true | profile overlay |
 | `hephaestus.workspace.init-default` | false | false | false | `prod` profile |
 | `hephaestus.git.enabled` | false | false | false | env default |
+| `hephaestus.git.image` | `ghcr.io/hephaestus-build/git-preparation:<app version>` | same | — | env default (`HEPHAESTUS_IMAGE_GIT_PREPARATION`); the shipped Compose files require the release lock's digest |
 | `hephaestus.sync.nats.enabled` | false | **false** | **true** | env default / profile overlay |
 | `hephaestus.agent.enabled` | false | false | false | env default |
 | `hephaestus.integration.outline.allowed-origins` | empty | empty | empty | env default |
@@ -118,7 +119,12 @@ sandbox *is* the worker capability, so it follows `hephaestus.runtime.worker.ena
 worker row down the **Server** column: a server pod carries the worker role too, so it opens the
 sandbox gateway on the same port and needs the same firewall treatment as a split-out worker. The
 webhook role turns the worker role off, so it opens no gateway — the three `sandbox.gateway` rows
-read `—` in that column.
+read `—` in that column. Native Git follows the same rule: a pod with the worker role runs Git
+preparation and commit ingestion in its own `git-preparation` containers, a server pod whose worker
+role is turned off dispatches each Git operation over the control channel to a connected worker —
+placed by hashing the repository id over the connected workers, so a repository keeps its worker
+while that worker's session lives — and the webhook role has no Git at all, so the `git.image` row
+reads `—` there too.
 
 Sandbox maintenance follows the worker role in both split-out and single-container deployments.
 Idle mentor sessions and orphaned resources are cleaned periodically without enabling server-wide

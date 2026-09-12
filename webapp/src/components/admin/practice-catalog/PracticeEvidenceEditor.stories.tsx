@@ -104,7 +104,7 @@ export const ReadsASourceExhaustively: Story = {
 		// "captured whole", not "nothing is missing anywhere": the claim is about this capture of this
 		// source, which is the only thing completeness is ever measured against.
 		await expect(canvas.getByText("· captured whole")).toBeVisible();
-		await expect(canvas.getByText("Repository files")).toBeVisible();
+		await expect(canvas.getByText("Repository files and history")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Use recommended evidence" })).toBeVisible();
 	},
 };

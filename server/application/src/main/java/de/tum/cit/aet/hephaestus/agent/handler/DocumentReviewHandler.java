@@ -1,30 +1,23 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import static de.tum.cit.aet.hephaestus.agent.handler.spi.JobMetadataReader.requireMetadata;
+
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
-import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
-import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
-import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
-import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.DocumentContentSource;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedObservations;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.Task;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
-import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Practice;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
@@ -36,7 +29,7 @@ import tools.jackson.databind.node.ObjectNode;
  * no {@code inputs/sources/scm/} mount. The case context is one mirrored document — its prose, its
  * collection and its authorship — at {@code inputs/context/document.md}.
  *
- * <p><b>Delivery records observations and stops there.</b> {@code docs.document} has one lane,
+ * <p><b>Admission records observations; delivery has no provider side effect.</b> {@code docs.document} has one lane,
  * {@link de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackLane#IN_APP}, and no channel writes to
  * it, so publishing a delivery event would look like feedback and reach nobody; add a delivery step only
  * alongside a channel for that lane.
@@ -46,22 +39,19 @@ public class DocumentReviewHandler implements JobTypeHandler {
     private static final Logger log = LoggerFactory.getLogger(DocumentReviewHandler.class);
 
     private final JsonMapper objectMapper;
-    private final WorkspaceContextBuilder workspaceContextBuilder;
-    private final TaskEnvelopeWriter taskEnvelopeWriter;
+    private final PracticeReviewPreparation preparation;
     private final PracticeCatalogInjector practiceCatalogInjector;
     private final PracticeDetectionResultParser resultParser;
     private final PracticeDetectionDeliveryService deliveryService;
 
     DocumentReviewHandler(
             JsonMapper objectMapper,
-            WorkspaceContextBuilder workspaceContextBuilder,
-            TaskEnvelopeWriter taskEnvelopeWriter,
+            PracticeReviewPreparation preparation,
             PracticeCatalogInjector practiceCatalogInjector,
             PracticeDetectionResultParser resultParser,
             PracticeDetectionDeliveryService deliveryService) {
         this.objectMapper = objectMapper;
-        this.workspaceContextBuilder = workspaceContextBuilder;
-        this.taskEnvelopeWriter = taskEnvelopeWriter;
+        this.preparation = preparation;
         this.practiceCatalogInjector = practiceCatalogInjector;
         this.resultParser = resultParser;
         this.deliveryService = deliveryService;
@@ -106,51 +96,21 @@ public class DocumentReviewHandler implements JobTypeHandler {
 
     @Override
     public PreparedJobInputs prepareInputs(AgentJob job) {
-        JsonNode metadata = job.getMetadata();
-        if (metadata == null || metadata.isNull() || metadata.isMissingNode()) {
-            throw new JobPreparationException("Job has no metadata: jobId=" + job.getId());
-        }
+        JsonNode metadata = requireMetadata(job);
         if (job.getWorkspace() == null) {
             throw new JobPreparationException("Job has no workspace: jobId=" + job.getId());
         }
-        SignalName signal = PracticeCatalogInjector.signalOf(job);
-        List<Practice> practices = practiceCatalogInjector.resolveEligiblePractices(job, ArtifactKinds.DOCUMENT);
-        PreparedEvidence prepared = workspaceContextBuilder.prepare(
-                new ContextRequest.DocumentReviewRequest(job), EvidencePlan.compile(practices));
-        var artifactSourceManifest = prepared.manifest();
-        var readiness = workspaceContextBuilder.prepareAutomatedReviewReadiness(
-                prepared.manifest(), practices, job.getId().toString(), job.getCreatedAt(), signal, prepared.files());
-        List<Practice> eligible = practices;
-        practices = readiness.readyPractices();
-        if (practices.size() < eligible.size()) {
-            log.info(
-                    "Not asking {} of {} practice(s): jobId={}, skipped={}",
-                    eligible.size() - practices.size(),
-                    eligible.size(),
-                    job.getId(),
-                    readiness.report().decisions().stream()
-                            .filter(decision -> !decision.ready())
-                            .map(decision -> decision.practiceSlug() + decision.reasonCodes())
-                            .toList());
-        }
-        if (practices.isEmpty()) {
-            // A common cause: a document body the mirror evicted under its size cap, reported so an
-            // operator can act rather than a review that read nothing.
-            throw new InsufficientEvidenceException(
-                    "No practice has sufficient evidence: jobId=" + job.getId(),
-                    new PreparedJobInputs(
-                            prepared.files(),
-                            prepared.filesOnDisk(),
-                            prepared.cleanups(),
-                            artifactSourceManifest,
-                            readiness.report()));
-        }
-        Map<String, byte[]> files = new LinkedHashMap<>(prepared.files());
-        files.put(SandboxLayout.TASK_ENVELOPE_FILENAME, taskEnvelopeWriter.write(buildTaskEnvelope(job, metadata)));
-        practiceCatalogInjector.inject(files, job, ArtifactKinds.DOCUMENT, practices);
-        log.info("Document context preparation complete: {} files, jobId={}", files.size(), job.getId());
-        return new PreparedJobInputs(
-                files, prepared.filesOnDisk(), prepared.cleanups(), artifactSourceManifest, readiness.report());
+        PreparedJobInputs inputs = preparation.prepare(
+                job,
+                ArtifactKinds.DOCUMENT,
+                new ContextRequest.DocumentReviewRequest(job),
+                () -> buildTaskEnvelope(job, metadata),
+                files -> {});
+        log.info(
+                "Document context preparation complete: {} files, jobId={}",
+                inputs.files().size(),
+                job.getId());
+        return inputs;
     }
 
     private TaskEnvelope buildTaskEnvelope(AgentJob job, JsonNode metadata) {
@@ -178,8 +138,8 @@ public class DocumentReviewHandler implements JobTypeHandler {
     }
 
     @Override
-    public void deliver(AgentJob job) {
-        var parsed = resultParser.parse(job.getOutput());
+    public PreparedObservations prepareObservations(AgentJob job, JsonNode observations) {
+        var parsed = resultParser.parseObservations(observations);
         if (!parsed.discarded().isEmpty()) {
             log.info(
                     "Discarded {} observations during parsing: jobId={}",
@@ -187,20 +147,24 @@ public class DocumentReviewHandler implements JobTypeHandler {
                     job.getId());
         }
         if (parsed.validObservations().isEmpty()) {
-            throw new JobDeliveryException("No valid observations in agent output: jobId=" + job.getId()
-                    + ", discarded="
-                    + parsed.discarded().size());
+            throw new ObservationsRefusedException(
+                    "no_valid_observations",
+                    "No valid observations in agent output: jobId=" + job.getId()
+                            + ", discarded="
+                            + parsed.discarded().size());
         }
-        Set<String> defectDetectorSlugs = practiceCatalogInjector.defectDetectorSlugs(job);
-        List<PracticeDetectionResultParser.ValidatedObservation> coercedObservations =
-                PracticeDetectionResultParser.coerceCoherence(parsed.validObservations(), defectDetectorSlugs);
+        var admissible = deliveryService.prepare(
+                job,
+                PracticeDetectionResultParser.coerceCoherence(
+                        parsed.validObservations(), practiceCatalogInjector.defectDetectorSlugs(job)));
+        return admitted -> deliveryService.publish(admitted, admissible);
+    }
 
-        PracticeDetectionDeliveryService.DeliveryResult result = deliveryService.deliver(job, coercedObservations);
-        log.info(
-                "Document delivery complete: inserted={}, duplicate={}, jobId={}",
-                result.inserted(),
-                result.discardedDuplicate(),
-                job.getId());
+    @Override
+    public void deliver(AgentJob job) {
+        if (ObservationAdmissionService.observationsWereRefused(job)) return;
+        ObservationAdmissionService.requireMatchingCompositionDigest(job);
+        deliveryService.requirePublished(job);
     }
 
     private static String lastSegmentOf(SignalName signal) {

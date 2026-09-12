@@ -1,0 +1,953 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://hephaestus.aet.cit.tum.de/contracts/artifact-source/1.1.0/artifact-source-manifest.schema.json",
+	"title": "Artifact source manifest",
+	"description": "Immutable record of the evidence captured, omitted, or withheld for one automated-review invocation.",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"contractVersion",
+		"catalogDigest",
+		"artifactKind",
+		"capturedAt",
+		"sources"
+	],
+	"properties": {
+		"contractVersion": {
+			"const": "1.1.0",
+			"description": "Source contract used to interpret every source state in this manifest."
+		},
+		"catalogDigest": {
+			"const": "8fedbc81c4d5388197ada6365005c133f0cca25f583fc910cce2219ff1fe0c5a",
+			"description": "SHA-256 digest of the exact source catalog used by the runtime."
+		},
+		"artifactKind": {
+			"enum": [
+				"scm.pull_request",
+				"scm.issue",
+				"chat.conversation_thread",
+				"docs.document"
+			],
+			"description": "Kind of work this invocation reviewed, which fixes the evidence sources that apply."
+		},
+		"capturedAt": {
+			"type": "string",
+			"format": "date-time",
+			"description": "Time at which this invocation finished recording its source captures."
+		},
+		"sources": {
+			"type": "array",
+			"minItems": 1,
+			"items": {
+				"$ref": "#/$defs/capture"
+			},
+			"allOf": [
+				{
+					"contains": {
+						"type": "object",
+						"properties": {
+							"kind": {
+								"const": "scm.pull-request.core",
+								"type": "string"
+							}
+						},
+						"required": [
+							"kind"
+						]
+					},
+					"minContains": 0,
+					"maxContains": 1
+				},
+				{
+					"contains": {
+						"type": "object",
+						"properties": {
+							"kind": {
+								"const": "scm.pull-request.diff",
+								"type": "string"
+							}
+						},
+						"required": [
+							"kind"
+						]
+					},
+					"minContains": 0,
+					"maxContains": 1
+				},
+				{
+					"contains": {
+						"type": "object",
+						"properties": {
+							"kind": {
+								"const": "scm.pull-request.comments",
+								"type": "string"
+							}
+						},
+						"required": [
+							"kind"
+						]
+					},
+					"minContains": 0,
+					"maxContains": 1
+				},
+				{
+					"contains": {
+						"type": "object",
+						"properties": {
+							"kind": {
+								"const": "scm.repository.tree",
+								"type": "string"
+							}
+						},
+						"required": [
+							"kind"
+						]
+					},
+					"minContains": 0,
+					"maxContains": 1
+				},
+				{
+					"contains": {
+						"type": "object",
+						"properties": {
+							"kind": {
+								"const": "scm.issue.core",
+								"type": "string"
+							}
+						},
+						"required": [
+							"kind"
+						]
+					},
+					"minContains": 0,
+					"maxContains": 1
+				},
+				{
+					"contains": {
+						"type": "object",
+						"properties": {
+							"kind": {
+								"const": "scm.issue.comments",
+								"type": "string"
+							}
+						},
+						"required": [
+							"kind"
+						]
+					},
+					"minContains": 0,
+					"maxContains": 1
+				},
+				{
+					"contains": {
+						"type": "object",
+						"properties": {
+							"kind": {
+								"const": "slack.conversation.thread",
+								"type": "string"
+							}
+						},
+						"required": [
+							"kind"
+						]
+					},
+					"minContains": 0,
+					"maxContains": 1
+				},
+				{
+					"contains": {
+						"type": "object",
+						"properties": {
+							"kind": {
+								"const": "scm.linked-work-items",
+								"type": "string"
+							}
+						},
+						"required": [
+							"kind"
+						]
+					},
+					"minContains": 0,
+					"maxContains": 1
+				},
+				{
+					"contains": {
+						"type": "object",
+						"properties": {
+							"kind": {
+								"const": "scm.review-threads",
+								"type": "string"
+							}
+						},
+						"required": [
+							"kind"
+						]
+					},
+					"minContains": 0,
+					"maxContains": 1
+				},
+				{
+					"contains": {
+						"type": "object",
+						"properties": {
+							"kind": {
+								"const": "scm.general-review-comments",
+								"type": "string"
+							}
+						},
+						"required": [
+							"kind"
+						]
+					},
+					"minContains": 0,
+					"maxContains": 1
+				},
+				{
+					"contains": {
+						"type": "object",
+						"properties": {
+							"kind": {
+								"const": "workspace.project-inventory",
+								"type": "string"
+							}
+						},
+						"required": [
+							"kind"
+						]
+					},
+					"minContains": 0,
+					"maxContains": 1
+				},
+				{
+					"contains": {
+						"type": "object",
+						"properties": {
+							"kind": {
+								"const": "outline.documents",
+								"type": "string"
+							}
+						},
+						"required": [
+							"kind"
+						]
+					},
+					"minContains": 0,
+					"maxContains": 1
+				},
+				{
+					"contains": {
+						"type": "object",
+						"properties": {
+							"kind": {
+								"const": "docs.document.core",
+								"type": "string"
+							}
+						},
+						"required": [
+							"kind"
+						]
+					},
+					"minContains": 0,
+					"maxContains": 1
+				}
+			],
+			"description": "One explicit capture result for each source considered by the invocation."
+		}
+	},
+	"$defs": {
+		"capture": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"kind",
+				"state",
+				"artifacts"
+			],
+			"properties": {
+				"kind": {
+					"enum": [
+						"scm.pull-request.core",
+						"scm.pull-request.diff",
+						"scm.pull-request.comments",
+						"scm.repository.tree",
+						"scm.issue.core",
+						"scm.issue.comments",
+						"docs.document.core",
+						"slack.conversation.thread",
+						"scm.linked-work-items",
+						"scm.review-threads",
+						"scm.general-review-comments",
+						"workspace.project-inventory",
+						"outline.documents",
+						"hephaestus.observation-history",
+						"hephaestus.feedback-history"
+					],
+					"description": "Logical source described by this capture."
+				},
+				"state": {
+					"oneOf": [
+						{
+							"type": "object",
+							"additionalProperties": false,
+							"required": [
+								"availability",
+								"content",
+								"completeness",
+								"facts"
+							],
+							"properties": {
+								"availability": {
+									"const": "AVAILABLE"
+								},
+								"content": {
+									"enum": [
+										"EMPTY",
+										"NON_EMPTY"
+									]
+								},
+								"completeness": {
+									"enum": [
+										"COMPLETE",
+										"PARTIAL",
+										"UNKNOWN"
+									]
+								},
+								"facts": {
+									"$ref": "#/$defs/facts"
+								},
+								"limitations": {
+									"type": "array",
+									"description": "What this capture could not include. Non-empty only when completeness is PARTIAL; see the source's own limitation codes.",
+									"items": {
+										"type": "string",
+										"minLength": 1
+									},
+									"uniqueItems": true
+								}
+							}
+						},
+						{
+							"type": "object",
+							"additionalProperties": false,
+							"required": [
+								"availability",
+								"reasonCode"
+							],
+							"properties": {
+								"availability": {
+									"enum": [
+										"NOT_COLLECTED",
+										"UNAVAILABLE",
+										"REDACTED"
+									]
+								},
+								"reasonCode": {
+									"enum": [
+										"GOVERNANCE_NOT_EFFECTIVE",
+										"DISABLED",
+										"NO_PROVIDER",
+										"EMPTY_NOT_VALID",
+										"NO_WORKING_COPY",
+										"NOT_FOUND",
+										"CONTENT_EVICTED",
+										"CONSENT_NOT_ACTIVE",
+										"PROVIDER_FAILURE"
+									],
+									"description": "Closed vocabulary; see SourceAbsenceReason."
+								}
+							}
+						},
+						{
+							"type": "object",
+							"additionalProperties": false,
+							"required": [
+								"availability",
+								"errorCode"
+							],
+							"properties": {
+								"availability": {
+									"const": "COLLECTION_ERROR"
+								},
+								"errorCode": {
+									"enum": [
+										"GOVERNANCE_NOT_EFFECTIVE",
+										"DISABLED",
+										"NO_PROVIDER",
+										"EMPTY_NOT_VALID",
+										"NO_WORKING_COPY",
+										"NOT_FOUND",
+										"CONTENT_EVICTED",
+										"CONSENT_NOT_ACTIVE",
+										"PROVIDER_FAILURE"
+									],
+									"description": "Closed vocabulary; see SourceAbsenceReason."
+								}
+							}
+						}
+					],
+					"description": "Explicit available or absent result of collection."
+				},
+				"artifacts": {
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/artifact"
+					},
+					"uniqueItems": true,
+					"description": "Materialized files attributable to this source; empty for an absent source."
+				}
+			},
+			"allOf": [
+				{
+					"if": {
+						"properties": {
+							"state": {
+								"type": "object",
+								"properties": {
+									"availability": {
+										"not": {
+											"const": "AVAILABLE"
+										}
+									}
+								},
+								"required": [
+									"availability"
+								]
+							}
+						},
+						"required": [
+							"state"
+						]
+					},
+					"then": {
+						"properties": {
+							"artifacts": {
+								"type": "array",
+								"maxItems": 0
+							}
+						}
+					}
+				},
+				{
+					"if": {
+						"properties": {
+							"state": {
+								"type": "object",
+								"properties": {
+									"availability": {
+										"const": "AVAILABLE"
+									},
+									"content": {
+										"const": "NON_EMPTY"
+									}
+								},
+								"required": [
+									"availability",
+									"content"
+								]
+							}
+						},
+						"required": [
+							"state"
+						]
+					},
+					"then": {
+						"properties": {
+							"artifacts": {
+								"type": "array",
+								"minItems": 1
+							}
+						}
+					}
+				}
+			],
+			"description": "Capture result for one logical evidence source."
+		},
+		"facts": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"capturedAt"
+			],
+			"properties": {
+				"capturedAt": {
+					"type": "string",
+					"format": "date-time",
+					"description": "Time this source capture completed."
+				},
+				"sourceEffectiveAt": {
+					"type": [
+						"string",
+						"null"
+					],
+					"format": "date-time",
+					"description": "Upstream time through which a mutable mirror is known to be current."
+				},
+				"observedAt": {
+					"type": [
+						"string",
+						"null"
+					],
+					"format": "date-time",
+					"description": "Event or upstream observation time represented by the capture."
+				},
+				"immutableIdentity": {
+					"type": [
+						"string",
+						"null"
+					],
+					"minLength": 1,
+					"description": "Pinned upstream identity when content is immutable."
+				}
+			},
+			"description": "What is true of this capture and could not be known before it ran. Anything derivable from the catalog this manifest pins by digest is deliberately absent."
+		},
+		"artifact": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"path",
+				"mediaType",
+				"sha256",
+				"bytes"
+			],
+			"properties": {
+				"path": {
+					"type": "string",
+					"minLength": 1,
+					"pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\/$)[^\\u0000]+$",
+					"description": "Safe relative path of the materialized evidence file."
+				},
+				"mediaType": {
+					"type": "string",
+					"minLength": 1,
+					"description": "Media type of the serialized artifact."
+				},
+				"sha256": {
+					"type": "string",
+					"pattern": "^[0-9a-f]{64}$",
+					"description": "SHA-256 digest of the exact artifact bytes."
+				},
+				"bytes": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Serialized artifact size in bytes."
+				}
+			},
+			"description": "Digest-addressed materialization belonging to one source capture."
+		}
+	},
+	"allOf": [
+		{
+			"if": {
+				"properties": {
+					"artifactKind": {
+						"const": "scm.pull_request"
+					}
+				},
+				"required": [
+					"artifactKind"
+				],
+				"type": "object"
+			},
+			"then": {
+				"properties": {
+					"sources": {
+						"minItems": 11,
+						"maxItems": 11,
+						"allOf": [
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "scm.pull-request.core"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "scm.pull-request.diff"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "scm.pull-request.comments"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "scm.repository.tree"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "scm.linked-work-items"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "scm.review-threads"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "scm.general-review-comments"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "workspace.project-inventory"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "outline.documents"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "hephaestus.observation-history"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "hephaestus.feedback-history"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							}
+						],
+						"type": "array"
+					}
+				},
+				"type": "object"
+			}
+		},
+		{
+			"if": {
+				"properties": {
+					"artifactKind": {
+						"const": "scm.issue"
+					}
+				},
+				"required": [
+					"artifactKind"
+				],
+				"type": "object"
+			},
+			"then": {
+				"properties": {
+					"sources": {
+						"minItems": 6,
+						"maxItems": 6,
+						"allOf": [
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "scm.issue.core"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "scm.issue.comments"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "workspace.project-inventory"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "outline.documents"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "hephaestus.observation-history"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "hephaestus.feedback-history"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							}
+						],
+						"type": "array"
+					}
+				},
+				"type": "object"
+			}
+		},
+		{
+			"if": {
+				"properties": {
+					"artifactKind": {
+						"const": "chat.conversation_thread"
+					}
+				},
+				"required": [
+					"artifactKind"
+				],
+				"type": "object"
+			},
+			"then": {
+				"properties": {
+					"sources": {
+						"minItems": 4,
+						"maxItems": 4,
+						"allOf": [
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "slack.conversation.thread"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "workspace.project-inventory"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "hephaestus.observation-history"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "hephaestus.feedback-history"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							}
+						],
+						"type": "array"
+					}
+				},
+				"type": "object"
+			}
+		},
+		{
+			"if": {
+				"properties": {
+					"artifactKind": {
+						"const": "docs.document"
+					}
+				},
+				"required": [
+					"artifactKind"
+				],
+				"type": "object"
+			},
+			"then": {
+				"properties": {
+					"sources": {
+						"minItems": 3,
+						"maxItems": 3,
+						"allOf": [
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "docs.document.core"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "hephaestus.observation-history"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							},
+							{
+								"contains": {
+									"type": "object",
+									"properties": {
+										"kind": {
+											"const": "hephaestus.feedback-history"
+										}
+									},
+									"required": [
+										"kind"
+									]
+								}
+							}
+						],
+						"type": "array"
+					}
+				},
+				"type": "object"
+			}
+		}
+	]
+}

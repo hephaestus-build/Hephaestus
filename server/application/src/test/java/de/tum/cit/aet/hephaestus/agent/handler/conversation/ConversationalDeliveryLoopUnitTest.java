@@ -113,7 +113,8 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
                             .toList();
                 });
         lenient()
-                .when(visibilityPolicy.permitsAll(anyLong(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING)))
+                .when(visibilityPolicy.permitsForNewDelivery(
+                        anyLong(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING)))
                 .thenAnswer(invocation -> {
                     Collection<Observation> observations = invocation.getArgument(1);
                     return observations.stream().map(Observation::getId).collect(Collectors.toSet());
@@ -305,7 +306,7 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
         // Withheld = absent from the permitted set. Nothing else in the batch says so.
         doReturn(Set.of())
                 .when(visibilityPolicy)
-                .permitsAll(anyLong(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING));
+                .permitsForNewDelivery(anyLong(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING));
 
         int flips = reconciler().reconcile(WS, RECIPIENT, UUID.randomUUID(), List.of(observationId));
 
@@ -331,7 +332,7 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
         doReturn(List.of(observation)).when(observationRepository).findAllByIdInAndWorkspaceId(any(), anyLong());
         doReturn(Set.of())
                 .when(visibilityPolicy)
-                .permitsAll(anyLong(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING));
+                .permitsForNewDelivery(anyLong(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING));
 
         int suppressed = reconciler().suppressForSilentMode(WS, RECIPIENT, List.of(observationId));
 

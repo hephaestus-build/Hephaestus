@@ -326,16 +326,14 @@ public class AgentJobEventListener {
             log.warn("Cannot submit agent job: missing head commit, prId={}", pr.getId());
             return;
         }
-        PullRequestReviewSubmissionRequest request = reviewData == null
-                ? new PullRequestReviewSubmissionRequest(
-                        prData, pr.getHeadRefName(), headRefOid, pr.getBaseRefName(), signalKey.signalName())
-                : PullRequestReviewSubmissionRequest.forSubmittedReview(
-                        prData,
-                        pr.getHeadRefName(),
-                        headRefOid,
-                        pr.getBaseRefName(),
-                        signalKey.signalName(),
-                        reviewData);
+        PullRequestReviewSubmissionRequest request = new PullRequestReviewSubmissionRequest(
+                prData,
+                pr.getHeadRefName(),
+                headRefOid,
+                pr.getBaseRefName(),
+                pr.getBaseRefOid(),
+                signalKey.signalName());
+        if (reviewData != null) request = request.forSubmittedReview(reviewData);
 
         try {
             agentJobService

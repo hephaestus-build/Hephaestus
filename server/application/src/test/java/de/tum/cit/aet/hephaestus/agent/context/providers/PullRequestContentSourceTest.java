@@ -5,12 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
-import de.tum.cit.aet.hephaestus.agent.context.EvidenceContribution;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
@@ -18,9 +16,6 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ScmTokenSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -28,9 +23,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -39,12 +38,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import org.eclipse.jgit.util.QuotedString;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -67,58 +64,35 @@ class PullRequestContentSourceTest extends BaseUnitTest {
     private GitDiffOperations gitDiffOperations;
 
     @Mock
-    private ConnectionService connectionService;
-
-    @Mock
-    private ScmTokenSource scmTokenSource;
+    private ReviewRepositoryPreparer repositoryPreparer;
 
     private static final Long WORKSPACE_ID = 99L;
     private static final SourceKind CORE = new SourceKind("scm.pull-request.core");
     private static final SourceKind DIFF = new SourceKind("scm.pull-request.diff");
     private static final SourceKind COMMENTS = new SourceKind("scm.pull-request.comments");
 
-    private static final GitDiffOperations.CommitLogEntry AUTHORED = new GitDiffOperations.CommitLogEntry(
-            "a".repeat(40),
-            "Extract the retry logic into a helper",
-            "The upload and the download paths duplicated it.",
-            Instant.parse("2026-06-01T10:00:00Z"),
-            Instant.parse("2026-06-01T10:01:00Z"),
-            1,
-            3);
-
-    private static final GitDiffOperations.CommitLogEntry MERGE = new GitDiffOperations.CommitLogEntry(
-            "b".repeat(40),
-            "Merge branch 'main' into feature/auth-fix",
-            null,
-            Instant.parse("2026-06-01T11:00:00Z"),
-            Instant.parse("2026-06-01T11:00:00Z"),
-            2,
-            null);
-
     private PullRequestContentSource provider;
 
     @BeforeEach
     void setUp() {
-        lenient().when(pullRequestRepository.existsByIdAndDeletedAtIsNull(456L)).thenReturn(true);
         lenient()
                 .when(pullRequestRepository.findByIdWithAuthorAndRepository(456L))
                 .thenReturn(Optional.of(new PullRequest()));
-        lenient().when(scmTokenSource.kind()).thenReturn(IntegrationKind.GITLAB);
         provider = new PullRequestContentSource(
                 objectMapper,
                 gitRepositoryManager,
                 pullRequestRepository,
                 reviewCommentRepository,
                 gitDiffOperations,
-                connectionService,
-                List.of(scmTokenSource));
+                repositoryPreparer);
     }
 
-    private static int countOccurrences(String haystack, String needle) {
-        int count = 0;
-        for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + needle.length())) count++;
-        return count;
-    }
+    @TempDir
+    Path stagingRoot;
+
+    private static final RepositoryKey REPOSITORY = new RepositoryKey(WORKSPACE_ID, 123L);
+    private static final ReviewRepositoryPreparer.PreparedReview PREPARED =
+            new ReviewRepositoryPreparer.PreparedReview(REPOSITORY, "abc123def456", "a".repeat(40));
 
     private ObjectNode sampleMetadata() {
         ObjectNode metadata = objectMapper.createObjectNode();
@@ -130,6 +104,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         metadata.put("commit_sha", "abc123def456");
         metadata.put("source_branch", "feature/auth-fix");
         metadata.put("target_branch", "main");
+        metadata.put("base_ref_oid", "a".repeat(40));
         return metadata;
     }
 
@@ -147,29 +122,66 @@ class PullRequestContentSourceTest extends BaseUnitTest {
     }
 
     private void stubGit() {
+        lenient().when(repositoryPreparer.prepare(any())).thenReturn(PREPARED);
+        lenient()
+                .when(gitDiffOperations.captureCommits(REPOSITORY, "a".repeat(40), "abc123def456"))
+                .thenAnswer(invocation -> commitCapture());
         lenient().when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        lenient().when(gitRepositoryManager.isRepositoryCloned(123L)).thenReturn(true);
+        lenient().when(gitRepositoryManager.isRepositoryCloned(REPOSITORY)).thenReturn(true);
         lenient()
-                .when(gitRepositoryManager.getRepositoryPath(123L))
-                .thenReturn(Path.of("/tmp/hephaestus-git-repos/123"));
-        lenient().when(gitRepositoryManager.commitExists(123L, "abc123def456")).thenReturn(true);
+                .when(gitDiffOperations.resolveDiffRange(REPOSITORY, "a".repeat(40), "abc123def456"))
+                .thenReturn(new String[] {"a".repeat(40), "abc123def456"});
         lenient()
-                .when(gitDiffOperations.resolveDiffRange(
-                        Path.of("/tmp/hephaestus-git-repos/123"), "main", "feature/auth-fix", "abc123def456"))
-                .thenReturn(new String[] {"main", "abc123def456"});
-        lenient()
-                .when(gitDiffOperations.diff(Path.of("/tmp/hephaestus-git-repos/123"), "main", "abc123def456"))
-                .thenReturn("diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -0,0 +1 @@\n+content\n");
-        lenient()
-                .when(gitDiffOperations.diffStat(Path.of("/tmp/hephaestus-git-repos/123"), "main", "abc123def456"))
-                .thenReturn(" a.txt | 1\n");
-        lenient()
-                .when(gitDiffOperations.commitLog(
-                        Path.of("/tmp/hephaestus-git-repos/123"),
-                        "main",
-                        "abc123def456",
-                        PullRequestContentSource.MAX_COMMITS))
-                .thenReturn(new GitDiffOperations.CommitLog(List.of(AUTHORED, MERGE), false));
+                .when(gitDiffOperations.capture(REPOSITORY, "a".repeat(40), "abc123def456"))
+                .thenAnswer(invocation -> diffCapture(
+                        "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -0,0 +1 @@\n[L1] +content\n",
+                        " a.txt | 1\n",
+                        "**1 file changed**\n"));
+    }
+
+    private GitDiffOperations.CommitCapture commitCapture() {
+        try {
+            Path file = Files.createTempFile(stagingRoot, "commits-", ".json");
+            Files.writeString(file, "{\"commits\":[],\"truncated\":false}");
+            return new GitDiffOperations.CommitCapture(file);
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+    }
+
+    private GitDiffOperations.DiffCapture diffCapture(String patch, String stat, String summary) {
+        try {
+            Path directory = Files.createTempDirectory(stagingRoot, "diff-");
+            Map<String, Path> files = new LinkedHashMap<>();
+            for (var entry : Map.of("diff.patch", patch, "diff_stat.txt", stat, "diff_summary.md", summary)
+                    .entrySet()) {
+                Path file = directory.resolve(entry.getKey());
+                Files.writeString(file, entry.getValue());
+                files.put(entry.getKey(), file);
+            }
+            return new GitDiffOperations.DiffCapture(directory, files);
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+    }
+
+    private void captureFiles(ContextRequest request, Map<String, byte[]> files) {
+        var contribution = provider.capture(request, provider.sourceKinds());
+        try {
+            files.putAll(contribution.files());
+            for (var entry : contribution.filesOnDisk().entrySet())
+                files.put(entry.getKey(), Files.readAllBytes(entry.getValue()));
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        } finally {
+            if (contribution.cleanup() != null) {
+                try {
+                    contribution.cleanup().close();
+                } catch (Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            }
+        }
     }
 
     @Nested
@@ -185,71 +197,10 @@ class PullRequestContentSourceTest extends BaseUnitTest {
     class MetadataAndComments {
 
         @Test
-        void shouldFailTheRecordWhenTheCloneIsUnavailable() {
-            when(gitRepositoryManager.isEnabled()).thenReturn(false);
-
-            assertThatThrownBy(() -> provider.capture(request(sampleMetadata()), java.util.Set.of(CORE)))
+        void shouldRefuseCoreWithoutGitBecauseItsCommitHistoryIsUnavailable() {
+            assertThatThrownBy(() -> provider.capture(request(sampleMetadata()), Set.of(CORE)))
                     .isInstanceOf(JobPreparationException.class)
                     .hasMessageContaining("Git local storage is disabled");
-            verifyNoInteractions(gitDiffOperations);
-        }
-
-        @Test
-        void shouldWriteTheRecordAndItsCommitsWhenCoreIsCaptured() throws Exception {
-            stubGit();
-
-            EvidenceContribution contribution = provider.capture(request(sampleMetadata()), java.util.Set.of(CORE));
-
-            assertThat(contribution.files())
-                    .containsOnlyKeys("inputs/context/metadata.json", "inputs/context/commits.json");
-            assertThat(contribution.completeness().get(CORE)).isEqualTo(SourceCompleteness.COMPLETE);
-            JsonNode commits = objectMapper.readTree(contribution.files().get("inputs/context/commits.json"));
-            assertThat(commits.get("truncated").asBoolean()).isFalse();
-            assertThat(commits.get("commits")).hasSize(2);
-            JsonNode authored = commits.get("commits").get(0);
-            assertThat(authored.get("sha").asString()).isEqualTo("a".repeat(40));
-            assertThat(authored.get("subject").asString()).isEqualTo("Extract the retry logic into a helper");
-            assertThat(authored.get("body").asString()).isEqualTo("The upload and the download paths duplicated it.");
-            assertThat(authored.get("authored_at").asString()).isEqualTo("2026-06-01T10:00:00Z");
-            assertThat(authored.get("committed_at").asString()).isEqualTo("2026-06-01T10:01:00Z");
-            assertThat(authored.get("parent_count").asInt()).isEqualTo(1);
-            assertThat(authored.get("changed_files").asInt()).isEqualTo(3);
-            JsonNode merge = commits.get("commits").get(1);
-            assertThat(merge.get("parent_count").asInt()).isEqualTo(2);
-            assertThat(merge.has("body")).isFalse();
-            assertThat(merge.has("changed_files")).isFalse();
-        }
-
-        @Test
-        void shouldReportThePartialRecordWhenTheCommitLogIsTruncated() throws Exception {
-            stubGit();
-            when(gitDiffOperations.commitLog(
-                            Path.of("/tmp/hephaestus-git-repos/123"),
-                            "main",
-                            "abc123def456",
-                            PullRequestContentSource.MAX_COMMITS))
-                    .thenReturn(new GitDiffOperations.CommitLog(List.of(AUTHORED), true));
-
-            EvidenceContribution contribution = provider.capture(request(sampleMetadata()), java.util.Set.of(CORE));
-
-            assertThat(contribution.completeness().get(CORE)).isEqualTo(SourceCompleteness.PARTIAL);
-            JsonNode commits = objectMapper.readTree(contribution.files().get("inputs/context/commits.json"));
-            assertThat(commits.get("truncated").asBoolean()).isTrue();
-        }
-
-        @Test
-        void shouldAbortWhenTheCommitLogCannotBeRead() {
-            stubGit();
-            when(gitDiffOperations.commitLog(
-                            Path.of("/tmp/hephaestus-git-repos/123"),
-                            "main",
-                            "abc123def456",
-                            PullRequestContentSource.MAX_COMMITS))
-                    .thenReturn(null);
-
-            assertThatThrownBy(() -> provider.capture(request(sampleMetadata()), java.util.Set.of(CORE)))
-                    .isInstanceOf(JobPreparationException.class)
-                    .hasMessageContaining("Commit log could not be read");
         }
 
         @Test
@@ -259,7 +210,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                     .thenReturn(List.of());
 
             Map<String, byte[]> files = new LinkedHashMap<>();
-            provider.contribute(request(sampleMetadata()), files);
+            captureFiles(request(sampleMetadata()), files);
 
             assertThat(files).containsKey("inputs/context/metadata.json");
             JsonNode metadataJson = objectMapper.readTree(files.get("inputs/context/metadata.json"));
@@ -284,7 +235,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                     .thenReturn(List.of());
 
             Map<String, byte[]> files = new LinkedHashMap<>();
-            provider.contribute(request(sampleMetadata()), files);
+            captureFiles(request(sampleMetadata()), files);
 
             JsonNode metadataJson = objectMapper.readTree(files.get("inputs/context/metadata.json"));
             assertThat(metadataJson.get("title").asString()).isEqualTo("Fix authentication bug");
@@ -313,7 +264,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                     .thenReturn(List.of(full, minimal));
 
             Map<String, byte[]> files = new LinkedHashMap<>();
-            provider.contribute(request(sampleMetadata()), files);
+            captureFiles(request(sampleMetadata()), files);
 
             JsonNode comments = objectMapper.readTree(files.get("inputs/context/comments.json"));
             assertThat(comments).hasSize(2);
@@ -340,7 +291,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                     .thenReturn(comments);
 
             Map<String, byte[]> files = new LinkedHashMap<>();
-            provider.contribute(request(sampleMetadata()), files);
+            captureFiles(request(sampleMetadata()), files);
 
             JsonNode commentsJson = objectMapper.readTree(files.get("inputs/context/comments.json"));
             assertThat(commentsJson).hasSize(PullRequestContentSource.MAX_COMMENTS);
@@ -372,241 +323,75 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
     @Nested
     class DiffPrecompute {
-
-        private final String repoPath = "/tmp/hephaestus-git-repos/123";
-
         @Test
-        void shouldIndexEveryFileOfThePatchExactlyOnce() {
-            String diff = "diff --git a/src/A.java b/src/A.java\n"
-                    + "--- a/src/A.java\n+++ b/src/A.java\n@@ -0,0 +1,2 @@\n+line a1\n+line a2\n"
-                    + "diff --git a/src/B.java b/src/B.java\n"
-                    + "--- a/src/B.java\n+++ b/src/B.java\n@@ -0,0 +1 @@\n+line b1\n";
-            byte[] annotated =
-                    GitDiffOperations.annotateDiffWithLineNumbers(diff).getBytes(StandardCharsets.UTF_8);
-            Map<String, byte[]> files = new LinkedHashMap<>();
-            files.put("inputs/context/diff.patch", annotated);
-
-            provider.computeAndStoreDiffSummary(files, diff);
-
-            String summary = new String(files.get("inputs/context/diff_summary.md"), StandardCharsets.UTF_8);
-            assertThat(summary).contains("**2 files changed**");
-            assertThat(countOccurrences(summary, "src/A.java")).isOne();
-            assertThat(countOccurrences(summary, "src/B.java")).isOne();
-            assertThat(summary).contains("`diff.patch`").doesNotContain("[L1]");
-            assertThat(files.get("inputs/context/diff.patch")).isEqualTo(annotated);
-        }
-
-        @ParameterizedTest
-        @ValueSource(strings = {"foo b/bar", "quoted\"path.txt", "café.txt", "pipe|back`tick*.txt", "line\nbreak.txt"})
-        void shouldPreserveGitPathsWithoutMarkdownInterpretation(String path) {
-            String oldPath = QuotedString.GIT_PATH.quote("a/" + path);
-            String newPath = QuotedString.GIT_PATH.quote("b/" + path);
-            String diff = "diff --git " + oldPath + " " + newPath + "\n" + "--- " + oldPath + "\n+++ " + newPath
-                    + "\n@@ -0,0 +1 @@\n+content\n";
-            Map<String, byte[]> files = new LinkedHashMap<>();
-
-            provider.computeAndStoreDiffSummary(files, diff);
-
-            String summary = new String(files.get("inputs/context/diff_summary.md"), StandardCharsets.UTF_8);
-            assertThat(summary)
-                    .contains("**1 file changed**", "\n    " + objectMapper.writeValueAsString(path) + "\n\n");
-        }
-
-        @Test
-        void shouldSummarizeRenamesDeletionsAndNonTextChanges() {
-            String diff = "diff --git a/old.txt b/new.txt\n"
-                    + "similarity index 100%\nrename from old.txt\nrename to new.txt\n"
-                    + "diff --git a/deleted.txt b/deleted.txt\n"
-                    + "deleted file mode 100644\n--- a/deleted.txt\n+++ /dev/null\n"
-                    + "@@ -1 +0,0 @@\n-content\n"
-                    + "diff --git a/logo.png b/logo.png\n"
-                    + "index 1234567..abcdef0 100644\nBinary files a/logo.png and b/logo.png differ\n"
-                    + "diff --git a/script.sh b/script.sh\nold mode 100644\nnew mode 100755\n";
-            Map<String, byte[]> files = new LinkedHashMap<>();
-
-            provider.computeAndStoreDiffSummary(files, diff);
-
-            assertThat(new String(files.get("inputs/context/diff_summary.md"), StandardCharsets.UTF_8))
-                    .contains(
-                            "**4 files changed**",
-                            "    \"new.txt\"",
-                            "    \"deleted.txt\"",
-                            "    \"logo.png\"",
-                            "    \"script.sh\"")
-                    .doesNotContain("/dev/null", "    \"old.txt\"");
-        }
-
-        @Test
-        void shouldSummarizeAPatchWhoseOnlyProblemsAreWarnings() {
-            // A trailing "\ No newline at end of file" on the removed side alone is a warning in JGit; the
-            // file list is still trustworthy, and a review must not be lost to it.
-            String diff = "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n"
-                    + "@@ -1 +1 @@\n-old\n\\ No newline at end of file\n+new\n";
-            Map<String, byte[]> files = new LinkedHashMap<>();
-
-            provider.computeAndStoreDiffSummary(files, diff);
-
-            assertThat(new String(files.get("inputs/context/diff_summary.md"), StandardCharsets.UTF_8))
-                    .contains("**1 file changed**", "    \"a.txt\"");
-        }
-
-        @ParameterizedTest
-        @ValueSource(
-                strings = {
-                    "not a patch",
-                    "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -0,0 +1,2 @@\n+only one line\n"
-                })
-        void shouldRefuseMalformedDiffSummaryRatherThanInventAnEmptyChange(String diff) {
-            Map<String, byte[]> files = new LinkedHashMap<>();
-
-            assertThatThrownBy(() -> provider.computeAndStoreDiffSummary(files, diff))
-                    .isInstanceOf(JobPreparationException.class);
-
-            assertThat(files).doesNotContainKey("inputs/context/diff_summary.md");
-        }
-
-        @Test
-        void shouldSummarizeAnEmptyDiffAsZeroFiles() {
-            Map<String, byte[]> files = new LinkedHashMap<>();
-
-            provider.computeAndStoreDiffSummary(files, "");
-
-            assertThat(new String(files.get("inputs/context/diff_summary.md"), StandardCharsets.UTF_8))
-                    .contains("**0 files changed**");
-        }
-
-        @Test
-        void emptyDiff_isCapturedAsAvailableEmptyEvidence() {
+        void shouldCaptureEmptyDiffAsCompleteEmptyEvidence() throws Exception {
             stubGit();
-            lenient()
-                    .when(reviewCommentRepository.findRecentByPullRequestIdWithAuthor(eq(456L), any()))
-                    .thenReturn(List.of());
-            when(gitDiffOperations.resolveDiffRange(Path.of(repoPath), "main", "feature/auth-fix", "abc123def456"))
-                    .thenReturn(new String[] {"main", "abc123def456"});
-            when(gitDiffOperations.diffStat(Path.of(repoPath), "main", "abc123def456"))
-                    .thenReturn("");
-            when(gitDiffOperations.diff(Path.of(repoPath), "main", "abc123def456"))
-                    .thenReturn("   ");
-
-            EvidenceContribution contribution = provider.capture(request(sampleMetadata()), java.util.Set.of(DIFF));
-
-            assertThat(contribution.files()).doesNotContainKey("inputs/context/commits.json");
-            assertThat(contribution.files().get("inputs/context/diff.patch")).isEmpty();
-            assertThat(contribution.contentStates().get(DIFF)).isEqualTo(SourceContentState.EMPTY);
-            assertThat(contribution.completeness().get(DIFF)).isEqualTo(SourceCompleteness.COMPLETE);
+            var diff = diffCapture("", "", "**0 files changed**\n");
+            when(gitDiffOperations.capture(REPOSITORY, "a".repeat(40), "abc123def456"))
+                    .thenReturn(diff);
+            var contribution = provider.capture(request(sampleMetadata()), Set.of(DIFF));
+            var cleanup = java.util.Objects.requireNonNull(contribution.cleanup());
+            try {
+                assertThat(contribution.files()).doesNotContainKey("inputs/context/diff.patch");
+                assertThat(contribution.filesOnDisk().get("inputs/context/diff.patch"))
+                        .hasContent("");
+                assertThat(contribution.contentStates().get(DIFF)).isEqualTo(SourceContentState.EMPTY);
+                assertThat(contribution.completeness().get(DIFF)).isEqualTo(SourceCompleteness.COMPLETE);
+            } finally {
+                cleanup.close();
+            }
+            assertThat(diff.directory()).doesNotExist();
         }
 
         @Test
-        void unreadableDiff_abortsInsteadOfStoringAnEmptyOne() {
+        void shouldRefuseCaptureWhenNativeDiffFails() {
             stubGit();
-            lenient()
-                    .when(reviewCommentRepository.findRecentByPullRequestIdWithAuthor(eq(456L), any()))
-                    .thenReturn(List.of());
-            when(gitDiffOperations.resolveDiffRange(Path.of(repoPath), "main", "feature/auth-fix", "abc123def456"))
-                    .thenReturn(new String[] {"main", "abc123def456"});
-            lenient()
-                    .when(gitDiffOperations.diffStat(Path.of(repoPath), "main", "abc123def456"))
-                    .thenReturn(null);
-            // null is what an unresolved object, an I/O error, or the 20 MiB cap looks like.
-            when(gitDiffOperations.diff(Path.of(repoPath), "main", "abc123def456"))
-                    .thenReturn(null);
-
-            assertThatThrownBy(() -> provider.capture(request(sampleMetadata()), java.util.Set.of(DIFF)))
+            when(gitDiffOperations.capture(REPOSITORY, "a".repeat(40), "abc123def456"))
+                    .thenThrow(new JobPreparationException("Native Git failed"));
+            assertThatThrownBy(() -> provider.capture(request(sampleMetadata()), Set.of(DIFF)))
                     .isInstanceOf(JobPreparationException.class)
-                    .hasMessageContaining("Diff could not be read");
+                    .hasRootCauseMessage("Native Git failed");
         }
 
         @Test
-        void headVerifiedButRangeUnresolvable_abortsWithJobPreparationException() {
+        void shouldRefuseCaptureWhenPinnedRangeCannotBeResolved() {
             stubGit();
-            lenient()
-                    .when(reviewCommentRepository.findRecentByPullRequestIdWithAuthor(eq(456L), any()))
-                    .thenReturn(List.of());
-            when(gitRepositoryManager.commitExists(123L, "abc123def456")).thenReturn(true);
-            when(gitDiffOperations.resolveDiffRange(Path.of(repoPath), "main", "feature/auth-fix", "abc123def456"))
+            when(gitDiffOperations.resolveDiffRange(REPOSITORY, "a".repeat(40), "abc123def456"))
                     .thenReturn(null);
-
-            assertThatThrownBy(() -> provider.contribute(request(sampleMetadata()), new LinkedHashMap<>()))
+            assertThatThrownBy(() -> captureFiles(request(sampleMetadata()), new LinkedHashMap<>()))
                     .isInstanceOf(JobPreparationException.class)
-                    .hasMessageContaining("all resolution strategies failed");
+                    .hasMessageContaining("pinned review diff range is unavailable");
         }
 
         @Test
-        void missingPinnedHead_abortsBeforeSandboxLaunch() {
+        void shouldReleaseNativeDiffWhenStagingCannotBeRead() throws Exception {
             stubGit();
-            lenient()
-                    .when(reviewCommentRepository.findRecentByPullRequestIdWithAuthor(eq(456L), any()))
-                    .thenReturn(List.of());
-            when(gitRepositoryManager.commitExists(123L, "abc123def456")).thenReturn(false);
-            when(gitDiffOperations.resolveDiffRange(Path.of(repoPath), "main", "feature/auth-fix", "abc123def456"))
-                    .thenReturn(null);
-
-            assertThatThrownBy(() -> provider.contribute(request(sampleMetadata()), new LinkedHashMap<>()))
+            var diff = diffCapture("patch", "stat", "summary");
+            Files.delete(diff.directory().resolve("diff.patch"));
+            when(gitDiffOperations.capture(REPOSITORY, "a".repeat(40), "abc123def456"))
+                    .thenReturn(diff);
+            assertThatThrownBy(() -> provider.capture(request(sampleMetadata()), Set.of(DIFF)))
                     .isInstanceOf(JobPreparationException.class)
-                    .hasMessageContaining("pinned head commit is unavailable");
+                    .hasMessageContaining("Could not stage reviewed change");
+            assertThat(diff.directory()).doesNotExist();
         }
 
         @Test
-        void unexpectedGitError_abortsWithJobPreparationException() {
+        void shouldForwardNativeAnnotatedPatchStatAndSummaryWithoutRewriting() {
             stubGit();
-            lenient()
-                    .when(reviewCommentRepository.findRecentByPullRequestIdWithAuthor(eq(456L), any()))
-                    .thenReturn(List.of());
-            when(gitDiffOperations.resolveDiffRange(Path.of(repoPath), "main", "feature/auth-fix", "abc123def456"))
-                    .thenReturn(new String[] {"main", "abc123def456"});
-            lenient()
-                    .when(gitDiffOperations.diffStat(Path.of(repoPath), "main", "abc123def456"))
-                    .thenReturn("1 file changed");
-            when(gitDiffOperations.diff(Path.of(repoPath), "main", "abc123def456"))
-                    .thenThrow(new RuntimeException("git process crashed"));
-
-            assertThatThrownBy(() -> provider.contribute(request(sampleMetadata()), new LinkedHashMap<>()))
-                    .isInstanceOf(JobPreparationException.class)
-                    .hasMessageContaining("Failed to pre-compute diff");
-        }
-
-        @Test
-        void realDiff_writesAnnotatedPatchAndSummary() throws Exception {
-            stubGit();
-            when(reviewCommentRepository.findRecentByPullRequestIdWithAuthor(eq(456L), any()))
-                    .thenReturn(List.of());
-            when(gitDiffOperations.resolveDiffRange(Path.of(repoPath), "main", "feature/auth-fix", "abc123def456"))
-                    .thenReturn(new String[] {"main", "abc123def456"});
-            when(gitDiffOperations.diffStat(Path.of(repoPath), "main", "abc123def456"))
-                    .thenReturn("1 file changed");
-            when(gitDiffOperations.diff(Path.of(repoPath), "main", "abc123def456"))
-                    .thenReturn(
-                            "diff --git a/src/A.java b/src/A.java\n--- a/src/A.java\n+++ b/src/A.java\n@@ -1,1 +1,2 @@\n context\n+added\n");
-
+            String patch =
+                    "diff --git a/src/A.java b/src/A.java\n--- a/src/A.java\n+++ b/src/A.java\n@@ -1,1 +1,2 @@\n[L1]  context\n[L2] +added\n";
+            String stat = " src/A.java | 1 +\n";
+            String summary = "**1 file changed**\n\n    \"src/A.java\"\n";
+            var diff = diffCapture(patch, stat, summary);
+            when(gitDiffOperations.capture(REPOSITORY, "a".repeat(40), "abc123def456"))
+                    .thenReturn(diff);
             Map<String, byte[]> files = new LinkedHashMap<>();
-            provider.contribute(request(sampleMetadata()), files);
-
-            assertThat(files).containsKey("inputs/context/diff.patch");
-            assertThat(files).containsKey("inputs/context/diff_stat.txt");
-            assertThat(files).containsKey("inputs/context/diff_summary.md");
-            String patch = new String(files.get("inputs/context/diff.patch"), StandardCharsets.UTF_8);
-            assertThat(patch).contains("[L2] +added");
-        }
-
-        @Test
-        void fetchesProviderReviewRefForForkHead() {
-            stubGit();
-            when(connectionService.findActiveProviderKind(WORKSPACE_ID))
-                    .thenReturn(Optional.of(IntegrationKind.GITLAB));
-            when(scmTokenSource.serverUrl(WORKSPACE_ID)).thenReturn(Optional.of("https://scm.example"));
-            when(scmTokenSource.accessToken(WORKSPACE_ID)).thenReturn(Optional.of("token"));
-            when(scmTokenSource.reviewHeadRef(42)).thenReturn(Optional.of("refs/merge-requests/42/head"));
-            when(gitRepositoryManager.fetchRemoteCommit(123L, "refs/merge-requests/42/head", "abc123def456", "token"))
-                    .thenReturn(true);
-            lenient()
-                    .when(reviewCommentRepository.findRecentByPullRequestIdWithAuthor(eq(456L), any()))
-                    .thenReturn(List.of());
-
-            provider.contribute(request(sampleMetadata()), new LinkedHashMap<>());
-
-            verify(gitRepositoryManager).ensureRepository(123L, "https://scm.example/owner/repo.git", "token");
-            verify(gitRepositoryManager)
-                    .fetchRemoteCommit(123L, "refs/merge-requests/42/head", "abc123def456", "token");
+            captureFiles(request(sampleMetadata()), files);
+            assertThat(files.get("inputs/context/diff.patch")).isEqualTo(patch.getBytes(StandardCharsets.UTF_8));
+            assertThat(files.get("inputs/context/diff_stat.txt")).isEqualTo(stat.getBytes(StandardCharsets.UTF_8));
+            assertThat(files.get("inputs/context/diff_summary.md")).isEqualTo(summary.getBytes(StandardCharsets.UTF_8));
+            assertThat(diff.directory()).doesNotExist();
         }
     }
 
@@ -616,9 +401,9 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         @Test
         void throwsWhenRepositoryMissing() {
             lenient().when(gitRepositoryManager.isEnabled()).thenReturn(true);
-            when(gitRepositoryManager.isRepositoryCloned(123L)).thenReturn(false);
+            when(gitRepositoryManager.isRepositoryCloned(REPOSITORY)).thenReturn(false);
 
-            assertThatThrownBy(() -> provider.contribute(request(sampleMetadata()), new LinkedHashMap<>()))
+            assertThatThrownBy(() -> captureFiles(request(sampleMetadata()), new LinkedHashMap<>()))
                     .isInstanceOf(JobPreparationException.class)
                     .hasMessageContaining("Repository is not available locally for evidence capture");
         }
@@ -626,20 +411,15 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         @Test
         void throwsWhenMetadataMissing() {
             var job = new AgentJob();
-            assertThatThrownBy(() ->
-                            provider.contribute(new ContextRequest.PracticeReviewRequest(job), new LinkedHashMap<>()))
+            assertThatThrownBy(() -> captureFiles(new ContextRequest.PracticeReviewRequest(job), new LinkedHashMap<>()))
                     .isInstanceOf(JobPreparationException.class)
                     .hasMessageContaining("no metadata");
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void shouldReportUnavailableThenAllowCaptureWhenArtifactReturns(boolean tombstoned) {
-        var artifact = new PullRequest();
-        artifact.setDeletedAt(Instant.parse("2026-09-05T00:00:00Z"));
-        when(pullRequestRepository.findByIdWithAuthorAndRepository(456L))
-                .thenReturn(tombstoned ? Optional.of(artifact) : Optional.empty());
+    @Test
+    void shouldReportUnavailableThenAllowCaptureWhenArtifactReturns() {
+        when(pullRequestRepository.findByIdWithAuthorAndRepository(456L)).thenReturn(Optional.empty());
         for (var kind : provider.sourceKinds()) {
             var captured = provider.capture(request(sampleMetadata()), Set.of(kind));
             assertThat(captured.files()).isEmpty();
@@ -649,8 +429,8 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                     .containsExactlyEntriesOf(
                             Map.of(kind, new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND)));
         }
-        verifyNoInteractions(reviewCommentRepository, gitDiffOperations, gitRepositoryManager);
-        artifact.setDeletedAt(null);
+        verifyNoInteractions(reviewCommentRepository, gitDiffOperations, repositoryPreparer);
+        var artifact = new PullRequest();
         when(pullRequestRepository.findByIdWithAuthorAndRepository(456L)).thenReturn(Optional.of(artifact));
         var restored = provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
         assertThat(restored.stateOverrides()).isEmpty();
@@ -658,39 +438,66 @@ class PullRequestContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldFetchTheCloneWhenOnlyCoreIsPrepared() {
-        when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitRepositoryManager.isRepositoryCloned(123L)).thenReturn(true);
-        when(connectionService.findActiveProviderKind(WORKSPACE_ID)).thenReturn(Optional.of(IntegrationKind.GITLAB));
-        when(scmTokenSource.serverUrl(WORKSPACE_ID)).thenReturn(Optional.of("https://scm.example"));
-        when(scmTokenSource.accessToken(WORKSPACE_ID)).thenReturn(Optional.of("token"));
-
-        provider.prepareCapture(request(sampleMetadata()), Set.of(CORE));
-
-        verify(gitRepositoryManager).ensureRepository(123L, "https://scm.example/owner/repo.git", "token");
-    }
-
-    @Test
     void shouldSkipGitPreparationWhenTheParentIsUnavailable() {
-        when(pullRequestRepository.existsByIdAndDeletedAtIsNull(456L)).thenReturn(false);
-
-        provider.prepareCapture(request(sampleMetadata()), Set.of(DIFF));
-
-        verifyNoInteractions(gitRepositoryManager, gitDiffOperations, connectionService);
-    }
-
-    @Test
-    void shouldRecheckAvailabilityAfterGitPreparation() {
-        when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        provider.prepareCapture(request(sampleMetadata()), Set.of(DIFF));
         var deleted = new PullRequest();
         deleted.setDeletedAt(Instant.parse("2026-09-05T00:00:00Z"));
         when(pullRequestRepository.findByIdWithAuthorAndRepository(456L)).thenReturn(Optional.of(deleted));
 
-        var captured = provider.capture(request(sampleMetadata()), Set.of(CORE));
+        var captured = provider.capture(request(sampleMetadata()), Set.of(DIFF));
 
-        assertThat(captured.files()).isEmpty();
         assertThat(captured.stateOverrides())
-                .containsEntry(CORE, new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND));
+                .containsEntry(DIFF, new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND));
+        verifyNoInteractions(gitRepositoryManager, gitDiffOperations, repositoryPreparer);
+    }
+
+    @Test
+    void shouldPrepareTheRepositoryOnceForEverySourceOfOneRequest() {
+        stubGit();
+        var request = request(sampleMetadata());
+
+        for (var kind : provider.sourceKinds()) provider.capture(request, Set.of(kind));
+
+        org.mockito.Mockito.verify(repositoryPreparer, org.mockito.Mockito.times(1))
+                .prepare(any());
+    }
+
+    @Test
+    void shouldHandTheSamePreparationFailureToEverySourceOfOneRequest() {
+        when(gitRepositoryManager.isEnabled()).thenReturn(true);
+        when(repositoryPreparer.prepare(any()))
+                .thenThrow(new JobPreparationException("SCM credentials are unavailable"));
+        var request = request(sampleMetadata());
+
+        for (var kind : List.of(CORE, DIFF)) {
+            assertThatThrownBy(() -> provider.capture(request, Set.of(kind)))
+                    .isInstanceOf(JobPreparationException.class)
+                    .hasMessage("SCM credentials are unavailable");
+        }
+        org.mockito.Mockito.verify(repositoryPreparer, org.mockito.Mockito.times(1))
+                .prepare(any());
+    }
+
+    @Test
+    void shouldCaptureCoreCommitHistoryOnDiskAndUseTheSamePinnedRangeAsTheDiff() throws Exception {
+        stubGit();
+        var captured = provider.capture(request(sampleMetadata()), Set.of(CORE, DIFF));
+        assertThat(captured.files()).doesNotContainKey("inputs/context/commits.json");
+        Path commits = java.util.Objects.requireNonNull(captured.filesOnDisk().get("inputs/context/commits.json"));
+        assertThat(commits).isRegularFile();
+        assertThat(captured.immutableIdentities().get(CORE))
+                .isEqualTo(captured.immutableIdentities().get(DIFF));
+        org.mockito.Mockito.verify(gitDiffOperations).resolveDiffRange(REPOSITORY, "a".repeat(40), "abc123def456");
+        java.util.Objects.requireNonNull(captured.cleanup()).close();
+        assertThat(commits).doesNotExist();
+    }
+
+    @Test
+    void shouldDiffAgainstThePreparedTargetRatherThanJobMetadata() {
+        stubGit();
+        var metadata = sampleMetadata();
+        metadata.remove("base_ref_oid");
+        var captured = provider.capture(request(metadata), Set.of(CORE));
+        assertThat(captured.immutableIdentities().get(CORE)).isEqualTo("a".repeat(40) + ":abc123def456");
+        org.mockito.Mockito.verify(gitDiffOperations).resolveDiffRange(REPOSITORY, "a".repeat(40), "abc123def456");
     }
 }

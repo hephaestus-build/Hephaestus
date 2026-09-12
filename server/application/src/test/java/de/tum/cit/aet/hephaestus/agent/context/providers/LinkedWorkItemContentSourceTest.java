@@ -2,8 +2,10 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -18,10 +20,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -51,12 +53,25 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
     @Mock
     private GitDiffOperations gitDiffOperations;
 
+    @Mock
+    private ReviewRepositoryPreparer repositoryPreparer;
+
     private LinkedWorkItemContentSource provider;
 
     @BeforeEach
     void setUp() {
         provider = new LinkedWorkItemContentSource(
-                objectMapper, pullRequestRepository, issueRepository, gitRepositoryManager, gitDiffOperations);
+                objectMapper,
+                pullRequestRepository,
+                issueRepository,
+                gitRepositoryManager,
+                gitDiffOperations,
+                repositoryPreparer);
+        lenient()
+                .when(repositoryPreparer.prepare(any()))
+                .thenReturn(new ReviewRepositoryPreparer.PreparedReview(
+                        new RepositoryKey(99L, REPO_ID), "abc123def456", "a".repeat(40)));
+        lenient().when(repositoryPreparer.authorize(any())).thenReturn(new RepositoryKey(99L, REPO_ID));
         // Git disabled by default; the commit-subject scan must no-op. Individual tests enable it.
         lenient().when(gitRepositoryManager.isEnabled()).thenReturn(false);
     }
@@ -67,6 +82,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         metadata.put("pull_request_id", PR_ID);
         metadata.put("source_branch", "feature/auth-fix");
         metadata.put("target_branch", "main");
+        metadata.put("base_ref_oid", "a".repeat(40));
         metadata.put("commit_sha", "abc123def456");
         return metadata;
     }
@@ -309,27 +325,15 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
 
         when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitRepositoryManager.isRepositoryCloned(REPO_ID)).thenReturn(true);
-        when(gitRepositoryManager.getRepositoryPath(REPO_ID)).thenReturn(java.nio.file.Path.of("/tmp/repo/123"));
-        when(gitDiffOperations.resolveDiffRange(
-                        java.nio.file.Path.of("/tmp/repo/123"), "main", "feature/plain", "abc123def456"))
+        when(gitDiffOperations.resolveDiffRange(new RepositoryKey(99L, REPO_ID), "a".repeat(40), "abc123def456"))
                 .thenReturn(new String[] {"base", "head"});
-        var commit = new GitRepositoryManager.CommitInfo(
-                "sha1",
-                "fix: resolve crash, fixes #77",
-                null,
-                "Author",
-                "author@example.com",
-                java.time.Instant.now(),
-                "Author",
-                "author@example.com",
-                java.time.Instant.now(),
-                1,
-                0,
-                1,
-                List.of(),
-                List.of());
-        when(gitRepositoryManager.walkCommits(REPO_ID, "base", "head", 501)).thenReturn(List.of(commit));
+        doAnswer(invocation -> {
+                    java.util.function.Consumer<String> consumer = invocation.getArgument(3);
+                    consumer.accept("fix: resolve crash, fixes #77");
+                    return null;
+                })
+                .when(gitRepositoryManager)
+                .forEachCommitSubject(eq(new RepositoryKey(99L, REPO_ID)), eq("base"), eq("head"), any());
         when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 77))
                 .thenReturn(Optional.of(issue(77, "Crash on launch", "criteria")));
 
@@ -353,12 +357,8 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         pr.setHeadRefName("feature/plain");
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
         when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitRepositoryManager.isRepositoryCloned(REPO_ID)).thenReturn(true);
-        var repoPath = java.nio.file.Path.of("/tmp/repo/123");
-        when(gitRepositoryManager.getRepositoryPath(REPO_ID)).thenReturn(repoPath);
-        when(gitDiffOperations.resolveDiffRange(repoPath, "main", "feature/plain", "abc123def456"))
+        when(gitDiffOperations.resolveDiffRange(new RepositoryKey(99L, REPO_ID), "a".repeat(40), "abc123def456"))
                 .thenReturn(new String[] {"base", "head"});
-        when(gitRepositoryManager.walkCommits(REPO_ID, "base", "head", 501)).thenReturn(List.of());
 
         ObjectNode metadata = sampleMetadata();
         metadata.put("source_branch", "feature/plain");
@@ -375,39 +375,52 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void aTruncatedCommitScanIsAlsoPartial() {
+    void shouldResolveAReferenceAfterFiveHundredCommitSubjects() throws Exception {
         PullRequest pr = new PullRequest();
         pr.setBody("No issue references.");
         pr.setHeadRefName("feature/plain");
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
         when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitRepositoryManager.isRepositoryCloned(REPO_ID)).thenReturn(true);
-        var repoPath = java.nio.file.Path.of("/tmp/repo/123");
-        when(gitRepositoryManager.getRepositoryPath(REPO_ID)).thenReturn(repoPath);
-        when(gitDiffOperations.resolveDiffRange(repoPath, "main", "feature/plain", "abc123def456"))
+        when(gitDiffOperations.resolveDiffRange(new RepositoryKey(99L, REPO_ID), "a".repeat(40), "abc123def456"))
                 .thenReturn(new String[] {"base", "head"});
-        var commit = new GitRepositoryManager.CommitInfo(
-                "sha",
-                "ordinary change",
-                null,
-                "Author",
-                "author@example.com",
-                java.time.Instant.EPOCH,
-                "Author",
-                "author@example.com",
-                java.time.Instant.EPOCH,
-                1,
-                0,
-                1,
-                List.of(),
-                List.of());
-        when(gitRepositoryManager.walkCommits(REPO_ID, "base", "head", 501))
-                .thenReturn(java.util.Collections.nCopies(501, commit));
+        doAnswer(invocation -> {
+                    java.util.function.Consumer<String> consumer = invocation.getArgument(3);
+                    for (int index = 0; index < 501; index++) consumer.accept("ordinary change");
+                    consumer.accept("Fixes #77");
+                    return null;
+                })
+                .when(gitRepositoryManager)
+                .forEachCommitSubject(eq(new RepositoryKey(99L, REPO_ID)), eq("base"), eq("head"), any());
+        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 77))
+                .thenReturn(Optional.of(issue(77, "Crash", "criteria")));
 
         ObjectNode metadata = sampleMetadata();
         metadata.put("source_branch", "feature/plain");
 
-        assertThat(provider.capture(request(metadata), provider.sourceKinds()).completeness())
-                .containsValue(SourceCompleteness.PARTIAL);
+        var captured = provider.capture(request(metadata), provider.sourceKinds());
+        assertThat(objectMapper
+                        .readTree(captured.files().get(LinkedWorkItemContentSource.OUTPUT_FILE))
+                        .path("workItems")
+                        .get(0)
+                        .path("number")
+                        .asInt())
+                .isEqualTo(77);
+    }
+
+    @Test
+    void shouldRejectUnauthorizedDatabaseCaptureWhenGitIsDisabled() {
+        when(repositoryPreparer.authorize(any())).thenThrow(new IllegalStateException("Unauthorized repository"));
+        assertThatExceptionOfType(EvidenceCollectionException.class)
+                .isThrownBy(() -> provider.capture(request(sampleMetadata()), provider.sourceKinds()));
+        org.mockito.Mockito.verifyNoInteractions(pullRequestRepository, issueRepository, gitDiffOperations);
+    }
+
+    @Test
+    void shouldReportCommitScanFailureInsteadOfEmptyEvidence() {
+        when(gitRepositoryManager.isEnabled()).thenReturn(true);
+        when(gitDiffOperations.resolveDiffRange(new RepositoryKey(99L, REPO_ID), "a".repeat(40), "abc123def456"))
+                .thenThrow(new IllegalStateException("Native Git failed"));
+        assertThatExceptionOfType(EvidenceCollectionException.class)
+                .isThrownBy(() -> provider.capture(request(sampleMetadata()), provider.sourceKinds()));
     }
 }

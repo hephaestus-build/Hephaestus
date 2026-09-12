@@ -71,6 +71,11 @@ const ROLE_SCOPES: readonly RoleScope[] = [
 		why: "ReleaseCheckService and ReleaseCheckClient are @ConditionalOnServerRole; RunningRelease, which reads the rest of hephaestus.release, is ungated",
 	},
 	{
+		path: "hephaestus.git.image",
+		role: "worker",
+		why: "DockerSandboxConfiguration launches trusted native Git workloads only in the worker runtime role",
+	},
+	{
 		path: "hephaestus.sandbox.docker",
 		role: "worker",
 		why: "DockerSandboxConfiguration registers Docker connection, network and runtime settings only when hephaestus.runtime.worker.enabled is active",

@@ -192,6 +192,11 @@ Do not restate that contract here. The one fact this page owns is where the read
 `agent_job.review_readiness`, its own `jsonb` column, split out from `evidence_snapshot` because a snapshot
 carries one entry per staged file and a TOASTed `jsonb` has no partial read.
 
+The secret scan runs here, at input preparation, over the diff a pull-request review captures, and its
+hits are stored in the same `evidence_snapshot`, bound to the staged diff by digest. Admission turns those
+recorded hits into redacted observations without starting a container inside the request; a snapshot
+whose verdicts belong to some other capture is inadmissible.
+
 ## Observation
 
 An observation is one practice's answer about one piece of work, written once and immutable. Its
@@ -206,6 +211,11 @@ nothing about applicability. The callback answers a refusal with HTTP 422, not a
 Status-specific warrants and citations are enforced both inside the sandbox and by the server.
 Capture failure remains a readiness decision and creates no observation. Unassessed statuses do not
 create positive or negative feedback and do not move the assessed-result trend denominator.
+
+Admission is single-flight per attempt. Verifying a historical citation may start a Git container, so a
+runner that repeats a submission whose answer did not arrive joins the admission already running and
+receives its answer; a repeat carrying a different payload is refused as a conflict, and an attempt that
+was already admitted answers with the recorded result.
 
 Identity is assigned at persistence, not in the sandbox: an occurrence key dedupes within a run
 (`insertIfAbsent`, `ON CONFLICT DO NOTHING`), and a recurrence key hashes the locus so the same observation

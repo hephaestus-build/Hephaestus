@@ -134,7 +134,7 @@ public class MentorProxyCredentialRegistry {
     /**
      * Empty when the token is unknown or expired. The routing carries what the bound turn has already
      * spent, which is what makes a turn's own in-flight spend visible to {@code ProxyBudgetGate}. A
-     * call arriving between turns names no turn and {@code LlmProxyController} refuses it, because
+     * call arriving between turns names no turn and {@code LlmProxyService} refuses it, because
      * nothing would record its tokens.
      */
     public Optional<ProxyRouting> validate(String token) {
@@ -161,7 +161,8 @@ public class MentorProxyCredentialRegistry {
                                 turn.turnId(),
                                 // A turn never retries, so there is only ever attempt 0 of a given turn id.
                                 0,
-                                turn.spentUsd())));
+                                turn.spentUsd(),
+                                null)));
     }
 
     /**

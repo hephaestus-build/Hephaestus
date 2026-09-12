@@ -17,10 +17,10 @@ vs writable is decided by *where* a file lives, not by convention. Three top-lev
 
 ```text
 /workspace/
-├── inputs/                          # READ-ONLY (enforced by directory ownership, not a path guard).
+├── inputs/                          # READ-ONLY (the /workspace volume is mounted read-only, not a path guard).
 │   ├── manifest.json                #   Versioned source, capture-state, and artifact index.
 │   ├── sources/                     #   Integration-namespaced source materialisations (ADR 0020).
-│   │   └── scm/repo/                #   Pinned, read-only SCM tree without Git metadata or history.
+│   │   └── scm/repo/                #   Pinned, read-only SCM checkout and sanitized Git history.
 │   ├── context/                     #   System-written, AI-readable. Populated by the ContentSource SPI.
 │   │                                #   Files: metadata.json, commits.json, comments.json, diff.patch, diff_summary.md,
 │   │                                #   diff_stat.txt, linked_work_items.json, review_threads.json,
@@ -38,7 +38,8 @@ vs writable is decided by *where* a file lives, not by convention. Three top-lev
 │   ├── analysis/practices/          #   Per-practice analysis output (holds the .gitkeep marker).
 │   └── composition/                 #   observations.json — the admitted observations feedback is composed from.
 ├── out/                             # THE ONLY collected directory — result.json, review-state.json,
-│                                    #   usage.json, runner-debug.json, watchdog-killed.json
+│                                    #   usage.json, runner-debug.json, practice-coverage.json,
+│                                    #   feedback.json, watchdog-killed.json
 ├── task.json                        # TaskEnvelope<…> — runtime contract between handler and runner.
 ├── .pi/                             # Pi SDK agent dir — $PI_CODING_AGENT_DIR resolves here.
 │   ├── AGENTS.md                    #   Orchestrator instructions
@@ -55,7 +56,7 @@ vs writable is decided by *where* a file lives, not by convention. Three top-lev
 ├── pi-runner-timings.ts             # Attempt-timing sidecar.
 ├── pi-runner-composition.ts         # Feedback-composition contract and coherence rules.
 ├── feedback-composer.md             # Composition-stage prompt; digested with the prompt scaffolding.
-├── node_modules -> /opt/pi-sdk/…    # Symlink created at container start, not staged.
+├── node_modules -> /opt/pi-sdk/…    # Symlink baked into the agent image, not staged.
 └── .run-pi.ts                       # Runner script entry point.
 ```
 
@@ -68,12 +69,12 @@ covered by this ABI.
 
 ## Path conventions
 
-- **`inputs/`** — the entire read-only region. Read-only-ness is a **filesystem** property, not a path
-  guard: the server pre-creates only the `work/` ancestors as the sandbox uid and lets the container
-  runtime auto-create the `inputs/` directories as root, so the unprivileged agent cannot write there.
-  There is no runtime allowlist of `inputs/`. The one allowlist that does exist is server-side and narrower
-  — it validates the paths an *adapter* may inject before the container exists, and covers
-  `inputs/context/` and the mentor's `.sessions/` only.
+- **`inputs/`** — the entire read-only region. Read-only-ness is a **mount** property, not a path
+  guard: a workspace initializer container downloads the attempt's workspace tar from the sandbox
+  gateway onto the attempt's `/workspace` volume, and the runtime container then mounts that volume
+  read-only. `work/`, `out/`, the Pi session directories `.pi` and `.sessions` are separate writable volumes of the same
+  attempt, removed with it. There is no runtime allowlist of `inputs/`; the server validates every
+  path it packs into the tar before the container exists.
 - **`inputs/context/`** — system-written, AI-readable source materializations of the artifact under
   review. A source with nothing to report still writes its file, holding an empty list: "the record was
   read and held nothing" is a fact a review may reason from, and "the file is not there" is not.
@@ -86,9 +87,14 @@ covered by this ABI.
   source listed as anything other than `AVAILABLE` says why in a typed reason code (`NO_PROVIDER`,
   `GOVERNANCE_NOT_EFFECTIVE`, `COLLECTION_ERROR`, …); none of those reasons is "no practice asked for it".
   It indexes context files but is not itself a source artifact.
-- **`inputs/sources/scm/repo/`** — a read-only repository tree materialised at the manifest's
-  immutable commit identity. It intentionally excludes `.git`, history, submodules, and symlink
-  targets; `inputs/manifest.json` records whether the resulting source is complete or partial.
+- **`inputs/sources/scm/repo/`** — a read-only checkout at the manifest's immutable commit
+  identity, with the Git history reachable from that commit, the mirrored remote-tracking branches
+  and tags, and the list of captured refs in `inputs/sources/scm/repo/.git/hephaestus-captured-refs`. Upstream remote
+  configuration, credentials, hooks, and unreachable objects are not exported. A symbolic link is
+  checked out as a regular file holding its target path, never followed; a submodule is not
+  hydrated, and its presence makes the capture `PARTIAL` with `SUBMODULE_EXCLUDED` recorded in
+  `inputs/manifest.json`. Only the `inputs/sources/scm/repo/.git/HEAD` and captured-refs witnesses carry manifest digests;
+  the checkout itself is transferred by traversal.
 - **`work/`** — agent + precompute scratch. The Pi agent may write here; the server never
   collects it.
 - **`out/`** — the *only* directory the sandbox collects after the run.
@@ -99,31 +105,6 @@ covered by this ABI.
 - **`.pi*`** / `inputs/practices/` / `work/precompute*` / `work/analysis/` / `out/`
   — internal control surfaces. AI-readable as configured by the orchestrator, but
   *not* part of the public agent ABI; subject to change without a `schemaVersion` bump.
-
-## Private execution capture
-
-With `PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED=true`, the practice runner persists native Pi
-session trees in `out/trace/sessions/` instead of `.sessions/`, including composition and retry
-sessions. Pi's `before_provider_request` extension hook records the final provider-specific request
-body in `out/trace/requests/`, addressed by SHA-256; it does not rewrite that body. Native session
-JSONL retains messages, tool calls, tool results and branch/compaction structure. The separate
-`events-*.jsonl` journal records observed event times and session associations rather than inferring
-timings from the transcript.
-
-`capture.json` reports capture limits, dropped records and unfinished sessions. A nonzero exit,
-missing native session or truncated journal cannot claim complete capture. This is not a packet
-capture or a claim that all provider-internal processing is visible. Scratch files under `work/`
-are not independently archived; their contents are visible only when present in captured tool
-results or requests. Abrupt cancellation may prevent output collection entirely.
-
-The server retains staged input bytes and collected output bytes in the existing Context Fabric
-content-addressed store, with immutable manifests per job attempt. The image field is the declared image reference, not a
-resolved registry digest or a promise of deterministic replay. Archive state distinguishes
-`INPUTS_CAPTURED` from `OUTPUTS_CAPTURED`; neither means the review succeeded or the native capture
-is complete. An empty attempt list means no retained capture, never an empty complete transcript.
-Workspace-admin archive endpoints check job membership before allowing access to an individual
-blob, and responses disable caching. See [operator guidance](/admin/observability#private-execution-archives)
-for privacy and retention.
 
 ## Task envelope
 
@@ -163,12 +144,13 @@ Output must be an uncompressed tar containing regular files beneath `out/` and z
 entries. Links, sparse files, devices, PAX/GNU extension records, invalid checksums, unsafe or
 duplicate normalized paths, truncation, and nonzero data after the end markers are rejected.
 
-**A writer keeps every name inside USTAR.** The daemon encodes a member name over 100 bytes, or any
-name outside ASCII, as a PAX extension record, and reading those records is what would let a sparse
-entry expand past the size its header declares — so the reader refuses them and a name it cannot hold
-fails the whole review. `out/` counts towards the 100 bytes, leaving 96 for the path beneath it. The
-runner routes every file it writes through `outputPath` in `pi-runner-output.ts`, which rejects an
-unusable name where the file is still identifiable.
+**A writer keeps every name inside USTAR.** `gateway-run.ts` packages `out/` inside the container
+with `tar --format=ustar`, which writes no PAX or GNU extension record at all: a name USTAR cannot
+hold fails the packaging, and with it the whole review. The reader refuses those records as well,
+because reading them is what would let a sparse entry expand past the size its header declares.
+`out/` counts towards the 100 bytes, leaving 96 for the path beneath it. The runner routes every file
+it writes through `outputPath` in `pi-runner-output.ts`, which rejects an unusable name where the
+file is still identifiable.
 
 Limits are 50 MiB for the entire archive, including headers, end markers and padding; 50 MiB of file
 contents in total; 10 MiB per file; and 10,000 entries, including directories. Rejected transfers are
@@ -190,9 +172,9 @@ worker filesystem.
 `137` is a container SIGKILL from the runtime, not a runner code. The server treats `0` as success,
 `42` as drift, and `75` and `76` as attempts to repeat; every other non-zero code is a generic failure.
 
-A sandbox reaches the server at the address the app server held when the container started, so a
-server that came back somewhere else — a deploy, a restart that moved the container — is unreachable
-for the rest of that run, whatever the runner's own retries do. The server answers `75` by queueing
+A sandbox reaches the worker's sandbox gateway at the address the worker held when the container
+started, so a worker that came back somewhere else — a deploy, a restart that moved the container —
+is unreachable for the rest of that run, whatever the runner's own retries do. The server answers `75` by queueing
 the work for another attempt with a rotated token and the usual backoff, keeping the finished
 attempt's transcript on the row; past the retry cap it terminalizes like any other non-zero exit. A
 job whose observations did reach the server — the admission committed and only its answer was lost —
@@ -216,7 +198,7 @@ The server creates the envelope and stages the runner and its sidecars from its 
 each attempt. They evolve together; there is no cross-version envelope compatibility layer.
 
 The agent image's `hephaestus.agent.runtime-contract` label versions its runtime dependencies and
-launch contract separately. Its value is `2`, independent of the envelope schema version. See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md)
+launch contract separately. Its value is `3`, independent of the envelope schema version. See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md)
 for the image contract.
 
 ## Precompute validation and limits
@@ -232,10 +214,42 @@ not a substitute for this outer deadline. Ordinary child processes are killed wh
 including after success. Failed precompute remains best-effort: the practice review continues without
 its hints.
 
-The bootstrap clears the inherited environment, retains the Node filesystem permission grants and
+The bootstrap clears the inherited environment, runs Node under filesystem permission grants scoped to
+the workspace, the precompute library and its own stage and output directories, and
 applies a **10 MiB per-file limit** in its subshell, including the diagnostic log. On failure, at most
 8 KiB of diagnostics is passed onward. The subsequent review does not inherit that file limit.
 These are safeguards against broken scripts, not hostile-code isolation: a per-file limit is not a
 cumulative disk quota, Node child-process permission is not a security boundary, and a deliberately
 detached process can escape process-group cleanup. Container resource limits and teardown remain the
-outer boundary. Runtime contract v3's workspace budgets and gateway transport are separate work.
+outer boundary.
+
+## Practice review tools
+
+Each session's tool set is fixed when the runner creates it, in `pi-runner.ts`:
+
+| Session | Native Pi tools | Reporting tools |
+|---------|-----------------|-----------------|
+| Reconnaissance | `read`, `grep`, `find`, `ls`, `write`, `edit`, `bash` | none |
+| Practice observer and retry | the same seven | `report_observation` |
+| Composer | `read`, `grep`, `find`, `ls` | `report_feedback`, `report_summary` |
+
+The composer writes feedback from observations the server has already admitted, so it reads and
+reports but has no `write`, `edit` or `bash`. The mentor runner exposes no native tool at all: its
+context arrives through `fetch_context`, and it links evidence with `link_observation`.
+
+The image provides Bash, Git, ripgrep, fd-find, and standard shell utilities. `PI_OFFLINE=1`
+disables tool downloads. Use `work/` or `$TMPDIR` for scratch files; scratch files are not
+captured evidence. Native search honors ignore rules; use explicit paths and
+`rg --hidden --no-ignore` when those exclusions are inappropriate. Use streaming shell commands for
+lines too large for the read tool.
+
+`out/` is the sandbox's own claim: the runner writes every file in it last, from memory, and removes
+whatever else a session left there, so a file under `out/` is always the runner's and never a
+tool's.
+
+The root filesystem and captured inputs are mounted read-only; scratch directories are separate
+writable mounts. The practice runner starts Node without permission flags, because a subprocess
+would bypass them anyway; the mount and container isolation are the boundary. The
+[sandbox threat model](/admin/threat-model#boundary-2-llm-agent-sandbox) owns the isolation
+requirements. Deployment connectivity is covered in
+[practice-review operations](/admin/practice-review-operations).

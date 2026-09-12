@@ -11,7 +11,7 @@ import org.jspecify.annotations.Nullable;
  * Sandbox configuration produced by {@link PracticePiAdapter#buildSandboxSpec}.
  * The executor combines it with job-level concerns into a {@link
  * de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec}. {@code inputFiles} paths are
- * workspace-relative; {@code volumeMounts} are bind-mounted read-only.
+ * workspace-relative.
  */
 public record PracticeSandboxSpec(
         String image,
@@ -21,7 +21,6 @@ public record PracticeSandboxSpec(
         String outputPath,
         @Nullable SecurityProfile securityProfile,
         @Nullable NetworkPolicy networkPolicy,
-        Map<String, String> volumeMounts,
         @Nullable String promptDigest) {
     public PracticeSandboxSpec {
         Objects.requireNonNull(image, "image must not be null");
@@ -35,6 +34,5 @@ public record PracticeSandboxSpec(
         command = command != null ? List.copyOf(command) : List.of();
         environment = environment != null ? Map.copyOf(environment) : Map.of();
         inputFiles = inputFiles != null ? Map.copyOf(inputFiles) : Map.of();
-        volumeMounts = volumeMounts != null ? Map.copyOf(volumeMounts) : Map.of();
     }
 }

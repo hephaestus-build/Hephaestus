@@ -8,7 +8,7 @@ import org.jspecify.annotations.Nullable;
  * Security hardening profile for a sandboxed container.
  *
  * <p>Only includes settings that callers can actually influence. Fixed invariants (no-new-privileges,
- * private cgroup namespace, writable rootfs) are hardcoded in {@code ContainerSecurityPolicy} and
+ * private cgroup namespace, read-only rootfs) are hardcoded in {@code ContainerSecurityPolicy} and
  * cannot be changed — they are intentionally absent from this record.
  *
  * <p>The seccomp profile is an infrastructure concern loaded once at startup by {@code

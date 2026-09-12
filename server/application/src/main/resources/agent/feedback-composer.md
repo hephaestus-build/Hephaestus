@@ -135,7 +135,8 @@ task-level note wearing a costume — rewrite it or drop it.
 - `<compositionRequest>` — the bounds for this turn: which lanes are open, how many units
   each may carry, and how many separate pieces of work a pattern needs.
 
-You may `read` and `grep` these files. You have nothing else, and you need nothing else.
+Use `read`, `grep`, `find` or `ls` to inspect these files; this turn has no shell and writes nothing
+but feedback. Compose only from the admitted observations.
 
 ---
 

@@ -64,7 +64,7 @@ import reactor.util.retry.Retry;
  * database, their emails will match on the next cycle — no TTL needed.
  * <p>
  * Emails are captured at commit ingestion (webhook or backfill) and stored on the
- * {@code git_commit} table, so enrichment never opens a JGit bare clone.
+ * {@code git_commit} table, so enrichment never opens a repository clone.
  */
 @Service
 @Slf4j

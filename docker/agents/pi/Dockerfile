@@ -8,6 +8,10 @@ RUN pnpm runtime set node ${NODE_VERSION} -g
 COPY pi/package.json pi/pnpm-lock.yaml pi/pnpm-workspace.yaml ./
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
+WORKDIR /opt/precompute
+COPY precompute/package.json precompute/pnpm-lock.yaml precompute/pnpm-workspace.yaml ./
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts
+
 FROM node:${NODE_VERSION}-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e
 ARG NODE_VERSION
 
@@ -22,7 +26,7 @@ ARG NODE_VERSION
 ARG SOURCE_COMMIT
 RUN echo "source commit: ${SOURCE_COMMIT:-<unset — local build>}" && \
     apt-get update -qq && apt-get upgrade -y -qq && \
-    apt-get install -y --no-install-recommends git findutils tree jq ca-certificates grep coreutils util-linux && \
+    apt-get install -y --no-install-recommends bash git ripgrep fd-find findutils tree jq ca-certificates grep coreutils util-linux tar && \
     rm -rf /var/lib/apt/lists/*
 
 RUN groupmod --new-name agent node && \
@@ -30,10 +34,10 @@ RUN groupmod --new-name agent node && \
 
 # renovate: datasource=npm depName=@earendil-works/pi-coding-agent
 ARG PI_VERSION=0.84.4
-COPY --from=dependencies --chown=1000:1000 /opt/pi-sdk /opt/pi-sdk
+COPY --from=dependencies /opt/pi-sdk /opt/pi-sdk
 RUN test -d /opt/pi-sdk/node_modules/@earendil-works/pi-coding-agent \
       || (echo "Pi SDK not found at /opt/pi-sdk/node_modules" >&2; exit 1) && \
-    mkdir -p /workspace && chown 1000:1000 /workspace
+    mkdir -p /workspace && chown 0:0 /workspace && chmod 1777 /workspace
 
 RUN mkdir -p /tmp/abi-check && ln -sf /opt/pi-sdk/node_modules /tmp/abi-check/node_modules && \
     printf 'const sdk = await import("@earendil-works/pi-coding-agent");\nif (!sdk || typeof sdk !== "object") { throw new Error("Pi SDK import yielded no module namespace"); }\nconsole.log("pi sdk exports:", Object.keys(sdk).length);\n' > /tmp/abi-check/check.ts && \
@@ -90,17 +94,38 @@ RUN mkdir -p /tmp/abi-check && ln -sf /opt/pi-sdk/node_modules /tmp/abi-check/no
       -e 'require("node:child_process").spawnSync("true")' 2>/dev/null && \
     rm -rf /tmp/abi-check
 
-COPY --chown=1000:1000 precompute/runner.ts /opt/precompute/runner.ts
-COPY --chown=1000:1000 precompute/lib/ /opt/precompute/lib/
+COPY --from=dependencies /opt/precompute/node_modules /opt/precompute/node_modules
+COPY precompute/package.json precompute/runner.ts /opt/precompute/
+COPY precompute/lib/ /opt/precompute/lib/
 
 RUN git config --system core.hooksPath /nonexistent && \
     git config --system core.fsmonitor false && \
-    git config --system safe.directory /workspace/repo
+    git config --system safe.directory /workspace/inputs/sources/scm/repo
 
 ENV HOME=/home/agent
+ENV XDG_CONFIG_HOME=/home/agent/.local/config
+ENV PI_OFFLINE=1
 ENV GIT_PAGER=cat
 ENV GIT_TERMINAL_PROMPT=0
+ENV GIT_OPTIONAL_LOCKS=0
 ENV LANG=C.UTF-8
+
+COPY pi/native-tools-check.ts /opt/pi-sdk/native-tools-check.ts
+RUN mkdir -p /workspace/inputs/sources/scm/repo/.hidden && \
+    printf 'searchable\n' > /workspace/inputs/sources/scm/repo/tracked.txt && \
+    printf '.hidden/\n' > /workspace/inputs/sources/scm/repo/.gitignore && \
+    head -c 3145728 /dev/zero | tr '\000' x > /workspace/inputs/sources/scm/repo/.hidden/large.txt && \
+    printf 'SENTINEL\n' >> /workspace/inputs/sources/scm/repo/.hidden/large.txt && \
+    git -C /workspace/inputs/sources/scm/repo init -q && \
+    git -C /workspace/inputs/sources/scm/repo add . && \
+    git -C /workspace/inputs/sources/scm/repo add -f .hidden/large.txt && \
+    git -C /workspace/inputs/sources/scm/repo -c user.name=fixture -c user.email=fixture@example.invalid commit -qm captured && \
+    chmod -R a-w /workspace/inputs/sources/scm/repo && \
+    mkdir -p /home/agent/.local/tmp /workspace/work && \
+    chown -R 1000:1000 /home/agent/.local /workspace/work && \
+    setpriv --reuid=1000 --regid=1000 --init-groups node --max-old-space-size=256 \
+      /opt/pi-sdk/native-tools-check.ts && \
+    rm -rf /workspace/inputs /workspace/work /opt/pi-sdk/native-tools-check.ts /home/agent/.local
 
 # The base image installs Yarn as a tree under /opt that /usr/local/bin only links to, so removing
 # the links alone leaves a runnable package manager behind — which is why the check below reads the
@@ -118,7 +143,12 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
         exit 1; \
     fi
 
-LABEL hephaestus.agent.runtime-contract=2
+COPY pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts pi/gateway-mentor.ts pi/lines.ts /opt/pi-sdk/
+RUN mkdir -p /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
+    chown -R 1000:1000 /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
+    ln -s /opt/pi-sdk/node_modules /workspace/node_modules
+
+LABEL hephaestus.agent.runtime-contract=3
 LABEL hephaestus.agent.node-version=${NODE_VERSION}
 LABEL hephaestus.agent.pi-version=${PI_VERSION}
 

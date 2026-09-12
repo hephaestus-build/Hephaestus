@@ -21,11 +21,21 @@ public class ObservationVisibilityPolicy {
     }
 
     /**
-     * Returns observations measured against current review rules whose evidence remains authorized for the
-     * requested use. Currentness is checked first so stale claims do not trigger authorization reads; the
-     * remaining observations are authorized in one batch.
+     * The ids of the observations measured against a current practice revision whose evidence remains
+     * authorized for the requested use. Currentness is checked first so stale claims do not trigger
+     * authorization reads; the rest are authorized in one batch.
      */
     public Set<UUID> permitsAll(long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose) {
+        return permitted(workspaceId, observations, purpose, false);
+    }
+
+    public Set<UUID> permitsForNewDelivery(
+            long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose) {
+        return permitted(workspaceId, observations, purpose, true);
+    }
+
+    private Set<UUID> permitted(
+            long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose, boolean newDelivery) {
         List<Observation> current = new ArrayList<>(observations.size());
         for (Observation observation : observations) {
             if (ReviewClaimCurrentness.of(observation.getPracticeRevision(), observation.getPractice())
@@ -36,6 +46,8 @@ public class ObservationVisibilityPolicy {
         if (current.isEmpty()) {
             return Set.of();
         }
-        return evidenceAuthorization.permitsAll(workspaceId, current, purpose);
+        return newDelivery
+                ? evidenceAuthorization.permitsForNewDelivery(workspaceId, current, purpose)
+                : evidenceAuthorization.permitsAll(workspaceId, current, purpose);
     }
 }

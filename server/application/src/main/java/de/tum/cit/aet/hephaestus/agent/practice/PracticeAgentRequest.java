@@ -14,7 +14,6 @@ public record PracticeAgentRequest(
         @Nullable Integer maxOutputTokens,
         boolean supportsReasoning,
         String jobToken,
-        boolean allowInternet,
         int timeoutSeconds) {
     public PracticeAgentRequest {
         Objects.requireNonNull(apiProtocol, "apiProtocol must not be null");

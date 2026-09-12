@@ -26,6 +26,21 @@ class FrameCodecRoundTripTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldPreserveScopedGitOperationAndSequencedOutputThroughTheWire() {
+        var id = java.util.UUID.randomUUID();
+        java.util.List<WorkerControlFrame> frames = java.util.List.of(
+                new GitOperation(id, "session", 7, 11, "private request", 123456, false),
+                new GitOutput(id, 2, "AAE=", false, true),
+                new GitAck(id, 2),
+                new GitCancel(id));
+        for (var frame : frames) {
+            assertThat(codec.decode(codec.encode(FrameEnvelope.of(frame))).payload())
+                    .isEqualTo(frame);
+            assertThat(frame.toString()).doesNotContain("private request");
+        }
+    }
+
+    @Test
     void rejectsOversizedFrameOnDecode() {
         String tooLarge = "x".repeat(FrameCodec.MAX_FRAME_BYTES + 1);
         assertThatThrownBy(() -> codec.decode(tooLarge))

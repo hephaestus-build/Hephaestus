@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -13,6 +14,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.mock.env.MockEnvironment;
 
 class AgentImageReferenceGuardTest extends BaseUnitTest {
 
@@ -29,8 +31,46 @@ class AgentImageReferenceGuardTest extends BaseUnitTest {
                         .doesNotHaveBean(AgentImagePinGuard.class));
     }
 
+    private static final String GIT_IMAGE = "ghcr.io/hephaestus-build/git-preparation:0.73.2";
+
     private static AgentImageReferenceGuard guardFor(String reference) {
-        return new AgentImageReferenceGuard(new AgentImageProperties(reference, ImagePullPolicy.IF_NOT_PRESENT));
+        return guardFor(reference, GIT_IMAGE);
+    }
+
+    private static AgentImageReferenceGuard guardFor(String reference, String gitImage) {
+        return new AgentImageReferenceGuard(
+                new AgentImageProperties(reference, ImagePullPolicy.IF_NOT_PRESENT),
+                new GitRepositoryProperties(true, 2, gitImage, 1L << 33),
+                new MockEnvironment());
+    }
+
+    @Test
+    void shouldLeaveTheGitImageAloneWhenTheWorkerRoleIsOff() {
+        var webhookOnly = new MockEnvironment().withProperty("hephaestus.runtime.worker.enabled", "false");
+        var channelTagged =
+                new GitRepositoryProperties(true, 2, "ghcr.io/hephaestus-build/git-preparation:latest", 1L << 33);
+        assertThatCode(() -> new AgentImageReferenceGuard(
+                        new AgentImageProperties("ghcr.io/hephaestus-build/agent-pi:0.73.2", ImagePullPolicy.ALWAYS),
+                        channelTagged,
+                        webhookOnly))
+                .doesNotThrowAnyException();
+    }
+
+    /** The Git preparation image is derived the same way, so it is judged by the same rule. */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "ghcr.io/hephaestus-build/git-preparation:latest",
+                "ghcr.io/hephaestus-build/git-preparation:0.73",
+                "ghcr.io/hephaestus-build/git-preparation",
+                "ghcr.io/hephaestus-build/git-preparation:",
+                "ghcr.io/hephaestus-build/git-preparation@sha256:abc123",
+            })
+    void shouldRefuseAGitImageThatCannotNameAMatchedBuild(String gitImage) {
+        assertThatThrownBy(() -> guardFor("ghcr.io/hephaestus-build/agent-pi:0.73.2", gitImage))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("hephaestus.git.image")
+                .hasMessageContaining(gitImage);
     }
 
     @ParameterizedTest

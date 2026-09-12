@@ -127,12 +127,15 @@ store can use a presigned download without changing the agent contract.
 
 ### One job folder and one context mechanism
 
-At job start, the owning worker creates `jobs/<job-id>/` and renders every permitted non-repository
-area from PostgreSQL as plain files. It adds a working copy of each permitted repository; objects are
-hard-linked from the worker's bare mirror where the filesystem permits it. Git documents local-clone
-hard-linking and its security constraint that the source repository must be owned by the current user
+At job start, the owning worker creates the attempt folder and renders every permitted non-repository
+area from PostgreSQL as plain files. It adds a working copy of each permitted repository: a
+`git-preparation` container fetches the reachable objects from the worker's bare mirror into a fresh
+bare repository and checks the reviewed commit out, and the worker reads that snapshot into the
+attempt folder as a tar it validates entry by entry. Hard-linking objects out of the mirror was
+rejected: the snapshot has to cross a container boundary, and Git's own local-clone hard-linking
+requires the source repository to be owned by the current user
 ([`git clone --local`](https://git-scm.com/docs/git-clone#Documentation/git-clone.txt---local)). The
-worker is the sole writer to its mirror and serializes mirror maintenance.
+worker is the sole writer to its mirror and a file lock serializes a fetch against readers.
 
 Governance is evaluated independently per context area and per repository before rendering. The
 result intentionally has two read models: PostgreSQL serves the webapp and pipeline; files serve the
@@ -145,8 +148,14 @@ per-job byte budget. Optional, permitted areas or repositories may use subsequen
 responses through the same endpoint and authorization check; every response counts toward that
 cumulative budget. This is one workspace-download capability, not a second transport or an
 unbounded sequence. Version 1.0 has no tool catalogue, MCP data plane, context-as-Git repository, or
-mounted context volume. Hints and provenance are never verdicts, and mentor conversation is not
+mount of worker or host context storage. Hints and provenance are never verdicts, and mentor conversation is not
 practice evidence.
+
+Downloaded inputs may use an attempt-local ephemeral volume prepared by a separate, trusted non-root
+initializer. The runtime mounts those inputs read-only, with separate writable scratch and output
+regions. This volume is local storage for the tar transport, not a second data plane: it never mounts
+the worker's repository cache or job folder, and is removed with the attempt. The same boundary uses
+managed Docker volumes in Compose and `emptyDir` with a non-root init container in Kubernetes.
 
 ### Sandbox Gateway and protocol v3
 
@@ -188,7 +197,9 @@ reconstruct evidence from current upstream content.
 
 ### Bash and the sandbox boundary
 
-The agent has Pi's `read`, `write`, `edit`, and `bash` tools plus report tools. Bash is on by default
+A practice session has Pi's `read`, `grep`, `find`, `ls`, `write`, `edit`, and `bash` tools plus
+report tools; the composition turn, which writes feedback from observations the server has already
+admitted, keeps the four read-only tools and its report tools. Bash is on by default
 under one configuration; there is no quality mode that disables it. This matches established coding
 agents and code-execution systems: [Claude Code](https://code.claude.com/docs/en/security),
 [Codex](https://learn.chatgpt.com/docs/security),
@@ -200,7 +211,7 @@ inside the same sandbox.
 
 The sandbox is the boundary: non-root user, read-only root filesystem, no host mounts or Docker
 socket, credential-free environment, one network destination, resource and PID limits, deadline, and
-sized tmpfs only for writable paths. On Kubernetes it also meets the Restricted Pod Security
+sized tmpfs plus the attempt-local volumes as the only writable paths. On Kubernetes it also meets the Restricted Pod Security
 Standard ([controls](https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted)).
 gVisor is recommended as `runsc` for Compose and as a
 `RuntimeClass` on Kubernetes; Kubernetes documents `RuntimeClass` as the mechanism for selecting a

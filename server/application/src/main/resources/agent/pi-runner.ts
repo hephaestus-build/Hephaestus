@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, resolve as resolvePath } from "node:path";
 
 import {
 	type AgentSession,
@@ -19,7 +19,6 @@ import {
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
 } from "./pi-agent-sandbox.ts";
 import { errorText } from "./pi-error-text.ts";
-import { buildGrepTool } from "./pi-grep-tool.ts";
 import {
 	ASSESSMENT_STATUS_VALUES,
 	ASSESSMENT_STATUS_DESCRIPTIONS,
@@ -40,7 +39,6 @@ import {
 } from "./pi-observation-normalize.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { loadProviderConfig, registerHephaestusProvider } from "./pi-provider.ts";
-import { ReviewTrace } from "./pi-review-trace.ts";
 import {
 	buildReviewTree,
 	mapConcurrent,
@@ -63,7 +61,7 @@ import {
 	promptTokens,
 	type RecordingPace,
 } from "./pi-runner-recording-pace.ts";
-import { isRetryableStatus, retrying } from "./pi-runner-retry.ts";
+import { isRetryableStatus, isTimeoutAbort, retrying } from "./pi-runner-retry.ts";
 import {
 	armRetryWindow,
 	deriveCompositionWindow,
@@ -167,10 +165,8 @@ function isAdmittedObservation(value: unknown): value is AdmittedObservation {
 }
 
 const WORKSPACE_ROOT = "/workspace";
-// The SDK's grep spawns ripgrep, which the sandbox forbids; the runner's own search tool takes its
-// place in every session under the same name. "grep" stays listed: the SDK filters custom tools
-// through this list too, and a listed custom definition replaces the built-in of that name.
-const EVIDENCE_TOOLS = ["read", "grep"] as const;
+const EVIDENCE_TOOLS = ["read", "grep", "find", "ls"] as const;
+const PRACTICE_TOOLS = [...EVIDENCE_TOOLS, "write", "edit", "bash"] as const;
 const CWD = process.env.PI_RUNNER_CWD ?? WORKSPACE_ROOT;
 const ENVELOPE_MISMATCH_EXIT = 42;
 const SUPPORTED_KIND = "practice_review";
@@ -178,8 +174,6 @@ const TASK_PATH = `${CWD}/task.json`;
 const taskEnvelope = readTaskEnvelope();
 const INPUT_PATHS = resolveTaskPaths(CWD, taskEnvelope.paths);
 const OUTPUT = `${CWD}/out`;
-const reviewTrace = process.env.PI_REVIEW_CAPTURE === "true" ? new ReviewTrace(OUTPUT) : undefined;
-process.on("exit", (code) => reviewTrace?.finish(code));
 const RESULT_PATH = outputPath(OUTPUT, "result.json");
 const REVIEW_STATE_PATH = outputPath(OUTPUT, "review-state.json");
 const WATCHDOG_PATH = outputPath(OUTPUT, "watchdog-killed.json");
@@ -209,6 +203,9 @@ const PROCESS_START_MS = Date.now();
 
 setTimeout(() => {
 	console.error(`[pi-runner] Watchdog: ${AGENT_BUDGET_MS + 30_000}ms elapsed, hard-exiting`);
+	// First, because finalizing removes from out/ whatever the session left there — which would
+	// include the marker written next.
+	finalizeOutputQuietly();
 	try {
 		writeFileSync(
 			WATCHDOG_PATH,
@@ -425,6 +422,12 @@ const evidenceSchema = {
 					artifactPath: { type: "string", enum: stagedArtifactPaths },
 					path: { type: "string", minLength: 1 },
 					side: { type: "string", enum: ["OLD", "NEW"] },
+					revision: {
+						type: "string",
+						pattern: "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+						description:
+							"For repository text: artifactPath names the captured .git/HEAD, path is repository-relative, and revision optionally selects a full commit SHA; omission means the captured HEAD.",
+					},
 					startLine: { type: "integer", minimum: 1 },
 					endLine: { type: "integer", minimum: 1 },
 					quote: { type: "string", minLength: 1 },
@@ -508,16 +511,39 @@ function persistReviewState() {
 	);
 }
 
-/**
- * Writes the collected result, and is the only thing that writes it: a review session is opened with
- * `read`, `grep` and `report_observation` and no tool that writes a file, so an observation reaches
- * this runner through the tool or not at all. What lands here is therefore already normalised and
- * already validated, by the same call that recorded it.
- */
 function maybeWriteResultFile(): boolean {
 	if (reviewState.observations.length === 0) return false;
-	writeFileSync(RESULT_PATH, JSON.stringify({ observations: reviewState.observations }, null, 2));
+	writeFileSync(
+		RESULT_PATH,
+		JSON.stringify(
+			{
+				observations: reviewState.observations,
+				...(admissionDigest === null ? {} : { admissionDigest }),
+			},
+			null,
+			2,
+		),
+	);
 	return true;
+}
+
+// out/ is the sandbox's own claim, so the runner writes every file in it last, from memory, and
+// removes whatever else a session left there.
+function finalizeOutput(): void {
+	const written = new Set<string>();
+	const persist = (path: string, write: () => unknown) => {
+		if (write() !== false) written.add(path);
+	};
+	persist(REVIEW_STATE_PATH, persistReviewState);
+	persist(RESULT_PATH, maybeWriteResultFile);
+	persist(USAGE_PATH, persistUsage);
+	persist(RUNNER_DEBUG_PATH, persistRunnerDebug);
+	if (practiceCoverageLedger !== null) persist(PRACTICE_COVERAGE_PATH, persistPracticeCoverage);
+	if (compositionAdmitted) persist(FEEDBACK_PATH, persistComposedFeedback);
+	for (const entry of readdirSync(OUTPUT)) {
+		const path = `${OUTPUT}/${entry}`;
+		if (!written.has(path)) rmSync(path, { recursive: true, force: true });
+	}
 }
 
 function hasPersistedReviewState(): boolean {
@@ -564,8 +590,17 @@ function normalizeAndValidateObservation(rawObservation: unknown): NormalizedObs
 	);
 	validateInapplicabilityScope(observation, availableSourceKinds);
 	for (const citation of observation.evidence.citations) {
-		const content = readFileSync(`${CWD}/${citation.artifactPath}`, "utf8");
-		const mismatch = describeCitationMismatch(citation, content);
+		// A historical repository citation is verified against the immutable capture by admission; one
+		// at the captured HEAD is read from the checkout so the session gets its correction here.
+		if (citation.sourceKind === "scm.repository.tree" && citation.revision !== undefined) continue;
+		const content =
+			citation.sourceKind === "scm.repository.tree"
+				? readCheckoutFile(citation.path)
+				: readFileSync(`${CWD}/${citation.artifactPath}`, "utf8");
+		const mismatch =
+			content === null
+				? "no such file in the checkout"
+				: describeCitationMismatch(citation, content);
 		if (mismatch !== null) {
 			throw new Error(
 				`citation does not match ${citation.path}:${citation.startLine}-${citation.endLine} ` +
@@ -575,6 +610,17 @@ function normalizeAndValidateObservation(rawObservation: unknown): NormalizedObs
 		}
 	}
 	return observation;
+}
+
+/** The file at a repository-relative path in the checkout, or null when there is none. */
+function readCheckoutFile(path: string): string | null {
+	const file = resolvePath(INPUT_PATHS.repositoryRoot, path);
+	if (!file.startsWith(`${INPUT_PATHS.repositoryRoot}/`)) return null;
+	try {
+		return readFileSync(file, "utf8");
+	} catch {
+		return null;
+	}
 }
 
 let measurementClosed = false;
@@ -1510,21 +1556,13 @@ function causeText(error: unknown): string {
  * so a server that came back somewhere else is not something waiting can reach — and a deployment
  * outlasts any wait that fits here anyway, its healthcheck allowing itself 90s to come up. These
  * attempts buy the failures that clear in place: a reset connection, a socket refused while the
- * process is coming back. Their 15s is already half the watchdog's grace, which still has to cover
- * the composer session this run builds next.
+ * process is coming back. An attempt that is merely slow is not repeated — it is the server working.
  */
 const ADMISSION_ATTEMPTS = 4;
 
-/**
- * How long one attempt may take before it counts as not arriving. A server that closes the socket
- * fails immediately; one that goes silent without closing it would otherwise hold the attempt for
- * Node's own five-minute default, and the watchdog would end the run before a second attempt existed.
- *
- * Four attempts at five seconds, waiting one second then doubling, is at most 27 seconds — inside the
- * 30 seconds of grace the watchdog leaves after the budget. A slow answer that is really coming is
- * retried rather than lost: the same observations replay against the digest the server already holds.
- */
-const ADMISSION_ATTEMPT_TIMEOUT_MS = 5_000;
+// Admission verifies every cited blob against the Git object, in a container the server starts, so
+// one attempt may take minutes; the cap only bounds a server that went silent without closing.
+const ADMISSION_ATTEMPT_TIMEOUT_MS = 10 * 60_000;
 
 /**
  * What the server said about an answer it refused, as text a reader can act on. A body that cannot be
@@ -1556,6 +1594,13 @@ async function postAdmission(): Promise<unknown> {
 			body: JSON.stringify({ schemaVersion: 1, observations: reviewState.observations }),
 		});
 	} catch (error) {
+		if (isTimeoutAbort(error)) {
+			// The server is still verifying; a second attempt would only queue the same work behind it.
+			throw new Error(
+				`observation admission did not answer within ${ADMISSION_ATTEMPT_TIMEOUT_MS}ms`,
+				{ cause: error },
+			);
+		}
 		// Node reports every transport failure as `TypeError: fetch failed`; only the cause says which
 		// one it was, and a report that has just the message cannot tell a restart from a wrong URL.
 		throw new AdmissionUnreachable(
@@ -1684,11 +1729,9 @@ async function main() {
 		`[pi-runner] Budget: total=${AGENT_BUDGET_MS}ms, initial=${INITIAL_TIMEOUT_MS}ms, retry=${RETRY_TIMEOUT_MS}ms`,
 	);
 
-	// Pi filters custom tools through this allowlist; omit filesystem mutation tools.
 	// pi-agent-sandbox.ts has the rationale for running untrusted; both Pi runners in this image
 	// share it.
 	const settingsManager = SettingsManager.create(CWD, AGENT_DIR, SANDBOX_SETTINGS_MANAGER_OPTIONS);
-	const grepTool = buildGrepTool(CWD);
 	// The only instructions a session carries beyond its prompt are the orchestrator the server
 	// staged in the agent dir, handed over by name below; the SDK's own discovery is turned off
 	// (pi-agent-sandbox.ts) and is not the channel a run's instructions arrive on. A run without
@@ -1703,7 +1746,6 @@ async function main() {
 			agentDir: AGENT_DIR ?? getAgentDir(),
 			settingsManager,
 			...SANDBOX_RESOURCE_LOADER_OPTIONS,
-			extensionFactories: reviewTrace ? [reviewTrace.extension] : [],
 			agentsFilesOverride: () => ({
 				agentsFiles: [{ path: orchestratorPath, content: orchestrator }],
 			}),
@@ -1755,10 +1797,7 @@ async function main() {
 		label: string,
 		pace: RecordingPace | null = null,
 	) => {
-		const sessionId = trackedSession.sessionManager.getSessionId();
-		reviewTrace?.session(sessionId, label, trackedSession.sessionManager.getSessionFile());
 		return trackedSession.subscribe((event: AgentSessionEvent) => {
-			reviewTrace?.event(sessionId, event);
 			if (event.type === "tool_execution_start") {
 				console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
 			}
@@ -1832,20 +1871,15 @@ async function main() {
 		measurementClosed = true;
 		await admitObservations();
 		persistComposedFeedback();
-		const parsed = parseJson(readFileSync(RESULT_PATH, "utf8"));
-		const result: Record<string, unknown> = isRecord(parsed) ? parsed : {};
-		result.admissionDigest = admissionDigest;
-		writeFileSync(RESULT_PATH, JSON.stringify(result));
+		maybeWriteResultFile();
 		if (!compositionRequest || !feedbackTool || admittedObservations.length === 0) return;
 		const { session: composerSession, extensionsResult: composerExtensions } =
 			await createAgentSession({
 				cwd: CWD,
 				agentDir: AGENT_DIR,
-				tools: ["read", "grep", "report_feedback", "report_summary"],
-				customTools: [grepTool, feedbackTool, buildSummaryTool()],
-				sessionManager: reviewTrace
-					? SessionManager.create(CWD, reviewTrace.sessionDir)
-					: SessionManager.inMemory(),
+				tools: [...EVIDENCE_TOOLS, "report_feedback", "report_summary"],
+				customTools: [feedbackTool, buildSummaryTool()],
+				sessionManager: SessionManager.inMemory(),
 				settingsManager,
 				resourceLoader: await loadResources(),
 				modelRuntime,
@@ -1922,7 +1956,7 @@ async function main() {
 		process.env.PI_REVIEW_CONCURRENCY,
 		tree.practiceCount,
 	);
-	const sessionDir = reviewTrace?.sessionDir ?? `${CWD}/.sessions`;
+	const sessionDir = `${CWD}/.sessions`;
 	console.error(
 		`[pi-runner] Review tree: ${tree.practiceCount} practices, ${tree.groups.length} evidence group(s), concurrency=${concurrency}`,
 	);
@@ -1935,8 +1969,8 @@ async function main() {
 			const { session: reconSession } = await createAgentSession({
 				cwd: CWD,
 				agentDir: AGENT_DIR,
-				tools: [...EVIDENCE_TOOLS],
-				customTools: [grepTool],
+				tools: [...PRACTICE_TOOLS],
+				customTools: [],
 				sessionManager: manager,
 				settingsManager,
 				resourceLoader: await loadResources(),
@@ -2005,8 +2039,8 @@ async function main() {
 					const { session: observerSession } = await createAgentSession({
 						cwd: CWD,
 						agentDir: AGENT_DIR,
-						tools: [...EVIDENCE_TOOLS, "report_observation"],
-						customTools: [grepTool, scopedTool],
+						tools: [...PRACTICE_TOOLS, "report_observation"],
+						customTools: [scopedTool],
 						sessionManager: manager,
 						settingsManager,
 						resourceLoader: await loadResources(),
@@ -2085,13 +2119,13 @@ async function main() {
 		assistantMessages: initialUsage.assistantMessages,
 		stopReasons: initialUsage.stopReasons,
 		usage: initialUsage,
-		resultFilePresent: existsSync(RESULT_PATH),
+		resultFilePresent: hasPersistedReviewState(),
 	});
 	persistRunnerDebug();
 	persistUsage();
 
 	console.error(
-		`[pi-runner] Initial: ${(initialDurationMs / 1000).toFixed(1)}s, calls=${initialUsage.totalCalls}, softTimeout=${softTimeoutFired}, hardAbort=${hardAborted}, resultFile=${existsSync(RESULT_PATH)}, reviewState=${hasPersistedReviewState()}`,
+		`[pi-runner] Initial: ${(initialDurationMs / 1000).toFixed(1)}s, calls=${initialUsage.totalCalls}, softTimeout=${softTimeoutFired}, hardAbort=${hardAborted}, reviewState=${hasPersistedReviewState()}`,
 	);
 
 	const resultFileWritten = maybeWriteResultFile();
@@ -2106,6 +2140,7 @@ async function main() {
 			`[pi-runner] SUCCESS: composed result.json from persisted tool state after initial run`,
 		);
 		await completeWithAdmittedComposition([]);
+		finalizeOutput();
 		process.exit(0);
 	}
 
@@ -2162,13 +2197,11 @@ async function main() {
 					const { session: retrySession } = await createAgentSession({
 						cwd: CWD,
 						agentDir: AGENT_DIR,
-						tools: [...EVIDENCE_TOOLS, "report_observation"],
-						customTools: [grepTool, retryTool],
+						tools: [...PRACTICE_TOOLS, "report_observation"],
+						customTools: [retryTool],
 						sessionManager: priorSessionFile
 							? SessionManager.open(priorSessionFile, sessionDir)
-							: reviewTrace
-								? SessionManager.create(CWD, reviewTrace.sessionDir)
-								: SessionManager.inMemory(),
+							: SessionManager.inMemory(),
 						settingsManager,
 						resourceLoader: await loadResources(),
 						modelRuntime,
@@ -2238,13 +2271,13 @@ async function main() {
 		assistantMessages: retryUsage.assistantMessages,
 		stopReasons: retryUsage.stopReasons,
 		usage: retryUsage,
-		resultFilePresent: existsSync(RESULT_PATH),
+		resultFilePresent: hasPersistedReviewState(),
 	});
 	persistRunnerDebug();
 	persistUsage();
 
 	console.error(
-		`[pi-runner] Retry: ${(retryDurationMs / 1000).toFixed(1)}s, resultFile=${existsSync(RESULT_PATH)}, reviewState=${hasPersistedReviewState()}`,
+		`[pi-runner] Retry: ${(retryDurationMs / 1000).toFixed(1)}s, reviewState=${hasPersistedReviewState()}`,
 	);
 	const missingAfterRetry = missingPracticeSlugs(
 		allSlugs,
@@ -2269,6 +2302,7 @@ async function main() {
 				: `[pi-runner] SUCCESS: composed result.json from persisted tool state after retry`,
 		);
 		await completeWithAdmittedComposition(missingAfterRetry);
+		finalizeOutput();
 		process.exit(0);
 	}
 
@@ -2277,30 +2311,37 @@ async function main() {
 			`[pi-runner] UNREACHABLE: this review reached no practice, and ${providerFailures} model call(s) ` +
 				`went unanswered — the provider, not the work, is what this run could not read`,
 		);
+		finalizeOutput();
 		process.exit(PROVIDER_UNREACHABLE_EXIT);
 	}
 	console.error(`[pi-runner] FAILED: this review reached no practice at all`);
+	finalizeOutput();
 	process.exit(1);
+}
+
+function finalizeOutputQuietly() {
+	try {
+		finalizeOutput();
+	} catch (error) {
+		console.error(`[pi-runner] output could not be finalized: ${errorText(error)}`);
+	}
 }
 
 process.on("uncaughtException", (err) => {
 	console.error(`[pi-runner] FATAL: ${errorText(err)}`);
-	persistRunnerDebug();
-	persistUsage();
+	finalizeOutputQuietly();
 	process.exit(2);
 });
 
 process.on("unhandledRejection", (reason) => {
 	console.error(`[pi-runner] UNHANDLED REJECTION: ${errorText(reason)}`);
-	persistRunnerDebug();
-	persistUsage();
+	finalizeOutputQuietly();
 	process.exit(2);
 });
 
 main().catch((err: unknown) => {
 	console.error(`[pi-runner] FATAL: ${errorText(err)}\n${err instanceof Error ? err.stack : ""}`);
-	persistRunnerDebug();
-	persistUsage();
+	finalizeOutputQuietly();
 	// A server this container never reached is not a defect in the review, and the attempts above have
 	// already ridden out the failures that clear in place. Saying so distinctly is what lets the server
 	// try the same work again instead of ending it.

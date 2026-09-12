@@ -36,7 +36,7 @@ class PracticeEvidenceDefaultsTest {
                 .allMatch(PracticeEvidenceRequirement::refuses);
 
         PracticeAutomatedReviewPolicy policy = defaults.policyFor(artifact);
-        assertThat(policy.sourceContractVersion()).isEqualTo(new SourceContractVersion("1.0.0"));
+        assertThat(policy.sourceContractVersion()).isEqualTo(new SourceContractVersion("1.1.0"));
         assertThat(policy.whenEvidenceIsInsufficient())
                 .isEqualTo(PracticeInsufficientEvidenceAction.SKIP_AUTOMATED_REVIEW);
         assertThat(policy.knownLimitations()).isNotEmpty();

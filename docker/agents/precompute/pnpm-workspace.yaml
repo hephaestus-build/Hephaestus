@@ -1,0 +1,3 @@
+# pnpm resolves against the nearest `pnpm-workspace.yaml` at or above the install directory. This
+# file puts that here rather than at the repository root, so no root setting reaches this image.
+minimumReleaseAge: 4320

@@ -87,7 +87,7 @@ class PracticeDefinitionTest extends BaseUnitTest {
                 "Criteria.",
                 null,
                 new PracticeAutomatedReviewPolicy(
-                        new SourceContractVersion("1.0.0"),
+                        new SourceContractVersion("1.1.0"),
                         automatedReview,
                         PracticeInsufficientEvidenceAction.SKIP_AUTOMATED_REVIEW,
                         List.of(),

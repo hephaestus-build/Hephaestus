@@ -109,12 +109,7 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
 
         try {
             T eventPayload = deserializer.deserialize(msg, payloadType);
-            // CRITICAL: Use TransactionTemplate to wrap handleEvent() in a transaction.
-            // Spring AOP @Transactional does NOT work for self-invocation, so the
-            // dispatcher's direct call into handleEvent() bypasses any proxy. Without
-            // this template every @Modifying JPA query would fail with
-            // TransactionRequiredException.
-            transactionTemplate.executeWithoutResult(status -> handleEvent(eventPayload));
+            dispatchEvent(eventPayload);
         } catch (IOException e) {
             log.error("Failed to parse payload: subject={}", safeSubject, e);
             throw new PayloadParsingException("Payload parsing failed for subject: " + safeSubject, e);
@@ -124,18 +119,20 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
         // duplicate logging.
     }
 
+    /** Override when external preparation must run before short persistence transactions. */
+    protected void dispatchEvent(T eventPayload) {
+        transactionTemplate.executeWithoutResult(status -> handleEvent(eventPayload));
+    }
+
     /**
-     * Handles the deserialized payload. Called from inside the transaction boundary set
-     * up by {@link #onMessage(Message)}; throwing here rolls back the transaction.
+     * Handles the deserialized payload. The default {@link #dispatchEvent(Object)} wraps
+     * this call in a transaction; orchestration handlers own their persistence boundaries.
      */
     protected abstract void handleEvent(T eventPayload);
 
     /**
-     * Subject-matching rule. Compares the trailing segment of the subject against the
-     * raw {@link #subjectEventToken} via last-dot extraction — exactly matching the
-     * GitLab legacy base's anti-{@code endsWith}-overlap guard. {@code "tag_push"}
-     * cannot pass as {@code "push"} because the last-segment comparison requires the
-     * full token to align.
+     * Compares the subject's last segment against {@link #subjectEventToken} by exact equality
+     * rather than {@code endsWith}, so {@code "tag_push"} cannot pass as {@code "push"}.
      */
     private boolean subjectMatchesExpectedEvent(String subject) {
         if (subject == null) {

@@ -36,6 +36,7 @@ public class SandboxMaintenanceConfiguration {
     @Bean
     ScheduledTaskRegistrar sandboxMaintenanceTasks(
             SandboxReconciler reconciler,
+            NativeGitVolumeReconciler gitReconciler,
             InteractiveSandboxRegistry sessions,
             SandboxProperties sandboxProperties,
             InteractiveSandboxProperties mentorProperties,
@@ -45,6 +46,8 @@ public class SandboxMaintenanceConfiguration {
                 reconciler::periodicReconciliation,
                 Duration.ofSeconds(sandboxProperties.reconciliationIntervalSeconds()),
                 Duration.ofSeconds(initialDelaySeconds)));
+        tasks.addFixedDelayTask(
+                new FixedDelayTask(gitReconciler::reconcile, Duration.ofMinutes(5), Duration.ofMinutes(5)));
         tasks.addFixedDelayTask(new FixedDelayTask(
                 sessions::reap, Duration.ofSeconds(mentorProperties.reapIntervalSeconds()), Duration.ZERO));
         return tasks;

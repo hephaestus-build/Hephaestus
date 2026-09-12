@@ -22,7 +22,7 @@ const meta = {
 		workTypeLabel: "Pull or merge request",
 		validation: {
 			status: "AUTHOR_DECLARED",
-			sourceContractVersion: "1.0.0",
+			sourceContractVersion: "1.1.0",
 			policyDigest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 			reviewRuleFingerprint: `v2:${"0".repeat(64)}`,
 		},

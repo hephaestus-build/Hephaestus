@@ -89,8 +89,10 @@ characters, then expose the webhook receiver through a trusted tunnel. GitLab gr
 requires the appropriate group role and license.
 
 The agent runs in a Docker sandbox (`ghcr.io/hephaestus-build/agent-pi`) and calls the LLM through
-the in-app proxy, so provider keys never enter the sandbox. Host-run E2E uses a non-internal Docker
-network (`allowInternet=true`) so the sandbox can reach that proxy through `host.docker.internal`.
+the in-app proxy, so provider keys never enter the sandbox. A practice review always runs on an
+internal Docker network, so a host-run server must be reachable from it: run the server in Docker or
+set `SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID`. Only the Heph binding may set `allowInternet=true`,
+which lets its sandbox reach a host-run proxy through `host.docker.internal`.
 Feedback is posted back to the MR, and the observations behind it are shown under the workspace's **Practices → Practice reviews** view.
 
 Live runner JUnit tests call the upstream provider directly. They do not cover application proxying,

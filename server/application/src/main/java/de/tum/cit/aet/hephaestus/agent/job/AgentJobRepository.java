@@ -140,7 +140,7 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
      * {@link Optional} does on the single-row query.
      */
     @Query(value = """
-        SELECT j.id AS "id",
+        SELECT j.id AS "id", j.retry_count AS "attempt",
                jsonb_extract_path_text(j.evidence_snapshot, 'manifest', 'contractVersion') AS "contractVersion"
         FROM agent_job j
         WHERE j.id IN :ids
@@ -151,6 +151,8 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
 
     interface EvidenceContractVersionRow {
         UUID getId();
+
+        int getAttempt();
 
         @Nullable
         String getContractVersion();

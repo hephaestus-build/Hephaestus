@@ -1397,6 +1397,7 @@ export type EvidenceCitation = {
   path: string;
   quote?: string;
   quoteRedacted: boolean;
+  revision?: string;
   side?: 'OLD' | 'NEW';
   sourceKind: string;
   startLine: number;

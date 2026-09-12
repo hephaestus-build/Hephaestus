@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.docker.NativeGitVolumeReconciler;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxContainerManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxMaintenanceConfiguration;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxReconciler;
@@ -43,10 +44,11 @@ class SandboxIdleMaintenanceTest extends BaseUnitTest {
                 .withUserConfiguration(SandboxMaintenanceConfiguration.class)
                 .withPropertyValues("hephaestus.runtime.server.enabled=false")
                 .withBean(InteractiveSandboxProperties.class, () -> properties)
-                .withBean(SandboxProperties.class, () -> new SandboxProperties(5, 10, 60, 1073741824L, 500000, null))
+                .withBean(SandboxProperties.class, () -> new SandboxProperties(5, 10, 60, null))
                 .withBean(StdinWriteWatchdog.class, () -> watchdog)
                 .withBean(InteractiveSandboxRegistry.class, () -> registry)
                 .withBean(SandboxReconciler.class, () -> mock(SandboxReconciler.class))
+                .withBean(NativeGitVolumeReconciler.class, () -> mock(NativeGitVolumeReconciler.class))
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(registry.tryRegister(idle))

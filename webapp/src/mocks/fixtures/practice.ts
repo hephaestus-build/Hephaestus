@@ -9,13 +9,13 @@ import type {
 
 export const mockAuthorDeclaredEvidenceValidation = {
 	status: "AUTHOR_DECLARED",
-	sourceContractVersion: "1.0.0",
+	sourceContractVersion: "1.1.0",
 	policyDigest: "0".repeat(64),
 	reviewRuleFingerprint: `v2:${"0".repeat(64)}`,
 } satisfies PracticeAutomatedReviewValidation;
 
 export const mockPullRequestPolicy = {
-	sourceContractVersion: "1.0.0",
+	sourceContractVersion: "1.1.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -30,7 +30,7 @@ export const mockPullRequestPolicy = {
 } satisfies PracticeAutomatedReviewPolicy;
 
 const mockIssuePolicy = {
-	sourceContractVersion: "1.0.0",
+	sourceContractVersion: "1.1.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -46,7 +46,7 @@ const mockIssuePolicy = {
 } satisfies PracticeAutomatedReviewPolicy;
 
 const mockConversationPolicy = {
-	sourceContractVersion: "1.0.0",
+	sourceContractVersion: "1.1.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -62,7 +62,7 @@ const mockConversationPolicy = {
 } satisfies PracticeAutomatedReviewPolicy;
 
 const mockDocumentPolicy = {
-	sourceContractVersion: "1.0.0",
+	sourceContractVersion: "1.1.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -117,7 +117,7 @@ export const mockDocumentBinding = {
  * observations about this person" on a pull request and something differently worded on an issue.
  *
  * The wire ids are the server's; the operator-facing strings are `displayName`, `description` and
- * `selectionScope`, all copied verbatim from `contracts/artifact-source/1.0.0/catalog.json`.
+ * `selectionScope`, all copied verbatim from `contracts/artifact-source/1.1.0/catalog.json`.
  */
 const relatedWorkSource = {
 	sourceKind: "workspace.project-inventory",
@@ -146,7 +146,7 @@ const observationHistorySource = {
 	sourceKind: "hephaestus.observation-history",
 	displayName: "Earlier observations about this person",
 	description:
-		"Observations earlier reviews in this workspace recorded about the person whose work is under review.",
+		"Observations earlier reviews in this workspace recorded about the person whose work is under review, with the practice, presence, assessment and recurrence key each was filed under.",
 	selectionScope:
 		"The most recent 50 observations about this person in this workspace within the last 90 days, after the same visibility rules that govern any other reading of them. A window over a growing record cannot establish that it holds every earlier observation, so this source is never reported as COMPLETE.",
 	privacyClass: "PERSONAL",
@@ -158,7 +158,7 @@ const feedbackHistorySource = {
 	sourceKind: "hephaestus.feedback-history",
 	displayName: "Feedback already delivered to this person",
 	description:
-		"Feedback earlier reviews already delivered to the person whose work is under review, with the place it went to.",
+		"Feedback earlier reviews already delivered to the person whose work is under review, with the channel it went to and the recurrence keys it spoke to.",
 	selectionScope:
 		"The most recent 30 delivered feedback items for this person in this workspace within the last 90 days. A window over a growing record cannot establish that it holds every earlier delivery, so this source is never reported as COMPLETE.",
 	privacyClass: "PERSONAL",
@@ -167,7 +167,7 @@ const feedbackHistorySource = {
 } satisfies PracticeEvidenceSourceOption;
 
 export const mockPracticeDefinitionOptions = {
-	sourceContractVersion: "1.0.0",
+	sourceContractVersion: "1.1.0",
 	workTypes: [
 		{
 			artifactKind: "scm.pull_request",
@@ -206,10 +206,9 @@ export const mockPracticeDefinitionOptions = {
 				{
 					sourceKind: "scm.pull-request.core",
 					displayName: "Pull request details",
-					description:
-						"The pull request record: title, description, author, branches, state, labels, and commit subjects.",
+					description: "The pull request record and its ordered commit history.",
 					selectionScope:
-						"One pull request, selected by the job, with its own fields and the commit subjects available for it.",
+						"One pull request selected by the job, with its mirrored fields and the complete commits.json history over the same pinned merge-base-to-head range as the diff. The target and head commit identities are fixed at submission. Commit records include subjects, bodies when present, author and committer timestamps, parent counts, and rename-aware changed-file counts for single-parent commits. History is streamed without a commit-count cutoff; unavailable Git history is a collection error.",
 					privacyClass: "PERSONAL",
 					requiredQuality: "COMPLETE",
 					supportsExhaustiveEvidence: true,
@@ -220,7 +219,7 @@ export const mockPracticeDefinitionOptions = {
 					description:
 						"The code changes the pull request introduces, as a unified diff annotated with line numbers.",
 					selectionScope:
-						"The merge-base-to-head diff for one pull request at the reviewed commit, up to 20 MiB. A diff that cannot be read is recorded as a collection error rather than as an empty diff.",
+						"The complete merge-base-to-head diff for one pull request, pinned by both commit identities. It is streamed to the job workspace without a content-size cutoff, alongside a NUL-delimited changed-path index that includes binary files, mode-only changes and renames. A diff that cannot be captured is a collection error, never an empty or silently truncated diff.",
 					privacyClass: "INTERNAL",
 					requiredQuality: "COMPLETE_AND_NON_EMPTY",
 					supportsExhaustiveEvidence: true,
@@ -257,11 +256,11 @@ export const mockPracticeDefinitionOptions = {
 				},
 				{
 					sourceKind: "scm.repository.tree",
-					displayName: "Repository files",
+					displayName: "Repository files and history",
 					description:
-						"Files from elsewhere in the repository, supplied as context for reading the change. Not reviewed on their own.",
+						"Repository files and reachable Git history, supplied as context for reading the change. Not reviewed on their own.",
 					selectionScope:
-						"The repository at the reviewed commit: up to 20,000 files and 32 MiB. Files above 10 MiB, symbolic links, submodules, and paths outside the tree are excluded, and the capture is reported as PARTIAL.",
+						"All regular, executable, and symbolic-link Git blobs at the reviewed commit, without file-count, total-size, per-file-size, or binary-content exclusions. A self-contained Git repository includes objects reachable from that commit and the local clone's captured branch, tag, and remote-tracking refs, with detached HEAD at the reviewed commit. Upstream configuration, credentials, hooks, replacement refs, and unreachable objects are not exported. Repository text citations identify a repository-relative path and line range, using the captured .git/HEAD artifact as their repository witness. An omitted revision selects the pinned HEAD; historical text identifies a full commit SHA. The manifest records the HEAD and captured-ref witnesses, not one artifact per repository file. Trusted admission verifies reachability from captured refs and the exact quoted location; arbitrary command output is not evidence. Symbolic-link blobs are materialized as regular text files containing the link target and are never followed. Submodules, unsupported file modes, and unsafe paths are excluded from the worktree and reported as PARTIAL. Git LFS pointer files are captured as committed; external LFS objects are not fetched. Shallow clones cannot satisfy this capture.",
 					privacyClass: "INTERNAL",
 					requiredQuality: "ANY_CAPTURE",
 					supportsExhaustiveEvidence: true,

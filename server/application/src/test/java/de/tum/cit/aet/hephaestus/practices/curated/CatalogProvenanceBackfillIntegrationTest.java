@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.practices.curated;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
@@ -10,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.time.Instant;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -26,6 +29,12 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
 
     @Autowired
     private CatalogProvenanceBackfill backfill;
+
+    @Autowired
+    private SourceContractPolicyMigration policyMigration;
+
+    @Autowired
+    private CuratedPracticeOverrideRepository overrideRepository;
 
     @Autowired
     private CuratedCatalogService catalogService;
@@ -154,6 +163,114 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT criteria FROM practice WHERE workspace_id = ?", String.class, matching.getId()))
                 .isEqualTo("The workspace intentionally changed these criteria");
+    }
+
+    @Test
+    void shouldAppendUpgradedPoliciesWithoutChangingHistoryOrWorkspaceCustomizations() {
+        var previousPolicy = previousPolicy();
+        seedLegacyWorkspace(matching, "Workspace-specific criteria", false, previousPolicy, null);
+        seedLegacyWorkspace(edited, "Different workspace criteria", false, previousPolicy, null);
+        var history = jdbcTemplate.queryForList("""
+                SELECT r.* FROM practice_revision r JOIN practice p ON p.id = r.practice_id
+                WHERE p.workspace_id IN (?, ?) ORDER BY r.id
+                """, matching.getId(), edited.getId());
+
+        policyMigration.run();
+        policyMigration.run();
+
+        assertThat(jdbcTemplate.queryForList("""
+                SELECT automated_review_policy ->> 'sourceContractVersion' FROM practice
+                WHERE workspace_id IN (?, ?) ORDER BY workspace_id
+                """, String.class, matching.getId(), edited.getId()))
+                .containsExactly("1.1.0", "1.1.0");
+        assertThat(jdbcTemplate.queryForList("""
+                SELECT criteria FROM practice WHERE workspace_id IN (?, ?) ORDER BY workspace_id
+                """, String.class, matching.getId(), edited.getId()))
+                .containsExactly("Workspace-specific criteria", "Different workspace criteria");
+        assertThat(jdbcTemplate.queryForList("""
+                SELECT r.* FROM practice_revision r JOIN practice p ON p.id = r.practice_id
+                WHERE p.workspace_id IN (?, ?) AND r.revision_number = 1 ORDER BY r.id
+                """, matching.getId(), edited.getId()))
+                .isEqualTo(history);
+        assertThat(jdbcTemplate.queryForList("""
+                SELECT r.revision_number FROM practice p JOIN practice_revision r ON r.id = p.current_revision_id
+                WHERE p.workspace_id IN (?, ?) ORDER BY p.workspace_id
+                """, Integer.class, matching.getId(), edited.getId()))
+                .containsExactly(2, 2);
+        assertThat(count("""
+                SELECT count(*) FROM practice_revision r JOIN practice p ON p.id = r.practice_id
+                WHERE p.workspace_id IN (?, ?)
+                """, matching.getId(), edited.getId())).isEqualTo(history.size() + 2);
+    }
+
+    @Test
+    void shouldResumeAfterAPartiallyCompletedPolicyUpgrade() {
+        var previousPolicy = previousPolicy();
+        seedLegacyWorkspace(matching, "First policy", false, previousPolicy, null);
+        seedLegacyWorkspace(edited, "Second policy", false, previousPolicy, null);
+        jdbcTemplate.update("""
+                UPDATE practice SET automated_review_policy = jsonb_set(automated_review_policy,
+                    '{automatedReview,mode}', '"INVALID"'::jsonb) WHERE workspace_id = ?
+                """, edited.getId());
+
+        assertThatThrownBy(policyMigration::run).isInstanceOf(RuntimeException.class);
+        assertThat(count("""
+                SELECT count(*) FROM practice_revision r JOIN practice p ON p.id = r.practice_id
+                WHERE p.workspace_id = ?
+                """, matching.getId())).isEqualTo(2);
+        jdbcTemplate.update(
+                "UPDATE practice SET automated_review_policy = ?::jsonb WHERE workspace_id = ?",
+                evidenceJson(previousPolicy),
+                edited.getId());
+
+        policyMigration.run();
+
+        assertThat(jdbcTemplate.queryForList("""
+                SELECT r.revision_number FROM practice p JOIN practice_revision r ON r.id = p.current_revision_id
+                WHERE p.workspace_id IN (?, ?) ORDER BY p.workspace_id
+                """, Integer.class, matching.getId(), edited.getId()))
+                .containsExactly(2, 2);
+    }
+
+    @Test
+    void shouldUpgradeInstanceOverridesWithoutAcknowledgingBundledChanges() {
+        var definition = shipped();
+        var policy = definition.automatedReviewPolicy();
+        var previousPolicy = previousPolicy();
+        transactionOperations.executeWithoutResult(ignored -> {
+            var override = new CuratedPracticeOverride(SHIPPED_SLUG, Instant.now());
+            override.write(
+                    new PracticeDefinition(
+                            definition.name(),
+                            definition.bindings(),
+                            "Instance criteria",
+                            definition.precomputeScript(),
+                            previousPolicy,
+                            definition.whyItMatters(),
+                            definition.whatGoodLooksLike(),
+                            definition.groupSlug()),
+                    "old-bundled-digest",
+                    Instant.now());
+            overrideRepository.save(override);
+        });
+
+        policyMigration.run();
+        policyMigration.run();
+
+        var override = overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow();
+        assertThat(override.getAutomatedReviewPolicy()).isEqualTo(policy);
+        assertThat(override.getCriteria()).isEqualTo("Instance criteria");
+        assertThat(override.getAcceptedBundledDigest()).isEqualTo("old-bundled-digest");
+    }
+
+    private PracticeAutomatedReviewPolicy previousPolicy() {
+        var policy = shipped().automatedReviewPolicy();
+        return new PracticeAutomatedReviewPolicy(
+                new SourceContractVersion("1.0.0"),
+                policy.automatedReview(),
+                policy.whenEvidenceIsInsufficient(),
+                policy.knownLimitations(),
+                policy.insufficiencyReason());
     }
 
     private PracticeDefinition shipped() {

@@ -1,11 +1,13 @@
 {
-  "name": "hephaestus-pi-sdk",
-  "private": true,
-  "version": "0.0.0",
-  "dependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.4"
-  },
-  "engines": {
-    "pnpm": "12.3.4"
-  }
+	"name": "hephaestus-pi-sdk",
+	"private": true,
+	"type": "module",
+	"version": "0.0.0",
+	"dependencies": {
+		"@earendil-works/pi-coding-agent": "0.84.4",
+		"ws": "8.21.3"
+	},
+	"engines": {
+		"pnpm": "12.3.4"
+	}
 }

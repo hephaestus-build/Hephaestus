@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler.conversation;
 
+import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -123,7 +124,9 @@ public class FeedbackChannelRouter {
             return false;
         }
         for (JsonNode citation : citations) {
-            if ("scm.pull-request.diff".equals(citation.path("sourceKind").asString())) {
+            if (PracticeSubjectClause.DIFF_SOURCE
+                    .value()
+                    .equals(citation.path("sourceKind").asString())) {
                 return true;
             }
         }

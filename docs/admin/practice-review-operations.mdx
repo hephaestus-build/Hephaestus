@@ -18,8 +18,12 @@ those inventories into another deployment manifest from this page.
 A working deployment must:
 
 - enable the agent runtime on both the submitting server and claiming worker;
-- make repository checkout and the shared fabric volume available to every worker that captures repository
-  evidence;
+- enable `GIT_CHECKOUT_ENABLED` for repository access and provide worker-local storage for complete
+  attempt inputs; enabling agent execution alone does not enable repository collection;
+- hand every server and worker container the `git-preparation` image from the verified release lock
+  (`HEPHAESTUS_IMAGE_GIT_PREPARATION`, bound to `hephaestus.git.image`). Native Git runs in that
+  image, never in the application image, and the reference must be digest-pinned wherever the agent
+  image must be;
 - set campaign, request-rate, retry, and retention limits appropriate to its budget and governance policy.
 
 Who gets practice review is **not** among them. There is no instance-wide population flag: each workspace
@@ -30,12 +34,22 @@ See the
 and [reference Compose files](https://github.com/hephaestus-build/Hephaestus/tree/main/docker) before changing an
 environment variable. Unknown or unforwarded variables do not configure the application.
 
-Repository checkouts, replay metadata, and content-addressed evidence share the fabric root. A split
-or multi-host deployment must mount the same durable read-write filesystem on every server and worker, with
-cross-process locks, atomic rename, and access controls suitable for source content.
+Repository mirrors and attempt folders are disposable worker-local storage, not a shared evidence store.
+A mirror is a Docker volume owned by one worker; a sweep removes it once its repository is no longer
+monitored by that workspace or its worker has gone. Attempt folders live under `HEPHAESTUS_FABRIC_ROOT`
+and are deleted once the attempt's observations are admitted, or an hour after an attempt ends without
+an admitted result. Sandbox inputs and results travel through the authenticated worker gateway.
+PostgreSQL retains admitted observations and their citation verification results; delivery does not
+require the worker's source files. The storage and cleanup contract is defined in
+[ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md).
 
-[ADR 0039](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0039-git-and-postgresql-own-evidence.md)
-records the decision to replace this mount; current releases still require it.
+A server pod that carries the worker role runs Git in its own `git-preparation` containers. A server
+pod whose worker role is off runs no Git itself: it dispatches each operation over the worker
+control channel to a connected worker, placed by hashing the repository id over the connected
+workers, so a repository stays on one worker while that worker's session lives and lands on the same
+worker again after a reconnect as long as the set of workers is unchanged. With no worker connected
+the operation fails rather than waits, and ingestion retries from its commit checkpoints. The webhook
+role has no Git at all.
 
 Source authorization is not a deployment toggle. The shipped artifact-source contract fixes which governed
 sources each purpose may use; integrations only determine which authorized sources are available. See
@@ -139,8 +153,8 @@ fence, retry count, and lease together prevent duplicate provider writes.
 
 ## Limits you should know about
 
-Configuration metadata and the artifact-source catalog are the source of truth for current values. These
-behaviors matter independently of their exact defaults:
+Configuration metadata describes deployment settings; the artifact-source catalog defines capture semantics.
+These behaviors matter independently of configured capacity:
 
 - **Background task cadences are fixed in code.** Their thresholds may be configurable even when their
   polling schedules are not.
@@ -151,11 +165,29 @@ behaviors matter independently of their exact defaults:
   then go quiet when their deadline passes.
 - **Nothing is ever deleted from the occurrence ledger**, in any state, including retired rows. It is the
   record of what was *not* done, and it only grows. Size it accordingly on a busy instance.
-- **The repository-tree capture is bounded**, by file count, total size, and per-file size
-  (`GIT_TREE_MAX_FILES`, `GIT_TREE_MAX_TOTAL_SIZE`, `GIT_TREE_MAX_FILE_SIZE`). When a bound bites, the
-  capture reports itself **partial** and names which bound it hit rather than silently truncating. The
-  values in force are the ones declared in the artifact-source catalog's selection scope for that source —
-  read them there rather than from a copy. None of the three is forwarded by the shipped Compose files.
+- **Repository capture includes every regular and executable file at the reviewed commit**, including
+  binary content and large files, plus sanitized Git history reachable from the reviewed commit and
+  the mirrored branches and tags. Native bash, Git, ripgrep, and file-discovery tools are available.
+  File count and content size do not truncate the tree. Symbolic links are materialized as regular
+  files containing the link target, without following it. Submodules are not hydrated; their
+  presence, like an excluded unsafe path, is reported as a partial capture, and an archive entry that
+  is not a regular file or directory fails the capture. Git LFS pointers are captured as committed,
+  not replaced by downloads. Provision storage for the mirror, captured content, and per-job staging;
+  model-facing output limits do not bound capture storage. The captured worktree and Git metadata are
+  read-only, with no repository credentials or upstream configuration. Reviews use an isolated
+  internal Docker network; the authenticated worker gateway must be reachable on that network.
+- **Native Git is bounded per container and per walk.** Each Git operation is one `git-preparation`
+  container under the sandbox security policy with 2 CPUs, 2 GiB, 256 processes and a 15-minute
+  deadline. Git containers run beside the review sandboxes, not in their place: they have their own
+  admission of `SANDBOX_MAX_CONCURRENT`, so a worker can run up to twice that many containers at once, and
+  `GIT_MAX_CONCURRENT_INGESTIONS` (default 2) caps how many captured commits are written to
+  PostgreSQL at once. The container reaches the provider only while fetching and has no network
+  otherwise. A repository whose checkout plus mirrored history exceeds `GIT_MAX_SNAPSHOT_BYTES`
+  (8 GiB by default) is refused whole, measured inside the container before anything is written;
+  raise it for larger monorepos. Exhaustion or refusal fails the operation; neither selects a smaller
+  tree. A commit-history walk reads commits in pages of 256 and pauses after 32 pages that needed
+  capture — pages whose commits were all captured before do not count — and the next sync cycle
+  resumes from the commits already captured.
 - **Linked Outline documents are retrieval-limited, and the mentor and review paths do not agree.** A
   review resolves documents *linked from* the work first and only tops up a small number by search; the
   mentor searches the whole corpus and truncates each document. Neither path can report that it found

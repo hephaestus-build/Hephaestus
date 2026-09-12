@@ -117,16 +117,14 @@ public class PullRequestSignalResubmitter implements PendingSignalResubmitter {
             }
             case GateDecision.Detect detect -> {
                 ScmEventPayload.PullRequestData prData = ScmEventPayload.PullRequestData.from(pr);
-                PullRequestReviewSubmissionRequest request = reviewData == null
-                        ? new PullRequestReviewSubmissionRequest(
-                                prData, pr.getHeadRefName(), pr.getHeadRefOid(), pr.getBaseRefName(), key.signalName())
-                        : PullRequestReviewSubmissionRequest.forSubmittedReview(
-                                prData,
-                                pr.getHeadRefName(),
-                                pr.getHeadRefOid(),
-                                pr.getBaseRefName(),
-                                key.signalName(),
-                                reviewData);
+                PullRequestReviewSubmissionRequest request = new PullRequestReviewSubmissionRequest(
+                        prData,
+                        pr.getHeadRefName(),
+                        pr.getHeadRefOid(),
+                        pr.getBaseRefName(),
+                        pr.getBaseRefOid(),
+                        key.signalName());
+                if (reviewData != null) request = request.forSubmittedReview(reviewData);
                 agentJobService.submit(
                         detect.workspace().getId(),
                         AgentJobType.PULL_REQUEST_REVIEW,

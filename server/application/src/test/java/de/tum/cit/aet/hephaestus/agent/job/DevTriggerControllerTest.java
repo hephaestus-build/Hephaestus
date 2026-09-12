@@ -153,6 +153,7 @@ class DevTriggerControllerTest extends BaseUnitTest {
         pr.setHeadRefOid("abc123");
         pr.setHeadRefName("feature/thing");
         pr.setBaseRefName("main");
+        pr.setBaseRefOid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         Repository repository = new Repository();
         repository.setId(100L);
         repository.setNameWithOwner("owner/repo");

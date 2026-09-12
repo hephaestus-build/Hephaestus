@@ -73,6 +73,11 @@ public class AgentBindingService {
             binding.setMaxConcurrentJobs(request.maxConcurrentJobs());
         }
         if (request.allowInternet() != null) {
+            // PracticePiAdapter always runs a review on an internal network; a stored true would be a lie.
+            if (request.allowInternet() && purpose == AgentPurpose.PRACTICE_REVIEW) {
+                throw new IllegalArgumentException(
+                        "Practice reviews run on an internal network; internet access can only be enabled for Heph.");
+            }
             binding.setAllowInternet(request.allowInternet());
         }
         if (request.enabled() != null) {

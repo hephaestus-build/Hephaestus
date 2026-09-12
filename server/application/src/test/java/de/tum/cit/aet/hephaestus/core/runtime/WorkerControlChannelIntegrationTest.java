@@ -71,7 +71,8 @@ class WorkerControlChannelIntegrationTest extends BaseIntegrationTest {
 
         try {
             // Send WorkerHello.
-            String helloJson = codec.encode(FrameEnvelope.of(new WorkerHello(workerId, List.of(1), "0.0-it")));
+            String helloJson = codec.encode(
+                    FrameEnvelope.of(new WorkerHello(workerId, List.of(FrameEnvelope.CURRENT_VERSION), "0.0-it")));
             ws.sendText(helloJson, true).get(5, TimeUnit.SECONDS);
 
             // Hub responds with WorkerWelcome and registers the session.

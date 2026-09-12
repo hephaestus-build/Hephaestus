@@ -76,7 +76,7 @@ class MentorTurnMeterCommitOrderingTest extends BaseUnitTest {
     }
 
     private static ProxyRouting.BilledAttempt attempt(UUID turnId) {
-        return new ProxyRouting.BilledAttempt(LlmUsageSourceType.MENTOR_TURN, turnId, 1, BigDecimal.ZERO);
+        return new ProxyRouting.BilledAttempt(LlmUsageSourceType.MENTOR_TURN, turnId, 1, BigDecimal.ZERO, null);
     }
 
     private static ProxyTokenUsage usageOf(UUID turnId) {

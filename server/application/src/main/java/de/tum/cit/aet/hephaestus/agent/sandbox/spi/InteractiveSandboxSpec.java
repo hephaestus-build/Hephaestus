@@ -21,8 +21,7 @@ public record InteractiveSandboxSpec(
         @Nullable NetworkPolicy networkPolicy,
         ResourceLimits resourceLimits,
         SecurityProfile securityProfile,
-        Map<String, byte[]> inputFiles,
-        Map<String, String> volumeMounts) {
+        Map<String, byte[]> inputFiles) {
     /** POSIX-shell env-var name shape: leading letter/underscore, then letters/digits/underscores. */
     private static final Pattern ENV_KEY = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
 
@@ -46,7 +45,6 @@ public record InteractiveSandboxSpec(
         }
         environment = environment != null ? environment : Map.of();
         inputFiles = inputFiles != null ? inputFiles : Map.of();
-        volumeMounts = volumeMounts != null ? volumeMounts : Map.of();
         for (var entry : environment.entrySet()) {
             String key = entry.getKey();
             if (key == null || !ENV_KEY.matcher(key).matches()) {
@@ -63,6 +61,5 @@ public record InteractiveSandboxSpec(
         command = List.copyOf(command);
         environment = Map.copyOf(environment);
         inputFiles = Map.copyOf(inputFiles);
-        volumeMounts = Map.copyOf(volumeMounts);
     }
 }

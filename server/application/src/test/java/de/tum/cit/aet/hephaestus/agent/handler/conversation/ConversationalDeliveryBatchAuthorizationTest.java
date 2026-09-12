@@ -36,7 +36,6 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * The conversational reconciler reads and authorizes a whole turn's linked observations in two queries rather
@@ -57,7 +56,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 class ConversationalDeliveryBatchAuthorizationTest extends BaseUnitTest {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final long WS = 7L;
     private static final long RECIPIENT = 11L;
     private static final String PERMITTED_KIND = "scm.pull-request.diff";
@@ -108,16 +106,16 @@ class ConversationalDeliveryBatchAuthorizationTest extends BaseUnitTest {
             // No row for runWithoutRow — a run this workspace does not own, or one that recorded no
             // snapshot. The single-row form answered both with an empty Optional.
             return List.of(
-                    new ContractRow(deniedSource.getAgentJobId(), "1.0.0"),
-                    new ContractRow(deliverable.getAgentJobId(), "1.0.0"));
+                    new ContractRow(deniedSource.getAgentJobId(), "1.1.0"),
+                    new ContractRow(deliverable.getAgentJobId(), "1.1.0"));
         });
         when(catalogs.isSourceUsePermitted(
-                        new SourceContractVersion("1.0.0"),
+                        new SourceContractVersion("1.1.0"),
                         new SourceKind(PERMITTED_KIND),
                         SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(true);
         when(catalogs.isSourceUsePermitted(
-                        new SourceContractVersion("1.0.0"),
+                        new SourceContractVersion("1.1.0"),
                         new SourceKind(DENIED_KIND),
                         SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(false);
@@ -208,17 +206,24 @@ class ConversationalDeliveryBatchAuthorizationTest extends BaseUnitTest {
         lenient().when(evaluated.getReviewRuleFingerprint()).thenReturn(current ? "fingerprint" : "superseded");
         lenient().when(currentRevision.getReviewRuleFingerprint()).thenReturn("fingerprint");
         lenient().when(practice.getCurrentRevision()).thenReturn(currentRevision);
+        UUID jobId = UUID.randomUUID();
         return Observation.builder()
                 .id(UUID.randomUUID())
-                .agentJobId(UUID.randomUUID())
+                .agentJobId(jobId)
                 .practice(practice)
                 .practiceRevision(evaluated)
-                .evidence(MAPPER.readTree("{\"citations\":[{\"sourceKind\":\"" + sourceKind + "\"}]}"))
+                .evidence(
+                        de.tum.cit.aet.hephaestus.agent.handler.AdmittedObservationFixtures.evidence(jobId, sourceKind))
                 .build();
     }
 
     private record ContractRow(UUID id, @Nullable String contractVersion)
             implements AgentJobRepository.EvidenceContractVersionRow {
+        @Override
+        public int getAttempt() {
+            return 0;
+        }
+
         @Override
         public UUID getId() {
             return id;

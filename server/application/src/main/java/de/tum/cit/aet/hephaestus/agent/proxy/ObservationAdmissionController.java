@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageSourceType;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
@@ -51,21 +52,38 @@ public class ObservationAdmissionController {
         UUID jobId = routing.sourceId();
         if (jobId == null
                 || routing.attempt() == null
-                || routing.attempt().sourceType() != LlmUsageSourceType.AGENT_JOB) {
+                || routing.attempt().sourceType() != LlmUsageSourceType.AGENT_JOB
+                || routing.workspaceId() == null
+                || routing.attempt().workerId() == null) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Agent-job credential required");
         }
+        var identity = new ObservationAdmissionService.AdmissionIdentity(
+                jobId,
+                routing.workspaceId(),
+                routing.attempt().number(),
+                routing.attempt().workerId());
+        // A refusal is 422, never 5xx: the runner repeats only a 5xx or a transport failure, and repeating a
+        // decided submission would put the same question again. The reason is already recorded on the job.
         try {
-            return admission.admit(jobId, request.path("observations"));
-        } catch (ObservationAdmissionService.AdmissionConflictException e) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Observations differ from the admitted payload", e);
+            return admission.admit(identity, request.path("observations"));
         } catch (ObservationsRefusedException e) {
-            // A decision, not a defect: the review ran and what it submitted does not support a claim
-            // about anyone's work. Answering 5xx would have the sandbox repeat a submission this server
-            // refuses for the same reason every time, and would file the refusal as an internal error.
             refusals.recordExecutionRefusal(e.reasonCode());
-            admission.recordRefusal(jobId, e.reasonCode(), e.reason());
             log.info("Refused this review's observations ({}): jobId={}, {}", e.reasonCode(), jobId, e.reason());
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, e.reason(), e);
+        } catch (JobDeliveryException e) {
+            refusals.recordExecutionRefusal(ObservationAdmissionService.INADMISSIBLE_REASON_CODE);
+            log.info("Refused this review's observations as inadmissible: jobId={}, {}", jobId, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, e.getMessage(), e);
+        } catch (ObservationAdmissionService.StaleAttemptException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Review attempt no longer owns this job", e);
+        } catch (ObservationAdmissionService.AdmissionConflictException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Observations differ from the admitted payload", e);
+        } catch (IllegalStateException e) {
+            // The evidence store or a verifier failed, not the submission: a 5xx the runner repeats. Mapped
+            // here because the shared advice would answer 409, which the runner treats as final.
+            log.error("Observation admission could not be completed: jobId={}", jobId, e);
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR, "Observation admission could not be completed", e);
         }
     }
 }

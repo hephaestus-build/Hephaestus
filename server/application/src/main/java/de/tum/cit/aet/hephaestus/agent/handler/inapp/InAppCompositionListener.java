@@ -196,8 +196,8 @@ public class InAppCompositionListener {
         if (candidates.isEmpty()) {
             return List.of();
         }
-        Set<UUID> visible =
-                visibilityPolicy.permitsAll(workspaceId, candidates, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        Set<UUID> visible = visibilityPolicy.permitsForNewDelivery(
+                workspaceId, candidates, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
         return candidates.stream().filter(o -> visible.contains(o.getId())).toList();
     }
 

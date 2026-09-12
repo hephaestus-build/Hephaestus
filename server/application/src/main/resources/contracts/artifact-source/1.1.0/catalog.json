@@ -1,0 +1,539 @@
+{
+	"version": "1.1.0",
+	"sources": [
+		{
+			"kind": "scm.pull-request.core",
+			"displayName": "Pull request details",
+			"description": "The pull request record and its ordered commit history.",
+			"selectionScope": "One pull request selected by the job, with its mirrored fields and the complete commits.json history over the same pinned merge-base-to-head range as the diff. The target and head commit identities are fixed at submission. Commit records include subjects, bodies when present, author and committer timestamps, parent counts, and rename-aware changed-file counts for single-parent commits. History is streamed without a commit-count cutoff; unavailable Git history is a collection error.",
+			"artifactKinds": [
+				"scm.pull_request"
+			],
+			"defaultRequirement": true,
+			"authority": "SYNCHRONIZED_MIRROR",
+			"identity": {
+				"mode": "NOT_APPLICABLE"
+			},
+			"completeness": {
+				"supportsComplete": true,
+				"supportsPartial": true,
+				"supportsEmpty": false
+			},
+			"requiredQuality": "COMPLETE",
+			"privacyClass": "PERSONAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-scm-pull-request-core-automated-review",
+				"use-scm-pull-request-core-feedback-delivery",
+				"use-scm-pull-request-core-mentor-context",
+				"use-scm-pull-request-core-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		},
+		{
+			"kind": "scm.pull-request.diff",
+			"displayName": "Code changes",
+			"description": "The code changes the pull request introduces, as a unified diff annotated with line numbers.",
+			"selectionScope": "The complete merge-base-to-head diff for one pull request, pinned by both commit identities. It is streamed to the job workspace without a content-size cutoff, alongside a NUL-delimited changed-path index that includes binary files, mode-only changes and renames. A diff that cannot be captured is a collection error, never an empty or silently truncated diff.",
+			"artifactKinds": [
+				"scm.pull_request"
+			],
+			"defaultRequirement": true,
+			"authority": "DETERMINISTIC_DERIVATION",
+			"identity": {
+				"mode": "PINNED_IDENTITY"
+			},
+			"completeness": {
+				"supportsComplete": true,
+				"supportsPartial": false,
+				"supportsEmpty": true
+			},
+			"requiredQuality": "COMPLETE_AND_NON_EMPTY",
+			"privacyClass": "INTERNAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-scm-pull-request-diff-automated-review",
+				"use-scm-pull-request-diff-feedback-delivery",
+				"use-scm-pull-request-diff-mentor-context",
+				"use-scm-pull-request-diff-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		},
+		{
+			"kind": "scm.pull-request.comments",
+			"displayName": "Inline review comments",
+			"description": "Review comments left on specific lines of the pull request.",
+			"selectionScope": "Up to the 500 most recent inline comments on one pull request, most recent first. Beyond that limit the capture is reported as PARTIAL.",
+			"artifactKinds": [
+				"scm.pull_request"
+			],
+			"defaultRequirement": true,
+			"authority": "SYNCHRONIZED_MIRROR",
+			"identity": {
+				"mode": "NOT_APPLICABLE"
+			},
+			"completeness": {
+				"supportsComplete": true,
+				"supportsPartial": true,
+				"supportsEmpty": true
+			},
+			"requiredQuality": "ANY_CAPTURE",
+			"privacyClass": "PERSONAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-scm-pull-request-comments-automated-review",
+				"use-scm-pull-request-comments-feedback-delivery",
+				"use-scm-pull-request-comments-mentor-context",
+				"use-scm-pull-request-comments-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		},
+		{
+			"kind": "scm.repository.tree",
+			"displayName": "Repository files and history",
+			"description": "Repository files and reachable Git history, supplied as context for reading the change. Not reviewed on their own.",
+			"selectionScope": "All regular, executable, and symbolic-link Git blobs at the reviewed commit, without file-count, total-size, per-file-size, or binary-content exclusions. A self-contained Git repository includes objects reachable from that commit and the local clone's captured branch, tag, and remote-tracking refs, with detached HEAD at the reviewed commit. Upstream configuration, credentials, hooks, replacement refs, and unreachable objects are not exported. Repository text citations identify a repository-relative path and line range, using the captured .git/HEAD artifact as their repository witness. An omitted revision selects the pinned HEAD; historical text identifies a full commit SHA. The manifest records the HEAD and captured-ref witnesses, not one artifact per repository file. Trusted admission verifies reachability from captured refs and the exact quoted location; arbitrary command output is not evidence. Symbolic-link blobs are materialized as regular text files containing the link target and are never followed. Submodules, unsupported file modes, and unsafe paths are excluded from the worktree and reported as PARTIAL. Git LFS pointer files are captured as committed; external LFS objects are not fetched. Shallow clones cannot satisfy this capture.",
+			"artifactKinds": [
+				"scm.pull_request"
+			],
+			"defaultRequirement": false,
+			"authority": "UPSTREAM_SNAPSHOT",
+			"identity": {
+				"mode": "PINNED_IDENTITY"
+			},
+			"completeness": {
+				"supportsComplete": true,
+				"supportsPartial": true,
+				"supportsEmpty": true
+			},
+			"requiredQuality": "ANY_CAPTURE",
+			"privacyClass": "INTERNAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-scm-repository-tree-automated-review",
+				"use-scm-repository-tree-feedback-delivery",
+				"use-scm-repository-tree-mentor-context",
+				"use-scm-repository-tree-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		},
+		{
+			"kind": "scm.issue.core",
+			"displayName": "Issue details",
+			"description": "The issue record: title, description, author, state, labels, and assignees.",
+			"selectionScope": "One issue, selected by the job, with its own fields and its rendered description.",
+			"artifactKinds": [
+				"scm.issue"
+			],
+			"defaultRequirement": true,
+			"authority": "SYNCHRONIZED_MIRROR",
+			"identity": {
+				"mode": "NOT_APPLICABLE"
+			},
+			"completeness": {
+				"supportsComplete": true,
+				"supportsPartial": true,
+				"supportsEmpty": false
+			},
+			"requiredQuality": "COMPLETE",
+			"privacyClass": "PERSONAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-scm-issue-core-automated-review",
+				"use-scm-issue-core-feedback-delivery",
+				"use-scm-issue-core-mentor-context",
+				"use-scm-issue-core-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		},
+		{
+			"kind": "scm.issue.comments",
+			"displayName": "Issue comments",
+			"description": "The discussion recorded on the issue.",
+			"selectionScope": "Up to the 200 most recent comments on one issue, most recent first. Beyond that limit the capture is reported as PARTIAL.",
+			"artifactKinds": [
+				"scm.issue"
+			],
+			"defaultRequirement": true,
+			"authority": "SYNCHRONIZED_MIRROR",
+			"identity": {
+				"mode": "NOT_APPLICABLE"
+			},
+			"completeness": {
+				"supportsComplete": true,
+				"supportsPartial": true,
+				"supportsEmpty": true
+			},
+			"requiredQuality": "ANY_CAPTURE",
+			"privacyClass": "PERSONAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-scm-issue-comments-automated-review",
+				"use-scm-issue-comments-feedback-delivery",
+				"use-scm-issue-comments-mentor-context",
+				"use-scm-issue-comments-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		},
+		{
+			"kind": "docs.document.core",
+			"displayName": "Document under review",
+			"description": "The written document a review is about: its prose, title, collection, author, and upstream timestamps.",
+			"selectionScope": "One mirrored document, selected by the job, rendered whole. A document removed upstream or evicted from the local mirror is reported as UNAVAILABLE rather than as a document that said nothing.",
+			"artifactKinds": [
+				"docs.document"
+			],
+			"defaultRequirement": true,
+			"authority": "SYNCHRONIZED_MIRROR",
+			"identity": {
+				"mode": "NOT_APPLICABLE"
+			},
+			"completeness": {
+				"supportsComplete": true,
+				"supportsPartial": false,
+				"supportsEmpty": false
+			},
+			"requiredQuality": "COMPLETE",
+			"privacyClass": "PERSONAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-docs-document-core-automated-review",
+				"use-docs-document-core-feedback-delivery",
+				"use-docs-document-core-mentor-context",
+				"use-docs-document-core-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		},
+		{
+			"kind": "slack.conversation.thread",
+			"displayName": "Slack thread",
+			"description": "One Slack thread in chronological order, read only from channels whose consent is active.",
+			"selectionScope": "One thread, selected by the job, with system and bot messages excluded. A thread whose channel consent is not active, or which no longer exists, is reported as REDACTED or UNAVAILABLE rather than as an empty conversation.",
+			"artifactKinds": [
+				"chat.conversation_thread"
+			],
+			"defaultRequirement": true,
+			"authority": "SYNCHRONIZED_MIRROR",
+			"identity": {
+				"mode": "NOT_APPLICABLE"
+			},
+			"completeness": {
+				"supportsComplete": true,
+				"supportsPartial": true,
+				"supportsEmpty": true
+			},
+			"requiredQuality": "COMPLETE",
+			"privacyClass": "SENSITIVE_PERSONAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-slack-conversation-thread-automated-review",
+				"use-slack-conversation-thread-feedback-delivery",
+				"use-slack-conversation-thread-mentor-context",
+				"use-slack-conversation-thread-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		},
+		{
+			"kind": "scm.linked-work-items",
+			"displayName": "Linked work items",
+			"description": "Issues the pull request states it addresses, resolved from its description, branch name, and commit subjects.",
+			"selectionScope": "Issues resolved from closing references, the branch name, and up to 500 commit subjects. Resolution cannot establish that it found every link the work actually has, so this source is never reported as COMPLETE. References to work outside this repository are reported as unresolved rather than as incomplete evidence.",
+			"artifactKinds": [
+				"scm.pull_request"
+			],
+			"defaultRequirement": false,
+			"authority": "LOSSY_DERIVATION",
+			"identity": {
+				"mode": "NOT_APPLICABLE"
+			},
+			"completeness": {
+				"supportsComplete": false,
+				"supportsPartial": true,
+				"supportsEmpty": true
+			},
+			"requiredQuality": "ANY_CAPTURE",
+			"privacyClass": "PERSONAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-scm-linked-work-items-automated-review",
+				"use-scm-linked-work-items-feedback-delivery",
+				"use-scm-linked-work-items-mentor-context",
+				"use-scm-linked-work-items-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		},
+		{
+			"kind": "scm.review-threads",
+			"displayName": "Review threads and decisions",
+			"description": "Review conversations on the pull request, whether each was resolved, and each reviewer's decision.",
+			"selectionScope": "Every review thread and review decision for one pull request.",
+			"artifactKinds": [
+				"scm.pull_request"
+			],
+			"defaultRequirement": false,
+			"authority": "SYNCHRONIZED_MIRROR",
+			"identity": {
+				"mode": "NOT_APPLICABLE"
+			},
+			"completeness": {
+				"supportsComplete": true,
+				"supportsPartial": true,
+				"supportsEmpty": true
+			},
+			"requiredQuality": "ANY_CAPTURE",
+			"privacyClass": "PERSONAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-scm-review-threads-automated-review",
+				"use-scm-review-threads-feedback-delivery",
+				"use-scm-review-threads-mentor-context",
+				"use-scm-review-threads-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		},
+		{
+			"kind": "scm.general-review-comments",
+			"displayName": "General review comments",
+			"description": "Review comments addressing the pull request as a whole rather than a specific line.",
+			"selectionScope": "Every general review comment on one pull request.",
+			"artifactKinds": [
+				"scm.pull_request"
+			],
+			"defaultRequirement": false,
+			"authority": "SYNCHRONIZED_MIRROR",
+			"identity": {
+				"mode": "NOT_APPLICABLE"
+			},
+			"completeness": {
+				"supportsComplete": true,
+				"supportsPartial": true,
+				"supportsEmpty": true
+			},
+			"requiredQuality": "ANY_CAPTURE",
+			"privacyClass": "PERSONAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-scm-general-review-comments-automated-review",
+				"use-scm-general-review-comments-feedback-delivery",
+				"use-scm-general-review-comments-mentor-context",
+				"use-scm-general-review-comments-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		},
+		{
+			"kind": "workspace.project-inventory",
+			"displayName": "Related workspace work",
+			"description": "Other work items in the same workspace, supplied so a change can be read against related work.",
+			"selectionScope": "Up to 200 issues and 200 pull requests across at most 25 visible repositories, excluding the work item under review. Beyond any of those limits the capture is reported as PARTIAL.",
+			"artifactKinds": [
+				"scm.pull_request",
+				"scm.issue",
+				"chat.conversation_thread"
+			],
+			"defaultRequirement": false,
+			"authority": "DETERMINISTIC_DERIVATION",
+			"identity": {
+				"mode": "NOT_APPLICABLE"
+			},
+			"completeness": {
+				"supportsComplete": true,
+				"supportsPartial": true,
+				"supportsEmpty": true
+			},
+			"requiredQuality": "ANY_CAPTURE",
+			"privacyClass": "PERSONAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-workspace-project-inventory-automated-review",
+				"use-workspace-project-inventory-feedback-delivery",
+				"use-workspace-project-inventory-mentor-context",
+				"use-workspace-project-inventory-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		},
+		{
+			"kind": "outline.documents",
+			"displayName": "Referenced Outline documents",
+			"description": "Outline documents the reviewed work references.",
+			"selectionScope": "Only documents referenced by the reviewed work or matched to it, up to 15. Retrieval cannot establish that it found every relevant document, so this source is never reported as COMPLETE.",
+			"artifactKinds": [
+				"scm.pull_request",
+				"scm.issue"
+			],
+			"defaultRequirement": false,
+			"authority": "LOSSY_DERIVATION",
+			"identity": {
+				"mode": "NOT_APPLICABLE"
+			},
+			"completeness": {
+				"supportsComplete": false,
+				"supportsPartial": true,
+				"supportsEmpty": true
+			},
+			"requiredQuality": "ANY_CAPTURE",
+			"privacyClass": "PERSONAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-outline-documents-automated-review",
+				"use-outline-documents-feedback-delivery",
+				"use-outline-documents-mentor-context",
+				"use-outline-documents-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		},
+		{
+			"kind": "hephaestus.observation-history",
+			"displayName": "Earlier observations about this person",
+			"description": "Observations earlier reviews in this workspace recorded about the person whose work is under review, with the practice, presence, assessment and recurrence key each was filed under.",
+			"selectionScope": "The most recent 50 observations about this person in this workspace within the last 90 days, after the same visibility rules that govern any other reading of them. A window over a growing record cannot establish that it holds every earlier observation, so this source is never reported as COMPLETE.",
+			"artifactKinds": [
+				"scm.pull_request",
+				"scm.issue",
+				"chat.conversation_thread",
+				"docs.document"
+			],
+			"defaultRequirement": false,
+			"authority": "LOSSY_DERIVATION",
+			"identity": {
+				"mode": "NOT_APPLICABLE"
+			},
+			"completeness": {
+				"supportsComplete": false,
+				"supportsPartial": true,
+				"supportsEmpty": true
+			},
+			"requiredQuality": "ANY_CAPTURE",
+			"privacyClass": "PERSONAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-hephaestus-observation-history-automated-review",
+				"use-hephaestus-observation-history-feedback-delivery",
+				"use-hephaestus-observation-history-mentor-context",
+				"use-hephaestus-observation-history-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		},
+		{
+			"kind": "hephaestus.feedback-history",
+			"displayName": "Feedback already delivered to this person",
+			"description": "Feedback earlier reviews already delivered to the person whose work is under review, with the channel it went to and the recurrence keys it spoke to.",
+			"selectionScope": "The most recent 30 delivered feedback items for this person in this workspace within the last 90 days. A window over a growing record cannot establish that it holds every earlier delivery, so this source is never reported as COMPLETE.",
+			"artifactKinds": [
+				"scm.pull_request",
+				"scm.issue",
+				"chat.conversation_thread",
+				"docs.document"
+			],
+			"defaultRequirement": false,
+			"authority": "LOSSY_DERIVATION",
+			"identity": {
+				"mode": "NOT_APPLICABLE"
+			},
+			"completeness": {
+				"supportsComplete": false,
+				"supportsPartial": true,
+				"supportsEmpty": true
+			},
+			"requiredQuality": "ANY_CAPTURE",
+			"privacyClass": "PERSONAL",
+			"retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+			"erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+			"useDecisionIds": [
+				"use-hephaestus-feedback-history-automated-review",
+				"use-hephaestus-feedback-history-feedback-delivery",
+				"use-hephaestus-feedback-history-mentor-context",
+				"use-hephaestus-feedback-history-operator-review"
+			],
+			"supportedAbsenceStates": [
+				"NOT_COLLECTED",
+				"UNAVAILABLE",
+				"REDACTED",
+				"COLLECTION_ERROR"
+			]
+		}
+	]
+}

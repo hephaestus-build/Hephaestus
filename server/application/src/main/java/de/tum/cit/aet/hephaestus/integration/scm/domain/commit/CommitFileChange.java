@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.commit;
 
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -40,6 +39,7 @@ import org.jspecify.annotations.Nullable;
 @ToString
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class CommitFileChange {
+    public static final int FILENAME_LENGTH = 1024;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -50,7 +50,7 @@ public class CommitFileChange {
      * The filename/path of the changed file.
      */
     @NonNull
-    @Column(length = 1024, nullable = false)
+    @Column(length = FILENAME_LENGTH, nullable = false)
     private String filename;
 
     /**
@@ -79,7 +79,7 @@ public class CommitFileChange {
     /**
      * The previous filename, if the file was renamed.
      */
-    @Column(length = 1024)
+    @Column(length = FILENAME_LENGTH)
     private @Nullable String previousFilename;
 
     // Relationships
@@ -131,24 +131,6 @@ public class CommitFileChange {
             case "copied" -> ChangeType.COPIED;
             case "changed" -> ChangeType.CHANGED;
             default -> ChangeType.UNKNOWN;
-        };
-    }
-
-    /**
-     * Convert from GitRepositoryManager.ChangeType to entity ChangeType.
-     */
-    public static ChangeType fromGitChangeType(GitRepositoryManager.ChangeType gitType) {
-        if (gitType == null) {
-            return ChangeType.UNKNOWN;
-        }
-        return switch (gitType) {
-            case ADDED -> ChangeType.ADDED;
-            case MODIFIED -> ChangeType.MODIFIED;
-            case REMOVED -> ChangeType.REMOVED;
-            case RENAMED -> ChangeType.RENAMED;
-            case COPIED -> ChangeType.COPIED;
-            case CHANGED -> ChangeType.CHANGED;
-            case UNKNOWN -> ChangeType.UNKNOWN;
         };
     }
 }

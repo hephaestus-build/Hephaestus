@@ -28,7 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
 class PracticeAutomatedReviewPolicySchemaTest extends BaseUnitTest {
 
     private static final String SCHEMA_RESOURCE =
-            "contracts/artifact-source/1.0.0/practice-automated-review-policy.schema.json";
+            "contracts/artifact-source/1.1.0/practice-automated-review-policy.schema.json";
 
     private final JsonMapper objectMapper = JsonMapper.builder().build();
 

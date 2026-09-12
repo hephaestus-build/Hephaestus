@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
 	appendFileSync,
+	existsSync,
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
@@ -90,6 +91,11 @@ if (scenario) {
 							? "observer"
 							: "retry"
 						: "recon";
+				if (lane === "composer") {
+					for (const tool of ["write", "edit", "bash"]) {
+						assert.ok(!options.tools.includes(tool), `Composer must not carry ${tool}`);
+					}
+				}
 				record(`create:${lane}`);
 				if (scenario === `${lane}-init` || (lane === "composer" && scenario === "composer"))
 					throw new Error(`${lane} initialization failed`);
@@ -107,6 +113,47 @@ if (scenario) {
 						async prompt() {
 							record(`prompt:${lane}`);
 							if (lane === "recon") throw new Error("Reconnaissance unavailable");
+							if (scenario === "tree-citation" && lane === "observer") {
+								const tool = options.customTools.find((item) => item.name === "report_observation");
+								assert.ok(tool);
+								// The tool refuses synchronously; the session sees that as a failed call.
+								const cite = (path: string, quote: string) =>
+									new Promise<unknown>((resolve) => {
+										resolve(
+											tool.execute("report-1", {
+												practiceSlug: "test-practice",
+												summary: "Unsafe authentication call",
+												assessmentStatus: "ASSESSED",
+												presence: "PRESENT",
+												assessment: "BAD",
+												severity: "MAJOR",
+												evidenceRationale: "The authentication code calls insecure().",
+												evidence: {
+													citations: [
+														{
+															sourceKind: "scm.repository.tree",
+															artifactPath: "repos/primary/.git/HEAD",
+															path,
+															startLine: 2,
+															quote,
+														},
+													],
+												},
+											}),
+										);
+									});
+								await assert.rejects(
+									cite("src/Auth.java", "insecure(user);"),
+									/not in the artifact/,
+								);
+								await assert.rejects(cite("src/Missing.java", "insecure();"), /no such file/);
+								await assert.rejects(cite("../task.json", "schemaVersion"), /no such file/);
+								record("citation:refused");
+								await cite("src/Auth.java", "insecure();");
+								record("citation:stored");
+								writeFileSync(join(cwd, "out", "stray.txt"), "left by a session");
+								return;
+							}
 							if (
 								((scenario.startsWith("composer") ||
 									scenario === "recon-init" ||
@@ -157,13 +204,16 @@ if (scenario) {
 		"recon-init",
 		"observer-init",
 		"retry-init",
+		"tree-citation",
 	]) {
 		void test(
 			stage.endsWith("-init")
 				? `preserves review progress when ${stage} throws`
 				: stage === "composer"
 					? "preserves admitted observations when composer initialization fails"
-					: `does not prompt a session whose ${stage} initialization exhausts the budget`,
+					: stage === "tree-citation"
+						? "verifies a HEAD repository citation against the checkout and finalizes out/"
+						: `does not prompt a session whose ${stage} initialization exhausts the budget`,
 			() => {
 				const cwd = mkdtempSync(join(tmpdir(), "pi-orchestration-"));
 				try {
@@ -185,6 +235,15 @@ if (scenario) {
 							}),
 						);
 					}
+					if (stage === "tree-citation") {
+						mkdirSync(join(cwd, "repos/primary/.git"), { recursive: true });
+						mkdirSync(join(cwd, "repos/primary/src"), { recursive: true });
+						writeFileSync(join(cwd, "repos/primary/.git/HEAD"), `${"a".repeat(40)}\n`);
+						writeFileSync(
+							join(cwd, "repos/primary/src/Auth.java"),
+							"class Auth {\n  insecure();\n}\n",
+						);
+					}
 					writeFileSync(
 						join(cwd, "evidence/manifest.json"),
 						JSON.stringify({
@@ -194,6 +253,15 @@ if (scenario) {
 									state: { availability: "AVAILABLE" },
 									artifacts: [{ path: "evidence/diff.patch" }],
 								},
+								...(stage === "tree-citation"
+									? [
+											{
+												kind: "scm.repository.tree",
+												state: { availability: "AVAILABLE" },
+												artifacts: [{ path: "repos/primary/.git/HEAD" }],
+											},
+										]
+									: []),
 							],
 						}),
 					);
@@ -247,7 +315,7 @@ if (scenario) {
 						child.status,
 						stage === "composer"
 							? 2
-							: stage === "composer-budget" || stage.endsWith("-init")
+							: stage === "composer-budget" || stage.endsWith("-init") || stage === "tree-citation"
 								? 0
 								: 1,
 						child.stderr,
@@ -262,6 +330,16 @@ if (scenario) {
 						assert.ok(events.includes("create:composer"), child.stderr);
 						assert.ok(!events.includes("prompt:composer"));
 						if (stage === "composer-budget") assert.ok(events.includes("dispose:composer"));
+					} else if (stage === "tree-citation") {
+						assert.deepEqual(
+							events.filter((event) => event.startsWith("citation:")),
+							["citation:refused", "citation:stored"],
+							child.stderr,
+						);
+						assert.ok(!existsSync(join(cwd, "out/stray.txt")));
+						const result: unknown = JSON.parse(readFileSync(join(cwd, "out/result.json"), "utf8"));
+						assert.ok(typeof result === "object" && result !== null && "admissionDigest" in result);
+						assert.equal(result.admissionDigest, "admitted-digest");
 					} else if (stage.endsWith("-init")) {
 						const lane = stage.slice(0, -5);
 						assert.ok(events.includes(`create:${lane}`), child.stderr);
@@ -291,12 +369,17 @@ if (scenario) {
 					);
 					assert.deepEqual(coverage, {
 						eligible: stage === "retry-init" ? 2 : 1,
-						evaluated: stage.startsWith("composer") || stage.endsWith("-init") ? 1 : 0,
+						evaluated:
+							stage.startsWith("composer") || stage.endsWith("-init") || stage === "tree-citation"
+								? 1
+								: 0,
 						outcomes: [
 							{
 								practiceSlug: "test-practice",
 								outcome:
-									stage.startsWith("composer") || stage.endsWith("-init")
+									stage.startsWith("composer") ||
+									stage.endsWith("-init") ||
+									stage === "tree-citation"
 										? "EVALUATED"
 										: "NOT_REACHED",
 							},

@@ -245,6 +245,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         pullRequest.setHeadRefName("feature");
         pullRequest.setHeadRefOid("abc123");
         pullRequest.setBaseRefName("main");
+        pullRequest.setBaseRefOid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         return pullRequest;
     }
 

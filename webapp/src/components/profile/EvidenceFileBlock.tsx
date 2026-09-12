@@ -57,6 +57,11 @@ export function EvidenceFileBlock({
 						{DIFF_SIDE_LABELS.OLD}
 					</Badge>
 				)}
+				{location.revision && (
+					<Badge variant="outline" className="shrink-0" title={location.revision}>
+						<code>{location.revision.slice(0, 7)}</code>
+					</Badge>
+				)}
 
 				{hasSnippet && (
 					<button

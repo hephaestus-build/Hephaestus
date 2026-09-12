@@ -53,7 +53,7 @@ missing or expired is never read, whatever the deployment sets. Disabling a use 
 contract version in which that decision no longer permits it.
 
 The runtime registry is
-[`source-use-decisions.json`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/artifact-source/1.0.0/source-use-decisions.json).
+[`source-use-decisions.json`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/artifact-source/1.1.0/source-use-decisions.json).
 It is an engineering gate and contains only releasable decision summaries. Each record governs exactly one source-use purpose; a source references separate records for automated review, feedback delivery, Mentor context, and operator evidence review:
 
 - `ENGINEERING_BASELINE` with `ENGINEERING_APPROVED` records maintainer approval of the shipped, minimized
@@ -68,16 +68,16 @@ policy disagrees with its source.
 Neither the registry nor CI can establish a legal basis, certify a DPIA, or replace the controller's record. Every
 use requires its own unexpired decision for exactly that source and purpose.
 
-`AGENT_EVIDENCE_RETENTION` is a layered policy. Diagnostic job output uses
-`hephaestus.agent.payload-retention` (14 days by default); the job row and its durable manifest/readiness snapshot use
-`hephaestus.agent.row-retention` (90 days); replay directories and unreferenced CAS blobs use
-`hephaestus.fabric.gc-retention-days` (30 days). Replay directories and unreferenced CAS blobs become eligible for
-collection at that age and are removed by a subsequent successful sweep. `WORKSPACE_AND_PERSON_ERASURE` is a
-governance obligation, not proof that every copy supports immediate selective deletion. Workspace purge removes agent
-SQL rows, while replay directories and CAS blobs follow the retention sweep. A production controller decision must
-explicitly accept that bounded residual window or require reference-aware immediate deletion first.
-Person and channel requests use the source-specific paths in the processor checklist; any uncovered derived copy
-blocks approval. The runtime and schemas use closed policy identifiers so a source cannot omit this decision.
+`AGENT_EVIDENCE_RETENTION` separates persisted results from temporary review inputs. Diagnostic job output uses
+`hephaestus.agent.payload-retention` (14 days by default); the job row and its manifest/readiness snapshot use
+`hephaestus.agent.row-retention` (90 days). Worker input lifetime and deletion are defined by
+[ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion). Verification results do
+not authorize retaining complete inputs or replaying a review.
+
+`WORKSPACE_AND_PERSON_ERASURE` is a governance obligation, not proof that every copy supports immediate selective
+deletion. Controller approval must cover active attempts, disposable repository mirrors, backups, and retained
+results. Person and channel requests use the source-specific paths in the processor checklist; any uncovered
+derived copy blocks approval. The runtime and schemas use closed policy identifiers so a source cannot omit this decision.
 
 ## Decision record
 
@@ -93,7 +93,7 @@ the runtime as the absence of a permitting record rather than as a refusal the r
 decisionId: SRC-YYYY-NNN
 status: PROPOSED # APPROVED, REJECTED, WITHDRAWN, SUPERSEDED
 sourceKind: example.logical-source
-sourceContractVersion: 1.0.0
+sourceContractVersion: 1.1.0
 deploymentScope: tumaet-production
 
 sourceUse:
@@ -157,7 +157,7 @@ feedback or operator review records when those uses do not invoke a model.
 ## Retention and erasure
 
 Deletion must traverse every content-bearing copy and derived record. A deleted database row is insufficient if
-the same content remains in a CAS blob, job directory, repository snapshot, precompute output, observation,
+the same content remains in a job directory, repository snapshot, precompute output, observation,
 feedback record, export, backup, broker, or externally posted comment.
 
 Before enabling a source or increasing retention, tests must prove:
@@ -166,7 +166,7 @@ Before enabling a source or increasing retention, tests must prove:
 - person erasure covers account-linked and source-only identities, conversations, assessments, feedback, exports,
   and retained cases;
 - shared upstream objects remain only while another authorized workspace reference exists;
-- caches and CAS blobs are collected only after every authorized reference expires;
+- disposable attempt folders and repository mirrors follow the worker cleanup and erasure contract;
 - broker and backup expiry are documented when selective deletion is impossible;
 - externally delivered content has a documented deletion or manual-remediation path; and
 - tombstones contain no source content, identifiers, URLs, or reversible hashes.
@@ -177,7 +177,7 @@ source/workspace/person erasure paths are implemented and tested.
 ## Approval renewal
 
 The shipped decisions expire on the date recorded in
-`server/application/src/main/resources/contracts/artifact-source/1.0.0/source-use-decisions.json`. Every governed use fails
+`server/application/src/main/resources/contracts/artifact-source/1.1.0/source-use-decisions.json`. Every governed use fails
 closed after expiry. Instance operators should alert when
 `artifact_source_governance_expiry_seconds` falls below 30 days and assign the alert to the instance
 privacy/governance owner. The server logs a warning at startup inside the same window.

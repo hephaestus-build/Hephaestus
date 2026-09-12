@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.Disposable;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.NullNode;
 
 /**
  * Per-subscriber bounded queue + virtual-thread dispatcher. Slow listeners drop their own frames
@@ -21,7 +22,7 @@ final class FrameSubscription implements Disposable {
     private static final Logger log = LoggerFactory.getLogger(FrameSubscription.class);
 
     // Identity-checked sentinel to wake a blocked queue.take() on dispose.
-    private static final JsonNode TERMINAL_SENTINEL = tools.jackson.databind.node.NullNode.getInstance();
+    private static final JsonNode TERMINAL_SENTINEL = NullNode.getInstance();
 
     private static final long DISPATCHER_JOIN_TIMEOUT_MS = 250L;
 

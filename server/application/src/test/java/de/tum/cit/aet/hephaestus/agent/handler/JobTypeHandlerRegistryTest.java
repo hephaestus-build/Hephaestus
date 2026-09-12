@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
@@ -20,7 +20,7 @@ import tools.jackson.databind.json.JsonMapper;
 class JobTypeHandlerRegistryTest extends BaseUnitTest {
 
     @Mock
-    private ContentAddressedStore cas;
+    private JobEvidenceFiles cas;
 
     @Mock
     private PracticeRepository practiceRepository;
@@ -39,21 +39,29 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
 
     private final JsonMapper objectMapper = JsonMapper.builder().build();
 
+    private PracticeCatalogInjector practiceCatalogInjector() {
+        return new PracticeCatalogInjector(
+                objectMapper, practiceRepository, InContextDeliveryGateFixtures.workspaceDefaults());
+    }
+
+    private PracticeReviewPreparation preparation(PracticeCatalogInjector practiceCatalogInjector) {
+        return new PracticeReviewPreparation(
+                workspaceContextBuilder, practiceCatalogInjector, new TaskEnvelopeWriter(objectMapper));
+    }
+
     private JobTypeHandler prReviewHandler() {
         var parser = new PracticeDetectionResultParser(objectMapper);
-        var envelopeWriter = new TaskEnvelopeWriter(objectMapper);
+        var practiceCatalogInjector = practiceCatalogInjector();
         return new PullRequestReviewHandler(
                 objectMapper,
                 cas,
-                new PracticeCatalogInjector(
-                        objectMapper, practiceRepository, InContextDeliveryGateFixtures.workspaceDefaults()),
-                workspaceContextBuilder,
-                envelopeWriter,
+                practiceCatalogInjector,
+                preparation(practiceCatalogInjector),
                 parser,
                 new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
                 deliveryService,
                 feedbackService,
-                new SecretDiffScanner(),
+                org.mockito.Mockito.mock(SecretDiffScanner.class),
                 org.mockito.Mockito.mock(FeedbackResponseSuppressionFilter.class),
                 InContextDeliveryGateFixtures.gate(
                         practiceRepository,
@@ -65,13 +73,11 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
 
     private JobTypeHandler issueReviewHandler() {
         var parser = new PracticeDetectionResultParser(objectMapper);
-        var envelopeWriter = new TaskEnvelopeWriter(objectMapper);
+        var practiceCatalogInjector = practiceCatalogInjector();
         return new IssueReviewHandler(
                 objectMapper,
-                workspaceContextBuilder,
-                envelopeWriter,
-                new PracticeCatalogInjector(
-                        objectMapper, practiceRepository, InContextDeliveryGateFixtures.workspaceDefaults()),
+                preparation(practiceCatalogInjector),
+                practiceCatalogInjector,
                 parser,
                 new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
                 deliveryService,
@@ -92,13 +98,11 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
 
     private JobTypeHandler conversationReviewHandler() {
         var parser = new PracticeDetectionResultParser(objectMapper);
-        var envelopeWriter = new TaskEnvelopeWriter(objectMapper);
+        var practiceCatalogInjector = practiceCatalogInjector();
         return new ConversationReviewHandler(
                 objectMapper,
-                workspaceContextBuilder,
-                envelopeWriter,
-                new PracticeCatalogInjector(
-                        objectMapper, practiceRepository, InContextDeliveryGateFixtures.workspaceDefaults()),
+                preparation(practiceCatalogInjector),
+                practiceCatalogInjector,
                 parser,
                 deliveryService,
                 org.mockito.Mockito.mock(ApplicationEventPublisher.class),
@@ -107,15 +111,9 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
 
     private JobTypeHandler documentReviewHandler() {
         var parser = new PracticeDetectionResultParser(objectMapper);
-        var envelopeWriter = new TaskEnvelopeWriter(objectMapper);
+        var practiceCatalogInjector = practiceCatalogInjector();
         return new DocumentReviewHandler(
-                objectMapper,
-                workspaceContextBuilder,
-                envelopeWriter,
-                new PracticeCatalogInjector(
-                        objectMapper, practiceRepository, InContextDeliveryGateFixtures.workspaceDefaults()),
-                parser,
-                deliveryService);
+                objectMapper, preparation(practiceCatalogInjector), practiceCatalogInjector, parser, deliveryService);
     }
 
     /** A registry with the full handler set (every {@link AgentJobType} mapped). */

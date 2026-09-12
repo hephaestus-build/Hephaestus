@@ -88,6 +88,7 @@ if (import.meta.main) {
 	}
 	// Include agent-pi, which the application launches outside Compose.
 	deployedImages.add("agent-pi");
+	deployedImages.add("git-preparation");
 	const extra = [...knownImages].filter((image) => !deployedImages.has(image));
 	const absent = [...deployedImages].filter((image) => !knownImages.has(image));
 	if (extra.length > 0 || absent.length > 0)

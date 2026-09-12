@@ -10,9 +10,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
@@ -22,18 +24,26 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.util.LinkedHashMap;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -54,6 +64,17 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
     @Mock
     private ContainerSecurityPolicy securityPolicy;
+
+    @Mock
+    private DockerVolumeOperations volumeOperations;
+
+    @TempDir
+    Path temporary;
+
+    private final SandboxGatewaySessions gatewaySessions = new SandboxGatewaySessions();
+
+    /** The runtime container's spec, the way the sandbox learns its session URL and credential. */
+    private final AtomicReference<DockerOperations.ContainerSpec> runtimeContainer = new AtomicReference<>();
 
     private DockerSandboxAdapter sandboxAdapter;
     private SimpleMeterRegistry meterRegistry;
@@ -78,13 +99,21 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             "private",
             "none",
             null,
-            Map.of());
+            Map.of(),
+            List.of());
 
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
         sandboxAdapter = new DockerSandboxAdapter(
-                networkManager, workspaceManager, containerManager, securityPolicy, 8081, meterRegistry);
+                networkManager,
+                workspaceManager,
+                containerManager,
+                securityPolicy,
+                8081,
+                meterRegistry,
+                gatewaySessions,
+                volumeOperations);
     }
 
     private SandboxSpec createSpec() {
@@ -92,11 +121,6 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
     }
 
     private SandboxSpec createSpec(boolean allowInternet) {
-        return createSpec(allowInternet, null);
-    }
-
-    private SandboxSpec createSpec(
-            boolean allowInternet, @org.jspecify.annotations.Nullable Map<String, String> volumeMounts) {
         return new SandboxSpec(
                 JOB_ID,
                 "alpine:latest",
@@ -106,37 +130,76 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                 ResourceLimits.DEFAULT,
                 SecurityProfile.DEFAULT,
                 Map.of(".prompt", "test prompt".getBytes()),
-                "/workspace/out",
-                volumeMounts);
+                "/workspace/out");
     }
 
-    private void setupHappyPath() {
-        setupExecution();
-        when(workspaceManager.collectOutput(eq(CONTAINER_ID), anyString()))
-                .thenReturn(Map.of("result.json", "{}".getBytes()));
+    private void setupHappyPath() throws Exception {
+        setupExecution(0, false, Map.of("result.json", "{}".getBytes()));
     }
 
-    private void setupExecution() {
-        setupExecution(0, false);
-    }
-
-    private void setupExecution(int exitCode, boolean timedOut) {
+    private void setupExecution(int exitCode, boolean timedOut, Map<String, byte[]> result) throws Exception {
         when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
         when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
         when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
         when(securityPolicy.buildLabels(JOB_ID))
                 .thenReturn(Map.of("hephaestus.sandbox-owner", "default", "hephaestus.job-id", JOB_ID.toString()));
-        when(containerManager.createContainer(any())).thenReturn(CONTAINER_ID);
-        when(containerManager.waitForCompletion(eq(CONTAINER_ID), any()))
-                .thenReturn(new SandboxContainerManager.WaitOutcome(exitCode, timedOut));
+        stubContainers();
+        stubRuntimeExit(exitCode, timedOut, result);
         when(containerManager.getLogs(eq(CONTAINER_ID), anyInt())).thenReturn("hello\n");
+    }
+
+    /** The packed input and the two containers every attempt creates: the initializer, then the runtime. */
+    private void stubContainers() throws IOException {
+        when(workspaceManager.createInputTar(any(), any(), any()))
+                .thenReturn(Files.writeString(temporary.resolve("input.tar"), "input"));
+        when(containerManager.createContainer(any())).thenAnswer(invocation -> {
+            DockerOperations.ContainerSpec spec = invocation.getArgument(0);
+            if (spec.command().contains("/opt/pi-sdk/gateway-init.ts")) {
+                return "initializer";
+            }
+            runtimeContainer.set(spec);
+            return CONTAINER_ID;
+        });
+        when(containerManager.waitForCompletion(eq("initializer"), any()))
+                .thenReturn(new SandboxContainerManager.WaitOutcome(0, false));
+    }
+
+    /** The runtime container exits after uploading {@code result} through its session, as the sandbox does. */
+    private void stubRuntimeExit(int exitCode, boolean timedOut, Map<String, byte[]> result) {
+        when(containerManager.waitForCompletion(eq(CONTAINER_ID), any())).thenAnswer(invocation -> {
+            uploadResult(result);
+            return new SandboxContainerManager.WaitOutcome(exitCode, timedOut);
+        });
+    }
+
+    private void uploadResult(Map<String, byte[]> files) throws IOException {
+        Map<String, String> environment = runtimeContainer.get().environment();
+        String runtimeUrl = Objects.requireNonNull(environment.get("SANDBOX_RUNTIME_URL"));
+        UUID sessionId = UUID.fromString(runtimeUrl.substring(runtimeUrl.lastIndexOf('/') + 1));
+        gatewaySessions
+                .require(sessionId, "Bearer " + environment.get("LLM_PROXY_TOKEN"))
+                .upload(new ByteArrayInputStream(resultTar(files)));
+    }
+
+    private static byte[] resultTar(Map<String, byte[]> files) throws IOException {
+        var bytes = new ByteArrayOutputStream();
+        try (var tar = new TarArchiveOutputStream(bytes)) {
+            for (var file : files.entrySet()) {
+                var entry = new TarArchiveEntry("out/" + file.getKey());
+                entry.setSize(file.getValue().length);
+                tar.putArchiveEntry(entry);
+                tar.write(file.getValue());
+                tar.closeArchiveEntry();
+            }
+        }
+        return bytes.toByteArray();
     }
 
     @Nested
     class HappyPath {
 
         @Test
-        void shouldExecuteFullLifecycle() {
+        void shouldExecuteFullLifecycle() throws Exception {
             setupHappyPath();
 
             SandboxResult result = sandboxAdapter.execute(createSpec());
@@ -149,11 +212,10 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
             verify(networkManager).createJobNetwork(JOB_ID, false);
             verify(networkManager).connectAppServer(NETWORK_ID);
-            verify(containerManager).createContainer(any());
-            verify(workspaceManager).injectFiles(eq(CONTAINER_ID), any(), any());
+            verify(containerManager, times(2)).createContainer(any());
+            verify(workspaceManager).createInputTar(any(), any(), any());
             verify(containerManager).startContainer(CONTAINER_ID);
             verify(containerManager).waitForCompletion(eq(CONTAINER_ID), any());
-            verify(workspaceManager).collectOutput(CONTAINER_ID, "/workspace/out");
             // 0 is every line: a Docker tail is applied by the daemon, so a persisted transcript that
             // asked for one would arrive already missing its beginning.
             verify(containerManager).getLogs(CONTAINER_ID, 0);
@@ -164,7 +226,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldInjectDefaultLlmProxyUrl() {
+        void shouldInjectDefaultLlmProxyUrl() throws Exception {
             setupHappyPath();
 
             SandboxSpec spec = new SandboxSpec(
@@ -176,14 +238,13 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(".prompt", "test".getBytes()),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             sandboxAdapter.execute(spec);
 
             ArgumentCaptor<DockerOperations.ContainerSpec> captor =
                     ArgumentCaptor.forClass(DockerOperations.ContainerSpec.class);
-            verify(containerManager).createContainer(captor.capture());
+            verify(containerManager, times(2)).createContainer(captor.capture());
 
             Map<String, String> env = captor.getValue().environment();
             // No per-provider path segment — the connection is identified from the authenticated token, not the URL.
@@ -193,9 +254,16 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldPointTheSandboxAtTheConfiguredGatewayPort() {
+        void shouldPointTheSandboxAtTheConfiguredGatewayPort() throws Exception {
             sandboxAdapter = new DockerSandboxAdapter(
-                    networkManager, workspaceManager, containerManager, securityPolicy, 8090, meterRegistry);
+                    networkManager,
+                    workspaceManager,
+                    containerManager,
+                    securityPolicy,
+                    8090,
+                    meterRegistry,
+                    gatewaySessions,
+                    volumeOperations);
             setupHappyPath();
 
             SandboxSpec spec = new SandboxSpec(
@@ -207,21 +275,20 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(".prompt", "test".getBytes()),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             sandboxAdapter.execute(spec);
 
             ArgumentCaptor<DockerOperations.ContainerSpec> captor =
                     ArgumentCaptor.forClass(DockerOperations.ContainerSpec.class);
-            verify(containerManager).createContainer(captor.capture());
+            verify(containerManager, times(2)).createContainer(captor.capture());
 
             assertThat(captor.getValue().environment())
                     .containsEntry("LLM_PROXY_URL", "http://172.18.0.2:8090/internal/llm");
         }
 
         @Test
-        void shouldResolveProxyUrlPlaceholder() {
+        void shouldResolveProxyUrlPlaceholder() throws Exception {
             setupHappyPath();
 
             SandboxSpec spec = new SandboxSpec(
@@ -233,20 +300,19 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(".prompt", "test".getBytes()),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             sandboxAdapter.execute(spec);
 
             ArgumentCaptor<DockerOperations.ContainerSpec> captor =
                     ArgumentCaptor.forClass(DockerOperations.ContainerSpec.class);
-            verify(containerManager).createContainer(captor.capture());
+            verify(containerManager, times(2)).createContainer(captor.capture());
 
             assertThat(captor.getValue().environment()).containsEntry("LLM_PROXY_URL", "http://172.18.0.2:9090/v1");
         }
 
         @Test
-        void shouldUseExplicitProxyUrl() {
+        void shouldUseExplicitProxyUrl() throws Exception {
             setupHappyPath();
 
             SandboxSpec spec = new SandboxSpec(
@@ -254,38 +320,37 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     "alpine:latest",
                     List.of("echo"),
                     Map.of(),
-                    new NetworkPolicy(false, "https://my-proxy.example.com/api", null),
+                    new NetworkPolicy(false, "https://my-proxy.example.com/api", "test-token"),
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(".prompt", "test".getBytes()),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             sandboxAdapter.execute(spec);
 
             ArgumentCaptor<DockerOperations.ContainerSpec> captor =
                     ArgumentCaptor.forClass(DockerOperations.ContainerSpec.class);
-            verify(containerManager).createContainer(captor.capture());
+            verify(containerManager, times(2)).createContainer(captor.capture());
 
             assertThat(captor.getValue().environment())
                     .containsEntry("LLM_PROXY_URL", "https://my-proxy.example.com/api");
         }
 
         @Test
-        void shouldMergeUserEnvironment() {
+        void shouldMergeUserEnvironment() throws Exception {
             setupHappyPath();
 
             sandboxAdapter.execute(createSpec());
 
             ArgumentCaptor<DockerOperations.ContainerSpec> captor =
                     ArgumentCaptor.forClass(DockerOperations.ContainerSpec.class);
-            verify(containerManager).createContainer(captor.capture());
+            verify(containerManager, times(2)).createContainer(captor.capture());
 
             assertThat(captor.getValue().environment()).containsEntry("FOO", "bar");
         }
 
         @Test
-        void shouldFilterBlockedEnvVars() {
+        void shouldFilterBlockedEnvVars() throws Exception {
             setupHappyPath();
 
             SandboxSpec spec = new SandboxSpec(
@@ -309,14 +374,13 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(".prompt", "test".getBytes()),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             sandboxAdapter.execute(spec);
 
             ArgumentCaptor<DockerOperations.ContainerSpec> captor =
                     ArgumentCaptor.forClass(DockerOperations.ContainerSpec.class);
-            verify(containerManager).createContainer(captor.capture());
+            verify(containerManager, times(2)).createContainer(captor.capture());
 
             Map<String, String> env = captor.getValue().environment();
             assertThat(env).containsEntry("SAFE_VAR", "ok");
@@ -328,15 +392,13 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldCreateInternetNetwork() {
+        void shouldCreateInternetNetwork() throws Exception {
             when(networkManager.createJobNetwork(eq(JOB_ID), eq(true))).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of("hephaestus.sandbox-owner", "default"));
-            when(containerManager.createContainer(any())).thenReturn(CONTAINER_ID);
-            when(containerManager.waitForCompletion(eq(CONTAINER_ID), any()))
-                    .thenReturn(new SandboxContainerManager.WaitOutcome(0, false));
-            when(workspaceManager.collectOutput(eq(CONTAINER_ID), anyString())).thenReturn(Map.of());
+            stubContainers();
+            stubRuntimeExit(0, false, Map.of());
             when(containerManager.getLogs(eq(CONTAINER_ID), anyInt())).thenReturn("");
 
             sandboxAdapter.execute(createSpec(true));
@@ -345,7 +407,28 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldSkipInjectionWhenNoFiles() {
+        void shouldInjectDiskInputsWhenMemoryInputsAreEmpty() throws Exception {
+            setupHappyPath();
+            Map<String, Path> files = Map.of("inputs/source.txt", Path.of("/captured/source.txt"));
+            SandboxSpec spec = new SandboxSpec(
+                    JOB_ID,
+                    "alpine:latest",
+                    List.of("echo"),
+                    Map.of(),
+                    new NetworkPolicy(false, null, "test-token"),
+                    ResourceLimits.DEFAULT,
+                    SecurityProfile.DEFAULT,
+                    Map.of(),
+                    files,
+                    "/workspace/out");
+
+            sandboxAdapter.execute(spec);
+
+            verify(workspaceManager).createInputTar(Map.of(), files, List.of());
+        }
+
+        @Test
+        void shouldTransferAnEmptyWorkspaceWhenNoFiles() throws Exception {
             setupHappyPath();
 
             SandboxSpec specWithoutFiles = new SandboxSpec(
@@ -353,95 +436,77 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     "alpine:latest",
                     List.of("echo"),
                     Map.of(),
-                    new NetworkPolicy(false, null, null),
+                    new NetworkPolicy(false, null, "test-token"),
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             sandboxAdapter.execute(specWithoutFiles);
 
-            verify(workspaceManager, never()).injectFiles(anyString(), any());
+            verify(workspaceManager).createInputTar(Map.of(), Map.of(), List.of());
         }
 
         @Test
-        void shouldHandleNullNetworkPolicy() {
-            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
+        void shouldRefuseMissingGatewayPolicy() {
+            when(networkManager.createJobNetwork(JOB_ID, false)).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
-            when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
-            when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of());
-            when(containerManager.createContainer(any())).thenReturn(CONTAINER_ID);
-            when(containerManager.waitForCompletion(eq(CONTAINER_ID), any()))
-                    .thenReturn(new SandboxContainerManager.WaitOutcome(0, false));
-            when(workspaceManager.collectOutput(eq(CONTAINER_ID), anyString())).thenReturn(Map.of());
-            when(containerManager.getLogs(eq(CONTAINER_ID), anyInt())).thenReturn("");
-
-            SandboxSpec spec = new SandboxSpec(
+            var spec = new SandboxSpec(
                     JOB_ID,
-                    "alpine:latest",
-                    List.of("echo"),
-                    Map.of("USER_VAR", "value"),
+                    "pi:locked",
+                    List.of("run"),
+                    Map.of(),
                     null,
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
-            SandboxResult result = sandboxAdapter.execute(spec);
-            assertThat(result.exitCode()).isZero();
-
-            ArgumentCaptor<DockerOperations.ContainerSpec> captor =
-                    ArgumentCaptor.forClass(DockerOperations.ContainerSpec.class);
-            verify(containerManager).createContainer(captor.capture());
-            Map<String, String> env = captor.getValue().environment();
-            assertThat(env).doesNotContainKey("LLM_PROXY_URL");
-            assertThat(env).doesNotContainKey("LLM_PROXY_TOKEN");
-            assertThat(env).containsEntry("USER_VAR", "value");
+            assertThatThrownBy(() -> sandboxAdapter.execute(spec))
+                    .isInstanceOf(SandboxException.class)
+                    .hasRootCauseMessage("Gateway credential required");
+            verify(containerManager, never()).createContainer(any());
         }
 
         @Test
-        void usesSpecOutputPath() {
-            setupHappyPath();
-
-            SandboxSpec spec = new SandboxSpec(
+        void shouldRefuseOutputOutsideTheRuntimeDirectory() {
+            when(networkManager.createJobNetwork(JOB_ID, false)).thenReturn(NETWORK_ID);
+            when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
+            var spec = new SandboxSpec(
                     JOB_ID,
-                    "alpine:latest",
-                    List.of("echo"),
+                    "pi:locked",
+                    List.of("run"),
                     Map.of(),
-                    new NetworkPolicy(false, null, null),
+                    new NetworkPolicy(false, null, "test-token"),
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
                     Map.of(),
-                    "/custom/output",
-                    null);
+                    "/custom/output");
 
-            sandboxAdapter.execute(spec);
-
-            verify(workspaceManager).collectOutput(CONTAINER_ID, "/custom/output");
+            assertThatThrownBy(() -> sandboxAdapter.execute(spec))
+                    .isInstanceOf(SandboxException.class)
+                    .hasMessageContaining("runtime output directory");
+            verify(containerManager, never()).createContainer(any());
         }
     }
 
     @Nested
     class TimeoutHandling {
 
-        private void setupTimeoutPath() {
+        private void setupTimeoutPath(Map<String, byte[]> result) throws Exception {
             when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID))
                     .thenReturn(Map.of("hephaestus.sandbox-owner", "default", "hephaestus.job-id", JOB_ID.toString()));
-            when(containerManager.createContainer(any())).thenReturn(CONTAINER_ID);
-            when(containerManager.waitForCompletion(eq(CONTAINER_ID), any()))
-                    .thenReturn(new SandboxContainerManager.WaitOutcome(137, true));
+            stubContainers();
+            stubRuntimeExit(137, true, result);
             when(containerManager.getLogs(eq(CONTAINER_ID), anyInt())).thenReturn("timeout\n");
         }
 
         @Test
-        void shouldReturnTimedOutOnTimeout() {
-            setupTimeoutPath();
-            when(workspaceManager.collectOutput(eq(CONTAINER_ID), anyString())).thenReturn(Map.of());
+        void shouldReturnTimedOutOnTimeout() throws Exception {
+            setupTimeoutPath(Map.of());
 
             SandboxResult result = sandboxAdapter.execute(createSpec());
 
@@ -450,15 +515,12 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldCollectOutputOnTimeout() {
-            setupTimeoutPath();
-            when(workspaceManager.collectOutput(eq(CONTAINER_ID), anyString()))
-                    .thenReturn(Map.of("partial.json", "{}".getBytes()));
+        void shouldCollectOutputOnTimeout() throws Exception {
+            setupTimeoutPath(Map.of("partial.json", "{}".getBytes()));
 
             SandboxResult result = sandboxAdapter.execute(createSpec());
 
             assertThat(result.outputFiles()).containsKey("partial.json");
-            verify(workspaceManager).collectOutput(CONTAINER_ID, "/workspace/out");
         }
     }
 
@@ -467,10 +529,16 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @ParameterizedTest
         @CsvSource({"137,true", "42,false"})
-        void shouldPreserveTerminalFailureWhenOutputCollectionFails(int exitCode, boolean timedOut) {
-            setupExecution(exitCode, timedOut);
-            when(workspaceManager.collectOutput(eq(CONTAINER_ID), anyString()))
-                    .thenThrow(new SandboxException("No output directory"));
+        void shouldPreserveTerminalFailureWhenTheSandboxUploadedNoResult(int exitCode, boolean timedOut)
+                throws Exception {
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
+            when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
+            when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
+            when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of());
+            stubContainers();
+            when(containerManager.waitForCompletion(eq(CONTAINER_ID), any()))
+                    .thenReturn(new SandboxContainerManager.WaitOutcome(exitCode, timedOut));
+            when(containerManager.getLogs(eq(CONTAINER_ID), anyInt())).thenReturn("");
 
             var result = sandboxAdapter.execute(createSpec());
 
@@ -481,21 +549,26 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldFailAndCleanUpWhenOutputIsInvalidDespiteZeroExit() {
-            setupExecution();
-            when(workspaceManager.collectOutput(eq(CONTAINER_ID), anyString()))
-                    .thenThrow(new SandboxException("Invalid output archive"));
+        void shouldFailAndCleanUpWhenTheSandboxUploadedNoResultDespiteZeroExit() throws Exception {
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
+            when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
+            when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
+            when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of());
+            stubContainers();
+            when(containerManager.waitForCompletion(eq(CONTAINER_ID), any()))
+                    .thenReturn(new SandboxContainerManager.WaitOutcome(0, false));
+            when(containerManager.getLogs(eq(CONTAINER_ID), anyInt())).thenReturn("");
 
             assertThatThrownBy(() -> sandboxAdapter.execute(createSpec()))
                     .isInstanceOf(SandboxException.class)
-                    .hasMessageContaining("Invalid output archive");
+                    .hasRootCauseMessage("Sandbox exited without uploading its result");
             verify(containerManager).forceRemove(CONTAINER_ID);
             verify(networkManager).disconnectAppServer(NETWORK_ID);
             verify(networkManager).removeNetwork(NETWORK_ID);
         }
 
         @Test
-        void shouldThrowOnNetworkFailure() {
+        void shouldThrowOnNetworkFailure() throws Exception {
             when(networkManager.createJobNetwork(any(), eq(false)))
                     .thenThrow(new SandboxException("Network creation failed"));
 
@@ -505,11 +578,13 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldCleanupOnContainerFailure() {
+        void shouldCleanupOnContainerFailure() throws Exception {
             when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of());
+            when(workspaceManager.createInputTar(any(), any(), any()))
+                    .thenReturn(Files.writeString(temporary.resolve("input.tar"), "input"));
             when(containerManager.createContainer(any())).thenThrow(new SandboxException("Image not found"));
 
             assertThatThrownBy(() -> sandboxAdapter.execute(createSpec())).isInstanceOf(SandboxException.class);
@@ -519,8 +594,9 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldToleratePartialCleanupFailure() {
+        void shouldToleratePartialCleanupFailure() throws Exception {
             setupHappyPath();
+            org.mockito.Mockito.doNothing().when(containerManager).forceRemove("initializer");
             doThrow(new SandboxException("Container stuck"))
                     .when(containerManager)
                     .forceRemove(CONTAINER_ID);
@@ -533,12 +609,12 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldCaptureLogsOnError() {
+        void shouldCaptureLogsOnError() throws Exception {
             when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of());
-            when(containerManager.createContainer(any())).thenReturn(CONTAINER_ID);
+            stubContainers();
             when(containerManager.waitForCompletion(eq(CONTAINER_ID), any()))
                     .thenThrow(new SandboxException("Docker daemon lost"));
             when(containerManager.getLogs(eq(CONTAINER_ID), anyInt())).thenReturn("error logs here");
@@ -555,15 +631,13 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldUseDefaultSecurityProfileWhenNull() {
+        void shouldUseDefaultSecurityProfileWhenNull() throws Exception {
             when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of());
-            when(containerManager.createContainer(any())).thenReturn(CONTAINER_ID);
-            when(containerManager.waitForCompletion(eq(CONTAINER_ID), any()))
-                    .thenReturn(new SandboxContainerManager.WaitOutcome(0, false));
-            when(workspaceManager.collectOutput(eq(CONTAINER_ID), anyString())).thenReturn(Map.of());
+            stubContainers();
+            stubRuntimeExit(0, false, Map.of());
             when(containerManager.getLogs(eq(CONTAINER_ID), anyInt())).thenReturn("");
 
             SandboxSpec specWithNullSecurity = new SandboxSpec(
@@ -571,12 +645,11 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     "alpine:latest",
                     List.of("echo"),
                     Map.of(),
-                    new NetworkPolicy(false, null, null),
+                    new NetworkPolicy(false, null, "test-token"),
                     ResourceLimits.DEFAULT,
                     null,
                     Map.of(),
-                    "/workspace/out",
-                    null);
+                    "/workspace/out");
 
             SandboxResult result = sandboxAdapter.execute(specWithNullSecurity);
             assertThat(result.exitCode()).isZero();
@@ -591,7 +664,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
     class Cancellation {
 
         @Test
-        void shouldThrowWhenCancelRacesNetworkCreation() {
+        void shouldThrowWhenCancelRacesNetworkCreation() throws Exception {
             when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenAnswer(invocation -> {
                 sandboxAdapter.cancel(JOB_ID);
                 return NETWORK_ID;
@@ -613,7 +686,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of("hephaestus.sandbox-owner", "default"));
-            when(containerManager.createContainer(any())).thenReturn(CONTAINER_ID);
+            stubContainers();
 
             when(containerManager.waitForCompletion(eq(CONTAINER_ID), any())).thenAnswer(inv -> {
                 containerStarted.countDown();
@@ -642,7 +715,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldNoOpForUnknownJob() {
+        void shouldNoOpForUnknownJob() throws Exception {
             assertThatCode(() -> sandboxAdapter.cancel(UUID.randomUUID())).doesNotThrowAnyException();
             verify(containerManager, never()).stopContainer(anyString());
         }
@@ -652,13 +725,13 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
     class HealthCheck {
 
         @Test
-        void shouldReturnTrueWhenHealthy() {
+        void shouldReturnTrueWhenHealthy() throws Exception {
             when(containerManager.ping()).thenReturn(true);
             assertThat(sandboxAdapter.isHealthy()).isTrue();
         }
 
         @Test
-        void shouldReturnFalseWhenUnhealthy() {
+        void shouldReturnFalseWhenUnhealthy() throws Exception {
             when(containerManager.ping()).thenReturn(false);
             assertThat(sandboxAdapter.isHealthy()).isFalse();
         }
@@ -668,7 +741,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
     class Metrics {
 
         @Test
-        void shouldIncrementSuccessCounter() {
+        void shouldIncrementSuccessCounter() throws Exception {
             setupHappyPath();
 
             sandboxAdapter.execute(createSpec());
@@ -684,15 +757,13 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldIncrementTimeoutCounter() {
+        void shouldIncrementTimeoutCounter() throws Exception {
             when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of());
-            when(containerManager.createContainer(any())).thenReturn(CONTAINER_ID);
-            when(containerManager.waitForCompletion(eq(CONTAINER_ID), any()))
-                    .thenReturn(new SandboxContainerManager.WaitOutcome(137, true));
-            when(workspaceManager.collectOutput(eq(CONTAINER_ID), anyString())).thenReturn(Map.of());
+            stubContainers();
+            stubRuntimeExit(137, true, Map.of());
             when(containerManager.getLogs(eq(CONTAINER_ID), anyInt())).thenReturn("");
 
             sandboxAdapter.execute(createSpec());
@@ -708,7 +779,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldIncrementFailureCounter() {
+        void shouldIncrementFailureCounter() throws Exception {
             when(networkManager.createJobNetwork(any(), eq(false))).thenThrow(new SandboxException("boom"));
 
             try {
@@ -723,7 +794,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldIncrementCancelledCounter() {
+        void shouldIncrementCancelledCounter() throws Exception {
             when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenAnswer(invocation -> {
                 sandboxAdapter.cancel(JOB_ID);
                 return NETWORK_ID;
@@ -746,7 +817,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldRecordDurationAlways() {
+        void shouldRecordDurationAlways() throws Exception {
             when(networkManager.createJobNetwork(any(), eq(false))).thenThrow(new SandboxException("fail"));
 
             try {
@@ -759,8 +830,9 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldIncrementCleanupFailureCounterWithStep() {
+        void shouldIncrementCleanupFailureCounterWithStep() throws Exception {
             setupHappyPath();
+            org.mockito.Mockito.doNothing().when(containerManager).forceRemove("initializer");
             doThrow(new SandboxException("stuck")).when(containerManager).forceRemove(CONTAINER_ID);
 
             sandboxAdapter.execute(createSpec());
@@ -780,13 +852,13 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of("hephaestus.sandbox-owner", "default"));
-            when(containerManager.createContainer(any())).thenReturn(CONTAINER_ID);
+            stubContainers();
             when(containerManager.waitForCompletion(eq(CONTAINER_ID), any())).thenAnswer(inv -> {
                 inExecution.countDown();
                 release.await(5, TimeUnit.SECONDS);
+                uploadResult(Map.of());
                 return new SandboxContainerManager.WaitOutcome(0, false);
             });
-            when(workspaceManager.collectOutput(eq(CONTAINER_ID), anyString())).thenReturn(Map.of());
             when(containerManager.getLogs(eq(CONTAINER_ID), anyInt())).thenReturn("");
 
             Thread bg = new Thread(() -> {
@@ -875,25 +947,25 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @ParameterizedTest(name = "should block exact var: {0}")
         @MethodSource("exactBlockedVars")
-        void shouldBlockExactVars(String varName) {
+        void shouldBlockExactVars(String varName) throws Exception {
             assertThat(SandboxEnvBlocklist.isBlocked(varName)).isTrue();
         }
 
         @ParameterizedTest(name = "should block prefix var: {0}")
         @MethodSource("prefixBlockedVars")
-        void shouldBlockPrefixVars(String varName) {
+        void shouldBlockPrefixVars(String varName) throws Exception {
             assertThat(SandboxEnvBlocklist.isBlocked(varName)).isTrue();
         }
 
         @Test
-        void shouldAllowSafeVars() {
+        void shouldAllowSafeVars() throws Exception {
             assertThat(SandboxEnvBlocklist.isBlocked("MY_APP_KEY")).isFalse();
             assertThat(SandboxEnvBlocklist.isBlocked("FOO")).isFalse();
             assertThat(SandboxEnvBlocklist.isBlocked("CUSTOM_VAR")).isFalse();
         }
 
         @Test
-        void shouldBlockCaseVariants() {
+        void shouldBlockCaseVariants() throws Exception {
             // Some tools and shells inject lowercase variants.
             assertThat(SandboxEnvBlocklist.isBlocked("aws_access_key_id")).isTrue();
             assertThat(SandboxEnvBlocklist.isBlocked("docker_host")).isTrue();
@@ -906,7 +978,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
     class GitSecurityConfig {
 
         @Test
-        void shouldContainAllExpectedKeys() {
+        void shouldContainAllExpectedKeys() throws Exception {
             assertThat(DockerSandboxAdapter.GIT_SECURITY_CONFIGS)
                     .extracting(Map.Entry::getKey)
                     .containsExactlyInAnyOrder(
@@ -924,14 +996,14 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldInjectSecurityConfigsWithoutVolumeMounts() {
+        void shouldInjectSecurityConfigsWithoutVolumeMounts() throws Exception {
             setupHappyPath();
 
             sandboxAdapter.execute(createSpec());
 
             ArgumentCaptor<DockerOperations.ContainerSpec> captor =
                     ArgumentCaptor.forClass(DockerOperations.ContainerSpec.class);
-            verify(containerManager).createContainer(captor.capture());
+            verify(containerManager, times(2)).createContainer(captor.capture());
 
             Map<String, String> env = captor.getValue().environment();
 
@@ -946,82 +1018,42 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldInjectSafeDirectoryPerVolumeMount() {
+        @DisplayName("should set GIT_TERMINAL_PROMPT and GIT_ATTR_NOSYSTEM")
+        void shouldSetGitHardeningEnvVars() throws Exception {
             setupHappyPath();
 
-            // Use LinkedHashMap to guarantee iteration order for index assertions
-            Map<String, String> mounts = new LinkedHashMap<>();
-            mounts.put("/host/repo1", "/workspace/repo1");
-            mounts.put("/host/repo2", "/workspace/repo2");
-            SandboxSpec spec = createSpec(false, mounts);
+            sandboxAdapter.execute(createSpec());
+
+            ArgumentCaptor<DockerOperations.ContainerSpec> captor =
+                    ArgumentCaptor.forClass(DockerOperations.ContainerSpec.class);
+            verify(containerManager, times(2)).createContainer(captor.capture());
+
+            Map<String, String> env = captor.getValue().environment();
+            assertThat(env).containsEntry("GIT_TERMINAL_PROMPT", "0");
+            assertThat(env).containsEntry("GIT_ATTR_NOSYSTEM", "1");
+        }
+
+        @Test
+        void shouldKeepTheEnforcedGitPromptValueWhenTheCallerSuppliesItsOwn() throws Exception {
+            setupHappyPath();
+            SandboxSpec spec = new SandboxSpec(
+                    JOB_ID,
+                    "alpine:latest",
+                    List.of("echo"),
+                    Map.of("GIT_TERMINAL_PROMPT", "1"),
+                    new NetworkPolicy(false, null, "test-token"),
+                    ResourceLimits.DEFAULT,
+                    SecurityProfile.DEFAULT,
+                    Map.of(),
+                    "/workspace/out");
 
             sandboxAdapter.execute(spec);
 
             ArgumentCaptor<DockerOperations.ContainerSpec> captor =
                     ArgumentCaptor.forClass(DockerOperations.ContainerSpec.class);
-            verify(containerManager).createContainer(captor.capture());
+            verify(containerManager, times(2)).createContainer(captor.capture());
 
-            Map<String, String> env = captor.getValue().environment();
-
-            assertThat(env.get("GIT_CONFIG_KEY_0")).isEqualTo("safe.directory");
-            assertThat(env.get("GIT_CONFIG_VALUE_0")).isEqualTo("/workspace/repo1");
-            assertThat(env.get("GIT_CONFIG_KEY_1")).isEqualTo("safe.directory");
-            assertThat(env.get("GIT_CONFIG_VALUE_1")).isEqualTo("/workspace/repo2");
-
-            int securityStartIdx = mounts.size();
-            for (int i = 0; i < DockerSandboxAdapter.GIT_SECURITY_CONFIGS.size(); i++) {
-                var expected = DockerSandboxAdapter.GIT_SECURITY_CONFIGS.get(i);
-                assertThat(env.get("GIT_CONFIG_KEY_" + (securityStartIdx + i))).isEqualTo(expected.getKey());
-                assertThat(env.get("GIT_CONFIG_VALUE_" + (securityStartIdx + i)))
-                        .isEqualTo(expected.getValue());
-            }
-
-            int expectedCount = mounts.size() + DockerSandboxAdapter.GIT_SECURITY_CONFIGS.size();
-            assertThat(env.get("GIT_CONFIG_COUNT")).isEqualTo(String.valueOf(expectedCount));
-        }
-
-        @Test
-        @DisplayName("should set GIT_TERMINAL_PROMPT and GIT_ATTR_NOSYSTEM")
-        void shouldSetGitHardeningEnvVars() {
-            setupHappyPath();
-
-            sandboxAdapter.execute(createSpec());
-
-            ArgumentCaptor<DockerOperations.ContainerSpec> captor =
-                    ArgumentCaptor.forClass(DockerOperations.ContainerSpec.class);
-            verify(containerManager).createContainer(captor.capture());
-
-            Map<String, String> env = captor.getValue().environment();
-            assertThat(env).containsEntry("GIT_TERMINAL_PROMPT", "0");
-            assertThat(env).containsEntry("GIT_ATTR_NOSYSTEM", "1");
-        }
-
-        @Test
-        void shouldBlockCallerGitConfigVars() {
-            assertThat(SandboxEnvBlocklist.isBlocked("GIT_CONFIG_COUNT")).isTrue();
-            assertThat(SandboxEnvBlocklist.isBlocked("GIT_CONFIG_KEY_0")).isTrue();
-            assertThat(SandboxEnvBlocklist.isBlocked("GIT_CONFIG_VALUE_99")).isTrue();
-        }
-
-        @Test
-        void shouldOverwriteSecurityEnvVarsViaOrdering() {
-            setupHappyPath();
-
-            // Even if these leaked past the blocklist, the injection at the end of buildEnvironment() wins.
-            sandboxAdapter.execute(createSpec());
-
-            ArgumentCaptor<DockerOperations.ContainerSpec> captor =
-                    ArgumentCaptor.forClass(DockerOperations.ContainerSpec.class);
-            verify(containerManager).createContainer(captor.capture());
-
-            Map<String, String> env = captor.getValue().environment();
-
-            assertThat(env).containsEntry("GIT_TERMINAL_PROMPT", "0");
-            assertThat(env).containsEntry("GIT_ATTR_NOSYSTEM", "1");
-            assertThat(env).containsKey("GIT_CONFIG_COUNT");
-
-            assertThat(env.get("GIT_CONFIG_KEY_0")).isEqualTo("core.hooksPath");
-            assertThat(env.get("GIT_CONFIG_VALUE_0")).isEqualTo("/nonexistent");
+            assertThat(captor.getValue().environment()).containsEntry("GIT_TERMINAL_PROMPT", "0");
         }
     }
 }

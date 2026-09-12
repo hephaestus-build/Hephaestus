@@ -55,16 +55,19 @@ public class SandboxReconciler {
     private final Counter skippedSweeps;
     private final Timer reconciliationDuration;
     private final Clock clock;
+    private final SandboxVolumeManager volumeManager;
 
     public SandboxReconciler(
             AgentJobRepository jobRepository,
             SandboxContainerManager containerManager,
             SandboxNetworkManager networkManager,
+            SandboxVolumeManager volumeManager,
             MeterRegistry meterRegistry,
             Clock clock) {
         this.jobRepository = jobRepository;
         this.containerManager = containerManager;
         this.networkManager = networkManager;
+        this.volumeManager = volumeManager;
         this.clock = clock;
         this.orphanedContainers = Counter.builder(AgentMetrics.SANDBOX_RECONCILER_ORPHANED)
                 .tag("resource", "container")
@@ -111,6 +114,7 @@ public class SandboxReconciler {
     private void sweep(Set<UUID> activeJobIds) {
         cleanupOrphanedContainers(activeJobIds).ifPresent(inUse -> {
             cleanupOrphanedNetworks(activeJobIds, inUse);
+            cleanupOrphanedVolumes(activeJobIds, inUse);
             completedSweeps.increment();
         });
     }
@@ -203,6 +207,29 @@ public class SandboxReconciler {
             return Optional.of(UUID.fromString(value));
         } catch (IllegalArgumentException e) {
             return Optional.empty();
+        }
+    }
+
+    private void cleanupOrphanedVolumes(Set<UUID> activeJobIds, Set<UUID> inUse) {
+        try {
+            for (var volume : volumeManager.listAttemptVolumes()) {
+                var id = parseUuid(volume.labels().get(SandboxLabels.JOB_ID));
+                String createdAt = volume.labels().get(SandboxLabels.CREATED_AT);
+                if (id.isEmpty() || createdAt == null || activeJobIds.contains(id.get()) || inUse.contains(id.get())) {
+                    continue;
+                }
+                try {
+                    if (java.time.Instant.parse(createdAt)
+                            .isAfter(clock.instant().minus(REAP_GRACE))) {
+                        continue;
+                    }
+                    volumeManager.removeVolume(volume.name());
+                } catch (RuntimeException exception) {
+                    log.warn("Could not reconcile attempt volume {}", volume.name(), exception);
+                }
+            }
+        } catch (RuntimeException exception) {
+            log.warn("Skipping attempt volume reconciliation: volume inventory unavailable", exception);
         }
     }
 

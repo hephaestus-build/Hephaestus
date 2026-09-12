@@ -3,13 +3,11 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import de.tum.cit.aet.hephaestus.agent.catalog.EgressPolicy;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
-import de.tum.cit.aet.hephaestus.agent.job.ExecutionArchiveService;
+import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageSourceType;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamResult;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
@@ -57,18 +55,15 @@ class LlmProxyService {
     private final ObjectMapper objectMapper;
     private final ProxyAccounting accounting;
     private final Tracer tracer;
-    private final ExecutionArchiveService executionArchive;
 
     LlmProxyService(
             Tracer tracer,
-            ExecutionArchiveService executionArchive,
             WebClient llmProxyWebClient,
             LlmModelResolver llmModelResolver,
             EgressPolicy egressPolicy,
             ObjectMapper objectMapper,
             ProxyAccounting accounting) {
         this.tracer = tracer;
-        this.executionArchive = executionArchive;
         this.webClient = llmProxyWebClient;
         this.resolver = llmModelResolver;
         this.egressPolicy = egressPolicy;
@@ -97,7 +92,7 @@ class LlmProxyService {
                 .name("gen_ai.chat")
                 .kind(Span.Kind.CLIENT)
                 .tag("gen_ai.operation.name", "chat")
-                .tag("hephaestus.pi_request.sha256", ContentAddressedStore.sha256(body))
+                .tag("hephaestus.pi_request.sha256", ProvenanceDigest.sha256Hex(body))
                 .start();
         if (routing.sourceId() != null)
             span.tag("hephaestus.job.id", routing.sourceId().toString());
@@ -173,7 +168,7 @@ class LlmProxyService {
         ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, responsesProtocol);
         UpstreamResult upstream;
         try {
-            upstream = callUpstream(upstreamUri, upstreamHeaders, prepared.body(), routing, span, body, response, tap);
+            upstream = callUpstream(upstreamUri, upstreamHeaders, prepared.body(), span, response, tap);
             if (rejectedOurUsageRequest(upstream, prepared)) {
                 // Asking for usage is OUR addition, so refusing it must cost the caller nothing.
                 log.info(
@@ -182,14 +177,7 @@ class LlmProxyService {
                         routing.principalDescription());
                 accounting.recordStreamUsageUnsupported(routing.apiProtocol());
                 upstream = callUpstream(
-                        upstreamUri,
-                        upstreamHeaders,
-                        prepared.withoutUsageRequestOrBody(),
-                        routing,
-                        span,
-                        body,
-                        response,
-                        tap);
+                        upstreamUri, upstreamHeaders, prepared.withoutUsageRequestOrBody(), span, response, tap);
             }
         } catch (WebClientRequestException e) {
             log.warn(
@@ -250,22 +238,9 @@ class LlmProxyService {
             URI uri,
             HttpHeaders upstreamHeaders,
             byte[] outgoingBody,
-            ProxyRouting routing,
             Span span,
-            byte[] incomingBody,
             HttpServletResponse response,
             ProxyStreamUsageTap tap) {
-        var attempt = routing.attempt();
-        Long workspaceId = routing.workspaceId();
-        if (attempt != null && workspaceId != null && attempt.sourceType() == LlmUsageSourceType.AGENT_JOB) {
-            executionArchive.captureProxyRequest(
-                    workspaceId,
-                    attempt.sourceId(),
-                    attempt.number(),
-                    outgoingBody,
-                    ContentAddressedStore.sha256(incomingBody),
-                    span.context());
-        }
         span.event("upstream.request");
         return webClient
                 .method(HttpMethod.POST)

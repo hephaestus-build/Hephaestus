@@ -60,6 +60,9 @@ import org.jspecify.annotations.Nullable;
 @NoArgsConstructor
 @ToString
 public class Commit {
+    public static final int MESSAGE_LENGTH = 1024;
+    public static final int HTML_URL_LENGTH = 512;
+    public static final int EMAIL_LENGTH = 255;
 
     /**
      * Auto-generated primary key.
@@ -80,7 +83,7 @@ public class Commit {
      * The commit message (first line / subject).
      */
     @NonNull
-    @Column(length = 1024, nullable = false)
+    @Column(length = MESSAGE_LENGTH, nullable = false)
     private String message;
 
     /**
@@ -93,7 +96,7 @@ public class Commit {
     /**
      * The URL to view this commit on the Git provider's web interface.
      */
-    @Column(length = 512)
+    @Column(length = HTML_URL_LENGTH)
     private String htmlUrl;
 
     /**
@@ -157,8 +160,6 @@ public class Commit {
     @Column(name = "parent_count")
     private Integer parentCount;
 
-    // R2: Expanded signature fields
-
     /**
      * The signature verification state from GitHub's GitSignatureState enum.
      * Provides granular detail beyond the boolean {@link #signatureValid} flag,
@@ -184,8 +185,6 @@ public class Commit {
     @Column(name = "signature_signer_login", length = 255)
     private String signatureSignerLogin;
 
-    // R3: Parent commit SHAs
-
     /**
      * Comma-separated SHAs of parent commits (up to 3 parents fetched).
      * Enables merge commit analysis and history graph traversal without
@@ -195,8 +194,6 @@ public class Commit {
     @Column(name = "parent_shas", columnDefinition = "TEXT")
     private String parentShas;
 
-    // R4: CI status rollup
-
     /**
      * The aggregated CI status check rollup state for this commit.
      * One of: ERROR, EXPECTED, FAILURE, PENDING, SUCCESS.
@@ -204,8 +201,6 @@ public class Commit {
      */
     @Column(name = "status_check_rollup_state", length = 32)
     private String statusCheckRollupState;
-
-    // R6: Organizational attribution
 
     /**
      * The login of the organization on whose behalf this commit was made.
@@ -225,7 +220,7 @@ public class Commit {
      * Stored at ingestion time to enable negative caching for author enrichment.
      * When author_email is set but author_id is NULL, enrichment was attempted and failed.
      */
-    @Column(name = "author_email", length = 255)
+    @Column(name = "author_email", length = EMAIL_LENGTH)
     private String authorEmail;
 
     /**
@@ -233,7 +228,7 @@ public class Commit {
      * Stored at ingestion time to enable negative caching for committer enrichment.
      * When committer_email is set but committer_id is NULL, enrichment was attempted and failed.
      */
-    @Column(name = "committer_email", length = 255)
+    @Column(name = "committer_email", length = EMAIL_LENGTH)
     private String committerEmail;
 
     /**
@@ -263,6 +258,10 @@ public class Commit {
     protected void onUpdate() {
         updatedAt = Instant.now();
     }
+
+    /** Set only after complete Git details and file changes have been persisted together. */
+    @Column(name = "git_details_captured_at")
+    private @Nullable Instant gitDetailsCapturedAt;
 
     // Relationships
 

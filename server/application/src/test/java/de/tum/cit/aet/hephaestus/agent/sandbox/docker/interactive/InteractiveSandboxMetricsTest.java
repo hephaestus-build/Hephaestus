@@ -56,14 +56,7 @@ class InteractiveSandboxMetricsTest extends BaseUnitTest {
                 .collect(Collectors.toSet());
 
         assertThat(reasons)
-                .containsExactlyInAnyOrder(
-                        "image_pull_failed",
-                        "container_start_failed",
-                        "stdin_open_failed",
-                        "first_frame_timeout",
-                        "first_frame_failed",
-                        "max_sessions",
-                        "other");
+                .containsExactlyInAnyOrder("first_frame_timeout", "first_frame_failed", "max_sessions", "other");
     }
 
     @Test
