@@ -16175,7 +16175,7 @@ components:
           description: Practice review criteria
           maxLength: 50000
           minLength: 0
-          pattern: .*\S.*
+          pattern: "[\\s\\S]*\\S[\\s\\S]*"
         group:
           $ref: "#/components/schemas/BindPracticeGroupRequest"
           description: Catalog placement to apply with the definition update; omit
@@ -16197,13 +16197,13 @@ components:
           description: Concrete example shown to the developer; not review criteria
           maxLength: 2000
           minLength: 0
-          pattern: .*\S.*
+          pattern: "[\\s\\S]*\\S[\\s\\S]*"
         whyItMatters:
           type: string
           description: Plain-language rationale shown to the developer
           maxLength: 2000
           minLength: 0
-          pattern: .*\S.*
+          pattern: "[\\s\\S]*\\S[\\s\\S]*"
     UpdatePracticeReviewSettingsRequest:
       type: object
       description: Update per-workspace practice-review policy. Null fields unchanged;
