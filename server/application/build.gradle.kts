@@ -51,6 +51,7 @@ dependencies {
     implementation(libs.spring.modulith.starter.core)
     // Event publication registry: the durable outbox behind notification listeners (ADR 0044).
     implementation(libs.spring.modulith.starter.jdbc)
+    implementation(libs.spring.modulith.events.core)
     testImplementation(libs.spring.modulith.starter.test)
     testImplementation(libs.spring.boot.starter.test) {
         exclude(group = "org.slf4j", module = "slf4j-simple")

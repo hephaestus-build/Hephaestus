@@ -49,7 +49,8 @@ class SurveyEmailInvitationService implements SurveyEmailInvitations {
 
     @Transactional
     public SurveyEmailInvitationSummaryDTO invite(UUID surveyId, long actorId, boolean sendReminder) {
-        Survey survey = require(surveyId);
+        Survey survey = surveys.findForUpdate(surveyId)
+                .orElseThrow(() -> new EntityNotFoundException("Survey", surveyId.toString()));
         var eligible = eligibleAccountIds(survey);
         var requested = new HashSet<>(invitations.requestedAccountIds(surveyId));
         var requeueable = new HashSet<>(invitations.requeueableAccountIds(surveyId));
@@ -71,7 +72,7 @@ class SurveyEmailInvitationService implements SurveyEmailInvitations {
                         .findBySurveyIdAndAccountId(surveyId, accountId)
                         .orElseThrow()
                         .getRequestGeneration();
-                delivery.request(surveyId, accountId, expiresAt, false, generation);
+                delivery.request(surveyId, accountId, now, expiresAt, false, generation);
                 queued++;
             }
             requeueable.remove(accountId);
@@ -142,6 +143,7 @@ class SurveyEmailInvitationService implements SurveyEmailInvitations {
                 delivery.request(
                         invitation.getSurveyId(),
                         invitation.getAccountId(),
+                        invitation.getRequestedAt(),
                         invitation.getExpiresAt(),
                         true,
                         invitation.getRequestGeneration());

@@ -60,7 +60,7 @@ class WorkspaceAlertEmailListenerTest extends BaseUnitTest {
     @Test
     void shouldNotSendToAnAdministratorOfOnlyADifferentWorkspace() {
         when(attention.isCurrent(change)).thenReturn(true);
-        when(subscriptions.unsubscribeToken(42L, NotificationSubscriptionKind.WORKSPACE_ALERTS))
+        when(subscriptions.unsubscribeToken(42L, NotificationSubscriptionKind.WORKSPACE_ALERTS, NOW))
                 .thenReturn(Optional.of("token"));
         when(contacts.activeVerifiedPrimaryEmail(42L)).thenReturn(Optional.of("admin@example.org"));
         when(memberships.membershipsForAccount(42L))
@@ -74,7 +74,7 @@ class WorkspaceAlertEmailListenerTest extends BaseUnitTest {
     @Test
     void shouldSendToTheCurrentSubscribedWorkspaceOwnerWithUnsubscribeHeaders() {
         when(attention.isCurrent(change)).thenReturn(true);
-        when(subscriptions.unsubscribeToken(42L, NotificationSubscriptionKind.WORKSPACE_ALERTS))
+        when(subscriptions.unsubscribeToken(42L, NotificationSubscriptionKind.WORKSPACE_ALERTS, NOW))
                 .thenReturn(Optional.of("token"));
         when(contacts.activeVerifiedPrimaryEmail(42L)).thenReturn(Optional.of("admin@example.org"));
         when(memberships.membershipsForAccount(42L))

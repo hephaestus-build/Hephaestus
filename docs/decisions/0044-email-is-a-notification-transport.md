@@ -45,6 +45,13 @@ would introduce an additional export or rendering step here without an existing 
   deadline. Expiration must not be a resubmission filter: Modulith limits the SQL batch before
   applying the predicate, so expired failures could permanently starve newer publications. Queued
   resubmissions are capped with the framework's `maxInFlight`; this is not a total executor limit.
+  A narrow repository decorator changes only failed-publication selection: least recently retried
+  publications come first, using `last_resubmission_date` with publication time as the fallback.
+  Modulith's publication-age ordering otherwise lets the oldest failing batch monopolize every
+  bounded retry pass. The framework still owns persistence, attempt transitions, dispatch and
+  completion; there is no second queue. The [upstream starvation report](https://github.com/spring-projects/spring-modulith/issues/1764)
+  describes the same bounded-selection hazard. Check the JDBC selection contract on upgrades and
+  remove this decorator when the framework provides fair retry selection.
   The listener suspends transactions around SMTP; its contact lookup owns a short read transaction.
   Transport failures throw only when a retry may help; every other outcome — Silent Mode, no
   verified address, an unconfigured instance, a refused mailbox — completes the publication and is counted on `notification.email.delivery`.
@@ -57,7 +64,9 @@ would introduce an additional export or rendering step here without an existing 
   empty host, and the compose topology forwards unset variables as empty strings. A server-role
   configuration conditionally imports Boot's own auto-configuration for a non-blank host, retaining SSL bundles
   and the framework's sender construction instead of copying its property mapping. The sender
-  identity is `hephaestus.email.*`.
+  identity is `hephaestus.email.*`. Both `smtp` and implicit-TLS `smtps` configure finite connection,
+  read and write timeouts and hostname verification. Authenticated transport is validated before
+  Boot's optional connection test can send credentials.
 - **Thymeleaf renders HTML and text from one model**; subjects live in `messages.properties`.
 - **Account notifications use a provider-verified address** (`AccountContactQuery`). The admin test
   may use an explicitly supplied recipient; it carries no account-deletion information.
@@ -71,10 +80,17 @@ would introduce an additional export or rendering step here without an existing 
   off. Settings use strong ETags; erasure removes owned rows even though the account becomes a
   tombstone. Exports include the typed choices, never unsubscribe tokens. Delivery rechecks current
   address, account status, permission, subscription and source eligibility through owning-module ports.
+  Optional requests also carry their request time: a later opt-in cannot revive work from an earlier
+  subscription period. Reminders retain the original invitation's request time. Losing a verified
+  contact or administrator access does not prevent opting out, and preferences remain accessible
+  when SMTP is unconfigured.
 - **Survey email records are business facts, not another outbox.** An explicit action creates one
   invitation per survey/account and queues the recipient in the same transaction. Relay acceptance
   is separate from the existing in-app participation record. Pause cancels pending work; no automatic
-  reactivation occurs on resume. Reminder and summary scheduling markers commit with their publications.
+  reactivation occurs on resume. Lifecycle edits and invitation requests lock the survey before
+  invitation rows; summary claims update that same source row. This prevents concurrent edits from
+  undoing a summary claim or a request from escaping a concurrent pause. SMTP runs after the source
+  transaction. Reminder and summary scheduling markers commit with their publications.
 - **The daily digest cursor lives with its subscription.** It advances atomically with its recipient
   publication, counts retained reports only, excludes time before opt-in and bounds downtime catch-up
   to seven days. Immediate and daily delivery are mutually exclusive for one subscription.
@@ -99,7 +115,8 @@ would introduce an additional export or rendering step here without an existing 
   RFC 8058; GET never mutates and the visible link opens confirmation. HTTPS links advertise one-click;
   the relay must DKIM-sign both unsubscribe headers. Tokens stay out of events, exports and logs.
   Reverse-proxy access logs must redact this capability path; the public confirmation page omits
-  credentials, referrers and error telemetry.
+  credentials, referrers and error telemetry. The document declares `no-referrer` before loading
+  assets, not only after the confirmation route mounts.
 - Operator alerts that must bypass Silent Mode go through the declared egress-exemption allowlist,
   as the runbook already requires; the gateway does not exempt itself.
 - Self-hosters bring their own relay. The code names no relay; the university relay used by the

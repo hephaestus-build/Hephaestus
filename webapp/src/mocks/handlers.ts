@@ -40,6 +40,7 @@ export const handlers = [
 			productSurveys: false,
 			researchSurveys: false,
 			emailAvailable: true,
+			deliveryConfigured: true,
 			etag: '"0-0-0"',
 		}),
 	),

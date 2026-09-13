@@ -23,6 +23,7 @@ class SurveyEmailDeliveryAdapter implements SurveyEmailDelivery {
     private final NotificationSubscriptionService subscriptions;
     private final AccountContactQuery contacts;
     private final ApplicationEventPublisher events;
+    private final java.time.Clock clock;
 
     @Override
     public List<Long> subscribedAccountIds(boolean research) {
@@ -48,8 +49,10 @@ class SurveyEmailDeliveryAdapter implements SurveyEmailDelivery {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public void request(UUID surveyId, long accountId, Instant expiresAt, boolean reminder, long generation) {
-        events.publishEvent(new SurveyEmailRequested(surveyId, accountId, expiresAt, reminder, generation));
+    public void request(
+            UUID surveyId, long accountId, Instant requestedAt, Instant expiresAt, boolean reminder, long generation) {
+        events.publishEvent(
+                new SurveyEmailRequested(surveyId, accountId, requestedAt, expiresAt, reminder, generation));
     }
 
     @Override
@@ -59,7 +62,8 @@ class SurveyEmailDeliveryAdapter implements SurveyEmailDelivery {
                 subscriptions.subscribedAccountIds(NotificationSubscriptionKind.SURVEY_SUMMARIES));
         for (long accountId : contacts.activeVerifiedAdministratorIds()) {
             if (subscribed.contains(accountId))
-                events.publishEvent(new SurveyEndedSummaryRequested(surveyId, accountId, endedAt, expiresAt));
+                events.publishEvent(
+                        new SurveyEndedSummaryRequested(surveyId, accountId, endedAt, clock.instant(), expiresAt));
         }
     }
 }

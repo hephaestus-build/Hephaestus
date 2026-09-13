@@ -59,6 +59,11 @@ spring:
             "[mail.smtp.connectiontimeout]": 5000
             "[mail.smtp.timeout]": 10000
             "[mail.smtp.writetimeout]": 10000
+            "[mail.smtps.ssl.checkserveridentity]": true
+            "[mail.smtps.auth]": true
+            "[mail.smtps.connectiontimeout]": 5000
+            "[mail.smtps.timeout]": 10000
+            "[mail.smtps.writetimeout]": 10000
 
     threads:
         virtual:

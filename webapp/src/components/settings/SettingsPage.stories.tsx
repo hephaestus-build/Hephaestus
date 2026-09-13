@@ -22,6 +22,7 @@ const meta = {
 					productSurveys: false,
 					researchSurveys: false,
 					emailAvailable: true,
+					deliveryConfigured: true,
 				},
 				isPending: false,
 				onChange: fn(),

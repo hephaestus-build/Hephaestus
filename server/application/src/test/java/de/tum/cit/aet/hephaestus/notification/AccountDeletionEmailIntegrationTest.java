@@ -37,6 +37,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.MailSendException;
 import org.springframework.modulith.events.FailedEventPublications;
 import org.springframework.modulith.events.ResubmissionOptions;
+import org.springframework.modulith.events.core.EventPublicationRepository;
+import org.springframework.modulith.events.core.EventPublicationRepository.FailedCriteria;
+import org.springframework.modulith.events.core.TargetEventPublication;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -65,6 +68,9 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private CapturingJavaMailSender mailSender;
+
+    @Autowired
+    private EventPublicationRepository publicationRepository;
 
     @Autowired
     private FailedEventPublications failedPublications;
@@ -151,7 +157,112 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    /** The instance installs with Silent Mode engaged (fail-closed); every test here needs it released. */
+    @Test
+    void shouldAdvancePastAStillFailingBatchOnTheNextRetry() {
+        long accountId = persistAccount("fair-retry-" + UUID.randomUUID() + "@hephaestus.test", Instant.now());
+        mailSender.failWith(new MailSendException("relay down", new ConnectException("refused")));
+        accountService.softDelete(accountId, null);
+        UUID newest =
+                (UUID) Objects.requireNonNull(publications(accountId).getFirst().get("id"));
+        List<UUID> older = new ArrayList<>();
+        try {
+            jdbc.update(
+                    "UPDATE event_publication SET publication_date = ? WHERE id = ?",
+                    Timestamp.from(Instant.now().minus(Duration.ofMinutes(10))),
+                    newest);
+            for (int i = 0; i < NotificationRedeliveryJob.BATCH_SIZE; i++) {
+                UUID id = UUID.randomUUID();
+                older.add(id);
+                var event = new AccountDeletionScheduledEvent(
+                        accountId, Instant.now().plus(Duration.ofDays(1)).plusSeconds(i));
+                assertThat(jdbc.update(
+                                """
+                        INSERT INTO event_publication
+                            (id, listener_id, event_type, serialized_event, publication_date, status, completion_attempts)
+                        SELECT ?, listener_id, event_type, ?, ?, 'FAILED', 1
+                          FROM event_publication WHERE id = ?
+                        """,
+                                id,
+                                objectMapper.writeValueAsString(event),
+                                Timestamp.from(
+                                        Instant.now().minus(Duration.ofHours(1)).plusSeconds(i)),
+                                newest))
+                        .isEqualTo(1);
+            }
+            new NotificationRedeliveryJob(failedPublications).resubmitFailed();
+            for (UUID id : older) {
+                assertThat(jdbc.queryForMap(
+                                "SELECT status, last_resubmission_date FROM event_publication WHERE id = ?", id))
+                        .containsEntry("status", "FAILED")
+                        .hasEntrySatisfying(
+                                "last_resubmission_date",
+                                value -> assertThat(value).isNotNull());
+            }
+            assertThat(publicationRepository.findFailedPublications(FailedCriteria.ALL))
+                    .extracting(TargetEventPublication::getIdentifier)
+                    .containsAll(older)
+                    .contains(newest);
+            var criteria = FailedCriteria.ALL
+                    .withPublicationsPublishedBefore(Instant.now().minus(Duration.ofMinutes(5)))
+                    .withItemsToRead(1);
+            assertThat(publicationRepository.findFailedPublications(criteria))
+                    .extracting(TargetEventPublication::getIdentifier)
+                    .containsExactly(newest);
+
+            mailSender.failWith(null);
+            failedPublications.resubmit(
+                    ResubmissionOptions.defaults().withBatchSize(1).withMaxInFlight(1));
+
+            assertThat(mailSender.sent()).hasSize(1);
+            assertThat(publications(accountId))
+                    .extracting(row -> row.get("id"))
+                    .containsExactlyInAnyOrderElementsOf(older);
+        } finally {
+            for (UUID id : older) jdbc.update("DELETE FROM event_publication WHERE id = ?", id);
+            jdbc.update("DELETE FROM event_publication WHERE id = ?", newest);
+        }
+    }
+
+    @Test
+    void shouldApplyFailedStatusAndMinimumAgeBeforeTheFairBatchLimit() {
+        long accountId = persistAccount("retry-filter-" + UUID.randomUUID() + "@hephaestus.test", Instant.now());
+        mailSender.failWith(new MailSendException("relay down", new ConnectException("refused")));
+        accountService.softDelete(accountId, null);
+        UUID source =
+                (UUID) Objects.requireNonNull(publications(accountId).getFirst().get("id"));
+        List<UUID> other = new ArrayList<>();
+        try {
+            jdbc.update(
+                    "UPDATE event_publication SET publication_date = ? WHERE id = ?",
+                    Timestamp.from(Instant.parse("2001-01-01T00:00:00Z")),
+                    source);
+            for (String status : List.of("PUBLISHED", "PROCESSING", "RESUBMITTED", "COMPLETED", "FAILED")) {
+                UUID id = UUID.randomUUID();
+                other.add(id);
+                Instant date = status.equals("FAILED")
+                        ? Instant.now().plus(Duration.ofDays(1))
+                        : Instant.parse("2000-01-01T00:00:00Z");
+                jdbc.update("""
+                        INSERT INTO event_publication
+                            (id, listener_id, event_type, serialized_event, publication_date, status, completion_attempts)
+                        SELECT ?, listener_id, event_type, serialized_event, ?, ?, 1
+                          FROM event_publication WHERE id = ?
+                        """, id, Timestamp.from(date), status, source);
+            }
+            assertThat(publicationRepository.findFailedPublications(FailedCriteria.ALL
+                            .withPublicationsPublishedBefore(Instant.now().minus(Duration.ofMinutes(5)))
+                            .withItemsToRead(1)))
+                    .extracting(TargetEventPublication::getIdentifier)
+                    .containsExactly(source);
+            assertThat(publicationRepository.findFailedPublications(FailedCriteria.ALL))
+                    .extracting(TargetEventPublication::getIdentifier)
+                    .contains(source, other.getLast());
+        } finally {
+            for (UUID id : other) jdbc.update("DELETE FROM event_publication WHERE id = ?", id);
+            jdbc.update("DELETE FROM event_publication WHERE id = ?", source);
+        }
+    }
+
     @Test
     void shouldPersistSharedEmailBudgetsAndReserveEssentialCapacity() {
         String prefix = UUID.randomUUID() + ":";
@@ -178,6 +289,7 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    /** The instance installs with Silent Mode engaged (fail-closed); every test here needs it released. */
     @BeforeEach
     void releaseSilentMode() {
         setSilentMode(false);
@@ -281,7 +393,7 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
     /** Registry rows for this account's event: the serialized event carries the account id. */
     private List<Map<String, @Nullable Object>> publications(long accountId) {
         return jdbc.queryForList(
-                "SELECT status, listener_id FROM event_publication WHERE serialized_event LIKE ?",
+                "SELECT id, status, listener_id FROM event_publication WHERE serialized_event LIKE ?",
                 "%\"accountId\":" + accountId + ",%");
     }
 

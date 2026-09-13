@@ -13,6 +13,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.mail.autoconfigure.MailSenderValidatorAutoConfiguration;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
@@ -130,6 +131,23 @@ class EmailTransportConfigurationTest {
                         "spring.mail.properties[mail.smtps.auth]=true",
                         "spring.mail.properties[mail.smtps.ssl.enable]=false")
                 .run(context -> assertThat(context).hasSingleBean(JavaMailSender.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"smtp", "smtps"})
+    void shouldApplyProductionHostnameVerificationAndTimeoutsForBothProtocols(String protocol) {
+        runner.withInitializer(new ConfigDataApplicationContextInitializer())
+                .withPropertyValues("spring.mail.host=smtp.example.org", "spring.mail.protocol=" + protocol)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    var sender = context.getBean(JavaMailSenderImpl.class);
+                    assertThat(sender.getProtocol()).isEqualTo(protocol);
+                    assertThat(sender.getJavaMailProperties())
+                            .containsEntry("mail." + protocol + ".ssl.checkserveridentity", "true")
+                            .containsEntry("mail." + protocol + ".connectiontimeout", "5000")
+                            .containsEntry("mail." + protocol + ".timeout", "10000")
+                            .containsEntry("mail." + protocol + ".writetimeout", "10000");
+                });
     }
 
     @Test

@@ -2294,6 +2294,13 @@ export type LoginProviderView = {
 };
 
 export type NotificationPreferences = {
+  /**
+   * This instance has an email transport and sender configured
+   */
+  deliveryConfigured: boolean;
+  /**
+   * The account has an active verified email address
+   */
   emailAvailable: boolean;
   etag: string;
   productFeedback: boolean;

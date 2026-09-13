@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.notification.email.EmailGateway;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -24,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class NotificationSubscriptionService {
     private final NotificationSubscriptionRepository subscriptions;
     private final AccountContactQuery contacts;
+    private final EmailGateway gateway;
     private final java.time.Clock clock;
 
     public boolean isEnabled(long accountId, NotificationSubscriptionKind kind) {
@@ -60,6 +62,17 @@ public class NotificationSubscriptionService {
                 .findByAccountIdAndKind(accountId, kind)
                 .filter(NotificationSubscription::isEnabled)
                 .map(s -> s.getUnsubscribeToken().toString());
+    }
+
+    /** A later opt-in or frequency change must not revive an older optional request. */
+    public Optional<String> unsubscribeToken(
+            long accountId, NotificationSubscriptionKind kind, java.time.Instant requestedAt) {
+        return subscriptions
+                .findByAccountIdAndKind(accountId, kind)
+                .filter(NotificationSubscription::isEnabled)
+                .filter(row ->
+                        row.getEnabledSince() != null && !row.getEnabledSince().isAfter(requestedAt))
+                .map(row -> row.getUnsubscribeToken().toString());
     }
 
     @Transactional
@@ -124,6 +137,7 @@ public class NotificationSubscriptionService {
                 enabled(rows, NotificationSubscriptionKind.PRODUCT_SURVEYS),
                 enabled(rows, NotificationSubscriptionKind.RESEARCH_SURVEYS),
                 contacts.activeVerifiedPrimaryEmail(accountId).isPresent(),
+                gateway.configured(),
                 enabled(rows, NotificationSubscriptionKind.SURVEY_SUMMARIES),
                 enabled(rows, NotificationSubscriptionKind.WORKSPACE_ALERTS),
                 rows.stream()

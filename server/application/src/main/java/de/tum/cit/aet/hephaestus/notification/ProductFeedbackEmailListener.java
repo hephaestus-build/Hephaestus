@@ -42,7 +42,8 @@ public class ProductFeedbackEmailListener {
             return;
         }
         var to = contacts.activeVerifiedAdministratorEmail(event.accountId());
-        var token = subscriptions.unsubscribeToken(event.accountId(), NotificationSubscriptionKind.PRODUCT_FEEDBACK);
+        var token = subscriptions.unsubscribeToken(
+                event.accountId(), NotificationSubscriptionKind.PRODUCT_FEEDBACK, event.requestedAt());
         if (!subscriptions.hasFrequency(event.accountId(), NotificationEmailFrequency.IMMEDIATE) || token.isEmpty()) {
             metrics.record(EmailKind.PRODUCT_FEEDBACK, Outcome.UNSUBSCRIBED);
             return;

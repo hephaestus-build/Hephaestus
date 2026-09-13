@@ -1,6 +1,6 @@
 import { useId } from "react";
 
-import type { UpdateNotificationPreferences } from "@/api/types.gen";
+import type { NotificationPreferences, UpdateNotificationPreferences } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import {
 	Field,
@@ -26,7 +26,7 @@ type EmailPreferencesState =
 	| { status: "error"; error: unknown; onRetry: () => void }
 	| {
 			status: "ready";
-			preferences: EmailNotificationChoices & { emailAvailable: boolean };
+			preferences: Omit<NotificationPreferences, "etag">;
 			isPending: boolean;
 			onChange: (choices: EmailNotificationChoices) => void;
 	  };
@@ -76,7 +76,9 @@ export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesS
 	const id = useId();
 	const visibleChoices = choices.filter(
 		(choice) =>
-			(choice.key !== "productFeedback" && choice.key !== "surveySummaries") || isAppAdmin,
+			(choice.key !== "productFeedback" && choice.key !== "surveySummaries") ||
+			isAppAdmin ||
+			(state.status === "ready" && state.preferences[choice.key]),
 	);
 
 	const change = (patch: Partial<EmailNotificationChoices>) => {
@@ -123,6 +125,19 @@ export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesS
 				/>
 			) : (
 				<>
+					{!isAppAdmin &&
+						(state.preferences.productFeedback || state.preferences.surveySummaries) && (
+							<p className="text-sm text-muted-foreground">
+								You no longer have instance-admin access. Existing administrator subscriptions can
+								be turned off here; they cannot send while that access is missing.
+							</p>
+						)}
+					{!state.preferences.deliveryConfigured && (
+						<p className="text-sm text-muted-foreground">
+							Email delivery is not configured for this instance. With a verified email address, you
+							can save choices for when it is enabled. Contact an instance administrator.
+						</p>
+					)}
 					{!state.preferences.emailAvailable && (
 						<p className="text-sm text-muted-foreground">
 							No verified email address is available for your account. A linked sign-in provider

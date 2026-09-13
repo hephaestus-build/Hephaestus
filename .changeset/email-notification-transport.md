@@ -25,3 +25,9 @@ Slack credential-revocation and GitHub suspension alerts, with recovery notices.
 unlinking and administrator-access changes also send
 security notices to the affected account's verified address. Shared SMTP attempt budgets reserve
 capacity for essential mail; configure them to fit your relay before inviting a large audience.
+
+Turning a subscription back on does not restart optional email requested before the new opt-in.
+You can turn subscriptions off, including after losing administrator access or a verified
+contact, and while the instance's relay is unconfigured. Survey pauses and schedule edits remain
+consistent with concurrent invitation requests and summary scheduling. Retry batches share turns
+across failed notifications instead of repeatedly retrying only the oldest batch.

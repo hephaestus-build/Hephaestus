@@ -16,11 +16,7 @@ const anonymousClient = createClient({
 export const Route = createFileRoute("/unsubscribe")({
 	staticData: { surface: "auth" },
 	head: () => ({
-		meta: [
-			{ title: "Unsubscribe — Hephaestus" },
-			{ name: "referrer", content: "no-referrer" },
-			{ name: "robots", content: "noindex, nofollow" },
-		],
+		meta: [{ title: "Unsubscribe — Hephaestus" }, { name: "robots", content: "noindex, nofollow" }],
 	}),
 	validateSearch: (search): { token?: string } => ({
 		token: typeof search.token === "string" && search.token.length > 0 ? search.token : undefined,

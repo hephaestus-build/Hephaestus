@@ -340,6 +340,10 @@ transport is Spring Boot's `spring.mail.*`, so every variable is the property pa
 TLS verifies the relay certificate and hostname. For implicit TLS on port `465`, enable SSL and
 disable both STARTTLS settings; leave certificate verification enabled. Authenticated SMTP without
 implicit TLS or required STARTTLS is rejected at startup to prevent credential exposure.
+Alternatively, select `SPRING_MAIL_PROTOCOL=smtps` with port `465`. Both protocols verify the relay's
+hostname and apply the timeouts below. Protocol-specific overrides use
+`mail.smtp.*` or `mail.smtps.*` respectively; keep authentication and certificate verification enabled
+for authenticated relays.
 
 Connection, read and write timeouts default to 5 s / 10 s / 10 s; a relay that stops answering
 cannot leave a socket operation waiting indefinitely. Only the `application-server` container reads these

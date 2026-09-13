@@ -10,7 +10,8 @@ public interface SurveyEmailDelivery {
 
     boolean isSubscribed(long accountId, boolean research);
 
-    void request(UUID surveyId, long accountId, Instant expiresAt, boolean reminder, long generation);
+    void request(
+            UUID surveyId, long accountId, Instant requestedAt, Instant expiresAt, boolean reminder, long generation);
 
     void requestSummary(UUID surveyId, Instant endedAt, Instant expiresAt);
 }

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
@@ -23,10 +24,14 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.net.ConnectException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -144,7 +149,12 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
 
         new TransactionTemplate(transactionManager)
                 .executeWithoutResult(status -> events.publishEvent(new SurveyEmailRequested(
-                        survey.getId(), recipient.accountId(), Instant.now().plusSeconds(60), false, 0L)));
+                        survey.getId(),
+                        recipient.accountId(),
+                        Instant.now(),
+                        Instant.now().plusSeconds(60),
+                        false,
+                        0L)));
         assertThat(mail.sent()).hasSize(1);
     }
 
@@ -270,7 +280,12 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
         mail.failWith(null);
         new TransactionTemplate(transactionManager)
                 .executeWithoutResult(status -> events.publishEvent(new SurveyEmailRequested(
-                        survey.getId(), recipient.accountId(), renewed.getExpiresAt(), false, 0)));
+                        survey.getId(),
+                        recipient.accountId(),
+                        renewed.getRequestedAt(),
+                        renewed.getExpiresAt(),
+                        false,
+                        0)));
         assertThat(mail.sent()).isEmpty();
         resubmit(survey.getId());
 
@@ -592,6 +607,182 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
             assertThat(surveys.claimSummary(survey.getId(), newEnd, Instant.now()))
                     .isEqualTo(1);
         });
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldNotReviveAnInvitationOrReminderFromAnEarlierSubscription(boolean reminder) {
+        Recipient recipient = recipient();
+        Survey survey = survey(recipient, null);
+        if (reminder) {
+            invitationService.invite(survey.getId(), recipient.accountId(), true);
+            acceptedHoursAgo(survey.getId(), 73);
+            mail.sent().clear();
+        }
+        mail.failWith(new MailSendException("relay down", new ConnectException("refused")));
+        if (reminder) invitationService.scheduleReminders();
+        else invitationService.invite(survey.getId(), recipient.accountId(), false);
+        assertThat(publications(survey.getId())).hasSize(1);
+
+        subscribe(recipient.accountId(), false);
+        subscribe(recipient.accountId(), true);
+        mail.failWith(null);
+        resubmit(survey.getId());
+
+        assertThat(mail.sent()).isEmpty();
+        assertThat(publications(survey.getId())).isEmpty();
+        var request = invitations
+                .findBySurveyIdAndAccountId(survey.getId(), recipient.accountId())
+                .orElseThrow();
+        if (reminder) assertThat(request.getReminderAcceptedAt()).isNull();
+        else assertThat(request.getAcceptedAt()).isNull();
+        Survey fresh = survey(recipient, null);
+        invitationService.invite(fresh.getId(), recipient.accountId(), false);
+        assertThat(mail.sent()).hasSize(1);
+    }
+
+    @Test
+    void shouldNotReviveAnEndedSurveySummaryFromAnEarlierSubscription() {
+        Recipient admin = recipient();
+        var account = accounts.findById(admin.accountId()).orElseThrow();
+        account.setAppRole(Account.AppRole.APP_ADMIN);
+        accounts.saveAndFlush(account);
+        summarySubscription(admin.accountId(), true);
+        Survey survey = survey(admin, null);
+        surveyService.edit(
+                survey.getId(),
+                new SurveyEditDTO(
+                        survey.getTitle(),
+                        survey.getDescription(),
+                        survey.getStartsAt(),
+                        Instant.now().minusSeconds(10),
+                        true));
+        mail.failWith(new MailSendException("relay down", new ConnectException("refused")));
+        invitationService.scheduleSummaries();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM event_publication WHERE event_type = ? AND serialized_event LIKE ?",
+                        Integer.class,
+                        SurveyEndedSummaryRequested.class.getName(),
+                        "%" + survey.getId() + "%"))
+                .isEqualTo(1);
+
+        summarySubscription(admin.accountId(), false);
+        summarySubscription(admin.accountId(), true);
+        mail.failWith(null);
+        failed.resubmit(ResubmissionOptions.defaults()
+                .withFilter(publication -> publication.getEvent() instanceof SurveyEndedSummaryRequested event
+                        && event.surveyId().equals(survey.getId())));
+        assertThat(mail.sent()).isEmpty();
+
+        surveyService.edit(
+                survey.getId(),
+                new SurveyEditDTO(
+                        survey.getTitle(),
+                        survey.getDescription(),
+                        survey.getStartsAt(),
+                        Instant.now().minusSeconds(1),
+                        true));
+        invitationService.scheduleSummaries();
+        assertThat(mail.sent()).hasSize(1);
+        summarySubscription(admin.accountId(), false);
+    }
+
+    @Test
+    void shouldResetAConcurrentSummaryClaimWhenTheEndChanges() throws Exception {
+        Survey survey = survey(recipient(), null);
+        Instant end = Objects.requireNonNull(
+                surveys.findById(survey.getId()).orElseThrow().getEndsAt());
+        Instant newEnd = end.plusSeconds(60);
+        raceOnSurveyRow(
+                () -> assertThat(surveys.claimSummary(survey.getId(), end, Instant.now()))
+                        .isEqualTo(1),
+                () -> surveyService.edit(
+                        survey.getId(),
+                        new SurveyEditDTO(
+                                survey.getTitle(), survey.getDescription(), survey.getStartsAt(), newEnd, true)));
+
+        Survey saved = surveys.findById(survey.getId()).orElseThrow();
+        assertThat(saved.getEndsAt()).isEqualTo(newEnd);
+        assertThat(saved.getSummaryQueuedAt()).isNull();
+        new TransactionTemplate(transactionManager)
+                .executeWithoutResult(status -> assertThat(surveys.claimSummary(survey.getId(), newEnd, Instant.now()))
+                        .isEqualTo(1));
+    }
+
+    @Test
+    void shouldPreserveAConcurrentSummaryClaimWhenOnlyTheTitleChanges() throws Exception {
+        Survey survey = survey(recipient(), null);
+        Instant end = Objects.requireNonNull(
+                surveys.findById(survey.getId()).orElseThrow().getEndsAt());
+        raceOnSurveyRow(
+                () -> assertThat(surveys.claimSummary(survey.getId(), end, Instant.now()))
+                        .isEqualTo(1),
+                () -> surveyService.edit(
+                        survey.getId(),
+                        new SurveyEditDTO("Edited title", survey.getDescription(), survey.getStartsAt(), end, true)));
+
+        Survey saved = surveys.findById(survey.getId()).orElseThrow();
+        assertThat(saved.getTitle()).isEqualTo("Edited title");
+        assertThat(saved.getSummaryQueuedAt()).isNotNull();
+        new TransactionTemplate(transactionManager)
+                .executeWithoutResult(status -> assertThat(surveys.claimSummary(survey.getId(), end, Instant.now()))
+                        .isZero());
+    }
+
+    @Test
+    void shouldNotQueueAnInvitationBehindAConcurrentPauseOrReviveItOnResume() throws Exception {
+        Recipient recipient = recipient();
+        Survey survey = survey(recipient, null);
+        raceOnSurveyRow(
+                () -> surveyService.edit(
+                        survey.getId(),
+                        new SurveyEditDTO(
+                                survey.getTitle(),
+                                survey.getDescription(),
+                                survey.getStartsAt(),
+                                survey.getEndsAt(),
+                                false)),
+                () -> assertThat(invitationService
+                                .invite(survey.getId(), recipient.accountId(), true)
+                                .queued())
+                        .isZero());
+
+        surveyService.edit(
+                survey.getId(),
+                new SurveyEditDTO(
+                        survey.getTitle(), survey.getDescription(), survey.getStartsAt(), survey.getEndsAt(), true));
+        assertThat(invitations.findBySurveyIdAndAccountId(survey.getId(), recipient.accountId()))
+                .isEmpty();
+        assertThat(publications(survey.getId())).isEmpty();
+        assertThat(mail.sent()).isEmpty();
+    }
+
+    private void raceOnSurveyRow(Runnable holder, Runnable follower) throws Exception {
+        var locked = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var holding = pool.submit(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                holder.run();
+                int holderPid = Objects.requireNonNull(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                locked.countDown();
+                await().atMost(Duration.ofSeconds(10)).until(() -> {
+                    // PostgreSQL caches this transaction's statistics snapshot until explicitly cleared.
+                    jdbc.execute("SELECT pg_stat_clear_snapshot()");
+                    return Objects.requireNonNull(jdbc.queryForObject(
+                                    "SELECT count(*) FROM pg_stat_activity WHERE ? = ANY(pg_blocking_pids(pid))",
+                                    Integer.class,
+                                    holderPid))
+                            > 0;
+                });
+            }));
+            var following = pool.submit(() -> {
+                if (!locked.await(10, TimeUnit.SECONDS))
+                    throw new IllegalStateException("Survey lock was not acquired");
+                follower.run();
+                return true;
+            });
+            holding.get(15, TimeUnit.SECONDS);
+            following.get(15, TimeUnit.SECONDS);
+        }
     }
 
     private void acceptedHoursAgo(UUID surveyId, long hours) {

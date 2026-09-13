@@ -164,7 +164,17 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(
-            strings = {"unsubscribed", "demoted", "suspended", "deleting", "deleted", "unverified", "source-erased"})
+            strings = {
+                "unsubscribed",
+                "resubscribed",
+                "frequency-changed-back",
+                "demoted",
+                "suspended",
+                "deleting",
+                "deleted",
+                "unverified",
+                "source-erased"
+            })
     void shouldRecheckEligibilityBeforeRetrying(String change) {
         Account admin = account(Account.AppRole.APP_ADMIN, Account.Status.ACTIVE, true, true);
         mail.failWith(new MailSendException("relay down", new ConnectException("refused")));
@@ -172,6 +182,25 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
         assertThat(publications(item.getId())).hasSize(1);
         switch (change) {
             case "unsubscribed" -> subscribed(admin, false);
+            case "resubscribed" -> {
+                subscribed(admin, false);
+                subscribed(admin, true);
+            }
+            case "frequency-changed-back" -> {
+                long id = Objects.requireNonNull(admin.getId());
+                subscriptions.update(
+                        id,
+                        new UpdateNotificationPreferencesDTO(
+                                true,
+                                false,
+                                false,
+                                de.tum.cit.aet.hephaestus.notification.preferences.NotificationEmailFrequency.DAILY,
+                                false,
+                                false),
+                        EntityTagPrecondition.parse(subscriptions.get(id).etag()),
+                        true);
+                subscribed(admin, true);
+            }
             case "demoted" -> admin.setAppRole(Account.AppRole.USER);
             case "suspended" -> admin.setStatus(Account.Status.SUSPENDED);
             case "deleting" -> admin.setStatus(Account.Status.DELETING);
@@ -197,7 +226,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
 
         new TransactionTemplate(transactionManager)
                 .executeWithoutResult(status -> events.publishEvent(new ProductFeedbackEmailRequested(
-                        item.getId(), Objects.requireNonNull(admin.getId()), Instant.EPOCH)));
+                        item.getId(), Objects.requireNonNull(admin.getId()), Instant.EPOCH, Instant.EPOCH)));
 
         assertThat(mail.sent()).isEmpty();
         assertThat(publications(item.getId())).isEmpty();

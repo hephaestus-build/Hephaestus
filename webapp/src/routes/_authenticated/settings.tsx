@@ -71,7 +71,9 @@ function RouteComponent() {
 	const emailPreferencesQuery = useQuery(getNotificationPreferencesOptions());
 	const emailPreferencesMutation = useMutation({
 		...updateNotificationPreferencesMutation(),
-		onSuccess: (preferences) => {
+		onMutate: () => queryClient.cancelQueries({ queryKey: getNotificationPreferencesQueryKey() }),
+		onSuccess: async (preferences) => {
+			await queryClient.cancelQueries({ queryKey: getNotificationPreferencesQueryKey() });
 			queryClient.setQueryData(getNotificationPreferencesQueryKey(), preferences);
 		},
 		onError: async (error) => {

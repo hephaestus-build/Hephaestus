@@ -45,9 +45,9 @@ public class SurveyEndedSummaryListener {
             metrics.record(EmailKind.SURVEY_ENDED_SUMMARY, Outcome.EXPIRED);
             return;
         }
-        var token = subscriptions.unsubscribeToken(event.accountId(), NotificationSubscriptionKind.SURVEY_SUMMARIES);
-        if (!subscriptions.isEnabled(event.accountId(), NotificationSubscriptionKind.SURVEY_SUMMARIES)
-                || token.isEmpty()) {
+        var token = subscriptions.unsubscribeToken(
+                event.accountId(), NotificationSubscriptionKind.SURVEY_SUMMARIES, event.requestedAt());
+        if (token.isEmpty()) {
             metrics.record(EmailKind.SURVEY_ENDED_SUMMARY, Outcome.UNSUBSCRIBED);
             return;
         }

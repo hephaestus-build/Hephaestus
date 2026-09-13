@@ -354,7 +354,9 @@ GROUP BY status;
 ```
 
 Alert when pending/failed publications age beyond the expected five-minute retry interval and
-investigate before the notification's expiry. Use a separate database-monitoring identity with
+investigate before the notification's expiry. Retry batches prioritize publications least recently
+retried, so one failing batch does not indefinitely block later work. This is fairness, not a promise
+of delivery within five minutes: capacity limits and backlog size still apply. Use a separate database-monitoring identity with
 least privilege. Do not replay a backlog blindly: each listener rechecks current eligibility, and
 Silent Mode deliberately completes withheld mail rather than saving a flood for later.
 

@@ -11581,8 +11581,12 @@ components:
     NotificationPreferences:
       type: object
       properties:
+        deliveryConfigured:
+          type: boolean
+          description: This instance has an email transport and sender configured
         emailAvailable:
           type: boolean
+          description: The account has an active verified email address
         etag:
           type: string
         productFeedback:
@@ -11601,6 +11605,7 @@ components:
         workspaceAlerts:
           type: boolean
       required:
+      - deliveryConfigured
       - emailAvailable
       - etag
       - productFeedback

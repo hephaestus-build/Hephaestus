@@ -38,7 +38,8 @@ public class WorkspaceAlertEmailListener {
             metrics.record(EmailKind.WORKSPACE_ALERT, EmailDeliveryResult.Outcome.EXPIRED);
             return;
         }
-        var token = subscriptions.unsubscribeToken(event.accountId(), NotificationSubscriptionKind.WORKSPACE_ALERTS);
+        var token = subscriptions.unsubscribeToken(
+                event.accountId(), NotificationSubscriptionKind.WORKSPACE_ALERTS, change.occurredAt());
         if (token.isEmpty()) {
             metrics.record(EmailKind.WORKSPACE_ALERT, EmailDeliveryResult.Outcome.UNSUBSCRIBED);
             return;

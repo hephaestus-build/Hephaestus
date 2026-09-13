@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -55,6 +56,8 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .jsonPath("$.productSurveys")
                 .isEqualTo(false)
                 .jsonPath("$.researchSurveys")
+                .isEqualTo(false)
+                .jsonPath("$.deliveryConfigured")
                 .isEqualTo(false)
                 .returnResult();
         String etag = Objects.requireNonNull(initial.getResponseHeaders().getETag());
@@ -339,6 +342,37 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
         assertThat(subscriptions.isDigestWindowCurrent(account, from)).isFalse();
         assertThat(subscriptions.isDigestWindowCurrent(account, java.time.Instant.now()))
                 .isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(NotificationSubscriptionKind.class)
+    void shouldKeepOldRequestsCancelledAfterReSubscribingToAnyOptionalKind(NotificationSubscriptionKind kind) {
+        long account = account();
+        var choices = new UpdateNotificationPreferencesDTO(
+                kind == NotificationSubscriptionKind.PRODUCT_FEEDBACK,
+                kind == NotificationSubscriptionKind.PRODUCT_SURVEYS,
+                kind == NotificationSubscriptionKind.RESEARCH_SURVEYS,
+                NotificationEmailFrequency.IMMEDIATE,
+                kind == NotificationSubscriptionKind.WORKSPACE_ALERTS,
+                kind == NotificationSubscriptionKind.SURVEY_SUMMARIES);
+        subscriptions.update(
+                account,
+                choices,
+                EntityTagPrecondition.parse(subscriptions.get(account).etag()),
+                true);
+        var originalRequest = java.time.Instant.now();
+        String token =
+                subscriptions.unsubscribeToken(account, kind, originalRequest).orElseThrow();
+        subscriptions.unsubscribe(token);
+        subscriptions.update(
+                account,
+                choices,
+                EntityTagPrecondition.parse(subscriptions.get(account).etag()),
+                true);
+        assertThat(subscriptions.unsubscribeToken(account, kind, originalRequest))
+                .isEmpty();
+        assertThat(subscriptions.unsubscribeToken(account, kind, java.time.Instant.now()))
+                .contains(token);
     }
 
     @Test

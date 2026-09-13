@@ -17,6 +17,7 @@ const ready = {
 		productSurveys: false,
 		researchSurveys: false,
 		emailAvailable: true,
+		deliveryConfigured: true,
 	},
 	isPending: false,
 	onChange: fn(),
@@ -80,6 +81,25 @@ export const InstanceAdmin: Story = {
 	},
 };
 
+export const FormerInstanceAdmin: Story = {
+	args: {
+		state: {
+			...ready,
+			preferences: {
+				...ready.preferences,
+				emailAvailable: false,
+				productFeedback: true,
+				surveySummaries: true,
+			},
+		},
+	},
+	play: async ({ canvas }) => {
+		await userEvent.click(canvas.getByRole("switch", { name: "New product feedback" }));
+		await expect(canvas.queryByRole("switch", { name: "New product feedback" })).toBeNull();
+		await expect(canvas.getByRole("switch", { name: "Survey summaries" })).toBeChecked();
+	},
+};
+
 export const Subscribed: Story = {
 	args: {
 		state: {
@@ -109,6 +129,10 @@ export const NoVerifiedAddress: Story = {
 		await expectUnavailable(product);
 		await expect(canvas.getByRole("switch", { name: "Research survey invitations" })).toBeChecked();
 	},
+};
+
+export const DeliveryNotConfigured: Story = {
+	args: { state: { ...ready, preferences: { ...ready.preferences, deliveryConfigured: false } } },
 };
 
 export const Saving: Story = {

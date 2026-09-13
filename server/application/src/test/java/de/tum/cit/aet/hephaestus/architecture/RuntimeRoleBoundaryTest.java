@@ -101,6 +101,9 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     "de.tum.cit.aet.hephaestus.notification.AccountDeletionEmailListener", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.notification.NotificationRedeliveryJob", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.NotificationPublicationConfiguration",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
                     "de.tum.cit.aet.hephaestus.notification.AccountSecurityEmailListener", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.notification.ProductFeedbackDigestListener",

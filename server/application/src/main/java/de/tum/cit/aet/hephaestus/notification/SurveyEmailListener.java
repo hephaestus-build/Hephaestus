@@ -49,8 +49,8 @@ public class SurveyEmailListener {
         var kind = invitation.get().research()
                 ? NotificationSubscriptionKind.RESEARCH_SURVEYS
                 : NotificationSubscriptionKind.PRODUCT_SURVEYS;
-        var token = subscriptions.unsubscribeToken(event.accountId(), kind);
-        if (!subscriptions.isEnabled(event.accountId(), kind) || token.isEmpty()) {
+        var token = subscriptions.unsubscribeToken(event.accountId(), kind, event.requestedAt());
+        if (token.isEmpty()) {
             metrics.record(EmailKind.SURVEY_INVITATION, Outcome.UNSUBSCRIBED);
             return;
         }

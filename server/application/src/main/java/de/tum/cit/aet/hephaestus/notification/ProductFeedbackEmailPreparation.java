@@ -35,7 +35,10 @@ public class ProductFeedbackEmailPreparation {
             if (subscribed.contains(accountId)
                     && subscriptions.hasFrequency(accountId, NotificationEmailFrequency.IMMEDIATE)) {
                 events.publishEvent(new ProductFeedbackEmailRequested(
-                        event.feedbackId(), accountId, event.submittedAt().plus(MAX_AGE)));
+                        event.feedbackId(),
+                        accountId,
+                        event.submittedAt(),
+                        event.submittedAt().plus(MAX_AGE)));
             }
         }
     }

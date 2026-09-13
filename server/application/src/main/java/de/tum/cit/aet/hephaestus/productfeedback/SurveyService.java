@@ -69,7 +69,8 @@ class SurveyService {
 
     @Transactional
     public SurveyDTO edit(UUID id, SurveyEditDTO request) {
-        Survey survey = require(id);
+        Survey survey =
+                surveys.findForUpdate(id).orElseThrow(() -> new EntityNotFoundException("Survey", id.toString()));
         survey.edit(request.title(), request.description(), request.startsAt(), request.endsAt(), request.active());
         if (!request.active()) {
             emailInvitations.cancelPendingForSurvey(id, clock.instant());
@@ -79,7 +80,8 @@ class SurveyService {
 
     @Transactional
     public void delete(UUID id) {
-        Survey survey = require(id);
+        Survey survey =
+                surveys.findForUpdate(id).orElseThrow(() -> new EntityNotFoundException("Survey", id.toString()));
         participations.deleteAllBySurveyId(id);
         emailInvitations.deleteAllBySurveyId(id);
         surveys.delete(survey);
