@@ -395,9 +395,12 @@ public class PracticeDetectionDeliveryService {
                             && (!side.isString() || !("OLD".equals(side.asString()) || "NEW".equals(side.asString()))))
                     || (!"scm.pull-request.diff".equals(sourceKind.asString()) && !side.isMissingNode())
                     || !startLine.isIntegralNumber()
+                    || !startLine.canConvertToInt()
                     || startLine.asInt() < 1
                     || (!endLine.isMissingNode()
-                            && (!endLine.isIntegralNumber() || endLine.asInt() < startLine.asInt()))
+                            && (!endLine.isIntegralNumber()
+                                    || !endLine.canConvertToInt()
+                                    || endLine.asInt() < startLine.asInt()))
                     || (!quote.isString() && !redactedSecretCitation)) {
                 throw new JobDeliveryException(
                         "Observation has an invalid evidence citation: slug=" + observation.practiceSlug()
@@ -485,8 +488,8 @@ public class PracticeDetectionDeliveryService {
                     return false;
                 }
             }
-            if (line.startsWith("--- ")) oldPath = parseDiffPath(line.substring(4));
-            if (line.startsWith("+++ ")) newPath = parseDiffPath(line.substring(4));
+            if (lineNumber == null && line.startsWith("--- ")) oldPath = parseDiffPath(line.substring(4));
+            if (lineNumber == null && line.startsWith("+++ ")) newPath = parseDiffPath(line.substring(4));
             if (lineNumber == null) continue;
             String lineSide = line.startsWith("-") ? "OLD" : "NEW";
             String linePath = "OLD".equals(lineSide) ? oldPath : newPath;
@@ -653,11 +656,11 @@ public class PracticeDetectionDeliveryService {
                     }
                 }
             }
-            if (line.startsWith("--- ")) {
+            if (annotatedLine == null && line.startsWith("--- ")) {
                 oldPath = parseDiffPath(line.substring(4));
                 continue;
             }
-            if (line.startsWith("+++ ")) {
+            if (annotatedLine == null && line.startsWith("+++ ")) {
                 newPath = parseDiffPath(line.substring(4));
                 continue;
             }
@@ -677,6 +680,7 @@ public class PracticeDetectionDeliveryService {
             String diffLine = citedLines.get(citedStartLine + i);
             String quoteLine = quoteLines.get(i);
             if (diffLine == null
+                    || diffLine.isEmpty()
                     || !(diffLine.equals(quoteLine) || diffLine.substring(1).equals(quoteLine))) {
                 return false;
             }

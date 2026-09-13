@@ -426,8 +426,8 @@ const evidenceSchema = {
 					artifactPath: { type: "string", enum: stagedArtifactPaths },
 					path: { type: "string", minLength: 1 },
 					side: { type: "string", enum: ["OLD", "NEW"] },
-					startLine: { type: "integer", minimum: 1 },
-					endLine: { type: "integer", minimum: 1 },
+					startLine: { type: "integer", minimum: 1, maximum: 2147483647 },
+					endLine: { type: "integer", minimum: 1, maximum: 2147483647 },
 					quote: { type: "string", minLength: 1 },
 				},
 			},
@@ -634,7 +634,7 @@ function buildReportObservationTool(allowedPracticeSlugs?: readonly string[]) {
 		name: "report_observation",
 		label: "Report Observation",
 		description:
-			"Persist exactly one structured observation immediately so it survives retries and timeouts. Call this as soon as one observation is ready. Do not wait to batch observations.",
+			"Persist one evidenced practice claim in local review state so it survives retries and timeouts, for later server admission. Follow the prompt's durable-submission boundary; this is not a dry-run validator.",
 		parameters: scopedObservationSchema,
 		execute: (_toolCallId, params): Promise<AgentToolResult<ReportObservationDetails>> => {
 			// Every branch below that declines to record logs the same reason it hands to the session.
@@ -1664,7 +1664,7 @@ function scheduleTurnTimers(
 		const remainingTurns = turnCount - turnNumber;
 		const steerMessage =
 			`This turn is using its fair share of the review budget; ${remainingTurns} focused turn(s) still need time. ` +
-			`Stop exploring and persist an observation for every practice in this turn now, one report_observation call per practice. ${PERSIST_DISCIPLINE}`;
+			`Stop exploring and persist only the practice observations that the inspected evidence supports. Record no claim merely to fill a practice slot. ${PERSIST_DISCIPLINE}`;
 		session
 			.steer(steerMessage)
 			.catch((err) => console.error(`[pi-runner] steer failed: ${errorText(err)}`));

@@ -127,6 +127,8 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
         String prompt = resolvedDocumentedPrompt();
         assertThat(prompt)
                 .contains("derive the outcome from the matrix", "appropriate omission or no material deficiency")
+                .contains("diagnostic probes are not observations")
+                .contains("including stored history", "not whether that judgment was", "current captured sources")
                 .contains("do not flip assessment to BAD", "No fault found does not establish positive absence")
                 .contains("practice's severity criteria to the evidenced consequence")
                 .contains(

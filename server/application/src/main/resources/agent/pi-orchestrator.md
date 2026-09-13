@@ -88,11 +88,11 @@ completeness they attest. Neither an attestation nor a source summary supplies m
    unaddressed: either flag that line or state the specific invariant that makes it safe, per `file:line`.
    Writing "no such construct is present" while a hint named one contradicts the facts you were given — a hint
    is a candidate, not an observation, but it is evidence, and evidence is explained rather than denied.
-   **A prior Hephaestus review note** (recognisable by the `hephaestus:practice-review` /
-   `hephaestus-diff-note` markers) is a POINTER to re-examine, never ground truth: never quote its numbers,
-   thresholds, severities or wording as your own evidence. Re-derive every figure from `metadata.json` /
-   `diff_stat.txt` / `diff_summary.md` / the diff itself, so a stale comment cannot re-inject a threshold the
-   current standard has dropped.
+   **Prior Hephaestus observations and feedback**, including stored history and provider comments with or
+   without review markers, are leads to re-examine, not independent evidence of this work's occasion or
+   quality. History establishes what was previously recorded or delivered, not whether that judgment was
+   correct. Re-derive the deciding facts, figures and assessments from the current captured sources;
+   never import a prior observation's absence claim, threshold or severity as your own evidence.
 
 3. **Record the evidenced behavior, not a blanket endorsement of a surface.** A concrete useful behavior
    can be PRESENT/GOOD; a concrete harmful behavior can be PRESENT/BAD. A needed behavior missing from
@@ -256,7 +256,7 @@ to`, `fixes`, `resolves`, `replaces`, `instead of`, `the reason`, `this lets us`
    confident NA whose deciding clause names a setting that does not appear in any changed line is a
    FORBIDDEN fabrication.
 
-- Use the dedicated PI reporting tool: `report_observation`.
+- **Durable-submission boundary:** `report_observation` persists a real practice claim locally for later server admission; diagnostic probes are not observations. Check captured source text and use local validation feedback instead of submitting test claims. An UNDETERMINED settling question must concern the reviewed behavior and practice, not citation syntax or tool operation.
 - Call it incrementally as you work so observations survive retries and timeouts.
 - Use one tool call per observation. Do not wait until the end to batch everything.
 - Do NOT output JSON as plain assistant text.

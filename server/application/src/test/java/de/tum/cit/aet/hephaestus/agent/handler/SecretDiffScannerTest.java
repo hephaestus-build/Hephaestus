@@ -22,6 +22,14 @@ class SecretDiffScannerTest extends BaseUnitTest {
     private static final String PG_URL = "postgres://admin:" + "s3cr3tPwd@db.internal:5432/app";
     private static final String HIGH_ENTROPY = "Hs7Kp2" + "Lm9Qz4Xv1Rt8Bw";
 
+    @Test
+    void shouldKeepAnnotatedHeaderLikeSourceOnItsOriginalPath() {
+        var hits = scanner.scan(
+                "--- a/config.ts\n+++ b/config.ts\n@@ -1 +1 @@\n[L1] +++ const apiKey = \"" + OPENAI_KEY + "\";\n");
+        assertThat(hits).isNotEmpty();
+        assertThat(hits).allSatisfy(hit -> assertThat(hit.path()).isEqualTo("config.ts"));
+    }
+
     private static String diff(String path, String... addedLines) {
         StringBuilder sb = new StringBuilder();
         sb.append("diff --git a/").append(path).append(" b/").append(path).append("\n");

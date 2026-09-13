@@ -80,6 +80,7 @@ if (scenario) {
 				tools: string[];
 				customTools: Array<{
 					name: string;
+					description: string;
 					execute: (id: string, input: unknown) => Promise<unknown>;
 				}>;
 			}) {
@@ -116,6 +117,9 @@ if (scenario) {
 							) {
 								const tool = options.customTools.find((item) => item.name === "report_observation");
 								assert.ok(tool);
+								assert.match(tool.description, /local review state/);
+								assert.match(tool.description, /not a dry-run validator/);
+								assert.match(tool.description, /durable-submission boundary/);
 								await tool.execute("report-1", {
 									practiceSlug: "test-practice",
 									summary: "Unsafe authentication call",
