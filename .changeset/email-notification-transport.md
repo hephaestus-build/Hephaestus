@@ -12,8 +12,8 @@ as the account change and retried until that deadline when the relay is unavaila
 send rejections are not retried. SMTP can deliver
 duplicates after a failed acknowledgement; relay acceptance does not guarantee inbox delivery.
 Silent Mode withholds email through the shared outbound guard. The local development stack gains a Mailpit inbox at
-`http://localhost:8025` by default (configurable with `MAILPIT_UI_PORT`). **Operators:** activating email makes the relay operator a recipient of
-personal data; complete the processor checklist before setting the host.
+`http://localhost:8025` by default (configurable with `MAILPIT_UI_PORT`). When you choose to activate email, the relay operator becomes a recipient of
+personal data; complete the processor checklist before setting the host. No relay configuration is required to upgrade.
 
 Optional email subscriptions start off and belong to each account. Administrators can choose immediate
 product-feedback alerts or a daily digest; people can choose product and research survey invitations
