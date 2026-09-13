@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewContextBuilder;
@@ -180,7 +181,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         if (readsClone(selectedKinds)) {
             // The record's commits are read from the clone over the diff's range, so the record fails as the
             // diff does when the clone or the range is unavailable.
-            ChangeRange range = resolveChangeRange(repositoryId, metadata);
+            ChangeRange range = resolveChangeRange(repositoryId, metadata, pullRequest);
             if (selectedKinds.contains(CORE)) {
                 storeMetadata(files, pullRequest, metadata);
                 boolean commitsTruncated = storeCommits(files, range, repositoryId);
@@ -370,11 +371,28 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
 
     private record ChangeRange(Path repoPath, String base, String head) {}
 
-    private ChangeRange resolveChangeRange(long repositoryId, JsonNode metadata) {
+    private ChangeRange resolveChangeRange(long repositoryId, JsonNode metadata, PullRequest pullRequest) {
         ensureRepositoryAvailable(repositoryId);
         String headSha = metadata.path("commit_sha").asString("");
         if (headSha.isBlank()) {
             throw new JobPreparationException("Cannot resolve the change range because commit_sha is missing");
+        }
+        // GitLab records the revision's diff base, unlike GitHub's target-branch tip. Use it only
+        // for the queued head it describes; target branches can advance after a merge. Equal
+        // endpoints are a provider-qualified empty change, not a failed capture.
+        if (pullRequest.getProvider() != null && pullRequest.getProvider().getType() == IdentityProviderType.GITLAB) {
+            String base = pullRequest.getBaseRefOid();
+            if (!headSha.equals(pullRequest.getHeadRefOid())) {
+                throw new JobPreparationException("Recorded merge request revision does not match the queued head");
+            }
+            if (base != null && !base.isBlank()) {
+                if (!gitRepositoryManager.commitExists(repositoryId, base)
+                        || !gitRepositoryManager.commitExists(repositoryId, headSha)) {
+                    throw new JobPreparationException(
+                            "Recorded merge request diff endpoint is unavailable after repository refresh");
+                }
+                return new ChangeRange(gitRepositoryManager.getRepositoryPath(repositoryId), base, headSha);
+            }
         }
         String targetBranch = requireText(metadata, "target_branch");
         String sourceBranch = requireText(metadata, "source_branch");
@@ -400,7 +418,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
     private boolean storeCommits(Map<String, byte[]> files, ChangeRange range, long repositoryId) {
         GitDiffOperations.CommitLog commitLog =
                 gitDiffOperations.commitLog(range.repoPath(), range.base(), range.head(), MAX_COMMITS);
-        // A null log is a failed read, never an empty history: a resolved range holds at least one commit.
+        // A null log is a failed read, never an empty history: an empty revision returns a non-null empty log.
         if (commitLog == null) {
             throw new JobPreparationException("Commit log could not be read for range=" + range.base()
                     + ".."
