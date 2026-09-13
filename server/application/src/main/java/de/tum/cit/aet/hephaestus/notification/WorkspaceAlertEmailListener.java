@@ -65,11 +65,18 @@ public class WorkspaceAlertEmailListener {
                 EmailKind.WORKSPACE_ALERT,
                 Map.of(
                         "integration",
-                        change.kind().name(),
+                        switch (change.kind()) {
+                            case GITHUB -> "GitHub";
+                            case GITLAB -> "GitLab";
+                            case SLACK -> "Slack";
+                            case OUTLINE -> "Outline";
+                        },
                         "description",
                         description,
-                        "workspaceId",
-                        change.workspaceId(),
+                        "workspaceSlug",
+                        workspace.get().workspaceSlug(),
+                        "workspaceName",
+                        workspace.get().workspaceName(),
                         "unsubscribeUrl",
                         unsubscribeLinks.confirmationUrl(token.get())));
         var result = gateway.send(new EmailMessage(

@@ -47,7 +47,7 @@ public class SurveyAdminController {
     @PostMapping("/{surveyId}/email-invitations")
     @Operation(
             operationId = "adminSendSurveyEmailInvitations",
-            summary = "Queue up to 1000 new survey email invitations")
+            summary = "Queue up to 1000 new or explicitly retried cancelled survey email invitations")
     @AuditExempt(reason = "Each invitation records its requester and time; this changes no survey participation")
     public SurveyEmailInvitationSummaryDTO sendEmailInvitations(
             @PathVariable UUID surveyId,

@@ -7,13 +7,13 @@ import org.thymeleaf.templatemode.TemplateMode;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
 /** The production template engine, assembled by hand so the unit tier renders real templates. */
-final class EmailTestSupport {
+public final class EmailTestSupport {
 
     static final String WEBAPP_URL = "https://hephaestus.example";
 
     private EmailTestSupport() {}
 
-    static EmailRenderer renderer() {
+    public static EmailRenderer renderer() {
         ClassLoaderTemplateResolver html = new ClassLoaderTemplateResolver();
         html.setPrefix("templates/");
         html.setSuffix(".html");

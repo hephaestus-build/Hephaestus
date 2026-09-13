@@ -186,6 +186,33 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
         assertThat(repository.findAllByAccountIdOrderByKind(account)).isEmpty();
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldRejectMissingOrNullChoicesWithoutOverwritingSubscriptions(boolean explicitNull) {
+        long account = account();
+        update(account, true, true);
+        var before = subscriptions.get(account);
+        var body = mapper.createObjectNode()
+                .put("productFeedback", false)
+                .put("researchSurveys", true)
+                .put("productFeedbackFrequency", "IMMEDIATE")
+                .put("workspaceAlerts", false)
+                .put("surveySummaries", false);
+        if (explicitNull) body.putNull("productSurveys");
+
+        web.put()
+                .uri("/user/notification-preferences")
+                .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account))
+                .header(HttpHeaders.IF_MATCH, before.etag())
+                .bodyValue(body)
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+
+        assertThat(subscriptions.get(account)).isEqualTo(before);
+    }
+
     @Test
     void shouldRefuseEmailOptInUntilTheCurrentAccountsContactIsVerified() {
         long account = account();

@@ -1681,7 +1681,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/SurveyEmailInvitationSummary"
           description: OK
-      summary: Queue up to 1000 new survey email invitations
+      summary: Queue up to 1000 new or explicitly retried cancelled survey email invitations
       tags:
       - survey-admin
   /admin/product-feedback/surveys/{surveyId}/responses:
@@ -2378,16 +2378,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/NotificationPreferences"
-          description: OK
+          description: Your current email subscriptions
+          headers:
+            ETag:
+              description: Strong validator for If-Match
+              schema:
+                type: string
+              style: simple
       summary: Get your email subscriptions
       tags:
       - notification-preferences
     put:
       operationId: updateNotificationPreferences
       parameters:
-      - in: header
+      - description: Current preferences ETag
+        in: header
         name: If-Match
-        required: false
+        required: true
         schema:
           type: string
       requestBody:
@@ -2402,7 +2409,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/NotificationPreferences"
-          description: OK
+          description: Email subscriptions updated
+          headers:
+            ETag:
+              description: Strong validator for the updated preferences
+              schema:
+                type: string
+              style: simple
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Invalid preferences or If-Match header
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Enabling this subscription requires instance administration
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Enabling email requires a verified contact on an active account
+        "412":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The supplied ETag is stale
+        "428":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: If-Match is required
       summary: Update your email subscriptions
       tags:
       - notification-preferences

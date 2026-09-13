@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.notification;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -18,6 +19,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class WorkspaceAlertEmailListenerTest extends BaseUnitTest {
     private static final Instant NOW = Instant.parse("2026-09-13T12:00:00Z");
@@ -25,7 +27,7 @@ class WorkspaceAlertEmailListenerTest extends BaseUnitTest {
     private final AccountWorkspaceMembershipQuery memberships = mock(AccountWorkspaceMembershipQuery.class);
     private final AccountContactQuery contacts = mock(AccountContactQuery.class);
     private final NotificationSubscriptionService subscriptions = mock(NotificationSubscriptionService.class);
-    private final EmailRenderer renderer = mock(EmailRenderer.class);
+    private final EmailRenderer renderer = EmailTestSupport.renderer();
     private final EmailGateway gateway = mock(EmailGateway.class);
     private final EmailUnsubscribeLinks links = mock(EmailUnsubscribeLinks.class);
     private final EmailDeliveryMetrics metrics = mock(EmailDeliveryMetrics.class);
@@ -82,16 +84,16 @@ class WorkspaceAlertEmailListenerTest extends BaseUnitTest {
                         7L, "owned", "Owned", "OWNER", 501L)));
         when(links.url("token")).thenReturn("https://example.org/unsubscribe/token");
         when(links.confirmationUrl("token")).thenReturn("https://example.org/unsubscribe/token/confirm");
-        when(renderer.render(any(), any())).thenReturn(new RenderedEmail("subject", "text", "html"));
         when(gateway.send(any())).thenReturn(EmailDeliveryResult.sent("id"));
         listener.on(new WorkspaceAlertEmailRequested(change, 42L));
-        verify(gateway)
-                .send(new EmailMessage(
-                        EmailKind.WORKSPACE_ALERT,
-                        "admin@example.org",
-                        "subject",
-                        "text",
-                        "html",
-                        "https://example.org/unsubscribe/token"));
+        var sent = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(gateway).send(sent.capture());
+        EmailMessage message = sent.getValue();
+        assertThat(message.to()).isEqualTo("admin@example.org");
+        assertThat(message.unsubscribeUrl()).isEqualTo("https://example.org/unsubscribe/token");
+        assertThat(message.text())
+                .contains("Slack in workspace Owned", "https://hephaestus.example/w/owned/admin/settings");
+        assertThat(message.html())
+                .contains("Slack", ">Owned</span>", "href=\"https://hephaestus.example/w/owned/admin/settings\"");
     }
 }

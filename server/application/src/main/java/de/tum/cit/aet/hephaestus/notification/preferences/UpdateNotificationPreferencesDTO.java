@@ -6,9 +6,19 @@ import jakarta.validation.constraints.NotNull;
 import org.jspecify.annotations.NonNull;
 
 public record UpdateNotificationPreferencesDTO(
-        @Schema(requiredMode = RequiredMode.REQUIRED) boolean productFeedback,
-        @Schema(requiredMode = RequiredMode.REQUIRED) boolean productSurveys,
-        @Schema(requiredMode = RequiredMode.REQUIRED) boolean researchSurveys,
+        @NotNull @NonNull @Schema(requiredMode = RequiredMode.REQUIRED)
+        Boolean productFeedback,
+
+        @NotNull @NonNull @Schema(requiredMode = RequiredMode.REQUIRED)
+        Boolean productSurveys,
+
+        @NotNull @NonNull @Schema(requiredMode = RequiredMode.REQUIRED)
+        Boolean researchSurveys,
+
         @NotNull @NonNull NotificationEmailFrequency productFeedbackFrequency,
-        @Schema(requiredMode = RequiredMode.REQUIRED) boolean workspaceAlerts,
-        @Schema(requiredMode = RequiredMode.REQUIRED) boolean surveySummaries) {}
+
+        @NotNull @NonNull @Schema(requiredMode = RequiredMode.REQUIRED)
+        Boolean workspaceAlerts,
+
+        @NotNull @NonNull @Schema(requiredMode = RequiredMode.REQUIRED)
+        Boolean surveySummaries) {}

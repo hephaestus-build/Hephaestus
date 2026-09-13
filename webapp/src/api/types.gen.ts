@@ -8731,7 +8731,7 @@ export type GetNotificationPreferencesData = {
 
 export type GetNotificationPreferencesResponses = {
   /**
-   * OK
+   * Your current email subscriptions
    */
   200: NotificationPreferences;
 };
@@ -8740,17 +8740,45 @@ export type GetNotificationPreferencesResponse = GetNotificationPreferencesRespo
 
 export type UpdateNotificationPreferencesData = {
   body: UpdateNotificationPreferences;
-  headers?: {
-    'If-Match'?: string;
+  headers: {
+    /**
+     * Current preferences ETag
+     */
+    'If-Match': string;
   };
   path?: never;
   query?: never;
   url: '/user/notification-preferences';
 };
 
+export type UpdateNotificationPreferencesErrors = {
+  /**
+   * Invalid preferences or If-Match header
+   */
+  400: ProblemDetail;
+  /**
+   * Enabling this subscription requires instance administration
+   */
+  403: ProblemDetail;
+  /**
+   * Enabling email requires a verified contact on an active account
+   */
+  409: ProblemDetail;
+  /**
+   * The supplied ETag is stale
+   */
+  412: ProblemDetail;
+  /**
+   * If-Match is required
+   */
+  428: ProblemDetail;
+};
+
+export type UpdateNotificationPreferencesError = UpdateNotificationPreferencesErrors[keyof UpdateNotificationPreferencesErrors];
+
 export type UpdateNotificationPreferencesResponses = {
   /**
-   * OK
+   * Email subscriptions updated
    */
   200: NotificationPreferences;
 };

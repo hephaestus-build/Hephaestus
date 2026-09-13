@@ -1,11 +1,6 @@
 <!DOCTYPE html>
-<!--
-  Shared chrome for every HTML email. Layout tables with role="presentation", inline styles and a
-  600px column are what mail clients render reliably; the color-scheme meta lets dark-mode clients
-  invert the palette instead of painting white cards on black. Each template pulls `head`, `header`
-  and `footer` from here — the latter two are table cells that slot into the template's own column —
-  and supplies its content.
--->
+<!-- Presentation tables and inline styles support mail clients without an external stylesheet.
+     Each email supplies its content and reuses these head, header and footer fragments. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head th:fragment="head(title)">
     <meta charset="UTF-8">

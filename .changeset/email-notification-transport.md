@@ -31,3 +31,7 @@ You can turn subscriptions off, including after losing administrator access or a
 contact, and while the instance's relay is unconfigured. Survey pauses and schedule edits remain
 consistent with concurrent invitation requests and summary scheduling. Retry batches share turns
 across failed notifications instead of repeatedly retrying only the oldest batch.
+
+Workspace connection alerts name the affected workspace and link to its current settings. Incomplete
+notification-preference updates are rejected instead of clearing choices, and the API documents the
+required version precondition.
