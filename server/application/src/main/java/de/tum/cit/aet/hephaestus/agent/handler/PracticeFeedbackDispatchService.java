@@ -340,7 +340,7 @@ class PracticeFeedbackDispatchService {
                         java.util.Objects.requireNonNull(placement.startLine()),
                         placement.endLine(),
                         placement.body(),
-                        placement.recurrenceKey()))
+                        placement.deliveryKey()))
                 .toList();
     }
 

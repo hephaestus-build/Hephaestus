@@ -7,7 +7,7 @@
  *       a job type to the code that runs it.</li>
  *   <li><b>The delivery layer</b> — renders immutable observations into SCM feedback and posts it:
  *       {@code DeliveryComposer}, {@code FeedbackDeliveryService}, {@code PracticeDetectionDeliveryService},
- *       {@code DiffNotePoster}, {@code PullRequestCommentPoster}, {@code ProgressFooterRenderer}, plus the
+ *       {@code DiffNotePoster}, {@code PullRequestCommentPoster}, plus the
  *       {@code FeedbackLedgerRecorder} (the sole write-orchestrator of the {@code practices.feedback} ledger —
  *       see {@code FeedbackLedgerOwnershipTest}) and {@code FeedbackResponseSuppressionFilter}. This is the layer the
  *       detection-context firewall ({@code DetectionReactionFirewallTest}) deliberately EXCLUDES:

@@ -307,8 +307,7 @@ public class IssueReviewHandler implements JobTypeHandler {
             throw new ObservationsRefusedException(
                     "no_valid_observations", "No valid observations in agent output: jobId=" + job.getId());
         }
-        var admitted = new ArrayList<>(PracticeDetectionResultParser.coerceCoherence(
-                parsed.validObservations(), practiceCatalogInjector.defectDetectorSlugs(job)));
+        var admitted = new ArrayList<>(PracticeDetectionResultParser.coerceCoherence(parsed.validObservations()));
         deliveryService.deliver(job, admitted);
     }
 

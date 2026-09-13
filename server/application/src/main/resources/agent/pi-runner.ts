@@ -347,7 +347,8 @@ const searchSchema = {
 		lookedFor: {
 			type: "string",
 			minLength: 1,
-			description: "The concrete thing whose absence you are reporting.",
+			description:
+				"The specific behavior whose absence you report, matching the behavior assessed in the summary and rationale.",
 		},
 		boundary: {
 			type: "string",
@@ -453,7 +454,7 @@ const observationSchema = {
 			minLength: 1,
 			maxLength: 120,
 			description:
-				"A short phrase naming what you observed, such as 'Debug print left in the request handler'. " +
+				"A short phrase identifying the specific behavior whose presence and contextual desirability you assess, such as 'Debug print left in the request handler'. " +
 				"Never a single word and never the practice's own name.",
 		},
 		assessmentStatus: {
@@ -725,7 +726,7 @@ function logPracticeCoverage() {
 const PERSIST_DISCIPLINE =
 	`There is no target count and no quota. ` +
 	`Record what you saw; you are not asked for a next step, so do not write one. ` +
-	`Only keep GOOD observations that add real review value. ` +
+	`Only keep positive observations that add real review value. ` +
 	`Do not add derivative low-signal observations when a stronger observation already covers the problem. ` +
 	`Use tools only from this point onward. Do not write planning prose or plain-text commentary.`;
 

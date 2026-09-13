@@ -24,7 +24,6 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
@@ -191,9 +190,8 @@ public class DocumentReviewHandler implements JobTypeHandler {
                     + ", discarded="
                     + parsed.discarded().size());
         }
-        Set<String> defectDetectorSlugs = practiceCatalogInjector.defectDetectorSlugs(job);
         List<PracticeDetectionResultParser.ValidatedObservation> coercedObservations =
-                PracticeDetectionResultParser.coerceCoherence(parsed.validObservations(), defectDetectorSlugs);
+                PracticeDetectionResultParser.coerceCoherence(parsed.validObservations());
 
         PracticeDetectionDeliveryService.DeliveryResult result = deliveryService.deliver(job, coercedObservations);
         log.info(

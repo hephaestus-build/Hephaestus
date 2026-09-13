@@ -17,10 +17,8 @@ import org.springframework.validation.annotation.Validated;
  *                            The only limit here keyed on a person rather than on a piece of work, and
  *                            therefore the only one that catches somebody asking for one review each of
  *                            twenty colleagues' merge requests. 0 disables it.
- * @param progressFooter      append the cross-run progress-delta footer (B1/B3) and post the re-review
- *                            notifying reply (A4). Off by default; needs ≥2 runs on a target to render.
- * @param reactionSuppression avoid repeating a locus the developer disputed or marked not applicable. Off by
- *                            default; inert until a response exists for a recurring locus.
+ * @param reactionSuppression avoid redelivering an observation the developer disputed or marked not applicable.
+ *                            Off by default; responses apply to the exact observations bound to feedback.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.practice-review")
@@ -28,5 +26,4 @@ public record PracticeReviewProperties(
         @DefaultValue("false") boolean deliverToMerged,
         @Min(0) @DefaultValue("15") int cooldownMinutes,
         @Min(0) @DefaultValue("5") int maxRequestsPerRequesterPerHour,
-        @DefaultValue("false") boolean progressFooter,
         @DefaultValue("false") boolean reactionSuppression) {}

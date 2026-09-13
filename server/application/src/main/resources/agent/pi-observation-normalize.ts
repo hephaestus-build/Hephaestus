@@ -95,15 +95,15 @@ export const ASSESSMENT_STATUS_DESCRIPTIONS: Record<AssessmentStatus, string> = 
 };
 export const PRESENCE_DESCRIPTIONS: Record<Presence, string> = {
 	PRESENT:
-		"The practice’s fixed target criterion is satisfied. For a desirable target such as usable guidance, inadequate partial guidance does not satisfy it; explain what exists and what is missing.",
+		"The specific behavior named in the observation occurred. Cite it and assess its desirability in context. Partial or misleading guidance is present; name a missing component precisely if assessing its absence.",
 	ABSENT:
-		"The practice applies, the bounded corpus was searched, and the fixed target is absent. Record evidence.search. A missing GOOD target yields NEGATIVE; an absent BAD target yields POSITIVE. Assessment stays fixed.",
+		"The practice applies and the specified behavior is absent from the bounded searched corpus. Record that same behavior in evidence.search. Missing desirable behavior yields NEGATIVE; absent undesirable behavior yields POSITIVE only with an applicable opportunity and complete coverage.",
 };
 
-/** Desirability of the fixed target, independent of its presence. */
+/** Contextual desirability of the specified behavior, independent of its presence. */
 export const ASSESSMENT_DESCRIPTIONS: Record<Assessment, string> = {
-	GOOD: "The practice’s defined target is desirable. PRESENT yields POSITIVE; ABSENT yields NEGATIVE. Do not change this assessment when the criterion is missing.",
-	BAD: "The practice’s defined target is undesirable. PRESENT yields NEGATIVE; ABSENT yields POSITIVE. Do not mistake absent harmful behaviour for a negative outcome.",
+	GOOD: "The specified behavior is desirable in the evidenced context. PRESENT yields POSITIVE; ABSENT yields NEGATIVE. Explain why the behavior is desirable here.",
+	BAD: "The specified behavior is undesirable in the evidenced context. PRESENT yields NEGATIVE; ABSENT yields POSITIVE. Optional or unnecessary behavior is not automatically undesirable.",
 };
 
 /**

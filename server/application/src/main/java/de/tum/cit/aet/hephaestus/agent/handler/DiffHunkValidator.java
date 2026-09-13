@@ -143,7 +143,7 @@ class DiffHunkValidator {
                     corrected.add(note);
                 } else {
                     corrected.add(new DiffNote(
-                            note.filePath(), note.startLine(), validatedEnd, note.body(), note.recurrenceKey()));
+                            note.filePath(), note.startLine(), validatedEnd, note.body(), note.deliveryKey()));
                 }
                 continue;
             }
@@ -189,7 +189,7 @@ class DiffHunkValidator {
 
             // Only the position changes — preserve the observation's correlation key so the snapped note still
             // maps back to its persisted observation (ADR 0021).
-            corrected.add(new DiffNote(note.filePath(), nearest, correctedEnd, note.body(), note.recurrenceKey()));
+            corrected.add(new DiffNote(note.filePath(), nearest, correctedEnd, note.body(), note.deliveryKey()));
         }
 
         if (corrections > 0 || dropped > 0) {

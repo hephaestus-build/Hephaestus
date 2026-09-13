@@ -20,12 +20,10 @@ import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -125,23 +123,6 @@ class PracticeCatalogInjector {
                 SandboxLayout.PRACTICES_PREFIX + "all-criteria.md",
                 bundle.toString().getBytes(StandardCharsets.UTF_8));
         return Map.copyOf(why);
-    }
-
-    /**
-     * The slugs of {@code focus}-scoped active practices that declare {@code DEFECT-DETECTOR DISCIPLINE} in
-     * their criteria — i.e. practices with no legal {@code (PRESENT, GOOD)} clean-bill-of-health observation
-     * (a clean surface is {@code NOT_APPLICABLE}, never a good reading). The delivery layer uses this to coerce
-     * a model-emitted {@code (PRESENT, GOOD)} to {@code NOT_APPLICABLE} before it ships to the student as a
-     * false strength (see {@code ValidatedObservation#coerceCoherence}).
-     */
-    Set<String> defectDetectorSlugs(AgentJob job) {
-        Set<String> slugs = new HashSet<>();
-        for (JsonNode practice : admittedPractices(job)) {
-            if (practice.path("defectDetector").asBoolean(false)) {
-                slugs.add(practice.path("slug").asString());
-            }
-        }
-        return Set.copyOf(slugs);
     }
 
     private static JsonNode admittedPractices(AgentJob job) {
@@ -261,7 +242,6 @@ class PracticeCatalogInjector {
                 throw new JobPreparationException("Practice has no current revision: " + p.getSlug());
             }
             entry.put("revisionId", p.getCurrentRevision().getId());
-            entry.put("defectDetector", p.isDefectDetector());
             // A pointer, not a fence: what may be CITED is what the run staged (inputs/manifest.json), so
             // reading beyond this list is expected, not a violation.
             ArrayNode readsSources = entry.putArray("readsSources");

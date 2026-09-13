@@ -597,7 +597,7 @@ void test("removed measurement fields are rejected rather than silently accepted
 	);
 });
 
-void test("all assessed combinations preserve the fixed target and judgment", () => {
+void test("all assessed combinations preserve the specified behavior and judgment", () => {
 	for (const presence of PRESENCE_VALUES) {
 		for (const assessment of ASSESSMENT_VALUES) {
 			const severity = (presence === "PRESENT") !== (assessment === "GOOD") ? "MAJOR" : null;

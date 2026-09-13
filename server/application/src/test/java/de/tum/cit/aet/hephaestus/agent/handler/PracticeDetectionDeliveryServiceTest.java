@@ -233,14 +233,32 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRefuseChangingTheTargetOfThePinnedPractice() {
+    void shouldAdmitContextualAssessmentWithoutParsingPolarityFromCriteria() {
         PracticeRevision revision = practiceRevisionRepository.findById(11L).orElseThrow();
-        org.mockito.Mockito.when(revision.getCriteria()).thenReturn("TARGET ASSESSMENT: BAD");
         var observation = validObservation("pr-description-quality", Presence.PRESENT);
-        assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
-                .isInstanceOf(JobDeliveryException.class)
-                .hasMessageContaining("fixed target assessment");
-        verifyNoInteractions(observationRepository);
+        service.deliver(testJob, List.of(observation));
+        verify(revision, org.mockito.Mockito.never()).getCriteria();
+        verify(observationRepository)
+                .insertIfAbsent(
+                        any(),
+                        anyString(),
+                        any(),
+                        anyLong(),
+                        anyLong(),
+                        any(),
+                        anyString(),
+                        anyLong(),
+                        anyLong(),
+                        any(),
+                        anyString(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        anyString(),
+                        any(),
+                        anyString());
     }
 
     @Test

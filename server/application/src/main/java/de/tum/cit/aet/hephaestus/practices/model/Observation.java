@@ -34,7 +34,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * Immutable assessment of one practice on one work artifact. Presence and assessment are separate axes;
- * later reviews append a new row linked by {@link #recurrenceKey}.
+ * later reviews append a new row. The recurrence key groups locations, not equivalent behaviors.
  */
 @Entity
 @Immutable
@@ -139,11 +139,10 @@ public class Observation {
     private Long aboutUserId;
 
     /**
-     * Cross-run locus grain: a deterministic hash of WHAT the observation is about (practice + target +
-     * subject + a content anchor), never of WHEN, computed by
-     * {@link de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint}. Lets a
-     * {@code Feedback} supersede rather than re-post and lets a reaction follow one locus across
-     * re-detections. NULL means the observation predates the fingerprint, not a missing reference.
+     * Cross-run location grouping (practice, artifact, subject and file), computed by
+     * {@link de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint}. Several different
+     * behaviors can share it. Row identity and reactions use the observation itself; this grouping
+     * establishes neither semantic recurrence nor resolution. NULL means no grouping was recorded.
      */
     @Column(name = "recurrence_key", length = 64)
     private String recurrenceKey;
@@ -157,7 +156,7 @@ public class Observation {
     @Column(name = "assessment_status", length = 16, nullable = false)
     private AssessmentStatus assessmentStatus;
 
-    /** The fixed target's presence; null unless assessed. */
+    /** The specified behavior’s presence; null unless assessed. */
     @Enumerated(EnumType.STRING)
     @Column(name = "presence", length = 16)
     private Presence presence;

@@ -66,7 +66,7 @@ export const EveryRegistry: Story = {
 			<Gallery heading="Dashboard visibility" defs={DASHBOARD_VISIBILITY_DEFS} />
 			<Gallery heading="Why withheld" defs={WITHHOLDING_FAMILY_DEFS} />
 			<Gallery heading="Outcome" defs={OUTCOME_DEFS} />
-			<Gallery heading="Target assessment" defs={ASSESSMENT_DEFS} />
+			<Gallery heading="Behavior assessment" defs={ASSESSMENT_DEFS} />
 			<Gallery heading="Severity" defs={SEVERITY_DEFS} />
 			<Gallery heading="Practice status" defs={PRESENCE_DEFS} />
 			<Gallery heading="Review status" defs={REVIEW_STATUS_DEFS} />

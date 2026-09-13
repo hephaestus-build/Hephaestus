@@ -366,7 +366,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         String unifiedDiff = capturedDiff(job);
         Set<String> diffFiles =
                 Set.copyOf(DiffHunkValidator.parseValidLines(unifiedDiff).keySet());
-        Set<String> defectDetectorSlugs = practiceCatalogInjector.defectDetectorSlugs(job);
         List<PracticeDetectionResultParser.ValidatedObservation> secretObservations =
                 practiceCatalogInjector.isAdmitted(job, "avoids-insecure-defaults-and-over-broad-permissions")
                         ? scanForSecrets(unifiedDiff)
@@ -446,8 +445,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
 
         // Refuse inconsistent assessments without inventing an applicability claim, and normalize severity
         // before observations are persisted or used to compose feedback.
-        scopedObservations =
-                new ArrayList<>(PracticeDetectionResultParser.coerceCoherence(scopedObservations, defectDetectorSlugs));
+        scopedObservations = new ArrayList<>(PracticeDetectionResultParser.coerceCoherence(scopedObservations));
 
         PracticeDetectionDeliveryService.DeliveryResult result;
         try {

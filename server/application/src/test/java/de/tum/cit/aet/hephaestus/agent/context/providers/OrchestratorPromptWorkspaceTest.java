@@ -88,6 +88,27 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
                         .isTrue());
     }
 
+    @Test
+    void shouldScopeChangedLineRequirementsToCodeObservations() throws IOException {
+        String prompt = resolvedDocumentedPrompt();
+        String rules = prompt.substring(prompt.indexOf("## Rules"), prompt.indexOf("## Context"));
+        assertThat(rules)
+                .contains("Changed-code observations", "Non-diff citations", "bounded search of the relevant")
+                .contains("description corpus", "conversation and documentation practices")
+                .doesNotContain("Before any negative observation, confirm the evidence is from changed lines")
+                .doesNotContain("Evidence snippets must be copied character-for-character from `+` or `-` lines");
+    }
+
+    @Test
+    void shouldDistinguishDirectInspectionFromReportedCoverage() throws IOException {
+        String prompt = resolvedDocumentedPrompt();
+        assertThat(prompt)
+                .contains("Attribute inspection and reported coverage separately")
+                .contains("cite and attribute those facts to that record")
+                .contains("A report of a check is not evidence that you personally executed it")
+                .contains("distinguish the supplied records you searched from the broader corpus");
+    }
+
     private static String resolvedDocumentedPrompt() throws IOException {
         Path candidate = Path.of("src/main/resources/agent/pi-orchestrator.md");
         Path resolved = Files.exists(candidate)

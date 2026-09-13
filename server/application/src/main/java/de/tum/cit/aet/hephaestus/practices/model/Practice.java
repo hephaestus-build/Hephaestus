@@ -152,9 +152,8 @@ public class Practice {
     private List<PracticeBinding> bindings = List.of();
 
     /**
-     * The detection rubric the agent evaluates the artifact against — the rule's normative text, never shown
-     * to developers. The {@code DEFECT-DETECTOR DISCIPLINE} marker token (see {@link #isDefectDetector()}) lives
-     * in this text.
+     * The practice criteria the runtime evaluates the reviewed work against; normative text for contextual
+     * behavior assessment, separate from developer-facing guidance.
      */
     @Column(name = "criteria", columnDefinition = "TEXT", nullable = false)
     @ToString.Exclude
@@ -228,20 +227,5 @@ public class Practice {
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = Instant.now();
-    }
-
-    /** Whether the criteria declare an undesirable target; its bounded absence is a positive outcome. */
-    public boolean isDefectDetector() {
-        return declaredTargetAssessment(criteria) == Assessment.BAD;
-    }
-    /** The target declared by a criteria revision, independent of whether it was observed. */
-    public static @Nullable Assessment declaredTargetAssessment(@Nullable String criteria) {
-        if (criteria == null) return null;
-        boolean good = criteria.contains("TARGET ASSESSMENT: GOOD");
-        boolean bad = criteria.contains("TARGET ASSESSMENT: BAD");
-        if (good && bad) throw new IllegalArgumentException("A practice must declare one fixed target assessment");
-        if (good) return Assessment.GOOD;
-        if (bad || criteria.contains("DEFECT-DETECTOR DISCIPLINE")) return Assessment.BAD;
-        return null;
     }
 }

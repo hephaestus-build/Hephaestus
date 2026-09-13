@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
@@ -361,16 +360,9 @@ public class PracticeDetectionResultParser {
         }
 
         /** Enforces valence and severity invariants independently of model output. */
-        public ValidatedObservation coerceCoherence(boolean isDefectDetector, boolean advisoryOnly) {
+        public ValidatedObservation coerceCoherence(boolean advisoryOnly) {
             Presence p = presence;
             Assessment a = assessment;
-            if (isDefectDetector && a == Assessment.GOOD) {
-                throw new ObservationsRefusedException(
-                        "incoherent_assessment",
-                        "Practice " + practiceSlug
-                                + " targets harmful behaviour: assessment must be BAD for both presence values. Reassess the original"
-                                + " evidence; inconsistency does not establish that the practice is inapplicable.");
-            }
             assessmentStatus.validate(p, a, severity);
             Severity s = severity;
             if (advisoryOnly && outcome() == Outcome.NEGATIVE && (s == Severity.CRITICAL || s == Severity.MAJOR)) {
@@ -388,12 +380,11 @@ public class PracticeDetectionResultParser {
     }
 
     /** Applies coherence rules to all observations and returns a mutable result. */
-    public static List<ValidatedObservation> coerceCoherence(
-            List<ValidatedObservation> observations, Set<String> defectDetectorSlugs) {
+    public static List<ValidatedObservation> coerceCoherence(List<ValidatedObservation> observations) {
         List<ValidatedObservation> out = new ArrayList<>(observations.size());
         for (ValidatedObservation f : observations) {
             boolean advisoryOnly = !BLOCKING_ELIGIBLE_PRACTICES.contains(f.practiceSlug());
-            out.add(f.coerceCoherence(defectDetectorSlugs.contains(f.practiceSlug()), advisoryOnly));
+            out.add(f.coerceCoherence(advisoryOnly));
         }
         return out;
     }
@@ -425,16 +416,15 @@ public class PracticeDetectionResultParser {
      *
      * @param filePath path relative to repo root (new path, not old)
      * @param endLine  optional last line number for multi-line (GitHub only; GitLab ignores)
-     * @param recurrenceKey the stable cross-run identity inherited from the observation this note belongs to, so a
-     *     posted placement can be matched back across re-runs; {@code null} until {@link DeliveryComposer}
-     *     carries it over from the stamped observation.
+     * @param deliveryKey opaque receipt-correlation key for this exact observation, carried from its
+     *     occurrence identity by {@link DeliveryComposer}; null before server-side correlation.
      */
     public record DiffNote(
             String filePath,
             int startLine,
             @Nullable Integer endLine,
             String body,
-            @Nullable String recurrenceKey) {
+            @Nullable String deliveryKey) {
         /** The parser's pre-correlation output shape: a note with no correlation key yet. */
         public DiffNote(String filePath, int startLine, @Nullable Integer endLine, String body) {
             this(filePath, startLine, endLine, body, null);
