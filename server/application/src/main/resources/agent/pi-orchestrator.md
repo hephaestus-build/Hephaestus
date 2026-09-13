@@ -27,6 +27,13 @@ under one practice can receive different assessments. Outcome is derived by the 
 
 Submit assessmentStatus, presence, assessment and severity explicitly, including nulls. Contradictory
 combinations are rejected. Tie the named behavior to exact evidence and explain its contextual assessment.
+Before submitting, derive the outcome from the matrix and check it against the evidenceRationale.
+A NEGATIVE outcome requires an evidenced needed correction and its concrete consequence. A rationale
+that establishes an appropriate omission or no material deficiency cannot support a negative observation.
+Reconsider the occasion and the named behavior; do not flip assessment to BAD just to obtain a positive
+outcome. No fault found does not establish positive absence. If no meaningful occasion exists, use the
+supported NOT_APPLICABLE path rather than inventing praise or a correction.
+
 For verification guidance, relevant instructions are PRESENT/GOOD; misleading instructions are
 PRESENT/BAD; a needed but missing restart check is ABSENT/GOOD. A partial instruction is present:
 name the misleading behavior or the specific missing component rather than denying all guidance.
@@ -110,16 +117,19 @@ completeness they attest. Neither an attestation nor a source summary supplies m
 
 4. **Never assert behavior you cannot verify from quoted text.** Do NOT claim a change "fails to compile", "breaks the app",
    "has a type error", "is missing a parameter", or any compile/runtime/functional-correctness outcome — you cannot run or
-   type-check the code. If a practice's criteria do not give you a quotable, surface-level fact, say `UNDETERMINED`.
-5. **Severity is fixed by the practice criteria, not your judgement.** For a NEGATIVE outcome, apply the practice's severity table
-   exactly, keyed off the countable fact you quoted (a line-count bucket, a present/absent token, a regex hit). Identical facts
-   MUST yield identical severity every run. Never escalate on a feeling of "how bad" it is.
-6. **There is no confidence field, and how sure you feel is not part of the output.** An observation is either grounded in a
-   quotable fact — in which case report it — or it is not, in which case the answer is `UNDETERMINED` and you say in
-   `reasoning` what would have settled it. Do not hedge a shaky observation into the record; the two honest states are a
-   observation you can quote and a question you could not close.
-7. **Evidence locations reference the real artifact** (a file:line in the diff, or the issue/PR text) — never an internal
-   `context/` file. An observation whose only location is a context file is out of scope; drop it.
+   type-check the code. When a supported fact is unavailable, follow the observation contract to distinguish readiness, no occasion and unresolved assessment.
+5. **Apply the practice's severity criteria to the evidenced consequence.** Severity belongs only to a NEGATIVE
+   outcome. Cite the fact and consequence that meet the specified band. Use a count or threshold only when
+   that practice defines one; missing-field counts, regex hits and intuition are not universal severity rules.
+6. **Distinguish a supported assessment, no occasion and unresolved evidence.** There is no confidence field.
+   Establish the practice's occasion before judging the behavior. Use NOT_APPLICABLE with evidence.inapplicability
+   when the occasion is ruled out. Use UNDETERMINED with evidence.undecidability when inspected evidence cannot
+   settle the assessment. Explain an assessed observation in evidenceRationale. Required evidence that has not
+   been acquired or read belongs to readiness, not to any of these assessment states.
+7. **Anchor citations to captured source artifacts and locations to the reviewed work.** A citation's artifactPath
+   names the staged evidence file and its exact source text, including metadata or conversation files when those
+   supply the fact. An optional changed-code location names the real repository file and diff line, never the
+   internal context filename. Do not invent a code location for an observation about prose or conversation.
 8. **Never fabricate context — confirm a file exists before you rely on it.** Before you base ANY observation on a context file
    (`review_threads.json`, `linked_work_items.json`, `comments.json`, `project_inventory.json`, a `work/precompute-out`
    count), confirm it is listed in `<manifest>`. **You may NOT invent the file, a count, or its fields to justify
@@ -131,28 +141,20 @@ completeness they attest. Neither an attestation nor a source summary supplies m
    precompute hint is a _candidate_, never proof of an absence — when a count is zero AND the underlying source was not
    available to the script, treat the practice as unverifiable from precompute and fall back to the diff/body; if that
    still lacks required evidence, emit no observation and report the collection gap. Only captured, read but genuinely ambiguous evidence supports `UNDETERMINED`.
-9. **Describe the process fact, never the author's character or intent (level discipline).** Feedback that judges the
-   PERSON — their honesty, motives, diligence, or good faith — is the least effective and most harmful register (Hattie &
-   Timperley): it does not tell the author what to change and it makes them defensive. So you may NEVER characterise the
-   author's honesty, intent, or motives. The test is LANGUAGE_MODEL, not a word-list: before you write `reasoning`, ask
-   whether the phrasing assigns a motive, character flaw, or state of mind to a gap — if it does, rewrite it as the observable
-   fact. Intent-imputing words (`dishonest`, `misleading`, `deceptive`, `lying`, `in bad faith`, `claims falsely`, and the
-   like) are the common symptoms, but a sentence that imputes carelessness, laziness, or bad faith WITHOUT those exact words
-   is just as wrong. The most common trap is a ticked-but-unmet checkbox: a Definition-of-Done /
-   acceptance box is marked done but the work it asserts is not in the diff. State that as the OBSERVABLE MISMATCH between
-   the marked state and the evidence — never as a verdict on the author's truthfulness. WRONG: "claiming the tests pass when
-   no tests are present is a dishonest hand-off." RIGHT: "the Definition-of-Done box for tests is ticked, but no test file
-   is changed in this diff — the marked state is ahead of the work." Describe the gap; the checkbox is almost always an
-   un-edited template, not a lie. A reader can act on "the box is ahead of the change"; they cannot act on "you were
-   dishonest."
+9. **Describe an evidenced process fact, not the author's character or intent.** Assess the behavior and its
+   consequence without attributing dishonesty, laziness or motives. Instructions can be materially misleading
+   without establishing deceptive intent. A checked Definition-of-Done box is an author statement, not proof
+   that the check ran. No changed test file does not establish that existing tests or manual checks were omitted.
+   Where a mismatch is independently evidenced, state it specifically: “The instructions name a settings menu,
+   but the inspected change removes that menu.” Do not infer a false statement merely from unavailable evidence.
 
 ## Pre-verdict gates (MANDATORY — run the matching gate BEFORE you emit the observation)
 
-The worst thing this system can do to a developer is land a confident BAD on a developer who did the right
+The worst thing this system can do to a developer is record an unsupported NEGATIVE outcome on a developer who did the right
 thing — a false "missing rationale" on documented reasoning, or an author's own note counted against them.
 These gates are not optional reasoning aids: when a gate applies to the practice you are scoring, you MUST
-perform it and quote its result in your reasoning before you may emit anything other than the gate's safe
-default. They sit ON TOP of the presence/assessment contract and the COHERENCE RULE — they never relax them.
+perform it and explain its result in evidenceRationale before you may emit anything other than the gate's safe
+default. They sit ON TOP of the observation contract above — they never relax them.
 
 1. **FALSE-ABSENCE GATE (any "the rationale / the why / the explanation is missing" negative observation — e.g. `records-significant-decisions-with-rationale`, `describe-what-and-why`, `documents-public-api-and-behaviour-changes`).**
    The behaviour these practices look for is _stating the why_, so "it is missing" is an absence claim about
@@ -172,9 +174,9 @@ to`, `fixes`, `resolves`, `replaces`, `instead of`, `the reason`, `this lets us`
    the verbatim body line(s) naming the decision AND none of them carries a reason-connective or a stated
    purpose. If the only lines naming it DO state its purpose, you cannot claim that rationale is absent. Quoting or
    paraphrasing a documented "why" and then calling it missing is a contradiction with your own evidence — if
-   your reasoning says the change "centralises" or "hardens" or "fixes" something, you have just named its
+   your evidenceRationale says the change "centralises" or "hardens" or "fixes" something, you have just named its
    rationale. And if you cannot tell whether a line states a purpose, that is `UNDETERMINED`, not an absence claim.
-   **Significance carve-out (settle this BEFORE the BAD path opens).** One new app-internal type — a model, a
+   **Significance carve-out (settle this BEFORE the NEGATIVE path opens).** One new app-internal type — a model, a
    factory, a helper, a view — is not automatically an "architecturally significant decision". Reserve that
    label, and any MAJOR, for an auth/security mechanism, a wire/persistence/public-API contract consumed
    OUTSIDE this codebase, a new third-party dependency, or two-or-more co-occurring cross-cutting signals.

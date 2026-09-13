@@ -122,6 +122,22 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
                 .contains("distinguish the supplied records you searched from the broader corpus");
     }
 
+    @Test
+    void shouldKeepOutcomeRationaleSeverityAndOccasionCoherent() throws IOException {
+        String prompt = resolvedDocumentedPrompt();
+        assertThat(prompt)
+                .contains("derive the outcome from the matrix", "appropriate omission or no material deficiency")
+                .contains("do not flip assessment to BAD", "No fault found does not establish positive absence")
+                .contains("practice's severity criteria to the evidenced consequence")
+                .contains(
+                        "Use NOT_APPLICABLE with evidence.inapplicability",
+                        "Use UNDETERMINED with evidence.undecidability")
+                .contains("No changed test file does not establish", "existing tests or manual checks were omitted")
+                .contains("citation's artifactPath", "optional changed-code location")
+                .doesNotContain("COHERENCE RULE", "confident BAD", "the two honest states", "in `reasoning`")
+                .doesNotContain("the marked state is ahead of the work", "keyed off the countable fact");
+    }
+
     private static String resolvedDocumentedPrompt() throws IOException {
         Path candidate = Path.of("src/main/resources/agent/pi-orchestrator.md");
         Path resolved = Files.exists(candidate)
