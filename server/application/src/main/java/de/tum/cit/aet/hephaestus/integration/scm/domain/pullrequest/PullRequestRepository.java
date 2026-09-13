@@ -68,7 +68,6 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
         SELECT p FROM PullRequest p
         LEFT JOIN FETCH p.author
         LEFT JOIN FETCH p.repository
-        LEFT JOIN FETCH p.provider
         WHERE p.id = :id
         """)
     Optional<PullRequest> findByIdWithAuthorAndRepository(@Param("id") Long id);

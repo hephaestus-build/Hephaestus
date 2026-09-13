@@ -179,6 +179,8 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         var mr = new PullRequest();
         var identity = new de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider();
         identity.setType(de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.GITLAB);
+        when(connectionService.findActiveProviderKind(WORKSPACE_ID)).thenReturn(Optional.of(IntegrationKind.GITLAB));
+        when(scmTokenSource.recordsReviewDiffBase()).thenReturn(true);
         mr.setProvider(identity);
         mr.setHeadRefOid("abc123def456");
         mr.setBaseRefOid(base);
@@ -216,6 +218,8 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         var pr = new PullRequest();
         var identity = new de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider();
         identity.setType(de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.GITHUB);
+        when(connectionService.findActiveProviderKind(WORKSPACE_ID)).thenReturn(Optional.of(IntegrationKind.GITLAB));
+        when(scmTokenSource.recordsReviewDiffBase()).thenReturn(false);
         pr.setProvider(identity);
         pr.setHeadRefOid("abc123def456");
         pr.setBaseRefOid("advanced-target-tip");
@@ -232,6 +236,8 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         var mr = new PullRequest();
         var identity = new de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider();
         identity.setType(de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.GITLAB);
+        when(connectionService.findActiveProviderKind(WORKSPACE_ID)).thenReturn(Optional.of(IntegrationKind.GITLAB));
+        when(scmTokenSource.recordsReviewDiffBase()).thenReturn(true);
         mr.setProvider(identity);
         mr.setHeadRefOid(stale ? "new-head" : "abc123def456");
         mr.setBaseRefOid("unavailable-base");

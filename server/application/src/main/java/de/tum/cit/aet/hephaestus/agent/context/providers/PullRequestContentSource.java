@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewContextBuilder;
@@ -181,7 +180,12 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         if (readsClone(selectedKinds)) {
             // The record's commits are read from the clone over the diff's range, so the record fails as the
             // diff does when the clone or the range is unavailable.
-            ChangeRange range = resolveChangeRange(repositoryId, metadata, pullRequest);
+            var source = connectionService
+                    .findActiveProviderKind(job.getWorkspace().getId())
+                    .map(tokenSources::get)
+                    .orElse(null);
+            ChangeRange range = resolveChangeRange(
+                    repositoryId, metadata, pullRequest, source != null && source.recordsReviewDiffBase());
             if (selectedKinds.contains(CORE)) {
                 storeMetadata(files, pullRequest, metadata);
                 boolean commitsTruncated = storeCommits(files, range, repositoryId);
@@ -371,7 +375,8 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
 
     private record ChangeRange(Path repoPath, String base, String head) {}
 
-    private ChangeRange resolveChangeRange(long repositoryId, JsonNode metadata, PullRequest pullRequest) {
+    private ChangeRange resolveChangeRange(
+            long repositoryId, JsonNode metadata, PullRequest pullRequest, boolean recordedDiffBase) {
         ensureRepositoryAvailable(repositoryId);
         String headSha = metadata.path("commit_sha").asString("");
         if (headSha.isBlank()) {
@@ -380,7 +385,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         // GitLab records the revision's diff base, unlike GitHub's target-branch tip. Use it only
         // for the queued head it describes; target branches can advance after a merge. Equal
         // endpoints are a provider-qualified empty change, not a failed capture.
-        if (pullRequest.getProvider() != null && pullRequest.getProvider().getType() == IdentityProviderType.GITLAB) {
+        if (recordedDiffBase) {
             String base = pullRequest.getBaseRefOid();
             if (!headSha.equals(pullRequest.getHeadRefOid())) {
                 throw new JobPreparationException("Recorded merge request revision does not match the queued head");

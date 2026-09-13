@@ -52,6 +52,19 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
             OutlineDocumentContentSource.REVIEW_PREFIX);
 
     @Test
+    void citationAndCandidateInstructionsDistinguishSourceTextFromPresentation() throws IOException {
+        String prompt = resolvedDocumentedPrompt();
+        assertThat(prompt)
+                .contains(
+                        "remove those display",
+                        "underlying file text",
+                        "quote `    render()`",
+                        "TEXT_MENTION",
+                        "not a provider-reported relationship or author adoption");
+        assertThat(prompt).doesNotContain("issues this PR closes or links", "the evidence — quote from here");
+    }
+
+    @Test
     @DisplayName("the workspace section documents the known collector outputs")
     void workspaceSectionDocumentsCollectorOutputs() throws IOException {
         String prompt = documentedWorkspaceSection();

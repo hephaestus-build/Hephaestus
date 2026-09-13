@@ -85,9 +85,8 @@ export default async function honoursLinkedIssueAcceptanceCriteria(
 	const body = meta.body ?? "";
 	const branch = meta.source_branch;
 
-	// Only explicit closing keywords + issue URLs in title/body are CLOSING references. A bare number in a
-	// branch name (e.g. `fix/2024-01-rewrite` → #2024, a year) is at most a *traceability* candidate, not a
-	// claim to close a tracked issue, so it is tracked separately and phrased more weakly below.
+	// Syntax matches are candidates, including examples and code spans. They establish neither a
+	// provider-reported relationship nor adoption of another issue's criteria by the author.
 	const refs = new Set<string>();
 	collect(CLOSE_REF, `${title}\n${body}`, refs);
 	collect(ISSUE_URL, `${title}\n${body}`, refs);
@@ -120,7 +119,7 @@ export default async function honoursLinkedIssueAcceptanceCriteria(
 	const directions: string[] = [];
 	if (hasClosingRef) {
 		directions.push(
-			`Closing reference(s) detected (${closingRefs.join(", ")}) from title/body — this change claims to close a tracked issue; map each linked issue's acceptance criteria to what the diff actually delivers.`,
+			`Issue-reference syntax candidate(s) (${closingRefs.join(", ")}) from title/body — inspect the exact mention in context, including templates/examples, before establishing that the author claims to close this issue. Only then map those criteria to the change.`,
 		);
 	} else if (hasBranchRef) {
 		directions.push(
@@ -146,15 +145,15 @@ export default async function honoursLinkedIssueAcceptanceCriteria(
 		);
 	} else {
 		directions.push(
-			`Linked-issue facts: bodyPresent=true, acceptanceCriteriaBlockPresent=${hasCheckableAcBlock} (heading=${acHeading}, checkboxes=${acBoxes}) — map each criterion/checkbox to done or deferred against the diff.`,
+			`Candidate issue facts: bodyPresent=true, acceptanceCriteriaBlockPresent=${hasCheckableAcBlock} (heading=${acHeading}, checkboxes=${acBoxes}) — these are text facts, not applicability. Confirm an authored closing claim in the original mention context before mapping criteria to done or deferred.`,
 		);
 	}
 
 	return {
 		hints: [],
 		metrics: {
-			closingRefCount: closingRefs.length,
-			hasClosingRef: hasClosingRef ? 1 : 0,
+			issueReferenceSyntaxCandidateCount: closingRefs.length,
+			hasIssueReferenceSyntaxCandidate: hasClosingRef ? 1 : 0,
 			branchRefCount: branchRefs.length,
 			hasBranchRef: hasBranchRef ? 1 : 0,
 			closingKeywordHits: keywordHits,

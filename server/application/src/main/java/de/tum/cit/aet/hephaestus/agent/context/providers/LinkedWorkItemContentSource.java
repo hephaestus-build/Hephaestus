@@ -169,9 +169,9 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
                     unresolved.add(number);
                     continue;
                 }
-                items.add(toItem(resolved.get(), entry.getValue()));
+                items.add(toItem(resolved.get(), entry.getValue(), refs.mentions.getOrDefault(number, List.of())));
             }
-            boolean truncated = refs.numbers.size() > MAX_ITEMS;
+            boolean truncated = refs.numbers.size() > MAX_ITEMS || refs.commitScanTruncated;
 
             ObjectNode root = objectMapper.createObjectNode();
             root.set("workItems", items);
@@ -205,7 +205,7 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         }
     }
 
-    private ObjectNode toItem(Issue issue, boolean closingKeyword) {
+    private ObjectNode toItem(Issue issue, boolean closingKeyword, List<Mention> mentions) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("number", issue.getNumber());
         node.put("title", issue.getTitle());
@@ -213,7 +213,9 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
             node.put("state", issue.getState().name());
         }
         node.put("url", issue.getHtmlUrl());
-        node.put("closingKeyword", closingKeyword);
+        node.put("referenceKind", "TEXT_MENTION");
+        node.put("matchedClosingKeyword", closingKeyword);
+        node.set("mentions", objectMapper.valueToTree(mentions));
 
         ArrayNode labels = objectMapper.createArrayNode();
         Set<Label> labelSet = issue.getLabels();
@@ -259,13 +261,11 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         }
         boolean found = false;
 
-        Set<Integer> closingNumbers = new LinkedHashSet<>();
         Matcher closing = CLOSING_REF.matcher(text);
         while (closing.find()) {
             Integer n = parseNumber(closing.group(3));
             if (n != null) {
-                closingNumbers.add(n);
-                refs.add(n, true);
+                refs.add(n, true, source, text, closing.start(), closing.end());
                 found = true;
             }
         }
@@ -273,9 +273,8 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         Matcher bare = BARE_REF.matcher(text);
         while (bare.find()) {
             Integer n = parseNumber(bare.group(1));
-            // A closing-ref number already accounted for keeps its closing=true classification.
-            if (n != null && !closingNumbers.contains(n)) {
-                refs.add(n, false);
+            if (n != null) {
+                refs.add(n, false, source, text, bare.start(), bare.end());
                 found = true;
             }
         }
@@ -294,7 +293,7 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         while (m.find()) {
             Integer n = parseNumber(m.group(1));
             if (n != null) {
-                refs.add(n, false);
+                refs.add(n, false, "branch", sourceBranch, m.start(), m.end());
                 found = true;
             }
         }
@@ -321,6 +320,7 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
             }
             List<GitRepositoryManager.CommitInfo> ahead =
                     gitRepositoryManager.walkCommits(repositoryId, range[0], range[1], MAX_COMMITS_SCANNED + 1);
+            refs.commitScanTruncated = ahead.size() > MAX_COMMITS_SCANNED;
             for (GitRepositoryManager.CommitInfo commit :
                     ahead.stream().limit(MAX_COMMITS_SCANNED).toList()) {
                 String subject = commit.message();
@@ -353,17 +353,31 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         return (b != null && !b.isBlank()) ? b : null;
     }
 
-    /**
-     * Accumulates distinct issue numbers with their closing/bare classification (closing wins on
-     * merge), preserving first-seen order, plus the ordered set of signals that produced at least
-     * one reference.
-     */
+    private record Mention(String source, String excerpt, boolean excerptTruncated) {}
+
+    /** Distinct candidates and bounded mention contexts; a closing-keyword match is a syntax fact. */
     private static final class Refs {
 
+        private boolean commitScanTruncated;
         private final LinkedHashMap<Integer, Boolean> numbers = new LinkedHashMap<>();
+        private final Map<Integer, List<Mention>> mentions = new LinkedHashMap<>();
         private final LinkedHashSet<String> resolvedFrom = new LinkedHashSet<>();
 
-        void add(int number, boolean closing) {
+        void add(int number, boolean closing, String source, String text, int matchStart, int matchEnd) {
+            // Keep exact surrounding text, including examples/code, without interpreting author intent.
+            // Bound both repeated mentions and a single pathological line independently of item limits.
+            List<Mention> contexts = mentions.computeIfAbsent(number, ignored -> new ArrayList<>());
+            if (contexts.size() < 3) {
+                int lineStart = text.lastIndexOf('\n', matchStart) + 1;
+                int nextLine = text.indexOf('\n', matchEnd);
+                int lineEnd = nextLine < 0 ? text.length() : nextLine;
+                int start = Math.max(lineStart, matchStart - 80);
+                int end = Math.min(lineEnd, start + 240);
+                if (start < text.length() && Character.isLowSurrogate(text.charAt(start))) start++;
+                if (end < text.length() && end > start && Character.isHighSurrogate(text.charAt(end - 1))) end--;
+                Mention mention = new Mention(source, text.substring(start, end), start != lineStart || end != lineEnd);
+                if (!contexts.contains(mention)) contexts.add(mention);
+            }
             Boolean existing = numbers.get(number);
             if (existing == null) {
                 numbers.put(number, closing);
