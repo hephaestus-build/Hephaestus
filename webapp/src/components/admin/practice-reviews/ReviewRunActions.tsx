@@ -1,5 +1,5 @@
 import type { AgentJob } from "@/api/types.gen";
-import { isCancellable, isDeliveryRetryable } from "@/components/admin/ai/job-utils";
+import { isCancellable, isResultProcessingRetryable } from "@/components/admin/ai/job-utils";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -28,7 +28,7 @@ export function ReviewRunActions({
 	onCancel,
 	onRetry,
 }: ReviewRunActionsProps) {
-	if (!isCancellable(job.status) && !isDeliveryRetryable(job)) return null;
+	if (!isCancellable(job.status) && !isResultProcessingRetryable(job)) return null;
 	return (
 		<div className="flex gap-2">
 			{isCancellable(job.status) && (
@@ -56,26 +56,27 @@ export function ReviewRunActions({
 					</AlertDialogContent>
 				</AlertDialog>
 			)}
-			{isDeliveryRetryable(job) && (
+			{isResultProcessingRetryable(job) && (
 				<AlertDialog>
 					<AlertDialogTrigger
 						render={
 							<Button disabled={isRetrying}>
-								{isRetrying ? "Retrying…" : "Retry feedback comment"}
+								{isRetrying ? "Retrying…" : "Retry result processing"}
 							</Button>
 						}
 					/>
 					<AlertDialogContent>
 						<AlertDialogHeader>
-							<AlertDialogTitle>Retry the feedback comment?</AlertDialogTitle>
+							<AlertDialogTitle>Retry result processing?</AlertDialogTitle>
 							<AlertDialogDescription>
-								The failed comment will be posted again.
+								Process the review results again. This may retry failed publication; approval
+								requirements still apply.
 							</AlertDialogDescription>
 						</AlertDialogHeader>
 						<AlertDialogFooter>
 							<AlertDialogCancel>Cancel</AlertDialogCancel>
 							<AlertDialogAction disabled={isRetrying} onClick={onRetry}>
-								Retry feedback comment
+								Retry result processing
 							</AlertDialogAction>
 						</AlertDialogFooter>
 					</AlertDialogContent>

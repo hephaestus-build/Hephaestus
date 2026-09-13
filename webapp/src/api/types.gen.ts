@@ -174,7 +174,7 @@ export type AgentJob = {
    */
   deliveryCommentId?: string;
   /**
-   * Delivery status: null = not applicable, PENDING = awaiting delivery, DELIVERED = posted, FAILED = delivery error
+   * Result-processing status: null = not applicable, PENDING = awaiting processing, DELIVERED = processing finished, FAILED = processing error. Processing may include delivery; this status alone does not establish feedback publication.
    */
   deliveryStatus?: 'PENDING' | 'DELIVERED' | 'FAILED';
   /**

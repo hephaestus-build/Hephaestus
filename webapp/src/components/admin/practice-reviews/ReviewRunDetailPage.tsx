@@ -6,7 +6,7 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import {
 	REVIEW_STATUS_DEFS,
-	SUMMARY_POST_DEFS,
+	RESULT_PROCESSING_DEFS,
 } from "@/components/practice-vocabulary/review-status-defs";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import {
@@ -134,7 +134,7 @@ export function ReviewRunDetailPage({
 				chips={
 					<>
 						<StatusBadge def={REVIEW_STATUS_DEFS[job.status]} />
-						{job.deliveryStatus && <StatusBadge def={SUMMARY_POST_DEFS[job.deliveryStatus]} />}
+						{job.deliveryStatus && <StatusBadge def={RESULT_PROCESSING_DEFS[job.deliveryStatus]} />}
 					</>
 				}
 				title={job.target.title}

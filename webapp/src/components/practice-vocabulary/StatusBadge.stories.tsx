@@ -6,7 +6,7 @@ import { DELIVERY_STATE_DEFS } from "./delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "./delivery-place-defs";
 import { OUTCOME_DEFS } from "./outcome-defs";
 import { PRESENCE_DEFS } from "./presence-defs";
-import { REVIEW_STATUS_DEFS, SUMMARY_POST_DEFS } from "./review-status-defs";
+import { REVIEW_STATUS_DEFS, RESULT_PROCESSING_DEFS } from "./review-status-defs";
 import { SEVERITY_DEFS } from "./severity-defs";
 import { type StatusDef, type StatusDefs, statusValues } from "./status-def";
 import { StatusBadge } from "./StatusBadge";
@@ -70,7 +70,7 @@ export const EveryRegistry: Story = {
 			<Gallery heading="Severity" defs={SEVERITY_DEFS} />
 			<Gallery heading="Practice status" defs={PRESENCE_DEFS} />
 			<Gallery heading="Review status" defs={REVIEW_STATUS_DEFS} />
-			<Gallery heading="Summary comment" defs={SUMMARY_POST_DEFS} />
+			<Gallery heading="Result processing" defs={RESULT_PROCESSING_DEFS} />
 			<section className="space-y-2">
 				<h3 className="text-sm font-semibold">Selected in Controls</h3>
 				<StatusBadge def={args.def} />

@@ -87,7 +87,7 @@ export const CompletedWithMixedOutput: Story = {
 		await canvas.findByRole("heading", {
 			name: "Cache the workspace member lookup on the review path",
 		});
-		canvas.getByText("Summary posted");
+		canvas.getByText("Results processed");
 		await canvas.findByText("A cache miss and a permission failure come back as the same 404");
 		await canvas.findByText(/2 issues to tighten in this change/);
 		await canvas.findByRole("heading", { name: "How this review ran", level: 3 });
@@ -95,6 +95,25 @@ export const CompletedWithMixedOutput: Story = {
 		canvas.getByText("Tokens read");
 		await expect(canvas.queryByText("Configuration snapshot")).not.toBeInTheDocument();
 		await expectNoPageOverflow();
+	},
+};
+
+/** Processing can finish while approval still prevents publication. */
+export const ProcessedWithFeedbackAwaitingApproval: Story = {
+	args: {
+		feedback: ready(
+			feedbackOf(COMPLETED_RUN)
+				.slice(0, 1)
+				.map((item) => ({
+					...item,
+					deliveryState: "AWAITING_APPROVAL" as const,
+				})),
+		),
+	},
+	play: async ({ canvas }) => {
+		await canvas.findByText("Results processed");
+		await canvas.findByText("Awaiting approval");
+		await expect(canvas.queryByText("Summary posted")).not.toBeInTheDocument();
 	},
 };
 

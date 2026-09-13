@@ -8114,8 +8114,10 @@ components:
           description: Git provider comment/note ID for posted feedback
         deliveryStatus:
           type: string
-          description: "Delivery status: null = not applicable, PENDING = awaiting\
-            \ delivery, DELIVERED = posted, FAILED = delivery error"
+          description: "Result-processing status: null = not applicable, PENDING =\
+            \ awaiting processing, DELIVERED = processing finished, FAILED = processing\
+            \ error. Processing may include delivery; this status alone does not establish\
+            \ feedback publication."
           enum:
           - PENDING
           - DELIVERED
