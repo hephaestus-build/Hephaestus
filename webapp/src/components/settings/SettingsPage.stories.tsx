@@ -9,6 +9,25 @@ import { SettingsPage } from "./SettingsPage";
 
 const meta = {
 	component: SettingsPage,
+	args: {
+		emailPreferencesProps: {
+			isAppAdmin: false,
+			state: {
+				status: "ready",
+				preferences: {
+					productFeedback: false,
+					workspaceAlerts: false,
+					surveySummaries: false,
+					productFeedbackFrequency: "IMMEDIATE",
+					productSurveys: false,
+					researchSurveys: false,
+					emailAvailable: true,
+				},
+				isPending: false,
+				onChange: fn(),
+			},
+		},
+	},
 	parameters: {
 		layout: "fullscreen",
 	},

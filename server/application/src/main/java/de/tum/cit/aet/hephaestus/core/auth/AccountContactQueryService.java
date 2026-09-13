@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,28 @@ public class AccountContactQueryService implements AccountContactQuery {
 
     public AccountContactQueryService(AccountRepository accountRepository) {
         this.accountRepository = accountRepository;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> activeVerifiedPrimaryEmail(long accountId) {
+        return accountRepository
+                .findById(accountId)
+                .filter(account -> account.getStatus() == Account.Status.ACTIVE)
+                .filter(account -> account.getPrimaryEmailVerifiedAt() != null)
+                .flatMap(account -> Optional.ofNullable(account.getPrimaryEmail()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> activeVerifiedAdministratorIds() {
+        return accountRepository.findActiveVerifiedAdministratorIds();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> activeVerifiedAdministratorEmail(long accountId) {
+        return accountRepository.findActiveVerifiedAdministratorEmail(accountId);
     }
 
     @Override

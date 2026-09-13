@@ -54,6 +54,9 @@ function mockSurveys(surveys: Wire<Survey>[]) {
 			}),
 		),
 		http.get("*/admin/product-feedback/surveys/:surveyId", () => HttpResponse.json(survey)),
+		http.get("*/admin/product-feedback/surveys/:surveyId/email-invitations", () =>
+			HttpResponse.json({ eligible: 0, alreadyRequested: 0, accepted: 0, queued: 0, remaining: 0 }),
+		),
 		http.get("*/admin/product-feedback/surveys/:surveyId/summary", () =>
 			HttpResponse.json(summary),
 		),
@@ -77,6 +80,46 @@ function mockSurveys(surveys: Wire<Survey>[]) {
 }
 
 describe("instance surveys route", () => {
+	it("queues only on confirmation and keeps the optional reminder off for each new batch", async () => {
+		mockSurveys([survey]);
+		const user = userEvent.setup();
+		const requests: unknown[] = [];
+		let counts = { eligible: 1420, alreadyRequested: 0, accepted: 0, queued: 0, remaining: 1420 };
+		server.use(
+			http.get("*/admin/product-feedback/surveys/:surveyId/email-invitations", () =>
+				HttpResponse.json(counts),
+			),
+			http.post(
+				"*/admin/product-feedback/surveys/:surveyId/email-invitations",
+				async ({ request }) => {
+					requests.push(await request.json());
+					counts = { ...counts, alreadyRequested: 1000, queued: 1000, remaining: 420 };
+					return HttpResponse.json(counts);
+				},
+			),
+		);
+		renderRouteAt("/admin/surveys");
+		await user.click(await screen.findByRole("link", { name: survey.title }, ROUTE_RENDER_WAIT));
+		const queue = await screen.findByRole("button", { name: "Queue email invitations…" });
+		expect(requests).toHaveLength(0);
+		await user.click(queue);
+		const confirmation = await screen.findByRole("alertdialog");
+		const reminder = within(confirmation).getByRole("checkbox", {
+			name: "Send one reminder after 72 hours if unanswered",
+		});
+		expect(reminder.getAttribute("aria-checked")).toBe("false");
+		await user.click(reminder);
+		expect(requests).toHaveLength(0);
+		await user.click(within(confirmation).getByRole("button", { name: "Queue invitations" }));
+		await waitFor(() => expect(requests).toStrictEqual([{ sendReminder: true }]));
+		await screen.findByText("420");
+		await user.click(queue);
+		const next = await screen.findByRole("alertdialog");
+		expect(within(next).getByRole("checkbox").getAttribute("aria-checked")).toBe("false");
+		await user.click(within(next).getByRole("button", { name: "Cancel" }));
+		expect(requests).toHaveLength(1);
+	});
+
 	it("lists the published surveys with their participation", async () => {
 		mockSurveys([survey]);
 		renderRouteAt("/admin/surveys");

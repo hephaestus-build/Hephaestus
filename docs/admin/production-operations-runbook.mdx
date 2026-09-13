@@ -334,3 +334,43 @@ changes to migrations, dispatch identity, provider APIs, broker configuration or
 - [NATS delivery and acknowledgement](https://docs.nats.io/learn/jetstream/delivery-and-acknowledgment)
 - [AWS runbook guidance](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_ready_to_support_use_runbooks.html)
 - [Google SRE launch guidance](https://sre.google/sre-book/reliable-product-launches/)
+
+## Email delivery operations
+
+Use **Instance settings → Email → Send test email** to distinguish a missing configuration, Silent
+Mode, exhausted capacity and relay failures. `SENT` is relay acceptance, not inbox delivery. SMTP
+health must not be a liveness or readiness dependency. Page the operator through an **external**
+monitoring channel for application, database, NATS, scheduler or SMTP outages: a broken email path
+cannot reliably report its own failure by email.
+
+Monitor the `notification.email.delivery` counter by bounded `kind` and `outcome`; sustained
+`unavailable`, `rate_limited`, `rejected` or `expired` outcomes warrant investigation. Inspect the
+publication backlog without selecting `serialized_event`:
+
+```sql
+SELECT status, count(*) AS publications, min(publication_date) AS oldest_publication
+FROM event_publication
+GROUP BY status;
+```
+
+Alert when pending/failed publications age beyond the expected five-minute retry interval and
+investigate before the notification's expiry. Use a separate database-monitoring identity with
+least privilege. Do not replay a backlog blindly: each listener rechecks current eligibility, and
+Silent Mode deliberately completes withheld mail rather than saving a flood for later.
+
+Before inviting a large audience, confirm the relay's quota, SPF/DKIM/DMARC alignment, monitored
+reply address, and bounce/complaint handling. Hephaestus records synchronous SMTP rejection; it does
+**not** claim to ingest asynchronous delivery-status notifications or provider complaints. Use a
+relay with suppression of hard bounces and complaints, monitor that suppression list, and keep
+optional bulk mail disabled until that operational path works. Never re-enable a suppressed address
+without resolving the reason. See [email configuration](./production-setup#email).
+
+Unsubscribe URLs contain narrowly scoped bearer capabilities. Redact `/notifications/unsubscribe/*`
+in reverse-proxy access logs and never retain the `token` query of the public confirmation page.
+Validate the externally reachable HTTPS POST path and DKIM coverage of both unsubscribe headers
+with a real message; a local Mailpit MIME test alone cannot prove DNS or DKIM configuration.
+
+Workspace connection alerts cover recorded Slack credential revocation and verified GitHub app
+suspension, with paired recovery. Intentional disconnection, routine token refresh, and first-time
+connection are not incidents. GitLab and Outline do not yet expose equivalent durable incident
+signals; monitor their existing health/configuration surfaces rather than assuming email coverage.

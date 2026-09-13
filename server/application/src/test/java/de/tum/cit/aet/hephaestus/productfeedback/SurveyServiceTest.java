@@ -52,6 +52,7 @@ class SurveyServiceTest {
         service = new SurveyService(
                 surveys,
                 participations,
+                mock(SurveyEmailInvitationRepository.class),
                 mock(FeedbackRefs.class),
                 research,
                 new ObjectMapper(),

@@ -24,6 +24,9 @@
     <tr>
         <td th:fragment="footer" style="padding: 24px; font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; line-height: 18px; color: #6b7280;">
             <p style="margin: 0;" th:text="#{email.footer(${webappUrl})}">This email was sent by Hephaestus.</p>
+            <p th:if="${unsubscribeUrl != null}" style="margin: 12px 0 0;">
+                <a th:href="${unsubscribeUrl}" style="color: #6b7280;">Unsubscribe from these emails</a>
+            </p>
         </td>
     </tr>
 </table>

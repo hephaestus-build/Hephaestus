@@ -28,6 +28,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
     private static final Map<String, String> FULL_CONTEXT_ASSIGNMENTS = Map.ofEntries(
             assignment("testconfig.BaseIntegrationTest", "base"),
             assignment("notification.AccountDeletionEmailIntegrationTest", "email-capture"),
+            assignment("notification.AccountSecurityEmailIntegrationTest", "email-capture"),
+            assignment("productfeedback.ProductFeedbackEmailIntegrationTest", "email-capture"),
+            assignment("productfeedback.SurveyEmailInvitationIntegrationTest", "email-capture"),
             assignment("notification.email.EmailAdminControllerIntegrationTest", "email-capture"),
             assignment("agent.job.AgentJobControllerIntegrationTest", "execution-capture-enabled"),
             assignment("agent.job.DeferredIssueEventIntegrationTest", "issue-event-transaction"),
@@ -89,6 +92,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> PROPERTY_SOURCE_TESTS = names(
             "notification.AccountDeletionEmailIntegrationTest",
+            "notification.AccountSecurityEmailIntegrationTest",
+            "productfeedback.ProductFeedbackEmailIntegrationTest",
+            "productfeedback.SurveyEmailInvitationIntegrationTest",
             "notification.email.EmailAdminControllerIntegrationTest",
             "agent.job.AgentJobControllerIntegrationTest",
             "agent.job.IssueUpdateCoalescerIntegrationTest",

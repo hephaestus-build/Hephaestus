@@ -44,7 +44,12 @@ class EmailSmtpIntegrationTest {
                                 Optional.of(context.getBean(JavaMailSender.class)),
                                 new EmailProperties("noreply@hephaestus.test", "Hephaestus", null),
                                 new OutboundEgressGuard(() -> false),
-                                new EmailDeliveryMetrics(registry));
+                                new EmailDeliveryMetrics(registry),
+                                new EmailRateLimiter(
+                                        (key, config) -> io.github.bucket4j.Bucket.builder()
+                                                .addLimit(config.getBandwidths()[0])
+                                                .build(),
+                                        new EmailRateLimitProperties(250, 200)));
                         var result = gateway.send(EmailMessage.of(
                                 EmailKind.TEST_MESSAGE,
                                 "developer@hephaestus.test",

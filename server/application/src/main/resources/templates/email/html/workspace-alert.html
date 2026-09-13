@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{email/html/layout :: head(#{email.workspace-alert.subject})}"></head>
+<body style="margin: 0; padding: 0; background-color: #f3f4f6;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; background-color: #f3f4f6;">
+    <tr>
+        <td align="center" style="padding: 24px 12px;">
+            <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px;">
+                <tr><td th:replace="~{email/html/layout :: header}"></td></tr>
+                <tr>
+                    <td style="padding: 24px; font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px; color: #111827;">
+                        <h1 style="margin: 0 0 16px 0; font-size: 20px; line-height: 28px;" th:text="#{email.workspace-alert.subject}">An integration in your Hephaestus workspace changed</h1>
+                        <p style="margin: 0 0 16px 0;"><strong th:text="${integration}">Integration</strong> in workspace <span th:text="${workspaceName}">workspace</span>: <span th:text="${description}">Connection changed.</span></p>
+                        <p style="margin: 0;"><a th:href="${webappUrl + '/w/' + workspaceSlug + '/admin/settings'}" style="color: #2563eb;">Review workspace integrations</a></p>
+                    </td>
+                </tr>
+                <tr><td th:replace="~{email/html/layout :: footer}"></td></tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

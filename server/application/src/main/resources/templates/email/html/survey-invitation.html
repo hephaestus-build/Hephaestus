@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{email/html/layout :: head(#{email.survey-invitation.subject})}"></head>
+<body style="margin: 0; padding: 0; background-color: #f3f4f6;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; background-color: #f3f4f6;">
+    <tr>
+        <td align="center" style="padding: 24px 12px;">
+            <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px;">
+                <tr><td th:replace="~{email/html/layout :: header}"></td></tr>
+                <tr>
+                    <td style="padding: 24px; font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px; color: #111827;">
+                        <h1 style="margin: 0 0 16px 0; font-size: 20px; line-height: 28px;" th:text="#{email.survey-invitation.subject}">An invitation to a Hephaestus survey</h1>
+                        <p style="margin: 0 0 16px 0;">A survey is available in your Hephaestus workspace. Taking part is optional. Sign in to read its purpose and decide whether to respond.</p>
+                        <p th:if="${reminder}">This is your one reminder. You can ignore or decline the survey; no further reminder is scheduled.</p>
+                        <p style="margin: 0;"><a th:href="${webappUrl + '/w/' + workspaceSlug + '?survey=' + surveyId}" style="color: #2563eb;">Open the survey</a></p>
+                    </td>
+                </tr>
+                <tr><td th:replace="~{email/html/layout :: footer}"></td></tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

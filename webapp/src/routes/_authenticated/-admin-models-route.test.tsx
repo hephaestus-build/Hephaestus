@@ -1,6 +1,6 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { LlmConnection, LlmModel } from "@/api/types.gen";
 import { server } from "@/mocks/server";
@@ -21,8 +21,20 @@ function mockPage(connections: LlmConnection[] = [], models: LlmModel[] = []) {
 	);
 }
 
+let queryClient: ReturnType<typeof renderRouteAt> | undefined;
+
+afterEach(async () => {
+	// Unmount observers before cancelling requests and release cache timers before jsdom closes.
+	await act(async () => {
+		cleanup();
+		await queryClient?.cancelQueries();
+		queryClient?.clear();
+	});
+	queryClient = undefined;
+});
+
 async function renderModelsRoute() {
-	renderRouteAt("/admin/models");
+	queryClient = renderRouteAt("/admin/models");
 	return screen.findByRole("heading", { name: "AI models" }, ROUTE_RENDER_WAIT);
 }
 

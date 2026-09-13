@@ -318,8 +318,9 @@ second reasoning rate would double-count the same work.
 
 ### Email
 
-Hephaestus sends email through one SMTP relay for the whole instance — today the account-deletion
-confirmation and the instance admin's test email; notifications join as they ship. Email is off until
+Hephaestus sends email through one SMTP relay for the whole instance. Account-security and deletion
+confirmations are essential mail; administrator updates, connection alerts and survey invitations are
+separate, opt-in subscriptions in each person's settings. Email is off until
 a relay host is set. There is no per-workspace mail configuration and no connection to authorise: the
 transport is Spring Boot's `spring.mail.*`, so every variable is the property path in upper case.
 
@@ -332,13 +333,15 @@ transport is Spring Boot's `spring.mail.*`, so every variable is the property pa
 | `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE` / `_REQUIRED` | `true` / `true` | Upgrade the connection with STARTTLS and refuse a relay that cannot. Disable both only with implicit TLS, or for an unauthenticated relay inside a trusted private network (`SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=false` and no credentials). |
 | `HEPHAESTUS_EMAIL_FROM` | *(unset)* | Sender address, required once the host is set. The relay must be allowed to send for its domain (SPF/DKIM), or receivers reject or junk the mail. |
 | `HEPHAESTUS_EMAIL_FROM_NAME` | `Hephaestus` | Display name next to the sender address. |
-| `HEPHAESTUS_EMAIL_REPLY_TO` | *(unset)* | Where a human reply lands. Unset means replies go to the sender address, which nobody reads. |
+| `HEPHAESTUS_EMAIL_REPLY_TO` | *(unset)* | Where a human reply lands. Unset means replies go to the sender address. |
+| `HEPHAESTUS_EMAIL_RATE_LIMIT_DAILY_CAPACITY` | `250` | Shared SMTP attempt budget per 24-hour refill interval. |
+| `HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY` | `200` | Optional-mail attempt budget; must be smaller than the total to reserve capacity for essential mail. |
 
 TLS verifies the relay certificate and hostname. For implicit TLS on port `465`, enable SSL and
 disable both STARTTLS settings; leave certificate verification enabled. Authenticated SMTP without
 implicit TLS or required STARTTLS is rejected at startup to prevent credential exposure.
 
-Connection, read and write timeouts are fixed at 5 s / 10 s / 10 s; a relay that stops answering
+Connection, read and write timeouts default to 5 s / 10 s / 10 s; a relay that stops answering
 cannot leave a socket operation waiting indefinitely. Only the `application-server` container reads these
 variables — the worker and webhook roles never send.
 
@@ -350,7 +353,8 @@ domains it signs, and set `HEPHAESTUS_EMAIL_FROM` inside one of them.
 the outcome: `SENT` with the message id to look for in the relay's log, `SILENT_MODE` while the
 [emergency brake](./production-operations-runbook) is engaged — a fresh instance starts that way —
 `NOT_CONFIGURED`, `INVALID_ADDRESS`, `REJECTED` for a refused mailbox, or `UNAVAILABLE` when the
-relay could not be reached or refused the credentials. The
+relay could not be reached or refused the credentials. `RATE_LIMITED` means the shared attempt budget
+is exhausted or its store is unavailable. The
 [configuration readiness](./configuration-readiness#email) fact `notification.email` reports the
 same setting pair, and `/actuator/health` gains a `mail` indicator that opens a connection to the
 relay on each check. SMTP does not belong to the readiness or liveness group, and connection
@@ -364,7 +368,26 @@ confirmation expires at its purge deadline: its next attempt completes without s
 are final: the row completes and the outcome is counted on the `notification.email.delivery` metric
 by `kind` and `outcome`. Logs carry the message id, never the address. Delivery is at-least-once:
 a crash after SMTP acceptance but before registry completion can produce a duplicate. `SENT` means
-the relay accepted the email, not that it reached the inbox.
+the relay accepted the email, not that it reached the inbox. Opt-out and eligibility checks apply to
+subsequent attempts; an SMTP attempt already in progress cannot be recalled.
+
+**Capacity.** Limits use the existing PostgreSQL-backed Bucket4j store and are shared across server
+replicas; keep `hephaestus.auth.rate-limit.postgres-backed=true` in production. An SMTP attempt consumes
+capacity even if the relay later rejects it or disconnects: refunding an ambiguous failure could exceed
+the relay's limit. Withheld mail consumes none. Durable notifications wait for capacity on a later
+retry; a synchronous test reports the outcome and does not queue itself. The 24-hour interval starts
+with the bucket's first use, not midnight or the relay's billing day. Match these limits conservatively
+to your relay's policy and allow for other applications using the same account. Restart after changing
+limits; existing buckets retain their configuration until they expire.
+
+**Optional-mail delivery.** Set the public application host and webapp URLs to their externally
+reachable **HTTPS** addresses. Optional emails include a visible unsubscribe confirmation link and
+an RFC 8058 one-click POST endpoint. A GET never changes a subscription. Configure the relay's DKIM
+signer to include **both `List-Unsubscribe` and `List-Unsubscribe-Post`** in its signed headers; adding
+headers in Hephaestus alone does not satisfy the standard. The local HTTP Mailpit loop intentionally
+does not advertise the HTTPS-only one-click header. Keep SPF, DKIM and DMARC aligned with the sender;
+follow [Google's sender requirements](https://support.google.com/a/answer/81126?hl=en) and
+[RFC 8058](https://www.rfc-editor.org/rfc/rfc8058).
 
 **Privacy.** The relay operator becomes a recipient of personal data (an address and the fact that
 its owner has an account). Before setting the host, complete the review in the

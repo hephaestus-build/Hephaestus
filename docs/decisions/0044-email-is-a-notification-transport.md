@@ -37,7 +37,7 @@ would introduce an additional export or rendering step here without an existing 
 - **The `notification` module owns messages Hephaestus sends to people outside the reviewed work.**
   `notification.email` is the first transport; listeners that turn events into notifications live at
   the module root. The role checker that used to sit there moved next to the SPI it implements.
-- **Every notification is an `@ApplicationModuleListener`.** `spring-modulith-starter-jdbc` provides
+- **Every external delivery listener is an `@ApplicationModuleListener`.** `spring-modulith-starter-jdbc` provides
   the registry; `registry-trigger-annotation` restricts it to that annotation, so the existing
   `@TransactionalEventListener` fan-out keeps its semantics. Liquibase owns `event_publication`.
   Completed publications are deleted; failed ones are resubmitted every five minutes in batches of
@@ -61,8 +61,26 @@ would introduce an additional export or rendering step here without an existing 
 - **Thymeleaf renders HTML and text from one model**; subjects live in `messages.properties`.
 - **Account notifications use a provider-verified address** (`AccountContactQuery`). The admin test
   may use an explicitly supplied recipient; it carries no account-deletion information.
-- **The first consumers** are the durable account-deletion confirmation and the synchronous admin
-  test. They share rendering and the SMTP gateway, not publication-registry delivery.
+- **Source modules own eligibility and lifecycle; notification owns subscriptions and delivery.**
+  Account-security and deletion changes publish in the mutation transaction. Product-feedback and
+  connection-attention preparation uses `BEFORE_COMMIT` to publish independently durable recipient
+  events in that same transaction. An asynchronous parent fan-out would duplicate children if it
+  crashed after their commit but before its own completion, so there is no durable parent fan-out.
+  The synchronous admin test shares the gateway but deliberately does not queue a retry.
+- **Preferences belong to native accounts**, not mirrored SCM users. All optional categories start
+  off. Settings use strong ETags; erasure removes owned rows even though the account becomes a
+  tombstone. Exports include the typed choices, never unsubscribe tokens. Delivery rechecks current
+  address, account status, permission, subscription and source eligibility through owning-module ports.
+- **Survey email records are business facts, not another outbox.** An explicit action creates one
+  invitation per survey/account and queues the recipient in the same transaction. Relay acceptance
+  is separate from the existing in-app participation record. Pause cancels pending work; no automatic
+  reactivation occurs on resume. Reminder and summary scheduling markers commit with their publications.
+- **The daily digest cursor lives with its subscription.** It advances atomically with its recipient
+  publication, counts retained reports only, excludes time before opt-in and bounds downtime catch-up
+  to seven days. Immediate and daily delivery are mutually exclusive for one subscription.
+- **Capacity reuses Bucket4j and the existing PostgreSQL store.** Optional and total attempt budgets
+  are shared across replicas and reserve capacity for essential mail. An ambiguous SMTP failure is
+  not refunded. Store failure is fail-closed and retryable, not a reason to send without accounting.
 
 ## Consequences
 
@@ -76,9 +94,12 @@ would introduce an additional export or rendering step here without an existing 
   recipient policy; the framework supplies durability and the gateway enforces Silent Mode.
 - The `event_publication` table is a framework table: its shape follows the registry's DDL and is
   excluded from the entity drift gate.
-- Subscribed notification kinds (digests, reminders) will need per-account preferences and an
-  unsubscribe endpoint before they ship; the gateway gains `List-Unsubscribe` headers with them, not
-  before, so a header never points at a route that does not exist.
+- Optional mail has a stable, random UUID capability per account/category. It can only disable that
+  subscription; it is not an authentication credential. An unauthenticated form POST handles
+  RFC 8058; GET never mutates and the visible link opens confirmation. HTTPS links advertise one-click;
+  the relay must DKIM-sign both unsubscribe headers. Tokens stay out of events, exports and logs.
+  Reverse-proxy access logs must redact this capability path; the public confirmation page omits
+  credentials, referrers and error telemetry.
 - Operator alerts that must bypass Silent Mode go through the declared egress-exemption allowlist,
   as the runbook already requires; the gateway does not exempt itself.
 - Self-hosters bring their own relay. The code names no relay; the university relay used by the
@@ -91,3 +112,6 @@ would introduce an additional export or rendering step here without an existing 
 - [Spring Boot email support](https://docs.spring.io/spring-boot/reference/io/email.html).
 - [SMTP responsibility after acceptance (RFC 5321 §6.1)](https://www.rfc-editor.org/rfc/rfc5321.html#section-6.1).
 - [Spring Modulith listener transaction propagation](https://github.com/spring-projects/spring-modulith/blob/2.1.1/spring-modulith-events/spring-modulith-events-api/src/main/java/org/springframework/modulith/events/ApplicationModuleListener.java).
+
+- [One-click unsubscribe (RFC 8058)](https://www.rfc-editor.org/rfc/rfc8058).
+- [Google email sender guidelines](https://support.google.com/a/answer/81126?hl=en).

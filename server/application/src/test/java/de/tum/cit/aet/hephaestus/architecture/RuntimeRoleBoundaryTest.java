@@ -100,6 +100,55 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             Map.entry(
                     "de.tum.cit.aet.hephaestus.notification.AccountDeletionEmailListener", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.notification.NotificationRedeliveryJob", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.AccountSecurityEmailListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.ProductFeedbackDigestListener",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.ProductFeedbackDigestJob",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.SurveyEmailDeliveryAdapter", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.SurveyEmailListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.email.EmailUnsubscribeController",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.email.EmailRateLimiter", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.NotificationPreferencesController",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.ProductFeedbackEmailPreparation",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.ProductFeedbackEmailListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.SurveyEndedSummaryListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.WorkspaceAlertEmailListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.WorkspaceAlertEmailPreparation",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.NotificationPreferencesControllerAdvice",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.NotificationPreferencesExportAdapter",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.NotificationAccountErasureAdapter",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackNotificationQueryService",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.productfeedback.SurveyEmailInvitationService",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.productfeedback.SurveyEmailSchedulingJob", RuntimeRole.SERVER_PROPERTY),
+
             // ServerSchedulingConfig silences the @Scheduled tick off-server, but an ungated BEAN still
             // registers its gauges — permanent zeros in agent.queue.* / mentor.in_flight.* from pods that
             // never sample. Gate the bean, not just the tick.

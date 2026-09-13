@@ -1640,6 +1640,50 @@ paths:
       summary: "Edit a survey's title, purpose, schedule or pause state"
       tags:
       - survey-admin
+  /admin/product-feedback/surveys/{surveyId}/email-invitations:
+    get:
+      operationId: adminPreviewSurveyEmailInvitations
+      parameters:
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SurveyEmailInvitationSummary"
+          description: OK
+      summary: Preview eligible survey email recipients and relay acceptance counts
+      tags:
+      - survey-admin
+    post:
+      operationId: adminSendSurveyEmailInvitations
+      parameters:
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveyEmailInvitationRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SurveyEmailInvitationSummary"
+          description: OK
+      summary: Queue up to 1000 new survey email invitations
+      tags:
+      - survey-admin
   /admin/product-feedback/surveys/{surveyId}/responses:
     get:
       operationId: adminListProductSurveyResponses
@@ -2016,6 +2060,40 @@ paths:
       summary: List available identity providers
       tags:
       - Auth discovery
+  /notifications/unsubscribe/{token}:
+    post:
+      operationId: unsubscribeEmail
+      parameters:
+      - in: path
+        name: token
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                List-Unsubscribe:
+                  type: string
+              required:
+              - List-Unsubscribe
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                List-Unsubscribe:
+                  type: string
+              required:
+              - List-Unsubscribe
+      responses:
+        "204":
+          description: "Subscription disabled, or token no longer applicable"
+      security: []
+      summary: Unsubscribe from one optional email subscription
+      tags:
+      - Notification preferences
   /oauth/callback/{kind}:
     get:
       operationId: callbackGet
@@ -2291,6 +2369,43 @@ paths:
       summary: Unlink one of the current user's linked identity providers
       tags:
       - Account
+  /user/notification-preferences:
+    get:
+      operationId: getNotificationPreferences
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferences"
+          description: OK
+      summary: Get your email subscriptions
+      tags:
+      - notification-preferences
+    put:
+      operationId: updateNotificationPreferences
+      parameters:
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationPreferences"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferences"
+          description: OK
+      summary: Update your email subscriptions
+      tags:
+      - notification-preferences
   /user/sessions:
     delete:
       operationId: revokeOtherSessions
@@ -10256,9 +10371,11 @@ components:
           - NOT_CONFIGURED
           - SILENT_MODE
           - NO_RECIPIENT
+          - UNSUBSCRIBED
           - INVALID_ADDRESS
           - REJECTED
           - UNAVAILABLE
+          - RATE_LIMITED
         to:
           type: string
           description: "the address it went to, or <code>null</code> when there was\
@@ -11461,6 +11578,37 @@ components:
       - scopes
       - type
       - updatedAt
+    NotificationPreferences:
+      type: object
+      properties:
+        emailAvailable:
+          type: boolean
+        etag:
+          type: string
+        productFeedback:
+          type: boolean
+        productFeedbackFrequency:
+          type: string
+          enum:
+          - IMMEDIATE
+          - DAILY
+        productSurveys:
+          type: boolean
+        researchSurveys:
+          type: boolean
+        surveySummaries:
+          type: boolean
+        workspaceAlerts:
+          type: boolean
+      required:
+      - emailAvailable
+      - etag
+      - productFeedback
+      - productFeedbackFrequency
+      - productSurveys
+      - researchSurveys
+      - surveySummaries
+      - workspaceAlerts
     ObservationDetail:
       type: object
       description: Full practice observation detail including delivered feedback and
@@ -15380,6 +15528,37 @@ components:
       - description
       - startsAt
       - title
+    SurveyEmailInvitationRequest:
+      type: object
+      properties:
+        sendReminder:
+          type: boolean
+    SurveyEmailInvitationSummary:
+      type: object
+      description: "Counts refer to email requests, not in-app invitations or responses.\
+        \ Accepted means SMTP relay acceptance."
+      properties:
+        accepted:
+          type: integer
+          format: int32
+        alreadyRequested:
+          type: integer
+          format: int32
+        eligible:
+          type: integer
+          format: int32
+        queued:
+          type: integer
+          format: int32
+        remaining:
+          type: integer
+          format: int32
+      required:
+      - accepted
+      - alreadyRequested
+      - eligible
+      - queued
+      - remaining
     SurveyInvitation:
       type: object
       properties:
@@ -16141,6 +16320,31 @@ components:
           type: boolean
         scopes:
           type: string
+    UpdateNotificationPreferences:
+      type: object
+      properties:
+        productFeedback:
+          type: boolean
+        productFeedbackFrequency:
+          type: string
+          enum:
+          - IMMEDIATE
+          - DAILY
+        productSurveys:
+          type: boolean
+        researchSurveys:
+          type: boolean
+        surveySummaries:
+          type: boolean
+        workspaceAlerts:
+          type: boolean
+      required:
+      - productFeedback
+      - productFeedbackFrequency
+      - productSurveys
+      - researchSurveys
+      - surveySummaries
+      - workspaceAlerts
     UpdateOutlineCollectionStateRequest:
       type: object
       description: Transition a mirrored Outline collection to a target mirror state

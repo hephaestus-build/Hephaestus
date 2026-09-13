@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.auth.spi.NotificationPreferencesExportQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Instant;
@@ -23,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Assembles the {@link ExportBundle} for one account by aggregating data the principal owns from
- * five sources:
+ * the owning sources:
  *
  * <ol>
  *   <li><b>account profile</b> + <b>own identity links</b> — {@link AccountService} ({@code core.auth} domain)</li>
@@ -31,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li><b>auth events (last 12 months)</b> — {@link AuthEventRepository} ({@code core.auth} audit)</li>
  *   <li><b>workspace memberships</b> — {@link AccountWorkspaceMembershipQuery} (auth-spi → {@code workspace})</li>
  *   <li><b>account preferences</b> — {@link AccountPreferencesQuery} (auth-spi → {@code account})</li>
+ *   <li><b>email subscriptions</b> — {@link NotificationPreferencesExportQuery} (auth-spi → notification)</li>
  * </ol>
  *
  * <p>The two cross-module sources are reached only through the {@code core.auth.spi} named
@@ -58,6 +60,7 @@ public class ExportBundleAssembler {
     private final AccountPreferencesQuery preferencesQuery;
     private final GitProviderRegistry gitProviderRegistry;
     private final Clock clock;
+    private final NotificationPreferencesExportQuery notificationPreferences;
 
     public ExportBundleAssembler(
             AccountService accountService,
@@ -66,7 +69,8 @@ public class ExportBundleAssembler {
             AccountWorkspaceMembershipQuery workspaceMembershipQuery,
             AccountPreferencesQuery preferencesQuery,
             GitProviderRegistry gitProviderRegistry,
-            Clock clock) {
+            Clock clock,
+            NotificationPreferencesExportQuery notificationPreferences) {
         this.accountService = accountService;
         this.accountFeatureRepository = accountFeatureRepository;
         this.authEventRepository = authEventRepository;
@@ -74,6 +78,7 @@ public class ExportBundleAssembler {
         this.preferencesQuery = preferencesQuery;
         this.gitProviderRegistry = gitProviderRegistry;
         this.clock = clock;
+        this.notificationPreferences = notificationPreferences;
     }
 
     @Transactional(readOnly = true)
@@ -139,7 +144,8 @@ public class ExportBundleAssembler {
                 memberships,
                 featureFlags,
                 preferences,
-                authEvents);
+                authEvents,
+                notificationPreferences.preferences(accountId));
     }
 
     private ExportBundle.Identity toIdentity(IdentityLink il) {

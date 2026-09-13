@@ -1,0 +1,10 @@
+[(#{email.workspace-alert.subject})]
+
+[(${integration})] in workspace [(${workspaceName})]: [(${description})]
+
+Review workspace integrations: [(${webappUrl})]/w/[(${workspaceSlug})]/admin/settings
+
+Unsubscribe from workspace integration alerts: [(${unsubscribeUrl})]
+
+--
+[(#{email.footer(${webappUrl})})]

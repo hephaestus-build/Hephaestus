@@ -35,16 +35,27 @@ import org.springframework.mail.javamail.JavaMailSender;
 
 class EmailGatewayTest extends BaseUnitTest {
 
-    private static final EmailMessage MESSAGE =
-            new EmailMessage(EmailKind.TEST_MESSAGE, "dev@example.org", "Test email", "plain body", "<p>html body</p>");
+    private static final EmailMessage MESSAGE = new EmailMessage(
+            EmailKind.TEST_MESSAGE, "dev@example.org", "Test email", "plain body", "<p>html body</p>", null);
 
     private final CapturingJavaMailSender sender = new CapturingJavaMailSender();
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private boolean silentMode;
+    private final EmailRateLimiter rateLimiter = org.mockito.Mockito.mock(EmailRateLimiter.class);
+
+    @org.junit.jupiter.api.BeforeEach
+    void allowCapacity() {
+        org.mockito.Mockito.when(rateLimiter.acquire(org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(true);
+    }
 
     private EmailGateway gateway(Optional<JavaMailSender> transport, EmailProperties properties) {
         return new EmailGateway(
-                transport, properties, new OutboundEgressGuard(() -> silentMode), new EmailDeliveryMetrics(registry));
+                transport,
+                properties,
+                new OutboundEgressGuard(() -> silentMode),
+                new EmailDeliveryMetrics(registry),
+                rateLimiter);
     }
 
     private EmailGateway configuredGateway() {
@@ -71,6 +82,8 @@ class EmailGatewayTest extends BaseUnitTest {
         assertThat(sent.getSubject()).isEqualTo("Test email");
         assertThat(sent.getHeader("Auto-Submitted")).containsExactly("auto-generated");
         assertThat(sent.getHeader("X-Auto-Response-Suppress")).containsExactly("All");
+        assertThat(sent.getHeader("List-Unsubscribe")).isNull();
+        assertThat(sent.getHeader("List-Unsubscribe-Post")).isNull();
         Multipart mixed = (Multipart) sent.getContent();
         assertThat(mixed.getCount()).isEqualTo(1);
         assertThat(mixed.getBodyPart(0).isMimeType("multipart/alternative")).isTrue();
@@ -86,6 +99,43 @@ class EmailGatewayTest extends BaseUnitTest {
                         .counter()
                         .count())
                 .isEqualTo(1.0);
+    }
+
+    @Test
+    void shouldAdvertiseOneClickOnlyForHttpsUnsubscribeLinks() throws Exception {
+        for (String scheme : java.util.List.of("https", "http")) {
+            String url = scheme + "://example.org/notifications/unsubscribe/opaque-token";
+            configuredGateway().send(new EmailMessage(EmailKind.TEST_MESSAGE, MESSAGE.to(), "s", "t", "h", url));
+            MimeMessage sent = sender.sent().getLast();
+            assertThat(sent.getHeader("List-Unsubscribe")).containsExactly("<" + url + ">");
+            if ("https".equals(scheme)) {
+                assertThat(sent.getHeader("List-Unsubscribe-Post")).containsExactly("List-Unsubscribe=One-Click");
+            } else {
+                assertThat(sent.getHeader("List-Unsubscribe-Post")).isNull();
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "https://example.org/\r\nBcc:other@example.org",
+                "mailto:other@example.org",
+                "https://user:password@example.org/unsubscribe",
+                "/unsubscribe",
+                "https://example.org/#token"
+            })
+    void shouldRejectUnsafeUnsubscribeLinks(String url) {
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> new EmailMessage(EmailKind.TEST_MESSAGE, MESSAGE.to(), "s", "t", "h", url))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void shouldRefuseOptionalMailWithoutAnUnsubscribeCapability() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> EmailMessage.of(
+                        EmailKind.PRODUCT_FEEDBACK, "dev@example.org", new RenderedEmail("subject", "text", "html")))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -120,7 +170,7 @@ class EmailGatewayTest extends BaseUnitTest {
     void shouldRefuseAnythingButOneValidMailbox(String to) {
         EmailGateway gateway = configuredGateway();
 
-        EmailDeliveryResult result = gateway.send(new EmailMessage(EmailKind.TEST_MESSAGE, to, "s", "t", "h"));
+        EmailDeliveryResult result = gateway.send(new EmailMessage(EmailKind.TEST_MESSAGE, to, "s", "t", "h", null));
 
         assertThat(result.outcome()).isEqualTo(Outcome.INVALID_ADDRESS);
         assertThat(sender.sent()).isEmpty();

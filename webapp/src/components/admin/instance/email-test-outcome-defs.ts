@@ -1,7 +1,9 @@
 import {
 	BanIcon,
 	CircleCheckIcon,
+	CircleMinusIcon,
 	ClockIcon,
+	GaugeIcon,
 	MailQuestionIcon,
 	MailXIcon,
 	PlugZapIcon,
@@ -59,6 +61,19 @@ export const EMAIL_TEST_OUTCOME_DEFS: StatusDefs<EmailTestOutcome> = {
 		badgeVariant: "destructive",
 		description:
 			"The relay rejected this email. Check the recipient and relay policy before trying again.",
+	},
+	UNSUBSCRIBED: {
+		label: "Not subscribed",
+		icon: CircleMinusIcon,
+		badgeVariant: "secondary",
+		description: "The recipient has not opted in to this optional email.",
+	},
+	RATE_LIMITED: {
+		label: "Rate limited",
+		icon: GaugeIcon,
+		badgeVariant: "warning",
+		description:
+			"Sending is paused: the email attempt limit was reached or capacity could not be checked. Try later.",
 	},
 	UNAVAILABLE: {
 		label: "Relay unavailable",

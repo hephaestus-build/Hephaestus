@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent;
+import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Instant;
@@ -147,6 +148,8 @@ public class AccountService {
                 .actingAccount(actingAccountId)
                 .gitProvider(gitProviderId)
                 .record();
+        eventPublisher.publishEvent(new AccountSecurityChangedEvent(
+                accountId, AccountSecurityChangedEvent.Kind.IDENTITY_UNLINKED, clock.instant()));
     }
 
     public List<Account> adminList(int page, int size) {
@@ -185,6 +188,9 @@ public class AccountService {
                 }
             }
             Account.AppRole previousRole = account.getAppRole();
+            if (previousRole == role) {
+                return account;
+            }
             account.setAppRole(role);
             accountRepository.save(account);
             if (isDemotion) {
@@ -206,6 +212,8 @@ public class AccountService {
                     .actingAccount(actingAccountId)
                     .details("{\"from\":\"" + previousRole.name() + "\",\"to\":\"" + role.name() + "\"}")
                     .record();
+            eventPublisher.publishEvent(new AccountSecurityChangedEvent(
+                    accountId, AccountSecurityChangedEvent.Kind.APP_ROLE_CHANGED, clock.instant()));
         }
         return account;
     }

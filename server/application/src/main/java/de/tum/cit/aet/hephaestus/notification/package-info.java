@@ -10,9 +10,13 @@
             "core::current-account",
             "core::runtime",
             "core::auth-spi",
+            "core::auth-ratelimit",
             "core::event",
             "config",
             "integration.core",
+            "integration.core::events",
+            "integration.core::spi",
+            "productfeedback::notification",
         })
 @org.jspecify.annotations.NullMarked
 package de.tum.cit.aet.hephaestus.notification;

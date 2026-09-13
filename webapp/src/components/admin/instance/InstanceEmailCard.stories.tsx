@@ -69,3 +69,7 @@ export const NarrowResult: Story = {
 	...Sent,
 	globals: { viewport: { value: "reflow" }, theme: "dark" },
 };
+
+export const RateLimited: Story = {
+	args: { result: { outcome: "RATE_LIMITED" } },
+};

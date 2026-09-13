@@ -30,4 +30,129 @@
             <column name="completion_date"/>
         </createIndex>
     </changeSet>
+    <changeSet id="1789190761030-2" author="hephaestus">
+        <createTable tableName="notification_subscription">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="notification_subscriptionPK"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enabled" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enabled_since" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="frequency" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="kind" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_digest_date" type="date"/>
+            <column name="unsubscribe_token" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="notification_subscription" baseColumnNames="account_id" constraintName="sfk_notification_subscription_account" referencedTableName="account" referencedColumnNames="id" onDelete="CASCADE"/>
+    </changeSet>
+    <changeSet id="1789190761030-3" author="hephaestus">
+        <createTable tableName="product_survey_email_invitation">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="product_survey_email_invitationPK"/>
+            </column>
+            <column name="accepted_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cancelled_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="expires_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reminder_accepted_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column defaultValueBoolean="false" name="reminder_enabled" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reminder_requested_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="requested_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="requested_by_account_id" type="BIGINT"/>
+            <column name="survey_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="product_survey_email_invitation" baseColumnNames="account_id" constraintName="sfk_survey_email_invitation_account" referencedTableName="account" referencedColumnNames="id" onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="product_survey_email_invitation" baseColumnNames="survey_id" constraintName="sfk_survey_email_invitation_survey" referencedTableName="product_survey" referencedColumnNames="id" onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="product_survey_email_invitation" baseColumnNames="workspace_id" constraintName="sfk_survey_email_invitation_workspace" referencedTableName="workspace" referencedColumnNames="id" onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="product_survey_email_invitation" baseColumnNames="requested_by_account_id" constraintName="sfk_survey_email_invitation_requester" referencedTableName="account" referencedColumnNames="id" onDelete="SET NULL"/>
+    </changeSet>
+    <changeSet id="1789190761030-4" author="hephaestus">
+        <addColumn tableName="connection">
+            <column name="attention_problem" type="VARCHAR(32)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789190761030-5" author="hephaestus">
+        <addColumn tableName="connection">
+            <column defaultValueNumeric="0" name="attention_revision" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789190761030-6" author="hephaestus">
+        <addColumn tableName="product_survey">
+            <column name="summary_queued_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789190761030-7" author="hephaestus">
+        <addUniqueConstraint columnNames="account_id, kind" constraintName="uk_notification_subscription_account_kind" tableName="notification_subscription"/>
+    </changeSet>
+    <changeSet id="1789190761030-8" author="hephaestus">
+        <addUniqueConstraint columnNames="unsubscribe_token" constraintName="uk_notification_subscription_token" tableName="notification_subscription"/>
+    </changeSet>
+    <changeSet id="1789190761030-9" author="hephaestus">
+        <addUniqueConstraint columnNames="survey_id, account_id" constraintName="uk_survey_email_invitation_account" tableName="product_survey_email_invitation"/>
+    </changeSet>
+    <changeSet id="1789190761030-10" author="hephaestus">
+        <createIndex indexName="idx_survey_email_invitation_account" tableName="product_survey_email_invitation">
+            <column name="account_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1789190761030-11" author="hephaestus">
+        <addColumn tableName="product_survey_email_invitation">
+            <column defaultValueNumeric="0" name="request_generation" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789190761030-12" author="hephaestus">
+        <createIndex indexName="idx_notification_subscription_delivery" tableName="notification_subscription">
+            <column name="kind"/>
+            <column name="enabled"/>
+            <column name="account_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1789190761030-13" author="hephaestus">
+        <createIndex indexName="idx_product_feedback_created_at" tableName="product_feedback">
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1789190761030-14" author="hephaestus">
+        <createIndex indexName="idx_product_survey_summary" tableName="product_survey">
+            <column name="summary_queued_at"/>
+            <column name="ends_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1789190761030-15" author="hephaestus">
+        <createIndex indexName="idx_survey_email_reminders" tableName="product_survey_email_invitation">
+            <column defaultValueBoolean="false" name="reminder_enabled"/>
+            <column name="reminder_requested_at"/>
+            <column name="cancelled_at"/>
+            <column name="expires_at"/>
+            <column name="accepted_at"/>
+        </createIndex>
+    </changeSet>
 </databaseChangeLog>

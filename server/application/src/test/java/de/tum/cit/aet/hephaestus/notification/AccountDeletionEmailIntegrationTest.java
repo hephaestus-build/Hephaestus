@@ -6,11 +6,14 @@ import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.auth.AccountService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettings;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingJavaMailSender;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfiguration;
+import de.tum.cit.aet.hephaestus.notification.email.EmailRateLimitProperties;
+import de.tum.cit.aet.hephaestus.notification.email.EmailRateLimiter;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import jakarta.mail.Message;
 import jakarta.mail.internet.InternetAddress;
@@ -50,6 +53,9 @@ import tools.jackson.databind.ObjectMapper;
 class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
 
     private static final String LISTENER = AccountDeletionEmailListener.class.getName() + ".on(";
+
+    @Autowired
+    private BucketResolver buckets;
 
     @Autowired
     private AccountService accountService;
@@ -146,6 +152,32 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
     }
 
     /** The instance installs with Silent Mode engaged (fail-closed); every test here needs it released. */
+    @Test
+    void shouldPersistSharedEmailBudgetsAndReserveEssentialCapacity() {
+        String prefix = UUID.randomUUID() + ":";
+        BucketResolver scoped = (key, configuration) -> buckets.resolve(prefix + key, configuration);
+        var first = new EmailRateLimiter(scoped, new EmailRateLimitProperties(3, 2));
+        var second = new EmailRateLimiter(scoped, new EmailRateLimitProperties(3, 2));
+        try {
+            assertThat(first.acquire(true)).isTrue();
+            assertThat(second.acquire(true)).isTrue();
+            assertThat(first.acquire(true)).isFalse();
+            assertThat(second.acquire(false)).isTrue();
+            assertThat(first.acquire(false)).isFalse();
+            assertThat(jdbc.queryForObject(
+                            "SELECT COUNT(*) FROM auth_rate_limit_bucket WHERE id IN (?, ?) AND state IS NOT NULL AND expires_at IS NOT NULL",
+                            Long.class,
+                            prefix + "email:optional",
+                            prefix + "email:total"))
+                    .isEqualTo(2);
+        } finally {
+            jdbc.update(
+                    "DELETE FROM auth_rate_limit_bucket WHERE id IN (?, ?)",
+                    prefix + "email:optional",
+                    prefix + "email:total");
+        }
+    }
+
     @BeforeEach
     void releaseSilentMode() {
         setSilentMode(false);

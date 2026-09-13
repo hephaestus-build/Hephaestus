@@ -22,16 +22,20 @@ public record EmailDeliveryResult(Outcome outcome, @Nullable String messageId) {
         SILENT_MODE,
         /** The account has no provider-verified address, so there is nobody to write to. */
         NO_RECIPIENT,
+        /** The recipient has disabled this optional notification kind. */
+        UNSUBSCRIBED,
         /** The recipient address is not a syntactically valid single mailbox. */
         INVALID_ADDRESS,
         /** The relay classified the address as invalid; no automatic retry. */
         REJECTED,
         /** The relay could not be reached or refused the credentials; a later attempt may succeed. */
-        UNAVAILABLE;
+        UNAVAILABLE,
+        /** Shared relay attempt budget exhausted or unavailable; retry later. */
+        RATE_LIMITED;
 
         /** Only a transport that may recover is worth another attempt. */
         public boolean retryable() {
-            return this == UNAVAILABLE;
+            return this == UNAVAILABLE || this == RATE_LIMITED;
         }
     }
 

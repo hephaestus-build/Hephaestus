@@ -24,7 +24,7 @@ spring:
     sql:
         init:
             mode: always
-            schema-locations: classpath:db/auth-event-sequence.sql
+            schema-locations: classpath:db/auth-event-sequence.sql,classpath:db/rate-limit-buckets.sql
 
     # JPA configuration for tests
     # Use 'create' instead of 'create-drop': the Testcontainer is ephemeral so

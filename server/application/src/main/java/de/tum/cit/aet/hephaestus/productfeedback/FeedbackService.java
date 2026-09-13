@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackFilter;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackItemDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
+import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSubmittedEvent;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -28,23 +30,26 @@ class FeedbackService {
     private final ProductFeedbackRepository feedback;
     private final FeedbackRefs refs;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
     private final String appVersion;
 
     FeedbackService(
             ProductFeedbackRepository feedback,
             FeedbackRefs refs,
             Clock clock,
+            ApplicationEventPublisher events,
             @Value("${spring.application.version}") String appVersion) {
         this.feedback = feedback;
         this.refs = refs;
         this.clock = clock;
+        this.events = events;
         this.appVersion = appVersion;
     }
 
     @Transactional
     public ProductFeedback add(FeedbackRequestDTO request, Long accountId, @Nullable Long workspaceId) {
         try {
-            return feedback.saveAndFlush(new ProductFeedback(
+            ProductFeedback saved = feedback.saveAndFlush(new ProductFeedback(
                     accountId,
                     workspaceId,
                     request.kind(),
@@ -52,6 +57,9 @@ class FeedbackService {
                     request.pagePath(),
                     request.userAgent(),
                     appVersion));
+            events.publishEvent(
+                    new ProductFeedbackSubmittedEvent(saved.getId(), Objects.requireNonNull(saved.getCreatedAt())));
+            return saved;
         } catch (DataIntegrityViolationException exception) {
             if (DataIntegrityViolationConstraints.hasName(exception, "uk_product_feedback_rate_limit")) {
                 throw new ResponseStatusException(

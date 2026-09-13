@@ -41,16 +41,19 @@ public class EmailGateway {
     private final EmailProperties properties;
     private final OutboundEgressGuard egressGuard;
     private final EmailDeliveryMetrics metrics;
+    private final EmailRateLimiter rateLimiter;
 
     public EmailGateway(
             Optional<JavaMailSender> mailSender,
             EmailProperties properties,
             OutboundEgressGuard egressGuard,
-            EmailDeliveryMetrics metrics) {
+            EmailDeliveryMetrics metrics,
+            EmailRateLimiter rateLimiter) {
         this.mailSender = mailSender;
         this.properties = properties;
         this.egressGuard = egressGuard;
         this.metrics = metrics;
+        this.rateLimiter = rateLimiter;
     }
 
     /** Whether this instance can send email at all: a relay host and a sender address are both set. */
@@ -87,6 +90,10 @@ public class EmailGateway {
             return EmailDeliveryResult.of(Outcome.SILENT_MODE);
         }
 
+        if (!rateLimiter.acquire(message.kind().optional())) {
+            return EmailDeliveryResult.of(Outcome.RATE_LIMITED);
+        }
+
         String messageId = "<" + UUID.randomUUID() + "@" + domainOf(from) + ">";
         MimeMessage mimeMessage = sender.createMimeMessage();
         try {
@@ -104,6 +111,14 @@ public class EmailGateway {
             mimeMessage.setHeader("Message-ID", messageId);
             mimeMessage.setHeader("Auto-Submitted", "auto-generated");
             mimeMessage.setHeader("X-Auto-Response-Suppress", "All");
+            String unsubscribeUrl = message.unsubscribeUrl();
+            if (unsubscribeUrl != null) {
+                mimeMessage.setHeader("List-Unsubscribe", "<" + unsubscribeUrl + ">");
+                // RFC 8058 requires HTTPS. Local Mailpit links remain usable without advertising one-click.
+                if (unsubscribeUrl.startsWith("https://")) {
+                    mimeMessage.setHeader("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
+                }
+            }
         } catch (MessagingException | UnsupportedEncodingException e) {
             log.error(
                     "email: could not build message kind={} messageId={} cause={}",

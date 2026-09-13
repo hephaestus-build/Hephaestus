@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent;
+import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Duration;
@@ -84,6 +85,9 @@ class AccountServiceTest extends BaseUnitTest {
         service.unlinkIdentity(1L, 10L, /* actingAccountId */ null);
 
         verify(identityLinkRepository).deleteByIdAndAccountId(10L, 1L);
+        verify(eventPublisher)
+                .publishEvent(new AccountSecurityChangedEvent(
+                        1L, AccountSecurityChangedEvent.Kind.IDENTITY_UNLINKED, clock.instant()));
         ArgumentCaptor<AuthEventData> event = ArgumentCaptor.forClass(AuthEventData.class);
         verify(auditWriter).write(event.capture());
         assertThat(event.getValue().type()).isEqualTo(AuthEvent.EventType.IDENTITY_UNLINKED);
@@ -163,6 +167,9 @@ class AccountServiceTest extends BaseUnitTest {
         service.adminSetRole(2L, "APP_ADMIN", 1L);
 
         assertThat(account.getAppRole()).isEqualTo(Account.AppRole.APP_ADMIN);
+        verify(eventPublisher)
+                .publishEvent(new AccountSecurityChangedEvent(
+                        2L, AccountSecurityChangedEvent.Kind.APP_ROLE_CHANGED, clock.instant()));
         verify(accountRepository).save(account);
         // Dedicated APP_ROLE_CHANGED type so the most security-sensitive mutation stays queryable on
         // the indexed event_type column.
@@ -190,6 +197,14 @@ class AccountServiceTest extends BaseUnitTest {
         // Demotion revokes the stripped admin's live sessions so app_admin authority can't outlive the
         // role change for the token's TTL.
         verify(issuedJwtRepository).revokeAllForAccount(eq(2L), any(), eq(IssuedJwt.RevokedReason.ADMIN_REVOKE));
+    }
+
+    @Test
+    void shouldNotPublishSecurityChangeWhenRoleIsUnchanged() {
+        accountWithRole(2L, Account.AppRole.USER);
+        service.adminSetRole(2L, "USER", 1L);
+        verifyNoInteractions(eventPublisher, auditWriter);
+        verify(accountRepository, never()).save(any());
     }
 
     @Test

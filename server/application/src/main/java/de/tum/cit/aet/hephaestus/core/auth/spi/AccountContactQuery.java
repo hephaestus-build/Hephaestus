@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.spi;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -13,6 +14,12 @@ import java.util.Optional;
  * <p>Implemented in {@code core.auth}; consumed by {@code notification}.
  */
 public interface AccountContactQuery {
+
+    Optional<String> activeVerifiedPrimaryEmail(long accountId);
+
+    List<Long> activeVerifiedAdministratorIds();
+
+    Optional<String> activeVerifiedAdministratorEmail(long accountId);
 
     /**
      * The account's provider-verified primary email address.
