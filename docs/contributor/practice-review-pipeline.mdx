@@ -217,6 +217,18 @@ and it is the only prose the observation carries anywhere. The measurement emits
 *delivery* (ADR 0021, ADR 0022), and the stage that decides deliveries is the subject of the next
 section.
 
+### Recorded-result coverage
+
+The runtime's per-practice execution ledger measures **recorded results**, not how thoroughly the
+sources were inspected. A practice with at least one recorded observation is counted as evaluated;
+a practice without one is counted as unevaluated and may be retried. This does not establish that
+all relevant behaviors were reviewed, or that a practice without a result was never inspected.
+
+The current runner cannot complete successfully with zero recorded observations. A supported
+`NOT_APPLICABLE` observation can record that no occasion exists; missing required sources remain
+readiness failures, and no verdict may be invented to satisfy execution coverage. Report this
+protocol limitation separately from source completeness, judgment quality and delivery.
+
 ## Measurement and intervention
 
 Everything above this line is the system taking a reading. Everything below it is the system deciding

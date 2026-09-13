@@ -221,15 +221,15 @@ export function normalizeEvidence(
 		// required-field checks below already reject by name.
 		const fields: Record<string, unknown> = isRecord(citation) ? citation : {};
 		const sourceKind = trimmedText(fields.sourceKind);
-		const artifactPath = trimmedText(fields.artifactPath);
-		const path = trimmedText(fields.path);
+		const artifactPath = typeof fields.artifactPath === "string" ? fields.artifactPath : "";
+		const path = typeof fields.path === "string" ? fields.path : "";
 		const declaredSide = fields.side == null ? null : trimmedText(fields.side).toUpperCase();
 		const startLine = Number(fields.startLine);
 		const endLine = fields.endLine == null ? startLine : Number(fields.endLine);
 		const quote = typeof fields.quote === "string" ? fields.quote : "";
 		if (!sourceKind) throw new Error("evidence citation sourceKind is required");
-		if (!artifactPath) throw new Error("evidence citation artifactPath is required");
-		if (!path) throw new Error("evidence citation path is required");
+		if (!artifactPath.trim()) throw new Error("evidence citation artifactPath is required");
+		if (!path.trim()) throw new Error("evidence citation path is required");
 		if (sourceKind === "scm.pull-request.diff" && declaredSide !== "OLD" && declaredSide !== "NEW")
 			throw new Error("diff evidence citation side must be OLD or NEW");
 		if (sourceKind !== "scm.pull-request.diff" && declaredSide !== null)

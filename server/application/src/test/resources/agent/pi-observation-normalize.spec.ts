@@ -795,3 +795,18 @@ void test("annotated source text is not parsed as a header and Unicode separator
 		null,
 	);
 });
+
+void test("normalization preserves nonblank citation path identifiers", () => {
+	const raw = baseObservation();
+	const supplied = onlyCitation(raw.evidence.citations);
+	supplied.path = " source file ";
+	supplied.artifactPath = "inputs/context/ captured file ";
+	const citation = onlyCitation(normalizeObservation(raw).evidence.citations);
+	assert.equal(citation.path, supplied.path);
+	assert.equal(citation.artifactPath, supplied.artifactPath);
+	for (const field of ["path", "artifactPath"]) {
+		const blank = baseObservation();
+		onlyCitation(blank.evidence.citations)[field] = " \t\n";
+		assert.throws(() => normalizeObservation(blank), new RegExp(`${field} is required`));
+	}
+});

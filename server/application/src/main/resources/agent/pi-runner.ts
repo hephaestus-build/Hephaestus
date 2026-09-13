@@ -669,8 +669,8 @@ function buildReportObservationTool(allowedPracticeSlugs?: readonly string[]) {
 						text: `Stored ${inserted} observation${duplicates > 0 ? ` (${duplicates} duplicate skipped)` : ""}. Negative observations in this call: ${negatives}. ${
 							allowed
 								? remainingPractices.length > 0
-									? `Still required from this group: ${remainingPractices.join(", ")}.`
-									: "This group is complete."
+									? `No recorded result for these practices: ${remainingPractices.join(", ")}.`
+									: "Each practice in this group has a recorded result; this does not certify exhaustive review."
 								: ""
 						}`,
 					},
@@ -1814,9 +1814,9 @@ async function main() {
 					// Checkpoint nudges must not relax the evidence requirements.
 					trackedSession
 						.steer(
-							`You have spent ${Math.round(reached * 100)}% of your context. Record now every practice your ` +
-								`evidence already settles, one report_observation call per practice. Record nothing for a ` +
-								`practice you cannot yet quote the deciding evidence for. ${PERSIST_DISCIPLINE}`,
+							`You have spent ${Math.round(reached * 100)}% of your context. Record only distinct practice claims ` +
+								`your evidence already supports. There is no observation quota. Do not invent a claim ` +
+								`for a practice without deciding evidence. ${PERSIST_DISCIPLINE}`,
 						)
 						.catch((err) => console.error(`[pi-runner] steer failed: ${errorText(err)}`));
 				}
@@ -2252,11 +2252,9 @@ async function main() {
 		reviewState.observations.map((item) => item.practiceSlug),
 	);
 	logPracticeCoverage();
-	// A practice nobody reached is recorded as unevaluated and reported as such, not turned into a
-	// reason to throw away the practices that were reached. Every observation here was quoted and
-	// validated when it was recorded, and the coverage ledger already carries what is missing, so the
-	// honest outcome is a review that says what it looked at. A review that reached nothing at all has
-	// nothing to say and remains a failure.
+	// This ledger measures recorded results, not inspection: a practice without an observation is
+	// unevaluated in the ledger even if the session read its sources. Preserve supported results from
+	// other practices; zero recorded observations cannot complete this runner protocol.
 	if (missingAfterRetry.length > 0) {
 		console.error(
 			`[pi-runner] PARTIAL: ${missingAfterRetry.length} of ${allSlugs.length} practice(s) not reached: ${missingAfterRetry.join(", ")}`,

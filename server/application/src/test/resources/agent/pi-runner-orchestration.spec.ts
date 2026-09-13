@@ -120,7 +120,7 @@ if (scenario) {
 								assert.match(tool.description, /local review state/);
 								assert.match(tool.description, /not a dry-run validator/);
 								assert.match(tool.description, /durable-submission boundary/);
-								await tool.execute("report-1", {
+								const reply = await tool.execute("report-1", {
 									practiceSlug: "test-practice",
 									summary: "Unsafe authentication call",
 									assessmentStatus: "ASSESSED",
@@ -142,6 +142,12 @@ if (scenario) {
 										],
 									},
 								});
+								assert.match(
+									JSON.stringify(reply),
+									/Each practice in this group has a recorded result/,
+								);
+								assert.match(JSON.stringify(reply), /does not certify exhaustive review/);
+								assert.doesNotMatch(JSON.stringify(reply), /group is complete|Still required/);
 							}
 						},
 					},
