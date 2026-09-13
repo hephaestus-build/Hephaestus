@@ -35,3 +35,6 @@ across failed notifications instead of repeatedly retrying only the oldest batch
 Workspace connection alerts name the affected workspace and link to its current settings. Incomplete
 notification-preference updates are rejected instead of clearing choices, and the API documents the
 required version precondition.
+
+Webhook receivers now wait briefly for monitoring to stop during shutdown and no longer report
+intentional cancellation as a broker outage.

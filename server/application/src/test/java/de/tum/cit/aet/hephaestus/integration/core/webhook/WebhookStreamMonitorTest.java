@@ -4,6 +4,7 @@ import static de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture.GI
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -24,6 +25,9 @@ import io.nats.client.api.StreamState;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -236,6 +240,49 @@ class WebhookStreamMonitorTest extends BaseUnitTest {
         monitor.poll();
 
         assertThat(pollAge()).isLessThan(5d);
+    }
+
+    @Test
+    void waitsForTheInFlightPollToStopWithoutReportingAShutdownAsAnOutage(CapturedOutput output) throws Exception {
+        var entered = new CountDownLatch(1);
+        var interrupted = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var stopped = new CountDownLatch(1);
+        doAnswer(invocation -> {
+                    entered.countDown();
+                    try {
+                        release.await();
+                    } catch (InterruptedException shutdown) {
+                        interrupted.countDown();
+                        // Simulate a broker call that must finish cleanup after cancellation.
+                        release.await();
+                        Thread.currentThread().interrupt();
+                    }
+                    throw new java.io.IOException("broker call cancelled during shutdown");
+                })
+                .when(jsm)
+                .getStreamInfo(anyString());
+        WebhookStreamMonitor monitor = monitor();
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            monitor.start();
+            try {
+                assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+                var stopping = executor.submit(() -> {
+                    monitor.stop();
+                    stopped.countDown();
+                });
+                assertThat(interrupted.await(5, TimeUnit.SECONDS)).isTrue();
+                assertThat(stopped.await(100, TimeUnit.MILLISECONDS))
+                        .as("shutdown waits for the running poll, not only its cancellation request")
+                        .isFalse();
+                release.countDown();
+                stopping.get(5, TimeUnit.SECONDS);
+                assertThat(output.getAll()).doesNotContain("Webhook loss accounting stopped");
+            } finally {
+                release.countDown();
+                monitor.stop();
+            }
+        }
     }
 
     private WebhookStreamMonitor monitor() {
