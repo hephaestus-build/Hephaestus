@@ -157,6 +157,7 @@ export const KEPT_AFTER_REPLY_DEFS: StatusDefs<KeptAfterReply> = {
 
 /** A choice's entry names the loosest tier the developer accepts; `null` is no AI at all. */
 export interface MemberAiChoiceDef extends StatusDef {
+	consideration: string;
 	ceiling: DataHandlingTier | null;
 }
 
@@ -171,14 +172,18 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		icon: Building2Icon,
 		badgeVariant: "secondary",
 		description: "Runs only on systems your organisation operates.",
+		consideration:
+			"Limited to your organisation’s models and capacity. Its own storage rules still apply.",
 		ceiling: "IN_HOUSE",
 	},
 	NOT_KEPT_ONLY: {
-		label: "Allow providers that keep nothing",
+		label: "Allow providers without content storage",
 		icon: ShieldCheckIcon,
 		badgeVariant: "secondary",
 		description:
-			"A provider under terms your organisation accepted may process it, never trains on it, and keeps nothing after the reply.",
+			"Also allows approved providers that do not store your prompts or replies after responding.",
+		consideration:
+			"Your work may leave your organisation. Providers may still keep usage metadata; in-house storage rules still apply.",
 		ceiling: "PROVIDER_NOT_KEPT",
 	},
 	ANY_DECLARED: {
@@ -186,7 +191,9 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		icon: ClockIcon,
 		badgeVariant: "secondary",
 		description:
-			"Also a provider that keeps it for a limited time for safety checks, which its staff may read if flagged.",
+			"Also allows approved providers that retain content for safety checks. This permits more options, not necessarily better models.",
+		consideration:
+			"Prompts and replies may be stored for safety checks, and provider staff may read flagged content.",
 		ceiling: "PROVIDER_KEPT",
 	},
 	NO_AI: {
@@ -194,6 +201,8 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		icon: CircleOffIcon,
 		badgeVariant: "secondary",
 		description: "No new practice reviews about you or new requests to Heph in this workspace.",
+		consideration:
+			"You won’t get new AI feedback or use Heph here. Membership and existing feedback stay unchanged.",
 		ceiling: null,
 	},
 };

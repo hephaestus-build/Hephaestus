@@ -6,10 +6,10 @@ import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAiAvailability;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -66,9 +66,24 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
                 workspace.getFeatures().getPracticesEnabled());
         var mentorRows = rowsIfEnabled(
                 workspaceId, AgentPurpose.MENTOR, workspace.getFeatures().getMentorEnabled());
-        return Stream.of(MemberAiChoice.IN_HOUSE_ONLY, MemberAiChoice.NOT_KEPT_ONLY, MemberAiChoice.ANY_DECLARED)
-                .map(choice -> new Option(choice, ready(reviewRows, choice), ready(mentorRows, choice)))
-                .toList();
+        var choices = List.of(MemberAiChoice.IN_HOUSE_ONLY, MemberAiChoice.NOT_KEPT_ONLY, MemberAiChoice.ANY_DECLARED);
+        var options = new ArrayList<Option>();
+        Optional<WorkspaceAgentBinding> previousReview = Optional.empty();
+        Optional<WorkspaceAgentBinding> previousMentor = Optional.empty();
+        MemberAiChoice previousChoice = null;
+        for (var choice : choices) {
+            var review = choice.ceiling().flatMap(ceiling -> loosestWithin(reviewRows, ceiling));
+            var mentor = choice.ceiling().flatMap(ceiling -> loosestWithin(mentorRows, ceiling));
+            // Compare the selected bindings, not readiness flags or model display names.
+            var unchanged = (review.isPresent() || mentor.isPresent())
+                    && review.orElse(null) == previousReview.orElse(null)
+                    && mentor.orElse(null) == previousMentor.orElse(null);
+            options.add(new Option(choice, review.isPresent(), mentor.isPresent(), unchanged ? previousChoice : null));
+            previousReview = review;
+            previousMentor = mentor;
+            previousChoice = choice;
+        }
+        return List.copyOf(options);
     }
 
     private List<WorkspaceAgentBinding> rowsIfEnabled(
@@ -76,10 +91,6 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
         return Boolean.TRUE.equals(featureEnabled)
                 ? bindings.findByWorkspaceIdAndPurpose(workspaceId, purpose)
                 : List.of();
-    }
-
-    private boolean ready(List<WorkspaceAgentBinding> rows, MemberAiChoice choice) {
-        return choice.ceiling().flatMap(ceiling -> loosestWithin(rows, ceiling)).isPresent();
     }
 
     private Optional<WorkspaceAgentBinding> loosestWithin(List<WorkspaceAgentBinding> rows, DataHandlingTier ceiling) {

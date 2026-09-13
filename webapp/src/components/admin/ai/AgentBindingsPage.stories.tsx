@@ -123,7 +123,7 @@ export const TiersPartiallyCovered: Story = {
 			"→ Stays in-house: Local Llama (self-hosted)",
 		);
 		await expect(
-			previewRow(reviews, "Members who chose Allow providers that keep nothing"),
+			previewRow(reviews, "Members who chose Allow providers without content storage"),
 		).toHaveTextContent("→ Stays in-house: Local Llama (self-hosted)");
 		await expect(
 			previewRow(reviews, "Members who chose Allow storage for safety checks"),
@@ -155,7 +155,7 @@ export const NothingCovered: Story = {
 		const reviews = purposeCard(canvas, "Practice reviews");
 		for (const term of [
 			"Members who chose Only in-house",
-			"Members who chose Allow providers that keep nothing",
+			"Members who chose Allow providers without content storage",
 			"Members who chose Allow storage for safety checks",
 		]) {
 			await expect(previewRow(reviews, term)).toHaveTextContent("→ nothing runs for them");
@@ -278,7 +278,7 @@ export const ProjectReviewsDisabled: Story = {
 		await expect(card.getByText("Practice reviews off")).toBeVisible();
 		for (const term of [
 			"Members who chose Only in-house",
-			"Members who chose Allow providers that keep nothing",
+			"Members who chose Allow providers without content storage",
 			"Members who chose Allow storage for safety checks",
 			UNCHOSEN_ROW,
 		]) {

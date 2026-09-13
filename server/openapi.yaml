@@ -17042,6 +17042,13 @@ components:
           type: boolean
         practiceReviewsReady:
           type: boolean
+        sameModelsAs:
+          type: string
+          enum:
+          - NO_AI
+          - IN_HOUSE_ONLY
+          - NOT_KEPT_ONLY
+          - ANY_DECLARED
       required:
       - choice
       - mentorReady

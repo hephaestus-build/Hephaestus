@@ -89,10 +89,10 @@ it("names the saved choice when no Heph model is within it", async () => {
 		ROUTE_RENDER_WAIT,
 	);
 	expect(
-		screen.getByText("Allow providers that keep nothing", { selector: "em" }).parentElement
+		screen.getByText("Allow providers without content storage", { selector: "em" }).parentElement
 			?.textContent,
 	).toBe(
-		"No Heph model is within Allow providers that keep nothing yet. Nothing switches you elsewhere — ask a workspace owner, or change your choice.",
+		"No Heph model is within Allow providers without content storage yet. Nothing switches you elsewhere — ask a workspace owner, or change your choice.",
 	);
 	expect(screen.getByRole("link", { name: "Change your AI choice" }).getAttribute("href")).toBe(
 		"/w/acme/onboarding?returnTo=%2Fw%2Facme%2Fmentor",

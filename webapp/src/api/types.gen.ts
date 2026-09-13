@@ -5981,6 +5981,7 @@ export type WorkspaceAiOption = {
   choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
   mentorReady: boolean;
   practiceReviewsReady: boolean;
+  sameModelsAs?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
 };
 
 /**

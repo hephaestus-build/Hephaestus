@@ -132,7 +132,6 @@ export const DeclaredPreview: Story = {
 			"Operated by",
 			"Kept after the reply",
 			"Training",
-			"Who reads it",
 		]);
 
 		await userEvent.click(within(dialog).getByRole("button", { name: /^add model$/i }));

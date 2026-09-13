@@ -274,13 +274,24 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 								</QuestionnaireTitle>
 								<QuestionnaireDescription>
 									For you, in this workspace only. Allowing a provider also allows in-house models.
-									Nothing outside your choice is used.
+									Nothing outside your choice is used. No model is used for training on your work.
+									Model quality and capacity depend on what this workspace has set up; allowing more
+									does not guarantee better results.
 								</QuestionnaireDescription>
 								<FactList facts={AI_FACTS} />
 								<QuestionnaireChoices className="gap-3 sm:grid-cols-2">
 									{AI_CHOICES.map((value) => {
-										const { icon: Icon, label, description } = MEMBER_AI_CHOICE_DEFS[value];
+										const {
+											icon: Icon,
+											label,
+											description,
+											consideration,
+										} = MEMBER_AI_CHOICE_DEFS[value];
 										const readiness = readinessSentence(state.data, value);
+										const setup = coverage(state.data, value);
+										const sameModelsAs = state.data.aiOptions.find(
+											(option) => option.choice === value,
+										)?.sameModelsAs;
 										return (
 											<QuestionnaireChoice
 												key={value}
@@ -296,13 +307,53 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 													{label}
 												</span>{" "}
 												<QuestionnaireChoiceDescription>
-													{description}{" "}
-													{readiness && <span className="mt-2 block font-medium">{readiness}</span>}
+													<span className="block">
+														<span className="font-medium text-foreground">Allows</span>{" "}
+														{description}
+													</span>{" "}
+													<span className="mt-3 block">
+														<span className="font-medium text-foreground">Consider</span>{" "}
+														{consideration}
+													</span>{" "}
+													<span className="mt-3 block border-t pt-3">
+														<span className="block font-medium text-foreground">
+															In this workspace
+														</span>{" "}
+														<span className="flex justify-between gap-2">
+															<span>Practice reviews</span>{" "}
+															<span>
+																{value === "NO_AI"
+																	? "Off for you"
+																	: setup.practiceReviews
+																		? "Set up"
+																		: "Not set up"}
+															</span>
+														</span>{" "}
+														<span className="flex justify-between gap-2">
+															<span>Heph</span>{" "}
+															<span>
+																{value === "NO_AI"
+																	? "Off for you"
+																	: setup.mentor
+																		? "Set up"
+																		: "Not set up"}
+															</span>
+														</span>{" "}
+														{sameModelsAs && (
+															<span className="mt-2 block">
+																Same models as “{MEMBER_AI_CHOICE_DEFS[sameModelsAs].label}” today.
+															</span>
+														)}
+														{readiness && <span className="mt-2 block">{readiness}</span>}
+													</span>
 												</QuestionnaireChoiceDescription>
 											</QuestionnaireChoice>
 										);
 									})}
 								</QuestionnaireChoices>
+								<p className="text-sm text-muted-foreground">
+									“Set up” describes this workspace’s configuration, not current service health.
+								</p>
 							</QuestionnaireItem>
 
 							{links.length > 0 && (

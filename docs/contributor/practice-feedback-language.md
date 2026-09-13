@@ -174,7 +174,7 @@ badge with a label and an icon everywhere a model appears:
 | `UNDECLARED` | **Not declared** | either fact missing | Never shown to developers; an admin to-do. |
 
 A developer's **AI choice** is a ceiling: the loosest tier they accept in one workspace, or **No
-AI**. The three AI answers are **Only in-house**, **Allow providers that keep nothing**
+AI**. The three AI answers are **Only in-house**, **Allow providers without content storage**
 and **Allow storage for safety checks**; anything stricter than the answer also counts, nothing ever
 switches a developer to a looser tier, and *Not declared* sits outside every ceiling. A member may
 choose any answer regardless of what the workspace has bound today: consent is to a boundary, not

@@ -59,7 +59,10 @@ class WorkspaceOnboardingService {
                 completed,
                 availability.options(context.id()).stream()
                         .map(option -> new WorkspaceOnboardingDTO.WorkspaceAiOptionDTO(
-                                option.choice(), option.practiceReviewsReady(), option.mentorReady()))
+                                option.choice(),
+                                option.practiceReviewsReady(),
+                                option.mentorReady(),
+                                option.sameModelsAs()))
                         .toList(),
                 linkOptions);
     }

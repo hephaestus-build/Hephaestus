@@ -13,7 +13,7 @@ import {
 } from "./WorkspaceOnboardingPage";
 
 const IN_HOUSE = /^Only in-house /;
-const NOT_KEPT = /^Allow providers that keep nothing /;
+const NOT_KEPT = /^Allow providers without content storage /;
 const ANY = /^Allow storage for safety checks /;
 const NO_AI = /^No AI /;
 
@@ -193,10 +193,10 @@ export const NoAi: Story = {
 	args: { state: { ...ready, data: { ...welcome, links: [] } } },
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toHaveAccessibleName(
-			"No AI No new practice reviews about you or new requests to Heph in this workspace.",
+			/No AI Allows No new practice reviews.*Consider.*Membership and existing feedback.*Practice reviews Off for you.*Heph Off for you/,
 		);
 		await expect(canvas.getByRole("radio", { name: IN_HOUSE })).toHaveAccessibleName(
-			"Only in-house Runs only on systems your organisation operates.",
+			/Only in-house Allows Runs only on systems your organisation operates.*Consider.*models and capacity/,
 		);
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
@@ -296,7 +296,7 @@ export const OptionUncovered: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		const inHouse = canvas.getByRole("radio", { name: IN_HOUSE });
 		await expect(inHouse).toHaveAccessibleName(
-			"Only in-house Runs only on systems your organisation operates. Not set up here yet — nothing runs for you until a workspace owner adds a model.",
+			/Only in-house.*Practice reviews Not set up.*Heph Not set up.*nothing runs for you/,
 		);
 		// A ceiling nobody has built up to is still a valid answer, so the card is not disabled.
 		await expect(inHouse).not.toHaveAttribute("aria-disabled");
@@ -337,7 +337,7 @@ export const HephNotCovered: Story = {
 			/Practice reviews aren't set up for this answer yet\.$/,
 		);
 		await expect(canvas.getByRole("radio", { name: ANY })).toHaveAccessibleName(
-			/safety checks, which its staff may read if flagged\.$/,
+			/provider staff may read flagged content.*Practice reviews Set up.*Heph Set up/,
 		);
 	},
 };
@@ -451,11 +451,13 @@ export const Saving: Story = {
 	args: { state: { ...ready, data: { ...welcome, links: [] } } },
 	render: (args) => <Harness {...args} afterSubmit={{ status: "saving", action: "save" }} />,
 	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
+		const noAi = canvas.getByRole("radio", { name: NO_AI });
+		await userEvent.click(noAi);
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Saving…" }));
-		for (const radio of canvas.getAllByRole("radio")) await expect(radio).toBeDisabled();
-		await expect(canvas.getByRole("radio", { name: NO_AI })).toBeChecked();
+		for (const radio of canvas.getAllByRole("radio", { hidden: true }))
+			await expect(radio).toBeDisabled();
+		await expect(noAi).toBeChecked();
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Skip for now" }));
 	},
 };
@@ -617,5 +619,40 @@ export const SkipWithoutSaving: Story = {
 		await userEvent.click(skip);
 		await expect(readyArgs(args).onSubmit).not.toHaveBeenCalled();
 		await expect(readyArgs(args).onLeave).toHaveBeenCalledOnce();
+	},
+};
+
+export const SameModelsForBroaderChoice: Story = {
+	args: {
+		state: {
+			...ready,
+			data: {
+				...welcome,
+				links: [],
+				aiOptions: [
+					{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: true, mentorReady: true },
+					{
+						choice: "NOT_KEPT_ONLY",
+						practiceReviewsReady: true,
+						mentorReady: true,
+						sameModelsAs: "IN_HOUSE_ONLY",
+					},
+					{
+						choice: "ANY_DECLARED",
+						practiceReviewsReady: true,
+						mentorReady: true,
+						sameModelsAs: "NOT_KEPT_ONLY",
+					},
+				],
+			},
+		},
+	},
+	play: async ({ canvas, userEvent, args }) => {
+		await expect(canvas.getByRole("radio", { name: NOT_KEPT })).toHaveAccessibleName(
+			/Same models as “Only in-house” today/,
+		);
+		await userEvent.click(canvas.getByRole("radio", { name: IN_HOUSE }));
+		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
+		await expect(readyArgs(args).onSubmit).toHaveBeenCalledWith("IN_HOUSE_ONLY");
 	},
 };

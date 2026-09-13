@@ -18,7 +18,8 @@ public record WorkspaceOnboardingDTO(
     public record WorkspaceAiOptionDTO(
             @NonNull MemberAiChoice choice,
             @NonNull boolean practiceReviewsReady,
-            @NonNull boolean mentorReady) {}
+            @NonNull boolean mentorReady,
+            @Nullable MemberAiChoice sameModelsAs) {}
 
     public record WorkspaceOnboardingLinkDTO(
             @NonNull long connectionId,

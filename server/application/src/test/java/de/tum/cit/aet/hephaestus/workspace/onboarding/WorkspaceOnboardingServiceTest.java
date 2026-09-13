@@ -149,9 +149,9 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         enabledPolicy();
         when(availability.options(1L))
                 .thenReturn(List.of(
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, false, false),
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.NOT_KEPT_ONLY, false, false),
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.ANY_DECLARED, true, true)));
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, false, false, null),
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.NOT_KEPT_ONLY, false, false, null),
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.ANY_DECLARED, true, true, null)));
         var result = service.choose(context, 10L, MemberAiChoice.IN_HOUSE_ONLY);
         var saved = ArgumentCaptor.forClass(WorkspaceMemberOnboarding.class);
         verify(members).save(saved.capture());
