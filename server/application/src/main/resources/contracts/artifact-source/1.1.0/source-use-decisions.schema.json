@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hephaestus.aet.cit.tum.de/contracts/artifact-source/1.1.0/source-use-decisions.schema.json",
+  "title": "Source use decisions",
+  "description": "Reviewed governance decisions that permit or deny each explicit product use of an evidence source.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "decisions"
+  ],
+  "properties": {
+    "contractVersion": {
+      "const": "1.1.0",
+      "description": "Source contract governed by these decisions."
+    },
+    "decisions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "sourceKind",
+          "purpose",
+          "basis",
+          "outcome",
+          "retentionPolicy",
+          "erasurePolicy",
+          "recordedAt",
+          "reviewer",
+          "decidedAt",
+          "expiresAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Stable identifier of this releasable governance decision."
+          },
+          "sourceKind": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9-]*)+$",
+            "description": "Logical source governed by this decision."
+          },
+          "purpose": {
+            "enum": [
+              "AUTOMATED_PRACTICE_REVIEW",
+              "PRACTICE_FEEDBACK_DELIVERY",
+              "CONVERSATIONAL_MENTORING",
+              "OPERATOR_EVIDENCE_REVIEW"
+            ],
+            "description": "Single product use governed by this decision."
+          },
+          "basis": {
+            "const": "ENGINEERING_BASELINE",
+            "description": "Authority this decision rests on. Engineering, never a controller or a data-protection officer."
+          },
+          "outcome": {
+            "const": "ENGINEERING_APPROVED",
+            "description": "Recorded outcome. A use nobody approved carries no entry rather than a recorded denial."
+          },
+          "modelProcessor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "description": "Named model processor when this use permits model egress."
+          },
+          "retentionPolicy": {
+            "const": "AGENT_EVIDENCE_RETENTION",
+            "description": "Retention policy reviewed for this use."
+          },
+          "erasurePolicy": {
+            "const": "WORKSPACE_AND_PERSON_ERASURE",
+            "description": "Erasure policy reviewed for this use."
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time this decision record entered the contract."
+          },
+          "reviewer": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Accountable reviewer or reviewing role."
+          },
+          "decidedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time the reviewer made the decision."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Exclusive time after which this decision no longer permits use."
+          }
+        },
+        "description": "Reviewed decision for one logical source and one product use."
+      },
+      "description": "One purpose-specific governance decision per source use."
+    }
+  }
+}

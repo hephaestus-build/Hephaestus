@@ -384,7 +384,7 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
 
     private static ArtifactSourceManifest manifestWith(SourceCapture... captures) {
         return new ArtifactSourceManifest(
-                new SourceContractVersion("1.0.0"),
+                new SourceContractVersion("1.1.0"),
                 "0".repeat(64),
                 "scm.pull_request",
                 Instant.EPOCH,

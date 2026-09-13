@@ -229,7 +229,7 @@ class InAppFeedbackControllerIntegrationTest extends AbstractWorkspaceIntegratio
         created.setWorkspace(ws);
         created.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         created.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
-        created.setEvidenceSnapshot(OBJECT_MAPPER.valueToTree(Map.of("manifest", Map.of("contractVersion", "1.0.0"))));
+        created.setEvidenceSnapshot(OBJECT_MAPPER.valueToTree(Map.of("manifest", Map.of("contractVersion", "1.1.0"))));
         return agentJobRepository.save(created);
     }
 

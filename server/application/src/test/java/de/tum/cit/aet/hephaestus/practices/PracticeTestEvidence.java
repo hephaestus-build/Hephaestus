@@ -24,7 +24,7 @@ public final class PracticeTestEvidence {
     public static PracticeAutomatedReviewPolicy forArtifact(ArtifactKind artifactKind) {
         needsFor(artifactKind); // reject an unsupported kind here rather than at the binding
         return new PracticeAutomatedReviewPolicy(
-                new SourceContractVersion("1.0.0"),
+                new SourceContractVersion("1.1.0"),
                 new PracticeAutomatedReview(
                         PracticeAutomatedReviewMode.LANGUAGE_MODEL,
                         PracticeEvidenceSufficiency.SUFFICIENT_WHEN_REQUIREMENTS_MET),

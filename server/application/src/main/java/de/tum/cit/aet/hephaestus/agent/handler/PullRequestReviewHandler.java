@@ -36,7 +36,6 @@ import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -481,21 +480,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             log.info(
                     "All {} observations suppressed by prior reactions: jobId={}",
                     scopedObservations.size(),
-                    job.getId());
-            return;
-        }
-
-        // The NOT_APPLICABLE guard above only fires when EVERY observation is NA. A weak model that instead
-        // reads a stale/empty diff as "all clean" (only positive absence, no negative outcomes) slips past it and
-        // composes an
-        // all-clear over an artifact that was effectively never diffed. Not thrown — a genuinely clean PR
-        // is legitimate strengths-only — but surfaced so the case is observable rather than silent.
-        boolean hasGap = deliverable.stream().anyMatch(f -> f.outcome() == Outcome.NEGATIVE);
-        if (!hasGap && diffFiles.isEmpty()) {
-            log.warn(
-                    "Composing a strengths-only delivery over an EMPTY diff ({} observation(s), no BAD): the diff may "
-                            + "be stale/unavailable, so this all-clear is not grounded in changed code. jobId={}",
-                    deliverable.size(),
                     job.getId());
         }
     }

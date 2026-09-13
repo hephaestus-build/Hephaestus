@@ -127,7 +127,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         testJob.setMetadata(metadata);
         ObjectNode snapshot = objectMapper.createObjectNode();
         var sources =
-                snapshot.putObject("manifest").put("contractVersion", "1.0.0").putArray("sources");
+                snapshot.putObject("manifest").put("contractVersion", "1.1.0").putArray("sources");
         var source = sources.addObject().put("kind", "scm.pull-request.diff");
         source.putObject("state").put("availability", "AVAILABLE").put("content", "NON_EMPTY");
         source.putArray("artifacts")

@@ -47,9 +47,9 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
 
     private static final Logger log = LoggerFactory.getLogger(ClasspathArtifactSourceCatalogRegistry.class);
 
-    static final SourceContractVersion CURRENT_VERSION = new SourceContractVersion("1.0.0");
-    static final String CATALOG_RESOURCE = "contracts/artifact-source/1.0.0/catalog.json";
-    static final String USE_DECISIONS_RESOURCE = "contracts/artifact-source/1.0.0/source-use-decisions.json";
+    static final SourceContractVersion CURRENT_VERSION = new SourceContractVersion("1.1.0");
+    static final String CATALOG_RESOURCE = "contracts/artifact-source/1.1.0/catalog.json";
+    static final String USE_DECISIONS_RESOURCE = "contracts/artifact-source/1.1.0/source-use-decisions.json";
     private final ArtifactSourceCatalog catalog;
     private final String catalogDigest;
     private final Map<String, SourceUseDecision> useDecisions;
