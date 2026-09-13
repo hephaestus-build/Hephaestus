@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1789038452155-1" author="hephaestus">
+        <createTable tableName="workspace_member_onboarding">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="workspace_member_onboardingPK"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ai_choice" type="VARCHAR(24)"/>
+            <column name="completed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="updated_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="welcomed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1789038452155-2" author="hephaestus">
+        <createTable tableName="workspace_onboarding_settings">
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="workspace_onboarding_settingsPK"/>
+            </column>
+            <column defaultValueBoolean="false" name="ai_choice_required" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueBoolean="false" name="enabled" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="required_connection_ids" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueNumeric="0" name="revision" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1789038452155-3" author="hephaestus">
+        <addColumn tableName="llm_model">
+            <column name="data_handling_note" type="VARCHAR(200)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789038452155-4" author="hephaestus">
+        <addColumn tableName="workspace_llm_model">
+            <column name="data_handling_note" type="VARCHAR(200)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789038452155-5" author="hephaestus">
+        <addColumn tableName="workspace_agent_binding">
+            <column defaultValue="UNDECLARED" name="data_handling_tier" type="VARCHAR(24)">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789038452155-6" author="hephaestus">
+        <addColumn tableName="llm_model">
+            <column name="kept_after_reply" type="VARCHAR(24)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789038452155-7" author="hephaestus">
+        <addColumn tableName="workspace_llm_model">
+            <column name="kept_after_reply" type="VARCHAR(24)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789038452155-8" author="hephaestus">
+        <addColumn tableName="llm_model">
+            <column name="operated_by" type="VARCHAR(24)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789038452155-9" author="hephaestus">
+        <addColumn tableName="workspace_llm_model">
+            <column name="operated_by" type="VARCHAR(24)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789038452155-10" author="hephaestus">
+        <addUniqueConstraint columnNames="workspace_id, purpose, data_handling_tier" constraintName="uk_workspace_agent_binding_purpose_tier" tableName="workspace_agent_binding"/>
+    </changeSet>
+    <changeSet id="1789038452155-11" author="hephaestus">
+        <addUniqueConstraint columnNames="workspace_id, account_id" constraintName="ux_member_onboarding_workspace_account" tableName="workspace_member_onboarding"/>
+    </changeSet>
+    <changeSet id="1789038452155-12" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="workspace_member_onboarding" constraintName="fk_member_onboarding_workspace" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
+    <changeSet id="1789038452155-13" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="workspace_onboarding_settings" constraintName="fk_onboarding_settings_workspace" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
+    <changeSet id="1789038452155-14" author="hephaestus">
+        <dropUniqueConstraint constraintName="uk_workspace_agent_binding_purpose" tableName="workspace_agent_binding"/>
+        <rollback>
+            <addUniqueConstraint columnNames="workspace_id, purpose" constraintName="uk_workspace_agent_binding_purpose" tableName="workspace_agent_binding"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1789038452155-15" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="account_id" baseTableName="workspace_member_onboarding" constraintName="sfk_member_onboarding_account" referencedColumnNames="id" referencedTableName="account"/>
+    </changeSet>
+    <changeSet id="1789038452155-16" author="hephaestus">
+        <sql>
+            ALTER TABLE llm_model ADD CONSTRAINT ck_llm_model_operated_by CHECK (operated_by IN ('OWN_ORGANISATION', 'PROVIDER'));
+            ALTER TABLE llm_model ADD CONSTRAINT ck_llm_model_kept_after_reply CHECK (kept_after_reply IN ('NONE', 'FOR_SAFETY_CHECKS'));
+            ALTER TABLE workspace_llm_model ADD CONSTRAINT ck_workspace_llm_model_operated_by CHECK (operated_by IN ('OWN_ORGANISATION', 'PROVIDER'));
+            ALTER TABLE workspace_llm_model ADD CONSTRAINT ck_workspace_llm_model_kept_after_reply CHECK (kept_after_reply IN ('NONE', 'FOR_SAFETY_CHECKS'));
+            ALTER TABLE workspace_agent_binding ADD CONSTRAINT ck_agent_binding_data_handling_tier CHECK (data_handling_tier IN ('IN_HOUSE', 'PROVIDER_NOT_KEPT', 'PROVIDER_KEPT', 'UNDECLARED'));
+            ALTER TABLE workspace_member_onboarding ADD CONSTRAINT ck_member_onboarding_ai_choice CHECK (ai_choice IN ('NO_AI', 'IN_HOUSE_ONLY', 'NOT_KEPT_ONLY', 'ANY_DECLARED'));
+            ALTER TABLE workspace_onboarding_settings ADD CONSTRAINT ck_onboarding_requires_choice CHECK (NOT enabled OR ai_choice_required);
+            ALTER TABLE workspace_onboarding_settings ADD CONSTRAINT ck_onboarding_required_links_array CHECK (jsonb_typeof(required_connection_ids) = 'array');
+        </sql>
+        <rollback>
+            <!-- Losing a saved refusal or a declared model would silently restore the old unrestricted default. -->
+            <sql splitStatements="false"><![CDATA[
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM workspace_member_onboarding)
+                        OR EXISTS (SELECT 1 FROM workspace_onboarding_settings)
+                        OR EXISTS (SELECT 1 FROM workspace_agent_binding WHERE data_handling_tier <> 'UNDECLARED')
+                        OR EXISTS (SELECT 1 FROM llm_model WHERE operated_by IS NOT NULL OR kept_after_reply IS NOT NULL)
+                        OR EXISTS (SELECT 1 FROM workspace_llm_model WHERE operated_by IS NOT NULL OR kept_after_reply IS NOT NULL) THEN
+                        RAISE EXCEPTION 'Member onboarding is in use; restore a verified pre-upgrade backup instead of discarding AI choices';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <sql>
+                ALTER TABLE workspace_onboarding_settings DROP CONSTRAINT ck_onboarding_required_links_array;
+                ALTER TABLE workspace_onboarding_settings DROP CONSTRAINT ck_onboarding_requires_choice;
+                ALTER TABLE workspace_member_onboarding DROP CONSTRAINT ck_member_onboarding_ai_choice;
+                ALTER TABLE workspace_agent_binding DROP CONSTRAINT ck_agent_binding_data_handling_tier;
+                ALTER TABLE workspace_llm_model DROP CONSTRAINT ck_workspace_llm_model_kept_after_reply;
+                ALTER TABLE workspace_llm_model DROP CONSTRAINT ck_workspace_llm_model_operated_by;
+                ALTER TABLE llm_model DROP CONSTRAINT ck_llm_model_kept_after_reply;
+                ALTER TABLE llm_model DROP CONSTRAINT ck_llm_model_operated_by;
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -62,3 +62,56 @@ Workspace admins can separately enable the leaderboard, progression, leagues, an
 - **Repository missing?** Check the GitHub App installation or the monitored repository list, depending on the connection type.
 - **Team missing?** Confirm that the team exists in the connected source platform and has synced.
 - **Feature missing?** Ask a workspace admin whether it is enabled and whether your account has access.
+
+## Your AI choice
+
+A workspace can ask you to set up on your first visit, after your membership is already in place. The
+setup page is one page in two parts: which AI may handle your work, and the Slack or Outline accounts
+your workspace asks you to connect. It does not approve or create membership.
+
+Your answer belongs to this workspace only and is a boundary, not a pick from a list of models:
+anything stricter than your answer also counts, and nothing ever switches you to anything looser.
+
+| Answer                                         | What it means                                                                                                            |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Only in-house**                              | Runs only on systems your organisation operates.                                                                         |
+| **Allow providers without content storage** | Also allows approved providers that do not store your prompts or replies after responding. Usage metadata may still be kept. |
+| **Allow storage for safety checks**               | Also a provider that keeps it for a limited time for safety checks, which its staff may read if flagged.                 |
+| **No AI**                                      | No new practice reviews about you or new requests to Heph in this workspace.                                                                                    |
+
+Each card separates what you allow from what is set up for **Practice reviews** and **Heph**.
+“Set up” describes the configuration, not current service health or a guarantee of speed. If a broader
+answer selects the same models, the card says so. In-house models depend on your organisation’s
+capacity and storage rules; allowing providers does not guarantee better models or faster replies.
+No declared model uses your work for training.
+
+On your first visit, nothing is preselected. Choose an answer and select **Continue**; on a return
+visit the button reads **Save**. You can choose any answer, including one your workspace has not set
+up yet: the card says so, nothing runs for you for that purpose, and Hephaestus never switches you to
+another answer. Wait for a workspace owner to add a model, or change your answer.
+
+Open **Your AI choice** in the sidebar to change your answer at any time. Existing feedback and
+earlier conversations with Heph remain readable. With **No AI**, there are no new practice reviews
+about you, new requests to Heph, or new feedback delivery. Requests already sent cannot be recalled.
+You cannot send, edit, or retry a conversation message. Your choice does not remove your work from
+shared repositories or change other members' choices. Research participation is a separate setting.
+
+### Connect the accounts your workspace uses
+
+A required link must match the Slack team or Outline instance configured for this workspace. A link
+to a different team or instance does not satisfy it. Connecting an account identifies you on that
+service; it does not enable AI.
+
+**Continue** finishes setup once you have chosen an answer and connected the required accounts. Your
+answer is saved when you select **Continue**, **Save AI choice**, or **Save & connect** for an account.
+When required accounts are still open, **Save AI choice** saves your answer without finishing setup.
+This includes **No AI**: you never need to connect an account to opt out. **Skip for now** leaves
+without saving a new answer; an already saved answer stays in effect, and the page waits for you under **Your AI choice**. On a return visit, **Save**
+records a new answer whether or not the required accounts are connected, and **Back to workspace**
+leaves without saving. If a required account is unavailable right
+now, it does not hold you up; ask a workspace owner to repair it or remove the requirement. Optional
+accounts never block completion. After finishing or skipping, you return to the workspace page you
+originally opened, including its filters and selected section.
+
+The sign-in notice and the research question are separate from workspace setup. Linking an account
+or choosing an answer does not change research participation.

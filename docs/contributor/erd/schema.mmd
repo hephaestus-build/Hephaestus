@@ -691,6 +691,9 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
+        VARCHAR(200) data_handling_note
+        VARCHAR(24) kept_after_reply
+        VARCHAR(24) operated_by
     }
 
     LlmModelPrice {
@@ -1483,6 +1486,7 @@ erDiagram
         BIGINT workspace_model_id FK
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
+        VARCHAR(24) data_handling_tier UK "NOT NULL"
     }
 
     WorkspaceLlmConnection {
@@ -1519,6 +1523,19 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
+        VARCHAR(200) data_handling_note
+        VARCHAR(24) kept_after_reply
+        VARCHAR(24) operated_by
+    }
+
+    WorkspaceMemberOnboarding {
+        BIGINT id PK
+        BIGINT account_id FK,UK "NOT NULL"
+        VARCHAR(24) ai_choice
+        TIMESTAMPTZ completed_at
+        TIMESTAMPTZ updated_at "NOT NULL"
+        TIMESTAMPTZ welcomed_at
+        BIGINT workspace_id FK,UK "NOT NULL"
     }
 
     WorkspaceMembership {
@@ -1528,6 +1545,14 @@ erDiagram
         BIGINT user_id PK,FK
         BIGINT workspace_id PK,FK
         BOOLEAN hidden "NOT NULL"
+    }
+
+    WorkspaceOnboardingSetting {
+        BIGINT workspace_id PK,FK
+        BOOLEAN ai_choice_required "NOT NULL"
+        BOOLEAN enabled "NOT NULL"
+        JSONB required_connection_ids "NOT NULL"
+        BIGINT revision "NOT NULL"
     }
 
     WorkspaceSlugHistory {
@@ -1568,6 +1593,7 @@ erDiagram
     PullRequestReviewComment ||--|| PullRequestReviewThread : reviewed
     User ||--|| UserPreference : has
     Organization ||--|| Workspace : has
+    Workspace ||--|| WorkspaceOnboardingSetting : has
 
     %% One-to-Many relationships
     Account ||--o{ AccountExport : has
@@ -1726,6 +1752,8 @@ erDiagram
     WorkspaceLlmConnection ||--o{ WorkspaceLlmModel : connection_id
     Workspace ||--o{ WorkspaceLlmModel : has
     WorkspaceLlmConnection ||--o{ WorkspaceLlmModel : connection_id
+    Workspace ||--o{ WorkspaceMemberOnboarding : belongs_to
+    Account ||--o{ WorkspaceMemberOnboarding : belongs_to
     User ||--o{ WorkspaceMembership : belongs_to
     Workspace ||--o{ WorkspaceMembership : belongs_to
     Workspace ||--o{ WorkspaceSlugHistory : has

@@ -24,6 +24,7 @@ import type { AdminLlmModelSaveBody } from "@/lib/admin-llm-model-save";
 import type { FieldErrors, LlmModelFormField } from "@/lib/llm-form-validation";
 
 import {
+	dataHandlingBodyOf,
 	LlmModelFields,
 	type LlmModelFieldsValue,
 	modelFieldsValueOf,
@@ -110,6 +111,7 @@ function AdminLlmModelFormDialogContent({
 			contextWindow: fields.contextWindow.trim() ? Number(fields.contextWindow) : undefined,
 			maxOutputTokens: fields.maxOutputTokens.trim() ? Number(fields.maxOutputTokens) : undefined,
 			supportsReasoning: fields.supportsReasoning,
+			...dataHandlingBodyOf(fields),
 			enabled: fields.enabled,
 		};
 		const metadata: CreateLlmModelRequest | UpdateLlmModelRequest = isEdit
@@ -140,7 +142,8 @@ function AdminLlmModelFormDialogContent({
 				<DialogHeader>
 					<DialogTitle>{isEdit ? "Edit model" : "Add model"}</DialogTitle>
 					<DialogDescription>
-						Give the model a name workspaces will recognize. The upstream id is never shown to them.
+						Name the model and declare how it handles data; workspaces and developers see the
+						declaration as a badge.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -152,6 +155,7 @@ function AdminLlmModelFormDialogContent({
 						idPrefix="llm-model"
 						isEdit={isEdit}
 						wasEnabled={editing?.enabled ?? false}
+						savedTier={editing?.dataHandlingTier}
 						value={fields}
 						onChange={setFields}
 						errors={errors}

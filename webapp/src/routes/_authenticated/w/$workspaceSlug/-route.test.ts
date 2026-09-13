@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { listWorkspacesQueryKey } from "@/api/@tanstack/react-query.gen";
+import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
@@ -33,6 +34,51 @@ async function land(url: string, queryClient = new QueryClient()) {
 
 /** The gate every `/w/<slug>/…` route inherits, driven through the generated tree. */
 describe("workspace route gate", () => {
+	it("welcomes an existing member on their first workspace visit", async () => {
+		listWorkspaces("acme");
+		server.use(
+			http.get("*/workspaces/acme/onboarding/me", () =>
+				HttpResponse.json({
+					...workspaceOnboarding(),
+					enabled: true,
+					aiChoiceRequired: true,
+					needsWelcome: true,
+				}),
+			),
+		);
+		expect((await land("/w/acme")).pathname).toBe("/w/acme/onboarding");
+	});
+	it("preserves the original destination including search and fragment", async () => {
+		listWorkspaces("acme");
+		server.use(
+			http.get("*/workspaces/acme/onboarding/me", () =>
+				HttpResponse.json({ ...workspaceOnboarding(), enabled: true, needsWelcome: true }),
+			),
+		);
+		const destination = "/w/acme/teams?view=mine#feedback";
+		const location = await land(destination);
+		expect(location.pathname).toBe("/w/acme/onboarding");
+		expect(location.search).toMatchObject({ returnTo: destination });
+	});
+	it("does not redirect the onboarding page into itself", async () => {
+		listWorkspaces("acme");
+		server.use(
+			http.get("*/workspaces/acme/onboarding/me", () =>
+				HttpResponse.json({ ...workspaceOnboarding(), enabled: true, needsWelcome: true }),
+			),
+		);
+		expect((await land("/w/acme/onboarding")).pathname).toBe("/w/acme/onboarding");
+	});
+	it("does not revoke membership when onboarding cannot load", async () => {
+		listWorkspaces("acme");
+		server.use(
+			http.get("*/workspaces/acme/onboarding/me", () => new HttpResponse(null, { status: 503 })),
+		);
+		expect(
+			(await land("/w/acme", new QueryClient({ defaultOptions: { queries: { retry: false } } })))
+				.pathname,
+		).toBe("/w/acme");
+	});
 	it("opens a workspace the account can reach", async () => {
 		listWorkspaces("acme");
 		expect((await land("/w/acme")).href).toBe("/w/acme");

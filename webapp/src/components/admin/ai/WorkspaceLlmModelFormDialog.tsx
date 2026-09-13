@@ -6,6 +6,7 @@ import type {
 	WorkspaceLlmModel,
 } from "@/api/types.gen";
 import {
+	dataHandlingBodyOf,
 	LlmModelFields,
 	type LlmModelFieldsValue,
 	modelFieldsValueOf,
@@ -18,6 +19,7 @@ import {
 	DialogBody,
 	DialogClose,
 	DialogContent,
+	DialogDescription,
 	DialogFooter,
 	DialogForm,
 	DialogHeader,
@@ -95,6 +97,7 @@ function WorkspaceLlmModelFormDialogContent({
 			contextWindow: fields.contextWindow.trim() ? Number(fields.contextWindow) : undefined,
 			maxOutputTokens: fields.maxOutputTokens.trim() ? Number(fields.maxOutputTokens) : undefined,
 			supportsReasoning: fields.supportsReasoning,
+			...dataHandlingBodyOf(fields),
 			enabled: isEdit ? fields.enabled : false,
 			pricingMode: price.pricingMode,
 			per1mInputUsd: price.pricingMode === "PRICED" ? price.per1mInputUsd : undefined,
@@ -119,6 +122,10 @@ function WorkspaceLlmModelFormDialogContent({
 			<DialogForm onSubmit={handleSubmit}>
 				<DialogHeader>
 					<DialogTitle>{isEdit ? "Edit model" : "Add model"}</DialogTitle>
+					<DialogDescription>
+						Name the model and declare how it handles data; workspaces and developers see the
+						declaration as a badge.
+					</DialogDescription>
 				</DialogHeader>
 
 				{/* This form outgrows a 320 px viewport; without an internal scroll region the popup hangs
@@ -129,6 +136,7 @@ function WorkspaceLlmModelFormDialogContent({
 						idPrefix="wm"
 						isEdit={isEdit}
 						wasEnabled={editing?.enabled ?? false}
+						savedTier={editing?.dataHandlingTier}
 						value={fields}
 						onChange={setFields}
 						errors={errors}

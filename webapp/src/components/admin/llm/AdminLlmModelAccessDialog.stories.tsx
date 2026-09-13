@@ -7,6 +7,7 @@ import { expectDialogFitsViewport } from "@/test/reflow";
 import { AdminLlmModelAccessDialog } from "./AdminLlmModelAccessDialog";
 
 const model: LlmModel = {
+	dataHandlingTier: "UNDECLARED",
 	id: 7,
 	slug: "gpt-5",
 	displayName: "GPT-5",

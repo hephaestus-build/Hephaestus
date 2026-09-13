@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import org.jspecify.annotations.NonNull;
@@ -26,6 +27,9 @@ public record AvailableLlmModelDTO(
         @NonNull @Schema(description = "Whether the model supports a reasoning mode")
         Boolean supportsReasoning,
 
+        @NonNull @Schema(description = "Data-handling tier derived from the admin's declared facts")
+        DataHandlingTier dataHandlingTier,
+
         @NonNull @Schema(description = "Pricing mode") PricingMode pricingMode,
 
         @Nullable @Schema(description = "Input rate per 1M tokens (USD)")
@@ -47,6 +51,7 @@ public record AvailableLlmModelDTO(
                 model.getDisplayName(),
                 model.getConnection().getDisplayName(),
                 model.isSupportsReasoning(),
+                model.getDataHandlingTier(),
                 pricingMode,
                 currentPrice != null ? currentPrice.getPer1mInputUsd() : null,
                 currentPrice != null ? currentPrice.getPer1mOutputUsd() : null,
@@ -61,6 +66,7 @@ public record AvailableLlmModelDTO(
                 model.getDisplayName(),
                 model.getConnection().getDisplayName(),
                 model.isSupportsReasoning(),
+                model.getDataHandlingTier(),
                 model.getPricingMode(),
                 model.getPer1mInputUsd(),
                 model.getPer1mOutputUsd(),

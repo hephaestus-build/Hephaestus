@@ -2,8 +2,10 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
+import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
@@ -39,6 +41,7 @@ public class AgentJobLifecycleService {
     private final ObjectMapper objectMapper;
     private final FeedbackDispatchRepository feedbackDispatchRepository;
     private final AgentJobTelemetry jobTelemetry;
+    private final ObservationAdmissionService observationAdmission;
 
     public AgentJobLifecycleService(
             AgentJobRepository agentJobRepository,
@@ -49,7 +52,8 @@ public class AgentJobLifecycleService {
             LlmUsageRecorder usageRecorder,
             ObjectMapper objectMapper,
             FeedbackDispatchRepository feedbackDispatchRepository,
-            AgentJobTelemetry jobTelemetry) {
+            AgentJobTelemetry jobTelemetry,
+            ObservationAdmissionService observationAdmission) {
         this.agentJobRepository = agentJobRepository;
         this.handlerRegistry = handlerRegistry;
         this.transactionTemplate = transactionTemplate;
@@ -59,6 +63,7 @@ public class AgentJobLifecycleService {
         this.objectMapper = objectMapper;
         this.feedbackDispatchRepository = feedbackDispatchRepository;
         this.jobTelemetry = jobTelemetry;
+        this.observationAdmission = observationAdmission;
     }
 
     /**
@@ -103,6 +108,7 @@ public class AgentJobLifecycleService {
                     AgentJobTelemetry.Outcome.DELIVERED,
                     Duration.between(deliveryStarted, Instant.now()));
         } catch (Exception e) {
+            recordObservationRefusal(job.getId(), e);
             transactionTemplate.executeWithoutResult(tx ->
                     agentJobRepository.updateDeliveryStatus(jobId, DeliveryStatus.FAILED, job.getDeliveryCommentId()));
             jobTelemetry.transition(
@@ -276,10 +282,25 @@ public class AgentJobLifecycleService {
             }
             return won;
         } catch (Exception e) {
+            recordObservationRefusal(job.getId(), e);
             // No terminal write: leaving PENDING lets a later sweep pass retry. The sweeper writes the
             // terminal FAILED once it observes the attempt cap exhausted.
             log.warn("Delivery recovery attempt failed: jobId={}, error={}", job.getId(), e.getMessage());
             return false;
+        }
+    }
+
+    private void recordObservationRefusal(UUID jobId, Exception error) {
+        if (error instanceof ObservationsRefusedException refusal) {
+            try {
+                observationAdmission.recordRefusal(jobId, refusal.reasonCode(), refusal.reason());
+            } catch (RuntimeException recordingFailed) {
+                log.warn(
+                        "Could not record observation refusal: jobId={}, reason={}",
+                        jobId,
+                        refusal.reasonCode(),
+                        recordingFailed);
+            }
         }
     }
 

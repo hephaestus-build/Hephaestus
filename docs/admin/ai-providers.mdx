@@ -255,6 +255,7 @@ slug is API surface; the title is what the UI shows.
 | 409 | `llm-connection-slug-conflict` | The slug you typed is taken. |
 | 409 | `llm-model-slug-conflict` | The model slug is taken on this connection. |
 | 409 | `llm-model-upstream-id-conflict` | Two catalog entries would point at the same upstream id on one connection. Refused because pricing would then match either one nondeterministically — a `NO_CHARGE` twin could silently shadow a `PRICED` model for billing. |
+| 409 | `agent-binding-slot-mismatch` | Assigning a model to a tier row it is not declared as. The body's `declaredTier` names the model's tier and the UI words the refusal from it; an undeclared model carries no `declaredTier`, only the detail. |
 | 404 | *Resource not found* | Unknown connection or model id. |
 
 ## Next
@@ -262,3 +263,77 @@ slug is API surface; the title is what the UI shows.
 - **Budgets, caps, and what a cap pauses:** [Workspace budgets and alerting](./production-setup#workspace-budgets-and-alerting).
 - **The environment variables that *are* deploy-time facts:** [Instance-wide LLM settings](./production-setup#instance-wide-llm-settings).
 - **Nothing is being reviewed:** [When a workspace goes quiet](./practice-review#when-a-workspace-goes-quiet).
+
+## Data handling and members' AI choices
+
+Owners configure **Administration → Member onboarding** after membership is already managed by the
+workspace's existing mechanism. The setup page is hidden by default. Declare and assign models before
+enabling it, and wait until every runtime role has been upgraded before assigning models by tier.
+
+1. In either model console, declare each model's **Data handling**: who operates the systems the
+   work is sent to (**Your organisation** or **A provider**) and whether anything is kept after the
+   reply (**Nothing** or **For safety checks**). Declaring them also confirms that the model's terms
+   rule out training on what it receives; Hephaestus does not accept a model that trains on
+   developers' work. From the two facts Hephaestus derives one tier — **Stays in-house**,
+   **Provider, nothing kept** or **Provider, kept for safety checks** — and shows it as a badge
+   wherever the model appears. Declare what the agreement says, not what the hostname suggests:
+   verify the endpoint, gateway routing, subprocessors and data-handling agreement first. A note
+   for admins (region, agreement, renewal date) is shown to admins only. Token limits and the
+   reasoning switch sit under **Advanced**.
+2. In the workspace's **AI models**, each purpose — **Practice reviews** and **Heph** — has one row
+   per tier. A row holds only a model declared as that tier: assigning a model declared as another
+   tier is refused with *This model is declared as \{tier\}; assign it to that row.*, and an
+   undeclared model with *This model's data handling isn't declared yet. Declare it first, or
+   assign it to Members who haven't chosen.* A model whose facts
+   later loosen no longer matches its row, reads **Not ready** and stops serving until you reassign
+   it; nothing is substituted. Existing grants, price declarations, funding sources, feature switches
+   and budgets still apply, and **Max concurrent runs** applies independently to each row.
+3. Optionally require Slack or Outline account links under **Member onboarding**. A required link
+   needs an active integration and an enabled account-linking provider for the same server. Slack
+   also needs the configured team; Outline needs the configured instance identity.
+4. Turn on **Ask members to set up on their first visit**. From then on, personal AI activity
+   requires an explicit member choice. Unknown or unlinked developers are not assumed to have agreed.
+
+A member's choice is a ceiling: the loosest tier they accept. **Only in-house** is served by the
+**Stays in-house** row; **Allow providers without content storage** by that row or the stricter
+one; **Allow storage for safety checks** by any declared row. Hephaestus picks the loosest ready row
+within the ceiling and never a looser one. A member whose ceiling no ready row is within gets no
+practice reviews and no Heph, and the page they chose on says so; each purpose card previews which
+model serves each answer. Members may choose any answer, including one no row covers yet.
+
+The **Members who haven't chosen** row preserves existing assignments for workspaces that have never
+required member choices. It serves only members without a choice where the choice is optional and
+is never a fallback for a member who chose. Existing models upgrade with no facts declared
+(**Not declared**) and existing assignments land in that row; Hephaestus does not infer data handling
+from names or endpoints.
+
+When individual member choices exist, an unknown or unlinked reviewed developer cannot use that
+legacy row either: Hephaestus cannot safely distinguish them from a member whose identity was
+unlinked after choosing a ceiling or No AI. Reconnect the developer's identity to restore their own
+choice; this does not change another identified member's choice or another workspace.
+
+Members may choose **No AI** even when model configuration or required account links are unavailable.
+This stops new practice reviews about them and new conversations with Heph in that workspace, not
+membership or access to existing feedback. A review is checked against the developer whose work is
+being reviewed, not the administrator who requested it. A changed choice is checked again at
+execution, before each model request, and before new feedback is accepted or delivered. An outbound
+request already in progress cannot be recalled, and the choice does not remove shared source content
+from other members' reviews.
+
+### Changing or pausing setup
+
+Clear a required account link to make it optional. A disconnected required integration stays visible
+as unavailable until it is repaired or its requirement is removed; it is not silently waived. Disabling
+a sign-in provider does not erase an already verified matching link.
+
+Hiding the setup page does **not** clear saved choices or restore unrestricted AI for members who
+have not chosen; the page shows a reminder while that is the case. Members can still open **Your AI
+choice** in the sidebar. Disabling a model or changing its data handling stops incompatible new
+requests; it never substitutes a looser tier. Turning an assignment off and on does not change a
+member's choice.
+
+The schema upgrade is additive apart from widening the assignment's uniqueness key to include its
+tier. A rollback is supported before onboarding settings, member choices, declared facts or
+tier-specific assignments have been saved. Once used, rollback is deliberately refused: losing a
+saved refusal could restore unrestricted processing. Recover through a [verified pre-upgrade backup](./backup-restore),
+not by deleting member choices to bypass the safeguard.

@@ -46,6 +46,7 @@ describe("AdminLlmModelFormDialog", () => {
 	it("keeps the upstream model identity immutable", () => {
 		const onSave = vi.fn<AdminLlmModelFormDialogProps["onSave"]>();
 		const editing: LlmModel = {
+			dataHandlingTier: "UNDECLARED",
 			id: 1,
 			slug: "gpt-5",
 			displayName: "GPT-5",
@@ -104,6 +105,7 @@ describe("AdminLlmModelFormDialog", () => {
 		const onSave = renderDialog();
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
 		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
+		fireEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
 		const contextWindow = screen.getByLabelText(/^Context window/);
 		const maxOutput = screen.getByLabelText(/^Max output tokens/);
 		fireEvent.change(contextWindow, { target: { value: "3000000000" } });
@@ -143,6 +145,7 @@ describe("AdminLlmModelFormDialog", () => {
 	it("turns an active model off when its price becomes unknown", () => {
 		const onSave = vi.fn<AdminLlmModelFormDialogProps["onSave"]>();
 		const editing: LlmModel = {
+			dataHandlingTier: "UNDECLARED",
 			id: 2,
 			slug: "gpt-5-active",
 			displayName: "GPT-5 active",
@@ -183,6 +186,73 @@ describe("AdminLlmModelFormDialog", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onSave.mock.calls[0]?.[0].metadata).toStrictEqual(
 			expect.objectContaining({ enabled: false }),
+		);
+	});
+
+	it("sends both facts and the note once declared and confirmed, and neither otherwise", () => {
+		const onSave = renderDialog();
+		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
+		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
+		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
+		expect(onSave.mock.calls[0]?.[0].metadata).toStrictEqual(
+			expect.objectContaining({
+				operatedBy: undefined,
+				keptAfterReply: undefined,
+				dataHandlingNote: undefined,
+			}),
+		);
+
+		fireEvent.click(screen.getByRole("radio", { name: "A provider" }));
+		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
+		const group = screen.getByRole("radiogroup", { name: "Operated by" });
+		const error = screen.getByRole("alert");
+		expect(error.textContent).toBe("Declare both facts or leave data handling undeclared.");
+		expect(group.getAttribute("aria-invalid")).toBe("true");
+		expect(group.getAttribute("aria-describedby")).toBe(error.id);
+		expect(onSave).toHaveBeenCalledTimes(1);
+
+		fireEvent.click(screen.getByRole("radio", { name: "Nothing" }));
+		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
+		const trainingError = screen.getByRole("alert");
+		expect(trainingError.textContent).toBe(
+			"Confirm the training guarantee, or leave data handling undeclared.",
+		);
+		// The fault is the checkbox alone, so only the checkbox is flagged and described by it.
+		const training = screen.getByRole("checkbox", { name: /rule out training/ });
+		expect(training.getAttribute("aria-invalid")).toBe("true");
+		expect(training.getAttribute("aria-describedby")).toBe(trainingError.id);
+		expect(group.getAttribute("aria-invalid")).not.toBe("true");
+		expect(onSave).toHaveBeenCalledTimes(1);
+
+		fireEvent.click(screen.getByRole("checkbox", { name: /rule out training/ }));
+		fireEvent.change(screen.getByLabelText(/^Note for admins/), {
+			target: { value: "EU region, DPA renews 2027-01" },
+		});
+		screen.getByText("Provider, nothing kept");
+		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
+		expect(onSave.mock.calls[1]?.[0].metadata).toStrictEqual(
+			expect.objectContaining({
+				operatedBy: "PROVIDER",
+				keptAfterReply: "NONE",
+				dataHandlingNote: "EU region, DPA renews 2027-01",
+			}),
+		);
+	});
+
+	it("lets a half-declared model go back to undeclared", () => {
+		const onSave = renderDialog();
+		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
+		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
+		fireEvent.click(screen.getByRole("radio", { name: "Your organisation" }));
+		fireEvent.click(screen.getByRole("button", { name: "Leave undeclared" }));
+		expect(screen.queryByRole("button", { name: "Leave undeclared" })).toBeNull();
+		// The cards clear too: the group stays controlled through the reset.
+		expect(
+			screen.getByRole("radio", { name: "Your organisation" }).getAttribute("aria-checked"),
+		).toBe("false");
+		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
+		expect(onSave.mock.calls[0]?.[0].metadata).toStrictEqual(
+			expect.objectContaining({ operatedBy: undefined, keptAfterReply: undefined }),
 		);
 	});
 });

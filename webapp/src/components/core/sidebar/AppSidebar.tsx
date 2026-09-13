@@ -37,6 +37,7 @@ export type SidebarContext = "main" | "mentor" | "admin";
 export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	username: string;
 	isAdmin: boolean;
+	isOwner?: boolean;
 	isAppAdmin: boolean;
 	hasMentorAccess: boolean;
 	integrationKinds: ReadonlyArray<IntegrationCatalogEntry["kind"]>;
@@ -54,6 +55,7 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 export function AppSidebar({
 	username,
 	isAdmin,
+	isOwner = false,
 	isAppAdmin,
 	hasMentorAccess,
 	integrationKinds,
@@ -142,6 +144,7 @@ export function AppSidebar({
 				)}
 				{isAdmin && (
 					<NavAdmin
+						isOwner={isOwner}
 						workspaceSlug={activeWorkspace.workspaceSlug}
 						integrationKinds={integrationKinds}
 						scmProviderType={activeWorkspace.providerType === "GITLAB" ? "GITLAB" : "GITHUB"}
@@ -169,7 +172,7 @@ export function AppSidebar({
 			</SidebarHeader>
 			<SidebarContent onClick={handleSectionClick}>{sidebarContent}</SidebarContent>
 			<SidebarFooter onClick={handleSectionClick}>
-				<NavFooter isAppAdmin={isAppAdmin} />
+				<NavFooter isAppAdmin={isAppAdmin} workspaceSlug={activeWorkspace?.workspaceSlug} />
 			</SidebarFooter>
 			<SidebarRail />
 		</Sidebar>

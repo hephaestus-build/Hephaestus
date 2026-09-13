@@ -36,6 +36,19 @@ export const GitLabWorkspace: Story = {
 	},
 };
 
+export const OwnerNavigation: Story = {
+	args: { isOwner: true },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: "Member onboarding" })).toHaveAttribute(
+			"href",
+			"/w/aet/admin/onboarding",
+		);
+		// Onboarding is a members concern, so it sits with Members rather than at the top.
+		const labels = canvas.getAllByRole("link").map((link) => link.textContent);
+		await expect(labels.indexOf("Member onboarding")).toBe(labels.indexOf("Members") + 1);
+	},
+};
+
 export const ExpandedNavigation: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Practices" }));

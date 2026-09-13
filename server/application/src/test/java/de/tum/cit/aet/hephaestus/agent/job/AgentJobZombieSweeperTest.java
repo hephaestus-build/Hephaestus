@@ -115,6 +115,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
                         null,
                         timeoutSeconds,
                         false,
+                        null,
                         null)
                 .withPriceSnapshot(new LlmPriceSnapshot(
                         FundingSource.INSTANCE, PricingState.NO_CHARGE, null, null, null, null, null, null));
@@ -253,7 +254,8 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
                             snapshot.timeoutSeconds(),
                             snapshot.allowInternet(),
                             null // the point of the fixture: an orphan frozen before admission pricing existed
-                            )
+                            ,
+                            null)
                     .toJson(objectMapper));
             when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(java.util.Optional.of(legacyJob));
 

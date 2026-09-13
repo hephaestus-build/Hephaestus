@@ -2650,6 +2650,17 @@ paths:
           enum:
           - PRACTICE_REVIEW
           - MENTOR
+      - in: query
+        name: dataHandlingTier
+        required: false
+        schema:
+          type: string
+          default: UNDECLARED
+          enum:
+          - IN_HOUSE
+          - PROVIDER_NOT_KEPT
+          - PROVIDER_KEPT
+          - UNDECLARED
       responses:
         "204":
           description: Binding removed
@@ -2674,6 +2685,17 @@ paths:
           enum:
           - PRACTICE_REVIEW
           - MENTOR
+      - in: query
+        name: dataHandlingTier
+        required: false
+        schema:
+          type: string
+          default: UNDECLARED
+          enum:
+          - IN_HOUSE
+          - PROVIDER_NOT_KEPT
+          - PROVIDER_KEPT
+          - UNDECLARED
       requestBody:
         content:
           application/json:
@@ -2689,6 +2711,9 @@ paths:
           description: Binding saved
         "404":
           description: Model not found
+        "409":
+          description: "The model is undeclared, or declared as another tier than\
+            \ this slot (problem type agent-binding-slot-mismatch, property declaredTier)"
       summary: Configure the agent for one purpose
       tags:
       - Agents
@@ -4185,6 +4210,173 @@ paths:
       summary: Update leaderboard notification preferences
       tags:
       - workspace
+  /workspaces/{workspaceSlug}/onboarding/me:
+    get:
+      operationId: getMemberOnboarding
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboarding"
+          description: OK
+      summary: Get your first-visit setup and AI choice in this workspace
+      tags:
+      - workspace-onboarding
+  /workspaces/{workspaceSlug}/onboarding/me/ai-choice:
+    put:
+      operationId: updateMemberAiChoice
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberAiChoiceRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboarding"
+          description: OK
+      summary: Change your AI choice without changing workspace membership
+      tags:
+      - workspace-onboarding
+  /workspaces/{workspaceSlug}/onboarding/me/completion:
+    put:
+      operationId: completeMemberOnboarding
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OnboardingCompletionRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboarding"
+          description: OK
+      summary: Finish first-visit setup after required account links are complete
+      tags:
+      - workspace-onboarding
+  /workspaces/{workspaceSlug}/onboarding/me/dismissal:
+    put:
+      operationId: dismissMemberOnboarding
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboarding"
+          description: OK
+      summary: Continue to the workspace without treating dismissal as an AI choice
+        or completed setup
+      tags:
+      - workspace-onboarding
+  /workspaces/{workspaceSlug}/onboarding/settings:
+    get:
+      operationId: getMemberOnboardingSettings
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboardingSettings"
+          description: OK
+      summary: Get this workspace's member-onboarding settings
+      tags:
+      - workspace-onboarding
+    put:
+      operationId: updateMemberOnboardingSettings
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceOnboardingSettings"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboardingSettings"
+          description: OK
+      summary: Configure first-visit setup and required workspace account links
+      tags:
+      - workspace-onboarding
+  /workspaces/{workspaceSlug}/onboarding/settings/links:
+    get:
+      operationId: getMemberOnboardingLinkOptions
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkspaceOnboardingLink"
+          description: OK
+      summary: List workspace account links available for onboarding requirements
+      tags:
+      - workspace-onboarding
   /workspaces/{workspaceSlug}/outline/collections:
     get:
       operationId: listOutlineCollections
@@ -7999,6 +8191,13 @@ components:
       properties:
         allowInternet:
           type: boolean
+        dataHandlingTier:
+          type: string
+          enum:
+          - IN_HOUSE
+          - PROVIDER_NOT_KEPT
+          - PROVIDER_KEPT
+          - UNDECLARED
         enabled:
           type: boolean
         instanceModelId:
@@ -8022,6 +8221,7 @@ components:
           type: integer
           format: int64
       required:
+      - dataHandlingTier
       - enabled
       - purpose
       - ready
@@ -8391,6 +8591,14 @@ components:
         connectionDisplayName:
           type: string
           description: Owning connection's display name
+        dataHandlingTier:
+          type: string
+          description: Data-handling tier derived from the admin's declared facts
+          enum:
+          - IN_HOUSE
+          - PROVIDER_NOT_KEPT
+          - PROVIDER_KEPT
+          - UNDECLARED
         displayName:
           type: string
           description: Human-readable name
@@ -8432,6 +8640,7 @@ components:
           description: Whether the model supports a reasoning mode
       required:
       - connectionDisplayName
+      - dataHandlingTier
       - displayName
       - id
       - pricingMode
@@ -9242,6 +9451,11 @@ components:
           format: int32
           description: Context window in tokens
           minimum: 1
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+          maxLength: 200
+          minLength: 0
         displayName:
           type: string
           description: Human-readable name
@@ -9250,11 +9464,24 @@ components:
         enabled:
           type: boolean
           description: Whether the model is active (default false)
+        keptAfterReply:
+          type: string
+          description: What stays behind after the reply; declare both facts or neither
+          enum:
+          - NONE
+          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
           description: Maximum output tokens
           minimum: 1
+        operatedBy:
+          type: string
+          description: Who operates the systems the work is sent to; declare both
+            facts or neither
+          enum:
+          - OWN_ORGANISATION
+          - PROVIDER
         slug:
           type: string
           description: Optional internal slug; generated from displayName when omitted
@@ -9583,6 +9810,11 @@ components:
           format: int32
           description: Context window in tokens
           minimum: 1
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+          maxLength: 200
+          minLength: 0
         displayName:
           type: string
           description: Human-readable name
@@ -9591,11 +9823,24 @@ components:
         enabled:
           type: boolean
           description: Whether the model is active (default false)
+        keptAfterReply:
+          type: string
+          description: What stays behind after the reply; declare both facts or neither
+          enum:
+          - NONE
+          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
           description: Maximum output tokens
           minimum: 1
+        operatedBy:
+          type: string
+          description: Who operates the systems the work is sent to; declare both
+            facts or neither
+          enum:
+          - OWN_ORGANISATION
+          - PROVIDER
         per1mCacheReadUsd:
           type: number
           format: decimal
@@ -11115,6 +11360,18 @@ components:
         currentPrice:
           $ref: "#/components/schemas/LlmModelPrice"
           description: Current price; null if none has ever been set
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+        dataHandlingTier:
+          type: string
+          description: Data-handling tier derived from the two facts; UNDECLARED until
+            both are set
+          enum:
+          - IN_HOUSE
+          - PROVIDER_NOT_KEPT
+          - PROVIDER_KEPT
+          - UNDECLARED
         displayName:
           type: string
           description: Human-readable name
@@ -11132,10 +11389,22 @@ components:
           type: integer
           format: int64
           description: Model id
+        keptAfterReply:
+          type: string
+          description: What stays behind after the reply; null until declared
+          enum:
+          - NONE
+          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
           description: Maximum output tokens
+        operatedBy:
+          type: string
+          description: Who operates the systems the work is sent to; null until declared
+          enum:
+          - OWN_ORGANISATION
+          - PROVIDER
         slug:
           type: string
           description: Unique slug within the connection
@@ -11159,6 +11428,7 @@ components:
       - connectionDisplayName
       - connectionId
       - createdAt
+      - dataHandlingTier
       - displayName
       - enabled
       - grantedWorkspaceIds
@@ -11366,6 +11636,18 @@ components:
       - scopes
       - type
       - updatedAt
+    MemberAiChoiceRequest:
+      type: object
+      properties:
+        choice:
+          type: string
+          enum:
+          - NO_AI
+          - IN_HOUSE_ONLY
+          - NOT_KEPT_ONLY
+          - ANY_DECLARED
+      required:
+      - choice
     ObservationDetail:
       type: object
       description: Full practice observation detail including delivered feedback and
@@ -11570,6 +11852,12 @@ components:
       - practiceName
       - practiceSlug
       - summary
+    OnboardingCompletionRequest:
+      type: object
+      properties:
+        revision:
+          type: integer
+          format: int64
     OptionCount:
       type: object
       properties:
@@ -14785,6 +15073,7 @@ components:
           - PRACTICES_DISABLED
           - NO_ACTIVE_PRACTICE
           - REVIEW_MODEL_UNBOUND
+          - MEMBER_AI_DECLINED
           - PRACTICE_AUTONOMY_OFF
           - BUDGET_EXHAUSTED
           - SUBJECT_UNLINKED
@@ -15738,6 +16027,7 @@ components:
           - PRACTICES_DISABLED
           - NO_ACTIVE_PRACTICE
           - REVIEW_MODEL_UNBOUND
+          - MEMBER_AI_DECLINED
           - PRACTICE_AUTONOMY_OFF
           - BUDGET_EXHAUSTED
           - SUBJECT_UNLINKED
@@ -15994,6 +16284,11 @@ components:
           format: int32
           description: Context window in tokens
           minimum: 1
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+          maxLength: 200
+          minLength: 0
         displayName:
           type: string
           description: Human-readable name
@@ -16002,11 +16297,24 @@ components:
         enabled:
           type: boolean
           description: Active toggle (off = existing settings stop working)
+        keptAfterReply:
+          type: string
+          description: What stays behind after the reply; declare both facts or neither
+          enum:
+          - NONE
+          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
           description: Maximum output tokens
           minimum: 1
+        operatedBy:
+          type: string
+          description: Who operates the systems the work is sent to; declare both
+            facts or neither
+          enum:
+          - OWN_ORGANISATION
+          - PROVIDER
         supportsReasoning:
           type: boolean
           description: Whether the model supports a reasoning mode
@@ -16382,6 +16690,11 @@ components:
           format: int32
           description: Context window in tokens
           minimum: 1
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+          maxLength: 200
+          minLength: 0
         displayName:
           type: string
           description: Human-readable name
@@ -16390,11 +16703,24 @@ components:
         enabled:
           type: boolean
           description: Active toggle
+        keptAfterReply:
+          type: string
+          description: What stays behind after the reply; declare both facts or neither
+          enum:
+          - NONE
+          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
           description: Maximum output tokens
           minimum: 1
+        operatedBy:
+          type: string
+          description: Who operates the systems the work is sent to; declare both
+            facts or neither
+          enum:
+          - OWN_ORGANISATION
+          - PROVIDER
         per1mCacheReadUsd:
           type: number
           format: decimal
@@ -16702,6 +17028,31 @@ components:
       - status
       - updatedAt
       - workspaceSlug
+    WorkspaceAiOption:
+      type: object
+      properties:
+        choice:
+          type: string
+          enum:
+          - NO_AI
+          - IN_HOUSE_ONLY
+          - NOT_KEPT_ONLY
+          - ANY_DECLARED
+        mentorReady:
+          type: boolean
+        practiceReviewsReady:
+          type: boolean
+        sameModelsAs:
+          type: string
+          enum:
+          - NO_AI
+          - IN_HOUSE_ONLY
+          - NOT_KEPT_ONLY
+          - ANY_DECLARED
+      required:
+      - choice
+      - mentorReady
+      - practiceReviewsReady
     WorkspaceListItem:
       type: object
       description: Summary information about a workspace for list views
@@ -16841,6 +17192,18 @@ components:
         currency:
           type: string
           description: Currency code
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+        dataHandlingTier:
+          type: string
+          description: Data-handling tier derived from the two facts; UNDECLARED until
+            both are set
+          enum:
+          - IN_HOUSE
+          - PROVIDER_NOT_KEPT
+          - PROVIDER_KEPT
+          - UNDECLARED
         displayName:
           type: string
           description: Human-readable name
@@ -16851,10 +17214,22 @@ components:
           type: integer
           format: int64
           description: Model id
+        keptAfterReply:
+          type: string
+          description: What stays behind after the reply; null until declared
+          enum:
+          - NONE
+          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
           description: Maximum output tokens
+        operatedBy:
+          type: string
+          description: Who operates the systems the work is sent to; null until declared
+          enum:
+          - OWN_ORGANISATION
+          - PROVIDER
         per1mCacheReadUsd:
           type: number
           format: decimal
@@ -16899,6 +17274,7 @@ components:
       - connectionId
       - createdAt
       - currency
+      - dataHandlingTier
       - displayName
       - enabled
       - id
@@ -17059,6 +17435,99 @@ components:
         userName:
           type: string
           description: Display name of the user
+    WorkspaceOnboarding:
+      type: object
+      properties:
+        aiChoice:
+          type: string
+          enum:
+          - NO_AI
+          - IN_HOUSE_ONLY
+          - NOT_KEPT_ONLY
+          - ANY_DECLARED
+        aiChoiceRequired:
+          type: boolean
+        aiOptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceAiOption"
+        completed:
+          type: boolean
+        enabled:
+          type: boolean
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceOnboardingLink"
+        needsWelcome:
+          type: boolean
+        revision:
+          type: integer
+          format: int64
+        workspaceName:
+          type: string
+      required:
+      - aiChoiceRequired
+      - aiOptions
+      - completed
+      - enabled
+      - links
+      - needsWelcome
+      - revision
+      - workspaceName
+    WorkspaceOnboardingLink:
+      type: object
+      properties:
+        available:
+          type: boolean
+        connectionId:
+          type: integer
+          format: int64
+        displayName:
+          type: string
+        linked:
+          type: boolean
+        providerType:
+          type: string
+        registrationId:
+          type: string
+        required:
+          type: boolean
+        teamName:
+          type: string
+      required:
+      - available
+      - connectionId
+      - displayName
+      - linked
+      - providerType
+      - required
+    WorkspaceOnboardingSettings:
+      type: object
+      description: |-
+        <code>aiChoiceRequired</code> is read on GET and ignored on PUT: the server latches it the first time
+         the setup page is enabled and never clears it.
+      properties:
+        aiChoiceRequired:
+          type: boolean
+        enabled:
+          type: boolean
+        requiredConnectionIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+            exclusiveMinimum: 0
+          maxItems: 20
+          minItems: 0
+        revision:
+          type: integer
+          format: int64
+      required:
+      - aiChoiceRequired
+      - enabled
+      - requiredConnectionIds
+      - revision
     WorkspaceProviders:
       type: object
       description: Available workspace creation providers and their configuration

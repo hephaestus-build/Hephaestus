@@ -4,11 +4,11 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
@@ -39,6 +39,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.core.signal.PracticeReviewRefusalMetrics;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -149,7 +150,7 @@ public class AgentJobExecutor {
     private final ExecutionArchiveService executionArchive;
     private final AgentProperties agentProperties;
     private final AgentJobRepository jobRepository;
-    private final WorkspaceAgentBindingRepository bindingRepository;
+    private final ReviewMemberAiPolicy memberAiPolicy;
     private final JobTypeHandlerRegistry handlerRegistry;
     private final PracticePiAdapter practiceAgent;
     private final WorkerJwtIssuer workerJwtIssuer;
@@ -181,6 +182,7 @@ public class AgentJobExecutor {
 
     private final Optional<WorkerCapacityState> capacityState;
     private final Optional<WorkerProperties> workerProperties;
+    private final ObservationAdmissionService observationAdmission;
     /** Null only when the worker role is off; stamped on claimed jobs to fence terminal writes. */
     private final @Nullable String workerId;
     /** Poll-thread-owned, hence unsynchronized. */
@@ -191,7 +193,7 @@ public class AgentJobExecutor {
             ExecutionArchiveService executionArchive,
             AgentProperties agentProperties,
             AgentJobRepository jobRepository,
-            WorkspaceAgentBindingRepository bindingRepository,
+            ReviewMemberAiPolicy memberAiPolicy,
             JobTypeHandlerRegistry handlerRegistry,
             PracticePiAdapter practiceAgent,
             WorkerJwtIssuer workerJwtIssuer,
@@ -206,11 +208,12 @@ public class AgentJobExecutor {
             LlmBudgetService llmBudgetService,
             @Nullable LlmAdmissionService llmAdmissionService,
             Optional<WorkerCapacityState> capacityState,
-            Optional<WorkerProperties> workerProperties) {
+            Optional<WorkerProperties> workerProperties,
+            ObservationAdmissionService observationAdmission) {
         this.executionArchive = executionArchive;
         this.agentProperties = agentProperties;
         this.jobRepository = jobRepository;
-        this.bindingRepository = bindingRepository;
+        this.memberAiPolicy = memberAiPolicy;
         this.handlerRegistry = handlerRegistry;
         this.practiceAgent = practiceAgent;
         this.workerJwtIssuer = workerJwtIssuer;
@@ -226,6 +229,7 @@ public class AgentJobExecutor {
         this.llmAdmissionService = llmAdmissionService;
         this.capacityState = capacityState;
         this.workerProperties = workerProperties;
+        this.observationAdmission = observationAdmission;
         this.workerId = workerProperties.map(WorkerProperties::resolvedWorkerId).orElse(null);
 
         this.concurrencyRejected = Counter.builder(AgentMetrics.AGENT_JOB_CONCURRENCY_REJECTED)
@@ -1100,6 +1104,16 @@ public class AgentJobExecutor {
 
             AgentJob job = locked.get();
 
+            if (!memberAiPolicy.permitsReview(job.getWorkspace().getId(), job.getJobType(), job.getMetadata())) {
+                job.setStatus(AgentJobStatus.CANCELLED);
+                job.setCompletedAt(Instant.now());
+                job.setErrorMessage("The developer has not enabled AI practice reviews in this workspace.");
+                job.setCancellationReason(AgentJobCancellationReason.MEMBER_AI_DECLINED);
+                jobRepository.save(job);
+                recordPracticeReviewRefusal(job, "member_ai_declined");
+                return new TerminalClaim(job, AgentJobStatus.CANCELLED);
+            }
+
             LlmBudgetBlockReason blockReason =
                     llmBudgetService.decide(job.getWorkspace().getId()).forFunding(claimedFundingSource(job));
             if (blockReason != LlmBudgetBlockReason.NONE) {
@@ -1112,9 +1126,8 @@ public class AgentJobExecutor {
             AgentPurpose purpose = job.getPurpose();
             WorkspaceAgentBinding binding = purpose == null
                     ? null
-                    : bindingRepository
-                            .findByWorkspaceIdAndPurpose(job.getWorkspace().getId(), purpose)
-                            .filter(WorkspaceAgentBinding::isEnabled)
+                    : memberAiPolicy
+                            .binding(job.getWorkspace().getId(), job.getJobType(), job.getMetadata())
                             .orElse(null);
             if (binding == null) {
                 return refuseUnavailableModel(job);
@@ -1122,6 +1135,8 @@ public class AgentJobExecutor {
             ConfigSnapshot snapshot;
             try {
                 ConfigSnapshot submitted = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
+                if (java.util.Objects.requireNonNullElse(submitted.dataHandlingTier(), DataHandlingTier.UNDECLARED)
+                        != binding.getDataHandlingTier()) return refuseUnavailableModel(job);
                 if (llmAdmissionService != null) {
                     var admitted = llmAdmissionService.admit(binding);
                     var ref = admitted.connection();
@@ -1142,11 +1157,10 @@ public class AgentJobExecutor {
                 return refuseUnavailableModel(job);
             }
 
-            // Admission above holds the binding row lock (joined into this transaction), so this count
-            // cannot race a sibling claim.
+            // Admission holds this slot's binding row lock until the RUNNING transition commits.
             {
-                long runningCount = jobRepository.countByWorkspaceIdAndPurposeAndStatusIn(
-                        job.getWorkspace().getId(), purpose, Set.of(AgentJobStatus.RUNNING));
+                long runningCount = jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
+                        job.getWorkspace().getId(), purpose, binding.getDataHandlingTier());
                 if (runningCount >= binding.getMaxConcurrentJobs()) {
                     concurrencyRejected.increment();
                     log.info(
@@ -1426,8 +1440,8 @@ public class AgentJobExecutor {
         if (purpose == null) {
             return null;
         }
-        return bindingRepository
-                .findByWorkspaceIdAndPurpose(job.getWorkspace().getId(), purpose)
+        return memberAiPolicy
+                .binding(job.getWorkspace().getId(), job.getJobType(), job.getMetadata())
                 .map(WorkspaceAgentBinding::getFundingSource)
                 .orElse(null);
     }
@@ -1471,6 +1485,17 @@ public class AgentJobExecutor {
                         Duration.between(deliveryStarted, Instant.now()));
             } catch (Exception e) {
                 log.warn("Delivery failed for job {} (output saved, job still COMPLETED): {}", jobId, e.getMessage());
+                if (e instanceof ObservationsRefusedException refusal) {
+                    try {
+                        observationAdmission.recordRefusal(jobId, refusal.reasonCode(), refusal.reason());
+                    } catch (RuntimeException recordingFailed) {
+                        log.warn(
+                                "Could not record observation refusal: jobId={}, reason={}",
+                                jobId,
+                                refusal.reasonCode(),
+                                recordingFailed);
+                    }
+                }
                 // Preserve the comment id from a partial delivery: the comment may already be posted.
                 persistDeliveryStatus(jobId, DeliveryStatus.FAILED, deliverJob.getDeliveryCommentId());
                 jobTelemetry.transition(

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import type { LlmModel } from "@/api/types.gen";
 import type { PricingMode } from "@/lib/llm-pricing";
 
 /**
@@ -118,6 +119,9 @@ const LLM_MODEL_FORM_FIELDS = [
 	"per1mCacheReadUsd",
 	"per1mCacheWriteUsd",
 	"note",
+	"dataHandling",
+	"trainingConfirmed",
+	"dataHandlingNote",
 ] as const;
 
 export type LlmModelFormField = (typeof LLM_MODEL_FORM_FIELDS)[number];
@@ -134,6 +138,11 @@ export interface LlmModelFormValue {
 	per1mCacheReadUsd?: number;
 	per1mCacheWriteUsd?: number;
 	note?: string;
+	operatedBy?: LlmModel["operatedBy"];
+	keptAfterReply?: LlmModel["keptAfterReply"];
+	/** The admin's confirmation that the model's terms rule out training; owed once facts are declared. */
+	trainingConfirmed?: boolean;
+	dataHandlingNote?: string;
 }
 
 const llmModelFormSchema = z
@@ -153,8 +162,26 @@ const llmModelFormSchema = z
 		per1mCacheReadUsd: rateSchema.optional(),
 		per1mCacheWriteUsd: rateSchema.optional(),
 		note: z.string().trim().max(500, "Use 500 characters or fewer.").optional(),
+		operatedBy: z.enum(["OWN_ORGANISATION", "PROVIDER"]).optional(),
+		keptAfterReply: z.enum(["NONE", "FOR_SAFETY_CHECKS"]).optional(),
+		trainingConfirmed: z.boolean().optional(),
+		dataHandlingNote: z.string().trim().max(200, "Use 200 characters or fewer.").optional(),
 	})
 	.superRefine((value, ctx) => {
+		// Undeclared stays saveable: models that predate the declaration must keep working.
+		if ((value.operatedBy === undefined) !== (value.keptAfterReply === undefined)) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["dataHandling"],
+				message: "Declare both facts or leave data handling undeclared.",
+			});
+		} else if (value.operatedBy !== undefined && value.trainingConfirmed !== true) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["trainingConfirmed"],
+				message: "Confirm the training guarantee, or leave data handling undeclared.",
+			});
+		}
 		if (value.pricingMode === "PRICED") {
 			const rates = [
 				value.per1mInputUsd,

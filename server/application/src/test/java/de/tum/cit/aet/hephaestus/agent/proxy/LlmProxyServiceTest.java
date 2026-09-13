@@ -4,12 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.EgressPolicy;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
@@ -49,7 +50,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
     private LlmModelResolver resolver;
 
     @Mock
-    private EgressPolicy egressPolicy;
+    private ProxyRequestPolicy requestPolicy;
 
     @Mock
     private ProxyBudgetGate budgetGate;
@@ -64,19 +65,35 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(requestPolicy.allows(any())).thenReturn(true);
         controller = new LlmProxyService(
                 io.micrometer.tracing.Tracer.NOOP,
                 org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.agent.job.ExecutionArchiveService.class),
                 WebClient.create(),
                 resolver,
-                egressPolicy,
                 OBJECT_MAPPER,
                 new ProxyAccounting(
                         budgetGate,
                         usageAccumulator,
                         mentorTurnUsageAccumulator,
                         new SimpleMeterRegistry(),
-                        OBJECT_MAPPER));
+                        OBJECT_MAPPER),
+                requestPolicy);
+    }
+
+    @Test
+    void shouldRefuseNoAiBeforeCredentialsOrNetworkAccess() {
+        var routing = routing("openai-completions");
+        authenticate(routing);
+        when(requestPolicy.allows(routing)).thenReturn(false);
+        var result = controller.proxy(
+                request("POST", "/internal/llm/chat/completions"),
+                new MockHttpServletResponse(),
+                new HttpHeaders(),
+                jsonBody());
+        assertThat(result).isNotNull();
+        assertThat(result.getStatusCode().value()).isEqualTo(403);
+        verifyNoInteractions(resolver, budgetGate);
     }
 
     @AfterEach
@@ -253,7 +270,9 @@ class LlmProxyServiceTest extends BaseUnitTest {
             var routing = routing("openai-completions");
             authenticate(routing);
             stubCredential(routing, credential("openai-completions", LlmAuthMode.BEARER));
-            doThrow(new IllegalArgumentException("blocked")).when(egressPolicy).validate("https://api.example.com/v1");
+            doThrow(new IllegalArgumentException("blocked"))
+                    .when(requestPolicy)
+                    .validateTarget("https://api.example.com/v1");
 
             var result = controller.proxy(
                     request("POST", "/internal/llm/chat/completions"),
@@ -270,7 +289,9 @@ class LlmProxyServiceTest extends BaseUnitTest {
             var routing = routing("openai-responses");
             authenticate(routing);
             stubCredential(routing, credential("openai-responses", LlmAuthMode.API_KEY));
-            doThrow(new IllegalArgumentException("blocked")).when(egressPolicy).validate("https://api.example.com/v1");
+            doThrow(new IllegalArgumentException("blocked"))
+                    .when(requestPolicy)
+                    .validateTarget("https://api.example.com/v1");
 
             var result = controller.proxy(
                     request("POST", "/internal/llm/responses"),
@@ -296,7 +317,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
             assertThat(result).isNotNull();
             assertThat(result.getStatusCode().value()).isEqualTo(502);
-            verifyNoInteractions(egressPolicy);
+            verify(requestPolicy, never()).validateTarget(any());
         }
     }
 
@@ -407,14 +428,14 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     mock(de.tum.cit.aet.hephaestus.agent.job.ExecutionArchiveService.class),
                     client,
                     resolver,
-                    egressPolicy,
                     OBJECT_MAPPER,
                     new ProxyAccounting(
                             budgetGate,
                             usageAccumulator,
                             mentorTurnUsageAccumulator,
                             new SimpleMeterRegistry(),
-                            OBJECT_MAPPER));
+                            OBJECT_MAPPER),
+                    requestPolicy);
             var routing = routing("openai-completions");
             authenticate(routing);
             when(resolver.resolveProxyCredential(any()))
@@ -481,14 +502,14 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.agent.job.ExecutionArchiveService.class),
                     WebClient.builder().build(),
                     resolver,
-                    egressPolicy,
                     OBJECT_MAPPER,
                     new ProxyAccounting(
                             budgetGate,
                             usageAccumulator,
                             mentorTurnUsageAccumulator,
                             streamingMeterRegistry,
-                            OBJECT_MAPPER));
+                            OBJECT_MAPPER),
+                    requestPolicy);
         }
 
         @AfterEach

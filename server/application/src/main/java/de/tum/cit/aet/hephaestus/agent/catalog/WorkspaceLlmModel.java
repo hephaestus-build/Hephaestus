@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -89,6 +91,9 @@ public class WorkspaceLlmModel {
     @Column(name = "supports_reasoning", nullable = false)
     private boolean supportsReasoning = false;
 
+    @Embedded
+    private DataHandlingFacts dataHandling = new DataHandlingFacts();
+
     @ColumnDefault("'UNPRICED'")
     @Enumerated(EnumType.STRING)
     @Column(name = "pricing_mode", nullable = false, length = 16)
@@ -128,6 +133,18 @@ public class WorkspaceLlmModel {
     @Nullable
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    /** Null-safe accessor: Hibernate sets the embeddable to {@code null} when every column is null. */
+    public DataHandlingFacts getDataHandling() {
+        if (dataHandling == null) {
+            dataHandling = new DataHandlingFacts();
+        }
+        return dataHandling;
+    }
+
+    public DataHandlingTier getDataHandlingTier() {
+        return getDataHandling().tier();
+    }
 
     @PrePersist
     public void prePersist() {

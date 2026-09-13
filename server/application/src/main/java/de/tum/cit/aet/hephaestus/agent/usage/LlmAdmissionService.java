@@ -32,8 +32,7 @@ public class LlmAdmissionService {
     public AdmittedLlmModel admit(WorkspaceAgentBinding binding) {
         WorkspaceAgentBinding locked = binding.getId() != null
                 ? bindingRepository
-                        .findByWorkspaceIdAndPurposeForUpdate(
-                                binding.getWorkspace().getId(), binding.getPurpose())
+                        .findByWorkspaceIdAndIdForUpdate(binding.getWorkspace().getId(), binding.getId())
                         .orElseThrow(LlmAdmissionService::modelUnavailable)
                 : binding;
         return admitLocked(locked);

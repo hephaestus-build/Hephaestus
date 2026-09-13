@@ -2,7 +2,14 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 import { ReviewRunningBanner } from "./ReviewRunningBanner";
 
-const readyModel = { binding: { purpose: "PRACTICE_REVIEW", enabled: true, ready: true } as const };
+const readyModel = {
+	binding: {
+		dataHandlingTier: "IN_HOUSE",
+		purpose: "PRACTICE_REVIEW",
+		enabled: true,
+		ready: true,
+	} as const,
+};
 
 const meta = {
 	title: "Workspace admin/Practices/Review/Running banner",
@@ -19,7 +26,9 @@ type Story = StoryObj<typeof meta>;
 
 export const Running: Story = {
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("status")).toHaveTextContent("Reviews are running");
+		const status = canvas.getByRole("status");
+		await expect(status).toHaveTextContent("Reviews are running");
+		await expect(status).toHaveTextContent("a review model declared as Stays in-house is ready");
 	},
 };
 

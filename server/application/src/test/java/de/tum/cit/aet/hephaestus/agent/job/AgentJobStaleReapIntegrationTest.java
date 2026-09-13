@@ -195,6 +195,7 @@ class AgentJobStaleReapIntegrationTest extends BaseIntegrationTest {
                         workspace.getId(),
                         600,
                         false,
+                        null,
                         null)
                 .withPriceSnapshot(new LlmPriceSnapshot(
                         FundingSource.INSTANCE, PricingState.NO_CHARGE, null, null, null, null, null, null));

@@ -80,7 +80,8 @@ class AccountExportServiceTest extends BaseUnitTest {
                 membershipQuery,
                 preferencesQuery,
                 gitProviderRegistry,
-                clock);
+                clock,
+                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceAiExport.class));
 
         ExportBundle bundle = assembler.assemble(ACCOUNT_ID);
 

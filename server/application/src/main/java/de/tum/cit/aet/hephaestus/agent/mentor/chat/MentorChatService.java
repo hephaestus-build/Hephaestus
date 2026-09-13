@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MentorContextKeys;
@@ -73,7 +73,6 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
 
     private final UserRepository userRepository;
     private final ChatThreadRepository chatThreadRepository;
-    private final WorkspaceAgentBindingRepository agentBindingRepository;
     private final WorkspaceContextBuilder workspaceContextBuilder;
     private final MentorPiAdapter mentorPiAdapter;
     // Non-worker roles still expose the API, but only the worker capability can attach a live sandbox.
@@ -88,6 +87,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     private final LlmBudgetService llmBudgetService;
     private final LlmAdmissionService llmAdmissionService;
     private final MentorProxyCredentialRegistry proxyCredentialRegistry;
+    private final MemberAiRoutingAdapter memberAiRouting;
 
     /** The holder lets a disconnect abort a runner attached after lifecycle callbacks were registered. */
     @Override
@@ -630,7 +630,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             return "Connection lost.";
         }
         if (e instanceof IllegalStateException && isMissingMentorConfig(e.getMessage())) {
-            return "Hephaestus is not ready to mentor in this workspace yet. Connect a mentor model, then try again.";
+            return "Heph isn't set up for your AI choice in this workspace yet. Ask a workspace owner, or change your choice under Your AI choice in the sidebar.";
         }
         if (e instanceof InteractiveSandboxException) {
             return "I couldn't start the mentor runtime. Please try again in a moment.";
@@ -650,13 +650,13 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     }
 
     private MentorLlmConfig resolveWorkspaceLlmConfig(long workspaceId) {
-        WorkspaceAgentBinding binding = agentBindingRepository
-                .findByWorkspaceIdAndPurpose(workspaceId, AgentPurpose.MENTOR)
+        WorkspaceAgentBinding binding = memberAiRouting
+                .binding(
+                        workspaceId,
+                        AgentPurpose.MENTOR,
+                        CurrentScmIdentityHolder.getUserId().orElse(null))
                 .orElseThrow(
                         () -> new IllegalStateException("No mentor model is configured for workspace " + workspaceId));
-        if (!binding.isEnabled()) {
-            throw new IllegalStateException("The configured mentor model is not available");
-        }
         return MentorLlmConfig.fromAdmission(binding, llmAdmissionService.admit(binding));
     }
 

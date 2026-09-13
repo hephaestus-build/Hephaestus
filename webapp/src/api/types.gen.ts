@@ -107,6 +107,7 @@ export type AdminWorkspaceView = {
  */
 export type AgentBinding = {
   allowInternet?: boolean;
+  dataHandlingTier: 'IN_HOUSE' | 'PROVIDER_NOT_KEPT' | 'PROVIDER_KEPT' | 'UNDECLARED';
   enabled: boolean;
   instanceModelId?: number;
   maxConcurrentJobs?: number;
@@ -389,6 +390,10 @@ export type AvailableLlmModel = {
    * Owning connection's display name
    */
   connectionDisplayName: string;
+  /**
+   * Data-handling tier derived from the admin's declared facts
+   */
+  dataHandlingTier: 'IN_HOUSE' | 'PROVIDER_NOT_KEPT' | 'PROVIDER_KEPT' | 'UNDECLARED';
   /**
    * Human-readable name
    */
@@ -877,6 +882,10 @@ export type CreateLlmModelRequest = {
    */
   contextWindow?: number;
   /**
+   * Admin-only note: region, agreement, renewal date
+   */
+  dataHandlingNote?: string;
+  /**
    * Human-readable name
    */
   displayName: string;
@@ -885,9 +894,17 @@ export type CreateLlmModelRequest = {
    */
   enabled?: boolean;
   /**
+   * What stays behind after the reply; declare both facts or neither
+   */
+  keptAfterReply?: 'NONE' | 'FOR_SAFETY_CHECKS';
+  /**
    * Maximum output tokens
    */
   maxOutputTokens?: number;
+  /**
+   * Who operates the systems the work is sent to; declare both facts or neither
+   */
+  operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
    * Optional internal slug; generated from displayName when omitted
    */
@@ -1112,6 +1129,10 @@ export type CreateWorkspaceLlmModelRequest = {
    */
   contextWindow?: number;
   /**
+   * Admin-only note: region, agreement, renewal date
+   */
+  dataHandlingNote?: string;
+  /**
    * Human-readable name
    */
   displayName: string;
@@ -1120,9 +1141,17 @@ export type CreateWorkspaceLlmModelRequest = {
    */
   enabled?: boolean;
   /**
+   * What stays behind after the reply; declare both facts or neither
+   */
+  keptAfterReply?: 'NONE' | 'FOR_SAFETY_CHECKS';
+  /**
    * Maximum output tokens
    */
   maxOutputTokens?: number;
+  /**
+   * Who operates the systems the work is sent to; declare both facts or neither
+   */
+  operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
    * Cache-read rate per 1M tokens (USD), if applicable
    */
@@ -2092,6 +2121,14 @@ export type LlmModel = {
    */
   currentPrice?: LlmModelPrice;
   /**
+   * Admin-only note: region, agreement, renewal date
+   */
+  dataHandlingNote?: string;
+  /**
+   * Data-handling tier derived from the two facts; UNDECLARED until both are set
+   */
+  dataHandlingTier: 'IN_HOUSE' | 'PROVIDER_NOT_KEPT' | 'PROVIDER_KEPT' | 'UNDECLARED';
+  /**
    * Human-readable name
    */
   displayName: string;
@@ -2108,9 +2145,17 @@ export type LlmModel = {
    */
   id: number;
   /**
+   * What stays behind after the reply; null until declared
+   */
+  keptAfterReply?: 'NONE' | 'FOR_SAFETY_CHECKS';
+  /**
    * Maximum output tokens
    */
   maxOutputTokens?: number;
+  /**
+   * Who operates the systems the work is sent to; null until declared
+   */
+  operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
    * Unique slug within the connection
    */
@@ -2271,6 +2316,10 @@ export type LoginProviderView = {
   updatedAt: Date;
 };
 
+export type MemberAiChoiceRequest = {
+  choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
+};
+
 /**
  * Full practice observation detail including delivered feedback and evidence
  */
@@ -2408,6 +2457,10 @@ export type ObservationList = {
    * Observation summary
    */
   summary: string;
+};
+
+export type OnboardingCompletionRequest = {
+  revision?: number;
 };
 
 export type OptionCount = {
@@ -4486,7 +4539,7 @@ export type ReviewRequestOutcome = {
   /**
    * The controlled-vocabulary reason nothing was started; absent when a review was started
    */
-  reason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  reason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
   /**
    * The reason as one sentence for the person who asked. Render it verbatim: it is written next to the reason it explains so that every surface says the same thing, and a re-worded copy is how a screen and a support answer come to disagree.
    */
@@ -5128,7 +5181,7 @@ export type TracedSignal = {
   /**
    * Why it ended in that state; null once it triggered a review
    */
-  stateReason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  stateReason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
 };
 
 export type TrendOpportunity = {
@@ -5300,6 +5353,10 @@ export type UpdateLlmModelRequest = {
    */
   contextWindow?: number;
   /**
+   * Admin-only note: region, agreement, renewal date
+   */
+  dataHandlingNote?: string;
+  /**
    * Human-readable name
    */
   displayName?: string;
@@ -5308,9 +5365,17 @@ export type UpdateLlmModelRequest = {
    */
   enabled?: boolean;
   /**
+   * What stays behind after the reply; declare both facts or neither
+   */
+  keptAfterReply?: 'NONE' | 'FOR_SAFETY_CHECKS';
+  /**
    * Maximum output tokens
    */
   maxOutputTokens?: number;
+  /**
+   * Who operates the systems the work is sent to; declare both facts or neither
+   */
+  operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
    * Whether the model supports a reasoning mode
    */
@@ -5617,6 +5682,10 @@ export type UpdateWorkspaceLlmModelRequest = {
    */
   contextWindow?: number;
   /**
+   * Admin-only note: region, agreement, renewal date
+   */
+  dataHandlingNote?: string;
+  /**
    * Human-readable name
    */
   displayName?: string;
@@ -5625,9 +5694,17 @@ export type UpdateWorkspaceLlmModelRequest = {
    */
   enabled?: boolean;
   /**
+   * What stays behind after the reply; declare both facts or neither
+   */
+  keptAfterReply?: 'NONE' | 'FOR_SAFETY_CHECKS';
+  /**
    * Maximum output tokens
    */
   maxOutputTokens?: number;
+  /**
+   * Who operates the systems the work is sent to; declare both facts or neither
+   */
+  operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
    * Cache-read rate per 1M tokens (USD), if applicable
    */
@@ -5900,6 +5977,13 @@ export type Workspace = {
   workspaceSlug: string;
 };
 
+export type WorkspaceAiOption = {
+  choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
+  mentorReady: boolean;
+  practiceReviewsReady: boolean;
+  sameModelsAs?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
+};
+
 /**
  * Summary information about a workspace for list views
  */
@@ -6029,6 +6113,14 @@ export type WorkspaceLlmModel = {
    */
   currency: string;
   /**
+   * Admin-only note: region, agreement, renewal date
+   */
+  dataHandlingNote?: string;
+  /**
+   * Data-handling tier derived from the two facts; UNDECLARED until both are set
+   */
+  dataHandlingTier: 'IN_HOUSE' | 'PROVIDER_NOT_KEPT' | 'PROVIDER_KEPT' | 'UNDECLARED';
+  /**
    * Human-readable name
    */
   displayName: string;
@@ -6041,9 +6133,17 @@ export type WorkspaceLlmModel = {
    */
   id: number;
   /**
+   * What stays behind after the reply; null until declared
+   */
+  keptAfterReply?: 'NONE' | 'FOR_SAFETY_CHECKS';
+  /**
    * Maximum output tokens
    */
   maxOutputTokens?: number;
+  /**
+   * Who operates the systems the work is sent to; null until declared
+   */
+  operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
    * Cache-read rate per 1M tokens (USD)
    */
@@ -6202,6 +6302,40 @@ export type WorkspaceMembership = {
    * Display name of the user
    */
   userName?: string;
+};
+
+export type WorkspaceOnboarding = {
+  aiChoice?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
+  aiChoiceRequired: boolean;
+  aiOptions: Array<WorkspaceAiOption>;
+  completed: boolean;
+  enabled: boolean;
+  links: Array<WorkspaceOnboardingLink>;
+  needsWelcome: boolean;
+  revision: number;
+  workspaceName: string;
+};
+
+export type WorkspaceOnboardingLink = {
+  available: boolean;
+  connectionId: number;
+  displayName: string;
+  linked: boolean;
+  providerType: string;
+  registrationId?: string;
+  required: boolean;
+  teamName?: string;
+};
+
+/**
+ * <code>aiChoiceRequired</code> is read on GET and ignored on PUT: the server latches it the first time
+ *  the setup page is enabled and never clears it.
+ */
+export type WorkspaceOnboardingSettings = {
+  aiChoiceRequired: boolean;
+  enabled: boolean;
+  requiredConnectionIds: Array<number>;
+  revision: number;
 };
 
 /**
@@ -8946,7 +9080,9 @@ export type DeleteAgentData = {
     workspaceSlug: string;
     purpose: 'PRACTICE_REVIEW' | 'MENTOR';
   };
-  query?: never;
+  query?: {
+    dataHandlingTier?: 'IN_HOUSE' | 'PROVIDER_NOT_KEPT' | 'PROVIDER_KEPT' | 'UNDECLARED';
+  };
   url: '/workspaces/{workspaceSlug}/agents/{purpose}';
 };
 
@@ -8968,7 +9104,9 @@ export type ConfigureAgentData = {
     workspaceSlug: string;
     purpose: 'PRACTICE_REVIEW' | 'MENTOR';
   };
-  query?: never;
+  query?: {
+    dataHandlingTier?: 'IN_HOUSE' | 'PROVIDER_NOT_KEPT' | 'PROVIDER_KEPT' | 'UNDECLARED';
+  };
   url: '/workspaces/{workspaceSlug}/agents/{purpose}';
 };
 
@@ -8977,6 +9115,10 @@ export type ConfigureAgentErrors = {
    * Model not found
    */
   404: unknown;
+  /**
+   * The model is undeclared, or declared as another tier than this slot (problem type agent-binding-slot-mismatch, property declaredTier)
+   */
+  409: unknown;
 };
 
 export type ConfigureAgentResponses = {
@@ -10192,6 +10334,153 @@ export type UpdateNotificationsResponses = {
 };
 
 export type UpdateNotificationsResponse = UpdateNotificationsResponses[keyof UpdateNotificationsResponses];
+
+export type GetMemberOnboardingData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/me';
+};
+
+export type GetMemberOnboardingResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboarding;
+};
+
+export type GetMemberOnboardingResponse = GetMemberOnboardingResponses[keyof GetMemberOnboardingResponses];
+
+export type UpdateMemberAiChoiceData = {
+  body: MemberAiChoiceRequest;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/me/ai-choice';
+};
+
+export type UpdateMemberAiChoiceResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboarding;
+};
+
+export type UpdateMemberAiChoiceResponse = UpdateMemberAiChoiceResponses[keyof UpdateMemberAiChoiceResponses];
+
+export type CompleteMemberOnboardingData = {
+  body: OnboardingCompletionRequest;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/me/completion';
+};
+
+export type CompleteMemberOnboardingResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboarding;
+};
+
+export type CompleteMemberOnboardingResponse = CompleteMemberOnboardingResponses[keyof CompleteMemberOnboardingResponses];
+
+export type DismissMemberOnboardingData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/me/dismissal';
+};
+
+export type DismissMemberOnboardingResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboarding;
+};
+
+export type DismissMemberOnboardingResponse = DismissMemberOnboardingResponses[keyof DismissMemberOnboardingResponses];
+
+export type GetMemberOnboardingSettingsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/settings';
+};
+
+export type GetMemberOnboardingSettingsResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboardingSettings;
+};
+
+export type GetMemberOnboardingSettingsResponse = GetMemberOnboardingSettingsResponses[keyof GetMemberOnboardingSettingsResponses];
+
+export type UpdateMemberOnboardingSettingsData = {
+  body: WorkspaceOnboardingSettings;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/settings';
+};
+
+export type UpdateMemberOnboardingSettingsResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboardingSettings;
+};
+
+export type UpdateMemberOnboardingSettingsResponse = UpdateMemberOnboardingSettingsResponses[keyof UpdateMemberOnboardingSettingsResponses];
+
+export type GetMemberOnboardingLinkOptionsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/settings/links';
+};
+
+export type GetMemberOnboardingLinkOptionsResponses = {
+  /**
+   * OK
+   */
+  200: Array<WorkspaceOnboardingLink>;
+};
+
+export type GetMemberOnboardingLinkOptionsResponse = GetMemberOnboardingLinkOptionsResponses[keyof GetMemberOnboardingLinkOptionsResponses];
 
 export type ListOutlineCollectionsData = {
   body?: never;

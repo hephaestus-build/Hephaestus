@@ -111,6 +111,8 @@ public class LlmModelService {
         if (request.supportsReasoning() != null) {
             model.setSupportsReasoning(request.supportsReasoning());
         }
+        model.setDataHandling(
+                DataHandlingFacts.of(request.operatedBy(), request.keptAfterReply(), request.dataHandlingNote()));
         if (request.enabled() != null) {
             if (request.enabled()) {
                 requireActivatable(model);
@@ -166,6 +168,8 @@ public class LlmModelService {
         if (request.supportsReasoning() != null) {
             model.setSupportsReasoning(request.supportsReasoning());
         }
+        model.setDataHandling(
+                DataHandlingFacts.of(request.operatedBy(), request.keptAfterReply(), request.dataHandlingNote()));
         if (request.enabled() != null) {
             model.setEnabled(request.enabled());
         }

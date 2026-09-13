@@ -8,8 +8,10 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -86,6 +88,19 @@ class ConfigSnapshotTest extends BaseUnitTest {
 
     @Nested
     class JsonRoundTrip {
+        @Test
+        void shouldPreserveTheFrozenDataHandlingTierWhenRepricingAndSerializing() {
+            var binding = createBinding();
+            binding.setDataHandlingTier(DataHandlingTier.IN_HOUSE);
+            stubResolver(binding);
+            var snapshot =
+                    ConfigSnapshot.from(binding, resolver).withPriceSnapshot(LlmPriceSnapshot.unpricedInstance());
+            binding.setDataHandlingTier(DataHandlingTier.PROVIDER_KEPT);
+
+            assertThat(ConfigSnapshot.fromJson(snapshot.toJson(OBJECT_MAPPER), OBJECT_MAPPER)
+                            .dataHandlingTier())
+                    .isEqualTo(DataHandlingTier.IN_HOUSE);
+        }
 
         @Test
         void shouldSerializeAndDeserializeCorrectly() {
@@ -285,6 +300,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
                     null,
                     timeoutSeconds,
                     false,
+                    null,
                     null);
         }
 

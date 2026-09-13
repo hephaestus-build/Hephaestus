@@ -8,6 +8,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.DataHandlingFacts;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataOperator;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataRetention;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
@@ -20,6 +23,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -65,7 +69,8 @@ class AgentBindingServiceTest extends BaseUnitTest {
     void upsertBindsAnAvailableInstanceModel() {
         Workspace w = workspace();
         when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
-        when(bindingRepository.findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW))
+        when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
+                        1L, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED))
                 .thenReturn(Optional.empty());
         LlmModel model = new LlmModel();
         model.setId(99L);
@@ -74,7 +79,8 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var request = new AgentBindingRequestDTO(99L, null, 300, 2, true, true);
-        WorkspaceAgentBinding saved = service.upsertBinding(context(), AgentPurpose.PRACTICE_REVIEW, request);
+        WorkspaceAgentBinding saved =
+                service.upsertBinding(context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED, request);
 
         assertThat(saved.getWorkspace()).isSameAs(w);
         assertThat(saved.getPurpose()).isEqualTo(AgentPurpose.PRACTICE_REVIEW);
@@ -107,7 +113,8 @@ class AgentBindingServiceTest extends BaseUnitTest {
     void upsertRejectsAModelThatIsNotAvailableToTheWorkspace() {
         Workspace w = workspace();
         when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
-        when(bindingRepository.findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW))
+        when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
+                        1L, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED))
                 .thenReturn(Optional.empty());
         LlmModel model = new LlmModel();
         model.setId(99L);
@@ -115,20 +122,117 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(false);
 
         var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
-        assertThatThrownBy(() -> service.upsertBinding(context(), AgentPurpose.PRACTICE_REVIEW, request))
+        assertThatThrownBy(() -> service.upsertBinding(
+                        context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED, request))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(bindingRepository, never()).save(any());
+    }
+
+    @Test
+    void upsertRejectsAModelWhoseDeclaredTierDiffersFromTheSlot() {
+        Workspace w = workspace();
+        when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
+        when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
+                        1L, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.PROVIDER_NOT_KEPT))
+                .thenReturn(Optional.empty());
+        LlmModel model = new LlmModel();
+        model.setId(99L);
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, LlmDataRetention.NONE, null));
+        when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
+
+        var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
+        assertThatThrownBy(() -> service.upsertBinding(
+                        context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.PROVIDER_NOT_KEPT, request))
+                .isInstanceOf(AgentBindingSlotMismatchException.class)
+                .hasMessage("This model is declared as a different tier; assign it to that row.")
+                .extracting("declaredTier")
+                .isEqualTo(DataHandlingTier.IN_HOUSE);
+        verify(llmModelResolver, never()).isAvailable(any(WorkspaceAgentBinding.class));
+        verify(bindingRepository, never()).save(any());
+    }
+
+    @Test
+    void upsertRejectsAnUndeclaredModelInATierSlotWithoutNamingATier() {
+        Workspace w = workspace();
+        when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
+        when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
+                        1L, AgentPurpose.MENTOR, DataHandlingTier.IN_HOUSE))
+                .thenReturn(Optional.empty());
+        LlmModel model = new LlmModel();
+        model.setId(99L);
+        when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
+
+        var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
+        assertThatThrownBy(
+                        () -> service.upsertBinding(context(), AgentPurpose.MENTOR, DataHandlingTier.IN_HOUSE, request))
+                .isInstanceOf(AgentBindingSlotMismatchException.class)
+                .hasMessage("This model's data handling isn't declared yet. "
+                        + "Declare it first, or assign it to Members who haven't chosen.")
+                .extracting("declaredTier")
+                .isNull();
+        verify(bindingRepository, never()).save(any());
+    }
+
+    @Test
+    void upsertFillsATierSlotWithAModelDeclaredAtThatTier() {
+        Workspace w = workspace();
+        when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
+        when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
+                        1L, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.PROVIDER_NOT_KEPT))
+                .thenReturn(Optional.empty());
+        LlmModel model = new LlmModel();
+        model.setId(99L);
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.NONE, null));
+        when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
+        when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
+        when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
+        WorkspaceAgentBinding saved = service.upsertBinding(
+                context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.PROVIDER_NOT_KEPT, request);
+
+        assertThat(saved.getDataHandlingTier()).isEqualTo(DataHandlingTier.PROVIDER_NOT_KEPT);
+        ArgumentCaptor<ConfigAuditEntry> entry = ArgumentCaptor.forClass(ConfigAuditEntry.class);
+        verify(configAudit).record(entry.capture());
+        assertThat(entry.getValue().after())
+                .hasFieldOrPropertyWithValue("dataHandlingTier", DataHandlingTier.PROVIDER_NOT_KEPT);
+    }
+
+    @Test
+    void upsertAcceptsAnyModelInTheUndeclaredSlot() {
+        Workspace w = workspace();
+        when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
+        when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
+                        1L, AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED))
+                .thenReturn(Optional.empty());
+        LlmModel model = new LlmModel();
+        model.setId(99L);
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.FOR_SAFETY_CHECKS, null));
+        when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
+        when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
+        when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
+        WorkspaceAgentBinding saved =
+                service.upsertBinding(context(), AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED, request);
+
+        assertThat(saved.getDataHandlingTier()).isEqualTo(DataHandlingTier.UNDECLARED);
+        var bound = saved.getInstanceModel();
+        assertThat(bound).isNotNull();
+        assertThat(bound.getId()).isEqualTo(99L);
     }
 
     @Test
     void upsertRejectsWhenNotExactlyOneModelIsProvided() {
         Workspace w = workspace();
         when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
-        when(bindingRepository.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR))
+        when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
+                        1L, AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED))
                 .thenReturn(Optional.empty());
 
         var bothNull = new AgentBindingRequestDTO(null, null, null, null, null, true);
-        assertThatThrownBy(() -> service.upsertBinding(context(), AgentPurpose.MENTOR, bothNull))
+        assertThatThrownBy(() ->
+                        service.upsertBinding(context(), AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED, bothNull))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -141,10 +245,11 @@ class AgentBindingServiceTest extends BaseUnitTest {
         bound.setId(42L);
         existing.setInstanceModel(bound);
         existing.setEnabled(true);
-        when(bindingRepository.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR))
+        when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
+                        1L, AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED))
                 .thenReturn(Optional.of(existing));
 
-        service.deleteBinding(context(), AgentPurpose.MENTOR);
+        service.deleteBinding(context(), AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED);
 
         verify(bindingRepository).delete(existing);
 

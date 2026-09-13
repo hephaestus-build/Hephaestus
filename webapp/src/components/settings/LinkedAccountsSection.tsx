@@ -1,15 +1,9 @@
-import { LinkIcon, type LucideIcon, Unlink } from "lucide-react";
+import { LinkIcon, Unlink } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import type { IdentityProviderView, IdentityView } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import {
-	type BrandIcon,
-	GithubIcon,
-	GitlabIcon,
-	OutlineIcon,
-	SlackIcon,
-} from "@/components/icons/brand";
+import { getProviderIcon } from "@/components/icons/provider-icons";
 import {
 	AlertDialog,
 	AlertDialogCancel,
@@ -44,14 +38,6 @@ import { asDate } from "@/lib/dates";
 import { getProviderLabel } from "@/lib/provider";
 import { firstNonBlank } from "@/lib/text";
 
-/** Both types are named because `BrandIcon` is a plain component and `LucideIcon` is not. */
-const PROVIDER_ICONS: Record<string, LucideIcon | BrandIcon> = {
-	GITHUB: GithubIcon,
-	GITLAB: GitlabIcon,
-	SLACK: SlackIcon,
-	OUTLINE: OutlineIcon,
-};
-
 /** Providers that can only be *linked* from Settings — they are never a sign-in method. */
 const LINK_ONLY_PROVIDER_TYPES = new Set(["SLACK", "OUTLINE"]);
 
@@ -65,15 +51,6 @@ const LINK_ONLY_RATIONALE: Record<string, string> = {
 	SLACK: "Connect Slack to manage your channel-message preference and reach the mentor in a DM.",
 	OUTLINE: "Connect Outline so the documents you write there are recognised as your work.",
 };
-
-/**
- * Resolve a brand icon from a provider type (e.g. "GITHUB", "GITLAB"). Falls back
- * to a generic link icon for unknown providers so new IdPs render gracefully.
- */
-function getProviderIcon(providerType?: string): LucideIcon | BrandIcon {
-	if (!providerType) return LinkIcon;
-	return PROVIDER_ICONS[providerType.toUpperCase()] ?? LinkIcon;
-}
 
 function formatLastLogin(lastLoginAt?: Date): string | undefined {
 	const date = asDate(lastLoginAt);

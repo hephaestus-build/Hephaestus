@@ -4,6 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
 	REVIEW_RUNNING_DEFS,
 	type ReviewRunningState,
+	reviewRunningDescription,
 	reviewRunningTone,
 } from "./review-readiness";
 
@@ -41,18 +42,13 @@ export interface ReviewRunningBannerProps {
  * mid-sentence.
  */
 export function ReviewRunningBanner({ running }: ReviewRunningBannerProps) {
-	const {
-		label,
-		description,
-		icon: ToneIcon,
-		badgeVariant,
-	} = REVIEW_RUNNING_DEFS[reviewRunningTone(running)];
+	const { label, icon: ToneIcon, badgeVariant } = REVIEW_RUNNING_DEFS[reviewRunningTone(running)];
 
 	return (
 		<Alert variant={ALERT_VARIANTS[badgeVariant]} role="status">
 			<ToneIcon />
 			<AlertTitle>{label}</AlertTitle>
-			<AlertDescription>{description}</AlertDescription>
+			<AlertDescription>{reviewRunningDescription(running)}</AlertDescription>
 		</Alert>
 	);
 }

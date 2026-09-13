@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.handler.IssueReviewSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewSubmissionRequest;
@@ -63,7 +62,7 @@ public class AgentJobService {
     private static final Set<AgentJobStatus> ACTIVE_STATUSES = Set.of(AgentJobStatus.QUEUED, AgentJobStatus.RUNNING);
 
     private final AgentJobRepository agentJobRepository;
-    private final WorkspaceAgentBindingRepository agentBindingRepository;
+    private final ReviewMemberAiPolicy memberAiPolicy;
     private final WorkspaceRepository workspaceRepository;
     private final ConnectionService connectionService;
     private final JobTypeHandlerRegistry handlerRegistry;
@@ -77,7 +76,7 @@ public class AgentJobService {
 
     public AgentJobService(
             AgentJobRepository agentJobRepository,
-            WorkspaceAgentBindingRepository agentBindingRepository,
+            ReviewMemberAiPolicy memberAiPolicy,
             WorkspaceRepository workspaceRepository,
             ConnectionService connectionService,
             JobTypeHandlerRegistry handlerRegistry,
@@ -89,7 +88,7 @@ public class AgentJobService {
             LlmModelResolver llmModelResolver,
             SignalRecorder signalRecorder) {
         this.agentJobRepository = agentJobRepository;
-        this.agentBindingRepository = agentBindingRepository;
+        this.memberAiPolicy = memberAiPolicy;
         this.workspaceRepository = workspaceRepository;
         this.connectionService = connectionService;
         this.handlerRegistry = handlerRegistry;
@@ -224,9 +223,12 @@ public class AgentJobService {
                 .findById(workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId.toString()));
 
-        WorkspaceAgentBinding binding = agentBindingRepository
-                .findByWorkspaceIdAndPurposeWithModels(workspaceId, AgentPurpose.PRACTICE_REVIEW)
-                .filter(WorkspaceAgentBinding::isEnabled)
+        JobTypeHandler handler = handlerRegistry.getHandler(jobType);
+        JobSubmission submission = handler.createSubmission(request);
+        if (!memberAiPolicy.permitsReview(workspaceId, jobType, submission.metadata()))
+            return refuse(signalKey, SignalStateReason.MEMBER_AI_DECLINED);
+        WorkspaceAgentBinding binding = memberAiPolicy
+                .binding(workspaceId, jobType, submission.metadata())
                 .orElse(null);
         if (binding == null) {
             log.debug("No practice-review binding to run: workspaceId={}", workspaceId);
@@ -239,9 +241,6 @@ public class AgentJobService {
         if (llmBudgetService.blockSubmission(workspace, jobType.name(), binding.getFundingSource())) {
             return refuse(signalKey, SignalStateReason.BUDGET_EXHAUSTED);
         }
-
-        JobTypeHandler handler = handlerRegistry.getHandler(jobType);
-        JobSubmission submission = handler.createSubmission(request);
 
         return submitForBinding(
                 workspace, jobType, artifactKindFor(jobType, request), submission, signalKey, admission);
@@ -306,9 +305,10 @@ public class AgentJobService {
                 return refuseInTransaction(signalKey, SignalStateReason.NO_ACTIVE_PRACTICE);
             }
 
-            WorkspaceAgentBinding binding = agentBindingRepository
-                    .findByWorkspaceIdAndPurpose(workspace.getId(), AgentPurpose.PRACTICE_REVIEW)
-                    .filter(WorkspaceAgentBinding::isEnabled)
+            if (!memberAiPolicy.permitsReview(workspace.getId(), jobType, submission.metadata()))
+                return refuseInTransaction(signalKey, SignalStateReason.MEMBER_AI_DECLINED);
+            WorkspaceAgentBinding binding = memberAiPolicy
+                    .binding(workspace.getId(), jobType, submission.metadata())
                     .orElse(null);
             if (binding == null) {
                 return refuseInTransaction(signalKey, SignalStateReason.REVIEW_MODEL_UNBOUND);

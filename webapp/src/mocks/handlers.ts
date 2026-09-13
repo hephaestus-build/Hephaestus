@@ -11,6 +11,8 @@
 
 import { HttpResponse, http, type PathParams } from "msw";
 
+import { workspaceOnboarding } from "./fixtures/onboarding";
+
 import {
 	adminUsers,
 	currentUser,
@@ -29,6 +31,9 @@ const exportPolls = new Map<string, number>();
 type AdminUserPatch = { appRole?: string };
 
 export const handlers = [
+	http.get("*/workspaces/:workspaceSlug/onboarding/me", () =>
+		HttpResponse.json(workspaceOnboarding()),
+	),
 	// --- current user -------------------------------------------------------
 	http.get("*/user", () => HttpResponse.json(currentUser)),
 	http.get("*/user/consent", () =>

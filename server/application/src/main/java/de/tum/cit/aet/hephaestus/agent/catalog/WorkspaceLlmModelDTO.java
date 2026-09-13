@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -38,6 +39,18 @@ public record WorkspaceLlmModelDTO(
         @NonNull @Schema(description = "Whether the model supports a reasoning mode")
         Boolean supportsReasoning,
 
+        @Nullable @Schema(description = "Who operates the systems the work is sent to; null until declared")
+        LlmDataOperator operatedBy,
+
+        @Nullable @Schema(description = "What stays behind after the reply; null until declared")
+        LlmDataRetention keptAfterReply,
+
+        @Nullable @Schema(description = "Admin-only note: region, agreement, renewal date")
+        String dataHandlingNote,
+
+        @NonNull @Schema(description = "Data-handling tier derived from the two facts; UNDECLARED until both are set")
+        DataHandlingTier dataHandlingTier,
+
         @NonNull @Schema(description = "Active toggle") Boolean enabled,
         @NonNull @Schema(description = "Pricing mode") PricingMode pricingMode,
 
@@ -70,6 +83,10 @@ public record WorkspaceLlmModelDTO(
                 model.getContextWindow(),
                 model.getMaxOutputTokens(),
                 model.isSupportsReasoning(),
+                model.getDataHandling().getOperatedBy(),
+                model.getDataHandling().getKeptAfterReply(),
+                model.getDataHandling().getNote(),
+                model.getDataHandlingTier(),
                 model.isEnabled(),
                 model.getPricingMode(),
                 model.getPer1mInputUsd(),

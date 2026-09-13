@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.EvidenceQuoteUnverifiedExcept
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
@@ -56,6 +57,7 @@ public class PracticeDetectionDeliveryService {
 
     private static final Logger log = LoggerFactory.getLogger(PracticeDetectionDeliveryService.class);
 
+    private final ReviewMemberAiPolicy memberAiPolicy;
     private final PracticeRevisionRepository practiceRevisionRepository;
     private final ObservationRepository observationRepository;
     private final ReviewTargetQuery reviewTargets;
@@ -75,7 +77,8 @@ public class PracticeDetectionDeliveryService {
             ApplicationEventPublisher eventPublisher,
             ObjectMapper objectMapper,
             ContentAddressedStore cas,
-            ArtifactSourceCatalogRegistry sourceCatalogs) {
+            ArtifactSourceCatalogRegistry sourceCatalogs,
+            ReviewMemberAiPolicy memberAiPolicy) {
         this.practiceRevisionRepository = practiceRevisionRepository;
         this.observationRepository = observationRepository;
         this.reviewTargets = reviewTargets;
@@ -85,6 +88,7 @@ public class PracticeDetectionDeliveryService {
         this.objectMapper = objectMapper;
         this.cas = cas;
         this.sourceCatalogs = sourceCatalogs;
+        this.memberAiPolicy = memberAiPolicy;
     }
 
     /** Metadata key for the run's immutable observation origin. */
@@ -117,6 +121,9 @@ public class PracticeDetectionDeliveryService {
             throw new JobDeliveryException("Missing job metadata: jobId=" + job.getId());
         }
 
+        if (!memberAiPolicy.allowsResult(job))
+            throw new ObservationsRefusedException(
+                    "member_ai_declined", "The developer's AI choice no longer permits recording this review result.");
         EvidenceBoundary evidenceBoundary = evidenceBoundary(job);
         for (SourceKind kind : evidenceBoundary.allowedSources()) {
             if (!sourceCatalogs.isSourceUsePermitted(

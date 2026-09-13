@@ -53,6 +53,9 @@ public enum SignalStateReason {
 
     REVIEW_MODEL_UNBOUND(SignalState.PENDING),
 
+    /** No choice or No AI: changing preferences affects future reviews, not a silent historical replay. */
+    MEMBER_AI_DECLINED(SignalState.SUPPRESSED),
+
     /**
      * Separate from {@link #NO_ACTIVE_PRACTICE} on purpose: collapsing them would make "we are
      * deliberately not reviewing this" indistinguishable from "nobody ever set this up".
@@ -114,6 +117,7 @@ public enum SignalStateReason {
             case PRACTICES_DISABLED ->
                 "Practice review is switched off for this workspace; it is re-offered when it is switched on.";
             case NO_ACTIVE_PRACTICE -> "No practice was bound to this occurrence when it was recorded.";
+            case MEMBER_AI_DECLINED -> "The developer has not enabled AI practice reviews in this workspace.";
             case REVIEW_MODEL_UNBOUND ->
                 "No AI model is bound to practice review for this workspace; binding one in Administration re-offers it.";
             case PRACTICE_AUTONOMY_OFF ->

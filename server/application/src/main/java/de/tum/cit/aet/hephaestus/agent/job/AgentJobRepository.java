@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
@@ -23,6 +24,7 @@ import tools.jackson.databind.JsonNode;
 
 @Repository
 public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
+
     @Modifying(flushAutomatically = true)
     @Query("DELETE FROM AgentJob j WHERE j.workspace.id = :workspaceId")
     int deleteAllByWorkspaceId(@Param("workspaceId") Long workspaceId);
@@ -165,8 +167,13 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
             + "j.deliveryStatus = de.tum.cit.aet.hephaestus.agent.job.DeliveryStatus.PENDING))")
     boolean existsPurgeBlockingWork(@Param("workspaceId") Long workspaceId);
 
-    long countByWorkspaceIdAndPurposeAndStatusIn(
-            Long workspaceId, AgentPurpose purpose, Collection<AgentJobStatus> statuses);
+    @Query(value = """
+            SELECT COUNT(*) FROM agent_job
+            WHERE workspace_id = :workspaceId AND purpose = :#{#purpose.name()} AND status = 'RUNNING'
+              AND COALESCE(config_snapshot ->> 'dataHandlingTier', 'UNDECLARED') = :#{#tier.name()}
+            """, nativeQuery = true)
+    long countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
+            Long workspaceId, AgentPurpose purpose, DataHandlingTier tier);
 
     long countByWorkspaceIdAndPurposeAndCreatedAtGreaterThanEqual(
             Long workspaceId, AgentPurpose purpose, Instant createdAt);

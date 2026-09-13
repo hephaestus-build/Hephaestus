@@ -148,3 +148,66 @@ Severity, feedback routing and result counts use the derived outcome, not assess
 server, sandbox tool contract and database reject contradictory axes. They never manufacture a
 judgment by defaulting status, presence, assessment or severity. See the
 [review pipeline](./practice-review-pipeline.mdx) for capture and delivery boundaries.
+
+## Member onboarding and AI choices
+
+**Member onboarding** is first-visit setup after existing workspace membership. It is not an
+admission request, approval, entitlement, or provisioning workflow. It is configuration and a
+member's own choice, not research consent. Retired words: *processing location*, *Unclassified*,
+*AI preference*, *Workspace preferences*, *Workspace default*.
+
+**Data handling** is what an admin declares about a model: two facts, never an inference from a
+hostname, connection or provider kind. **Operated by** is *Your organisation* or *A provider*;
+**Kept after the reply** is *Nothing* or *For safety checks*. Declaring them is also the admin's
+confirmation that the model's terms rule out training on what it receives; Hephaestus does not
+accept a model that trains on developers' work. An admin-only **note** carries region, agreement
+and renewal date and is never shown to developers. No retention period appears in product copy.
+
+From the two facts Hephaestus derives one **data-handling tier**, strictest first, and shows it as a
+badge with a label and an icon everywhere a model appears:
+
+| Tier | Label | Derived when | What a developer reads |
+| --- | --- | --- | --- |
+| `IN_HOUSE` | **Stays in-house** | operated by your organisation | Runs only on systems your organisation operates. |
+| `PROVIDER_NOT_KEPT` | **Provider, nothing kept** | a provider, nothing kept | A provider under terms your organisation accepted processes it and keeps nothing after the reply. |
+| `PROVIDER_KEPT` | **Provider, kept for safety checks** | a provider, kept for safety checks | A provider under terms your organisation accepted keeps it for a limited time for safety checks, which its staff may read if flagged. |
+| `UNDECLARED` | **Not declared** | either fact missing | Never shown to developers; an admin to-do. |
+
+A developer's **AI choice** is a ceiling: the loosest tier they accept in one workspace, or **No
+AI**. The three AI answers are **Only in-house**, **Allow providers without content storage**
+and **Allow storage for safety checks**; anything stricter than the answer also counts, nothing ever
+switches a developer to a looser tier, and *Not declared* sits outside every ceiling. A member may
+choose any answer regardless of what the workspace has bound today: consent is to a boundary, not
+to the current inventory. The member-facing name for the choice is **your AI choice** on every
+surface: the sidebar item, the heading, the notice and the copy.
+
+**Members who haven't chosen** names the *Not declared* row on the workspace admin's model page: it
+serves only members who have not chosen yet, where the choice is optional, and never a member who
+chose. (*Workspace default* is retired here; it already names practice autonomy.)
+
+Two phrases, two meanings, never swapped: an AI answer that no ready model covers is **not set up
+here yet** (a workspace owner adds a model); an account link whose integration is broken is
+**unavailable right now** (it does not hold the member up).
+
+The sign-in and first-visit pages follow ten rules:
+
+1. Heph speaks in the first person only inside `HephSays`, and introduces himself once, on the
+   sign-in setup page.
+2. Outside the bubble: plain second person, no "please", contractions allowed; alert titles start
+   "Couldn't …".
+3. Buttons: **Continue** moves on, **Save AI choice** saves before required account links are complete,
+   **Save** on a return visit, **Skip for now** defers, **Sign out**
+   only on the sign-in setup page, **Back to workspace** on a return visit; never Next, Finish,
+   Submit or Done.
+4. Section titles are the question or the noun.
+5. Hints are one sentence and the primary button's accessible description.
+6. *Not set up here yet* for an AI answer; *unavailable right now* for an account link. When only
+   one of practice reviews and Heph is covered, Heph says *part of your choice* is not set up yet,
+   never that the whole choice is.
+7. Ask "a workspace owner" on the workspace page, "whoever runs this Hephaestus instance" on the
+   sign-in page.
+8. `{workspaceName}` in the heading and in Heph's intro; "this workspace" in body text.
+9. "AI" when reviews and Heph are both meant; "practice reviews" or "Heph" when one is; never
+   *model*, *LLM* or *agent*.
+10. Both pages open on "Give me a moment — I'm fetching your setup." and close on "That's
+    everything. Let's get to work."

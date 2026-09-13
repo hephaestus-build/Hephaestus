@@ -40,6 +40,59 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 - Co-locate `*.stories.tsx` files. Show the states the component can actually reach, with realistic data. Run `vp run --filter webapp chromatic:ci` whenever stories change.
 - Defer analytics work to effects that run after paint.
 
+### Onboarding and choice screens
+
+The sign-in setup page (`ConsentPage`) and the workspace setup page (`WorkspaceOnboardingPage`) are
+one product surface. These rules apply to that onboarding journey, not to every form or survey.
+Each rule names the source it comes from.
+
+- **Group the decision with its question.** Use the shared [shadcn questionnaire](https://ui.shadcn.com/docs/components/base/questionnaire)
+  for the workspace choice, with a native fieldset and legend. Account linking remains a separate
+  section below it; saving the AI choice never depends on linking an account. —
+  [W3C grouping controls](https://www.w3.org/WAI/tutorials/forms/grouping/)
+- **Do not invent a journey total.** Onboarding cannot count the sign-in stages that preceded it.
+  A survey with a defined question list can use the questionnaire's own progress component.
+  The workspace choice marker reports a saved answer, not an unsaved selection. —
+  [GOV.UK question pages](https://design-system.service.gov.uk/patterns/question-pages/)
+- **Never pre-select an answer.** Keep a first visit unanswered. A saved answer shown
+  checked on a return visit is the current fact, not a default, and the copy says so. —
+  [GOV.UK radios](https://design-system.service.gov.uk/components/radios/)
+- **Answers are equally weighted.** Same card, title plus one sentence, one same-size icon on every
+  answer including No AI, no benefit attached to one; EDPB condemns asymmetry, not icons. What
+  explains the choice lives in a `FactList` above the group, addressed to every answer. — [EDPB 03/2022 § 4.2](https://www.edpb.europa.eu/system/files/documents/2023-02/edpb_03-2022_guidelines_on_deceptive_design_patterns_in_social_media_platform_interfaces_v2_en_0.pdf)
+- **Declining costs the same click as accepting, and changing later is one sidebar click to the
+  same cards.** No confirmation dialog on choosing or leaving No AI. — [GDPR Art. 7(3)](https://gdpr-info.eu/art-7-gdpr/),
+  [NN/g on confirmation dialogs](https://www.nngroup.com/articles/confirmation-dialog/)
+- **Consequences are read once, before choosing, never behind a disclosure.** — EDPB 03/2022 "Left
+  in the dark"; [Hick's law](https://lawsofux.com/hicks-law/)
+- **An answer the workspace has not set up yet stays selectable, with the consequence in the card
+  text.** The answer is a boundary, not a pick from today's models: nothing runs for that purpose,
+  the card and Heph say so, and never an automatic switch to another answer. —
+  [Inactive buttons](https://www.uxtigers.com/post/inactive-buttons)
+- **Optional stages say so in their heading; a stage with nothing in it is not rendered.** —
+  [W3C multi-page forms](https://www.w3.org/WAI/tutorials/forms/multi-page/)
+- **One primary per state.** `Continue` when it moves the flow on, the specific verb when it does one
+  thing (`Save AI choice`, `Save`). Keep connection actions compact: visible `Connect`, with the
+  integration name in the accessible label. Use `Save & connect` when that action also saves a
+  pending AI choice before the sign-in redirect. Two primaries side by side compete. —
+  [NN/g wizards](https://www.nngroup.com/articles/wizards/)
+- **A disabled submit carries its reason in visible text wired through `aria-describedby`.** A native
+  disabled button is out of the tab order, so the reason must be readable elsewhere. —
+  `webapp/AGENTS.md` § Role-based gating
+- **The exit is always reachable and says what it leaves behind.** A look-only visit needs no server
+  write to leave; the flow ends on the page the reader was going to, never on a "Done" interstitial.
+  — NN/g wizards; [peak-end rule](https://lawsofux.com/peak-end-rule/)
+- **App-authored explanation is cut to a `FactList`; there is no owner-authored welcome text.** —
+  [NN/g on cognitive load](https://www.nngroup.com/articles/minimize-cognitive-load/)
+- **The visual language is `ConsentPage`'s and nothing else.** `bg-background`, `PageLayout
+  max-w-2xl`, Heph speaking from `HephSays`, the `--mentor` accent only where Heph speaks, `LegalLinks`
+  at the foot. No decorative background and no entrance motion: ornament masks faults, and the page
+  arrives right after one that has neither. — [Aesthetic-usability effect](https://lawsofux.com/aesthetic-usability-effect/);
+  motion rules in `webapp/AGENTS.md` § Motion
+- **One name per thing on every surface the member sees.** The member's choice is "your AI choice" in
+  the sidebar, the notice, the heading and the copy; "Member onboarding" is the owner's page. A
+  consequence sentence is written once and quoted, not paraphrased.
+
 ### Quality gates
 
 - Install dependencies with `vp install` at the repo root so optional binaries resolve.

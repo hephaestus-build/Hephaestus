@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.EgressPolicy;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.job.ExecutionArchiveService;
@@ -53,9 +52,9 @@ class LlmProxyService {
 
     private final WebClient webClient;
     private final LlmModelResolver resolver;
-    private final EgressPolicy egressPolicy;
     private final ObjectMapper objectMapper;
     private final ProxyAccounting accounting;
+    private final ProxyRequestPolicy requestPolicy;
     private final Tracer tracer;
     private final ExecutionArchiveService executionArchive;
 
@@ -64,16 +63,16 @@ class LlmProxyService {
             ExecutionArchiveService executionArchive,
             WebClient llmProxyWebClient,
             LlmModelResolver llmModelResolver,
-            EgressPolicy egressPolicy,
             ObjectMapper objectMapper,
-            ProxyAccounting accounting) {
+            ProxyAccounting accounting,
+            ProxyRequestPolicy requestPolicy) {
         this.tracer = tracer;
         this.executionArchive = executionArchive;
         this.webClient = llmProxyWebClient;
         this.resolver = llmModelResolver;
-        this.egressPolicy = egressPolicy;
         this.objectMapper = objectMapper;
         this.accounting = accounting;
+        this.requestPolicy = requestPolicy;
     }
 
     @SuppressWarnings("try") // The scope installs the current span and restores it on close.
@@ -132,6 +131,10 @@ class LlmProxyService {
             return ResponseEntity.status(403).body("This credential is not running a billable execution");
         }
 
+        if (!requestPolicy.allows(routing)) {
+            return ResponseEntity.status(403).body("Your AI choice no longer permits this model in this workspace.");
+        }
+
         // Before any credential is resolved or the network touched. Never interrupts a live stream.
         if (accounting.refuseForBudget(routing)) {
             return ResponseEntity.status(429).body(budgetReachedMessage(routing.connectionScope()));
@@ -150,7 +153,7 @@ class LlmProxyService {
         }
 
         try {
-            egressPolicy.validate(credential.baseUrl());
+            requestPolicy.validateTarget(credential.baseUrl());
         } catch (IllegalArgumentException e) {
             incrementErrors(routing.apiProtocol());
             return ResponseEntity.status(502).body("Upstream target not permitted");
@@ -181,6 +184,9 @@ class LlmProxyService {
                                 + "this call's tokens will not be metered",
                         routing.principalDescription());
                 accounting.recordStreamUsageUnsupported(routing.apiProtocol());
+                if (!requestPolicy.allows(routing))
+                    return ResponseEntity.status(403)
+                            .body("Your AI choice no longer permits this model in this workspace.");
                 upstream = callUpstream(
                         upstreamUri,
                         upstreamHeaders,

@@ -142,8 +142,8 @@ gate never kills a call already streaming; it acts only pre-forward.
 
 - **Concurrency.** Each execution is bounded on its own, so N running concurrently for one workspace
   can together reach N times the cap before any of them stops. For jobs N is the workspace's
-  `maxConcurrentJobs` — an operator-set number, not an open end; for mentor turns it is the number of
-  developers chatting at once.
+  sum of the per-location `maxConcurrentJobs` limits — operator-set numbers, not an open end; for mentor
+  turns it is the number of developers chatting at once.
 - **Calls the provider reports no usage for.** A streamed call whose provider rejects
   `stream_options.include_usage` (retried without it, counted as
   `llm.proxy.stream.usage.unsupported`), or any response with no usage block, contributes nothing to

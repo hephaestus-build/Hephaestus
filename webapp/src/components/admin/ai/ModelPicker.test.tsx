@@ -8,6 +8,7 @@ import { ModelPicker, type ModelPickerProps } from "./ModelPicker";
 
 const models: AvailableLlmModel[] = [
 	{
+		dataHandlingTier: "PROVIDER_NOT_KEPT",
 		id: 1,
 		scope: "SHARED",
 		displayName: "GPT-5",
@@ -18,6 +19,7 @@ const models: AvailableLlmModel[] = [
 		supportsReasoning: true,
 	},
 	{
+		dataHandlingTier: "IN_HOUSE",
 		id: 2,
 		scope: "WORKSPACE",
 		displayName: "GPT-5",
@@ -50,16 +52,53 @@ describe("ModelPicker", () => {
 		screen.getByText("Your models");
 	});
 
-	// Names written out rather than composed through `priceLabel`, the helper the component itself
-	// calls: a composed expectation catches "the price is gone" and never "the price is wrong".
-	it("keeps the price in each option's accessible name", () => {
+	// Names written out rather than composed through `priceLabel` and the registry, the helpers the
+	// component itself calls: a composed expectation catches "the price is gone" and never "the price
+	// is wrong".
+	it("keeps the data handling and the price in each option's accessible name", () => {
 		renderPicker({ availableModels: models, value: null, onChange: vi.fn() });
 		fireEvent.click(screen.getByRole("combobox"));
 
 		screen.getByRole("option", {
-			name: "GPT-5 · Organization endpoint · $1.00 input · $2.00 output / 1M tokens",
+			name: "GPT-5 · Organization endpoint · Provider, nothing kept · $1.00 input · $2.00 output / 1M tokens",
 		});
-		screen.getByRole("option", { name: "GPT-5 · Workspace endpoint · No metered API cost" });
+		screen.getByRole("option", {
+			name: "GPT-5 · Workspace endpoint · Stays in-house · No metered API cost",
+		});
+	});
+
+	it("lists only the models declared as the requested tier", () => {
+		renderPicker({
+			availableModels: models,
+			value: null,
+			onChange: vi.fn(),
+			tier: "IN_HOUSE",
+		});
+		fireEvent.click(screen.getByRole("combobox"));
+
+		screen.getByRole("option", { name: /Workspace endpoint/ });
+		expect(screen.queryByRole("option", { name: /Organization endpoint/ })).toBeNull();
+		expect(screen.queryByText("Shared models")).toBeNull();
+	});
+
+	it("disables itself when the tier filter leaves nothing to list", () => {
+		renderPicker({
+			availableModels: models,
+			value: null,
+			onChange: vi.fn(),
+			tier: "PROVIDER_KEPT",
+		});
+		expect(screen.getByRole("combobox").hasAttribute("disabled")).toBe(true);
+	});
+
+	it("still names a selected model the tier filter no longer offers", () => {
+		renderPicker({
+			availableModels: models,
+			value: { scope: "SHARED", id: 1 },
+			onChange: vi.fn(),
+			tier: "IN_HOUSE",
+		});
+		expect(screen.getByRole("combobox").textContent).toContain("GPT-5 · Organization endpoint");
 	});
 
 	it("marks the trigger invalid and links its description when asked to", () => {
