@@ -1,0 +1,14 @@
+[(#{email.survey-ended-summary.subject})]
+
+A survey has ended. These are its participation totals; individual answers are available only in the authenticated administrator console.
+
+People shown an in-app invitation: [(${invited})]
+Responded: [(${responded})]
+Declined: [(${declined})]
+
+Open surveys: [(${webappUrl})]/admin/surveys
+
+Unsubscribe from survey summaries: [(${unsubscribeUrl})]
+
+--
+[(#{email.footer(${webappUrl})})]

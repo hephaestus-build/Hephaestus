@@ -1388,6 +1388,28 @@ export type DeveloperPracticeSummary = {
   totalObservations: number;
 };
 
+export type EmailTestRequest = {
+  /**
+   * the mailbox to send the test email to; blank means the caller's own verified address
+   */
+  to?: string;
+};
+
+export type EmailTestResponse = {
+  /**
+   * the accepted <code>Message-ID</code>, only for <code>SENT</code>; search for it in the relay's log
+   */
+  messageId?: string;
+  /**
+   * what became of the test email; <code>SENT</code> is the only success
+   */
+  outcome: 'SENT' | 'EXPIRED' | 'NOT_CONFIGURED' | 'SILENT_MODE' | 'NO_RECIPIENT' | 'UNSUBSCRIBED' | 'INVALID_ADDRESS' | 'REJECTED' | 'UNAVAILABLE' | 'RATE_LIMITED';
+  /**
+   * the address it went to, or <code>null</code> when there was no recipient to resolve
+   */
+  to?: string;
+};
+
 /**
  * A verified quote and its exact source location
  */
@@ -2269,6 +2291,17 @@ export type LoginProviderView = {
   seededFromEnv?: boolean;
   type: string;
   updatedAt: Date;
+};
+
+export type NotificationPreferences = {
+  emailAvailable: boolean;
+  etag: string;
+  productFeedback: boolean;
+  productFeedbackFrequency: 'IMMEDIATE' | 'DAILY';
+  productSurveys: boolean;
+  researchSurveys: boolean;
+  surveySummaries: boolean;
+  workspaceAlerts: boolean;
 };
 
 /**
@@ -4805,6 +4838,21 @@ export type SurveyEdit = {
   title: string;
 };
 
+export type SurveyEmailInvitationRequest = {
+  sendReminder?: boolean;
+};
+
+/**
+ * Counts refer to email requests, not in-app invitations or responses. Accepted means SMTP relay acceptance.
+ */
+export type SurveyEmailInvitationSummary = {
+  accepted: number;
+  alreadyRequested: number;
+  eligible: number;
+  queued: number;
+  remaining: number;
+};
+
 export type SurveyInvitation = {
   description: string;
   endsAt?: Date;
@@ -5341,6 +5389,15 @@ export type UpdateLoginProviderRequest = {
   displayName?: string;
   enabled?: boolean;
   scopes?: string;
+};
+
+export type UpdateNotificationPreferences = {
+  productFeedback: boolean;
+  productFeedbackFrequency: 'IMMEDIATE' | 'DAILY';
+  productSurveys: boolean;
+  researchSurveys: boolean;
+  surveySummaries: boolean;
+  workspaceAlerts: boolean;
 };
 
 /**
@@ -6912,6 +6969,31 @@ export type AdminGetConfigurationReadinessResponses = {
 
 export type AdminGetConfigurationReadinessResponse = AdminGetConfigurationReadinessResponses[keyof AdminGetConfigurationReadinessResponses];
 
+export type AdminSendTestEmailData = {
+  body?: EmailTestRequest;
+  path?: never;
+  query?: never;
+  url: '/admin/email/test';
+};
+
+export type AdminSendTestEmailErrors = {
+  /**
+   * Malformed request or invalid recipient address
+   */
+  400: ProblemDetail;
+};
+
+export type AdminSendTestEmailError = AdminSendTestEmailErrors[keyof AdminSendTestEmailErrors];
+
+export type AdminSendTestEmailResponses = {
+  /**
+   * Email delivery outcome
+   */
+  200: EmailTestResponse;
+};
+
+export type AdminSendTestEmailResponse = AdminSendTestEmailResponses[keyof AdminSendTestEmailResponses];
+
 export type AdminListLlmConnectionsData = {
   body?: never;
   path?: never;
@@ -7961,6 +8043,42 @@ export type AdminUpdateProductSurveyResponses = {
 
 export type AdminUpdateProductSurveyResponse = AdminUpdateProductSurveyResponses[keyof AdminUpdateProductSurveyResponses];
 
+export type AdminPreviewSurveyEmailInvitationsData = {
+  body?: never;
+  path: {
+    surveyId: string;
+  };
+  query?: never;
+  url: '/admin/product-feedback/surveys/{surveyId}/email-invitations';
+};
+
+export type AdminPreviewSurveyEmailInvitationsResponses = {
+  /**
+   * OK
+   */
+  200: SurveyEmailInvitationSummary;
+};
+
+export type AdminPreviewSurveyEmailInvitationsResponse = AdminPreviewSurveyEmailInvitationsResponses[keyof AdminPreviewSurveyEmailInvitationsResponses];
+
+export type AdminSendSurveyEmailInvitationsData = {
+  body?: SurveyEmailInvitationRequest;
+  path: {
+    surveyId: string;
+  };
+  query?: never;
+  url: '/admin/product-feedback/surveys/{surveyId}/email-invitations';
+};
+
+export type AdminSendSurveyEmailInvitationsResponses = {
+  /**
+   * OK
+   */
+  200: SurveyEmailInvitationSummary;
+};
+
+export type AdminSendSurveyEmailInvitationsResponse = AdminSendSurveyEmailInvitationsResponses[keyof AdminSendSurveyEmailInvitationsResponses];
+
 export type AdminListProductSurveyResponsesData = {
   body?: never;
   path: {
@@ -8315,6 +8433,26 @@ export type ListIdentityProvidersResponses = {
 
 export type ListIdentityProvidersResponse = ListIdentityProvidersResponses[keyof ListIdentityProvidersResponses];
 
+export type UnsubscribeEmailData = {
+  body?: {
+    'List-Unsubscribe': string;
+  };
+  path: {
+    token: string;
+  };
+  query?: never;
+  url: '/notifications/unsubscribe/{token}';
+};
+
+export type UnsubscribeEmailResponses = {
+  /**
+   * Subscription disabled, or token no longer applicable
+   */
+  204: void;
+};
+
+export type UnsubscribeEmailResponse = UnsubscribeEmailResponses[keyof UnsubscribeEmailResponses];
+
 export type CallbackGetData = {
   body?: never;
   path: {
@@ -8576,6 +8714,41 @@ export type UnlinkIdentityResponses = {
 };
 
 export type UnlinkIdentityResponse = UnlinkIdentityResponses[keyof UnlinkIdentityResponses];
+
+export type GetNotificationPreferencesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/user/notification-preferences';
+};
+
+export type GetNotificationPreferencesResponses = {
+  /**
+   * OK
+   */
+  200: NotificationPreferences;
+};
+
+export type GetNotificationPreferencesResponse = GetNotificationPreferencesResponses[keyof GetNotificationPreferencesResponses];
+
+export type UpdateNotificationPreferencesData = {
+  body: UpdateNotificationPreferences;
+  headers?: {
+    'If-Match'?: string;
+  };
+  path?: never;
+  query?: never;
+  url: '/user/notification-preferences';
+};
+
+export type UpdateNotificationPreferencesResponses = {
+  /**
+   * OK
+   */
+  200: NotificationPreferences;
+};
+
+export type UpdateNotificationPreferencesResponse = UpdateNotificationPreferencesResponses[keyof UpdateNotificationPreferencesResponses];
 
 export type RevokeOtherSessionsData = {
   body?: never;

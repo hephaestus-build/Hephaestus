@@ -8,6 +8,10 @@ import { optionalIntegrationsAvailable } from "@/integrations/consent";
 
 import { CookiePreferencesSection } from "./CookiePreferencesSection";
 import { DangerZoneSection } from "./DangerZoneSection";
+import {
+	EmailPreferencesSection,
+	type EmailPreferencesSectionProps,
+} from "./EmailPreferencesSection";
 import { LinkedAccountsSection, type LinkedAccountsSectionProps } from "./LinkedAccountsSection";
 import {
 	PracticeFeedbackSection,
@@ -24,6 +28,7 @@ import {
 } from "./SlackPreferencesSection";
 
 export interface SettingsPageProps {
+	emailPreferencesProps: EmailPreferencesSectionProps;
 	practiceFeedbackProps: PracticeFeedbackSectionProps;
 	researchProps: ResearchParticipationSectionProps;
 	showResearchSection: boolean;
@@ -37,6 +42,7 @@ export interface SettingsPageProps {
 }
 
 export function SettingsPage({
+	emailPreferencesProps,
 	practiceFeedbackProps,
 	researchProps,
 	showResearchSection,
@@ -100,6 +106,9 @@ export function SettingsPage({
 						)}
 					</>
 				)}
+
+				<Separator />
+				<EmailPreferencesSection {...emailPreferencesProps} />
 
 				<Separator />
 				<LinkedAccountsSection {...linkedRest} isLoading={isLoading || linkedLoading} />

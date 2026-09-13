@@ -5,6 +5,11 @@
 spring:
     liquibase:
         enabled: false
+    # The registry opens a JDBC connection to detect the database type; there is none here.
+    autoconfigure:
+        exclude:
+            - org.springframework.modulith.events.jdbc.JdbcEventPublicationAutoConfiguration
+            - org.springframework.modulith.events.config.EventPublicationAutoConfiguration
     datasource:
         hikari:
             initialization-fail-timeout: -1

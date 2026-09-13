@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -33,6 +34,26 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class SurveyAdminController {
     private final SurveyService service;
+    private final SurveyEmailInvitationService emailInvitations;
+
+    @GetMapping("/{surveyId}/email-invitations")
+    @Operation(
+            operationId = "adminPreviewSurveyEmailInvitations",
+            summary = "Preview eligible survey email recipients and relay acceptance counts")
+    public SurveyEmailInvitationSummaryDTO previewEmailInvitations(@PathVariable UUID surveyId) {
+        return emailInvitations.preview(surveyId);
+    }
+
+    @PostMapping("/{surveyId}/email-invitations")
+    @Operation(
+            operationId = "adminSendSurveyEmailInvitations",
+            summary = "Queue up to 1000 new survey email invitations")
+    @AuditExempt(reason = "Each invitation records its requester and time; this changes no survey participation")
+    public SurveyEmailInvitationSummaryDTO sendEmailInvitations(
+            @PathVariable UUID surveyId,
+            @RequestBody(required = false) @Valid @Nullable SurveyEmailInvitationRequestDTO request) {
+        return emailInvitations.invite(surveyId, CurrentAccount.requireId(), request != null && request.sendReminder());
+    }
 
     @GetMapping
     @Operation(operationId = "adminListProductSurveys", summary = "List product surveys with participation counts")

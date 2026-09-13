@@ -93,6 +93,62 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             // Server-only so the worker and webhook pods never acquire an outbound dependency on
             // ecb.europa.eu — this fetcher is the only egress the display-currency feature has.
             Map.entry("de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateFetchScheduler", RuntimeRole.SERVER_PROPERTY),
+            // Email leaves the instance from the server role only: the gateway, the listeners that feed it,
+            // the redelivery sweep and the admin verification surface all boot with it.
+            Map.entry("de.tum.cit.aet.hephaestus.notification.email.EmailGateway", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.email.EmailAdminController", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.AccountDeletionEmailListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.NotificationRedeliveryJob", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.AccountSecurityEmailListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.ProductFeedbackDigestListener",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.ProductFeedbackDigestJob",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.SurveyEmailDeliveryAdapter", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.SurveyEmailListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.email.EmailUnsubscribeController",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.email.EmailRateLimiter", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.NotificationPreferencesController",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.ProductFeedbackEmailPreparation",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.ProductFeedbackEmailListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.SurveyEndedSummaryListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.WorkspaceAlertEmailListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.WorkspaceAlertEmailPreparation",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.NotificationPreferencesControllerAdvice",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.NotificationPreferencesExportAdapter",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.NotificationAccountErasureAdapter",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackNotificationQueryService",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.productfeedback.SurveyEmailInvitationService",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.productfeedback.SurveyEmailSchedulingJob", RuntimeRole.SERVER_PROPERTY),
+
             // ServerSchedulingConfig silences the @Scheduled tick off-server, but an ungated BEAN still
             // registers its gauges — permanent zeros in agent.queue.* / mentor.in_flight.* from pods that
             // never sample. Gate the bean, not just the tick.
@@ -305,7 +361,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
     /**
      * The {@code core.auth.spi} read-only query impls are the cross-role data-access part of auth
      * (account identity/role/name lookups), consumed by the connection-identity service, the
-     * workspace and notification modules, and product feedback's name resolution and erasure adapters
+     * workspace and practices modules, and product feedback's name resolution and erasure adapters
      * on every role. They carry no hard prod env and must stay ungated — unlike the web/OAuth/issuance
      * layer.
      */

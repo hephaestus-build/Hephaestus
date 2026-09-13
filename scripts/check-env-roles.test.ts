@@ -58,6 +58,11 @@ hephaestus:
             inactive-threshold: 30d
         github:
             token: \${GH_AUTH_TOKEN:}
+    email:
+        from: noreply@example.org
+spring:
+    mail:
+        host: relay.example.org
 `;
 
 const compose = (services: string): ComposeFile[] => [["compose.yaml", `services:\n${services}`]];
@@ -113,6 +118,23 @@ await test("removing it from the wrong container without adding it to the right 
 	assert.equal(failures.length, 1, failures.join("\n"));
 	assert.match(failureAt(failures, 0), /HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES is offered by/);
 	assert.match(failureAt(failures, 0), /no service in the deployment forwards it/);
+});
+
+await test("a placeholder in a local-only document is a developer knob, not an unforwarded setting", () => {
+	const { failures } = analyse(
+		`${APPLICATION}
+---
+spring:
+    config:
+        activate:
+            on-profile: local
+    mail:
+        port: \${MAILPIT_SMTP_PORT:1025}
+`,
+		compose(RECEIVER),
+	);
+
+	assert.deepEqual(failures, []);
 });
 
 await test("the variable reaching the container that runs its role passes", () => {
@@ -458,4 +480,20 @@ await test("Docker settings must be forwarded to a worker rather than only docum
 	assert.equal(failures.length, 1, failures.join("\n"));
 	assert.match(failureAt(failures, 0), /SANDBOX_DOCKER_HOST is offered by/);
 	assert.match(failureAt(failures, 0), /no service in the deployment forwards it/);
+});
+
+await test("production overlays retain environment forwarding checks", () => {
+	const { failures } = analyse(
+		`${APPLICATION}
+---
+spring:
+    config:
+        activate:
+            on-profile: prod
+    mail:
+        host: \${PRODUCTION_RELAY:}
+`,
+		compose(RECEIVER),
+	);
+	assert.ok(failures.some((failure) => failure.includes("PRODUCTION_RELAY is offered by")));
 });

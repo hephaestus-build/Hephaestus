@@ -1,0 +1,8 @@
+[(#{email.test-message.subject})]
+
+If you can read this, the relay is configured correctly and this mailbox receives email from your Hephaestus instance.
+
+Instance: [(${webappUrl})]
+
+--
+[(#{email.footer(${webappUrl})})]

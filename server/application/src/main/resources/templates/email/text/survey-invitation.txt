@@ -1,0 +1,12 @@
+[(#{email.survey-invitation.subject})]
+
+A survey is available in your Hephaestus workspace. Taking part is optional. Sign in to read its purpose and decide whether to respond.
+
+[(${reminder == true ? 'This is your one reminder. You can ignore or decline the survey; no further reminder is scheduled.' : ''})]
+
+Open the survey: [(${webappUrl})]/w/[(${workspaceSlug})]?survey=[(${surveyId})]
+
+Unsubscribe from these survey emails: [(${unsubscribeUrl})]
+
+--
+[(#{email.footer(${webappUrl})})]

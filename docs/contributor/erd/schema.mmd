@@ -234,6 +234,8 @@ erDiagram
         BIGINT version "NOT NULL"
         INTEGER credentials_key_version
         TIMESTAMPTZ credentials_rotation_failed_at
+        VARCHAR(32) attention_problem
+        BIGINT attention_revision "NOT NULL"
     }
 
     ConnectionActivity {
@@ -384,6 +386,18 @@ erDiagram
     DiscussionLabel {
         BIGINT discussion_id PK,FK
         BIGINT label_id PK,FK
+    }
+
+    EventPublication {
+        UUID id PK
+        TEXT listener_id "NOT NULL"
+        TEXT event_type "NOT NULL"
+        TEXT serialized_event "NOT NULL"
+        TIMESTAMPTZ publication_date "NOT NULL"
+        TIMESTAMPTZ completion_date
+        TEXT status
+        INTEGER completion_attempts
+        TIMESTAMPTZ last_resubmission_date
     }
 
     Feedback {
@@ -789,6 +803,18 @@ erDiagram
         BIGINT provider_id FK,UK "NOT NULL"
     }
 
+    NotificationSubscription {
+        UUID id PK
+        BIGINT account_id FK,UK "NOT NULL"
+        BOOLEAN enabled "NOT NULL"
+        TIMESTAMPTZ enabled_since
+        VARCHAR(16) frequency "NOT NULL"
+        VARCHAR(32) kind UK "NOT NULL"
+        DATE last_digest_date
+        UUID unsubscribe_token UK "NOT NULL"
+        BIGINT version "NOT NULL"
+    }
+
     OauthStateNonce {
         VARCHAR(32) nonce PK
         BIGINT workspace_id "NOT NULL"
@@ -1003,6 +1029,23 @@ erDiagram
         BIGINT created_by_account_id FK
         TIMESTAMPTZ created_at "NOT NULL"
         VARCHAR(200) research_organization
+        TIMESTAMPTZ summary_queued_at
+    }
+
+    ProductSurveyEmailInvitation {
+        UUID id PK
+        TIMESTAMPTZ accepted_at
+        BIGINT account_id FK,UK "NOT NULL"
+        TIMESTAMPTZ cancelled_at
+        TIMESTAMPTZ expires_at "NOT NULL"
+        TIMESTAMPTZ reminder_accepted_at
+        BOOLEAN reminder_enabled "NOT NULL"
+        TIMESTAMPTZ reminder_requested_at
+        TIMESTAMPTZ requested_at "NOT NULL"
+        BIGINT requested_by_account_id FK
+        UUID survey_id FK,UK "NOT NULL"
+        BIGINT workspace_id FK
+        BIGINT request_generation "NOT NULL"
     }
 
     ProductSurveyParticipation {
@@ -1647,6 +1690,7 @@ erDiagram
     IdentityProvider ||--o{ Milestone : references
     Repository ||--o{ Milestone : has
     User ||--o{ Milestone : created_by
+    Account ||--o{ NotificationSubscription : has
     Practice ||--o{ Observation : practice_id
     Practice ||--o{ Observation : practice_id
     PracticeRevision ||--o{ Observation : has
@@ -1669,6 +1713,10 @@ erDiagram
     Workspace ||--o{ ProductFeedback : has
     Account ||--o{ ProductSurvey : has
     Workspace ||--o{ ProductSurvey : has
+    Account ||--o{ ProductSurveyEmailInvitation : account_id
+    Account ||--o{ ProductSurveyEmailInvitation : requested_by_account_id
+    ProductSurvey ||--o{ ProductSurveyEmailInvitation : has
+    Workspace ||--o{ ProductSurveyEmailInvitation : has
     Account ||--o{ ProductSurveyParticipation : has
     ProductSurvey ||--o{ ProductSurveyParticipation : has
     Workspace ||--o{ ProductSurveyParticipation : has

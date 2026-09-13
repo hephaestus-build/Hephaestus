@@ -1,0 +1,10 @@
+[(#{email.product-feedback.subject})]
+
+Someone submitted product feedback to your Hephaestus instance. Sign in as an instance administrator to read it.
+
+Open product feedback: [(${webappUrl})]/admin/feedback
+
+Unsubscribe from product-feedback email: [(${unsubscribeUrl})]
+
+--
+[(#{email.footer(${webappUrl})})]

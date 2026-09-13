@@ -24,7 +24,7 @@ spring:
     sql:
         init:
             mode: always
-            schema-locations: classpath:db/auth-event-sequence.sql
+            schema-locations: classpath:db/auth-event-sequence.sql,classpath:db/rate-limit-buckets.sql
 
     # JPA configuration for tests
     # Use 'create' instead of 'create-drop': the Testcontainer is ephemeral so
@@ -47,6 +47,13 @@ spring:
     # Disable liquibase for tests (use JPA auto DDL instead)
     liquibase:
         enabled: false
+
+    # Liquibase is off, so the registry creates its own event_publication table (CREATE IF NOT EXISTS).
+    modulith:
+        events:
+            jdbc:
+                schema-initialization:
+                    enabled: true
 
     # Security configuration for tests (minimal config)
     security:

@@ -1,0 +1,10 @@
+[(#{email.product-feedback-digest.subject})]
+
+[(${reportCount})] product feedback submissions are ready to review. Sign in as an instance administrator to read it.
+
+Open product feedback: [(${webappUrl})]/admin/feedback
+
+Unsubscribe from product-feedback email: [(${unsubscribeUrl})]
+
+--
+[(#{email.footer(${webappUrl})})]

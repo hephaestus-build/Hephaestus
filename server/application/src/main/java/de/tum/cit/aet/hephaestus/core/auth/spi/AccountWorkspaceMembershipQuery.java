@@ -15,6 +15,13 @@ import java.util.Set;
  * implemented in {@code workspace}.
  */
 public interface AccountWorkspaceMembershipQuery {
+    /** Current memberships through active identity links and their stable actor IDs; never a login-name join. */
+    List<WorkspaceMembershipView> membershipsForAccount(long accountId);
+
+    List<Long> administratorAccountIds(long workspaceId);
+
+    boolean isAdministrator(long workspaceId, long accountId);
+
     /**
      * @param logins the principal's git-provider logins (case-insensitive), resolved from its
      *               active identity links; empty input yields an empty result

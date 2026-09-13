@@ -40,6 +40,7 @@ class SurveyService {
 
     private final SurveyRepository surveys;
     private final SurveyParticipationRepository participations;
+    private final SurveyEmailInvitationRepository emailInvitations;
     private final FeedbackRefs refs;
     private final ResearchParticipationQuery research;
     private final ObjectMapper mapper;
@@ -70,6 +71,9 @@ class SurveyService {
     public SurveyDTO edit(UUID id, SurveyEditDTO request) {
         Survey survey = require(id);
         survey.edit(request.title(), request.description(), request.startsAt(), request.endsAt(), request.active());
+        if (!request.active()) {
+            emailInvitations.cancelPendingForSurvey(id, clock.instant());
+        }
         return dtos(List.of(survey)).getFirst();
     }
 
@@ -77,6 +81,7 @@ class SurveyService {
     public void delete(UUID id) {
         Survey survey = require(id);
         participations.deleteAllBySurveyId(id);
+        emailInvitations.deleteAllBySurveyId(id);
         surveys.delete(survey);
     }
 
@@ -157,6 +162,18 @@ class SurveyService {
             Csv.appendRow(csv, cells);
         }
         return csv.toString();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isEligibleForEmail(UUID surveyId, long workspaceId, long accountId) {
+        Survey survey = surveys.findById(surveyId).orElse(null);
+        return survey != null
+                && survey.isOpenFor(workspaceId, clock.instant())
+                && participant(accountId).isOffered(survey)
+                && participations
+                        .findBySurveyIdAndAccountId(surveyId, accountId)
+                        .map(participation -> participation.getStatus() == Status.INVITED)
+                        .orElse(true);
     }
 
     @Transactional(readOnly = true)

@@ -52,6 +52,60 @@ How members are invited and how they answer or decline is described in
   stay. A scheduled survey has not started, so it cannot be ended; delete it instead.
 - **Delete** removes the survey and every response and decline it collected. This cannot be undone.
 
+## Invite by email
+
+Creating or editing a survey never starts an email campaign. From its results page, preview the
+email audience and explicitly request invitations. Only people who opted into the matching product
+or research survey emails are eligible; research invitations additionally require current consent for
+the survey's research organisation. Each recipient must still belong to an eligible workspace and
+have an active account with a verified address. One person receives one invitation across workspaces.
+
+Each request queues at most 1,000 recipients. Repeat the action to continue a larger audience;
+initial invitations already accepted by the relay are not requested again. Eligibility is checked again when sending or
+retrying. Pausing cancels pending invitations; resuming does not revive them. Closing or deleting the
+survey, answering, declining, withdrawing consent or leaving the audience prevents queued delivery.
+
+The email audience card distinguishes:
+
+- **Eligible now**: current subscribers who can still answer this survey.
+- **Already requested**: people for whom an email invitation was requested, including cancelled
+  requests. A request is not proof of delivery.
+- **Accepted by relay**: initial invitations accepted by SMTP, not opened or answered. Reminders
+  do not increase this count.
+- **Remaining**: eligible people who have never been requested, or whose initial invitation was
+  cancelled before relay acceptance and can be explicitly requested again.
+
+The result of the send action reports how many invitations were newly queued in that batch; it is
+not a count of messages still waiting. Email requests and acceptance are separate from the in-app
+invitation counts used for completion rates. No tracking pixels are added and no answers are sent
+in email.
+
+### One optional reminder
+
+**Send one reminder** starts off for each send action. If selected, one reminder can be scheduled
+for each new recipient at least 72 hours after the relay accepts their initial invitation. It is
+not a repeating campaign: answering, declining, unsubscribing, leaving the audience or losing research
+consent prevents the reminder. The survey must still be open, and email requests expire seven days
+after they were made or when the survey closes, whichever comes first.
+
+Pausing cancels both pending initial invitations and pending reminders. Resuming does not revive
+those requests or remove their **Already requested** history. After resuming, a fresh send action can
+explicitly request a cancelled initial invitation that the relay never accepted. It cannot repeat an
+accepted initial invitation or revive that invitation's cancelled reminder.
+
+### End-of-survey summaries
+
+Instance administrators can separately opt into **Survey summaries** in their email notification
+settings. When a survey ends, its summary contains aggregate counts of people shown the invitation
+in the app, responses and declines, plus a link to the administrator console. It contains no
+individual answers. Subscribing to survey invitations does not subscribe an administrator to summaries.
+
+Only active instance administrators with verified email addresses receive summaries, and eligibility
+is checked again before sending. Summaries are prepared only for surveys that ended within the last
+seven days; older surveys are not backfilled after downtime. A summary is prepared once for a survey's end time, not once per response or each time someone
+changes their subscription. Changing the end time invalidates a queued summary for the old schedule
+and allows a new summary when the revised end is reached.
+
 ## Read survey results
 
 Open a survey from the table to see who was invited, who responded and who declined, a summary per
@@ -67,8 +121,11 @@ research survey's results page reminds you whose data they are.
 **Inbox** lists ideas, bug reports and feedback. Each shows who sent it, from which workspace, the
 page and browser when the sender chose to attach them, and the Hephaestus release that received it.
 **Mark resolved** moves an item out of the open list; **Reopen** brings it back. Nobody is notified
-either way, and there are no submission notifications, so check the inbox regularly and follow your
-team's process for acting on reports. An idea or a bug that concerns every instance is worth passing
+either way. In your personal settings, opt in to product-feedback email for new submissions,
+either immediately or as a daily digest. Digests run after 08:00 UTC for the previous UTC calendar
+day, skip empty windows and combine at most seven days after downtime. They never include report
+text or attached context: sign in to read it. Only currently active instance administrators with a
+verified email address receive these emails. Follow your team's process for acting on reports. An idea or a bug that concerns every instance is worth passing
 on to the [Hephaestus project](https://github.com/hephaestus-build/Hephaestus/issues); nothing does
 that for you.
 
@@ -83,6 +140,10 @@ account, so the results page can report a completion rate.
 
 Research survey answers are collected under the research consent and stay with the survey after a
 member withdraws; removing them means erasing the account or deleting the survey. Account erasure and
-workspace purge remove the corresponding submissions. There is no automatic age-based deletion:
-include product feedback in your retention and rights-request procedures. The
+workspace purge remove the corresponding submissions. Account erasure also removes that account's
+survey email-invitation records and clears its requester attribution on other people's invitations.
+Deleting a survey removes its invitation records alongside its responses; workspace purge removes
+records belonging to that workspace. These operations cannot recall email already accepted by a relay.
+There is no automatic age-based deletion of retained invitation records: include them and product
+feedback in your retention and rights-request procedures. The
 [personal-data map](dsms/personal-data-map.md) describes erasure coverage.

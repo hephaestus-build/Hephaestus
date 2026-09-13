@@ -91,7 +91,9 @@ class AccountExportServiceTest extends BaseUnitTest {
                 membershipQuery,
                 preferencesQuery,
                 gitProviderRegistry,
-                clock);
+                clock,
+                accountId -> new de.tum.cit.aet.hephaestus.core.auth.spi.NotificationPreferencesExportQuery.Preferences(
+                        false, false, false, "IMMEDIATE", false, false));
 
         ExportBundle bundle = assembler.assemble(ACCOUNT_ID);
 

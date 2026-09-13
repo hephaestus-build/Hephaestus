@@ -233,8 +233,6 @@ class AdvancedArchitectureTest extends HephaestusArchitectureTest {
                             || // Job type handlers implement handler SPI
                             javaClass.getPackageName().contains(".context.providers")
                             || // Content sources declare ReviewContextBuilder
-                            javaClass.getPackageName().contains(".notification")
-                            || // Notification module implements activity SPIs
                             javaClass.getPackageName().contains(".manifest")
                             || // IntegrationManifest impls + bootstrap utilities
                             javaClass.getPackageName().contains(".registry")

@@ -35,7 +35,12 @@ class AccountBootstrapServiceTest extends BaseUnitTest {
     private AccountBootstrapService serviceWithToken(String configuredToken) {
         AuthProperties props = mock(AuthProperties.class);
         when(props.bootstrapToken()).thenReturn(configuredToken);
-        return new AccountBootstrapService(accountRepository, new AuthEventLogger(auditWriter), props);
+        return new AccountBootstrapService(
+                accountRepository,
+                new AuthEventLogger(auditWriter),
+                props,
+                java.time.Clock.systemUTC(),
+                mock(org.springframework.context.ApplicationEventPublisher.class));
     }
 
     @Test

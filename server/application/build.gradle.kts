@@ -40,6 +40,7 @@ dependencies {
     implementation(libs.spring.boot.starter.logging)
     developmentOnly(libs.spring.boot.docker.compose)
     implementation(libs.spring.boot.starter.mail)
+    implementation(libs.angus.mail)
     implementation(libs.spring.boot.starter.thymeleaf)
     implementation(libs.spring.boot.starter.aspectj)
     runtimeOnly(libs.postgresql)
@@ -48,6 +49,8 @@ dependencies {
     // docker-java exposes Immutables metadata; consumers need annotations, not its processor.
     compileOnly(libs.immutables.value.annotations)
     implementation(libs.spring.modulith.starter.core)
+    // Event publication registry: the durable outbox behind notification listeners (ADR 0044).
+    implementation(libs.spring.modulith.starter.jdbc)
     testImplementation(libs.spring.modulith.starter.test)
     testImplementation(libs.spring.boot.starter.test) {
         exclude(group = "org.slf4j", module = "slf4j-simple")
@@ -419,9 +422,10 @@ for ((taskName, command) in
             args(
                 "--changelog-file=${layout.buildDirectory.file("changelog_new.xml").get().asFile}",
                 "--reference-url=hibernate:spring:de.tum.cit.aet.hephaestus?dialect=org.hibernate.dialect.PostgreSQLDialect&hibernate.physical_naming_strategy=org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy&hibernate.implicit_naming_strategy=org.springframework.boot.hibernate.SpringImplicitNamingStrategy",
-                // Hibernate cannot emit unmapped tables, partitions, or scalar-id foreign keys. The
-                // pending contractions are listed in docs/contributor/database-migration.mdx.
-                "--exclude-objects=table:shedlock,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,table:consent_notice,column:notice_sha256,table:product_survey_submission,foreignkey:sfk_.*",
+                // Hibernate cannot emit unmapped tables, partitions, or scalar-id foreign keys.
+                // event_publication is the JDBC registry; pending contractions are listed in
+                // docs/contributor/database-migration.mdx.
+                "--exclude-objects=table:shedlock,table:event_publication,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,table:consent_notice,column:notice_sha256,table:product_survey_submission,foreignkey:sfk_.*",
             )
         }
     }

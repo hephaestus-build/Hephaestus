@@ -18,6 +18,47 @@ spring:
     modulith:
         moments:
             enabled: false
+        # Event publication registry — the durable outbox behind notification listeners (ADR 0044).
+        # Only @ApplicationModuleListener methods get a registry row; the plain
+        # @TransactionalEventListener fan-out elsewhere in the tree keeps its fire-and-forget
+        # semantics. A completed row is deleted, a failed one stays until
+        # notification.NotificationRedeliveryJob resubmits it; each listener owns expiration.
+        events:
+            registry-trigger-annotation: org.springframework.modulith.events.ApplicationModuleListener
+            completion-mode: delete
+            republish-outstanding-events-on-restart: false
+            # Liquibase owns event_publication (db/changelog); the registry's own DDL stays off.
+            jdbc:
+                schema-initialization:
+                    enabled: false
+            # A listener that crashed mid-flight, or a publication whose listener never ran, is
+            # marked FAILED after this long so the redelivery job can pick it up.
+            staleness:
+                published: 15m
+                processing: 15m
+                resubmitted: 15m
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SMTP TRANSPORT — Boot's own spring.mail.* properties, so the env names are the ones an
+    # operator guesses from the property path (SPRING_MAIL_HOST ↔ spring.mail.host). Unset host
+    # = no sender bean = email off (notification.email.EmailTransportConfiguration). The three
+    # timeouts are set because Jakarta Mail's defaults are infinite. The sender identity is
+    # hephaestus.email.* below. Local development points at Mailpit (see the `local` profile).
+    # ═══════════════════════════════════════════════════════════════════════════
+    mail:
+        host: ${SPRING_MAIL_HOST:}
+        port: ${SPRING_MAIL_PORT:587}
+        username: ${SPRING_MAIL_USERNAME:}
+        password: ${SPRING_MAIL_PASSWORD:}
+        properties:
+            "[mail.smtp.ssl.enable]": ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE:false}
+            "[mail.smtp.ssl.checkserveridentity]": true
+            "[mail.smtp.auth]": ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:true}
+            "[mail.smtp.starttls.enable]": ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:true}
+            "[mail.smtp.starttls.required]": ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED:true}
+            "[mail.smtp.connectiontimeout]": 5000
+            "[mail.smtp.timeout]": 10000
+            "[mail.smtp.writetimeout]": 10000
 
     threads:
         virtual:
@@ -411,6 +452,16 @@ hephaestus:
 
     webapp:
         url: ${HEPHAESTUS_WEBAPP_URL:${APPLICATION_HOST_URL:http://localhost:4200}}
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # EMAIL — sender identity for the notification module (notification.email.EmailProperties).
+    # The SMTP transport is spring.mail.* above; email is on exactly when spring.mail.host is set,
+    # and `from` is then required (the configuration-readiness page reports the pair).
+    # ═══════════════════════════════════════════════════════════════════════════
+    email:
+        from: ${HEPHAESTUS_EMAIL_FROM:}
+        from-name: ${HEPHAESTUS_EMAIL_FROM_NAME:Hephaestus}
+        reply-to: ${HEPHAESTUS_EMAIL_REPLY_TO:}
 
     leaderboard:
         schedule:
@@ -852,3 +903,15 @@ spring:
             enabled: true
             file: ../compose.yaml
             lifecycle-management: start-only
+    # Mailpit (compose.yaml) catches every email; open its UI on MAILPIT_UI_PORT (8025 by default).
+    mail:
+        host: localhost
+        port: ${MAILPIT_SMTP_PORT:1025}
+        properties:
+            "[mail.smtp.auth]": false
+            "[mail.smtp.starttls.enable]": false
+            "[mail.smtp.starttls.required]": false
+
+hephaestus:
+    email:
+        from: hephaestus@localhost
