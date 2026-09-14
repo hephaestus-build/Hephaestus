@@ -135,6 +135,21 @@ export const DeliveryNotConfigured: Story = {
 	args: { state: { ...ready, preferences: { ...ready.preferences, deliveryConfigured: false } } },
 };
 
+export const RetainedSubscriptions: Story = {
+	args: {
+		isAppAdmin: true,
+		state: {
+			...ready,
+			preferences: {
+				...ready.preferences,
+				deliveryConfigured: false,
+				emailAvailable: false,
+				productFeedback: true,
+			},
+		},
+	},
+};
+
 export const Saving: Story = {
 	args: { state: { ...ready, isPending: true } },
 	play: async ({ canvas }) => {

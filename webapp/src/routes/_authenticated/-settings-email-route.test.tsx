@@ -183,31 +183,90 @@ describe("account email choices", () => {
 		}
 	});
 
-	it("lets a verified account save its choice when instance email delivery is not configured", async () => {
-		const user = userEvent.setup();
-		server.use(
-			http.get("*/user/notification-preferences", () =>
-				HttpResponse.json({ ...preferences, deliveryConfigured: false }),
-			),
-			http.put("*/user/notification-preferences", () =>
-				HttpResponse.json({
-					...preferences,
-					deliveryConfigured: false,
-					productSurveys: true,
-					etag: '"2"',
+	it.each([
+		{ appRole: "APP_USER", roles: ["ROLE_USER"] },
+		{ appRole: "APP_ADMIN", roles: ["ROLE_ADMIN"] },
+	])(
+		"hides unconfigured email choices without retained subscriptions for $appRole",
+		async ({ appRole, roles }) => {
+			server.use(
+				http.get("*/user", () =>
+					HttpResponse.json({
+						...currentUser,
+						appRole,
+						roles,
+					}),
+				),
+				http.get("*/user/notification-preferences", () =>
+					HttpResponse.json({ ...preferences, deliveryConfigured: false }),
+				),
+			);
+			const queryClient = renderRouteAt("/settings");
+			await waitFor(
+				() =>
+					expect(queryClient.getQueryData(getNotificationPreferencesQueryKey())).toMatchObject({
+						deliveryConfigured: false,
+					}),
+				ROUTE_RENDER_WAIT,
+			);
+			expect(screen.queryByRole("region", { name: "Email notifications" })).toBeNull();
+			expect(screen.queryByText(/Email delivery is not configured/)).toBeNull();
+		},
+	);
+
+	it.each([
+		{ appRole: "APP_USER", roles: ["ROLE_USER"] },
+		{ appRole: "APP_ADMIN", roles: ["ROLE_ADMIN"] },
+	])(
+		"allows only retained opt-outs without SMTP for %s and removes the section after the last",
+		async ({ appRole, roles }) => {
+			const user = userEvent.setup();
+			const retained = {
+				...preferences,
+				deliveryConfigured: false,
+				emailAvailable: false,
+				productFeedback: true,
+			};
+			const writes: unknown[] = [];
+			server.use(
+				http.get("*/user", () =>
+					HttpResponse.json({
+						...currentUser,
+						appRole,
+						roles,
+					}),
+				),
+				http.get("*/user/notification-preferences", () => HttpResponse.json(retained)),
+				http.put("*/user/notification-preferences", async ({ request }) => {
+					writes.push(await request.json());
+					return HttpResponse.json({ ...retained, productFeedback: false, etag: '"2"' });
 				}),
-			),
-		);
-		renderRouteAt("/settings");
-		await screen.findByText(
-			/Email delivery is not configured for this instance/,
-			{},
-			ROUTE_RENDER_WAIT,
-		);
-		const product = screen.getByRole("switch", { name: "Product survey invitations" });
-		await user.click(product);
-		await waitFor(() => expect(product.getAttribute("aria-checked")).toBe("true"));
-	});
+			);
+			renderRouteAt("/settings");
+			const feedback = await screen.findByRole(
+				"switch",
+				{ name: "New product feedback" },
+				ROUTE_RENDER_WAIT,
+			);
+			expect(screen.queryByRole("switch", { name: "Product survey invitations" })).toBeNull();
+			expect(screen.queryByRole("combobox", { name: "Product feedback frequency" })).toBeNull();
+			expect(screen.queryByText(/Email delivery is not configured/)).toBeNull();
+			await user.click(feedback);
+			await waitFor(() =>
+				expect(screen.queryByRole("region", { name: "Email notifications" })).toBeNull(),
+			);
+			expect(writes).toStrictEqual([
+				{
+					productFeedback: false,
+					workspaceAlerts: false,
+					surveySummaries: false,
+					productFeedbackFrequency: "IMMEDIATE",
+					productSurveys: false,
+					researchSurveys: false,
+				},
+			]);
+		},
+	);
 
 	it("lets a former instance administrator remove retained administrator opt-ins without re-enabling them", async () => {
 		const user = userEvent.setup();

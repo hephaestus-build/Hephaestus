@@ -10,6 +10,7 @@ import { CookiePreferencesSection } from "./CookiePreferencesSection";
 import { DangerZoneSection } from "./DangerZoneSection";
 import {
 	EmailPreferencesSection,
+	hasEmailPreferences,
 	type EmailPreferencesSectionProps,
 } from "./EmailPreferencesSection";
 import { LinkedAccountsSection, type LinkedAccountsSectionProps } from "./LinkedAccountsSection";
@@ -107,8 +108,12 @@ export function SettingsPage({
 					</>
 				)}
 
-				<Separator />
-				<EmailPreferencesSection {...emailPreferencesProps} />
+				{hasEmailPreferences(emailPreferencesProps.state) && (
+					<>
+						<Separator />
+						<EmailPreferencesSection {...emailPreferencesProps} />
+					</>
+				)}
 
 				<Separator />
 				<LinkedAccountsSection {...linkedRest} isLoading={isLoading || linkedLoading} />

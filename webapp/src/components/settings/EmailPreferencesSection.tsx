@@ -74,6 +74,14 @@ const choices = [
 	},
 ] as const;
 
+export function hasEmailPreferences(state: EmailPreferencesState) {
+	return (
+		state.status !== "ready" ||
+		state.preferences.deliveryConfigured ||
+		choices.some((choice) => state.preferences[choice.key])
+	);
+}
+
 export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesSectionProps) {
 	const id = useId();
 	const showSpinner = useSpinDelay(state.status === "ready" && state.isPending, {
@@ -81,12 +89,16 @@ export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesS
 		minDuration: 500,
 	});
 	const busy = state.status === "ready" && (state.isPending || showSpinner);
-	const visibleChoices = choices.filter(
-		(choice) =>
-			(choice.key !== "productFeedback" && choice.key !== "surveySummaries") ||
-			isAppAdmin ||
-			(state.status === "ready" && state.preferences[choice.key]),
+	const optOutOnly = state.status === "ready" && !state.preferences.deliveryConfigured;
+	const visibleChoices = choices.filter((choice) =>
+		optOutOnly
+			? state.preferences[choice.key]
+			: (choice.key !== "productFeedback" && choice.key !== "surveySummaries") ||
+				isAppAdmin ||
+				(state.status === "ready" && state.preferences[choice.key]),
 	);
+
+	if (!hasEmailPreferences(state)) return null;
 
 	const change = (patch: Partial<EmailNotificationChoices>) => {
 		if (state.status !== "ready" || busy) return;
@@ -118,8 +130,9 @@ export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesS
 					</p>
 				</div>
 				<p className="text-sm text-muted-foreground">
-					Optional emails are off until you choose to receive them. You can turn each kind off at
-					any time. Essential account emails, such as account-deletion confirmations, are separate.
+					{optOutOnly
+						? "You can turn off your existing email subscriptions below."
+						: "Optional emails are off until you choose to receive them. You can turn each kind off at any time. Essential account emails, such as account-deletion confirmations, are separate."}
 				</p>
 			</div>
 			{state.status === "loading" ? (
@@ -142,20 +155,15 @@ export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesS
 				/>
 			) : (
 				<>
-					{!isAppAdmin &&
+					{!optOutOnly &&
+						!isAppAdmin &&
 						(state.preferences.productFeedback || state.preferences.surveySummaries) && (
 							<p className="text-sm text-muted-foreground">
 								You no longer have instance-admin access. Existing administrator subscriptions can
 								be turned off here; they cannot send while that access is missing.
 							</p>
 						)}
-					{!state.preferences.deliveryConfigured && (
-						<p className="text-sm text-muted-foreground">
-							Email delivery is not configured for this instance. With a verified email address, you
-							can save choices for when it is enabled. Contact an instance administrator.
-						</p>
-					)}
-					{!state.preferences.emailAvailable && (
+					{!optOutOnly && !state.preferences.emailAvailable && (
 						<p className="text-sm text-muted-foreground">
 							No verified email address is available for your account. A linked sign-in provider
 							must supply a verified address before you can turn on another email kind. You can
@@ -184,7 +192,7 @@ export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesS
 								/>
 							</Field>
 						))}
-						{isAppAdmin && state.preferences.productFeedback && (
+						{!optOutOnly && isAppAdmin && state.preferences.productFeedback && (
 							<Field orientation="responsive">
 								<FieldContent>
 									<FieldLabel id={`${id}-frequency-label`} htmlFor={`${id}-frequency`}>

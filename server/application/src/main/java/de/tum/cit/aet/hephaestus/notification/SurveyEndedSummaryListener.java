@@ -57,6 +57,10 @@ public class SurveyEndedSummaryListener {
             return;
         }
         var counts = summary.get();
+        if (!gateway.configured()) {
+            metrics.record(EmailKind.SURVEY_ENDED_SUMMARY, Outcome.NOT_CONFIGURED);
+            return;
+        }
         var rendered = renderer.render(
                 EmailKind.SURVEY_ENDED_SUMMARY,
                 Map.of(

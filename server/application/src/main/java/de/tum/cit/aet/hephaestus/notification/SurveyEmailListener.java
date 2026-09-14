@@ -59,6 +59,10 @@ public class SurveyEmailListener {
             metrics.record(EmailKind.SURVEY_INVITATION, Outcome.NO_RECIPIENT);
             return;
         }
+        if (!gateway.configured()) {
+            metrics.record(EmailKind.SURVEY_INVITATION, Outcome.NOT_CONFIGURED);
+            return;
+        }
         var rendered = renderer.render(
                 EmailKind.SURVEY_INVITATION,
                 Map.of(

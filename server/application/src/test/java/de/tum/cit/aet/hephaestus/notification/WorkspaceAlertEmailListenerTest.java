@@ -84,6 +84,7 @@ class WorkspaceAlertEmailListenerTest extends BaseUnitTest {
                         7L, "owned", "Owned", "OWNER", 501L)));
         when(links.url("token")).thenReturn("https://example.org/unsubscribe/token");
         when(links.confirmationUrl("token")).thenReturn("https://example.org/unsubscribe/token/confirm");
+        when(gateway.configured()).thenReturn(true);
         when(gateway.send(any())).thenReturn(EmailDeliveryResult.sent("id"));
         listener.on(new WorkspaceAlertEmailRequested(change, 42L));
         var sent = ArgumentCaptor.forClass(EmailMessage.class);

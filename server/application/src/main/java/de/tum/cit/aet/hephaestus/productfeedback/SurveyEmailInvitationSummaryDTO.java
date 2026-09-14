@@ -9,4 +9,5 @@ public record SurveyEmailInvitationSummaryDTO(
         @Schema(requiredMode = RequiredMode.REQUIRED) int alreadyRequested,
         @Schema(requiredMode = RequiredMode.REQUIRED) int accepted,
         @Schema(requiredMode = RequiredMode.REQUIRED) int queued,
-        @Schema(requiredMode = RequiredMode.REQUIRED) int remaining) {}
+        @Schema(requiredMode = RequiredMode.REQUIRED) int remaining,
+        @Schema(requiredMode = RequiredMode.REQUIRED) boolean deliveryConfigured) {}

@@ -6,6 +6,8 @@ import java.util.UUID;
 
 /** The survey owner selects eligible people; the notification adapter owns contact subscriptions and delivery. */
 public interface SurveyEmailDelivery {
+    boolean configured();
+
     List<Long> subscribedAccountIds(boolean research);
 
     boolean isSubscribed(long accountId, boolean research);

@@ -1680,7 +1680,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SurveyEmailInvitationSummary"
-          description: OK
+          description: Invitation request summary
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Email delivery is not configured; no invitations were requested
       summary: Queue up to 1000 new or explicitly retried cancelled survey email invitations
       tags:
       - survey-admin
@@ -15592,6 +15598,8 @@ components:
         alreadyRequested:
           type: integer
           format: int32
+        deliveryConfigured:
+          type: boolean
         eligible:
           type: integer
           format: int32
@@ -15604,6 +15612,7 @@ components:
       required:
       - accepted
       - alreadyRequested
+      - deliveryConfigured
       - eligible
       - queued
       - remaining

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.notification;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.notification.email.EmailGateway;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionKind;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
 import de.tum.cit.aet.hephaestus.productfeedback.notification.SurveyEmailDelivery;
@@ -24,6 +25,12 @@ class SurveyEmailDeliveryAdapter implements SurveyEmailDelivery {
     private final AccountContactQuery contacts;
     private final ApplicationEventPublisher events;
     private final java.time.Clock clock;
+    private final EmailGateway gateway;
+
+    @Override
+    public boolean configured() {
+        return gateway.configured();
+    }
 
     @Override
     public List<Long> subscribedAccountIds(boolean research) {

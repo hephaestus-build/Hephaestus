@@ -1,6 +1,8 @@
+import { Link } from "@tanstack/react-router";
 import { useId, useState } from "react";
 import { useSpinDelay } from "spin-delay";
 
+import { cn } from "cn";
 import type { SurveyEmailInvitationSummary } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import {
@@ -13,7 +15,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel, FieldDescription, FieldContent } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -77,26 +79,41 @@ export function AdminSurveyEmailInvitations({ state }: { state: SurveyEmailInvit
 						sending.
 					</p>
 					<div className="flex flex-wrap gap-2">
-						<Button
-							disabled={busy || !state.summary.remaining}
-							onClick={() => {
-								setSendReminder(false);
-								setConfirming(true);
-							}}
-						>
-							{showSpinner && <Spinner />}
-							{showSpinner ? "Queuing…" : "Queue email invitations…"}
-						</Button>
+						{state.summary.deliveryConfigured ? (
+							<Button
+								disabled={busy || !state.summary.remaining}
+								onClick={() => {
+									setSendReminder(false);
+									setConfirming(true);
+								}}
+							>
+								{showSpinner && <Spinner />}
+								{showSpinner ? "Queuing…" : "Queue email invitations…"}
+							</Button>
+						) : (
+							<Link to="/admin/settings" className={cn(buttonVariants({ variant: "outline" }))}>
+								Set up email
+							</Link>
+						)}
 						<Button variant="outline" disabled={busy} onClick={state.onRefresh}>
 							Refresh counts
 						</Button>
 					</div>
-					{!state.summary.remaining && (
+					{!state.summary.deliveryConfigured && (
+						<p className="text-sm text-muted-foreground">
+							Surveys still appear in Hephaestus. Set up email in instance settings to send
+							invitations.
+						</p>
+					)}
+					{state.summary.deliveryConfigured && !state.summary.remaining && (
 						<p className="text-sm text-muted-foreground">
 							No eligible recipients waiting for an invitation.
 						</p>
 					)}
-					<AlertDialog open={confirming} onOpenChange={setConfirming}>
+					<AlertDialog
+						open={confirming && state.summary.deliveryConfigured}
+						onOpenChange={setConfirming}
+					>
 						<AlertDialogContent>
 							<AlertDialogHeader>
 								<AlertDialogTitle>Queue survey invitation emails?</AlertDialogTitle>
@@ -129,7 +146,8 @@ export function AdminSurveyEmailInvitations({ state }: { state: SurveyEmailInvit
 								<AlertDialogAction
 									disabled={busy || !state.summary.remaining}
 									onClick={() => {
-										if (busy || !state.summary.remaining) return;
+										if (busy || !state.summary.deliveryConfigured || !state.summary.remaining)
+											return;
 										setConfirming(false);
 										state.onQueue(sendReminder);
 									}}

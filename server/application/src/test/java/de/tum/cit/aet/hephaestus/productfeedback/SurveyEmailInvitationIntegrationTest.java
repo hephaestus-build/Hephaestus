@@ -123,6 +123,8 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
     void shouldRequestEachRecipientOnceAndCountRelayAcceptanceWithoutChangingParticipation() throws Exception {
         Recipient recipient = recipient();
         Survey survey = survey(recipient, null);
+        assertThat(invitationService.preview(survey.getId()).deliveryConfigured())
+                .isTrue();
 
         assertThat(invitationService.preview(survey.getId()).remaining()).isEqualTo(1);
         assertThat(invitationService

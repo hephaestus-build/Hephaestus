@@ -61,6 +61,7 @@ class ProductFeedbackDigestListenerTest extends BaseUnitTest {
         when(links.confirmationUrl("token")).thenReturn("https://example.org/unsubscribe?token=token");
         when(links.url("token")).thenReturn("https://example.org/notifications/unsubscribe/token");
         when(renderer.render(any(), any())).thenReturn(new RenderedEmail("subject", "3 reports", "<p>3 reports</p>"));
+        when(gateway.configured()).thenReturn(true);
         when(gateway.send(any())).thenReturn(EmailDeliveryResult.of(EmailDeliveryResult.Outcome.RATE_LIMITED));
         assertThatThrownBy(() -> listener.on(event)).isInstanceOf(NotificationDeliveryUnavailableException.class);
     }

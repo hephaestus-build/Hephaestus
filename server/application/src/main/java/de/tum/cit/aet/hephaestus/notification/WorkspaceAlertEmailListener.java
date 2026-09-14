@@ -61,6 +61,10 @@ public class WorkspaceAlertEmailListener {
                     case PROVIDER_SUSPENDED ->
                         "The provider suspended this integration. Restore it at the provider to resume synchronization.";
                 };
+        if (!gateway.configured()) {
+            metrics.record(EmailKind.WORKSPACE_ALERT, EmailDeliveryResult.Outcome.NOT_CONFIGURED);
+            return;
+        }
         var rendered = renderer.render(
                 EmailKind.WORKSPACE_ALERT,
                 Map.of(

@@ -16,8 +16,10 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @ConditionalOnServerRole
@@ -51,6 +53,9 @@ class SurveyEmailInvitationService implements SurveyEmailInvitations {
     public SurveyEmailInvitationSummaryDTO invite(UUID surveyId, long actorId, boolean sendReminder) {
         Survey survey = surveys.findForUpdate(surveyId)
                 .orElseThrow(() -> new EntityNotFoundException("Survey", surveyId.toString()));
+        if (!delivery.configured()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Email delivery is not configured");
+        }
         var eligible = eligibleAccountIds(survey);
         var requested = new HashSet<>(invitations.requestedAccountIds(surveyId));
         var requeueable = new HashSet<>(invitations.requeueableAccountIds(surveyId));
@@ -184,6 +189,7 @@ class SurveyEmailInvitationService implements SurveyEmailInvitations {
                 requested,
                 Math.toIntExact(invitations.countBySurveyIdAndAcceptedAtIsNotNull(surveyId)),
                 queued,
-                remaining);
+                remaining,
+                delivery.configured());
     }
 }

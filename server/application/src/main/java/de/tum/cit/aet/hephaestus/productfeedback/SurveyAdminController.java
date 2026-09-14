@@ -10,6 +10,9 @@ import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.SurveyEditDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.SurveyResponseDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.SurveySummaryDTO;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
@@ -22,6 +25,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -48,6 +52,14 @@ public class SurveyAdminController {
     @Operation(
             operationId = "adminSendSurveyEmailInvitations",
             summary = "Queue up to 1000 new or explicitly retried cancelled survey email invitations")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Invitation request summary",
+            content = @Content(schema = @Schema(implementation = SurveyEmailInvitationSummaryDTO.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "Email delivery is not configured; no invitations were requested",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @AuditExempt(reason = "Each invitation records its requester and time; this changes no survey participation")
     public SurveyEmailInvitationSummaryDTO sendEmailInvitations(
             @PathVariable UUID surveyId,

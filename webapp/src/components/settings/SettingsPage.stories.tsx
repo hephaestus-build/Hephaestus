@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "storybook/test";
+import { expect, fn } from "storybook/test";
 
 import { AuthProvider } from "@/integrations/auth/AuthContext";
 import { withStandardPage } from "@/stories/decorators";
@@ -100,6 +100,25 @@ export const Default: Story = {
 		slackPreferencesProps: defaultSlackPreferencesProps,
 		onAccountDeleted: fn(),
 		isLoading: false,
+	},
+};
+
+export const EmailNotConfigured: Story = {
+	args: {
+		...Default.args,
+		emailPreferencesProps: {
+			...meta.args.emailPreferencesProps,
+			state: {
+				...meta.args.emailPreferencesProps.state,
+				preferences: {
+					...meta.args.emailPreferencesProps.state.preferences,
+					deliveryConfigured: false,
+				},
+			},
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("region", { name: "Email notifications" })).toBeNull();
 	},
 };
 

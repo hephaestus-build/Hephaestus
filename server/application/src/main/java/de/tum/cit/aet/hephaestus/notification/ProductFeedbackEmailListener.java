@@ -52,6 +52,10 @@ public class ProductFeedbackEmailListener {
             metrics.record(EmailKind.PRODUCT_FEEDBACK, Outcome.NO_RECIPIENT);
             return;
         }
+        if (!gateway.configured()) {
+            metrics.record(EmailKind.PRODUCT_FEEDBACK, Outcome.NOT_CONFIGURED);
+            return;
+        }
         var rendered = renderer.render(
                 EmailKind.PRODUCT_FEEDBACK, Map.of("unsubscribeUrl", unsubscribeLinks.confirmationUrl(token.get())));
         var result = gateway.send(new EmailMessage(

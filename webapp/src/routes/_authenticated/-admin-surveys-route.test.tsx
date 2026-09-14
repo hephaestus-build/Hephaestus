@@ -55,7 +55,14 @@ function mockSurveys(surveys: Wire<Survey>[]) {
 		),
 		http.get("*/admin/product-feedback/surveys/:surveyId", () => HttpResponse.json(survey)),
 		http.get("*/admin/product-feedback/surveys/:surveyId/email-invitations", () =>
-			HttpResponse.json({ eligible: 0, alreadyRequested: 0, accepted: 0, queued: 0, remaining: 0 }),
+			HttpResponse.json({
+				deliveryConfigured: true,
+				eligible: 0,
+				alreadyRequested: 0,
+				accepted: 0,
+				queued: 0,
+				remaining: 0,
+			}),
 		),
 		http.get("*/admin/product-feedback/surveys/:surveyId/summary", () =>
 			HttpResponse.json(summary),
@@ -80,11 +87,41 @@ function mockSurveys(surveys: Wire<Survey>[]) {
 }
 
 describe("instance surveys route", () => {
+	it("keeps survey results available without offering email sends when SMTP is unconfigured", async () => {
+		mockSurveys([survey]);
+		server.use(
+			http.get("*/admin/product-feedback/surveys/:surveyId/email-invitations", () =>
+				HttpResponse.json({
+					deliveryConfigured: false,
+					eligible: 0,
+					alreadyRequested: 0,
+					accepted: 0,
+					queued: 0,
+					remaining: 0,
+				}),
+			),
+		);
+		renderRouteAt("/admin/surveys");
+		const user = userEvent.setup();
+		await user.click(await screen.findByRole("link", { name: survey.title }, ROUTE_RENDER_WAIT));
+		const setup = await screen.findByRole("link", { name: "Set up email" }, ROUTE_RENDER_WAIT);
+		expect(setup.getAttribute("href")).toBe("/admin/settings");
+		expect(screen.queryByRole("button", { name: "Queue email invitations…" })).toBeNull();
+		await screen.findByRole("heading", { name: survey.title });
+	});
+
 	it("queues only on confirmation and keeps the optional reminder off for each new batch", async () => {
 		mockSurveys([survey]);
 		const user = userEvent.setup();
 		const requests: unknown[] = [];
-		let counts = { eligible: 1420, alreadyRequested: 0, accepted: 0, queued: 0, remaining: 1420 };
+		let counts = {
+			deliveryConfigured: true,
+			eligible: 1420,
+			alreadyRequested: 0,
+			accepted: 0,
+			queued: 0,
+			remaining: 1420,
+		};
 		server.use(
 			http.get("*/admin/product-feedback/surveys/:surveyId/email-invitations", () =>
 				HttpResponse.json(counts),

@@ -39,3 +39,8 @@ unchanged until the server confirms them.
 
 Webhook receivers now wait briefly for monitoring to stop during shutdown and no longer report
 intentional cancellation as a broker outage.
+
+Self-hosted instances can run without email: personal settings hide unused email choices rather
+than showing setup warnings, while existing subscriptions remain available to turn off. Instance
+administrators retain setup guidance; survey invitations cannot be queued until sending is configured.
+Surveys and product feedback continue to work in the application without SMTP.

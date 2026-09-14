@@ -48,6 +48,10 @@ public class ProductFeedbackDigestListener {
         }
         long count = feedback.countBetween(event.from(), event.until());
         if (count == 0) return;
+        if (!gateway.configured()) {
+            metrics.record(EmailKind.PRODUCT_FEEDBACK_DIGEST, Outcome.NOT_CONFIGURED);
+            return;
+        }
         var rendered = renderer.render(
                 EmailKind.PRODUCT_FEEDBACK_DIGEST,
                 Map.of("reportCount", count, "unsubscribeUrl", links.confirmationUrl(token.get())));

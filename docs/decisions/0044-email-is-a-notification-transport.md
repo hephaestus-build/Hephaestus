@@ -82,8 +82,11 @@ would introduce an additional export or rendering step here without an existing 
   address, account status, permission, subscription and source eligibility through owning-module ports.
   Optional requests also carry their request time: a later opt-in cannot revive work from an earlier
   subscription period. Reminders retain the original invitation's request time. Losing a verified
-  contact or administrator access does not prevent opting out, and preferences remain accessible
-  when SMTP is unconfigured.
+  contact or administrator access does not prevent opting out. When SMTP is unconfigured, personal
+  settings hide new opt-ins and show only retained subscriptions for opt-out; no subscriptions means
+  no email section. Setup diagnostics belong to instance administration. Survey invitation requests
+  require configured delivery before creating request records. Optional listeners finish unconfigured
+  delivery before constructing HTTPS unsubscribe links, while configured mail retains that validation.
 - **Survey email records are business facts, not another outbox.** An explicit action creates one
   invitation per survey/account and queues the recipient in the same transaction. Relay acceptance
   is separate from the existing in-app participation record. Pause cancels pending work; no automatic

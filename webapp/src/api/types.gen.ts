@@ -4855,6 +4855,7 @@ export type SurveyEmailInvitationRequest = {
 export type SurveyEmailInvitationSummary = {
   accepted: number;
   alreadyRequested: number;
+  deliveryConfigured: boolean;
   eligible: number;
   queued: number;
   remaining: number;
@@ -8077,9 +8078,18 @@ export type AdminSendSurveyEmailInvitationsData = {
   url: '/admin/product-feedback/surveys/{surveyId}/email-invitations';
 };
 
+export type AdminSendSurveyEmailInvitationsErrors = {
+  /**
+   * Email delivery is not configured; no invitations were requested
+   */
+  503: ProblemDetail;
+};
+
+export type AdminSendSurveyEmailInvitationsError = AdminSendSurveyEmailInvitationsErrors[keyof AdminSendSurveyEmailInvitationsErrors];
+
 export type AdminSendSurveyEmailInvitationsResponses = {
   /**
-   * OK
+   * Invitation request summary
    */
   200: SurveyEmailInvitationSummary;
 };

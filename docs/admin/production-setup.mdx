@@ -324,8 +324,26 @@ separate, opt-in subscriptions in each person's settings. Email is off until
 a relay host is set. There is no per-workspace mail configuration and no connection to authorise: the
 transport is Spring Boot's `spring.mail.*`, so every variable is the property path in upper case.
 
+**Running without email is supported.** Leave `SPRING_MAIL_HOST` and `HEPHAESTUS_EMAIL_FROM`
+blank. No SMTP service is required for startup, sign-in, account management, product feedback or
+in-app surveys. Account-security and deletion emails are withheld; the underlying operations still
+complete. Do not promise users an email confirmation as their only record of an action.
+
+Personal settings hide email choices when sending is unconfigured and the account has no active
+subscriptions. If email was previously enabled, only retained subscriptions remain visible so people
+can turn them off; new opt-ins and frequency changes are hidden. Users see no SMTP setup warning.
+**Instance settings → Email** remains available to administrators for setup and verification. Survey
+administration preserves results and request history but replaces the send action with a setup link;
+a direct invitation request returns `503` without creating email request records.
+
+Removing SMTP configuration does not erase preferences. Delivery attempts made while unconfigured
+complete as `NOT_CONFIGURED` rather than waiting for reactivation. Existing subscriptions remain in effect
+for future events if sending is configured again. A temporary relay outage and Silent Mode do **not**
+hide controls: configuration, transport health and deliberate withholding are different states.
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `SPRING_MAIL_PROTOCOL` | `smtp` | Transport protocol: `smtp` (STARTTLS or implicit SSL) or `smtps` (implicit TLS). |
 | `SPRING_MAIL_HOST` | *(unset — email off)* | Relay hostname. Setting it turns email on. |
 | `SPRING_MAIL_PORT` | `587` | Relay port. `587` is submission with STARTTLS; use `465` with `SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE=true` for implicit TLS. |
 | `SPRING_MAIL_USERNAME` / `SPRING_MAIL_PASSWORD` | *(unset)* | Relay credentials. Leave both unset for an unauthenticated internal relay and set `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=false`. |
