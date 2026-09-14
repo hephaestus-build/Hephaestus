@@ -6,8 +6,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.core.auth.spi.ConsentSource;
-import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationCommand;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
@@ -23,6 +21,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -47,9 +47,6 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
     private SlackMentorIdentityResolver identityResolver;
 
     @Mock
-    private ResearchParticipationCommand researchParticipationCommand;
-
-    @Mock
     private SlackAppHomeService appHomeService;
 
     @Mock
@@ -68,7 +65,6 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
         handler = new SlackInteractivityHandler(
                 workspaceResolver,
                 identityResolver,
-                researchParticipationCommand,
                 appHomeService,
                 participantConsentService,
                 personErasureService,
@@ -92,38 +88,11 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
         return payload;
     }
 
-    @Test
-    void appHomeResearchOptOut_setsResearchFalse_republishesHome_only() {
-        when(identityResolver.resolveDeveloperLogin(WORKSPACE_ID, TEAM, USER)).thenReturn(Optional.of("octocat"));
-
-        handler.handleBlockActions(blockActions(SlackAppHomeService.ACTION_RESEARCH_OPT_OUT, "false"));
-
-        verify(participantConsentService).recordResearchDecision(WORKSPACE_ID, USER, false);
-        verify(researchParticipationCommand).setForLogin("octocat", false, ConsentSource.SLACK_APP_HOME);
-        verify(appHomeService).onHomeOpened(TEAM, USER);
-        verifyNoInteractions(personErasureService, messageService);
-    }
-
-    @Test
-    void appHomeResearchOptIn_setsResearchTrue() {
-        when(identityResolver.resolveDeveloperLogin(WORKSPACE_ID, TEAM, USER)).thenReturn(Optional.of("octocat"));
-
-        handler.handleBlockActions(blockActions(SlackAppHomeService.ACTION_RESEARCH_OPT_IN, "true"));
-
-        verify(participantConsentService).recordResearchDecision(WORKSPACE_ID, USER, true);
-        verify(researchParticipationCommand).setForLogin("octocat", true, ConsentSource.SLACK_APP_HOME);
-        verify(appHomeService).onHomeOpened(TEAM, USER);
-        verifyNoInteractions(personErasureService);
-    }
-
-    @Test
-    void appHomeResearchOptOut_unlinkedUser_recordsResearchBit_noResearchCommand_notThrown() {
-        when(identityResolver.resolveDeveloperLogin(WORKSPACE_ID, TEAM, USER)).thenReturn(Optional.empty());
-
-        handler.handleBlockActions(blockActions(SlackAppHomeService.ACTION_RESEARCH_OPT_OUT, "false"));
-
-        verify(participantConsentService).recordResearchDecision(WORKSPACE_ID, USER, false);
-        verifyNoInteractions(personErasureService, researchParticipationCommand, appHomeService);
+    @ParameterizedTest
+    @ValueSource(strings = {"research_opt_in", "research_opt_out"})
+    void shouldNotWriteAnIndependentResearchDecisionFromOldSlackControls(String action) {
+        handler.handleBlockActions(blockActions(action, "false"));
+        verifyNoInteractions(participantConsentService, identityResolver, appHomeService, personErasureService);
     }
 
     @Test
@@ -138,7 +107,6 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
                 .sendEphemeralForWorkspace(
                         eq(WORKSPACE_ID), eq(CHANNEL), eq(USER), anyList(), eq(SlackConsentBlocks.confirmationText()));
         verify(appHomeService).onHomeOpened(TEAM, USER);
-        verifyNoInteractions(researchParticipationCommand);
     }
 
     @Test
@@ -147,7 +115,7 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
 
         verify(participantConsentService).recordChannelMessageOptIn(WORKSPACE_ID, USER);
         verify(appHomeService).onHomeOpened(TEAM, USER);
-        verifyNoInteractions(personErasureService, researchParticipationCommand, messageService);
+        verifyNoInteractions(personErasureService, messageService);
     }
 
     @Test
@@ -161,19 +129,14 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
         verify(messageService)
                 .sendEphemeralForWorkspace(
                         eq(WORKSPACE_ID), eq(CHANNEL), eq(USER), anyList(), eq(SlackConsentBlocks.confirmationText()));
-        verifyNoInteractions(researchParticipationCommand, appHomeService);
+        verifyNoInteractions(appHomeService);
     }
 
     @Test
     void unknownAction_isIgnored() {
         handler.handleBlockActions(blockActions("unknown_action", MESSAGE_TS));
 
-        verifyNoInteractions(
-                participantConsentService,
-                researchParticipationCommand,
-                appHomeService,
-                personErasureService,
-                messageService);
+        verifyNoInteractions(participantConsentService, appHomeService, personErasureService, messageService);
     }
 
     /** Runs Slack follow-ups inline so the tests can verify them synchronously. */

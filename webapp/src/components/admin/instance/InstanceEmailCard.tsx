@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { MailIcon, SendIcon } from "lucide-react";
 import { type SubmitEvent, useId, useState } from "react";
 import { useSpinDelay } from "spin-delay";
@@ -103,6 +104,15 @@ export function InstanceEmailCard({ isPending, result, onSendTest }: InstanceEma
 							</span>
 						</div>
 					) : null}
+					{result?.outcome === "SENT" && (
+						<p className="text-sm text-muted-foreground">
+							Choose your optional email notifications in{" "}
+							<Link to="/settings" className="underline underline-offset-4">
+								account settings
+							</Link>
+							.
+						</p>
+					)}
 				</CardContent>
 				<CardFooter>
 					<Button type="submit" variant="outline" disabled={isBusy}>

@@ -19,7 +19,7 @@ void test("a testing checklist does not turn a traceable handoff into a test-abs
 		},
 	);
 
-	assert.equal(result.metrics.traceabilityRefCount, 1);
+	assert.equal(result.metrics.issueMentionSyntaxCandidateCount, 1);
 	assert.equal(result.directions.length, 1);
 	assert.match(result.directions[0] ?? "", /#42/);
 });

@@ -26,12 +26,5 @@ interface NotificationSubscriptionRepository extends JpaRepository<NotificationS
     @Query("SELECT s.accountId FROM NotificationSubscription s WHERE s.kind = :kind AND s.enabled = true")
     List<Long> subscribedAccountIds(NotificationSubscriptionKind kind);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query(
-            "SELECT s FROM NotificationSubscription s WHERE s.kind = 'PRODUCT_FEEDBACK' AND s.enabled = true "
-                    + "AND s.frequency = 'DAILY' AND (s.lastDigestDate IS NULL OR s.lastDigestDate < :date) ORDER BY s.accountId")
-    List<NotificationSubscription> pendingDigests(
-            java.time.LocalDate date, org.springframework.data.domain.Pageable pageable);
-
     void deleteAllByAccountId(long accountId);
 }

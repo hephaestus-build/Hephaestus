@@ -108,7 +108,7 @@ export const mockJobRunning: AgentJob = {
 	retryCount: 0,
 };
 
-export const mockJobFailedDelivery: AgentJob = {
+export const mockJobFailedResultProcessing: AgentJob = {
 	id: "job-failed-delivery-1",
 	jobType: "PULL_REQUEST_REVIEW",
 	reviewOutcome: "REVIEWED",
@@ -120,7 +120,7 @@ export const mockJobFailedDelivery: AgentJob = {
 	availableAt: new Date("2026-05-20T09:02:00Z"),
 	completedAt: new Date("2026-05-20T09:05:00Z"),
 	deliveryStatus: "FAILED",
-	errorMessage: "GitLab API returned 403 when posting the MR note.",
+	errorMessage: "Review result processing failed.",
 	llmModel: "openai/gpt-oss-120b",
 	llmTotalInputTokens: 31_000,
 	llmTotalOutputTokens: 1_200,
@@ -210,6 +210,6 @@ export const mockJobs: AgentJob[] = [
 	mockJobRunning,
 	mockJobQueued,
 	mockJobHeldOnBudget,
-	mockJobFailedDelivery,
+	mockJobFailedResultProcessing,
 	mockJobTimedOut,
 ];

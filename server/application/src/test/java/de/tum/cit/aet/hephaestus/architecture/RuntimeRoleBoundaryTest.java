@@ -105,12 +105,6 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.notification.AccountSecurityEmailListener", RuntimeRole.SERVER_PROPERTY),
-            Map.entry(
-                    "de.tum.cit.aet.hephaestus.notification.ProductFeedbackDigestListener",
-                    RuntimeRole.SERVER_PROPERTY),
-            Map.entry(
-                    "de.tum.cit.aet.hephaestus.notification.preferences.ProductFeedbackDigestJob",
-                    RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.notification.SurveyEmailDeliveryAdapter", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.notification.SurveyEmailListener", RuntimeRole.SERVER_PROPERTY),
             Map.entry(

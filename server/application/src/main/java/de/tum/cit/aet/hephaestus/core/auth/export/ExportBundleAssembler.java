@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.spi.NotificationPreferencesExportQuery;
+import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Instant;
@@ -32,10 +33,11 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li><b>auth events (last 12 months)</b> — {@link AuthEventRepository} ({@code core.auth} audit)</li>
  *   <li><b>workspace memberships</b> — {@link AccountWorkspaceMembershipQuery} (auth-spi → {@code workspace})</li>
  *   <li><b>account preferences</b> — {@link AccountPreferencesQuery} (auth-spi → {@code account})</li>
+ *   <li><b>research participation</b> — {@link ResearchParticipationQuery}, the native-account consent ledger</li>
  *   <li><b>email subscriptions</b> — {@link NotificationPreferencesExportQuery} (auth-spi → notification)</li>
  * </ol>
  *
- * <p>The two cross-module sources are reached only through the {@code core.auth.spi} named
+ * <p>The cross-module sources are reached only through the {@code core.auth.spi} named
  * interface (implemented in {@code workspace} / {@code account}); this module never imports those
  * modules' domain types. The {@code Account → login} bridge ({@code IdentityLink.usernameAtSignup})
  * is owned here and fed to the workspace/preferences queries.
@@ -60,6 +62,7 @@ public class ExportBundleAssembler {
     private final AccountPreferencesQuery preferencesQuery;
     private final GitProviderRegistry gitProviderRegistry;
     private final Clock clock;
+    private final ResearchParticipationQuery researchParticipation;
     private final NotificationPreferencesExportQuery notificationPreferences;
 
     public ExportBundleAssembler(
@@ -70,7 +73,8 @@ public class ExportBundleAssembler {
             AccountPreferencesQuery preferencesQuery,
             GitProviderRegistry gitProviderRegistry,
             Clock clock,
-            NotificationPreferencesExportQuery notificationPreferences) {
+            NotificationPreferencesExportQuery notificationPreferences,
+            ResearchParticipationQuery researchParticipation) {
         this.accountService = accountService;
         this.accountFeatureRepository = accountFeatureRepository;
         this.authEventRepository = authEventRepository;
@@ -79,6 +83,7 @@ public class ExportBundleAssembler {
         this.gitProviderRegistry = gitProviderRegistry;
         this.clock = clock;
         this.notificationPreferences = notificationPreferences;
+        this.researchParticipation = researchParticipation;
     }
 
     @Transactional(readOnly = true)
@@ -112,13 +117,13 @@ public class ExportBundleAssembler {
 
         List<String> featureFlags = accountFeatureRepository.findFlagsByAccountId(accountId);
 
-        // Preferences are keyed by a single SCM login; use the principal's primary (first active)
-        // login. Absent if no preferences row exists yet.
-        ExportBundle.Preferences preferences = logins.stream()
+        boolean practiceFeedbackDelivery = logins.stream()
                 .findFirst()
                 .flatMap(preferencesQuery::preferencesForLogin)
-                .map(p -> new ExportBundle.Preferences(p.participateInResearch(), p.practiceFeedbackDeliveryEnabled()))
-                .orElse(null);
+                .map(AccountPreferencesQuery.PreferencesView::practiceFeedbackDeliveryEnabled)
+                .orElse(AccountPreferencesQuery.PreferencesView.PRACTICE_FEEDBACK_DELIVERY_ENABLED_BY_DEFAULT);
+        ExportBundle.Preferences preferences =
+                new ExportBundle.Preferences(researchParticipation.participates(accountId), practiceFeedbackDelivery);
 
         // Real calendar months (not 30-day approximations) so this window matches the partition
         // retention (pg_partman, 12 months), which is also 12 calendar months.

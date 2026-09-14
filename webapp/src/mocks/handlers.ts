@@ -36,7 +36,6 @@ export const handlers = [
 			productFeedback: false,
 			workspaceAlerts: false,
 			surveySummaries: false,
-			productFeedbackFrequency: "IMMEDIATE",
 			productSurveys: false,
 			researchSurveys: false,
 			emailAvailable: true,

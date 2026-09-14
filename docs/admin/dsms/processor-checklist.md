@@ -6,7 +6,12 @@ Records every entity that might qualify as a processor (Art. 28 GDPR) for the TU
 
 Hephaestus engages a processor chain of: GitHub (identity provider and source-system API), the per-workspace LLM provider (Microsoft Azure OpenAI by default on the TUM-operated deployment, or any OpenAI-API-compatible HTTPS endpoint configured per workspace), and Slack (per-workspace opt-in). The LRZ (gitlab.lrz.de) is **not** a processor; it is a separate controller under the EDPB 07/2020 framework. Outline has no fixed operator or origin, so it remains disabled until the operator records a per-instance role, hosting region, transfer basis, and AVV status. The webapp ships a disabled Sentry client; it is off in the current production deployment.
 
-First-party product feedback and survey responses remain inside the instance PostgreSQL database and add no processor.
+First-party product feedback and survey responses remain inside the instance PostgreSQL database.
+Optional email alerts do not contain those responses, but the configured relay receives recipient
+addresses, notification type and links. Before enabling SMTP, record the relay operator, hosting and
+retention terms, and its role under the applicable institutional arrangement; external processing
+requires the appropriate agreement. Do not infer the SMTP relationship from LRZ's separate role as
+the gitlab.lrz.de operator.
 
 ## Detailed check
 
@@ -45,7 +50,7 @@ Amend this file, the Art. 30 record, and the privacy statement before deploying 
 - A new LLM provider added to the AET-pool (e.g., Anthropic).
 - A new identity provider beyond GitHub and gitlab.lrz.de.
 - Enabling Outline for a new origin or changing its operator, hosting region, or contractual role.
-- Activating any future transactional-email integration (the chosen SMTP host becomes a recipient of personal data; a TUM-internal relay falls under the TUM-internal framework, an external relay needs an Art. 28 DPA).
+- Activating SMTP email delivery (the chosen SMTP host becomes a recipient of personal data; a TUM-internal relay falls under the TUM-internal framework, an external relay needs an Art. 28 DPA).
 - Activating the bundled Sentry client. A self-hosted Sentry on TUM infrastructure is an in-house recipient; a SaaS Sentry tenant is an Art. 28 U.S. processor that needs a DPA, a privacy-statement entry, and a DPIA re-assessment.
 - Any external storage (S3, CDN) or any third-party font, script, image, or embed served from the application: requires an AVV and a privacy-statement entry.
 - Any widening of the practice-review sandbox network posture beyond the per-job LLM proxy — triggers a re-audit under §5 of `dpia-prescreen.md`.

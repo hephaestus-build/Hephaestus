@@ -544,11 +544,8 @@ hephaestus:
         # catches somebody asking for one review each on twenty colleagues' merge requests. The cooldown
         # above will not: those are twenty different PRs.
         max-requests-per-requester-per-hour: ${PRACTICE_REVIEW_MAX_REQUESTS_PER_REQUESTER_PER_HOUR:5}
-        # Append the cross-run progress-delta footer and post the re-review notifying reply. Needs at
-        # least two runs on a target before it renders anything.
-        progress-footer: ${PRACTICE_REVIEW_PROGRESS_FOOTER:false}
-        # Stop re-raising a locus the developer already disputed or marked not-applicable. Inert until a
-        # response exists for a recurring locus.
+        # Stop redelivering an observation the developer disputed or marked not-applicable.
+        # Responses apply only to the exact observations bound to the feedback.
         reaction-suppression: ${PRACTICE_REVIEW_REACTION_SUPPRESSION:false}
         # Fleet-wide limits on backfill campaigns (ReviewBackfillProperties). max-window and
         # max-artifacts are the spend guard rails: a campaign wider than either is refused at preflight,

@@ -10,8 +10,9 @@
                 <tr>
                     <td style="padding: 24px; font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px; color: #111827;">
                         <h1 style="margin: 0 0 16px 0; font-size: 20px; line-height: 28px;" th:text="#{email.survey-invitation.subject}">An invitation to a Hephaestus survey</h1>
-                        <p style="margin: 0 0 16px 0;">A survey is available in your Hephaestus workspace. Taking part is optional. Sign in to read its purpose and decide whether to respond.</p>
+                        <p style="margin: 0 0 16px 0;"><span th:text="${research ? 'A research survey is available in your Hephaestus workspace.' : 'A product survey is available in your Hephaestus workspace.'}">A survey is available.</span> Taking part is optional. Sign in to read its purpose and decide whether to respond.</p>
                         <p th:if="${reminder}">This is your one reminder. You can ignore or decline the survey; no further reminder is scheduled.</p>
+                        <p th:text="${research ? 'You receive research-survey invitations; unsubscribe below to stop research-survey emails.' : 'You receive product-survey invitations; unsubscribe below to stop product-survey emails.'}"></p>
                         <p style="margin: 0;"><a th:href="${webappUrl + '/w/' + workspaceSlug + '?survey=' + surveyId}" style="color: #2563eb;">Open the survey</a></p>
                     </td>
                 </tr>

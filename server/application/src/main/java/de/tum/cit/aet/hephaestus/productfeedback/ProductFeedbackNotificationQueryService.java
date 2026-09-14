@@ -17,12 +17,6 @@ class ProductFeedbackNotificationQueryService implements ProductFeedbackNotifica
 
     @Override
     @Transactional(readOnly = true)
-    public long countBetween(java.time.Instant from, java.time.Instant until) {
-        return feedback.countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(from, until);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
     public boolean exists(UUID feedbackId) {
         return feedback.existsById(feedbackId);
     }

@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.notification.preferences;
 
 import jakarta.persistence.*;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -37,15 +36,8 @@ class NotificationSubscription {
     @Column(nullable = false)
     private boolean enabled;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 16)
-    private NotificationEmailFrequency frequency = NotificationEmailFrequency.IMMEDIATE;
-
     @Column(name = "enabled_since")
     private @Nullable Instant enabledSince;
-
-    @Column(name = "last_digest_date")
-    private @Nullable LocalDate lastDigestDate;
 
     @Version
     private long version;
@@ -58,14 +50,5 @@ class NotificationSubscription {
     void setEnabled(boolean enabled, Instant now) {
         if (enabled && !this.enabled) this.enabledSince = now;
         this.enabled = enabled;
-    }
-
-    void setFrequency(NotificationEmailFrequency frequency, Instant now) {
-        if (frequency != this.frequency) this.enabledSince = now;
-        this.frequency = frequency;
-    }
-
-    void setLastDigestDate(LocalDate date) {
-        this.lastDigestDate = date;
     }
 }

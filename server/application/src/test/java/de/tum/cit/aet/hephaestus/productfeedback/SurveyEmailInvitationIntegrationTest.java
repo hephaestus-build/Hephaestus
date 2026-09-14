@@ -271,7 +271,7 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             var staleRequest = new SurveyEmailInvitation(
                     survey, recipient.accountId(), recipient.accountId(), Instant.now(), renewed.getExpiresAt(), false);
-            assertThat(invitations.requeueCancelled(staleRequest)).isZero();
+            assertThat(invitations.requeueUnaccepted(staleRequest)).isZero();
         });
         assertThat(invitationService.eligibleInvitation(survey.getId(), recipient.accountId(), false, 0))
                 .isEmpty();
@@ -296,6 +296,38 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
                 .isEqualTo(1);
         assertThat(invitationService
                         .invite(survey.getId(), recipient.accountId(), true)
+                        .queued())
+                .isZero();
+    }
+
+    @Test
+    void shouldExplicitlyRequeueAnExpiredUnacceptedInvitationWithANewGeneration() {
+        Recipient recipient = recipient();
+        Survey survey = survey(recipient, null);
+        mail.failWith(new MailSendException("relay down", new ConnectException("refused")));
+        invitationService.invite(survey.getId(), recipient.accountId(), false);
+        assertThat(jdbc.update(
+                        "UPDATE product_survey_email_invitation SET expires_at = ? WHERE survey_id = ?",
+                        java.sql.Timestamp.from(Instant.now().minusSeconds(1)),
+                        survey.getId()))
+                .isEqualTo(1);
+        assertThat(invitationService.preview(survey.getId()).remaining()).isEqualTo(1);
+        assertThat(invitationService
+                        .invite(survey.getId(), recipient.accountId(), false)
+                        .queued())
+                .isEqualTo(1);
+        var renewed = invitations
+                .findBySurveyIdAndAccountId(survey.getId(), recipient.accountId())
+                .orElseThrow();
+        assertThat(renewed.getRequestGeneration()).isEqualTo(1);
+        assertThat(invitationService.eligibleInvitation(survey.getId(), recipient.accountId(), false, 0))
+                .isEmpty();
+        mail.failWith(null);
+        resubmit(survey.getId());
+        assertThat(mail.sent()).hasSize(1);
+        assertThat(invitationService.preview(survey.getId()).remaining()).isZero();
+        assertThat(invitationService
+                        .invite(survey.getId(), recipient.accountId(), false)
                         .queued())
                 .isZero();
     }
@@ -799,13 +831,7 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
         var current = subscriptions.get(accountId);
         subscriptions.update(
                 accountId,
-                new UpdateNotificationPreferencesDTO(
-                        false,
-                        true,
-                        true,
-                        de.tum.cit.aet.hephaestus.notification.preferences.NotificationEmailFrequency.IMMEDIATE,
-                        false,
-                        enabled),
+                new UpdateNotificationPreferencesDTO(false, true, true, false, enabled),
                 EntityTagPrecondition.parse(current.etag()),
                 true);
     }
@@ -835,13 +861,7 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
         var current = subscriptions.get(accountId);
         subscriptions.update(
                 accountId,
-                new UpdateNotificationPreferencesDTO(
-                        false,
-                        enabled,
-                        enabled,
-                        de.tum.cit.aet.hephaestus.notification.preferences.NotificationEmailFrequency.IMMEDIATE,
-                        false,
-                        false),
+                new UpdateNotificationPreferencesDTO(false, enabled, enabled, false, false),
                 EntityTagPrecondition.parse(current.etag()),
                 false);
     }

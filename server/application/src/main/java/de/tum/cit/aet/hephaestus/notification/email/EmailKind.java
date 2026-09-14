@@ -16,7 +16,6 @@ public enum EmailKind {
     ACCOUNT_SECURITY_CHANGED("account-security-changed", false),
     SURVEY_ENDED_SUMMARY("survey-ended-summary", true),
     SURVEY_INVITATION("survey-invitation", true),
-    PRODUCT_FEEDBACK_DIGEST("product-feedback-digest", true),
     PRODUCT_FEEDBACK("product-feedback", true);
 
     private final String templateName;

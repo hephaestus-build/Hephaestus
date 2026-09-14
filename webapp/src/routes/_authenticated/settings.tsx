@@ -86,6 +86,7 @@ function RouteComponent() {
 		},
 	});
 	const emailPreferencesProps: EmailPreferencesSectionProps = {
+		researchAvailable: hasText(accountConsent?.researchOrganization),
 		isAppAdmin,
 		state: emailPreferencesQuery.isError
 			? {

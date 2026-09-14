@@ -42,13 +42,9 @@
                 <constraints nullable="false"/>
             </column>
             <column name="enabled_since" type="TIMESTAMP(6) WITH TIME ZONE"/>
-            <column name="frequency" type="VARCHAR(16)">
-                <constraints nullable="false"/>
-            </column>
             <column name="kind" type="VARCHAR(32)">
                 <constraints nullable="false"/>
             </column>
-            <column name="last_digest_date" type="date"/>
             <column name="unsubscribe_token" type="UUID">
                 <constraints nullable="false"/>
             </column>

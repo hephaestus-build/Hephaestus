@@ -23,7 +23,7 @@ export default function readyAndTraceableHandoff(
 	const allRefs = new Set<string>([...bodyRefs, ...branchRefs]);
 	if (allRefs.size > 0) {
 		directions.push(
-			`Traceability fact: a motivating-issue reference IS present — ${[...allRefs].join(", ")}${branchRefs.size ? ` (branch '${branch}' encodes ${[...branchRefs].join(", ")})` : ""}. Traceability does NOT require a closing keyword: 'Refs #N', a bare '#N', or an issue-number branch prefix all establish the link, so do not read a closingRefCount of 0 as "untraceable".`,
+			`Issue-mention syntax candidates: ${[...allRefs].join(", ")}${branchRefs.size ? ` (branch '${branch}' encodes ${[...branchRefs].join(", ")})` : ""}. Inspect each mention in context before treating it as the author's motivating issue: templates, examples and branch numbers may be unrelated. A genuine reference need not contain a closing keyword.`,
 		);
 	} else {
 		directions.push(
@@ -34,7 +34,7 @@ export default function readyAndTraceableHandoff(
 	return {
 		hints: [],
 		metrics: {
-			traceabilityRefCount: allRefs.size,
+			issueMentionSyntaxCandidateCount: allRefs.size,
 		},
 		directions,
 	};

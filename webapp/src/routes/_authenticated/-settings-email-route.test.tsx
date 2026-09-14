@@ -1,7 +1,7 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { getNotificationPreferencesQueryKey } from "@/api/@tanstack/react-query.gen";
 import { currentUser } from "@/mocks/fixtures/auth";
@@ -13,7 +13,6 @@ const preferences = {
 	productFeedback: false,
 	workspaceAlerts: false,
 	surveySummaries: false,
-	productFeedbackFrequency: "IMMEDIATE",
 	productSurveys: false,
 	researchSurveys: false,
 	emailAvailable: true,
@@ -22,6 +21,45 @@ const preferences = {
 };
 
 describe("account email choices", () => {
+	beforeEach(() => {
+		server.use(
+			http.get("*/user/consent", () =>
+				HttpResponse.json({
+					completed: true,
+					noticeVersion: "2026-09-11",
+					participateInResearch: false,
+					researchOrganization: "AET",
+				}),
+			),
+		);
+	});
+
+	it("hides research invitations without a study but lets a retained subscription be turned off", async () => {
+		const user = userEvent.setup();
+		server.use(
+			http.get("*/user/consent", () =>
+				HttpResponse.json({
+					completed: true,
+					noticeVersion: "2026-09-11",
+					participateInResearch: false,
+				}),
+			),
+			http.get("*/user/notification-preferences", () =>
+				HttpResponse.json({ ...preferences, researchSurveys: true }),
+			),
+			http.put("*/user/notification-preferences", () =>
+				HttpResponse.json({ ...preferences, etag: '"1"' }),
+			),
+		);
+		renderRouteAt("/settings");
+		await user.click(
+			await screen.findByRole("switch", { name: "Research survey invitations" }, ROUTE_RENDER_WAIT),
+		);
+		await waitFor(() =>
+			expect(screen.queryByRole("switch", { name: "Research survey invitations" })).toBeNull(),
+		);
+		expect(screen.getByRole("switch", { name: "Product survey invitations" })).not.toBeNull();
+	});
 	it("sends the confirmed revision and keeps consent off until the server accepts it", async () => {
 		const user = userEvent.setup();
 		let release: (() => void) | undefined;
@@ -51,7 +89,6 @@ describe("account email choices", () => {
 			productFeedback: false,
 			workspaceAlerts: false,
 			surveySummaries: false,
-			productFeedbackFrequency: "IMMEDIATE",
 			productSurveys: true,
 			researchSurveys: false,
 		});
@@ -72,47 +109,6 @@ describe("account email choices", () => {
 				.getByRole("switch", { name: "Research survey invitations" })
 				.getAttribute("aria-checked"),
 		).toBe("false");
-	});
-
-	it("changes the opted-in admin feedback frequency without enabling another email kind", async () => {
-		const user = userEvent.setup();
-		let body: unknown;
-		server.use(
-			http.get("*/user/notification-preferences", () =>
-				HttpResponse.json({ ...preferences, productFeedback: true }),
-			),
-			http.put("*/user/notification-preferences", async ({ request }) => {
-				body = await request.json();
-				return HttpResponse.json({
-					...preferences,
-					productFeedback: true,
-					productFeedbackFrequency: "DAILY",
-					etag: '"1"',
-				});
-			}),
-		);
-		renderRouteAt("/settings");
-		await user.click(
-			await screen.findByRole(
-				"combobox",
-				{ name: "Product feedback frequency" },
-				ROUTE_RENDER_WAIT,
-			),
-		);
-		await user.click(await screen.findByRole("option", { name: "Daily summary" }));
-		await waitFor(() =>
-			expect(body).toStrictEqual({
-				productFeedback: true,
-				productFeedbackFrequency: "DAILY",
-				workspaceAlerts: false,
-				surveySummaries: false,
-				productSurveys: false,
-				researchSurveys: false,
-			}),
-		);
-		expect(
-			screen.getByRole("combobox", { name: "Product feedback frequency" }).textContent,
-		).toContain("Daily summary");
 	});
 
 	it("cancels stale reads before and during a save so confirmed consent and its revision stay current", async () => {
@@ -249,7 +245,6 @@ describe("account email choices", () => {
 				ROUTE_RENDER_WAIT,
 			);
 			expect(screen.queryByRole("switch", { name: "Product survey invitations" })).toBeNull();
-			expect(screen.queryByRole("combobox", { name: "Product feedback frequency" })).toBeNull();
 			expect(screen.queryByText(/Email delivery is not configured/)).toBeNull();
 			await user.click(feedback);
 			await waitFor(() =>
@@ -260,7 +255,6 @@ describe("account email choices", () => {
 					productFeedback: false,
 					workspaceAlerts: false,
 					surveySummaries: false,
-					productFeedbackFrequency: "IMMEDIATE",
 					productSurveys: false,
 					researchSurveys: false,
 				},
@@ -294,7 +288,6 @@ describe("account email choices", () => {
 			ROUTE_RENDER_WAIT,
 		);
 		expect(feedback.getAttribute("aria-checked")).toBe("true");
-		expect(screen.queryByRole("combobox", { name: "Product feedback frequency" })).toBeNull();
 		await user.click(feedback);
 		await waitFor(() =>
 			expect(screen.queryByRole("switch", { name: "New product feedback" })).toBeNull(),
@@ -305,7 +298,6 @@ describe("account email choices", () => {
 		expect(writes).toStrictEqual([
 			{
 				productFeedback: false,
-				productFeedbackFrequency: "IMMEDIATE",
 				productSurveys: false,
 				researchSurveys: false,
 				workspaceAlerts: false,
@@ -371,7 +363,6 @@ describe("account email choices", () => {
 			expect(writes).toStrictEqual([
 				{
 					productFeedback: false,
-					productFeedbackFrequency: "IMMEDIATE",
 					workspaceAlerts: false,
 					surveySummaries: false,
 					productSurveys: false,

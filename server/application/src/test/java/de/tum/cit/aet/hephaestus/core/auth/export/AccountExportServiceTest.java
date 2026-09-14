@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery.WorkspaceMembershipView;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Instant;
@@ -29,6 +30,8 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
@@ -51,14 +54,17 @@ class AccountExportServiceTest extends BaseUnitTest {
 
     // ── Bundle assembly ────────────────────────────────────────────────────────────────────
 
-    @Test
-    void assemble_includesOwnData_andExcludesTokensAndOtherUsers() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void assemble_includesAuthoritativeConsent_andExcludesTokensAndOtherUsers(boolean participating) {
         AccountService accountService = mock(AccountService.class);
         AccountFeatureRepository featureRepo = mock(AccountFeatureRepository.class);
         AuthEventRepository authEventRepo = mock(AuthEventRepository.class);
         AccountWorkspaceMembershipQuery membershipQuery = mock(AccountWorkspaceMembershipQuery.class);
         AccountPreferencesQuery preferencesQuery = mock(AccountPreferencesQuery.class);
         GitProviderRegistry gitProviderRegistry = mock(GitProviderRegistry.class);
+        ResearchParticipationQuery research = mock(ResearchParticipationQuery.class);
+        when(research.participates(ACCOUNT_ID)).thenReturn(participating);
 
         Account account = new Account("Ada Lovelace");
         setId(account, ACCOUNT_ID);
@@ -82,7 +88,7 @@ class AccountExportServiceTest extends BaseUnitTest {
         when(membershipQuery.membershipsForLogins(any()))
                 .thenReturn(List.of(new WorkspaceMembershipView(7L, "tum-ase", "TUM ASE", "MEMBER", 314L)));
         when(preferencesQuery.preferencesForLogin("ada"))
-                .thenReturn(Optional.of(new AccountPreferencesQuery.PreferencesView(true, false)));
+                .thenReturn(Optional.of(new AccountPreferencesQuery.PreferencesView(!participating, false)));
 
         ExportBundleAssembler assembler = new ExportBundleAssembler(
                 accountService,
@@ -93,7 +99,8 @@ class AccountExportServiceTest extends BaseUnitTest {
                 gitProviderRegistry,
                 clock,
                 accountId -> new de.tum.cit.aet.hephaestus.core.auth.spi.NotificationPreferencesExportQuery.Preferences(
-                        false, false, false, "IMMEDIATE", false, false));
+                        false, false, false, false, false),
+                research);
 
         ExportBundle bundle = assembler.assemble(ACCOUNT_ID);
 
@@ -110,11 +117,8 @@ class AccountExportServiceTest extends BaseUnitTest {
         });
         assertThat(bundle.featureFlags()).containsExactly("mentor_access");
         assertNotNull(bundle.preferences());
-        assertThat(bundle.preferences().participateInResearch()).isTrue();
+        assertThat(bundle.preferences().participateInResearch()).isEqualTo(participating);
         assertThat(bundle.preferences().practiceFeedbackDeliveryEnabled()).isFalse();
-        // The preferences could only carry these values if the bundle resolved the login "ada" from
-        // this account's identity link and looked it up via preferencesForLogin("ada") — so the
-        // returned-state assertions above already prove the Account → login bridge; no verify needed.
 
         String json = new ObjectMapper().writeValueAsString(bundle);
         assertThat(json).contains("\"ada@example.com\"", "tum-ase", "mentor_access");
@@ -125,6 +129,12 @@ class AccountExportServiceTest extends BaseUnitTest {
                 .doesNotContain("private_key")
                 .doesNotContain("client_secret")
                 .doesNotContain("password");
+
+        when(accountService.activeIdentities(ACCOUNT_ID)).thenReturn(List.of());
+        var withoutScmPreferences = assembler.assemble(ACCOUNT_ID).preferences();
+        assertNotNull(withoutScmPreferences);
+        assertThat(withoutScmPreferences.participateInResearch()).isEqualTo(participating);
+        assertThat(withoutScmPreferences.practiceFeedbackDeliveryEnabled()).isTrue();
     }
 
     // ── Ownership / enumeration defense ────────────────────────────────────────────────────

@@ -690,18 +690,20 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     void shouldRecordOnlyLandedPlacementAndFindingWhenInlineDeliveryIsPartiallySuppressed() {
         Observation landed = problem();
         Observation suppressed = problem();
-        when(landed.getRecurrenceKey()).thenReturn("key-1");
-        when(suppressed.getRecurrenceKey()).thenReturn("key-2");
+        when(landed.getOccurrenceKey()).thenReturn("key-1");
+        lenient().when(landed.getRecurrenceKey()).thenReturn("shared-location");
+        when(suppressed.getOccurrenceKey()).thenReturn("key-2");
+        lenient().when(suppressed.getRecurrenceKey()).thenReturn("shared-location");
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(landed, suppressed));
         DeliveryContent delivery = new DeliveryContent(
                 "summary",
                 List.of(
-                        new DiffNote("src/Foo.java", 10, null, "landed", "key-1"),
-                        new DiffNote("src/Bar.java", 20, null, "suppressed", "key-2")),
+                        new DiffNote("src/Foo.java", 10, null, "landed", "observation:key-1"),
+                        new DiffNote("src/Foo.java", 10, null, "suppressed", "observation:key-2")),
                 List.of());
         InlineFeedbackChannel.DeliveredSignal signal = new InlineFeedbackChannel.DeliveredSignal(
-                "key-1",
+                "observation:key-1",
                 new FeedbackAnchor.DiffAnchor("src/Foo.java", 10, null),
                 InlineFeedbackChannel.Disposition.POSTED,
                 "note-1",
@@ -711,7 +713,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
         recorder.record(job, delivery, ArtifactKinds.PULL_REQUEST, List.of(signal), null, true);
         recorder.recordSuppressedRemainder(
-                job, delivery, FeedbackSuppressionReason.INSTANCE_SILENCED, List.of("key-2"));
+                job, delivery, FeedbackSuppressionReason.INSTANCE_SILENCED, List.of("observation:key-2"));
 
         ArgumentCaptor<FeedbackPlacement> placement = ArgumentCaptor.forClass(FeedbackPlacement.class);
         verify(feedbackPlacementRepository).save(placement.capture());

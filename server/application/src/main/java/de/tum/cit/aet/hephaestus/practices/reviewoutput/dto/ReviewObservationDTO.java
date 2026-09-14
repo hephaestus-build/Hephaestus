@@ -36,7 +36,9 @@ public record ReviewObservationDTO(
         @NonNull AssessmentStatus assessmentStatus,
         @Nullable Presence presence,
 
-        @Schema(description = "Target behaviour: GOOD means desirable, BAD means undesirable (null unless ASSESSED)")
+        @Schema(
+                description =
+                        "Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)")
         @Nullable
         Assessment assessment,
 
@@ -59,7 +61,7 @@ public record ReviewObservationDTO(
         ReviewFeedbackDispositionDTO feedbackDisposition) {
     @com.fasterxml.jackson.annotation.JsonProperty("outcome")
     @Schema(
-            description = "Derived from presence and target assessment; null unless assessed",
+            description = "Derived from presence and contextual behavior assessment; null unless assessed",
             accessMode = Schema.AccessMode.READ_ONLY)
     public @Nullable Outcome getOutcome() {
         return Outcome.of(presence, assessment);

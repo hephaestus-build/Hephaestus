@@ -57,8 +57,14 @@ class FeedbackService {
                     request.pagePath(),
                     request.userAgent(),
                     appVersion));
-            events.publishEvent(
-                    new ProductFeedbackSubmittedEvent(saved.getId(), Objects.requireNonNull(saved.getCreatedAt())));
+            events.publishEvent(new ProductFeedbackSubmittedEvent(
+                    saved.getId(),
+                    Objects.requireNonNull(saved.getCreatedAt()),
+                    switch (saved.getKind()) {
+                        case BUG -> ProductFeedbackSubmittedEvent.Kind.BUG;
+                        case IDEA -> ProductFeedbackSubmittedEvent.Kind.IDEA;
+                        case FEEDBACK -> ProductFeedbackSubmittedEvent.Kind.FEEDBACK;
+                    }));
             return saved;
         } catch (DataIntegrityViolationException exception) {
             if (DataIntegrityViolationConstraints.hasName(exception, "uk_product_feedback_rate_limit")) {

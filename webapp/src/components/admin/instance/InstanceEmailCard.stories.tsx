@@ -32,6 +32,12 @@ export const Sending: Story = {
 };
 
 export const Sent: Story = {
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: "account settings" })).toHaveAttribute(
+			"href",
+			"/settings",
+		);
+	},
 	args: {
 		result: {
 			outcome: "SENT",
@@ -46,6 +52,9 @@ export const WithheldBySilentMode: Story = {
 };
 
 export const NotConfigured: Story = {
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("link", { name: "account settings" })).toBeNull();
+	},
 	args: { result: { outcome: "NOT_CONFIGURED", to: "ops@example.org" } },
 };
 

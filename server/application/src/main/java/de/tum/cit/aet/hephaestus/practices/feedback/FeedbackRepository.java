@@ -417,22 +417,21 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             @Param("workspaceId") Long workspaceId, @Param("recipientUserId") Long recipientUserId, Pageable pageable);
 
     /**
-     * Whether a DELIVERED IN_CONTEXT unit already exists for this recipient bound to an observation carrying
-     * {@code recurrenceKey}, so the router can avoid re-raising a locus already received inline.
+     * Whether this exact observation was already delivered in context to the recipient.
      */
     @Query("""
         SELECT (COUNT(f) > 0) FROM Feedback f, FeedbackObservation fo
         WHERE fo.feedback = f
-          AND fo.observation.recurrenceKey = :recurrenceKey
+          AND fo.observation.id = :observationId
           AND f.workspaceId = :workspaceId
           AND f.recipientUserId = :recipientUserId
           AND f.channel = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel.IN_CONTEXT
           AND f.deliveryState = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.DELIVERED
         """)
-    boolean existsDeliveredInContextForRecurrenceKey(
+    boolean existsDeliveredInContextForObservation(
             @Param("workspaceId") Long workspaceId,
             @Param("recipientUserId") Long recipientUserId,
-            @Param("recurrenceKey") String recurrenceKey);
+            @Param("observationId") UUID observationId);
 
     /** Distinct workspaces holding at least one PREPARED conversational unit (TTL sweep enumeration). */
     @Query("""

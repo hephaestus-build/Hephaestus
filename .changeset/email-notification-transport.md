@@ -15,8 +15,8 @@ Silent Mode withholds email through the shared outbound guard. The local develop
 `http://localhost:8025` by default (configurable with `MAILPIT_UI_PORT`). When you choose to activate email, the relay operator becomes a recipient of
 personal data; complete the processor checklist before setting the host. No relay configuration is required to upgrade.
 
-Optional email subscriptions start off and belong to each account. Administrators can choose immediate
-product-feedback alerts or a daily digest; people can choose product and research survey invitations
+Optional email subscriptions start off and belong to each account. Administrators can opt in to an email for each new
+product-feedback submission; people can choose product and research survey invitations
 separately. Every optional email offers unsubscribe without sign-in. Survey invitations require an
 explicit administrator action, respect current eligibility and keep relay acceptance separate from
 in-app participation counts. Administrators may request one reminder after 72 hours and subscribe to
@@ -44,3 +44,10 @@ Self-hosted instances can run without email: personal settings hide unused email
 than showing setup warnings, while existing subscriptions remain available to turn off. Instance
 administrators retain setup guidance; survey invitations cannot be queued until sending is configured.
 Surveys and product feedback continue to work in the application without SMTP.
+
+Research participation now has one control in User settings, also linked from Slack. Account exports
+report that consent decision rather than an unrelated historical preference.
+
+**Operators:** custom clients must use the dedicated research-consent endpoint instead of the removed
+`participateInResearch` field on `/user/settings`. The shipped webapp already uses the consent endpoint;
+no SMTP setup is required to upgrade. See the migration note for custom-client details.

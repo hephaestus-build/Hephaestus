@@ -24,21 +24,22 @@ interface SurveyEmailInvitationRepository extends JpaRepository<SurveyEmailInvit
     int insertIfAbsent(@Param("invitation") SurveyEmailInvitation invitation);
 
     @Modifying
-    @WorkspaceAgnostic("An instance administrator explicitly retries a cancelled request for one survey and account")
+    @WorkspaceAgnostic(
+            "An instance administrator explicitly retries a cancelled or expired request for one survey and account")
     @Query(value = """
         UPDATE product_survey_email_invitation SET request_generation = request_generation + 1,
             requested_by_account_id = :#{#invitation.requestedByAccountId}, requested_at = :#{#invitation.requestedAt},
             expires_at = :#{#invitation.expiresAt}, reminder_enabled = :#{#invitation.reminderEnabled},
             cancelled_at = NULL, reminder_requested_at = NULL, reminder_accepted_at = NULL
         WHERE survey_id = :#{#invitation.surveyId} AND account_id = :#{#invitation.accountId}
-            AND cancelled_at IS NOT NULL AND accepted_at IS NULL
+            AND (cancelled_at IS NOT NULL OR expires_at <= :#{#invitation.requestedAt}) AND accepted_at IS NULL
         """, nativeQuery = true)
-    int requeueCancelled(@Param("invitation") SurveyEmailInvitation invitation);
+    int requeueUnaccepted(@Param("invitation") SurveyEmailInvitation invitation);
 
-    @WorkspaceAgnostic("An instance administrator previews cancelled initial requests for one survey")
+    @WorkspaceAgnostic("An instance administrator previews cancelled or expired initial requests for one survey")
     @Query(
-            "SELECT i.accountId FROM SurveyEmailInvitation i WHERE i.surveyId = :surveyId AND i.cancelledAt IS NOT NULL AND i.acceptedAt IS NULL")
-    List<Long> requeueableAccountIds(@Param("surveyId") UUID surveyId);
+            "SELECT i.accountId FROM SurveyEmailInvitation i WHERE i.surveyId = :surveyId AND (i.cancelledAt IS NOT NULL OR i.expiresAt <= :now) AND i.acceptedAt IS NULL")
+    List<Long> requeueableAccountIds(@Param("surveyId") UUID surveyId, @Param("now") Instant now);
 
     Optional<SurveyEmailInvitation> findBySurveyIdAndAccountId(UUID surveyId, long accountId);
 

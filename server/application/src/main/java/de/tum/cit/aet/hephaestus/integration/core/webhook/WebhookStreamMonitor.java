@@ -147,22 +147,15 @@ class WebhookStreamMonitor {
     @PreDestroy
     void stop() {
         scheduler.shutdownNow();
-        try {
-            if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
-                log.warn("Webhook stream monitor did not stop within its shutdown deadline");
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        // Context teardown must not leave a poll using the broker or logging after this bean is gone.
+        scheduler.close();
     }
 
     /** Package-private so loss accounting is testable without waiting on the scheduler. */
     void poll() {
         for (String name : WebhookJetStreamBootstrap.STREAMS) {
-            if (scheduler.isShutdown() || Thread.currentThread().isInterrupted()) return;
             try {
                 StreamInfo info = jsm.getStreamInfo(name);
-                if (scheduler.isShutdown()) return;
                 StreamState state = info.getStreamState();
                 if (state == null) {
                     failed(name, new IllegalStateException("stream state unavailable"));
@@ -180,7 +173,6 @@ class WebhookStreamMonitor {
                 Objects.requireNonNull(lastSuccessfulPollMillis.get(name)).set(System.currentTimeMillis());
                 recovered(name);
             } catch (Exception e) {
-                if (scheduler.isShutdown() || Thread.currentThread().isInterrupted()) return;
                 failed(name, e);
             }
         }

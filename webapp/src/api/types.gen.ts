@@ -174,7 +174,7 @@ export type AgentJob = {
    */
   deliveryCommentId?: string;
   /**
-   * Delivery status: null = not applicable, PENDING = awaiting delivery, DELIVERED = posted, FAILED = delivery error
+   * Result-processing status: null = not applicable, PENDING = awaiting processing, DELIVERED = processing finished, FAILED = processing error. Processing may include delivery; this status alone does not establish feedback publication.
    */
   deliveryStatus?: 'PENDING' | 'DELIVERED' | 'FAILED';
   /**
@@ -2304,7 +2304,6 @@ export type NotificationPreferences = {
   emailAvailable: boolean;
   etag: string;
   productFeedback: boolean;
-  productFeedbackFrequency: 'IMMEDIATE' | 'DAILY';
   productSurveys: boolean;
   researchSurveys: boolean;
   surveySummaries: boolean;
@@ -2328,7 +2327,7 @@ export type ObservationDetail = {
    */
   artifactUrl?: string;
   /**
-   * Target desirability: GOOD or BAD; null unless assessmentStatus is ASSESSED
+   * Contextual desirability of the specified behavior: GOOD or BAD; null unless assessmentStatus is ASSESSED
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
@@ -2358,7 +2357,7 @@ export type ObservationDetail = {
    */
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
   /**
-   * Derived from presence and target assessment; null unless assessed
+   * Derived from presence and contextual behavior assessment; null unless assessed
    */
   readonly outcome?: 'POSITIVE' | 'NEGATIVE';
   /**
@@ -2404,7 +2403,7 @@ export type ObservationList = {
    */
   artifactKind: string;
   /**
-   * Target desirability: GOOD or BAD; null unless assessmentStatus is ASSESSED
+   * Contextual desirability of the specified behavior: GOOD or BAD; null unless assessmentStatus is ASSESSED
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
@@ -2425,7 +2424,7 @@ export type ObservationList = {
    */
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
   /**
-   * Derived from presence and target assessment; null unless assessed
+   * Derived from presence and contextual behavior assessment; null unless assessed
    */
   readonly outcome?: 'POSITIVE' | 'NEGATIVE';
   /**
@@ -3081,7 +3080,7 @@ export type PracticeGroupReviewObservation = {
   feedbackUsefulness?: 'HELPFUL' | 'UNHELPFUL';
   observationId: string;
   /**
-   * Derived from presence and target assessment; null unless assessed
+   * Derived from presence and contextual behavior assessment; null unless assessed
    */
   readonly outcome?: 'POSITIVE' | 'NEGATIVE';
   practiceName: string;
@@ -4134,7 +4133,7 @@ export type ReviewBoundFeedback = {
  */
 export type ReviewBoundObservation = {
   /**
-   * Target behaviour: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
+   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
@@ -4153,7 +4152,7 @@ export type ReviewBoundObservation = {
    */
   ordinal: number;
   /**
-   * Derived from presence and target assessment; null unless assessed
+   * Derived from presence and contextual behavior assessment; null unless assessed
    */
   readonly outcome?: 'POSITIVE' | 'NEGATIVE';
   practiceName: string;
@@ -4322,7 +4321,7 @@ export type ReviewObservation = {
   agentJobId: string;
   artifact: ReviewArtifact;
   /**
-   * Target behaviour: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
+   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
@@ -4345,7 +4344,7 @@ export type ReviewObservation = {
    */
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
   /**
-   * Derived from presence and target assessment; null unless assessed
+   * Derived from presence and contextual behavior assessment; null unless assessed
    */
   readonly outcome?: 'POSITIVE' | 'NEGATIVE';
   practiceName: string;
@@ -4389,7 +4388,7 @@ export type ReviewObservationDetail = {
   agentJobId: string;
   artifact: ReviewArtifact;
   /**
-   * Target behaviour: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
+   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
@@ -4410,7 +4409,7 @@ export type ReviewObservationDetail = {
   id: string;
   observedAt: Date;
   /**
-   * Derived from presence and target assessment; null unless assessed
+   * Derived from presence and contextual behavior assessment; null unless assessed
    */
   readonly outcome?: 'POSITIVE' | 'NEGATIVE';
   practiceName: string;
@@ -5401,7 +5400,6 @@ export type UpdateLoginProviderRequest = {
 
 export type UpdateNotificationPreferences = {
   productFeedback: boolean;
-  productFeedbackFrequency: 'IMMEDIATE' | 'DAILY';
   productSurveys: boolean;
   researchSurveys: boolean;
   surveySummaries: boolean;
@@ -5823,10 +5821,6 @@ export type UserInfo = {
  * User preferences and settings
  */
 export type UserSettings = {
-  /**
-   * Whether the user consents to participate in research studies
-   */
-  participateInResearch: boolean;
   /**
    * Whether new practice-feedback comments may be delivered on issues, pull requests, and merge requests authored by the user, together with related Slack reminders
    */
@@ -6354,7 +6348,7 @@ export type ObservationDetailWritable = {
    */
   artifactUrl?: string;
   /**
-   * Target desirability: GOOD or BAD; null unless assessmentStatus is ASSESSED
+   * Contextual desirability of the specified behavior: GOOD or BAD; null unless assessmentStatus is ASSESSED
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
@@ -6418,7 +6412,7 @@ export type ObservationListWritable = {
    */
   artifactKind: string;
   /**
-   * Target desirability: GOOD or BAD; null unless assessmentStatus is ASSESSED
+   * Contextual desirability of the specified behavior: GOOD or BAD; null unless assessmentStatus is ASSESSED
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
@@ -6673,7 +6667,7 @@ export type PracticeStandingObservationWritable = {
  */
 export type ReviewBoundObservationWritable = {
   /**
-   * Target behaviour: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
+   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
@@ -6779,7 +6773,7 @@ export type ReviewObservationWritable = {
   agentJobId: string;
   artifact: ReviewArtifact;
   /**
-   * Target behaviour: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
+   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
@@ -6826,7 +6820,7 @@ export type ReviewObservationDetailWritable = {
   agentJobId: string;
   artifact: ReviewArtifact;
   /**
-   * Target behaviour: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
+   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';

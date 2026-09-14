@@ -12,8 +12,6 @@ interface ProductFeedbackRepository extends JpaRepository<ProductFeedback, UUID>
 
     Page<ProductFeedback> findAllByResolvedAtIsNotNullOrderByResolvedAtDesc(Pageable pageable);
 
-    long countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(java.time.Instant from, java.time.Instant until);
-
     void deleteAllByWorkspaceId(Long workspaceId);
 
     void deleteAllByAccountId(long accountId);

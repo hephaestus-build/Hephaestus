@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
 import static de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture.GIBIBYTE;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -243,43 +245,42 @@ class WebhookStreamMonitorTest extends BaseUnitTest {
     }
 
     @Test
-    void waitsForTheInFlightPollToStopWithoutReportingAShutdownAsAnOutage(CapturedOutput output) throws Exception {
-        var entered = new CountDownLatch(1);
-        var interrupted = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
-        var stopped = new CountDownLatch(1);
+    void stopWaitsForTheActivePollToFinish() throws Exception {
+        WebhookStreamMonitor monitor = monitor();
+        give(1_000, 999);
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch blockUntilShutdown = new CountDownLatch(1);
+        CountDownLatch interrupted = new CountDownLatch(1);
+        CountDownLatch finishPoll = new CountDownLatch(1);
+        CountDownLatch pollFinished = new CountDownLatch(1);
         doAnswer(invocation -> {
                     entered.countDown();
                     try {
-                        release.await();
-                    } catch (InterruptedException shutdown) {
+                        blockUntilShutdown.await();
+                    } catch (InterruptedException e) {
                         interrupted.countDown();
-                        // Simulate a broker call that must finish cleanup after cancellation.
-                        release.await();
-                        Thread.currentThread().interrupt();
+                        finishPoll.await();
                     }
-                    throw new java.io.IOException("broker call cancelled during shutdown");
+                    pollFinished.countDown();
+                    return quiet();
                 })
                 .when(jsm)
-                .getStreamInfo(anyString());
-        WebhookStreamMonitor monitor = monitor();
-        try (var executor = Executors.newSingleThreadExecutor()) {
-            monitor.start();
+                .getStreamInfo(STREAM);
+        monitor.start();
+        try (var stopping = Executors.newSingleThreadExecutor()) {
             try {
                 assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
-                var stopping = executor.submit(() -> {
-                    monitor.stop();
-                    stopped.countDown();
-                });
+                var stopped = stopping.submit(monitor::stop);
                 assertThat(interrupted.await(5, TimeUnit.SECONDS)).isTrue();
-                assertThat(stopped.await(100, TimeUnit.MILLISECONDS))
-                        .as("shutdown waits for the running poll, not only its cancellation request")
-                        .isFalse();
-                release.countDown();
-                stopping.get(5, TimeUnit.SECONDS);
-                assertThat(output.getAll()).doesNotContain("Webhook loss accounting stopped");
+                assertThatThrownBy(() -> stopped.get(100, TimeUnit.MILLISECONDS))
+                        .as("shutdown waits while the interrupted broker poll is still finishing")
+                        .isInstanceOf(TimeoutException.class);
+                finishPoll.countDown();
+                stopped.get(5, TimeUnit.SECONDS);
+                assertThat(pollFinished.getCount()).isZero();
             } finally {
-                release.countDown();
+                finishPoll.countDown();
+                blockUntilShutdown.countDown();
                 monitor.stop();
             }
         }

@@ -19,5 +19,4 @@ public record NotificationPreferencesDTO(
 
         @Schema(requiredMode = RequiredMode.REQUIRED) boolean surveySummaries,
         @Schema(requiredMode = RequiredMode.REQUIRED) boolean workspaceAlerts,
-        @NonNull NotificationEmailFrequency productFeedbackFrequency,
         @NonNull String etag) {}

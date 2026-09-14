@@ -18,10 +18,10 @@ class EmailRendererTest extends BaseUnitTest {
     void shouldRenderSubjectTextAndHtmlForEveryKind(EmailKind kind) {
         Map<String, Object> model = new HashMap<>(
                 switch (kind) {
-                    case TEST_MESSAGE, PRODUCT_FEEDBACK -> Map.of();
+                    case TEST_MESSAGE -> Map.of();
+                    case PRODUCT_FEEDBACK -> Map.of("feedbackKind", "BUG");
                     case ACCOUNT_DELETION_SCHEDULED -> Map.of("purgeAfter", "14 September 2026 at 10:00 UTC");
                     case ACCOUNT_SECURITY_CHANGED -> Map.of("change", "A sign-in identity was linked to your account.");
-                    case PRODUCT_FEEDBACK_DIGEST -> Map.of("reportCount", 17L);
                     case SURVEY_ENDED_SUMMARY -> Map.of("invited", 37L, "responded", 23L, "declined", 11L);
                     case SURVEY_INVITATION ->
                         Map.of(
@@ -51,7 +51,7 @@ class EmailRendererTest extends BaseUnitTest {
                 switch (kind) {
                     case TEST_MESSAGE, ACCOUNT_DELETION_SCHEDULED -> "";
                     case ACCOUNT_SECURITY_CHANGED -> "/settings";
-                    case PRODUCT_FEEDBACK, PRODUCT_FEEDBACK_DIGEST -> "/admin/feedback";
+                    case PRODUCT_FEEDBACK -> "/admin/feedback";
                     case SURVEY_ENDED_SUMMARY -> "/admin/surveys";
                     case SURVEY_INVITATION -> "/w/survey-team?survey=7bc509de-ce47-498f-bec3-2a5ea141c241";
                     case WORKSPACE_ALERT -> "/w/delivery-team/admin/settings";
@@ -59,7 +59,9 @@ class EmailRendererTest extends BaseUnitTest {
         String actionUrl = EmailTestSupport.WEBAPP_URL + actionPath;
         assertThat(rendered.text()).contains(actionUrl);
         assertThat(rendered.html()).contains("href=\"" + actionUrl + "\"");
-        for (Object value : model.values()) {
+        for (var entry : model.entrySet()) {
+            if (entry.getKey().equals("feedbackKind")) continue;
+            Object value = entry.getValue();
             if (value instanceof Boolean) continue;
             assertThat(rendered.text()).contains(value.toString());
             assertThat(rendered.html()).contains(value.toString());
@@ -77,6 +79,34 @@ class EmailRendererTest extends BaseUnitTest {
                 .contains("<title>" + rendered.subject() + "</title>")
                 .contains("role=\"presentation\"")
                 .doesNotContain(" th:", "xmlns:th");
+    }
+
+    @ParameterizedTest
+    @EnumSource(de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSubmittedEvent.Kind.class)
+    void shouldDescribeTheProductFeedbackKind(
+            de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSubmittedEvent.Kind kind) {
+        var rendered = renderer.render(
+                EmailKind.PRODUCT_FEEDBACK,
+                Map.of(
+                        "feedbackKind",
+                        kind.name(),
+                        "unsubscribeUrl",
+                        EmailTestSupport.WEBAPP_URL + "/unsubscribe?token=test"));
+        String expected =
+                switch (kind) {
+                    case BUG -> "Someone reported a bug";
+                    case IDEA -> "Someone suggested an idea";
+                    case FEEDBACK -> "Someone shared general feedback";
+                };
+        String expectedSubject =
+                switch (kind) {
+                    case BUG -> "New bug report in Hephaestus";
+                    case IDEA -> "New idea for Hephaestus";
+                    case FEEDBACK -> "New product feedback in Hephaestus";
+                };
+        assertThat(rendered.subject()).isEqualTo(expectedSubject);
+        assertThat(rendered.text()).contains(expected);
+        assertThat(rendered.html()).contains(expected);
     }
 
     @Test

@@ -4,17 +4,17 @@ import { ASSESSMENT_STATUS_DEFS } from "./assessment-status-defs";
 import { PRESENCE_DEFS } from "./presence-defs";
 
 describe("presence vocabulary", () => {
-	it("keeps presence neutral for desirable and undesirable targets", () => {
+	it("keeps presence neutral for desirable and undesirable behaviors", () => {
 		expect(PRESENCE_DEFS.PRESENT.label).toBe("Present");
 		expect(PRESENCE_DEFS.ABSENT.label).toBe("Absent");
 		expect(PRESENCE_DEFS.PRESENT.description).toContain("GOOD/BAD assessment");
 		expect(PRESENCE_DEFS.ABSENT.description).toContain(
-			"negative for GOOD targets and positive for BAD targets",
+			"negative for desirable behavior and positive for undesirable behavior",
 		);
 	});
 
 	it("does not describe absence as inapplicability", () => {
-		expect(PRESENCE_DEFS.ABSENT.description).toContain("applicable target criterion");
+		expect(PRESENCE_DEFS.ABSENT.description).toContain("applicable, bounded search");
 		expect(ASSESSMENT_STATUS_DEFS.NOT_APPLICABLE.description).toContain("nothing to judge");
 	});
 });

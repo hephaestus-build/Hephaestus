@@ -18,7 +18,6 @@ class NotificationPreferencesExportAdapter implements NotificationPreferencesExp
                 preferences.productFeedback(),
                 preferences.productSurveys(),
                 preferences.researchSurveys(),
-                preferences.productFeedbackFrequency().name(),
                 preferences.workspaceAlerts(),
                 preferences.surveySummaries());
     }

@@ -10,13 +10,6 @@ import {
 	FieldGroup,
 	FieldLabel,
 } from "@/components/ui/field";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
@@ -36,12 +29,8 @@ type EmailPreferencesState =
 export interface EmailPreferencesSectionProps {
 	state: EmailPreferencesState;
 	isAppAdmin: boolean;
+	researchAvailable: boolean;
 }
-
-const frequencyItems = [
-	{ value: "IMMEDIATE", label: "Immediately" },
-	{ value: "DAILY", label: "Daily summary" },
-] as const;
 
 const choices = [
 	{
@@ -65,12 +54,13 @@ const choices = [
 		key: "researchSurveys",
 		label: "Research survey invitations",
 		description:
-			"Email invitations to academic research surveys. These also require your current research participation consent. This email choice does not grant or withdraw that consent.",
+			"Receive academic research survey invitations by email when you also consent to research participation. Turning this off stops email invitations, not your research participation.",
 	},
 	{
 		key: "productFeedback",
 		label: "New product feedback",
-		description: "Email notifications when someone submits product feedback to this instance.",
+		description:
+			"Get an email when new product feedback arrives. Review it in the private instance-admin inbox; resolving it does not notify the sender.",
 	},
 ] as const;
 
@@ -82,7 +72,11 @@ export function hasEmailPreferences(state: EmailPreferencesState) {
 	);
 }
 
-export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesSectionProps) {
+export function EmailPreferencesSection({
+	state,
+	isAppAdmin,
+	researchAvailable,
+}: EmailPreferencesSectionProps) {
 	const id = useId();
 	const showSpinner = useSpinDelay(state.status === "ready" && state.isPending, {
 		delay: 1000,
@@ -93,9 +87,11 @@ export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesS
 	const visibleChoices = choices.filter((choice) =>
 		optOutOnly
 			? state.preferences[choice.key]
-			: (choice.key !== "productFeedback" && choice.key !== "surveySummaries") ||
-				isAppAdmin ||
-				(state.status === "ready" && state.preferences[choice.key]),
+			: choice.key === "researchSurveys"
+				? researchAvailable || (state.status === "ready" && state.preferences.researchSurveys)
+				: (choice.key !== "productFeedback" && choice.key !== "surveySummaries") ||
+					isAppAdmin ||
+					(state.status === "ready" && state.preferences[choice.key]),
 	);
 
 	if (!hasEmailPreferences(state)) return null;
@@ -106,7 +102,6 @@ export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesS
 			productFeedback: state.preferences.productFeedback,
 			workspaceAlerts: state.preferences.workspaceAlerts,
 			surveySummaries: state.preferences.surveySummaries,
-			productFeedbackFrequency: state.preferences.productFeedbackFrequency,
 			productSurveys: state.preferences.productSurveys,
 			researchSurveys: state.preferences.researchSurveys,
 			...patch,
@@ -159,8 +154,8 @@ export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesS
 						!isAppAdmin &&
 						(state.preferences.productFeedback || state.preferences.surveySummaries) && (
 							<p className="text-sm text-muted-foreground">
-								You no longer have instance-admin access. Existing administrator subscriptions can
-								be turned off here; they cannot send while that access is missing.
+								You can turn off your previous administrator subscriptions here. They do not send
+								while you lack instance-admin access.
 							</p>
 						)}
 					{!optOutOnly && !state.preferences.emailAvailable && (
@@ -192,42 +187,6 @@ export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesS
 								/>
 							</Field>
 						))}
-						{!optOutOnly && isAppAdmin && state.preferences.productFeedback && (
-							<Field orientation="responsive">
-								<FieldContent>
-									<FieldLabel id={`${id}-frequency-label`} htmlFor={`${id}-frequency`}>
-										Product feedback frequency
-									</FieldLabel>
-									<FieldDescription id={`${id}-frequency-description`}>
-										Daily summaries cover the previous UTC calendar day and are prepared at 08:00
-										UTC.
-									</FieldDescription>
-								</FieldContent>
-								<Select
-									items={frequencyItems}
-									value={state.preferences.productFeedbackFrequency}
-									disabled={busy}
-									onValueChange={(value) => {
-										if (value) change({ productFeedbackFrequency: value });
-									}}
-								>
-									<SelectTrigger
-										id={`${id}-frequency`}
-										aria-describedby={`${id}-frequency-description`}
-										className="w-full @md/field-group:w-56"
-									>
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent aria-labelledby={`${id}-frequency-label`}>
-										{frequencyItems.map((item) => (
-											<SelectItem key={item.value} value={item.value}>
-												{item.label}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</Field>
-						)}
 					</FieldGroup>
 				</>
 			)}

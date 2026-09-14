@@ -15,8 +15,6 @@ public record UpdateNotificationPreferencesDTO(
         @NotNull @NonNull @Schema(requiredMode = RequiredMode.REQUIRED)
         Boolean researchSurveys,
 
-        @NotNull @NonNull NotificationEmailFrequency productFeedbackFrequency,
-
         @NotNull @NonNull @Schema(requiredMode = RequiredMode.REQUIRED)
         Boolean workspaceAlerts,
 

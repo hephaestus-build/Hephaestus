@@ -8,7 +8,6 @@ public interface NotificationPreferencesExportQuery {
             boolean productFeedback,
             boolean productSurveys,
             boolean researchSurveys,
-            String productFeedbackFrequency,
             boolean workspaceAlerts,
             boolean surveySummaries) {}
 }

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { assert, describe, expect, it } from "vitest";
 
-import { holdReasonCopy, jobWait, MoneyCell } from "./job-utils";
+import { holdReasonCopy, isResultProcessingRetryable, jobWait, MoneyCell } from "./job-utils";
 
 const NOW = new Date("2026-05-20T12:00:00Z").getTime();
 const SOON = new Date("2026-05-20T12:05:00Z");
@@ -27,17 +27,23 @@ describe("jobWait", () => {
 	});
 
 	it("reports a backoff for a queued run whose next attempt is still ahead", () => {
-		expect(jobWait({ status: "QUEUED", availableAt: SOON }, NOW)).toStrictEqual({
+		expect(
+			jobWait({ status: "QUEUED", holdReason: undefined, availableAt: SOON }, NOW),
+		).toStrictEqual({
 			kind: "backoff",
 		});
 	});
 
 	it("reports nothing for a queued run that is already claimable", () => {
-		expect(jobWait({ status: "QUEUED", availableAt: EARLIER }, NOW)).toBeNull();
+		expect(
+			jobWait({ status: "QUEUED", holdReason: undefined, availableAt: EARLIER }, NOW),
+		).toBeNull();
 	});
 
 	it("reports nothing once the run has left the queue, whatever its timestamps say", () => {
-		expect(jobWait({ status: "RUNNING", availableAt: SOON }, NOW)).toBeNull();
+		expect(
+			jobWait({ status: "RUNNING", holdReason: undefined, availableAt: SOON }, NOW),
+		).toBeNull();
 		expect(
 			jobWait({ status: "COMPLETED", holdReason: "BUDGET", availableAt: SOON }, NOW),
 		).toBeNull();
@@ -102,5 +108,17 @@ describe("MoneyCell", () => {
 		assert(bound);
 		expect(cents.textContent).toBe("$4.50");
 		expect(bound.textContent).toBe("<$0.01");
+	});
+});
+
+describe("result-processing retry", () => {
+	it.each([
+		["COMPLETED", "FAILED", true],
+		["COMPLETED", "PENDING", false],
+		["COMPLETED", "DELIVERED", false],
+		["RUNNING", "FAILED", false],
+		["FAILED", "FAILED", false],
+	] as const)("%s / %s is retryable: %s", (status, deliveryStatus, retryable) => {
+		expect(isResultProcessingRetryable({ status, deliveryStatus })).toBe(retryable);
 	});
 });

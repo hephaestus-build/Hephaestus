@@ -106,7 +106,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
                 .extracting(ProductFeedbackEmailIntegrationTest::recipient)
                 .containsExactlyInAnyOrder(first.getPrimaryEmail(), second.getPrimaryEmail());
         for (MimeMessage message : mail.sent()) {
-            assertThat(message.getSubject()).isEqualTo("New product feedback in Hephaestus");
+            assertThat(message.getSubject()).isEqualTo("New bug report in Hephaestus");
             assertThat(message.getHeader("List-Unsubscribe"))
                     .singleElement()
                     .asString()
@@ -167,7 +167,6 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
             strings = {
                 "unsubscribed",
                 "resubscribed",
-                "frequency-changed-back",
                 "demoted",
                 "suspended",
                 "deleting",
@@ -184,21 +183,6 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
             case "unsubscribed" -> subscribed(admin, false);
             case "resubscribed" -> {
                 subscribed(admin, false);
-                subscribed(admin, true);
-            }
-            case "frequency-changed-back" -> {
-                long id = Objects.requireNonNull(admin.getId());
-                subscriptions.update(
-                        id,
-                        new UpdateNotificationPreferencesDTO(
-                                true,
-                                false,
-                                false,
-                                de.tum.cit.aet.hephaestus.notification.preferences.NotificationEmailFrequency.DAILY,
-                                false,
-                                false),
-                        EntityTagPrecondition.parse(subscriptions.get(id).etag()),
-                        true);
                 subscribed(admin, true);
             }
             case "demoted" -> admin.setAppRole(Account.AppRole.USER);
@@ -226,7 +210,12 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
 
         new TransactionTemplate(transactionManager)
                 .executeWithoutResult(status -> events.publishEvent(new ProductFeedbackEmailRequested(
-                        item.getId(), Objects.requireNonNull(admin.getId()), Instant.EPOCH, Instant.EPOCH)));
+                        item.getId(),
+                        Objects.requireNonNull(admin.getId()),
+                        Instant.EPOCH,
+                        Instant.EPOCH,
+                        de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSubmittedEvent.Kind
+                                .BUG)));
 
         assertThat(mail.sent()).isEmpty();
         assertThat(publications(item.getId())).isEmpty();
@@ -270,13 +259,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
         var current = subscriptions.get(id);
         subscriptions.update(
                 id,
-                new UpdateNotificationPreferencesDTO(
-                        enabled,
-                        false,
-                        false,
-                        de.tum.cit.aet.hephaestus.notification.preferences.NotificationEmailFrequency.IMMEDIATE,
-                        false,
-                        false),
+                new UpdateNotificationPreferencesDTO(enabled, false, false, false, false),
                 EntityTagPrecondition.parse(current.etag()),
                 true);
     }

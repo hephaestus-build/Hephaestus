@@ -35,24 +35,6 @@ public class NotificationSubscriptionService {
                 .orElse(false);
     }
 
-    public boolean hasFrequency(long accountId, NotificationEmailFrequency frequency) {
-        return subscriptions
-                .findByAccountIdAndKind(accountId, NotificationSubscriptionKind.PRODUCT_FEEDBACK)
-                .filter(NotificationSubscription::isEnabled)
-                .map(row -> row.getFrequency() == frequency)
-                .orElse(false);
-    }
-
-    /** A resumed subscription or frequency change cannot revive a digest from an earlier consent period. */
-    public boolean isDigestWindowCurrent(long accountId, java.time.Instant from) {
-        return subscriptions
-                .findByAccountIdAndKind(accountId, NotificationSubscriptionKind.PRODUCT_FEEDBACK)
-                .filter(NotificationSubscription::isEnabled)
-                .filter(row -> row.getFrequency() == NotificationEmailFrequency.DAILY)
-                .filter(row -> row.getEnabledSince() != null && !from.isBefore(row.getEnabledSince()))
-                .isPresent();
-    }
-
     public List<Long> subscribedAccountIds(NotificationSubscriptionKind kind) {
         return subscriptions.subscribedAccountIds(kind);
     }
@@ -64,7 +46,7 @@ public class NotificationSubscriptionService {
                 .map(s -> s.getUnsubscribeToken().toString());
     }
 
-    /** A later opt-in or frequency change must not revive an older optional request. */
+    /** A later opt-in must not revive an older optional request. */
     public Optional<String> unsubscribeToken(
             long accountId, NotificationSubscriptionKind kind, java.time.Instant requestedAt) {
         return subscriptions
@@ -123,9 +105,6 @@ public class NotificationSubscriptionService {
                 rows.add(row);
             }
             row.setEnabled(requested(update, kind), clock.instant());
-            if (kind == NotificationSubscriptionKind.PRODUCT_FEEDBACK) {
-                row.setFrequency(update.productFeedbackFrequency(), clock.instant());
-            }
         }
         subscriptions.saveAllAndFlush(rows);
         return view(accountId, rows);
@@ -140,11 +119,6 @@ public class NotificationSubscriptionService {
                 gateway.configured(),
                 enabled(rows, NotificationSubscriptionKind.SURVEY_SUMMARIES),
                 enabled(rows, NotificationSubscriptionKind.WORKSPACE_ALERTS),
-                rows.stream()
-                        .filter(row -> row.getKind() == NotificationSubscriptionKind.PRODUCT_FEEDBACK)
-                        .map(NotificationSubscription::getFrequency)
-                        .findFirst()
-                        .orElse(NotificationEmailFrequency.IMMEDIATE),
                 EntityTagPrecondition.format(version(rows)));
     }
 

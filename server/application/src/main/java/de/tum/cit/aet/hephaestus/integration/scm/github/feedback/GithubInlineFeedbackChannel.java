@@ -40,9 +40,9 @@ import org.springframework.stereotype.Component;
  * {@link de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint} is embedded in the thread body as a
  * hidden HTML tag, and before posting we read the PR's existing review threads
  * ({@code GetPullRequestReviewThreads}) and index this reviewer's own prior threads by that key. A finding
- * whose key already has a live (non-outdated) bot thread is PRESERVED rather than re-posted, so a stable
- * finding does not accrue a duplicate thread on every re-run. After posting, the created comment node ids are
- * read back from the mutation payload and matched to feedbackItems by {@code path:line} so each
+ * whose key already has a live (non-outdated) bot thread is PRESERVED rather than re-posted, so retrying an exact
+ * delivery does not create a duplicate thread. After posting, the created comment node ids are
+ * read back from the mutation payload and matched by their exact delivery keys so each
  * {@link DeliveredSignal} carries the durable comment + review handles.
  *
  * <p>Both the post path and the {@link #clearStaleFeedback} override retire (minimize as {@code OUTDATED}) the
@@ -74,12 +74,12 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
     private static final String OUTDATED_CLASSIFIER = "OUTDATED";
 
     /**
-     * Hidden per-finding correlation tag embedded in a thread body so a prior thread can be matched back to the
+     * Hidden per-delivery correlation tag embedded in a thread body so a prior thread can be matched back to the
      * finding that produced it across re-runs. Humans never type this HTML comment, so its presence in a thread's
      * first comment marks the thread as one of ours. The key is alnum/dash/underscore (a
      * {@link de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint} digest), so no escaping is needed.
      */
-    private static final Pattern CK_TAG = Pattern.compile("<!-- hephaestus-diff-note-ck=([A-Za-z0-9_-]+) -->");
+    private static final Pattern CK_TAG = Pattern.compile("<!-- hephaestus-diff-note-ck=([A-Za-z0-9_:-]+) -->");
 
     private final GitHubGraphQlClientProvider gitHubProvider;
     private final GithubPrNodeIdResolver prNodeIdResolver;
@@ -141,13 +141,13 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
             if (!(finding.anchor() instanceof FeedbackAnchor.DiffAnchor diff)) {
                 log.warn("Skipping non-diff anchor on GitHub inline feedback: anchor={}", finding.anchor());
                 unsupportedSignals.add(
-                        new DeliveredSignal(finding.recurrenceKey(), finding.anchor(), Disposition.FAILED, null, null));
+                        new DeliveredSignal(finding.deliveryKey(), finding.anchor(), Disposition.FAILED, null, null));
                 continue;
             }
             // Register the key as seen BEFORE the blank-body guard: a finding whose key is still present this run
             // must never be reaped by minimizeVanishedThreads, regardless of body content (GitLab parity).
             // Otherwise a valid-key, blank-body finding would silently minimize its own still-current thread.
-            String key = finding.recurrenceKey();
+            String key = finding.deliveryKey();
             if (key != null) {
                 seenKeys.add(key);
             }
@@ -193,9 +193,9 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
         for (InlineFeedback finding : toPost) {
             FeedbackAnchor.DiffAnchor diff = (FeedbackAnchor.DiffAnchor) finding.anchor();
             String body = immutablePackage ? appendMarker(finding.body(), finding.marker()) : finding.body();
-            threads.add(buildThread(diff, appendCorrelationTag(body, finding.recurrenceKey())));
+            threads.add(buildThread(diff, appendCorrelationTag(body, finding.deliveryKey())));
             postedAnchors.add(diff);
-            postedKeys.add(finding.recurrenceKey());
+            postedKeys.add(finding.deliveryKey());
         }
         seenKeys.addAll(postedKeys);
         int postedBeforeSuppression = preservedSignals.size();
@@ -253,11 +253,11 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
             return new InlineResult(threads.size() + preservedSignals.size(), unsupportedAnchorCount, List.copyOf(all));
         } catch (OutboundEgressSuppressedException e) {
             Set<String> completedKeys = signalsBeforeSuppression.stream()
-                    .map(DeliveredSignal::recurrenceKey)
+                    .map(DeliveredSignal::deliveryKey)
                     .filter(Objects::nonNull)
                     .collect(Collectors.toSet());
             List<String> suppressedKeys = toPost.stream()
-                    .map(InlineFeedback::recurrenceKey)
+                    .map(InlineFeedback::deliveryKey)
                     .filter(Objects::nonNull)
                     .filter(key -> !completedKeys.contains(key))
                     .toList();
@@ -297,10 +297,10 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
     /**
      * Builds {@link DeliveredSignal}s for the posted threads, matching comment node ids back to feedbackItems.
      *
-     * <p>Primary match is the per-finding correlation tag (ck-fingerprint) embedded in each posted comment body:
+     * <p>Match uses the exact delivery correlation tag embedded in each posted comment body:
      * {@code path:line} is NOT unique — two feedbackItems can anchor to the same line — so a positional or path:line
      * index would hand the second finding the first's comment id (or none), corrupting its ledger external_ref.
-     * Falls back to path:line only for a comment whose body carries no parseable tag (pre-correlation feedbackItems).
+     * Unmatched responses retain no comment ID; coordinates alone cannot bind two pieces of feedback.
      */
     private static List<DeliveredSignal> buildPostedSignals(
             ClientGraphQlResponse response,
@@ -308,7 +308,6 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
             List<FeedbackAnchor.DiffAnchor> anchors,
             List<String> keys) {
         Map<String, String> commentIdByCk = new HashMap<>();
-        Map<String, String> commentIdByPathLine = new HashMap<>();
         List<Map<String, Object>> comments = response.field("addPullRequestReview.pullRequestReview.comments.nodes")
                 .getValue();
         if (comments != null) {
@@ -318,14 +317,9 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
                     continue;
                 }
                 String body = (String) comment.get("body");
-                String ck = body == null ? null : parseObservationFingerprint(body);
+                String ck = body == null ? null : parseDeliveryKey(body);
                 if (ck != null) {
                     commentIdByCk.putIfAbsent(ck, id);
-                }
-                String path = (String) comment.get("path");
-                Object line = comment.get("line");
-                if (path != null && line != null) {
-                    commentIdByPathLine.putIfAbsent(path + ":" + line, id);
                 }
             }
         }
@@ -335,9 +329,6 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
             FeedbackAnchor.DiffAnchor diff = anchors.get(i);
             String key = keys.get(i);
             String commentId = key == null ? null : commentIdByCk.get(key);
-            if (commentId == null) {
-                commentId = commentIdByPathLine.get(diff.filePath() + ":" + diff.newLineNumber());
-            }
             signals.add(new DeliveredSignal(key, diff, Disposition.POSTED, commentId, reviewId));
         }
         return signals;
@@ -428,7 +419,7 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
         if (body == null || commentId == null || (marker != null && !body.contains(marker))) {
             return;
         }
-        String key = parseObservationFingerprint(body);
+        String key = parseDeliveryKey(body);
         if (key == null) {
             return; // human thread or a legacy bot note posted before keys existed — not ours to reconcile
         }
@@ -478,17 +469,17 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
     }
 
     @Nullable
-    private static String parseObservationFingerprint(String body) {
+    private static String parseDeliveryKey(String body) {
         Matcher m = CK_TAG.matcher(body);
         return m.find() ? m.group(1) : null;
     }
 
-    /** Appends the hidden per-finding correlation tag; a null key (pre-correlation finding) appends nothing. */
-    private static String appendCorrelationTag(String body, @Nullable String recurrenceKey) {
-        if (recurrenceKey == null || recurrenceKey.isBlank()) {
+    /** Appends the hidden per-delivery correlation tag; a null key appends nothing. */
+    private static String appendCorrelationTag(String body, @Nullable String deliveryKey) {
+        if (deliveryKey == null || deliveryKey.isBlank()) {
             return body;
         }
-        return body + "\n<!-- hephaestus-diff-note-ck=" + recurrenceKey + " -->";
+        return body + "\n<!-- hephaestus-diff-note-ck=" + deliveryKey + " -->";
     }
 
     /** A prior review thread we posted, matched by the correlation key in its first comment. */

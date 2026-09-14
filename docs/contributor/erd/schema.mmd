@@ -808,9 +808,7 @@ erDiagram
         BIGINT account_id FK,UK "NOT NULL"
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ enabled_since
-        VARCHAR(16) frequency "NOT NULL"
         VARCHAR(32) kind UK "NOT NULL"
-        DATE last_digest_date
         UUID unsubscribe_token UK "NOT NULL"
         BIGINT version "NOT NULL"
     }

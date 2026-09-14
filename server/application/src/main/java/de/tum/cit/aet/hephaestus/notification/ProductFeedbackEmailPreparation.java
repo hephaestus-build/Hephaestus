@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.notification;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.notification.preferences.NotificationEmailFrequency;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionKind;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
 import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSubmittedEvent;
@@ -32,13 +31,13 @@ public class ProductFeedbackEmailPreparation {
         var subscribed =
                 new HashSet<>(subscriptions.subscribedAccountIds(NotificationSubscriptionKind.PRODUCT_FEEDBACK));
         for (long accountId : contacts.activeVerifiedAdministratorIds()) {
-            if (subscribed.contains(accountId)
-                    && subscriptions.hasFrequency(accountId, NotificationEmailFrequency.IMMEDIATE)) {
+            if (subscribed.contains(accountId)) {
                 events.publishEvent(new ProductFeedbackEmailRequested(
                         event.feedbackId(),
                         accountId,
                         event.submittedAt(),
-                        event.submittedAt().plus(MAX_AGE)));
+                        event.submittedAt().plus(MAX_AGE),
+                        event.kind()));
             }
         }
     }

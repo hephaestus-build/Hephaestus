@@ -10,8 +10,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
-import de.tum.cit.aet.hephaestus.practices.observation.ObservationTrendService;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;
@@ -33,7 +31,6 @@ public class JobTypeHandlerConfiguration {
 
     private final JsonMapper objectMapper;
     private final ContentAddressedStore contentAddressedStore;
-    private final PracticeReviewProperties reviewProperties;
     private final WorkspaceContextBuilder workspaceContextBuilder;
     private final TaskEnvelopeWriter taskEnvelopeWriter;
     private final FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter;
@@ -41,13 +38,11 @@ public class JobTypeHandlerConfiguration {
     JobTypeHandlerConfiguration(
             JsonMapper objectMapper,
             ContentAddressedStore contentAddressedStore,
-            PracticeReviewProperties reviewProperties,
             WorkspaceContextBuilder workspaceContextBuilder,
             TaskEnvelopeWriter taskEnvelopeWriter,
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter) {
         this.objectMapper = objectMapper;
         this.contentAddressedStore = contentAddressedStore;
-        this.reviewProperties = reviewProperties;
         this.workspaceContextBuilder = workspaceContextBuilder;
         this.taskEnvelopeWriter = taskEnvelopeWriter;
         this.feedbackResponseSuppressionFilter = feedbackResponseSuppressionFilter;
@@ -76,16 +71,13 @@ public class JobTypeHandlerConfiguration {
             PullRequestCommentPoster commentPoster,
             PracticeFeedbackDeliveryPolicy deliveryPolicy,
             FeedbackLedgerRecorder feedbackLedgerRecorder,
-            ObservationTrendService observationTrendService,
             PracticeFeedbackCommentFormatter commentFormatter,
             PracticeFeedbackDispatchService dispatchService,
             AgentJobRepository agentJobRepository) {
         return new FeedbackDeliveryService(
                 commentPoster,
                 deliveryPolicy,
-                reviewProperties,
                 feedbackLedgerRecorder,
-                observationTrendService,
                 commentFormatter,
                 dispatchService,
                 agentJobRepository);

@@ -42,7 +42,7 @@ class SurveyEmailInvitationService implements SurveyEmailInvitations {
         Survey survey = require(surveyId);
         var eligible = eligibleAccountIds(survey);
         var requested = new HashSet<>(invitations.requestedAccountIds(surveyId));
-        var requeueable = new HashSet<>(invitations.requeueableAccountIds(surveyId));
+        var requeueable = new HashSet<>(invitations.requeueableAccountIds(surveyId, clock.instant()));
         int remaining = (int) eligible.stream()
                 .filter(id -> !requested.contains(id) || requeueable.contains(id))
                 .count();
@@ -58,7 +58,7 @@ class SurveyEmailInvitationService implements SurveyEmailInvitations {
         }
         var eligible = eligibleAccountIds(survey);
         var requested = new HashSet<>(invitations.requestedAccountIds(surveyId));
-        var requeueable = new HashSet<>(invitations.requeueableAccountIds(surveyId));
+        var requeueable = new HashSet<>(invitations.requeueableAccountIds(surveyId, clock.instant()));
         Instant now = clock.instant();
         Instant expiresAt = now.plus(MAX_AGE);
         if (survey.getEndsAt() != null && survey.getEndsAt().isBefore(expiresAt)) {
@@ -70,7 +70,7 @@ class SurveyEmailInvitationService implements SurveyEmailInvitations {
                 continue;
             var request = new SurveyEmailInvitation(survey, accountId, actorId, now, expiresAt, sendReminder);
             int changed = requested.contains(accountId)
-                    ? invitations.requeueCancelled(request)
+                    ? invitations.requeueUnaccepted(request)
                     : invitations.insertIfAbsent(request);
             if (changed == 1) {
                 long generation = invitations

@@ -214,16 +214,44 @@ void test("capture reports interruption and capacity loss instead of claiming a 
 	}
 });
 
-void test("a missing native session and a nonzero exit cannot be called complete", () => {
+void test("a missing native session cannot be called complete", () => {
 	const root = mkdtempSync(join(tmpdir(), "pi-trace-missing-"));
 	try {
 		const capture = new ReviewTrace(join(root, "out"));
 		capture.session("missing", "observer", join(root, "never-written.jsonl"));
 		capture.finish(0);
 		assert.equal(Reflect.get(json(join(root, "out/trace/capture.json")), "complete"), false);
-		const failed = new ReviewTrace(join(root, "failed"));
-		failed.finish(1);
-		assert.equal(Reflect.get(json(join(root, "failed/trace/capture.json")), "complete"), false);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a settled failed review has complete capture without becoming a successful review", () => {
+	const root = mkdtempSync(join(tmpdir(), "pi-trace-failed-"));
+	try {
+		const capture = new ReviewTrace(join(root, "out"));
+		const file = join(capture.sessionDir, "review.jsonl");
+		writeFileSync(file, '{"type":"session"}\n');
+		capture.session("review", "observer", file);
+		capture.event("review", { type: "agent_start" });
+		capture.event("review", { type: "agent_end", messages: [], willRetry: false });
+		capture.event("review", { type: "agent_settled" });
+		capture.finish(2);
+		const status = json(join(root, "out/trace/capture.json"));
+		assert.equal(Reflect.get(status, "complete"), true);
+		assert.equal(Reflect.get(status, "exitCode"), 2);
+		assert.equal(
+			readFileSync(join(root, "out/trace/sessions/review.jsonl"), "utf8"),
+			readFileSync(file, "utf8"),
+		);
+		const interrupted = new ReviewTrace(join(root, "interrupted"));
+		interrupted.session("review", "observer", file);
+		interrupted.event("review", { type: "agent_start" });
+		interrupted.event("review", { type: "agent_end", messages: [], willRetry: true });
+		interrupted.finish(137);
+		const partial = json(join(root, "interrupted/trace/capture.json"));
+		assert.equal(Reflect.get(partial, "complete"), false);
+		assert.equal(Reflect.get(partial, "unfinishedSessions"), 1);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

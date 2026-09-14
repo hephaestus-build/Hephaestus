@@ -109,11 +109,11 @@ final class SecretDiffScanner {
         for (String storedLine : unifiedDiff.split("\n", -1)) {
             int annotationEnd = storedLine.startsWith("[L") ? storedLine.indexOf("] ") : -1;
             String raw = annotationEnd > 0 ? storedLine.substring(annotationEnd + 2) : storedLine;
-            if (raw.startsWith("+++ ")) {
+            if (annotationEnd < 0 && raw.startsWith("+++ ")) {
                 currentPath = parseNewPath(raw);
                 continue;
             }
-            if (raw.startsWith("--- ") || raw.startsWith("diff ") || raw.startsWith("index ")) {
+            if (annotationEnd < 0 && (raw.startsWith("--- ") || raw.startsWith("diff ") || raw.startsWith("index "))) {
                 continue;
             }
             Matcher hunk = HUNK_HEADER.matcher(raw);
@@ -130,7 +130,7 @@ final class SecretDiffScanner {
                 // Removed line — does not advance the new-side counter.
                 continue;
             }
-            if (raw.startsWith("+") && !raw.startsWith("+++")) {
+            if (raw.startsWith("+")) {
                 String content = raw.substring(1);
                 if (currentPath != null) {
                     scanLine(currentPath, newLine, content, hits);

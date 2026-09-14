@@ -331,7 +331,7 @@ complete. Do not promise users an email confirmation as their only record of an 
 
 Personal settings hide email choices when sending is unconfigured and the account has no active
 subscriptions. If email was previously enabled, only retained subscriptions remain visible so people
-can turn them off; new opt-ins and frequency changes are hidden. Users see no SMTP setup warning.
+can turn them off; new opt-ins are hidden. Users see no SMTP setup warning.
 **Instance settings → Email** remains available to administrators for setup and verification. Survey
 administration preserves results and request history but replaces the send action with a setup link;
 a direct invitation request returns `503` without creating email request records.
@@ -410,6 +410,24 @@ headers in Hephaestus alone does not satisfy the standard. The local HTTP Mailpi
 does not advertise the HTTPS-only one-click header. Keep SPF, DKIM and DMARC aligned with the sender;
 follow [Google's sender requirements](https://support.google.com/a/answer/81126?hl=en) and
 [RFC 8058](https://www.rfc-editor.org/rfc/rfc8058).
+
+**TUM/LRZ example — confirm the actual account before a campaign.**
+[LRZ's mail-server policy](https://doku.lrz.de/richtlinien-fuer-die-lrz-mailserver-4427198.html)
+limits a login to 250 recipient addresses per 24 hours, with 500 or 1,000 available on request.
+[TUM's shared-mailbox FAQ](https://www.it.tum.de/it/faq/e-mail/exchange/ich-moechte-aus-der-shared-mailbox-ein-massenmailing-versenden-wieviele-e-mails-koennen-standardmaessig-pro-tag-versendet-werden/)
+states 250 mails per day, raisable to 1,000 through [IT Support](mailto:it-support@tum.de), and says
+shared mailboxes are not intended for mass mailing. These are published defaults, not confirmation
+of your service account's allowance. Ask support which account is charged, whether other applications
+share it, how its window resets, and how quota rejection is signalled. A shared From address alone
+does not establish a separate quota.
+
+Keep headroom for other senders and retries. For example, a shared 250/day account might allocate
+200 total and 150 optional attempts to this instance. This is an operating budget, not a guarantee
+against a rolling-window relay quota: the application's interval refill can permit bursts across a
+boundary. For a larger research campaign, obtain an approved higher limit or a suitable relay rather
+than raising the application budget alone. Five reports to two subscribed admins need ten attempts;
+a daily digest is unnecessary at that volume. Survey invitations and reminders require separate
+capacity planning.
 
 **Privacy.** The relay operator becomes a recipient of personal data (an address and the fact that
 its owner has an account). Before setting the host, complete the review in the

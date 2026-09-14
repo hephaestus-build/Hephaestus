@@ -13,7 +13,6 @@ const ready = {
 		productFeedback: false,
 		workspaceAlerts: false,
 		surveySummaries: false,
-		productFeedbackFrequency: "IMMEDIATE",
 		productSurveys: false,
 		researchSurveys: false,
 		emailAvailable: true,
@@ -26,7 +25,7 @@ const ready = {
 const meta = {
 	component: EmailPreferencesSection,
 	tags: ["autodocs"],
-	args: { state: ready, isAppAdmin: false },
+	args: { state: ready, isAppAdmin: false, researchAvailable: true },
 	render: (args) => {
 		const state = args.state;
 		if (state.status !== "ready") return <EmailPreferencesSection {...args} />;
@@ -75,7 +74,6 @@ export const InstanceAdmin: Story = {
 			preferences: {
 				...ready.preferences,
 				productFeedback: true,
-				productFeedbackFrequency: "DAILY",
 			},
 		},
 	},
@@ -174,4 +172,12 @@ export const NarrowDark: Story = {
 		state: { ...ready, preferences: { ...ready.preferences, emailAvailable: false } },
 	},
 	globals: { viewport: { value: "reflow" }, theme: "dark" },
+};
+
+export const ResearchUnavailable: Story = { args: { researchAvailable: false } };
+export const RetainedResearch: Story = {
+	args: {
+		researchAvailable: false,
+		state: { ...ready, preferences: { ...ready.preferences, researchSurveys: true } },
+	},
 };

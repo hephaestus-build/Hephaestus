@@ -6,10 +6,13 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class SurveyEmailRendererTest extends BaseUnitTest {
-    @Test
-    void shouldLinkToTheSelectedSurveyAndItsOwnUnsubscribeConfirmation() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldLinkToTheSelectedSurveyAndItsOwnUnsubscribeConfirmation(boolean research) {
         UUID surveyId = UUID.randomUUID();
         String unsubscribeUrl = EmailTestSupport.WEBAPP_URL + "/unsubscribe?token=opaque-token";
         var rendered = EmailTestSupport.renderer()
@@ -21,12 +24,16 @@ class SurveyEmailRendererTest extends BaseUnitTest {
                                 "surveyId",
                                 surveyId,
                                 "research",
-                                false,
+                                research,
                                 "reminder",
                                 false,
                                 "unsubscribeUrl",
                                 unsubscribeUrl));
 
+        String category = research ? "research" : "product";
+        assertThat(rendered.text())
+                .contains("A " + category + " survey", "Unsubscribe from " + category + "-survey emails");
+        assertThat(rendered.html()).contains("A " + category + " survey", "stop " + category + "-survey emails");
         String target = EmailTestSupport.WEBAPP_URL + "/w/team?survey=" + surveyId;
         assertThat(rendered.text()).contains(target, unsubscribeUrl, "Taking part is optional");
         assertThat(rendered.html()).contains("href=\"" + target + "\"", "href=\"" + unsubscribeUrl + "\"");

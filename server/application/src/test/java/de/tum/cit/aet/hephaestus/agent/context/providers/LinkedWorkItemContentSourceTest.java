@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
@@ -91,6 +92,74 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void preservesTemplateExamplesAndAuthoredInlineReferencesAsTextCandidates() throws Exception {
+        String body =
+                "- [ ] Related issue is linked (e.g., `Closes #12`)\nImplemented the requested fix: `Closes #42`.";
+        var pr = new PullRequest();
+        pr.setBody(body);
+        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
+        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 12))
+                .thenReturn(Optional.of(issue(12, "Example", "")));
+        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42))
+                .thenReturn(Optional.of(issue(42, "Requested fix", "")));
+        var capture = provider.capture(request(sampleMetadata()), Set.of(new SourceKind("scm.linked-work-items")));
+        var items = objectMapper
+                .readTree(capture.files().get("inputs/context/linked_work_items.json"))
+                .get("workItems");
+        assertThat(items).hasSize(2);
+        for (var item : items) {
+            assertThat(item.get("referenceKind").asString()).isEqualTo("TEXT_MENTION");
+            assertThat(item.has("closingKeyword")).isFalse();
+            assertThat(item.has("authorAdopted")).isFalse();
+            assertThat(item.get("matchedClosingKeyword").asBoolean()).isTrue();
+        }
+        assertThat(items.get(0).get("mentions").get(0).get("excerpt").asString())
+                .isEqualTo(body.split("\n")[0]);
+        assertThat(items.get(1).get("mentions").get(0).get("excerpt").asString())
+                .isEqualTo(body.split("\n")[1]);
+    }
+
+    @Test
+    void templateClosingExampleDoesNotHideLaterAuthoredBareMention() throws Exception {
+        String example = "Example: `Closes #12`.";
+        String authored = "For the intended check, follow the acceptance criteria in #12.";
+        var pr = new PullRequest();
+        pr.setBody(example + "\n" + authored);
+        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
+        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 12)).thenReturn(Optional.of(issue(12, "Work", "")));
+        var capture = provider.capture(request(sampleMetadata()), provider.sourceKinds());
+        var item = objectMapper
+                .readTree(capture.files().get("inputs/context/linked_work_items.json"))
+                .get("workItems")
+                .get(0);
+        assertThat(item.get("matchedClosingKeyword").asBoolean()).isTrue();
+        assertThat(item.get("mentions")).hasSize(2);
+        assertThat(item.get("mentions").get(0).get("excerpt").asString()).isEqualTo(example);
+        assertThat(item.get("mentions").get(1).get("excerpt").asString()).isEqualTo(authored);
+    }
+
+    @Test
+    void candidateContextsHaveBoundedExactExcerpts() throws Exception {
+        var pr = new PullRequest();
+        String body = "prefix ".repeat(100) + "Closes #42" + " suffix".repeat(100);
+        pr.setBody(body);
+        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
+        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42)).thenReturn(Optional.of(issue(42, "Work", "")));
+        var capture = provider.capture(request(sampleMetadata()), Set.of(new SourceKind("scm.linked-work-items")));
+        var mention = objectMapper
+                .readTree(capture.files().get("inputs/context/linked_work_items.json"))
+                .get("workItems")
+                .get(0)
+                .get("mentions")
+                .get(0);
+        String excerpt = mention.get("excerpt").asString();
+        assertThat(excerpt.length()).isLessThanOrEqualTo(240);
+        assertThat(excerpt).contains("Closes #42");
+        assertThat(body).contains(excerpt);
+        assertThat(mention.get("excerptTruncated").asBoolean()).isTrue();
+    }
+
+    @Test
     void supportsPracticeReviewOnly() {
         assertThat(provider.supports(request(sampleMetadata()))).isTrue();
     }
@@ -127,7 +196,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         assertThat(item.get("title").asString()).isEqualTo("Add token refresh");
         assertThat(item.get("state").asString()).isEqualTo("OPEN");
         assertThat(item.get("url").asString()).isEqualTo("https://example.com/issues/42");
-        assertThat(item.get("closingKeyword").asBoolean()).isTrue();
+        assertThat(item.get("matchedClosingKeyword").asBoolean()).isTrue();
         assertThat(item.get("bodyExcerpt").asString()).contains("Acceptance criteria");
         assertThat(item.get("labels").get(0).asString()).isEqualTo("backend");
         assertThat(item.get("subIssuesTotal").asInt()).isEqualTo(3);
@@ -149,7 +218,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         provider.contribute(request(sampleMetadata()), files);
 
         JsonNode root = objectMapper.readTree(files.get("inputs/context/linked_work_items.json"));
-        assertThat(root.get("workItems").get(0).get("closingKeyword").asBoolean())
+        assertThat(root.get("workItems").get(0).get("matchedClosingKeyword").asBoolean())
                 .isFalse();
     }
 
@@ -172,7 +241,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         // Exactly #42 resolves; the version-looking #1.2 is rejected (and #1 was never looked up).
         assertThat(items).hasSize(1);
         assertThat(items.get(0).get("number").asInt()).isEqualTo(42);
-        assertThat(items.get(0).get("closingKeyword").asBoolean()).isFalse();
+        assertThat(items.get(0).get("matchedClosingKeyword").asBoolean()).isFalse();
     }
 
     @Test
@@ -341,7 +410,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
 
         JsonNode root = objectMapper.readTree(files.get("inputs/context/linked_work_items.json"));
         assertThat(root.get("workItems").get(0).get("number").asInt()).isEqualTo(77);
-        assertThat(root.get("workItems").get(0).get("closingKeyword").asBoolean())
+        assertThat(root.get("workItems").get(0).get("matchedClosingKeyword").asBoolean())
                 .isTrue();
         assertThat(root.get("resolvedFrom").toString()).contains("commits");
     }

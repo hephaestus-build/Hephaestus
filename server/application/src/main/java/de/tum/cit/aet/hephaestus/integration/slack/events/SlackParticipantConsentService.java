@@ -10,9 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code (workspace, slack_user_id)} and member-optional by design: an unlinked user's opt-out is still stored so it
  * applies once they later link.
  *
- * <p>The two bits are intentionally separate: channel-message controls change {@code ingestion_opted_out}; research
- * controls change {@code research_opted_out}. A channel-message opt-out may also erase already-collected channel
- * data, but that erasure is performed by the caller through {@code SlackPersonErasureService}.
+ * <p>Channel-message controls change ingestion consent only. Research participation belongs to the
+ * native-account consent ledger. Erasure of collected channel data is performed by the caller through
+ * {@code SlackPersonErasureService}.
  */
 @Service
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
@@ -48,13 +48,5 @@ public class SlackParticipantConsentService {
             return;
         }
         participantConsentRepository.optInToIngestion(workspaceId, slackUserId, SOURCE_SLACK_APP_HOME);
-    }
-
-    @Transactional
-    public void recordResearchDecision(long workspaceId, String slackUserId, boolean participate) {
-        if (slackUserId == null || slackUserId.isBlank()) {
-            return;
-        }
-        participantConsentRepository.setResearchOptOut(workspaceId, slackUserId, !participate, SOURCE_SLACK_APP_HOME);
     }
 }

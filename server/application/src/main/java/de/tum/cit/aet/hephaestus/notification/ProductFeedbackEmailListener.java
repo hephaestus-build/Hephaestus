@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.notification.email.EmailKind;
 import de.tum.cit.aet.hephaestus.notification.email.EmailMessage;
 import de.tum.cit.aet.hephaestus.notification.email.EmailRenderer;
 import de.tum.cit.aet.hephaestus.notification.email.EmailUnsubscribeLinks;
-import de.tum.cit.aet.hephaestus.notification.preferences.NotificationEmailFrequency;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionKind;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
 import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackNotificationQuery;
@@ -44,7 +43,7 @@ public class ProductFeedbackEmailListener {
         var to = contacts.activeVerifiedAdministratorEmail(event.accountId());
         var token = subscriptions.unsubscribeToken(
                 event.accountId(), NotificationSubscriptionKind.PRODUCT_FEEDBACK, event.requestedAt());
-        if (!subscriptions.hasFrequency(event.accountId(), NotificationEmailFrequency.IMMEDIATE) || token.isEmpty()) {
+        if (token.isEmpty()) {
             metrics.record(EmailKind.PRODUCT_FEEDBACK, Outcome.UNSUBSCRIBED);
             return;
         }
@@ -57,7 +56,12 @@ public class ProductFeedbackEmailListener {
             return;
         }
         var rendered = renderer.render(
-                EmailKind.PRODUCT_FEEDBACK, Map.of("unsubscribeUrl", unsubscribeLinks.confirmationUrl(token.get())));
+                EmailKind.PRODUCT_FEEDBACK,
+                Map.of(
+                        "unsubscribeUrl",
+                        unsubscribeLinks.confirmationUrl(token.get()),
+                        "feedbackKind",
+                        event.kind().name()));
         var result = gateway.send(new EmailMessage(
                 EmailKind.PRODUCT_FEEDBACK,
                 to.get(),

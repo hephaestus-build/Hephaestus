@@ -29,8 +29,13 @@ public class EmailRenderer {
     public RenderedEmail render(EmailKind kind, Map<String, Object> model) {
         Map<String, Object> variables = new HashMap<>(model);
         variables.put("webappUrl", applicationProperties.webapp().url());
+        String subjectKey = "email." + kind.templateName() + ".subject";
+        if (kind == EmailKind.PRODUCT_FEEDBACK) {
+            subjectKey += "." + model.get("feedbackKind");
+        }
+        String subject = messages.getMessage(subjectKey, null, LOCALE);
+        variables.put("subject", subject);
         Context context = new Context(LOCALE, variables);
-        String subject = messages.getMessage("email." + kind.templateName() + ".subject", null, LOCALE);
         String text = templateEngine.process("email/text/" + kind.templateName(), context);
         String html = templateEngine.process("email/html/" + kind.templateName(), context);
         return new RenderedEmail(subject, text, html);

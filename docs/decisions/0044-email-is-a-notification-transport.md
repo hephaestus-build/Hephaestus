@@ -94,9 +94,9 @@ would introduce an additional export or rendering step here without an existing 
   invitation rows; summary claims update that same source row. This prevents concurrent edits from
   undoing a summary claim or a request from escaping a concurrent pause. SMTP runs after the source
   transaction. Reminder and summary scheduling markers commit with their publications.
-- **The daily digest cursor lives with its subscription.** It advances atomically with its recipient
-  publication, counts retained reports only, excludes time before opt-in and bounds downtime catch-up
-  to seven days. Immediate and daily delivery are mutually exclusive for one subscription.
+- **Product-feedback alerts are immediate.** Each subscribed administrator receives a notification
+  for each new submission. The private inbox owns processing and resolve/reopen state; email does not
+  carry report text. Low-volume feedback does not need a second delivery schedule.
 - **Capacity reuses Bucket4j and the existing PostgreSQL store.** Optional and total attempt budgets
   are shared across replicas and reserve capacity for essential mail. An ambiguous SMTP failure is
   not refunded. Store failure is fail-closed and retryable, not a reason to send without accounting.
