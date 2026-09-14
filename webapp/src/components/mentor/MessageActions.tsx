@@ -50,12 +50,12 @@ export function MessageActions({
 	// Different button styling for artifact context
 	const buttonClasses =
 		variant === "artifact"
-			? "touch:w-10 size-8 text-muted-foreground hover:text-foreground hover:bg-primary/5"
+			? "pointer-coarse:w-10 text-muted-foreground hover:text-foreground hover:bg-primary/5"
 			: "text-muted-foreground hover:text-foreground";
 
 	// For user messages, align actions to the right
 	const containerClassName = cn(
-		"flex flex-row gap-0.5 opacity-0 group-hover/message:opacity-100 transition-opacity",
+		"flex flex-row gap-0.5 opacity-0 group-hover/message:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity",
 		{
 			"justify-end": isUserMessage,
 			"justify-start": isAssistantMessage,
@@ -113,7 +113,7 @@ export function MessageActions({
 									<Button
 										aria-label="Good response"
 										className={cn(
-											"touch:w-10 size-8 text-muted-foreground hover:text-provider-success-foreground hover:bg-provider-success-foreground/10",
+											"pointer-coarse:w-10 text-muted-foreground hover:text-provider-success-foreground hover:bg-provider-success-foreground/10",
 											{
 												"text-provider-success-foreground": vote?.isUpvoted === true,
 												"opacity-50 hover:opacity-100": vote?.isUpvoted === false,
@@ -136,7 +136,7 @@ export function MessageActions({
 									<Button
 										aria-label="Bad response"
 										className={cn(
-											"touch:w-10 size-8 text-muted-foreground hover:text-provider-danger-foreground hover:bg-provider-danger-foreground/10",
+											"pointer-coarse:w-10 text-muted-foreground hover:text-provider-danger-foreground hover:bg-provider-danger-foreground/10",
 											{
 												"text-provider-danger-foreground": vote?.isUpvoted === false,
 												"opacity-50 hover:opacity-100": vote?.isUpvoted === true,

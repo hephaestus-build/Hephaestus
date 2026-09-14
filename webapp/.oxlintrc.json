@@ -2,7 +2,7 @@
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
 
 	"plugins": ["typescript", "unicorn", "oxc", "import", "react", "jsx-a11y", "vitest", "promise"],
-	"jsPlugins": ["./tools/oxlint/index.ts"],
+	"jsPlugins": ["./tools/oxlint/index.ts", "@shadcn/lint"],
 
 	// No `warn` tier: oxlint exits 0 on warnings unless `--deny-warnings` is passed.
 	"categories": {
@@ -36,6 +36,14 @@
 	],
 
 	"rules": {
+		// components.json supplies the real Tailwind v4 theme and its imports.
+		// Both checks also cover registry internals, stories and cn/cva definitions.
+		"shadcn/no-unknown-classes": "error",
+		"shadcn/no-raw-colors": "error",
+		// No blanket no-restyle/no-arbitrary-values policy: Base UI slots, responsive fields and
+		// overlay motion deliberately compose utilities, selectors and measured geometry.
+		// no-inline-styles would also reject provider colors, TanStack widths and dnd-kit transforms;
+		// require-static-classes cannot resolve the shared vocabulary maps and CVA return values.
 		// -- On, despite their category being off ---------------------------------------------------
 		"no-else-return": "error",
 		"prefer-const": "error",

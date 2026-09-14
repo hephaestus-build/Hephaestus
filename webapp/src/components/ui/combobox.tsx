@@ -125,8 +125,9 @@ function ComboboxList({ className, ...props }: ComboboxListProps) {
 	return (
 		<ComboboxPrimitive.List
 			data-slot="combobox-list"
+			// Diverges from the registry: omit no-scrollbar; this app keeps native scrollbars visible.
 			className={cn(
-				"no-scrollbar max-h-72 scroll-py-1 p-1 outline-none overflow-x-hidden overflow-y-auto",
+				"max-h-72 scroll-py-1 p-1 outline-none overflow-x-hidden overflow-y-auto",
 				className,
 			)}
 			{...props}

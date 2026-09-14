@@ -112,4 +112,20 @@ task's source coverage and annotation policy without editing or compiling the ap
 files. CI runs it when its implementation or PMD wiring changes.
 
 The facts the graph relies on are gates of their own: `gate:runner-contract` proves how `vp run`
-executes commands, and `gate:lint-contract` proves every house rule still fires through `vp lint`.
+executes commands, and `gate:lint-contract` proves every house rule, type-aware diagnostics and the
+webapp's design-system checks still fire through `vp lint`. Its positive fixtures use the real Tailwind
+theme, its imports and the typography plugin; a misspelled variant proves that
+the check loaded Tailwind rather than silently falling back to its less precise class grammar.
+
+### Design-system lint
+
+[`@shadcn/lint`](https://github.com/shadcn-ui/lint) runs inside the existing Oxlint pipeline, not a
+separate ESLint pass. `webapp/.oxlintrc.json` owns the enabled policies and their rationale.
+`webapp/components.json` owns component and theme discovery; no second alias or token list is needed.
+Run `vp run lint:webapp` to check the webapp and `vp run gate:lint-contract` to verify enforcement.
+
+The plugin's [analysis limits](https://github.com/shadcn-ui/lint/blob/main/docs/how-it-works.md)
+matter: a clean lint result does not prove contrast, correct runtime classes or interaction behavior.
+Review both light and dark themes, and run the affected component tests. A color suggestion is based
+on proximity in light mode, not on its semantic purpose; select the existing token for the meaning.
+A genuine false positive gets a line-level suppression with its reason, never a palette-wide exception.

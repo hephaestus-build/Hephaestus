@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "storybook/test";
+import { expect, fn, waitFor } from "storybook/test";
 
 import { STORY_NOW } from "@/components/common/story-clock";
 
@@ -74,7 +74,9 @@ const meta = {
 	decorators: [
 		(Story) => (
 			<div className="max-w-md p-4 border rounded-lg group/message">
-				<div className="mb-2 text-sm text-muted-foreground">Hover to see actions</div>
+				<div className="mb-2 text-sm text-muted-foreground">
+					Hover or use the keyboard to explore message actions
+				</div>
 				<Story />
 			</div>
 		),
@@ -87,7 +89,14 @@ type Story = StoryObj<typeof meta>;
 /**
  * Default assistant message actions with copy and vote buttons.
  */
-export const AssistantMessage: Story = {};
+export const AssistantMessage: Story = {
+	play: async ({ canvas, userEvent }) => {
+		const copy = canvas.getByRole("button", { name: "Copy message" });
+		await userEvent.tab();
+		await expect(copy).toHaveFocus();
+		await waitFor(() => expect(copy).toBeVisible());
+	},
+};
 
 /**
  * User message actions with copy and edit buttons.

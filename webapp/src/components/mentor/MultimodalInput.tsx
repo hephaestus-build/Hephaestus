@@ -239,7 +239,7 @@ function AttachmentsButton({
 	return (
 		<Button
 			aria-label="Attach a file"
-			className="rounded-md rounded-bl-lg p-[7px] dark:border-zinc-700 hover:dark:bg-zinc-900 hover:bg-zinc-200"
+			className="rounded-md rounded-bl-lg p-1.75"
 			onClick={(event) => {
 				event.preventDefault();
 				fileInputRef.current?.click();
@@ -257,7 +257,7 @@ function StopButton({ onStop }: { onStop: () => void }) {
 	return (
 		<Button
 			aria-label="Stop generating"
-			className="rounded-full p-1.5 border dark:border-zinc-600"
+			className="rounded-full p-1.5 border border-border"
 			onClick={(event) => {
 				event.preventDefault();
 				onStop();
@@ -273,7 +273,7 @@ function SendButton({ onSubmit, disabled }: { onSubmit: () => void; disabled: bo
 	return (
 		<Button
 			aria-label="Send message"
-			className="rounded-full p-1.5 border dark:border-zinc-600"
+			className="rounded-full p-1.5 border border-border"
 			onClick={(event) => {
 				event.preventDefault();
 				onSubmit();

@@ -11,6 +11,7 @@ export const CATALOG_FILE = "pnpm-workspace.yaml";
 
 /** Catalog entry → the bundled package whose version it restates. */
 export const BUNDLED_PINS: Record<string, string> = {
+	vite: "vite",
 	oxfmt: "oxfmt",
 	oxlint: "oxlint",
 	"oxlint-tsgolint": "oxlint-tsgolint",
