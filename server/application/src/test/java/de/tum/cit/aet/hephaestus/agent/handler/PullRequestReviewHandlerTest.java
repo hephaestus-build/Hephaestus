@@ -465,24 +465,6 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     }
 
     @Nested
-    class ParseDiffNameOnlyPaths {
-
-        @Test
-        void simplePaths() {
-            String output = "src/Main.swift\nViews/ContentView.swift\nREADME.md\n";
-            assertThat(PullRequestReviewHandler.parseDiffNameOnlyPaths(output))
-                    .containsExactlyInAnyOrder("src/Main.swift", "Views/ContentView.swift", "README.md");
-        }
-
-        @Test
-        void blankInput() {
-            assertThat(PullRequestReviewHandler.parseDiffNameOnlyPaths("")).isEmpty();
-            assertThat(PullRequestReviewHandler.parseDiffNameOnlyPaths("  \n  "))
-                    .isEmpty();
-        }
-    }
-
-    @Nested
     class Deliver {
 
         private AgentJob jobWithOutput(String rawOutputJson) {
@@ -679,7 +661,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
 
         @Test
         @SuppressWarnings("unchecked")
-        void hardcodedSecretUsesPracticeSeverityCap() {
+        void shouldPreserveSubmittedCriticalSeverityWhenAdmittingASecret() {
             String rawOutput = """
                 {
                   "observations": [{
@@ -706,7 +688,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     .filter(f -> "avoids-insecure-defaults-and-over-broad-permissions".equals(f.practiceSlug()))
                     .findFirst()
                     .orElseThrow();
-            assertThat(secret.severity()).isEqualTo(Severity.MAJOR);
+            assertThat(secret.severity()).isEqualTo(Severity.CRITICAL);
         }
 
         private void stubDiff(String diff) {

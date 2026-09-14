@@ -18,6 +18,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -681,194 +683,59 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
                         outcome == de.tum.cit.aet.hephaestus.practices.model.Outcome.NEGATIVE ? Severity.MINOR : null,
                         null,
                         "Evidence explains the behavior and its desirability in context");
-                var admitted = PracticeDetectionResultParser.coerceCoherence(List.of(observation));
+                var admitted = PracticeDetectionResultParser.validateCoherence(List.of(observation));
                 assertThat(admitted).containsExactly(observation);
                 assertThat(admitted.get(0).outcome()).isEqualTo(outcome);
             }
         }
     }
 
-    @Nested
-    @DisplayName("coerceCoherence — structural (observation, severity) invariants")
-    class CoerceCoherence {
+    @ParameterizedTest
+    @CsvSource({
+        "custom-integrity-check, ABSENT, GOOD, CRITICAL",
+        "custom-integrity-check, PRESENT, BAD, MAJOR",
+        "describe-what-and-why, ABSENT, GOOD, MAJOR",
+        "describe-what-and-why, PRESENT, BAD, CRITICAL",
+        "avoids-insecure-defaults-and-over-broad-permissions, PRESENT, BAD, CRITICAL",
+        "handles-errors-instead-of-swallowing-them, PRESENT, BAD, MAJOR",
+        "custom-integrity-check, ABSENT, GOOD, INFO",
+        "custom-integrity-check, PRESENT, BAD, MINOR"
+    })
+    void shouldPreserveSeverityForBundledAndCustomPractices(
+            String slug, Presence presence, Assessment assessment, Severity severity) {
+        var observation = new ValidatedObservation(
+                slug,
+                "An evidenced concern",
+                AssessmentStatus.ASSESSED,
+                presence,
+                assessment,
+                severity,
+                null,
+                "The practice's criteria support this severity");
 
-        private ValidatedObservation observation(@Nullable Presence presence, Severity severity) {
-            Assessment assessment = presence == null ? null : Assessment.GOOD;
-            return new ValidatedObservation(
-                    "p",
-                    "t",
-                    presence == null ? AssessmentStatus.NOT_APPLICABLE : AssessmentStatus.ASSESSED,
-                    presence,
-                    assessment,
-                    severity,
-                    null,
-                    "evidenceRationale");
-        }
+        assertThat(PracticeDetectionResultParser.validateCoherence(List.of(observation)))
+                .containsExactly(observation);
+    }
 
-        @Test
-        @DisplayName("PRESENT/GOOD rejects a severity")
-        void nonDefectObservedSeverityInfo() {
-            assertThatThrownBy(
-                            () -> observation(Presence.PRESENT, Severity.MAJOR).coerceCoherence(false))
-                    .isInstanceOf(IllegalArgumentException.class);
-        }
+    @ParameterizedTest
+    @CsvSource({
+        "ASSESSED, PRESENT, GOOD, MAJOR",
+        "ASSESSED, ABSENT, BAD, INFO",
+        "ASSESSED, PRESENT, BAD,",
+        "ASSESSED, ABSENT, GOOD,",
+        "ASSESSED,,,",
+        "NOT_APPLICABLE,,, MAJOR",
+        "UNDETERMINED, PRESENT, GOOD,"
+    })
+    void shouldRejectContradictoryAxesWithoutCoercion(
+            AssessmentStatus status,
+            @Nullable Presence presence,
+            @Nullable Assessment assessment,
+            @Nullable Severity severity) {
+        var observation = new ValidatedObservation(
+                "custom-check", "An invalid judgment", status, presence, assessment, severity, null, "Evidence");
 
-        @Test
-        @DisplayName("ABSENT/GOOD preserves INFO severity")
-        void notObservedInfoToMinor() {
-            var out = observation(Presence.ABSENT, Severity.INFO).coerceCoherence(false);
-            assertThat(out.presence()).isEqualTo(Presence.ABSENT);
-            assertThat(out.severity()).isEqualTo(Severity.INFO);
-        }
-
-        @Test
-        @DisplayName("ABSENT with a real band is unchanged (identity)")
-        void notObservedMajorUnchanged() {
-            var in = observation(Presence.ABSENT, Severity.MAJOR);
-            assertThat(in.coerceCoherence(false)).isSameAs(in);
-        }
-
-        @Test
-        @DisplayName("NOT_APPLICABLE rejects a severity")
-        void naSeverityInfo() {
-            assertThatThrownBy(() -> observation(null, Severity.MAJOR).coerceCoherence(false))
-                    .isInstanceOf(IllegalArgumentException.class);
-        }
-
-        @Test
-        @DisplayName("ABSENT/BAD is a positive observation")
-        void absentGoodIsPreservedAsStrength() {
-            var strength = new ValidatedObservation(
-                    "p",
-                    "t",
-                    AssessmentStatus.ASSESSED,
-                    Presence.ABSENT,
-                    Assessment.BAD,
-                    null,
-                    null,
-                    "evidenceRationale");
-            var out = strength.coerceCoherence(false);
-            assertThat(out.presence()).isEqualTo(Presence.ABSENT);
-            assertThat(out.assessment()).isEqualTo(Assessment.BAD);
-            assertThat(out.severity()).isNull();
-        }
-
-        @Test
-        @DisplayName("ABSENT/BAD preserves the evidence rationale")
-        void shouldPreserveAbsenceEvidenceRationale() {
-            var strength = new ValidatedObservation(
-                    "p",
-                    "t",
-                    AssessmentStatus.ASSESSED,
-                    Presence.ABSENT,
-                    Assessment.BAD,
-                    null,
-                    null,
-                    "evidenceRationale");
-            var out = strength.coerceCoherence(false);
-            assertThat(out.presence()).isEqualTo(Presence.ABSENT);
-            assertThat(out.assessment()).isEqualTo(Assessment.BAD);
-            // Severity is a coaching band for a problem only, so a strength carries none whatever was emitted.
-            assertThat(out.severity()).isNull();
-            assertThat(out.evidenceRationale()).isEqualTo("evidenceRationale");
-        }
-
-        @Test
-        @DisplayName("list helper preserves contextual assessments across practices")
-        void shouldPreserveContextualAssessmentAcrossPractices() {
-            var dd = new ValidatedObservation(
-                    "sec", "t", AssessmentStatus.ASSESSED, Presence.PRESENT, Assessment.GOOD, null, null, "r");
-            var ok = new ValidatedObservation(
-                    "style", "t", AssessmentStatus.ASSESSED, Presence.PRESENT, Assessment.GOOD, null, null, "r");
-            var out = PracticeDetectionResultParser.coerceCoherence(List.of(dd, ok));
-            assertThat(out).allSatisfy(observation -> {
-                assertThat(observation.presence()).isEqualTo(Presence.PRESENT);
-                assertThat(observation.assessment()).isEqualTo(Assessment.GOOD);
-                assertThat(observation.severity()).isNull();
-            });
-        }
-
-        // Advisory ceiling: craft/process critiques may not present as merge-blockers.
-
-        @Test
-        @DisplayName("advisory practice: ABSENT MAJOR is capped to MINOR (no merge-block)")
-        void advisoryMajorCappedToMinor() {
-            var out = observation(Presence.ABSENT, Severity.MAJOR).coerceCoherence(true);
-            assertThat(out.presence()).isEqualTo(Presence.ABSENT);
-            assertThat(out.severity()).isEqualTo(Severity.MINOR);
-        }
-
-        @Test
-        @DisplayName("advisory practice: ABSENT CRITICAL is also capped to MINOR")
-        void advisoryCriticalCappedToMinor() {
-            var out = observation(Presence.ABSENT, Severity.CRITICAL).coerceCoherence(true);
-            assertThat(out.severity()).isEqualTo(Severity.MINOR);
-        }
-
-        @Test
-        @DisplayName("blocking-eligible practice: ABSENT MAJOR keeps its band")
-        void blockingEligibleMajorPreserved() {
-            var out = observation(Presence.ABSENT, Severity.MAJOR).coerceCoherence(false);
-            assertThat(out.severity()).isEqualTo(Severity.MAJOR);
-        }
-
-        @Test
-        @DisplayName("list helper: a craft slug's MAJOR is capped, a correctness slug's MAJOR survives")
-        void listHelperAppliesAdvisoryCeilingBySlug() {
-            var craft = new ValidatedObservation(
-                    "describe-what-and-why",
-                    "t",
-                    AssessmentStatus.ASSESSED,
-                    Presence.ABSENT,
-                    Assessment.GOOD,
-                    Severity.MAJOR,
-                    null,
-                    "r");
-            var correctness = new ValidatedObservation(
-                    "handles-errors-instead-of-swallowing-them",
-                    "t",
-                    AssessmentStatus.ASSESSED,
-                    Presence.ABSENT,
-                    Assessment.GOOD,
-                    Severity.MAJOR,
-                    null,
-                    "r");
-            var out = PracticeDetectionResultParser.coerceCoherence(List.of(craft, correctness));
-            assertThat(out.get(0).severity()).as("craft MAJOR -> MINOR").isEqualTo(Severity.MINOR);
-            assertThat(out.get(1).severity()).as("correctness MAJOR preserved").isEqualTo(Severity.MAJOR);
-        }
-
-        @Test
-        @DisplayName("an advisory practice caps a PRESENT/BAD MAJOR to MINOR")
-        void shouldCapPresentBadSeverityForAdvisoryPractice() {
-            var advisory = new ValidatedObservation(
-                    "describe-what-and-why",
-                    "t",
-                    AssessmentStatus.ASSESSED,
-                    Presence.PRESENT,
-                    Assessment.BAD,
-                    Severity.MAJOR,
-                    null,
-                    "r");
-            var out = PracticeDetectionResultParser.coerceCoherence(List.of(advisory));
-            assertThat(out.get(0).presence()).isEqualTo(Presence.PRESENT);
-            assertThat(out.get(0).assessment()).isEqualTo(Assessment.BAD);
-            assertThat(out.get(0).severity())
-                    .as("advisory cap applies to a present harmful behavior")
-                    .isEqualTo(Severity.MINOR);
-        }
-
-        @Test
-        @DisplayName("blocking-eligible set is the curated correctness/security/data-integrity consequence class")
-        void blockingEligibleSetIsPinned() {
-            assertThat(PracticeDetectionResultParser.BLOCKING_ELIGIBLE_PRACTICES)
-                    .containsExactlyInAnyOrder(
-                            "handles-errors-instead-of-swallowing-them",
-                            "validates-inputs-and-edge-cases-at-the-boundary",
-                            "avoids-unsafe-panics-and-chosen-crashes",
-                            "validates-and-escapes-untrusted-input",
-                            "avoids-insecure-defaults-and-over-broad-permissions",
-                            "keeps-the-test-suite-honest");
-        }
+        assertThatThrownBy(() -> PracticeDetectionResultParser.validateCoherence(List.of(observation)))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

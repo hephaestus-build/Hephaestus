@@ -65,7 +65,9 @@ same `assessmentStatus`, `presence`, `assessment` and `severity` axes. The
 [product vocabulary](./practice-feedback-language.md#observation-assessment-axes) defines their valid
 combinations and meaning. `outcome` is a read-only POSITIVE/NEGATIVE projection of the matrix, not another stored or model-authored axis. The descriptive standing `kind` is separate from this outcome. There is no fused input enum or translation to different presence labels.
 The runtime requires every axis explicitly, including nulls. Contradictory axes are rejected by the
-normalizer and server and constrained by the database; no judgment or severity is silently invented.
+normalizer and server and constrained by the database. Practice criteria define severity; admission
+preserves the submitted band rather than capping it by practice slug. Approval, autonomy and channel
+eligibility govern delivery separately.
 
 ### Evidence warrants
 

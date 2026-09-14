@@ -74,8 +74,8 @@ const meta = {
 		practices: workspacePractices,
 		onCancel: fn(),
 		cancelPending: false,
-		onRetryDelivery: fn(),
-		retryDeliveryPending: false,
+		onRetryResultProcessing: fn(),
+		retryResultProcessingPending: false,
 	},
 } satisfies Meta<typeof ReviewRunDetailPage>;
 
@@ -114,6 +114,7 @@ export const ProcessedWithFeedbackAwaitingApproval: Story = {
 		await canvas.findByText("Results processed");
 		await canvas.findByText("Awaiting approval");
 		await expect(canvas.queryByText("Summary posted")).not.toBeInTheDocument();
+		await expect(canvas.queryByText("Delivered")).not.toBeInTheDocument();
 	},
 };
 

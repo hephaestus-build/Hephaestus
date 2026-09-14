@@ -50,8 +50,8 @@ export interface ReviewRunDetailPageProps {
 	practices?: Practice[];
 	onCancel: () => void;
 	cancelPending: boolean;
-	onRetryDelivery: () => void;
-	retryDeliveryPending: boolean;
+	onRetryResultProcessing: () => void;
+	retryResultProcessingPending: boolean;
 }
 
 /** A section that has finished loading and holds nothing, as opposed to one still waiting. */
@@ -72,8 +72,8 @@ export function ReviewRunDetailPage({
 	practices,
 	onCancel,
 	cancelPending,
-	onRetryDelivery,
-	retryDeliveryPending,
+	onRetryResultProcessing,
+	retryResultProcessingPending,
 }: ReviewRunDetailPageProps) {
 	const breadcrumbs = (
 		<ReviewBreadcrumbs
@@ -151,9 +151,9 @@ export function ReviewRunDetailPage({
 					<ReviewRunActions
 						job={job}
 						isCancelling={cancelPending}
-						isRetrying={retryDeliveryPending}
+						isRetrying={retryResultProcessingPending}
 						onCancel={onCancel}
-						onRetry={onRetryDelivery}
+						onRetry={onRetryResultProcessing}
 					/>
 				}
 			/>

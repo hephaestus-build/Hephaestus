@@ -210,11 +210,10 @@ public class ConversationReviewHandler implements JobTypeHandler {
                     + ", discarded="
                     + parsed.discarded().size());
         }
-        // Validate the axes and apply the practice’s advisory severity ceiling.
-        List<PracticeDetectionResultParser.ValidatedObservation> coercedObservations =
-                PracticeDetectionResultParser.coerceCoherence(parsed.validObservations());
+        List<PracticeDetectionResultParser.ValidatedObservation> validatedObservations =
+                PracticeDetectionResultParser.validateCoherence(parsed.validObservations());
 
-        PracticeDetectionDeliveryService.DeliveryResult result = deliveryService.deliver(job, coercedObservations);
+        PracticeDetectionDeliveryService.DeliveryResult result = deliveryService.deliver(job, validatedObservations);
         log.info(
                 "Conversation delivery complete: inserted={}, duplicate={}, jobId={}",
                 result.inserted(),

@@ -6,4 +6,4 @@ Practice reviews preserve the exact text of submitted evidence quotations, inclu
 
 Review tools also state their durable-submission boundary: citation-format experiments are not practice observations. Time-budget reminders request only supported claims, never an observation quota.
 
-Source lines that resemble diff headers remain source content for evidence and secret checks. Citation coordinates outside the supported positive 32-bit range are rejected before matching.
+Source lines that resemble diff headers remain source content for evidence and secret checks, and inline feedback retains the correct source location. Citation coordinates outside the supported positive 32-bit range are rejected before matching.

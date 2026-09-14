@@ -33,15 +33,6 @@ public class PracticeDetectionResultParser {
 
     static final int MAX_MR_NOTE_LENGTH = 60_000;
 
-    /** Only practices with correctness, security, or integrity consequences may block a merge. */
-    static final Set<String> BLOCKING_ELIGIBLE_PRACTICES = Set.of(
-            "handles-errors-instead-of-swallowing-them",
-            "validates-inputs-and-edge-cases-at-the-boundary",
-            "avoids-unsafe-panics-and-chosen-crashes",
-            "validates-and-escapes-untrusted-input",
-            "avoids-insecure-defaults-and-over-broad-permissions",
-            "keeps-the-test-suite-honest");
-
     private static final Set<String> OBSERVATION_FIELDS = Set.of(
             "practiceSlug",
             "summary",
@@ -358,35 +349,16 @@ public class PracticeDetectionResultParser {
         public @Nullable String occurrenceKey() {
             return keys == null ? null : keys.occurrenceKey();
         }
-
-        /** Enforces valence and severity invariants independently of model output. */
-        public ValidatedObservation coerceCoherence(boolean advisoryOnly) {
-            Presence p = presence;
-            Assessment a = assessment;
-            assessmentStatus.validate(p, a, severity);
-            Severity s = severity;
-            if (advisoryOnly && outcome() == Outcome.NEGATIVE && (s == Severity.CRITICAL || s == Severity.MAJOR)) {
-                s = Severity.MINOR;
-            }
-            if ("avoids-insecure-defaults-and-over-broad-permissions".equals(practiceSlug) && s == Severity.CRITICAL) {
-                s = Severity.MAJOR;
-            }
-            if (p == presence && a == assessment && s == severity) {
-                return this;
-            }
-            return new ValidatedObservation(
-                    practiceSlug, summary, assessmentStatus, p, a, s, evidence, evidenceRationale, keys);
-        }
     }
 
-    /** Applies coherence rules to all observations and returns a mutable result. */
-    public static List<ValidatedObservation> coerceCoherence(List<ValidatedObservation> observations) {
-        List<ValidatedObservation> out = new ArrayList<>(observations.size());
-        for (ValidatedObservation f : observations) {
-            boolean advisoryOnly = !BLOCKING_ELIGIBLE_PRACTICES.contains(f.practiceSlug());
-            out.add(f.coerceCoherence(advisoryOnly));
+    /** Validates axes without changing the practice's contextual judgment or severity. */
+    public static List<ValidatedObservation> validateCoherence(List<ValidatedObservation> observations) {
+        for (ValidatedObservation observation : observations) {
+            observation
+                    .assessmentStatus()
+                    .validate(observation.presence(), observation.assessment(), observation.severity());
         }
-        return out;
+        return new ArrayList<>(observations);
     }
 
     public record DiscardedEntry(int index, String reason) {}

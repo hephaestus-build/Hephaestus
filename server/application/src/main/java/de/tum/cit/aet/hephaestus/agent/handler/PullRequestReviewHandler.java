@@ -394,7 +394,8 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                             + job.getId());
         }
 
-        var scopedObservations = new ArrayList<>(filterByDiffScope(parsed.validObservations(), diffFiles));
+        List<PracticeDetectionResultParser.ValidatedObservation> scopedObservations =
+                new ArrayList<>(filterByDiffScope(parsed.validObservations(), diffFiles));
         if (scopedObservations.size() < parsed.validObservations().size()) {
             log.info(
                     "Diff scope filter removed {} out-of-scope observations: jobId={}, before={}, after={}",
@@ -442,9 +443,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                             + diffFiles.size());
         }
 
-        // Refuse inconsistent assessments without inventing an applicability claim, and normalize severity
-        // before observations are persisted or used to compose feedback.
-        scopedObservations = new ArrayList<>(PracticeDetectionResultParser.coerceCoherence(scopedObservations));
+        scopedObservations = PracticeDetectionResultParser.validateCoherence(scopedObservations);
 
         PracticeDetectionDeliveryService.DeliveryResult result;
         try {
@@ -575,21 +574,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
 
     Map<String, TreeSet<Integer>> validDiffLines(AgentJob job) {
         return DiffHunkValidator.parseValidLines(capturedDiff(job));
-    }
-
-    /**
-     * Parse file paths from {@code git diff --name-only} output.
-     * Each non-blank line is a file path — no truncation or stat formatting.
-     */
-    static Set<String> parseDiffNameOnlyPaths(String nameOnlyOutput) {
-        Set<String> paths = new HashSet<>();
-        for (String line : nameOnlyOutput.split("\n")) {
-            String trimmed = line.trim();
-            if (!trimmed.isEmpty()) {
-                paths.add(trimmed);
-            }
-        }
-        return paths;
     }
 
     /**

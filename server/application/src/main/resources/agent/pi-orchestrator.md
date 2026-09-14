@@ -156,33 +156,15 @@ These gates are not optional reasoning aids: when a gate applies to the practice
 perform it and explain its result in evidenceRationale before you may emit anything other than the gate's safe
 default. They sit ON TOP of the observation contract above — they never relax them.
 
-1. **FALSE-ABSENCE GATE (any "the rationale / the why / the explanation is missing" negative observation — e.g. `records-significant-decisions-with-rationale`, `describe-what-and-why`, `documents-public-api-and-behaviour-changes`).**
-   The behaviour these practices look for is _stating the why_, so "it is missing" is an absence claim about
-   the author's own prose — and an absence you did not search for is not evidence. Before you emit one, you
-   MUST quote-scan the WHOLE body, not just the opening paragraph: the description, AND every detail /
-   implementation bullet, AND every commit subject, AND every comment — pulling out verbatim each line that
-   NAMES the decision you say is unexplained. Then check those lines for a rationale signal.
-   A rationale signal is EITHER an explicit reason-connective — `because`, `so that`, `to <verb>`, `in order
-to`, `fixes`, `resolves`, `replaces`, `instead of`, `the reason`, `this lets us`, `we chose … over …` — OR a
-   stated PURPOSE, role or trade-off carrying no such word: "single source of truth for X", "prefers A, falls
-   back to B", "hardens the … path", "reuses the existing … channel". The second kind is the one that gets
-   missed: a line that says what a thing is FOR has stated its why.
-   **If a quoted line naming the decision states its purpose, that explanation is PRESENT.** Assess its
-   adequacy in context. Name any missing trade-off specifically, rather than denying the explanation.
-   If required prose could not be read, report a collection gap.
-   **Hard precondition for missing rationale.** You may emit `ABSENT, GOOD` ONLY IF `evidence.citations[].quote` holds
-   the verbatim body line(s) naming the decision AND none of them carries a reason-connective or a stated
-   purpose. If the only lines naming it DO state its purpose, you cannot claim that rationale is absent. Quoting or
-   paraphrasing a documented "why" and then calling it missing is a contradiction with your own evidence — if
-   your evidenceRationale says the change "centralises" or "hardens" or "fixes" something, you have just named its
-   rationale. And if you cannot tell whether a line states a purpose, that is `UNDETERMINED`, not an absence claim.
-   **Significance carve-out (settle this BEFORE the NEGATIVE path opens).** One new app-internal type — a model, a
-   factory, a helper, a view — is not automatically an "architecturally significant decision". Reserve that
-   label, and any MAJOR, for an auth/security mechanism, a wire/persistence/public-API contract consumed
-   OUTSIDE this codebase, a new third-party dependency, or two-or-more co-occurring cross-cutting signals.
-   When the only decision you can point to is one internal type, the practice is at most `PRESENT, BAD` MINOR
-   if its purpose is genuinely undocumented — and `PRESENT, GOOD` the moment the body says what it is for. Do
-   not manufacture significance to justify a MAJOR.
+1. **Rationale claims.** Use the practice's own applicability and permitted-source rules: a description
+   practice may require a reason in the MR body, while a decision-record practice may accept a linked ADR.
+   Establish the decision or change that calls for an explanation, then inspect the complete permitted
+   sources before claiming a rationale is absent. Quote authored reasoning that bears on the claim,
+   whether it appears in prose, a bullet or another permitted source; no connective or heading is required.
+   Distinguish a missing needed rationale (`ABSENT, GOOD`) from a supplied explanation (`PRESENT`) whose
+   adequacy must be assessed. A phrase that restates what changed does not necessarily explain why.
+   Do not infer the author's rationale from implementation or treat your own paraphrase as authored evidence.
+   Apply the common readiness and uncertainty rules when the relevant evidence cannot settle the claim.
 
 2. **AUTHOR/REVIEWER PARTITION PRE-STEP (review-craft practices: `leaves-useful-specific-review-comments`, `reviews-substantively-with-understanding`, `reviews-respectfully-asks-rather-than-demands`, `engaging-with-inline-review-comments`).**
    Before counting a single reviewer comment, print the PR author login, then for EACH note/comment print

@@ -171,12 +171,7 @@ function trimmedStrings(value: unknown): string[] {
 		: [];
 }
 
-/**
- * The recorded scope of a search that came up empty. An ABSENT observation is a universal claim —
- * "it is not there" — and the one thing a fragment of a corpus can never support. Narrating the
- * search in `reasoning` is the honour-system version of this; a structured block is what a validator
- * can actually hold against the domain the practice declared.
- */
+/** Requires the source list, named behavior and boundary of an absence claim. */
 export function normalizeSearch(search: unknown): RecordedSearch {
 	if (!isRecord(search)) throw new Error("search is required");
 	const consulted = trimmedStrings(search.consulted);
@@ -440,15 +435,7 @@ export function dedupeKeyForObservation(observation: NormalizedObservation): str
 	return `${observation.practiceSlug}|${observation.summary}|${citations}`;
 }
 
-/**
- * Holds every citation to bytes this run actually staged, under the source that produced them.
- *
- * <p>The run stages every source that applies to the artifact, so the question is no longer whether
- * the practice predicted it would read this one — it is whether the source was there and the quote
- * really came out of it. A practice whose subject turns out to live in a source its author did not
- * name is exactly the case full context exists to catch, and rejecting its citation would have thrown
- * away the observation for being observant.
- */
+/** Requires each citation to name an artifact staged by its declared source. */
 export function validateEvidenceSources(
 	observation: NormalizedObservation,
 	availableSourceKinds: ReadonlySet<string>,
@@ -478,24 +465,9 @@ function describeAvailableSources(sourceKinds: ReadonlySet<string>): string {
 }
 
 /**
- * Holds a recorded search against the domain the practice declared it would search.
- *
- * <p>`EXHAUSTIVE` is the practice saying "this claim asserts something is NOT in this source", which
- * is the only stance under which absence is assertable at all. So the sources held that way ARE the
- * domain: an ABSENT observation that did not consult one of them is asserting a universal over a
- * corpus it never opened, and the honest answer is UNDETERMINED instead.
- *
- * <p>The two directions of an absence do not need the same proof, and the difference is what lets a
- * clean surface be recorded as a strength at all. An ABSENT/BAD says a good behaviour is missing from
- * the place the citation points at — the claim is anchored to that locus, so the search only has to
- * reach as far as the locus does. An ABSENT/BAD says a harmful behaviour is nowhere in the work, which
- * ranges over the WHOLE corpus and is provable only if that corpus is closed and was covered whole.
- * A practice that has not declared an exhaustive stance has not closed a corpus, so it cannot make that
- * claim, and UNDETERMINED is the honest answer; one that has, can. This is what the eight defect
- * detectors used to buy by refusing GOOD outright and paying for it in false NOT_APPLICABLEs.
- *
- * <p>Consulting something this run never staged is the same error the citation check already rejects —
- * the bytes were not there, so they cannot have been searched.
+ * Requires searched sources to be staged and every declared exhaustive source to be consulted.
+ * ABSENT/BAD additionally requires an exhaustive source policy: a positive absence claim needs a
+ * closed search boundary. These checks validate the declared search, not whether the model read it.
  */
 export function validateSearchScope(
 	observation: NormalizedObservation,

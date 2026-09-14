@@ -190,10 +190,10 @@ public class DocumentReviewHandler implements JobTypeHandler {
                     + ", discarded="
                     + parsed.discarded().size());
         }
-        List<PracticeDetectionResultParser.ValidatedObservation> coercedObservations =
-                PracticeDetectionResultParser.coerceCoherence(parsed.validObservations());
+        List<PracticeDetectionResultParser.ValidatedObservation> validatedObservations =
+                PracticeDetectionResultParser.validateCoherence(parsed.validObservations());
 
-        PracticeDetectionDeliveryService.DeliveryResult result = deliveryService.deliver(job, coercedObservations);
+        PracticeDetectionDeliveryService.DeliveryResult result = deliveryService.deliver(job, validatedObservations);
         log.info(
                 "Document delivery complete: inserted={}, duplicate={}, jobId={}",
                 result.inserted(),

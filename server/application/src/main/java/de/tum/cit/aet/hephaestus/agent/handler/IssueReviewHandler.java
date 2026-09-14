@@ -35,7 +35,6 @@ import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -307,7 +306,7 @@ public class IssueReviewHandler implements JobTypeHandler {
             throw new ObservationsRefusedException(
                     "no_valid_observations", "No valid observations in agent output: jobId=" + job.getId());
         }
-        var admitted = new ArrayList<>(PracticeDetectionResultParser.coerceCoherence(parsed.validObservations()));
+        var admitted = PracticeDetectionResultParser.validateCoherence(parsed.validObservations());
         deliveryService.deliver(job, admitted);
     }
 
