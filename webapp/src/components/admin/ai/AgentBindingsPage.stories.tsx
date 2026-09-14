@@ -113,7 +113,6 @@ export const AdvancedDisclosure: Story = {
 		await openPracticeReviewAdvanced(canvas);
 		const card = purposeCard(canvas, "Practice reviews");
 		card.getByLabelText("Timeout (seconds)");
-		// A practice review always runs on an internal network, so there is nothing to switch.
 		await expect(card.queryByRole("switch", { name: "Internet access" })).toBeNull();
 	},
 };

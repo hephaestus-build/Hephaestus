@@ -54,13 +54,11 @@ void test("historical reads use witnessed roots and Git file bytes, not injected
 					GIT_TEMP_DIRECTORY: directory,
 				},
 			});
-		const batch = spawnSync(
-			process.execPath,
-			[fileURLToPath(new URL("./operation.ts", import.meta.url))],
-			{
+		const runBatch = (revisions: string[]) =>
+			spawnSync(process.execPath, [fileURLToPath(new URL("./operation.ts", import.meta.url))], {
 				input: JSON.stringify({
 					operation: "CITED_BLOBS",
-					revisions: [head, head, "source.txt", feature, "missing.txt", feature, "source.txt"],
+					revisions,
 				}),
 				timeout: 10_000,
 				env: {
@@ -68,8 +66,16 @@ void test("historical reads use witnessed roots and Git file bytes, not injected
 					GIT_REPOSITORY_DIRECTORY: join(directory, ".git"),
 					GIT_TEMP_DIRECTORY: directory,
 				},
-			},
-		);
+			});
+		const batch = runBatch([
+			head,
+			head,
+			"source.txt",
+			feature,
+			"missing.txt",
+			feature,
+			"source.txt",
+		]);
 		assert.equal(batch.status, 0, batch.stderr.toString());
 		assert.equal(
 			execFileSync("tar", ["-tf", "-"], { input: batch.stdout, encoding: "utf8" }),
@@ -83,6 +89,9 @@ void test("historical reads use witnessed roots and Git file bytes, not injected
 			execFileSync("tar", ["-xOf", "-", "2"], { input: batch.stdout, encoding: "utf8" }),
 			"feature\n",
 		);
+		const absent = runBatch([head, head, "missing.txt"]);
+		assert.equal(absent.status, 0, absent.stderr.toString());
+		assert.equal(execFileSync("tar", ["-tf", "-"], { input: absent.stdout, encoding: "utf8" }), "");
 		assert.equal(run(head, "source.txt").stdout, "main\n");
 		assert.equal(run(feature, "source.txt").stdout, "feature\n");
 		assert.notEqual(run(injected, "source.txt").status, 0);

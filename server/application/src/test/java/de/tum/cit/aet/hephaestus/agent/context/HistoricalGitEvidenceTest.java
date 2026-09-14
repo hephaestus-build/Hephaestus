@@ -22,6 +22,8 @@ import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class HistoricalGitEvidenceTest extends BaseUnitTest {
     private final JobEvidenceFiles files = mock(JobEvidenceFiles.class);
@@ -66,21 +68,25 @@ class HistoricalGitEvidenceTest extends BaseUnitTest {
         verify(git).executeInSnapshot(eq(repository), any(), any(), any());
     }
 
-    @Test
-    void shouldAnswerACitationOfAMissingPathAsAbsentWhileVerifyingTheRest() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldAnswerMissingPathsAsAbsent(boolean includePresent) {
         var present = new HistoricalGitEvidence.Citation("a".repeat(40), "one.java", "same quote", 2, 2);
         var missing = new HistoricalGitEvidence.Citation("a".repeat(40), "gone.java", "same quote", 1, 1);
         doAnswer(invocation -> {
                     try (var tar = new TarArchiveOutputStream((OutputStream) invocation.getArgument(3))) {
-                        entry(tar, "0", "other line\nsame quote\n");
+                        if (includePresent) entry(tar, "0", "other line\nsame quote\n");
                     }
                     return null;
                 })
                 .when(git)
                 .executeInSnapshot(eq(repository), any(), any(), any());
-        var result = verifier.verifyAll(job, "head-digest", "refs-digest", "c".repeat(40), List.of(present, missing));
-        assertThat(java.util.Objects.requireNonNull(result.get(present)).matches())
-                .isTrue();
+        var citations = includePresent ? List.of(present, missing) : List.of(missing);
+        var result = verifier.verifyAll(job, "head-digest", "refs-digest", "c".repeat(40), citations);
+        if (includePresent) {
+            assertThat(java.util.Objects.requireNonNull(result.get(present)).matches())
+                    .isTrue();
+        }
         assertThat(result.get(missing)).isEqualTo(JobEvidenceFiles.QuoteMatch.absent());
     }
 

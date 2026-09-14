@@ -31,10 +31,7 @@ public class HistoricalGitEvidence {
     private record Blob(String revision, String path) {}
 
     /**
-     * Every submitted citation answered from one native transfer. The archive names each blob by the
-     * index of its (revision, path) pair in the request and carries no entry for a pair that does not
-     * exist at its revision, so such a citation comes back as {@link JobEvidenceFiles.QuoteMatch#absent()}
-     * rather than costing the whole batch.
+     * CITED_BLOBS names entries by distinct (revision, path) request index; absent paths have no entry.
      */
     public Map<Citation, JobEvidenceFiles.QuoteMatch> verifyAll(
             AgentJob job, String headDigest, String refsDigest, String pinnedHead, List<Citation> submitted) {

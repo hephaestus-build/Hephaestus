@@ -123,9 +123,9 @@ function CitationHeader({
 				</Badge>
 			)}
 			{citation.revision && (
-				<Badge variant="outline" className="shrink-0" title={citation.revision}>
-					<code>{citation.revision.slice(0, 7)}</code>
-				</Badge>
+				<p className="min-w-0 basis-full text-xs break-all text-muted-foreground">
+					Commit <code>{citation.revision}</code>
+				</p>
 			)}
 		</div>
 	);

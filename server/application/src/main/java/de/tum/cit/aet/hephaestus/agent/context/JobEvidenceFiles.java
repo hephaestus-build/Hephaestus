@@ -48,19 +48,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-/** Worker-local evidence retained through admission or the failed-attempt cleanup grace. */
 @Component
 public class JobEvidenceFiles {
     private static final Logger log = LoggerFactory.getLogger(JobEvidenceFiles.class);
 
-    /**
-     * Malformed input decodes to a lone surrogate, which no valid UTF-8 sequence produces and no quote
-     * survives {@code CitationVerification.quoteDigest} carrying, so a quote can only verify against
-     * bytes that decode and an undecodable byte elsewhere in the artifact costs nothing.
-     */
+    /** Invalid UTF-8 cannot match a quote: this lone surrogate is rejected by quoteDigest. */
     private static final String UNDECODABLE = "\uDC00";
 
-    /** How long an ended attempt, or a Git spool entry nobody released, stays before it is deleted. */
     static final Duration RETENTION_GRACE = Duration.ofHours(1);
 
     private final FabricLayout layout;
@@ -327,11 +321,6 @@ public class JobEvidenceFiles {
         }
     }
 
-    /**
-     * A Git snapshot or spooled output survives its preparation only when the process died holding it.
-     * The grace is the one an ended attempt gets, so a preparation still running is never swept from
-     * under itself.
-     */
     private void cleanStaleGitSpool() {
         if (!Files.isDirectory(layout.root())) return;
         try (var entries = Files.list(layout.root())) {
@@ -339,6 +328,7 @@ public class JobEvidenceFiles {
                 String name = entry.getFileName().toString();
                 if (!name.startsWith(GitRepositoryManager.GIT_SNAPSHOT_PREFIX)
                         && !name.startsWith(GitRepositoryManager.GIT_OUTPUT_PREFIX)) continue;
+                if (GitRepositoryManager.isCurrentProcessSpool(entry)) continue;
                 try {
                     if (Files.getLastModifiedTime(entry, LinkOption.NOFOLLOW_LINKS)
                             .toInstant()

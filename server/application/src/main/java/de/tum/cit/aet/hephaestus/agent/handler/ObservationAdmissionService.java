@@ -33,10 +33,8 @@ public class ObservationAdmissionService {
 
     public static final String DIGEST_METADATA_KEY = "observation_admission_digest";
 
-    /** Where a refusal's reason is kept, so the run says what happened to it after the sandbox is gone. */
     public static final String REFUSAL_METADATA_KEY = "observation_admission_refusal";
 
-    /** The refusal reason for a submission that is inadmissible for a reason no retry changes. */
     public static final String INADMISSIBLE_REASON_CODE = "inadmissible_observations";
 
     static boolean observationsWereRefused(AgentJob job) {
@@ -66,11 +64,7 @@ public class ObservationAdmissionService {
     private final JsonMapper mapper;
     private final TransactionTemplate transactions;
 
-    /**
-     * One admission in flight per attempt. The runner repeats a request whose answer did not arrive,
-     * and a repeat that started its own preparation would verify the same submission twice — with a
-     * container each — so it joins the one already running and gets the same answer.
-     */
+    /** Retries join in-flight verification rather than launching duplicate Git operations. */
     private final ConcurrentHashMap<AdmissionIdentity, Flight> flights = new ConcurrentHashMap<>();
 
     private record Flight(String digest, CompletableFuture<ObjectNode> outcome) {}
@@ -88,10 +82,7 @@ public class ObservationAdmissionService {
         this.transactions = new TransactionTemplate(transactionManager);
     }
 
-    /**
-     * Admits {@code submitted} as the observations of this attempt, or refuses it and records why on the
-     * job before rethrowing the refusal.
-     */
+    /** Records refusals on the job before rethrowing them. */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ObjectNode admit(AdmissionIdentity identity, JsonNode submitted) {
         String digest = ProvenanceDigest.sha256Hex(serializedPayload(submitted));
@@ -166,7 +157,6 @@ public class ObservationAdmissionService {
         }));
     }
 
-    /** Whether this job's observations were admitted; the digest is the one durable trace of it. */
     public static boolean isAdmitted(AgentJob job) {
         return !admissionDigest(job).isBlank();
     }
@@ -177,7 +167,7 @@ public class ObservationAdmissionService {
                 : job.getMetadata().path(DIGEST_METADATA_KEY).asString();
     }
 
-    /** The refused admission left nothing behind; its reason is recorded on its own under the same ownership fence. */
+    /** Persists the refusal under the ownership fence before propagating the verification failure. */
     public void recordRefusal(
             AdmissionIdentity identity, String reasonCode, String reason, JsonNode verificationFailures) {
         transactions.executeWithoutResult(status -> {

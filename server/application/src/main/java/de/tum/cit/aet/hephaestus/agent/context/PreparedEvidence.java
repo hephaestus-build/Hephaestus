@@ -12,10 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * What one capture staged for a sandbox.
- *
- * @param manifest the source manifest of a practice review; null for evidence built without a source
- *     contract, which only the mentor chat and a files-only test fixture do
+ * @param manifest null for inputs captured without a source contract
  */
 public record PreparedEvidence(
         Map<String, byte[]> files,
@@ -45,7 +42,7 @@ public record PreparedEvidence(
         cleanups = List.copyOf(Objects.requireNonNull(cleanups, "cleanups"));
     }
 
-    /** The same capture with {@code files} in place of this one's; disk-staged content and cleanups are shared. */
+    /** Shares disk-staged content and cleanup ownership with this capture. */
     public PreparedEvidence withFiles(Map<String, byte[]> files) {
         return new PreparedEvidence(files, filesOnDisk, cleanups, manifest, directories);
     }

@@ -62,7 +62,7 @@ const EVIDENCE_SOURCE_DEFS: Record<string, EvidenceSourceDef> = {
 		icon: FolderTreeIcon,
 		badgeVariant: "outline",
 		description:
-			"Any file at the reviewed commit or at an earlier one in its history, read for context around the work.",
+			"Files at the reviewed commit or another commit in the captured repository history, read for context around the work.",
 		locator: "code",
 	},
 	"scm.issue.core": {

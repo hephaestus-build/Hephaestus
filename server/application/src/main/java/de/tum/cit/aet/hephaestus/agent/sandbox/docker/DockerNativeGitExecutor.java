@@ -45,11 +45,6 @@ import tools.jackson.databind.ObjectMapper;
  * the review sandboxes' own bound.
  */
 public final class DockerNativeGitExecutor implements NativeGitExecutor {
-    /**
-     * What one worker's Git preparation is pinned to: the image, the worker that owns the mirrors it
-     * creates, how many operations may run at once, the snapshot bound, and the Docker owner scope
-     * shared with the review sandboxes.
-     */
     public record Settings(
             String image, String workerId, int maxConcurrentOperations, long maxSnapshotBytes, String owner) {}
 
@@ -88,8 +83,7 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
         this.policy = policy;
         this.mapper = mapper;
         this.settings = settings;
-        // A volume name admits only [a-zA-Z0-9][a-zA-Z0-9_.-]* and a worker id is any operator-chosen
-        // string, so the id enters the name as its hash.
+        // Worker ids may contain characters Docker volume names forbid.
         this.workerNamespace = UUID.nameUUIDFromBytes(settings.workerId().getBytes(StandardCharsets.UTF_8))
                 .toString();
     }
@@ -163,10 +157,8 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
             labels.put(SandboxLabels.GIT_WORKSPACE, Long.toString(scope.workspaceId()));
             labels.put(SandboxLabels.GIT_REPOSITORY, Long.toString(scope.repositoryId()));
             if (fetch) operations.createVolume(volume, labels);
-            // Only a fetch creates the mirror; a query on a worker without it sees an empty tree and
-            // answers "not cloned" rather than leaving an unlabelled volume behind. Docker copies the
-            // image's /git into an empty named volume on its first mount, which is where the /git/lock
-            // file the command below flocks comes from.
+            // Queries must not create unlabelled volumes. A fetch initializes /git/lock through
+            // Docker's copy-up from the image into the new volume.
             mirror = fetch || mirrorExists(volume, scope);
             mounts.add(
                     mirror
@@ -186,7 +178,6 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
                     .withSource(snapshotVolume)
                     .withTarget("/snapshot"));
         }
-        // The review sandbox's floor, with the provider reachable only while fetching.
         HostConfig host = operations
                 .hostConfig(
                         policy.buildHostConfig(SecurityProfile.DEFAULT, LIMITS, new NetworkPolicy(fetch, null, null)))
@@ -304,10 +295,7 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
         }
     }
 
-    /**
-     * Every step runs. A failure never replaces the operation's own: with a {@code primary} it is
-     * attached as suppressed, otherwise the first one is thrown once the rest have run.
-     */
+    /** Runs every cleanup without masking the operation's failure. */
     private static void release(String container, @Nullable Throwable primary, List<Runnable> steps) {
         RuntimeException leftover = null;
         for (Runnable step : steps) {

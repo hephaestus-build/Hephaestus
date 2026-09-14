@@ -22,19 +22,13 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-/**
- * What one attempt captured, read back from its evidence snapshot as the typed manifest it was written
- * from. Every reader of the snapshot — citation boundaries, the pinned repository head, the changed
- * paths, the secret verdicts — asks here, so the snapshot's shape has one home.
- */
+/** Typed access to the persisted evidence snapshot. */
 final class CapturedEvidence {
 
-    /** The staged patch, and the NUL-separated list of the paths it touches. */
     static final String DIFF_ARTIFACT = ContentSource.OUTPUT_PREFIX + "diff.patch";
 
     static final String DIFF_PATHS_ARTIFACT = ContentSource.OUTPUT_PREFIX + "diff_paths.nul";
 
-    /** One captured file: the source it belongs to and the digest of the bytes staged for the run. */
     record Artifact(SourceKind kind, String sha256) {}
 
     private final ArtifactSourceManifest manifest;
@@ -65,7 +59,6 @@ final class CapturedEvidence {
         return new CapturedEvidence(manifest, null);
     }
 
-    /** The job's evidence snapshot, refused as inadmissible when it does not hold a manifest this runtime can read. */
     static CapturedEvidence of(AgentJob job, ObjectMapper mapper) {
         JsonNode snapshot = job.getEvidenceSnapshot();
         if (snapshot == null || !snapshot.isObject()) {
@@ -90,7 +83,6 @@ final class CapturedEvidence {
         return manifest.contractVersion();
     }
 
-    /** The sources the run could read; a citation of any other source is fabricated. */
     Set<SourceKind> availableSources() {
         return availableSources;
     }
@@ -104,7 +96,6 @@ final class CapturedEvidence {
         return artifacts.get(path);
     }
 
-    /** The artifact at {@code path} as {@code kind} staged it; anything else is unavailable or misattributed. */
     Artifact requireArtifact(SourceKind kind, String path) {
         Artifact artifact = artifacts.get(path);
         if (!availableSources.contains(kind)
@@ -115,7 +106,6 @@ final class CapturedEvidence {
         return artifact;
     }
 
-    /** The immutable identity an available source reported, or null when it reported none. */
     @Nullable
     String immutableIdentity(SourceKind kind) {
         for (SourceCapture source : manifest.sources()) {
@@ -126,7 +116,6 @@ final class CapturedEvidence {
         return null;
     }
 
-    /** The commit the captured repository was pinned at. */
     String pinnedHead() {
         String identity = immutableIdentity(RepositoryTreeContentSource.KIND);
         String head = identity == null ? "" : identity.split(":", 2)[0];
@@ -136,10 +125,6 @@ final class CapturedEvidence {
         return head;
     }
 
-    /**
-     * The paths the captured change touches, read from the artifact the capture wrote them to; empty when
-     * no diff was captured.
-     */
     Set<String> diffPaths(AgentJob job, JobEvidenceFiles evidenceFiles) {
         if (!availableSources.contains(PracticeSubjectClause.DIFF_SOURCE)) return Set.of();
         Artifact listing = artifacts.get(DIFF_PATHS_ARTIFACT);
@@ -169,7 +154,6 @@ final class CapturedEvidence {
                 .orElseThrow(() -> new JobDeliveryException("Captured diff is no longer available"));
     }
 
-    /** The secret verdicts recorded at preparation, or null when the review did not run the scan. */
     @Nullable
     SecretScan secretScan() {
         return secretScan;

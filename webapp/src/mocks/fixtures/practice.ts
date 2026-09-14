@@ -208,7 +208,7 @@ export const mockPracticeDefinitionOptions = {
 					displayName: "Pull request details",
 					description: "The pull request record and its ordered commit history.",
 					selectionScope:
-						"One pull request selected by the job, with its mirrored fields and the complete commits.json history over the same pinned merge-base-to-head range as the diff. The target and head commit identities are fixed at submission. Commit records include subjects, bodies when present, author and committer timestamps, parent counts, and rename-aware changed-file counts for single-parent commits. History is streamed without a commit-count cutoff; unavailable Git history is a collection error.",
+						"One pull request selected by the job, with its mirrored fields and the complete commits.json history over the same pinned review range as the diff. The target and head commit identities are fixed for the captured review. Commit records include subjects, bodies when present, author and committer timestamps, parent counts, and rename-aware changed-file counts for single-parent commits. History is streamed without a commit-count cutoff; unavailable Git history is a collection error.",
 					privacyClass: "PERSONAL",
 					requiredQuality: "COMPLETE",
 					supportsExhaustiveEvidence: true,
@@ -219,9 +219,9 @@ export const mockPracticeDefinitionOptions = {
 					description:
 						"The code changes the pull request introduces, as a unified diff annotated with line numbers.",
 					selectionScope:
-						"The complete merge-base-to-head diff for one pull request, pinned by both commit identities. It is streamed to the job workspace without a content-size cutoff, alongside a NUL-delimited changed-path index that includes binary files, mode-only changes and renames. A diff that cannot be captured is a collection error, never an empty or silently truncated diff.",
+						"The complete provider-qualified base-to-head diff for one pull request, pinned by both commit identities. It is streamed without a content-size cutoff alongside a NUL-delimited changed-path index covering binary files, mode-only changes and renames. GitLab records the review diff base; providers that record the target tip require its merge base with the reviewed head. A verified range with no changes is complete and empty. A diff that cannot be captured is a collection error, never a silently truncated diff.",
 					privacyClass: "INTERNAL",
-					requiredQuality: "COMPLETE_AND_NON_EMPTY",
+					requiredQuality: "COMPLETE",
 					supportsExhaustiveEvidence: true,
 				},
 				{

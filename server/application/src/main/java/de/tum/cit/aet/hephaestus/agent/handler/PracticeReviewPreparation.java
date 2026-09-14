@@ -23,10 +23,6 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * The preparation every practice review shares: capture the evidence, decide which practices it can
- * be put to, then stage the task envelope and the practice catalog for the sandbox.
- */
 final class PracticeReviewPreparation {
 
     private static final Logger log = LoggerFactory.getLogger(PracticeReviewPreparation.class);
@@ -65,10 +61,6 @@ final class PracticeReviewPreparation {
             var readiness = workspaceContextBuilder.prepareAutomatedReviewReadiness(
                     manifest, eligible, job.getId().toString(), job.getCreatedAt(), signal, prepared.files());
             List<Practice> ready = readiness.readyPractices();
-            // A practice not put to the model leaves no trace in the delivered review, so a reader cannot
-            // distinguish it from one that was assessed and produced no observations; the readiness report
-            // records why — evidence we could not read, or a subject that was not in this work — and both
-            // the administration surface and the artifact trace read it back from there.
             if (ready.size() < eligible.size()) {
                 log.info(
                         "Not asking {} of {} practice(s): jobId={}, skipped={}",

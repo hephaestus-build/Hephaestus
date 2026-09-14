@@ -10,10 +10,8 @@ a separate workspace contract.
 
 ## Layout
 
-The workspace is partitioned by **lifecycle, expressed as location** (ADR 0020): read-only
-vs writable is decided by *where* a file lives, not by convention. Three top-level regions —
-`inputs/` (read-only), `work/` (agent + precompute scratch; never collected), and `out/`
-(the only directory collected back to the server).
+The workspace has three data regions: read-only `inputs/`, writable `work/` scratch, and
+collected `out/` results. Mount isolation is defined under [Path conventions](#path-conventions).
 
 ```text
 /workspace/
@@ -60,12 +58,9 @@ vs writable is decided by *where* a file lives, not by convention. Three top-lev
 └── .run-pi.ts                       # Runner script entry point.
 ```
 
-The mentor runner stages `pi-provider.ts`, `pi-error-text.ts` and `pi-mentor-protocol.ts` instead. Everything
-here runs on Node; see
+The mentor uses a separate `context/target/`, `context/user/`, and `scratch/` layout. Both runners
+execute on Node; see
 [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md).
-
-The mentor interactive sandbox has its own `context/target/`, `context/user/`, and `scratch/` layout and is not
-covered by this ABI.
 
 ## Path conventions
 
@@ -78,9 +73,8 @@ covered by this ABI.
 - **`inputs/context/`** — system-written, AI-readable source materializations of the artifact under
   review. A source with nothing to report still writes its file, holding an empty list: "the record was
   read and held nothing" is a fact a review may reason from, and "the file is not there" is not.
-- **`inputs/history/`** — the same, for what came before this event rather than for this event. Present on
-  every review, because a review of one event is only a partial practice review and cannot be made whole by
-  reading that event harder. Never reported COMPLETE: it is a bounded window over a growing record.
+- **`inputs/history/`** — earlier observations and feedback, present on every review. Never reported
+  `COMPLETE`: it is a bounded window over a growing record.
 - **`inputs/manifest.json`** — the source and artifact index, and the authoritative statement of what a run
   staged. **Every source the source contract says applies to the artifact kind is captured and staged, on
   every review** — practice bindings decide which practices may run, never which files the agent can see. A
@@ -144,13 +138,10 @@ Output must be an uncompressed tar containing regular files beneath `out/` and z
 entries. Links, sparse files, devices, PAX/GNU extension records, invalid checksums, unsafe or
 duplicate normalized paths, truncation, and nonzero data after the end markers are rejected.
 
-**A writer keeps every name inside USTAR.** `gateway-run.ts` packages `out/` inside the container
-with `tar --format=ustar`, which writes no PAX or GNU extension record at all: a name USTAR cannot
-hold fails the packaging, and with it the whole review. The reader refuses those records as well,
-because reading them is what would let a sparse entry expand past the size its header declares.
-`out/` counts towards the 100 bytes, leaving 96 for the path beneath it. The runner routes every file
-it writes through `outputPath` in `pi-runner-output.ts`, which rejects an unusable name where the
-file is still identifiable.
+`gateway-run.ts` packages output with `tar --format=ustar`; packaging failure fails the review.
+The runner's `outputPath` accepts portable ASCII names and limits the complete `out/<name>` path to
+100 bytes. This producer restriction avoids extension records, which the reader rejects to prevent
+sparse-file expansion beyond declared sizes.
 
 Limits are 50 MiB for the entire archive, including headers, end markers and padding; 50 MiB of file
 contents in total; 10 MiB per file; and 10,000 entries, including directories. Rejected transfers are
@@ -172,20 +163,13 @@ worker filesystem.
 `137` is a container SIGKILL from the runtime, not a runner code. The server treats `0` as success,
 `42` as drift, and `75` and `76` as attempts to repeat; every other non-zero code is a generic failure.
 
-A sandbox reaches the worker's sandbox gateway at the address the worker held when the container
-started, so a worker that came back somewhere else — a deploy, a restart that moved the container —
-is unreachable for the rest of that run, whatever the runner's own retries do. The server answers `75` by queueing
-the work for another attempt with a rotated token and the usual backoff, keeping the finished
-attempt's transcript on the row; past the retry cap it terminalizes like any other non-zero exit. A
-job whose observations did reach the server — the admission committed and only its answer was lost —
-is never repeated: a second payload against a digest the job already carries is refused. That decision
-is taken under the row lock the admission itself takes, and governs every requeue, including the one a
-classified infrastructure failure asks for.
+The gateway address is fixed for an attempt. If it becomes unreachable, runner retries cannot follow
+a relocated worker. Exit `75` requeues the job with a new token and backoff unless an admission already
+committed; the admission digest is checked under the job-row lock before requeueing. A lost admission
+response therefore cannot repeat an admitted review. The retry cap still applies.
 
-`76` says the same thing about the other end of the run. A review that reached no practice because
-every model call went unanswered measured nothing, so there is nothing to record about the work and
-nothing a second attempt would repeat; the runner counts the calls the provider never answered and
-names them in the transcript, and the server queues the work again on the same terms as `75`.
+Exit `76` uses the same retry policy when no practice was reached and every model call went
+unanswered. It records a provider failure, not an observation about the reviewed work.
 
 ## Versioning policy
 
@@ -243,9 +227,8 @@ captured evidence. Native search honors ignore rules; use explicit paths and
 `rg --hidden --no-ignore` when those exclusions are inappropriate. Use streaming shell commands for
 lines too large for the read tool.
 
-`out/` is the sandbox's own claim: the runner writes every file in it last, from memory, and removes
-whatever else a session left there, so a file under `out/` is always the runner's and never a
-tool's.
+The runner rewrites `out/` from its in-memory state and removes unexpected files before packaging.
+Output remains untrusted; server-side admission verifies its observations and citations.
 
 The root filesystem and captured inputs are mounted read-only; scratch directories are separate
 writable mounts. The practice runner starts Node without permission flags, because a subprocess

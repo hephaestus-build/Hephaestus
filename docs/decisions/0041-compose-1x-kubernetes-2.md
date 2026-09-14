@@ -172,42 +172,33 @@ connection to a sandbox. `gitProxyUrl` remains absent and no Git server is intro
 support is a credential lookup behind the same proxy, not a second proxy topology; the Squid sidecar
 proposal in [#1108](https://github.com/hephaestus-build/Hephaestus/issues/1108) is withdrawn.
 
-Protocol v3 uses a per-job credential, runtime capability discovery with an explicit cumulative-byte
-budget, one required workspace-tar request with optional additive responses, admitted result upload,
-and interactive frames. Only the worker
-holding the job lease accepts its upload; a duplicate terminal upload returns `409`, which drivers
-treat as successful convergence. Agent image contract v2 to v3 is one release-lock upgrade;
-[ADR 0034](0034-signed-release-image-lock.md) owns the lockstep set and the lock's inventory.
+Protocol v3 provides attempt-scoped credentials, byte-budget discovery, one workspace download,
+result-archive upload, and interactive frames. A successful upload or duplicate `409` acknowledges
+transport, not observation admission; an overlapping upload returns retryable `503`.
+[ADR 0034](0034-signed-release-image-lock.md) owns the lockstep image upgrade.
 
 ### Evidence admission and deletion
 
-On upload, before admitting observations, the owning worker verifies every citation against the job
-folder the agent read. Context quotes use a bounded file read; code quotes use the repository's Git
-object. It records a verdict, digest of the quoted bytes, and typed failure reason per citation in
-PostgreSQL. A citation to a refused area or repository is rejected. Delivery on any runtime role
-reads only these verdicts and never worker storage.
+Observation admission is a separate authenticated operation. It verifies citations against captured
+artifacts or Git objects and persists verdicts and digests in PostgreSQL under the job's ownership
+fence. Result upload does not bypass this check. Delivery reads persisted verdicts, never worker
+storage.
 
-The guarantee is **byte-exact verification once, against what the agent saw**. **No replay is
-offered.** The worker deletes the folder after admission, or one hour after an attempt ends without an
-admitted result. There are no keep-refs, content-addressed store, evidence payload rows, shared
-volume, or retained evidence copies. If regulation, incident response, or user research establishes
-a concrete audit-window requirement, a follow-up may add encrypted retained bytes with explicit
-authorization, regional placement, erasure, expiry, backup, and restoration semantics. It must not
-reconstruct evidence from current upstream content.
+The guarantee is **byte-exact citation verification against captured evidence**. **No replay is
+offered.** Inputs remain available through attempt completion, including feedback composition after
+observation admission. The worker deletes a completed attempt’s folder when retiring it if its
+observations were admitted; a sweep retries missed cleanup. Other ended or orphaned attempts become
+eligible for deletion one hour after the worker first records that they have ended, and are removed
+by a successful cleanup sweep. Running attempts are not swept. There are no keep-refs,
+content-addressed store, evidence payload rows, shared volume, or retained replay copies. Git spool
+files are released by their creating process; age-based cleanup reclaims only previous-process leftovers.
 
 ### Bash and the sandbox boundary
 
-A practice session has Pi's `read`, `grep`, `find`, `ls`, `write`, `edit`, and `bash` tools plus
-report tools; the composition turn, which writes feedback from observations the server has already
-admitted, keeps the four read-only tools and its report tools. Bash is on by default
-under one configuration; there is no quality mode that disables it. This matches established coding
-agents and code-execution systems: [Claude Code](https://code.claude.com/docs/en/security),
-[Codex](https://learn.chatgpt.com/docs/security),
-[GitHub Copilot cloud agent](https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent)
-and Cloudflare's [Code Mode](https://blog.cloudflare.com/code-mode/) all treat command execution as a
-sandboxing and policy problem rather than an allowlisted-language problem. A tool allowlist was
-never a security boundary here because precompute already executes arbitrary Node child processes
-inside the same sandbox.
+Practice sessions expose native shell and file tools; feedback composition uses read-only evidence
+tools and report tools. The [workspace ABI](../contributor/agent/workspace-abi.mdx#practice-review-tools)
+owns the tool sets. A tool allowlist is not a security boundary: precompute also executes child
+processes inside the sandbox.
 
 The sandbox is the boundary: non-root user, read-only root filesystem, no host mounts or Docker
 socket, credential-free environment, one network destination, resource and PID limits, deadline, and
@@ -216,8 +207,8 @@ Standard ([controls](https://kubernetes.io/docs/concepts/security/pod-security-s
 gVisor is recommended as `runsc` for Compose and as a
 `RuntimeClass` on Kubernetes; Kubernetes documents `RuntimeClass` as the mechanism for selecting a
 container runtime configuration ([RuntimeClass](https://kubernetes.io/docs/concepts/containers/runtime-class/)).
-The evaluation harness gates release quality with bash enabled. A runtime switch cannot turn a weak
-agent into a safe one and is not added.
+Release qualification must exercise Bash-enabled reviews; restricting tools is not a substitute for
+runtime isolation.
 
 ### Kubernetes batch and interactive execution
 

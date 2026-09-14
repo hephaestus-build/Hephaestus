@@ -118,7 +118,7 @@ public class SandboxGatewaySessions {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Result already uploaded");
                 }
                 if (uploading) {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Result upload in progress");
+                    throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Result upload in progress");
                 }
                 uploading = true;
             }

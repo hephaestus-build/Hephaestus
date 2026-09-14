@@ -274,7 +274,7 @@ export default defineConfig({
 			]),
 			"gate:agent-tests": group(["test:agents"]),
 			"test:agents": run(
-				"node --test server/application/src/test/resources/agent/*.spec.ts docker/agents/precompute/*.test.ts docker/agents/precompute/lib/*.test.ts docker/agents/git/*.test.ts",
+				"node --test server/application/src/test/resources/agent/*.spec.ts docker/agents/precompute/*.test.ts docker/agents/precompute/lib/*.test.ts docker/agents/git/*.test.ts docker/agents/pi/*.test.ts",
 			),
 			"test:tooling": run("node --test scripts/*.test.ts"),
 

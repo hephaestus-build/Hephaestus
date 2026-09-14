@@ -11,9 +11,8 @@ should start with [Practice Review](./practice-review.mdx).
 
 ## Deployment configuration
 
-Configuration metadata in the server is the source of truth for property names, types, and defaults. The
-reference Compose files are the source of truth for which environment variables they forward; do not copy
-those inventories into another deployment manifest from this page.
+Server configuration metadata defines property names, types, and defaults; the reference Compose files
+define which environment variables reach the application.
 
 A working deployment must:
 
@@ -26,8 +25,7 @@ A working deployment must:
   image must be;
 - set campaign, request-rate, retry, and retention limits appropriate to its budget and governance policy.
 
-Who gets practice review is **not** among them. There is no instance-wide population flag: each workspace
-turns itself on, and decides its own coverage.
+Each workspace enables practice review and chooses its own coverage.
 
 See the
 [server configuration](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/application.yml)
@@ -36,20 +34,14 @@ environment variable. Unknown or unforwarded variables do not configure the appl
 
 Repository mirrors and attempt folders are disposable worker-local storage, not a shared evidence store.
 A mirror is a Docker volume owned by one worker; a sweep removes it once its repository is no longer
-monitored by that workspace or its worker has gone. Attempt folders live under `HEPHAESTUS_FABRIC_ROOT`
-and are deleted once the attempt's observations are admitted, or an hour after an attempt ends without
-an admitted result. Sandbox inputs and results travel through the authenticated worker gateway.
+monitored by that workspace or its worker has gone. Attempt folders live under `HEPHAESTUS_FABRIC_ROOT`.
+Sandbox inputs and results travel through the authenticated worker gateway.
 PostgreSQL retains admitted observations and their citation verification results; delivery does not
 require the worker's source files. The storage and cleanup contract is defined in
-[ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md).
+[ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion).
 
-A server pod that carries the worker role runs Git in its own `git-preparation` containers. A server
-pod whose worker role is off runs no Git itself: it dispatches each operation over the worker
-control channel to a connected worker, placed by hashing the repository id over the connected
-workers, so a repository stays on one worker while that worker's session lives and lands on the same
-worker again after a reconnect as long as the set of workers is unchanged. With no worker connected
-the operation fails rather than waits, and ingestion retries from its commit checkpoints. The webhook
-role has no Git at all.
+[Runtime roles](./runtime-roles.mdx#configuration-cheatsheet) defines Git dispatch and worker placement.
+With no worker connected, a remote Git operation fails; ingestion retries from its commit checkpoints.
 
 Source authorization is not a deployment toggle. The shipped artifact-source contract fixes which governed
 sources each purpose may use; integrations only determine which authorized sources are available. See
@@ -57,17 +49,15 @@ sources each purpose may use; integrations only determine which authorized sourc
 
 ## Running instance
 
-Nothing on this page configures a workspace. Model readiness, coverage, delivery status, autonomy, spend
-and the per-artifact trace are all workspace-administrator screens, and
-[Practice review](./practice-review.mdx) is the guide to them.
+For workspace model readiness, coverage, autonomy, spend and review activity, see
+[Practice review](./practice-review.mdx).
 
 ### Queue health
 
 The job queue exposes its own signals — alert off these rather than reading application logs.
 
-- **`agent.queue.oldest_age_seconds`** — age of the oldest eligible queued job, `0` when empty. **This is
-  the one to alert on**: a briefly busy queue and a stuck one both show non-zero depth, but only a stuck
-  queue shows a climbing age.
+- **`agent.queue.oldest_age_seconds`** — age of the oldest eligible queued job, `0` when empty.
+  Alert on sustained growth: queue depth alone does not distinguish a transient burst from persistent backlog.
 - **`agent.queue.depth`** — queued jobs eligible to run now.
 - **`agent.queue.held`** — jobs parked on an exhausted budget.
 - **`agent.queue.running`** — jobs running fleet-wide.
@@ -194,9 +184,8 @@ These behaviors matter independently of configured capacity:
   everything, and neither is a substitute for the other when you are diagnosing missing context.
 - **Work that has been deleted at the provider yields a review with no evidence, not an empty one.**
   Once a reconciliation pass finds work missing upstream, evidence capture reports its sources as
-  unavailable and the review stops without recording anything about that work. That is the instance
-  working as intended, not a capture failure to chase. If the work reappears, the next ordinary sync
-  clears the mark and a later review reads it again.
+  unavailable and the review stops without recording anything about that work. If the work reappears,
+  the next ordinary sync clears the mark and a later review reads it again.
 - **No screen edits what the model is told.** What Hephaestus observes is shaped by each practice's
   criteria; the wording it then chooses is shaped by a prompt that ships with the release. Changing the
   latter is a code change.

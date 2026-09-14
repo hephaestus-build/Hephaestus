@@ -241,7 +241,7 @@ function startGit(
 		["maintenance.auto", "false"],
 		["gc.auto", "0"],
 	];
-	// The token rides a config value so that it appears in no argv and in no message Git prints.
+	// Git config environment keeps credentials out of process arguments.
 	if (token !== null)
 		configs.push([
 			"http.extraHeader",
@@ -583,7 +583,7 @@ async function citedBlobs(request: Request): Promise<void> {
 			await gitFile(["cat-file", "blob", object], `${directory}/${name}`);
 			names.push(name);
 		}
-		const tar = spawn("tar", ["-C", directory, "-cf", "-", ...names], {
+		const tar = spawn("tar", ["-C", directory, "-cf", "-", "--files-from", "/dev/null", ...names], {
 			stdio: ["ignore", "pipe", "ignore"],
 		});
 		await Promise.all([

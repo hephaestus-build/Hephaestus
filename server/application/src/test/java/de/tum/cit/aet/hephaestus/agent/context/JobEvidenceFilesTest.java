@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.agent.context;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -11,8 +14,15 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Request;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.io.ByteArrayOutputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -226,6 +237,51 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldPreserveOwnedGitOutputsAndSnapshotsBeyondTheGracePeriod() throws Exception {
+        var layout = new FabricLayout(root.toString());
+        var cleaner = new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(2)));
+        var nativeGit = mock(NativeGitExecutor.class);
+        var key = new RepositoryKey(1L, 1L);
+        var bytes = new ByteArrayOutputStream();
+        try (var archive = new TarArchiveOutputStream(bytes)) {
+            archive.finish();
+        }
+        doAnswer(invocation -> {
+                    Request request = invocation.getArgument(1);
+                    OutputStream output = invocation.getArgument(3);
+                    switch (request.operation()) {
+                        case RESOLVE, TREE_ID -> output.write("a".repeat(40).getBytes(StandardCharsets.UTF_8));
+                        case SNAPSHOT -> output.write(bytes.toByteArray());
+                        default -> {}
+                    }
+                    try (var entries = Files.list(root)) {
+                        var owned = entries.toList();
+                        assertThat(owned).isNotEmpty();
+                        for (Path entry : owned) {
+                            Files.setLastModifiedTime(entry, java.nio.file.attribute.FileTime.from(clock.instant()));
+                        }
+                        cleaner.cleanEndedAttempts();
+                        assertThat(owned).allSatisfy(path -> assertThat(path).exists());
+                    }
+                    return null;
+                })
+                .when(nativeGit)
+                .execute(eq(key), any(), any(), any());
+        var manager = new GitRepositoryManager(
+                new GitRepositoryProperties(true, 1, "git-preparation:test", 1024), Optional.of(nativeGit), layout);
+        Path staging;
+        try (var snapshot = manager.readTreeSnapshot(key, "a".repeat(40))) {
+            staging = snapshot.stagingDir();
+            cleaner.cleanEndedAttempts();
+            assertThat(staging).isDirectory();
+        }
+        assertThat(staging).doesNotExist();
+        try (var entries = Files.list(root)) {
+            assertThat(entries).isEmpty();
+        }
+    }
+
+    @Test
     void shouldSweepGitSnapshotsAndSpooledOutputsNobodyReleasedAfterTheGracePeriod() throws Exception {
         var layout = new FabricLayout(root.toString());
         Path snapshot = Files.createDirectories(layout.root().resolve("git-snapshot-abandoned"));
@@ -237,7 +293,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         }
 
         new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofMinutes(59))).cleanEndedAttempts();
-        assertThat(snapshot).as("a preparation may still be running").exists();
+        assertThat(snapshot).exists();
         assertThat(output).exists();
 
         new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1))).cleanEndedAttempts();

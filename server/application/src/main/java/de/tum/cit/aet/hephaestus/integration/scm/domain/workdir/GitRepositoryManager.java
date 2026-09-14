@@ -30,6 +30,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -52,6 +53,7 @@ public class GitRepositoryManager {
     public static final String GIT_SNAPSHOT_PREFIX = "git-snapshot-";
 
     public static final String GIT_OUTPUT_PREFIX = "git-output-";
+    private static final String PROCESS_SPOOL_ID = UUID.randomUUID() + "-";
     private static final Logger log = LoggerFactory.getLogger(GitRepositoryManager.class);
     private static final Duration OPERATION_TIMEOUT = Duration.ofMinutes(15);
     private static final int DETAIL_FRAME_BYTES = 16 * 1024 * 1024;
@@ -335,7 +337,7 @@ public class GitRepositoryManager {
         Path archive = spool(repository, Operation.SNAPSHOT, List.of(resolved));
         Path directory;
         try {
-            directory = Files.createTempDirectory(layout.root(), GIT_SNAPSHOT_PREFIX);
+            directory = Files.createTempDirectory(layout.root(), GIT_SNAPSHOT_PREFIX + PROCESS_SPOOL_ID);
         } catch (IOException e) {
             deleteFile(archive);
             throw new GitOperationException("Cannot create snapshot directory", e);
@@ -422,10 +424,17 @@ public class GitRepositoryManager {
         }
     }
 
+    /** The fabric root is process-local; only a previous process's spool may be swept by age. */
+    public static boolean isCurrentProcessSpool(Path path) {
+        String name = path.getFileName().toString();
+        return name.startsWith(GIT_SNAPSHOT_PREFIX + PROCESS_SPOOL_ID)
+                || name.startsWith(GIT_OUTPUT_PREFIX + PROCESS_SPOOL_ID);
+    }
+
     private Path temporary(String prefix) {
         try {
             Files.createDirectories(layout.root());
-            return Files.createTempFile(layout.root(), prefix, ".tmp");
+            return Files.createTempFile(layout.root(), prefix + PROCESS_SPOOL_ID, ".tmp");
         } catch (IOException e) {
             throw new GitOperationException("Cannot create Git operation output", e);
         }

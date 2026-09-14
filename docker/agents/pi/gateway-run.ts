@@ -31,7 +31,7 @@ function retryable(status: number): boolean {
 	return status === 425 || status >= 500;
 }
 
-async function upload(url: URL, token: string, archive: string): Promise<void> {
+export async function upload(url: URL, token: string, archive: string): Promise<void> {
 	for (let attempt = 1; ; attempt++) {
 		let response: Response;
 		try {
@@ -90,7 +90,9 @@ async function main() {
 	process.exitCode = exitCode;
 }
 
-main().catch((error: unknown) => {
-	console.error(error);
-	process.exitCode = 1;
-});
+if (import.meta.main) {
+	main().catch((error: unknown) => {
+		console.error(error);
+		process.exitCode = 1;
+	});
+}

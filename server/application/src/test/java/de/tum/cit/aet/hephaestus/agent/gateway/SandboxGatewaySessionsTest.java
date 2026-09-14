@@ -5,9 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.junit.jupiter.api.Tag;
@@ -105,6 +110,47 @@ class SandboxGatewaySessionsTest {
             assertThatThrownBy(() -> session.upload(new ByteArrayInputStream(new byte[0])))
                     .isInstanceOf(java.io.IOException.class);
             assertThatThrownBy(session::result).isInstanceOf(IllegalStateException.class);
+
+            session.upload(new ByteArrayInputStream(resultTar()));
+
+            assertThat(session.result()).containsOnlyKeys("observations.json");
+        }
+    }
+
+    @Test
+    void shouldKeepAnOverlappingRetryRetryableUntilAnUploadCompletes() throws Exception {
+        Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
+        var reading = new CountDownLatch(1);
+        var disconnect = new CountDownLatch(1);
+        try (var session = sessions.register("token", archive, "out");
+                var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var first = executor.submit(() -> {
+                session.upload(new InputStream() {
+                    @Override
+                    public int read() throws IOException {
+                        reading.countDown();
+                        try {
+                            if (!disconnect.await(5, TimeUnit.SECONDS)) throw new IOException("Read timed out");
+                        } catch (InterruptedException exception) {
+                            Thread.currentThread().interrupt();
+                            throw new IOException(exception);
+                        }
+                        throw new IOException("Connection lost");
+                    }
+                });
+                return null;
+            });
+            try {
+                assertThat(reading.await(5, TimeUnit.SECONDS)).isTrue();
+                assertThatThrownBy(() -> session.upload(new ByteArrayInputStream(resultTar())))
+                        .isInstanceOfSatisfying(
+                                ResponseStatusException.class,
+                                e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+                assertThatThrownBy(session::result).isInstanceOf(IllegalStateException.class);
+            } finally {
+                disconnect.countDown();
+            }
+            assertThatThrownBy(() -> first.get(5, TimeUnit.SECONDS)).hasRootCauseMessage("Connection lost");
 
             session.upload(new ByteArrayInputStream(resultTar()));
 

@@ -19,7 +19,7 @@
 			"description": "Source contract used to interpret the referenced manifest and source checks."
 		},
 		"catalogDigest": {
-			"const": "28dd2608453a94ed4c0f269d3553763992155b22e0bd06346b6c1372b9bb67b6",
+			"const": "ceef3f03a68b1474c593cc4fda1be757f80f5d2609052502aede3246d5ae1cd7",
 			"description": "SHA-256 digest of the exact source catalog used by the runtime."
 		},
 		"artifactKind": {

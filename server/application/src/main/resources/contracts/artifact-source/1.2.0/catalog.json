@@ -40,7 +40,7 @@
 			"kind": "scm.pull-request.diff",
 			"displayName": "Code changes",
 			"description": "The code changes the pull request introduces, as a unified diff annotated with line numbers.",
-			"selectionScope": "The provider-qualified base-to-head diff for one pull request at the reviewed commit, up to 20 MiB. GitLab records the review diff base; providers that record the target tip require its merge base with the reviewed head. A verified range with no changes is complete and empty. A diff that cannot be read is recorded as a collection error rather than as an empty diff.",
+			"selectionScope": "The complete provider-qualified base-to-head diff for one pull request, pinned by both commit identities. It is streamed without a content-size cutoff alongside a NUL-delimited changed-path index covering binary files, mode-only changes and renames. GitLab records the review diff base; providers that record the target tip require its merge base with the reviewed head. A verified range with no changes is complete and empty. A diff that cannot be captured is a collection error, never a silently truncated diff.",
 			"artifactKinds": [
 				"scm.pull_request"
 			],

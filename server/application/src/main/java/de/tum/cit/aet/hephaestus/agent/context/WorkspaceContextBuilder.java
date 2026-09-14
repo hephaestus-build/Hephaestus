@@ -125,9 +125,7 @@ public class WorkspaceContextBuilder {
             @Nullable ArtifactSourceManifest manifest) {}
 
     private BuildResult buildInputs(ContextRequest request, @Nullable EvidencePlan evidencePlan) {
-        // Every source the contract says applies to this artifact kind — not a subset chosen for the
-        // practices in scope. What a practice needs before it may be reviewed is asked later, by the
-        // readiness check; this one is only "what can the model see".
+        // Capture scope follows the source contract, not the practices later selected by readiness.
         Set<SourceKind> stagedSources = Set.of();
         if (evidencePlan != null) {
             if (manifestBuilder == null) {
@@ -162,9 +160,6 @@ public class WorkspaceContextBuilder {
                 String providerName = provider.getClass().getSimpleName();
                 Map<String, byte[]> contributionFiles;
                 if (evidencePlan != null && provider instanceof EvidenceSource evidenceSource) {
-                    // A collector whose kinds do not apply to this artifact kind at all — the Slack thread
-                    // reader on a pull-request review — has nothing to say here. The manifest already reports
-                    // only the kinds that apply, so there is no absence to record for it either.
                     if (evidenceSource.sourceKinds().stream().noneMatch(stagedSources::contains)) {
                         continue;
                     }
@@ -241,7 +236,7 @@ public class WorkspaceContextBuilder {
                         throw new IllegalStateException(providerName + " emitted undocumented detector input " + key);
                     }
                     if (value == null) {
-                        // Staged from disk: the bytes are never read by this process.
+                        // Disk-staged content has no in-memory value.
                         continue;
                     }
                     files.put(key, value.clone());
@@ -276,8 +271,6 @@ public class WorkspaceContextBuilder {
                     contributed);
             return new BuildResult(files, filesOnDisk, directories, cleanups, manifest);
         } catch (RuntimeException exception) {
-            // A later provider or the manifest failing must not strand what earlier collectors staged on
-            // disk: nobody else will ever hold these cleanups.
             for (AutoCloseable cleanup : cleanups) {
                 try {
                     cleanup.close();
@@ -325,10 +318,7 @@ public class WorkspaceContextBuilder {
             try {
                 contribution = source.capture(request, Set.of(kind));
             } catch (RuntimeException e) {
-                // Sources are captured independently so one failing collector costs only its own source;
-                // letting the exception propagate would instead discard every source already captured
-                // for this job. Only failures raised by the collector are absorbed here — the checks
-                // below still propagate.
+                // Collector failures affect only their source; contribution validation failures propagate.
                 stateOverrides.put(kind, new SourceCaptureState.CollectionError(SourceAbsenceReason.PROVIDER_FAILURE));
                 meterRegistry
                         .counter(
@@ -406,8 +396,7 @@ public class WorkspaceContextBuilder {
             case ContextRequest.IssueReviewRequest ir -> ir.job();
             case ContextRequest.ConversationReviewRequest cr -> cr.job();
             case ContextRequest.DocumentReviewRequest dr -> dr.job();
-            // Mentor chat is synchronous and has no job. No default branch: a variant added to the sealed
-            // type must be a compile error here rather than a silent null.
+            // Synchronous mentor chat has no job.
             case ContextRequest.MentorChatRequest ignored -> null;
         };
     }

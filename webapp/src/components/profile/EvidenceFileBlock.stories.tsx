@@ -170,8 +170,6 @@ export const HistoricalSource: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		const revision = canvas.getByText("b".repeat(7));
-		await expect(revision).toBeVisible();
-		await expect(revision.closest("[title]")).toHaveAttribute("title", "b".repeat(40));
+		await expect(canvas.getByText("b".repeat(40))).toBeVisible();
 	},
 };
