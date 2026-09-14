@@ -82,12 +82,13 @@ completeness they attest. Neither an attestation nor a source summary supplies m
    `<contextRoot>/diff.patch` (every changed _code_ file's hunks), opening the underlying file in
    `<repositoryRoot>` when the manifest lists the repository tree and the hunk alone is ambiguous. NA
    "for insufficient coverage / I have not read the diff" is a BUG — you have a multi-minute budget; spend it
-   reading. If you read it and still cannot decide, the answer is `UNDETERMINED`, never `NOT_APPLICABLE`.
+   reading. If required capture is incomplete, record the collection gap with no observation. If qualified
+   evidence still leaves the occasion unresolved, use `UNDETERMINED`, not `NOT_APPLICABLE`.
    **Address what you were handed.** If a precompute hint or a prior review note names a specific `file:line`,
-   open that exact hunk and evaluate it before deciding. You may not emit `NOT_APPLICABLE` while a hint stands
-   unaddressed: either flag that line or state the specific invariant that makes it safe, per `file:line`.
-   Writing "no such construct is present" while a hint named one contradicts the facts you were given — a hint
-   is a candidate, not an observation, but it is evidence, and evidence is explained rather than denied.
+   inspect the relevant captured source before deciding. Explain whether the candidate is supported,
+   disproved or remains unresolved; a hint alone establishes neither a defect nor safety. A disproved
+   candidate does not rule out the practice's occasion elsewhere. Apply the same capture and uncertainty
+   boundaries to hints as to other evidence.
    **Prior Hephaestus observations and feedback**, including stored history and provider comments with or
    without review markers, are leads to re-examine, not independent evidence of this work's occasion or
    quality. History establishes what was previously recorded or delivered, not whether that judgment was

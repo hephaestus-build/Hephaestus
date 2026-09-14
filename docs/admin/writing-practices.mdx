@@ -1,0 +1,134 @@
+---
+id: writing-practices
+title: Writing effective practices
+description: Define evidence-bounded review criteria and check them against realistic cases before adoption.
+---
+
+A useful practice helps a developer make a specific decision about their work. Its review criteria
+must explain **when the expectation matters, what can be observed, and what would justify feedback**.
+A memorable name or a long checklist is not enough.
+
+Use this guide when creating a custom practice or adapting a catalog entry. The
+[Practice Catalog guide](./practice-catalog) explains adoption and updates.
+
+## Start with one expectation
+
+Choose an observable way of working, such as explaining a consequential design decision. Avoid
+personality judgments such as “is careful” or whole-system promises such as “writes correct software.”
+State who the expectation concerns and what work is being reviewed. An author's reply is not a
+reviewer's comment; a plan in an issue is not proof that a change shipped.
+
+When a review runs is separate from whether an expectation applies. A merge event can start a review
+without making every practice relevant to that change.
+
+Separate the fields in the editor:
+
+- **What to look for** contains every rule needed to make the judgment: applicability, evidence,
+  sufficient and insufficient behavior, uncertainty and severity.
+- **Why it matters** explains the practical benefit without claiming a guaranteed outcome.
+- **What good looks like** gives a realistic example. If an example introduces a requirement, also
+  state that requirement in **What to look for**; explanatory guidance does not change review rules.
+
+## Write the review criteria
+
+Use these questions as a drafting outline, not as mandatory headings or a word-count target.
+
+| Decision | What the author must make clear |
+| --- | --- |
+| Applicability | What fact in the work makes this expectation relevant? What ordinary cases need no observation? |
+| Behavior | What exactly could be present or absent? Keep that same behavior in the assessment, evidence and rationale. |
+| Evidence | Which captured sources may establish each claim? Who authored them, and at what point in the work? |
+| Sufficiency | What makes the behavior useful or harmful here? Distinguish an inadequate example from no example. |
+| Absence | What complete, bounded search would justify saying the needed behavior is missing or a harmful behavior is absent? |
+| Uncertainty | What unresolved question would prevent a judgment, even with the required evidence captured? |
+| Consequence | Why does a negative observation matter, and what consequence justifies its severity? |
+| Feedback | What specific change could the developer make? When would no corrective feedback be useful? |
+
+Prefer “identify a material decision whose rationale the reviewer needs” to a keyword test for
+“because.” Prefer the consequence of a missing check to a rule that every missing heading is MAJOR.
+If a threshold represents a team policy, identify that policy and its exceptions. Do not present a
+convenient number as a universal engineering standard.
+
+### Presence, assessment and outcome
+
+Presence says whether the **named behavior** occurred. GOOD or BAD evaluates doing that behavior in
+this context; it does not evaluate the act of omitting it. Together they determine the outcome.
+
+For a practice about proportionate verification guidance on a persistence change:
+
+| Named behavior and evidence | Presence / assessment | Outcome |
+| --- | --- | --- |
+| Written steps save a setting, restart the app and check the saved value. | PRESENT / GOOD | POSITIVE |
+| Written instructions claim an in-memory preview establishes persistence across restarts. | PRESENT / BAD | NEGATIVE |
+| A necessary restart check is missing after all permitted guidance was inspected. | ABSENT / GOOD | NEGATIVE |
+| Destructive production-data instructions are absent from a fully inspected procedure for a check that should use isolated test data. | ABSENT / BAD | POSITIVE |
+
+The last example needs a genuine opportunity for that harmful instruction and an adequate search;
+it is not a reason to praise every unrelated change. Likewise, optional extra guidance is not BAD
+merely because it is unnecessary. A biography-only edit may have no meaningful occasion for this
+runtime-verification practice. That is NOT_APPLICABLE, not positive absence.
+
+One practice can produce different scoped observations. Do not force every review to fill all four
+cells, and do not count “inadequate instructions” and “the missing part of those instructions” as two
+separate lapses when they request the same correction.
+
+### Evidence is more than a matching quotation
+
+A quotation proves that text exists, not that the conclusion follows. Relate instructions to the
+actual changed behavior. An authored preview can provide an entry point; implementation text alone
+need not communicate the intended result. An uninspected screenshot supplies no established visual
+facts. A template issue number is not automatically an adopted requirement.
+
+Required evidence that is missing, failed or truncated stops assessment: record the collection gap,
+not an observation about the developer. With qualified evidence, use UNDETERMINED for a material
+question that remains unresolved. Inability to find a quotation does not itself prove absence.
+A previous observation records an earlier judgment; it is not independent proof that judgment was right.
+
+## Example criteria to adapt
+
+> Review author-provided verification guidance when the actual change introduces a material behavior
+> or appearance that a reviewer needs to check. Ordinary prose edits and empty changes do not by
+> themselves require runtime instructions. Read the captured change and relevant source context, then
+> inspect the description, explicitly adopted linked
+> requirements and relevant authored tests or previews; only use attachments whose contents were
+> inspected. Identify the changed behavior and the guidance that addresses it. For a usable route,
+> establish an entry point, action and observable expected result, with prerequisites needed to reach
+> it. A static preview can demonstrate appearance but does not establish persistence or external
+> integration. Name an existing misleading instruction as present and assess it in context; name a
+> genuinely missing necessary step as absent after the bounded search. Request the smallest useful
+> correction and explain its consequence. Do not claim to have executed the route.
+
+This is an illustrative draft, not an automatically qualified catalog entry. Tailor its evidence
+requirements and consequences to the work your workspace can actually capture.
+
+## Challenge the draft before adopting it
+
+Prepare a small set of real or clearly identified synthetic cases. Record the expected behavior,
+judgment, decisive evidence and appropriate feedback **before** running the review. Include:
+
+- a clearly useful example, a misleading example and a genuinely missing necessary behavior;
+- a harmless omission or excluded occasion, and a case with missing required capture;
+- sufficient context spread across permitted sources, plus an irrelevant or unadopted linked source;
+- an ambiguous case with a precise settling question;
+- a near-identical pair where one decisive fact changes, and a cosmetic rewrite that should not
+  change the judgment;
+- source text that attempts to instruct the reviewer, which must remain evidence rather than authority.
+
+Have another reviewer use the criteria without seeing your expected judgments. Compare the named
+behaviors and rationales as well as labels: matching outcomes can conceal different claims. Revise
+ambiguous instructions, then evaluate on additional cases that were not used to write the revision.
+Agreement measures consistency; it does not establish correctness or human independence.
+
+Keep **Review before sending** while evaluating. Check unsupported corrections, missed material
+concerns, exclusions and uncertainty separately; a single positive rate hides these differences.
+Record the definition and evidence used for each evaluation. Changing criteria requires renewed
+validation, and neither a successful run nor valid citations authorizes automatic sending.
+
+## Basis for these guidelines
+
+[Google's code-review guidance](https://google.github.io/eng-practices/review/reviewer/looking-for.html)
+supports checking real functionality, justified complexity, useful tests and explanatory comments.
+[Artstein and Poesio's survey](https://aclanthology.org/J08-4004/) explains agreement measures and their
+assumptions. [Datasheets for Datasets](https://doi.org/10.1145/3458723) motivates recording composition,
+collection and limitations. These sources inform review and evaluation design; they do not prove
+that a particular practice or model is accurate.
