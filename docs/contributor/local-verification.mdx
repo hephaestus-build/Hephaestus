@@ -122,6 +122,11 @@ the check loaded Tailwind rather than silently falling back to its less precise 
 [`@shadcn/lint`](https://github.com/shadcn-ui/lint) runs inside the existing Oxlint pipeline, not a
 separate ESLint pass. `webapp/.oxlintrc.json` owns the enabled policies and their rationale.
 `webapp/components.json` owns component and theme discovery; no second alias or token list is needed.
+Inline styles fail unless they forward props, carry CSS custom properties, or document a runtime
+boundary at the offending line. Padding and gaps use the theme spacing scale; this is not a blanket
+ban on layout formulas or arbitrary selectors. Selected indirect vocabulary maps are also checked at their definitions
+where indirect consumers exceed the plugin's one-hop analysis.
+
 Run `vp run lint:webapp` to check the webapp and `vp run gate:lint-contract` to verify enforcement.
 
 The plugin's [analysis limits](https://github.com/shadcn-ui/lint/blob/main/docs/how-it-works.md)

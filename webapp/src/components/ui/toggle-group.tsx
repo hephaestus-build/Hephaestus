@@ -43,6 +43,7 @@ function ToggleGroup<Value extends string>({
 			orientation={orientation}
 			style={{ "--gap": spacing }}
 			className={cn(
+				// oxlint-disable-next-line shadcn/no-arbitrary-values -- Registry spacing is a runtime multiple of the theme scale, not an off-token gap.
 				"rounded-lg data-[size=sm]:rounded-[min(var(--radius-md),10px)] group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch",
 				className,
 			)}

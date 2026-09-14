@@ -130,6 +130,7 @@ export function OutlineCollectionIcon({ icon, color, className }: OutlineCollect
 		const NamedIcon = NAMED_ICONS[icon];
 		if (NamedIcon) {
 			return (
+				// oxlint-disable-next-line shadcn/no-inline-styles -- Outline owns each collection's runtime color.
 				<NamedIcon aria-hidden className={className ?? "size-4 shrink-0"} style={{ color: tint }} />
 			);
 		}
@@ -146,6 +147,7 @@ export function OutlineCollectionIcon({ icon, color, className }: OutlineCollect
 		<span
 			aria-hidden
 			className="size-2.5 shrink-0 rounded-full"
+			// oxlint-disable-next-line shadcn/no-inline-styles -- Outline owns each collection's runtime color.
 			style={{ backgroundColor: tint }}
 		/>
 	);

@@ -61,7 +61,6 @@ export function TeamCard({
 							variant="ghost"
 							size="icon"
 							onClick={() => onToggleVisibility(!team.hidden)}
-							className="h-8 w-8"
 							title={team.hidden ? "Show team" : "Hide team"}
 						>
 							{team.hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

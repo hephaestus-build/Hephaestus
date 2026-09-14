@@ -23,8 +23,8 @@ import { firstNonBlank } from "@/lib/text";
 import { type EnvironmentTone, resolveHeaderBadge } from "@/lib/version";
 
 const ENV_DOT: Record<EnvironmentTone, string> = {
-	staging: "bg-amber-500 dark:bg-amber-400",
-	preview: "bg-violet-500 dark:bg-violet-400",
+	staging: "bg-warning",
+	preview: "bg-mentor",
 	local: "bg-muted-foreground/50",
 };
 

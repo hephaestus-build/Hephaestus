@@ -149,7 +149,7 @@ export function ReviewRunCard({
 								type="button"
 								variant="ghost"
 								size="sm"
-								className="h-8 px-2 text-muted-foreground hover:text-foreground"
+								className="h-8 px-2 text-muted-foreground"
 								onClick={() => setShowAllObservations((current) => !current)}
 							>
 								{showAllObservations ? "Show less" : `Show more (${hiddenCount})`}

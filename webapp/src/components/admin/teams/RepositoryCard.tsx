@@ -80,8 +80,7 @@ export function RepositoryCard({
 						{onToggleVisibility && (
 							<Button
 								variant="ghost"
-								size="sm"
-								className="h-7 w-7 p-0"
+								size="icon-sm"
 								onClick={() => void onToggleVisibility(!repository.hiddenFromContributions)}
 								title={
 									repository.hiddenFromContributions
@@ -90,9 +89,9 @@ export function RepositoryCard({
 								}
 							>
 								{repository.hiddenFromContributions ? (
-									<EyeOff className="h-3 w-3" />
+									<EyeOff className="size-3.5" />
 								) : (
-									<Eye className="h-3 w-3" />
+									<Eye className="size-3.5" />
 								)}
 							</Button>
 						)}
@@ -101,11 +100,10 @@ export function RepositoryCard({
 								render={
 									<Button
 										variant="ghost"
-										size="sm"
-										className="h-7 w-7 p-0"
+										size="icon-sm"
 										aria-label={`Configure labels for ${repository.nameWithOwner}`}
 									>
-										<Settings className="h-3 w-3" />
+										<Settings className="size-3.5" />
 									</Button>
 								}
 							/>

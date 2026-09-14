@@ -67,21 +67,13 @@ export function LandingGlow({ className }: { className?: string }) {
 	return <span className={cn(styles.glow, className)} aria-hidden="true" />;
 }
 
-function rotation(degrees: number): StyleWithCustomProperties {
-	return { "--rot": `${degrees}deg` };
-}
-
-/**
- * Merged is violet by GitHub's convention rather than by a token, the same way `group-visuals.ts`
- * spells its palette out: these are borrowed states, not part of our own colour system.
- */
 const WORK_STATES = {
 	open: { label: "Open", icon: CircleDot, className: "bg-success text-success-foreground" },
 	ready: { label: "Open", icon: GitPullRequest, className: "bg-success text-success-foreground" },
 	merged: {
 		label: "Merged",
 		icon: GitMerge,
-		className: "bg-violet-600 text-white dark:bg-violet-500",
+		className: "bg-provider-done text-provider-done-foreground",
 	},
 } as const;
 
@@ -113,7 +105,10 @@ export function LandingWorkCard({
 	rotate = 0,
 }: LandingWorkCardProps) {
 	return (
-		<div className={styles.atom} style={rotation(rotate)}>
+		<div
+			className={styles.atom}
+			style={{ "--rot": `${rotate}deg` } satisfies StyleWithCustomProperties}
+		>
 			<div className="flex flex-col gap-1.5 p-3">
 				<div className="flex items-center gap-1.5">
 					{state ? <LandingStatePill state={state} /> : undefined}
@@ -190,7 +185,10 @@ export function LandingFeedbackCard({
 	const assessment = OUTCOME_DEFS[stance === "strength" ? "POSITIVE" : "NEGATIVE"];
 	const StanceIcon = assessment.icon;
 	return (
-		<div className={cn(styles.atom, styles.slip)} style={rotation(rotate)}>
+		<div
+			className={cn(styles.atom, styles.slip)}
+			style={{ "--rot": `${rotate}deg` } satisfies StyleWithCustomProperties}
+		>
 			<p
 				className={cn(
 					"flex items-start gap-1.5 rounded-t-[0.9rem] px-3 py-1.5 text-[0.6875rem] font-medium",

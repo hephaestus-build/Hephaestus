@@ -40,10 +40,12 @@
 		// Both checks also cover registry internals, stories and cn/cva definitions.
 		"shadcn/no-unknown-classes": "error",
 		"shadcn/no-raw-colors": "error",
-		// No blanket no-restyle/no-arbitrary-values policy: Base UI slots, responsive fields and
-		// overlay motion deliberately compose utilities, selectors and measured geometry.
-		// no-inline-styles would also reject provider colors, TanStack widths and dnd-kit transforms;
-		// require-static-classes cannot resolve the shared vocabulary maps and CVA return values.
+		"shadcn/no-inline-styles": "error",
+		// Padding and gaps use the spacing scale. Layout constraints, typography and motion have
+		// legitimate one-off values; arbitrary selectors are not arbitrary values at all.
+		"shadcn/no-arbitrary-values": ["error", { "deny": ["spacing"] }],
+		// no-restyle conflicts with intentional Base UI slot composition; require-static-classes
+		// cannot resolve imported vocabulary maps and CVA results without duplicating their owners.
 		// -- On, despite their category being off ---------------------------------------------------
 		"no-else-return": "error",
 		"prefer-const": "error",
@@ -478,6 +480,16 @@
 	// the later one's copy of a rule REPLACES the earlier one's options instead of merging with them.
 	// Entries whose globs overlap but set different rules are fine, and there are several below.
 	"overrides": [
+		{
+			// Vocabulary maps are consumed indirectly, beyond the plugin's one-hop analysis.
+			// Scanning all strings everywhere misreads provider IDs such as "outline-token" as CSS.
+			"files": [
+				"src/lib/**",
+				"src/components/core/Header.tsx",
+				"src/components/info/landing/LandingVisuals.tsx"
+			],
+			"rules": { "shadcn/no-raw-colors": ["error", { "scanAllStrings": true }] }
+		},
 		{
 			// `@/` maps to `src/`, so nothing here can spell a sibling any other way. This is a
 			// self-contained tool, not part of the app tree.

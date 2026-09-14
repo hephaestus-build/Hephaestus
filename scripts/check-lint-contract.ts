@@ -28,6 +28,54 @@ const story = (name: string) => `src/components/ui/LintContract-${name}.stories.
 const preferPath = story("prefer-title");
 const fixtures: Fixture[] = [
 	{
+		path: "src/lint-contract-inline.tsx",
+		code: "shadcn(no-inline-styles)",
+		source: "export const bad = <div style={{ padding: 13 }} />;",
+	},
+	{
+		path: "src/components/ui/lint-contract-inline.tsx",
+		code: "shadcn(no-inline-styles)",
+		source: 'export const bad = <div style={{ color: "var(--color-primary)" }} />;',
+	},
+	{
+		path: "src/lint-contract-style-element.tsx",
+		code: "shadcn(no-inline-styles)",
+		source: 'export const bad = <style>{".escape { padding: 13px }"}</style>;',
+	},
+	{
+		path: "src/lint-contract-spacing.tsx",
+		code: "shadcn(no-arbitrary-values)",
+		source: 'export const bad = <div className="md:p-[13px]" />;',
+	},
+	{
+		path: "src/components/ui/lint-contract-spacing.tsx",
+		code: "shadcn(no-arbitrary-values)",
+		source:
+			'import { cva } from "class-variance-authority"; export const bad = cva("flex", { variants: { space: { bad: "gap-[7px]" } } });',
+	},
+	{
+		path: "src/lib/lint-contract-palette.ts",
+		code: "shadcn(no-raw-colors)",
+		source: 'export const states = { merged: { className: "bg-violet-600" } };',
+	},
+	{
+		path: "src/lib/lint-contract-theme-map.ts",
+		code: null,
+		source:
+			'export const states = { merged: { className: "bg-provider-done text-provider-done-foreground" } };',
+	},
+	{
+		path: "src/lint-contract-layout.tsx",
+		code: null,
+		source:
+			'export const good = <div className="p-0.75 gap-2 w-[calc(100vw-2rem)] [&>svg]:size-4" />;',
+	},
+	{
+		path: "src/lint-contract-custom-property.tsx",
+		code: null,
+		source: `import type { CSSProperties } from "react"; export function Good({ width, style }: { width: number; style?: CSSProperties }) { const panelStyle = { ...style, "--panel-width": \`\${width}px\` } satisfies CSSProperties & Record<"--panel-width", string>; return <div className="w-(--panel-width)" style={panelStyle} />; }`,
+	},
+	{
 		path: "src/lint-contract-unused-disable.ts",
 		code: "Unused oxlint-disable directive (no problems were reported).",
 		source: "// oxlint-disable-next-line no-debugger\nexport const value = true;",

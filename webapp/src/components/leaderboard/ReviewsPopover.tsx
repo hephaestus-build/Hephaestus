@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 import type { PullRequestBaseInfo, PullRequestInfo } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
-import { CardTitle } from "@/components/ui/card";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getProviderTerms, getPullRequestStateIcon, type ProviderType } from "@/lib/provider";
 
@@ -122,11 +121,16 @@ export function ReviewsPopover({
 				onClick={(e) => e.stopPropagation()}
 			>
 				<div className="flex flex-wrap justify-between items-center gap-4">
-					<CardTitle className="flex items-center gap-2">
+					<PopoverTitle className="flex items-center gap-2 leading-none">
 						<PrIcon size={20} />
-						<h4 className="font-medium leading-none">Reviewed {terms.pullRequestsShort}</h4>
-					</CardTitle>
-					<Button variant="outline" size="icon" onClick={copyPullRequests}>
+						Reviewed {terms.pullRequestsShort}
+					</PopoverTitle>
+					<Button
+						variant="outline"
+						size="icon"
+						aria-label={`Copy links to reviewed ${terms.pullRequests.toLowerCase()}`}
+						onClick={copyPullRequests}
+					>
 						{showCopySuccess ? (
 							<CheckIcon className="text-success size-4" />
 						) : (
@@ -135,12 +139,7 @@ export function ReviewsPopover({
 					</Button>
 				</div>
 				{hasReviews && (
-					<ScrollArea
-						className="rounded-md -mr-2.5"
-						style={{
-							height: `min(200px, ${36 * sortedReviewedPullRequests.length}px)`,
-						}}
-					>
+					<ScrollArea className="rounded-md -mr-2.5" viewportClassName="max-h-50">
 						<div className="flex flex-col rounded-md text-muted-foreground text-sm pr-2.5">
 							{sortedReviewedPullRequests.map((pullRequest) => (
 								<a

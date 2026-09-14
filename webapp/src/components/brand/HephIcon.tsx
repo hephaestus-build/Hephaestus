@@ -41,12 +41,11 @@ export function HephIcon({
 					<line x1="12" y1="7.2" x2="12" y2="3.6" />
 					<circle cx="12" cy="2.8" r="1" fill="currentColor" />
 					<circle
-						className={cn(styles.ping, streaming && styles.streaming)}
+						className={cn(styles.ping, streaming && [styles.streaming, "text-mentor"])}
 						cx="12"
 						cy="2.8"
 						r={streaming ? 4 : 1.6}
 						fill="none"
-						style={{ color: streaming ? "var(--color-mentor)" : undefined }}
 						opacity={animated ? (streaming ? "1" : "0.5") : "0"}
 					/>
 					<rect x="4" y="8" width="16" height="12" rx="3" />

@@ -229,10 +229,7 @@ export function PracticeGroupDetailPage({
 							size="sm"
 							aria-expanded={isGroupDescriptionOpen}
 							aria-controls="practice-group-description"
-							className={cn(
-								"text-muted-foreground hover:text-foreground",
-								isGroupDescriptionOpen && "bg-muted text-foreground",
-							)}
+							className="text-muted-foreground"
 							onClick={() => setIsGroupDescriptionOpen((open) => !open)}
 						>
 							<InfoIcon className="size-3.5" aria-hidden />
@@ -424,7 +421,7 @@ export function PracticeGroupDetailPage({
 							<Button
 								type="button"
 								variant="link"
-								className="w-fit px-0 text-primary"
+								className="w-fit px-0"
 								onClick={feed.onLoadMore}
 								disabled={feed.isLoadingMore}
 							>

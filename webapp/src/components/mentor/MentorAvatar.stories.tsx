@@ -56,7 +56,7 @@ export const Large: Story = {
  */
 export const CustomStyle: Story = {
 	args: {
-		className: "border-2 border-blue-500 shadow-lg",
+		className: "border-2 border-brand shadow-lg",
 	},
 };
 
