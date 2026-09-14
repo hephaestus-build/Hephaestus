@@ -1,12 +1,16 @@
-import { CheckIcon, CopyIcon } from "@primer/octicons-react";
-import { useEffect, useRef, useState } from "react";
+import { CopyIcon } from "@primer/octicons-react";
+import { useState } from "react";
+import { toast } from "sonner";
 
 import { cn } from "cn";
 import type { PullRequestBaseInfo, PullRequestInfo } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Spinner } from "@/components/ui/spinner";
 import { getProviderTerms, getPullRequestStateIcon, type ProviderType } from "@/lib/provider";
+
+import { copyReviewLinks, reviewLinkUrl } from "./review-links";
 
 export type ReviewedPullRequest = PullRequestInfo | PullRequestBaseInfo;
 
@@ -21,14 +25,11 @@ export function ReviewsPopover({
 	highlight = false,
 	providerType = "GITHUB",
 }: ReviewsPopoverProps) {
-	const [isOpen, setIsOpen] = useState(false);
-	const [showCopySuccess, setShowCopySuccess] = useState(false);
-	const copySuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const [isCopying, setIsCopying] = useState(false);
 	const hasReviews = reviewedPullRequests.length > 0;
 	const terms = getProviderTerms(providerType);
 	const { icon: PrIcon } = getPullRequestStateIcon(providerType, "OPEN");
 
-	// Sort reviewed PRs by repository name and PR number
 	const sortedReviewedPullRequests = [...reviewedPullRequests].sort((a, b) => {
 		if (a.repository?.name === b.repository?.name) {
 			return a.number - b.number;
@@ -36,72 +37,35 @@ export function ReviewsPopover({
 		return (a.repository?.name ?? "").localeCompare(b.repository?.name ?? "");
 	});
 
-	// Helper function to copy PR URLs to clipboard
-	const copyPullRequests = () => {
-		if (!hasReviews) return;
+	const links = sortedReviewedPullRequests.map((pullRequest) => ({
+		id: pullRequest.id,
+		title: pullRequest.title,
+		label: `${pullRequest.repository?.name ?? ""} #${pullRequest.number}`.trim(),
+		url: reviewLinkUrl(pullRequest.htmlUrl),
+	}));
+	const copyableLinks = links.flatMap(({ label, url }) => (url ? [{ label, url }] : []));
 
-		// Create HTML for clipboard
-		const htmlList = `<ul>
-      ${sortedReviewedPullRequests
-				.map(
-					(pullRequest) =>
-						`<li><a href="${pullRequest.htmlUrl}">${pullRequest.repository?.name ?? ""} #${pullRequest.number}</a></li>`,
-				)
-				.join("\n")}
-    </ul>`;
-
-		// Create markdown text
-		const plainText = sortedReviewedPullRequests
-			.map(
-				(pullRequest) =>
-					`[${pullRequest.repository?.name ?? ""} #${pullRequest.number}](${pullRequest.htmlUrl})`,
-			)
-			.join("\n");
-
+	const copyLinks = async () => {
+		setIsCopying(true);
 		try {
-			// Try to use the ClipboardItem API (modern browsers)
-			const clipboardItem = new ClipboardItem({
-				"text/html": new Blob([htmlList], { type: "text/html" }),
-				"text/plain": new Blob([plainText], { type: "text/plain" }),
-			});
-
-			navigator.clipboard.write([clipboardItem]).catch(() => {
-				// Fallback to plain text if html copying fails
-				void navigator.clipboard.writeText(plainText);
-			});
-		} catch (_e) {
-			// Basic fallback for older browsers
-			void navigator.clipboard.writeText(plainText);
+			await copyReviewLinks(copyableLinks);
+			toast.success("Review links copied");
+		} catch {
+			toast.error("Could not copy review links");
+		} finally {
+			setIsCopying(false);
 		}
-
-		setShowCopySuccess(true);
-
-		if (copySuccessTimerRef.current !== null) {
-			clearTimeout(copySuccessTimerRef.current);
-		}
-		copySuccessTimerRef.current = setTimeout(() => {
-			setShowCopySuccess(false);
-			copySuccessTimerRef.current = null;
-		}, 2000);
 	};
 
-	useEffect(() => {
-		return () => {
-			if (copySuccessTimerRef.current !== null) {
-				clearTimeout(copySuccessTimerRef.current);
-				copySuccessTimerRef.current = null;
-			}
-		};
-	}, []);
-
 	return (
-		<Popover open={isOpen} onOpenChange={setIsOpen}>
+		<Popover>
 			<PopoverTrigger
 				render={
 					<Button
 						variant="outline"
 						size="sm"
 						disabled={!hasReviews}
+						aria-label={`Show ${reviewedPullRequests.length} reviewed ${(reviewedPullRequests.length === 1 ? terms.pullRequest : terms.pullRequests).toLowerCase()}`}
 						className={cn(
 							"flex items-center gap-1",
 							!highlight
@@ -128,32 +92,33 @@ export function ReviewsPopover({
 					<Button
 						variant="outline"
 						size="icon"
-						aria-label={`Copy links to reviewed ${terms.pullRequests.toLowerCase()}`}
-						onClick={copyPullRequests}
+						aria-label={
+							isCopying
+								? "Copying review links…"
+								: `Copy links to reviewed ${terms.pullRequests.toLowerCase()}`
+						}
+						disabled={isCopying || copyableLinks.length === 0}
+						onClick={() => void copyLinks()}
 					>
-						{showCopySuccess ? (
-							<CheckIcon className="text-success size-4" />
-						) : (
-							<CopyIcon className="size-4" />
-						)}
+						{isCopying ? <Spinner /> : <CopyIcon className="size-4" />}
 					</Button>
 				</div>
 				{hasReviews && (
 					<ScrollArea className="rounded-md -mr-2.5" viewportClassName="max-h-50">
 						<div className="flex flex-col rounded-md text-muted-foreground text-sm pr-2.5">
-							{sortedReviewedPullRequests.map((pullRequest) => (
+							{links.map((pullRequest) => (
 								<a
 									key={pullRequest.id}
-									href={pullRequest.htmlUrl}
+									href={pullRequest.url}
 									target="_blank"
 									rel="noopener noreferrer"
 									className={cn(
-										"px-3 py-2 hover:bg-accent rounded-md justify-start",
-										"transition-colors duration-200",
+										"px-3 py-2 rounded-md justify-start",
+										pullRequest.url && "hover:bg-accent transition-colors duration-200",
 									)}
 									title={pullRequest.title}
 								>
-									{pullRequest.repository?.name ?? ""} #{pullRequest.number}
+									{pullRequest.label}
 								</a>
 							))}
 						</div>

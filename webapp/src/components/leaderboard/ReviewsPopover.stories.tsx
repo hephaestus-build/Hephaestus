@@ -142,7 +142,7 @@ export const HighlightedMergeRequest: Story = {
 		providerType: "GITLAB",
 	},
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "2" }));
+		await userEvent.click(canvas.getByRole("button", { name: /Show 2 reviewed/ }));
 		await expectSettledVisible(await screen.findByRole("dialog", { name: "Reviewed MRs" }));
 		await expect(
 			screen.getByRole("button", { name: "Copy links to reviewed merge requests" }),
@@ -161,7 +161,7 @@ export const WrappedRepositoryNames: Story = {
 		})),
 	},
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "2" }));
+		await userEvent.click(canvas.getByRole("button", { name: /Show 2 reviewed/ }));
 		await expectSettledVisible(await screen.findByRole("dialog", { name: "Reviewed PRs" }));
 		await expect(
 			screen.getByRole("button", { name: "Copy links to reviewed pull requests" }),
@@ -195,7 +195,7 @@ export const LongReviewList: Story = {
 		),
 	},
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "12" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Show 12 reviewed pull requests" }));
 		await expectSettledVisible(await screen.findByRole("dialog", { name: "Reviewed PRs" }));
 		const lastLink = screen.getByRole("link", { name: "Hephaestus #106" });
 		const viewport = lastLink.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');

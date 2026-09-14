@@ -95,6 +95,14 @@ export const AssistantMessage: Story = {
 		await userEvent.tab();
 		await expect(copy).toHaveFocus();
 		await waitFor(() => expect(copy).toBeVisible());
+		await expect(canvas.getByRole("button", { name: "Good response" })).toHaveAttribute(
+			"aria-pressed",
+			"false",
+		);
+		await expect(canvas.getByRole("button", { name: "Bad response" })).toHaveAttribute(
+			"aria-pressed",
+			"false",
+		);
 	},
 };
 
@@ -119,6 +127,16 @@ export const AssistantUpvoted: Story = {
 			updatedAt: new Date(STORY_NOW),
 		},
 	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Good response" })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		await expect(canvas.getByRole("button", { name: "Bad response" })).toHaveAttribute(
+			"aria-pressed",
+			"false",
+		);
+	},
 };
 
 /**
@@ -131,6 +149,16 @@ export const AssistantDownvoted: Story = {
 			isUpvoted: false,
 			updatedAt: new Date(STORY_NOW),
 		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Good response" })).toHaveAttribute(
+			"aria-pressed",
+			"false",
+		);
+		await expect(canvas.getByRole("button", { name: "Bad response" })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
 	},
 };
 

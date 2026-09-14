@@ -1,67 +1,23 @@
-import React, { type ComponentType, type ReactNode } from "react";
+import { cn } from "cn";
+import type { ReactNode } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 
-/** Kept to what Lucide and Octicons both accept. */
-interface IconProps {
-	className?: string;
-	size?: number;
-}
-
-/** Lucide icons are `forwardRef` objects, not plain functions, so both shapes count. */
-function isIconComponent(
-	icon: ReactNode | ComponentType<IconProps>,
-): icon is ComponentType<IconProps> {
-	if (typeof icon === "function") return true;
-	if (typeof icon !== "object" || icon === null || !("render" in icon)) return false;
-	return typeof icon.render === "function";
-}
-
 export interface EmptyStateProps {
-	/** The icon to display at the top of the empty state */
-	icon: ReactNode | ComponentType<IconProps>;
-	/** The title to display as the main message */
+	icon: ReactNode;
 	title: string;
-	/** Optional description text to provide more context */
 	description?: string;
-	/** Optional action component like a button */
 	action?: ReactNode;
-	/** Optional custom height, defaults to h-60 */
-	height?: string;
-	/** Optional additional className */
 	className?: string;
 }
 
-/**
- * EmptyState component displays a consistent empty state pattern across the application
- * when there is no content to show.
- */
-export function EmptyState({
-	icon,
-	title,
-	description,
-	action,
-	height = "h-60",
-	className,
-}: EmptyStateProps) {
-	// Render the icon based on its type
-	const renderIcon = () => {
-		if (React.isValidElement(icon)) {
-			return icon;
-		}
-
-		if (isIconComponent(icon)) {
-			const IconComponent = icon;
-			return <IconComponent className="h-6 w-6 text-muted-foreground" size={24} />;
-		}
-
-		return null;
-	};
-
+export function EmptyState({ icon, title, description, action, className }: EmptyStateProps) {
 	return (
-		<Card className={`border-dashed ${height} ${className ?? ""}`}>
-			<CardContent className="flex flex-col items-center justify-center py-8 px-4 text-center h-full">
-				<div className="rounded-full bg-muted p-3 mb-3">{renderIcon()}</div>
+		<Card className={cn("min-h-60 border-dashed", className)}>
+			<CardContent className="flex flex-1 flex-col items-center justify-center py-8 px-4 text-center">
+				<div aria-hidden="true" className="rounded-full bg-muted text-muted-foreground p-3 mb-3">
+					{icon}
+				</div>
 				<h3 className="font-medium text-lg mb-1">{title}</h3>
 				{description && (
 					<p className="text-muted-foreground text-sm mb-4 max-w-md">{description}</p>

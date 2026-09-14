@@ -112,6 +112,7 @@ export function MessageActions({
 								render={
 									<Button
 										aria-label="Good response"
+										aria-pressed={vote?.isUpvoted === true}
 										className={cn(
 											"pointer-coarse:w-10 text-muted-foreground hover:text-provider-success-foreground hover:bg-provider-success-foreground/10",
 											{
@@ -135,6 +136,7 @@ export function MessageActions({
 								render={
 									<Button
 										aria-label="Bad response"
+										aria-pressed={vote?.isUpvoted === false}
 										className={cn(
 											"pointer-coarse:w-10 text-muted-foreground hover:text-provider-danger-foreground hover:bg-provider-danger-foreground/10",
 											{
