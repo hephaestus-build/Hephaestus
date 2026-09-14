@@ -318,6 +318,19 @@ function taskClosure(tasks: Record<string, unknown>, roots: Iterable<string>): S
 }
 
 void describe("CI contract", () => {
+	void test("the webapp image includes root configuration read by Vite", async () => {
+		const config = await readFile("webapp/vite.config.ts", "utf8");
+		const dockerfile = await readFile("webapp/Dockerfile", "utf8");
+		const rootInputs = [...config.matchAll(/new URL\("\.\.\/([^"/]+)", import\.meta\.url\)/g)].map(
+			([, file]) => file,
+		);
+		assert.ok(rootInputs.length > 0, "Expected root configuration dependencies");
+		const copied = dockerfile.match(/^COPY (.+) \/repo\/$/m)?.[1]?.split(/\s+/) ?? [];
+		for (const file of rootInputs) {
+			assert.ok(copied.includes(file ?? ""), `Webapp image is missing ${file}`);
+		}
+	});
+
 	void test("task names follow the vocabulary in AGENTS.md", async () => {
 		const tasks = await loadTasks();
 		const instructions = await readFile("AGENTS.md", "utf8");
