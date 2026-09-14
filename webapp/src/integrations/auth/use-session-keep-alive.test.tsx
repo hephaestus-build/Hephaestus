@@ -15,7 +15,6 @@ function userPayload(expiresInSec: number) {
 		displayName: "Active Annie",
 		appRole: "USER",
 		status: "ACTIVE",
-		impersonating: false,
 		linkedProviders: [],
 		roles: [],
 		accessTokenExpiresAt: Math.floor(Date.now() / 1000) + expiresInSec,

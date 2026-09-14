@@ -4,6 +4,7 @@ import { isRecord } from "@/lib/is-record";
 export type AuditSeverity = "error" | "warning" | "info";
 
 const HIGH_RISK_EVENTS = new Set([
+	"USER_VIEW",
 	"IMPERSONATION_BEGIN",
 	"WORKSPACE_ELEVATION",
 	"APP_ROLE_CHANGED",
@@ -23,6 +24,7 @@ export type AuthEventType = NonNullable<
 >[number];
 
 export const EVENT_TYPE_LABELS: Record<AuthEventType, string> = {
+	USER_VIEW: "User view authorized",
 	LOGIN: "Sign-in",
 	LOGIN_FAILED: "Failed sign-in",
 	LOGOUT: "Sign-out",

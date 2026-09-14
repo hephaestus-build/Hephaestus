@@ -15,7 +15,6 @@ import { toast } from "sonner";
 
 import { getIntegrationCatalogOptions, listThreadsOptions } from "@/api/@tanstack/react-query.gen";
 import type { SurveyInvitation } from "@/api/types.gen";
-import { ImpersonationBanner } from "@/components/auth/ImpersonationBanner";
 import { LoginDialog } from "@/components/auth/LoginDialog";
 import { CookieConsentBanner } from "@/components/consent/CookieConsentBanner";
 import Footer from "@/components/core/Footer";
@@ -99,7 +98,6 @@ function RootLayout() {
 			<HeadContent />
 			<SkipToContent />
 			{!loginOpen && <CookieConsentBanner />}
-			<ImpersonationBanner />
 			<ProviderColorScope>
 				<SidebarProvider>
 					<AppSidebarContainer />
@@ -270,7 +268,6 @@ function HeaderContainer() {
 		logout,
 		getUserProfilePictureUrl,
 		getUserId,
-		isImpersonating,
 	} = useAuth();
 	const {
 		chromeWorkspaceSlug,
@@ -296,7 +293,7 @@ function HeaderContainer() {
 			avatarUrl={getUserProfilePictureUrl()}
 			workspaceSlug={chromeWorkspaceSlug}
 			feedbackDialog={
-				!isLoading && isAuthenticated && !isImpersonating ? (
+				!isLoading && isAuthenticated ? (
 					<ProductFeedbackControls
 						key={`${getUserId()}:${chromeWorkspaceSlug}`}
 						workspaceSlug={chromeWorkspaceSlug}

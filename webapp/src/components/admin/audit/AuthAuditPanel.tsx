@@ -139,7 +139,7 @@ export function AuthAuditPanel({
 				)}
 				{search.actorId !== undefined && (
 					<ReferenceFilterPill
-						label="Impersonated by"
+						label="Acting account"
 						id={search.actorId}
 						name={nameForRef(events, search.actorId)}
 						onClear={() => onSearchChange({ actorId: undefined })}

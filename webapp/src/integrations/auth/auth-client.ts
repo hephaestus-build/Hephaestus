@@ -30,14 +30,11 @@ export function csrfHeaders(): Record<string, string> {
 	return token ? { "X-XSRF-TOKEN": token } : {};
 }
 
-export function applyStateChangingHeaders(request: Request, writesEnabled: boolean): Request {
+export function applyStateChangingHeaders(request: Request): Request {
 	const method = request.method.toUpperCase();
 	if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
 		for (const [key, value] of Object.entries(csrfHeaders())) {
 			request.headers.set(key, value);
-		}
-		if (writesEnabled) {
-			request.headers.set("X-Impersonation-Allow-Writes", "true");
 		}
 	}
 	return request;

@@ -33,11 +33,15 @@ Identity linking uses the same OAuth exchange but binds its sealed intent to the
 signed-in account. It cannot create an authenticated link from an anonymous request. Slack and
 Outline support linking only, not sign-in.
 
+Sign-in and linking also fill [`identity_link.external_actor_id`](./auth-glossary.md), the synced
+git-provider user the link denotes. That join, not a login comparison, is what tells the rest of the
+system which developer an account is.
+
 ## Key properties
 
 - **No HTTP sessions.** Revocation state lives in PostgreSQL. The browser holds one `__Host-HEPHAESTUS_AT`
   cookie carrying an ES256 JWT;
-  [session deadlines](./admin/configuration-readiness.mdx#session-and-impersonation-deadlines) define
+  [session deadlines](./admin/configuration-readiness.mdx#session-deadlines) define
   its lifetime. OAuth-flow state rides AES-GCM cookies, not a
   session — so login works across pods without sticky sessions.
 - **Application-issued tokens.** After federating to the upstream IdP, Hephaestus issues its own JWT. Claim
@@ -59,11 +63,9 @@ Outline support linking only, not sign-in.
   by `EncryptedStringConverter` (AES-256-GCM). This is **authentication** only; a workspace's SCM
   data source is a separate per-workspace `Connection` + group token/PAT. ADR 0017 records why the
   two are separate.
-- **Impersonation reissues the token.** There is no server-side session to switch, so an
-  instance admin mints a target-scoped JWT carrying the actor claim defined in
-  [the auth glossary](./auth-glossary.md#jwt-claim-shape).
-  `ImpersonationGuard` makes such sessions read-only unless the operator sends an explicit
-  confirm-writes header. Every begin/exit is audited.
+- **A user view never switches authentication.** An instance administrator reads a workspace
+  member's private pages as themselves, even when the viewed user has no account — see
+  [read-only user views](./contributor/instance-admin.md#read-only-user-views).
 - **GDPR.** `auth_event` is an append-only, monthly RANGE-partitioned (self-managed in-app by
   `pg_partman`, 12-month retention; see ADR 0018)
   audit log. Account deletion is a 48-hour soft-delete cooldown → hard cascade +
@@ -72,7 +74,7 @@ Outline support linking only, not sign-in.
 
 ## Browser session coordination
 
-Renewal, logout and impersonation transitions use the browser's
+Renewal and logout use the browser's
 [Web Locks API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API) to serialize requests
 and responses that replace the shared session cookie. Generated SDK operations own HTTP requests;
 TanStack Query mutation options retain their lifecycle and error handling. Without Web Locks, only
@@ -111,5 +113,5 @@ through `GitProviderRegistry`, an auth SPI. A login provider grants authenticati
 supply a workspace's integration credentials.
 
 Workspace, SCM integration and notification modules consume auth read interfaces and events;
-auth does not depend on their implementations. HTTP-wide enforcement, including impersonation
-write restrictions, belongs to `core.security`, outside individual provider adapters.
+auth does not depend on their implementations. HTTP-wide enforcement belongs to `core.security`,
+outside individual provider adapters.

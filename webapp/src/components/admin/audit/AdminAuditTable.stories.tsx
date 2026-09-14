@@ -147,7 +147,7 @@ export const EmptyInitial: Story = {
 	args: { events: [], hasFilter: false },
 	play: async ({ canvas }) => {
 		canvas.getByText("No events yet");
-		canvas.getByText(/Sign-ins, impersonation, role changes/i);
+		canvas.getByText(/Sign-ins, user views, role changes/i);
 	},
 };
 
@@ -180,5 +180,36 @@ export const ColumnCountMatchesHeader: Story = {
 		if (!firstBodyRow) throw new Error("The table rendered no body rows");
 		const cells = within(firstBodyRow).getAllByRole("cell");
 		await expect(headers).toHaveLength(cells.length);
+	},
+};
+
+/** An accountless viewed user is attributable without pretending that they were signed in. */
+export const AccountlessUserView: Story = {
+	args: {
+		events: [
+			{
+				id: 20,
+				occurredAt: new Date("2026-09-11T12:00:00Z"),
+				eventType: "USER_VIEW",
+				result: "SUCCESS",
+				elevatedViaInstanceAdmin: true,
+				accountId: 7,
+				viewedUserId: 99,
+				workspaceId: 12,
+				account: { id: 7, displayName: "Grace Hopper" },
+				details:
+					'{"phase":"AUTHORIZED","reason":"Investigate missing feedback","surface":"practices"}',
+			},
+		],
+	},
+	play: async ({ canvas }) => {
+		canvas.getByText("High-risk event:");
+		await expect(canvas.getByText("Elevated")).toBeVisible();
+		await expect(
+			canvas.getByRole("button", { name: "View details: User view authorized — Grace Hopper" }),
+		).toBeVisible();
+		await userEvent.click(canvas.getByRole("button", { name: /View details/ }));
+		await expectSettledVisible(await screen.findByText("Viewed user"));
+		screen.getByText("#99");
 	},
 };

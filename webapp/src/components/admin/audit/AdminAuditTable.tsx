@@ -99,7 +99,7 @@ export function AdminAuditTable({
 					<EmptyTitle>{hasFilter ? "No events match your filters" : "No events yet"}</EmptyTitle>
 					{!hasFilter && (
 						<EmptyDescription>
-							Sign-ins, impersonation, role changes, and account deletions will appear here.
+							Sign-ins, user views, role changes, and account deletions will appear here.
 						</EmptyDescription>
 					)}
 				</EmptyHeader>
@@ -178,7 +178,7 @@ export function AdminAuditTable({
 										</span>
 										{actor && (
 											<span className="block truncate text-xs text-muted-foreground">
-												impersonated by{" "}
+												by{" "}
 												{onFilterActor && actingAccountId != null ? (
 													<FilterLink
 														label={actor}

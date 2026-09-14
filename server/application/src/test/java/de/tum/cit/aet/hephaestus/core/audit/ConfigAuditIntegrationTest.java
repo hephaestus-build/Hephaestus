@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
-import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -48,9 +47,6 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private ConfigAuditEventRepository configAuditEventRepository;
-
-    @Autowired
-    private AccountRepository accountRepository;
 
     @Autowired
     private IdentityLinkRepository identityLinkRepository;
@@ -92,7 +88,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void shouldTagBothLedgersWhenAnInstanceAdminReachesAWorkspaceTheyAreNotAMemberOf() {
         Workspace workspace = setupWorkspace("audit-elevated");
-        Account admin = persistAccount("Elevation operator");
+        Account admin = persistInstanceAdmin("Elevation operator");
         long adminId = persistedId(admin);
 
         patchPracticeReviewAs(workspace, token(adminId), Map.of("cooldownMinutes", 47));
@@ -112,7 +108,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
         Workspace workspace = setupWorkspace("audit-member");
         User member = persistUser("audit-member-admin");
         ensureWorkspaceMembership(workspace, member, WorkspaceMembership.WorkspaceRole.ADMIN);
-        Account account = persistAccount("Workspace member");
+        Account account = persistInstanceAdmin("Workspace member");
         linkIdentity(account, member);
         long accountId = persistedId(account);
 
@@ -570,13 +566,6 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
     /** Authenticates as one specific account id — the JWT subject the native-auth filters read. */
     private static String token(long accountId) {
         return "mock-jwt-sub-" + accountId;
-    }
-
-    private Account persistAccount(String displayName) {
-        Account account = new Account(displayName);
-        account.setAppRole(Account.AppRole.APP_ADMIN);
-        account.setStatus(Account.Status.ACTIVE);
-        return accountRepository.save(account);
     }
 
     /** Wires an account to an SCM actor, which is what turns a workspace membership into roles. */

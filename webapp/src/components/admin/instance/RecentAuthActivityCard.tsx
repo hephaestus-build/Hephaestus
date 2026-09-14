@@ -76,7 +76,7 @@ export function RecentAuthActivityCard({
 							</EmptyMedia>
 							<EmptyTitle>No activity yet</EmptyTitle>
 							<EmptyDescription>
-								Sign-ins, role changes, and impersonations will show up here as they happen.
+								Sign-ins, role changes, and user views will show up here as they happen.
 							</EmptyDescription>
 						</EmptyHeader>
 					</Empty>

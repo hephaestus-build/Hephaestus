@@ -46,7 +46,6 @@ const meta = {
 		isFetchingNextPage: false,
 		onLoadMore: fn(),
 		onChangeRole: fn(),
-		onImpersonate: fn(),
 		onForceSignOut: fn(),
 	},
 } satisfies Meta<typeof AdminUsersTable>;
@@ -54,23 +53,15 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A signed-in admin (id 1) cannot revoke their own admin or impersonate themselves. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("Ada Admin");
-
-		// Open the signed-in admin's own action menu (row id 1).
 		await userEvent.click(canvas.getByRole("button", { name: "Actions for Ada Admin" }));
-		// Both self-guards render their menu item disabled, so neither action can fire. (Asserting the
-		// disabled state, not a click: a disabled Base UI item has pointer-events:none so it can't be
-		// clicked — the positive path is covered by ChangeAnotherUsersRole.)
+		// A disabled Base UI item has pointer-events:none, so the guard is asserted rather than clicked.
 		const revokeSelf = await screen.findByRole("menuitem", {
 			name: /can't revoke your own admin/i,
 		});
 		await expect(revokeSelf).toHaveAttribute("data-disabled");
-		await expect(
-			screen.getByRole("menuitem", { name: /cannot impersonate self/i }),
-		).toHaveAttribute("data-disabled");
 	},
 };
 

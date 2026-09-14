@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.oauth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -24,6 +25,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -49,13 +51,14 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
     private AccountJitCreator accountJitCreator;
     private AdminBootstrapPolicy adminBootstrapPolicy;
     private LoginProviderRepository loginProviderRepository;
+    private GitProviderRegistry gitProviderRegistry;
     private AccountProvisioningService service;
 
     @BeforeEach
     void setUp() {
         accountRepository = mock(AccountRepository.class);
         identityLinkRepository = mock(IdentityLinkRepository.class);
-        GitProviderRegistry gitProviderRegistry = mock(GitProviderRegistry.class);
+        gitProviderRegistry = mock(GitProviderRegistry.class);
         verifiedEmailResolver = mock(VerifiedEmailResolver.class);
         accountJitCreator = mock(AccountJitCreator.class);
         adminBootstrapPolicy = mock(AdminBootstrapPolicy.class);
@@ -66,6 +69,7 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
         githubProvider.setBaseUrl("https://github.com");
         lenient().when(loginProviderRepository.findByRegistrationId(any())).thenReturn(Optional.of(githubProvider));
         lenient().when(gitProviderRegistry.resolveProviderId(any(), any())).thenReturn(PROVIDER_ID);
+        lenient().when(gitProviderRegistry.findActorId(anyLong(), any())).thenReturn(Optional.empty());
         lenient().when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(accountJitCreator.create(any(), any())).thenAnswer(inv -> inv.getArgument(0));
         service = new AccountProvisioningService(
@@ -282,6 +286,54 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
                         "github", "sub-1", principal(), AuthIntentCookie.Intent.login(null, null)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("lost the race");
+    }
+
+    @Test
+    void returningLogin_wiresTheLinkToTheUserSyncedSinceTheLastSignIn() {
+        existingLink(null);
+        when(gitProviderRegistry.findActorId(PROVIDER_ID, "777")).thenReturn(Optional.of(555L));
+
+        service.resolveOrProvision("github", "777", principal(), AuthIntentCookie.Intent.login(null, null));
+
+        verify(identityLinkRepository).linkExternalActorIfAbsent(31L, 555L);
+    }
+
+    @Test
+    void returningLogin_leavesAWiredLinkAlone() {
+        existingLink(555L);
+
+        service.resolveOrProvision("github", "777", principal(), AuthIntentCookie.Intent.login(null, null));
+
+        verify(gitProviderRegistry, never()).findActorId(anyLong(), any());
+        verify(identityLinkRepository, never()).linkExternalActorIfAbsent(anyLong(), anyLong());
+    }
+
+    private IdentityLink existingLink(@Nullable Long externalActorId) {
+        Account account = new Account("Existing");
+        account.setId(9L);
+        IdentityLink link = new IdentityLink();
+        link.setId(31L);
+        link.setAccount(account);
+        link.setExternalActorId(externalActorId);
+        when(identityLinkRepository.findActiveByProviderSubject(eq(PROVIDER_ID), eq("777"), any()))
+                .thenReturn(Optional.of(link));
+        return link;
+    }
+
+    @Test
+    void newLink_carriesTheSyncedUserBeforeItIsSaved() {
+        when(identityLinkRepository.findActiveByProviderSubject(eq(PROVIDER_ID), eq("777"), any()))
+                .thenReturn(Optional.empty());
+        when(gitProviderRegistry.findActorId(PROVIDER_ID, "777")).thenReturn(Optional.of(555L));
+        when(verifiedEmailResolver.resolve(eq("github"), any()))
+                .thenReturn(new VerifiedEmailResolver.ResolvedEmail("u@v.de", true));
+
+        service.resolveOrProvision("github", "777", principal(), AuthIntentCookie.Intent.login(null, null));
+
+        var link = ArgumentCaptor.forClass(IdentityLink.class);
+        verify(accountJitCreator).create(any(), link.capture());
+        assertThat(link.getValue().getExternalActorId()).isEqualTo(555L);
+        verify(identityLinkRepository, never()).linkExternalActorIfAbsent(anyLong(), anyLong());
     }
 
     @Test

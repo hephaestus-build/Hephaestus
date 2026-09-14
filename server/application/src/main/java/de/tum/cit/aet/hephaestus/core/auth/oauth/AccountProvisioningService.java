@@ -112,6 +112,13 @@ public class AccountProvisioningService {
                         registrationId, subject, link.getAccount().getId());
             }
             identityLinkRepository.touchLastLogin(link.getId(), clock.instant());
+            if (link.getExternalActorId() == null) {
+                // A developer synced from a repository before their first sign-in has a user row this
+                // link did not know about; a later sync can also create it after the link.
+                gitProviderRegistry
+                        .findActorId(providerId, subject)
+                        .ifPresent(actorId -> identityLinkRepository.linkExternalActorIfAbsent(link.getId(), actorId));
+            }
             log.info(
                     "auth.success: returning login provider={} accountId={}",
                     registrationId,
@@ -241,6 +248,8 @@ public class AccountProvisioningService {
         link.setProviderId(providerId);
         link.setSubject(subject);
         link.setTeamId(teamId);
+        link.setExternalActorId(
+                gitProviderRegistry.findActorId(providerId, subject).orElse(null));
         link.setUsernameAtSignup(stringAttr(principal, "login", "preferred_username", "username"));
         link.setEmailAtSignup(email(principal));
         link.setDisplayName(stringAttr(principal, "name", "display_name"));

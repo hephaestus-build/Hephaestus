@@ -344,7 +344,7 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
 
     private void seedFailure(long id, AuthEvent.EventType type, Instant occurredAt, String failureReason) {
         AuthEventData data = new AuthEventData(
-                type, AuthEvent.Result.FAILURE, null, null, failureReason, null, null, null, null, false);
+                type, AuthEvent.Result.FAILURE, null, null, null, failureReason, null, null, null, null, false);
         authEventRepository.save(AuthEvent.create(data, id, occurredAt, "127.0.0.1", "test-agent"));
     }
 
@@ -355,7 +355,7 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
             @Nullable Long accountId,
             @Nullable Long actingAccountId) {
         AuthEventData data = new AuthEventData(
-                type, AuthEvent.Result.SUCCESS, accountId, actingAccountId, null, null, null, null, null, false);
+                type, AuthEvent.Result.SUCCESS, accountId, null, actingAccountId, null, null, null, null, null, false);
         authEventRepository.save(AuthEvent.create(data, id, occurredAt, "127.0.0.1", "test-agent"));
     }
 
