@@ -1,5 +1,66 @@
 # Changelog
 
+## 0.81.0
+
+### Minor Changes
+
+- Practice observations now distinguish whether a practice was assessed from whether the specified behavior was present and whether that behavior is desirable or undesirable in context. Not applicable and undetermined observations no longer masquerade as presence values. Invalid combinations are rejected instead of silently rewritten, and positive and negative outcomes are derived from presence and assessment. Severity belongs only to negative outcomes.
+
+  **Operators:** This changes the observation API and runtime output contract. Upgrade the server, sandbox runtime and webapp together; update custom consumers to read `assessmentStatus` and nullable `presence`, `assessment` and `severity`, plus the read-only `outcome`. Standing observations expose their descriptive `kind` separately. Back up the database before upgrading. The migration preserves existing outcomes by translating historical absence assessments and stops rather than inventing a severity for an inconsistent historical bad observation. See the migration guide before upgrading.
+
+- Practice reviews of a pull request now read its commits — each commit's subject, body, timestamps and file count, in history order — so feedback about commit messages and commit scope no longer comes back inconclusive because no commit list reached the review. **Operators:** a pull request review now needs the repository checkout for every practice, not only the code practices; an installation that enables `GIT_CHECKOUT_ENABLED` together with `AGENT_ENABLED`, as the install guide requires, needs no change.
+- Practice reviews can evaluate a verified empty code-change range under source contract 1.1.0. Each practice still determines whether the work presents an occasion; an empty capture does not automatically produce praise, criticism or a not-applicable observation. Missing, failed and incomplete required captures remain blocked.
+
+  New reviews use the updated source policy. Recorded 1.0.0 evidence retains its original policy and digest; this runtime does not re-derive those historical readiness decisions.
+
+  **Operators:** Pause new reviews before upgrading, then review and explicitly update stored custom and overridden practice policies to source contract 1.1.0 through the normal administration API before resuming them. Adopt the updated bundled catalogue through its existing adoption flow. Historical policies are not silently reinterpreted.
+
+- A **Feedback** button in the header is now the one place to reach the Hephaestus team: **Share an idea**, **Report a bug** or **Send feedback**, with a dialog that asks for what that kind needs, and a link to the public issue tracker for those who prefer the open. Surveys wait in the same menu with their length; each new one is announced once and never opens by itself. A survey asks one question at a time, marks optional questions, takes **Something else** where its author allows it, keeps your draft when you close it, and lets you undo an accidental decline. Page and browser details go with a report only when you tick the box — ticked by default for a bug.
+
+  Instance administrators can publish a survey for research as well as for product improvement. A **product** survey is read by the Hephaestus team and is never research. Where the instance names a research organisation, a **research** survey is offered only to members who currently take part in that study, is labelled as research with a link to leave the study, and its answers are that study's data. Results pages show invited, responded and declined counts, a summary per question with averages and a Net Promoter Score, every response, and a CSV export. The inbox badges ideas, bugs and feedback and lets you resolve or reopen them.
+
+- Practice reviews assess each evidenced behavior in context, distinguishing useful actions, harmful actions, missing needed behavior and bounded avoidance. Developer practice pages retain both kinds of positive observation, and review guidance ties verification instructions to the change they actually exercise.
+
+  Review history retains individual observations without inferred resolved or regressed statuses. Automatic cross-review progress footers are removed: a shared location or a missing observation does not establish that the same concern changed.
+
+  Reactions and delivery receipts apply to the exact observation they reference. Different behaviors at the same location remain independent, so addressing or delivering one does not silently suppress another.
+
+  **Operators:** Upgrade the server and review runtime together after draining in-flight reviews and feedback dispatches. Adopt the updated bundled practice definitions, review customized criteria for contextual behavior assessment, and remove `PRACTICE_REVIEW_PROGRESS_FOOTER` or `hephaestus.practice-review.progress-footer` from deployment overrides.
+
+- Instance administrators see which release, commit and image digest the server reports from its verified release lock, and whether a newer release is published. To learn that, the server asks `api.github.com` once a day, unauthenticated and without any instance data; set `HEPHAESTUS_RELEASE_CHECK_ENABLED=false` on an air-gapped host to switch it off. The overview keeps a newer release apart from a failed, rate-limited, disabled or never-completed check, says whether the newer release carries schema migrations, and links its notes and the upgrade guide. Every runtime role reports the same identity under `release` in `/actuator/info`.
+
+### Patch Changes
+
+- Replace the web application's styling utility dependencies with shadcn's maintained class-merging library, preserving component style overrides without requiring upgrade steps.
+- Remove an unused documentation dependency and simplify internal styling and mentor text handling without changing displayed content or requiring upgrade steps.
+- Practice-review instructions check that an observation's derived outcome agrees with its evidenced rationale. Appropriate omissions do not justify negative observations or automatic positive credit. Severity follows each practice's consequence-based criteria, and a missing changed test file does not establish that tests were not run.
+- Simplify internal styling dependencies without changing component appearance or requiring upgrade steps.
+- Bundled practices distinguish missing evidence from missing behavior and use context-specific expectations for test changes, review explanations, generated files, dependency updates and documented decisions. Shared review guidance no longer assumes a fixed set of available sources or treats an unavailable quotation as proof of absence. A new authoring guide explains how to define and evaluate custom practices.
+
+  Existing workspace practices remain independent copies. Review and adopt revised criteria deliberately; these changes do not enable automatic feedback.
+
+- Practice reviews preserve nonblank citation file identifiers exactly instead of stripping meaningful surrounding spaces. Progress replies describe recorded results without calling them exhaustive review, and context-budget reminders request supported claims without a per-practice observation quota.
+- Practice criteria, rationale and examples can be updated with multiline Markdown without being rejected as blank. Whitespace-only updates remain invalid, and omitted fields remain unchanged.
+- Observation severity now appears for missing desirable behaviour as well as present undesirable behaviour, and never for positive outcomes.
+- Practice reviews preserve the exact text of submitted evidence quotations, including indentation and line endings. Local citation checks now use the same strict text-matching rules as server admission rather than accepting altered indentation, display coordinates or substituted punctuation. Valid indented quotations are no longer damaged before submission.
+
+  Review tools also state their durable-submission boundary: citation-format experiments are not practice observations. Time-budget reminders request only supported claims, never an observation quota.
+
+  Source lines that resemble diff headers remain source content for evidence and secret checks, and inline feedback retains the correct source location. Citation coordinates outside the supported positive 32-bit range are rejected before matching.
+
+- Practice reviews preserve the severity of supported observations instead of silently lowering it based on the practice's name. Custom practices follow their own review criteria; feedback approval and delivery controls remain unchanged.
+- GitLab reviews use the recorded merge-request diff base rather than an advanced target branch, including legitimately empty changes. Unavailable revision objects remain explicit evidence gaps. Reviews stopped before model execution now record result processing as complete without claiming feedback was delivered.
+- Captured issue mentions retain bounded source context and are identified as text candidates, including template examples. Review instructions also distinguish displayed diff annotations from exact source quotations; evidence admission remains strict.
+
+  Issue-closure reviews distinguish current checklists and sub-issue counts from evidence of their state at closure. A current snapshot alone does not establish a historical outcome or a developer-wide habit.
+
+- Review details distinguish completed result processing from feedback publication, including when feedback still awaits approval.
+
+  Retrying result processing keeps the review status and prepared feedback up to date without requiring a page reload.
+
+- A fully captured practice-review trace can be complete even when the review fails. Trace completeness now records finalized, closed capture with no dropped events; the review's exit status, errors and evidence-admission result remain separate. Interrupted or incomplete capture is still reported as incomplete, and historical traces retain their recorded completeness.
+- Webhook stream monitoring finishes its active poll during shutdown before broker resources are released, avoiding polling against a closed connection.
+
 ## 0.80.0
 
 ### Minor Changes
