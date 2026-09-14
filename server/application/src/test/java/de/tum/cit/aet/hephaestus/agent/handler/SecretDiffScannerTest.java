@@ -128,6 +128,15 @@ class SecretDiffScannerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRefusePreparationWhenAChangedFileWasNotScanned() {
+        answer("{\"skipped\":[\"large.java\"],\"verdicts\":[]}");
+
+        assertThatThrownBy(() -> scanner().scan(JOB_ID, evidence(RANGE, true)))
+                .isInstanceOf(JobPreparationException.class)
+                .hasRootCauseMessage("Secret scan is incomplete: 1 changed file(s) exceed the scan resource budget");
+    }
+
+    @Test
     void shouldRejectScannerFailureRatherThanReportNoSecrets() {
         doThrow(new IllegalStateException("helper failed"))
                 .when(git)

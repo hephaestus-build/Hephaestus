@@ -16,6 +16,9 @@ mirrored history exceeds `GIT_MAX_SNAPSHOT_BYTES` (8 GiB by default) is refused 
 captured in part; raise it for larger monorepos. `GIT_MAX_CONCURRENT_INGESTIONS` (default 2) caps how
 many captured commits a worker writes to PostgreSQL at once.
 
+When the review includes the secret-scanning practice, a changed file larger than the scanner's
+8 MiB per-file budget refuses preparation rather than recording an incomplete scan as successful.
+
 Review the expanded repository-history scope with your deployment's privacy owner. Files deleted from
 the current checkout can remain accessible in history.
 

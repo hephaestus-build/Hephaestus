@@ -18,8 +18,6 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.apache.commons.io.FileUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -28,8 +26,6 @@ import tools.jackson.databind.json.JsonMapper;
  * reads the recorded verdicts instead of launching a container inside the request.
  */
 final class SecretDiffScanner {
-    private static final Logger log = LoggerFactory.getLogger(SecretDiffScanner.class);
-
     private static final Pattern LOW_SIGNAL_PATH =
             Pattern.compile("(?i)(?:^|/)(?:tests?|spec|specs|fixtures?|__tests__|__mocks__|docs?|examples|samples)/"
                     + "|^(?:example|sample)/|\\.(?:example|sample|md)$|(?:^|/)\\.env\\.example$");
@@ -82,9 +78,8 @@ final class SecretDiffScanner {
             if (rows == null || !rows.isArray() || skipped == null || !skipped.isArray())
                 throw new JobPreparationException("Invalid secret scan verdicts");
             if (!skipped.isEmpty()) {
-                // An unscanned file is an omission the review cannot see; the paths carry no secret.
-                log.warn(
-                        "Secret scan skipped {} oversized file(s): jobId={}, paths={}", skipped.size(), jobId, skipped);
+                throw new JobPreparationException("Secret scan is incomplete: " + skipped.size()
+                        + " changed file(s) exceed the scan resource budget");
             }
             List<SecretScan.Hit> hits = new ArrayList<>();
             for (JsonNode row : rows) {

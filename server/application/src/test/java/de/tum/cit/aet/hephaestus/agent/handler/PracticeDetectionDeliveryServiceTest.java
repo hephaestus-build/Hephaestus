@@ -813,6 +813,45 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldAcceptAQuoteCopiedWithItsExactDiffAnnotations() {
+            capturedDiff = "diff --git a/src/Auth.java b/src/Auth.java\n"
+                    + "--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10,2 +10,2 @@\n"
+                    + "[L10] + insecure();\n[L11] + allowAll();\n";
+            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
+            ((ObjectNode) evidenceOf(observation).withArray("citations").get(0))
+                    .put("endLine", 11)
+                    .put("quote", "[L10] + insecure();\n[L11] + allowAll();");
+
+            assertThat(publishVerified(testJob, List.of(observation)).inserted())
+                    .isEqualTo(1);
+        }
+
+        @Test
+        void shouldAcceptAQuoteEndingWithAnEmptyDiffLine() {
+            capturedDiff = "diff --git a/src/Auth.java b/src/Auth.java\n"
+                    + "--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10,2 +10,2 @@\n"
+                    + "[L10] + insecure();\n[L11] +\n";
+            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
+            ((ObjectNode) evidenceOf(observation).withArray("citations").get(0))
+                    .put("endLine", 11)
+                    .put("quote", " insecure();\n");
+
+            assertThat(publishVerified(testJob, List.of(observation)).inserted())
+                    .isEqualTo(1);
+        }
+
+        @Test
+        void shouldRejectAQuoteWithAnAnnotationForAnotherLine() {
+            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
+            ((ObjectNode) evidenceOf(observation).withArray("citations").get(0)).put("quote", "[L11] + insecure();");
+
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessageContaining("does not match the cited diff location");
+            verifyNoInteractions(observationRepository);
+        }
+
+        @Test
         void shouldAcceptAQuoteSpanningTwoDiffLines() {
             capturedDiff = "diff --git a/src/Auth.java b/src/Auth.java\n"
                     + "--- a/src/Auth.java\n"

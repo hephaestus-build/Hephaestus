@@ -837,7 +837,7 @@ public class PracticeDetectionDeliveryService {
             String quote,
             @Nullable String redactedDigest)
             throws IOException {
-        List<String> expected = quote.lines().toList();
+        List<String> expected = List.of(quote.split("\n", -1));
         if (redactedDigest == null && expected.size() != (long) end - start + 1) return false;
         @Nullable String[] paths = new String[2];
         Map<Integer, Boolean> matches = new HashMap<>();
@@ -877,7 +877,8 @@ public class PracticeDetectionDeliveryService {
             } else {
                 String expectedLine = expected.get(number - start);
                 match = stored.complete()
-                        && (line.equals(expectedLine)
+                        && (stored.prefix().equals(expectedLine)
+                                || line.equals(expectedLine)
                                 || (!line.isEmpty() && line.substring(1).equals(expectedLine)));
             }
             matches.merge(number, match, (previous, current) -> previous && current);

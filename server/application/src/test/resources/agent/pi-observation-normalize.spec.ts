@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -212,13 +213,13 @@ void test("diff citations bind the quote to the claimed file and line", () => {
 	assert.equal(citationMatchesArtifact({ ...citation, endLine: 12 }, diff), false);
 });
 
-void test("a quote may drop the diff's marker and the indentation in front of the code", () => {
+void test("a quote may drop the diff marker but must preserve indentation", () => {
 	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
 	const diff =
 		"diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] +    insecure();\n";
 
-	// The code as a reader would write it down, without the marker or the diff's indentation.
-	assert.equal(describeCitationMismatch({ ...citation, quote: "insecure();" }, diff), null);
+	assert.notEqual(describeCitationMismatch({ ...citation, quote: "insecure();" }, diff), null);
+	assert.equal(describeCitationMismatch({ ...citation, quote: "    insecure();" }, diff), null);
 	assert.equal(describeCitationMismatch({ ...citation, quote: "+    insecure();" }, diff), null);
 	// Different text at that coordinate is still refused, trimmed or not.
 	assert.match(
@@ -230,7 +231,7 @@ void test("a quote may drop the diff's marker and the indentation in front of th
 	const flagDiff =
 		"diff --git a/run.sh b/run.sh\n+++ b/run.sh\n@@ -10 +10 @@\n[L10] +    -flag --now\n";
 	assert.equal(
-		describeCitationMismatch({ ...citation, path: "run.sh", quote: "-flag --now" }, flagDiff),
+		describeCitationMismatch({ ...citation, path: "run.sh", quote: "    -flag --now" }, flagDiff),
 		null,
 	);
 	assert.equal(
@@ -651,7 +652,7 @@ void test("describeVocabulary refuses a value it cannot describe", () => {
 	);
 });
 
-void test("a citation survives the typographic substitutions a model makes while transcribing", () => {
+void test("a citation rejects typographic substitutions not present in the artifact", () => {
 	const content = 'Resolve "Connect data between screens" — see the plan';
 	const cite = (quote: string): NormalizedCitation => ({
 		sourceKind: "scm.pull-request.core",
@@ -668,12 +669,12 @@ void test("a citation survives the typographic substitutions a model makes while
 	);
 	assert.equal(
 		citationMatchesArtifact(cite("Resolve “Connect data between screens”"), content),
-		true,
+		false,
 	);
 	assert.equal(citationMatchesArtifact(cite("see the plan"), content), true);
 });
 
-void test("folding glyphs never makes a quote the artifact does not contain match", () => {
+void test("a citation rejects invented artifact text", () => {
 	const content = 'Resolve "Connect data between screens"';
 	const cite = (quote: string): NormalizedCitation => ({
 		sourceKind: "scm.pull-request.core",
@@ -760,5 +761,52 @@ void test("historical citations preserve a full revision for trusted admission",
 				"PRESENT",
 			),
 		/scm.repository.tree/,
+	);
+});
+
+void test("live practice fixture permits a citation of its planted credential", () => {
+	const diff = readFileSync(new URL("./live-practice/diff.patch", import.meta.url), "utf8");
+	assert.equal(
+		describeCitationMismatch(
+			{
+				sourceKind: "scm.pull-request.diff",
+				artifactPath: "inputs/context/diff.patch",
+				path: "LoginService.swift",
+				side: "NEW",
+				startLine: 4,
+				endLine: 4,
+				quote: '    private let apiKey = "sk-live-AKIAIOSFODNN7EXAMPLE-prod-2026"',
+			},
+			diff,
+		),
+		null,
+	);
+});
+
+void test("normalization preserves the quoted source indentation and trailing spaces", () => {
+	const raw = baseObservation();
+	const quote = "    insecure();  ";
+	onlyCitation(raw.evidence.citations).quote = quote;
+	assert.equal(onlyCitation(normalizeObservation(raw).evidence.citations).quote, quote);
+});
+
+void test("serialized-source citations must quote the specified lines, not elsewhere in the artifact", () => {
+	const citation: NormalizedCitation = {
+		sourceKind: "scm.pull-request.core",
+		artifactPath: "inputs/context/metadata.json",
+		path: "inputs/context/metadata.json",
+		startLine: 1,
+		endLine: 1,
+		quote: '"changed_files" : 1',
+	};
+	const content = '{\n  "changed_files" : 1\n}\n';
+	assert.equal(citationMatchesArtifact(citation, content), false);
+	assert.equal(citationMatchesArtifact({ ...citation, startLine: 2, endLine: 2 }, content), true);
+	assert.equal(
+		citationMatchesArtifact(
+			{ ...citation, startLine: 2, endLine: 2, quote: '  "changed_files" : 1\n' },
+			content,
+		),
+		true,
 	);
 });

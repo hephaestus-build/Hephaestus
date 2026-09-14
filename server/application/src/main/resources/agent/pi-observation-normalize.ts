@@ -233,7 +233,7 @@ export function normalizeEvidence(
 			throw new Error("historical citations require scm.repository.tree and a full commit SHA");
 		const startLine = Number(fields.startLine);
 		const endLine = fields.endLine == null ? startLine : Number(fields.endLine);
-		const quote = trimmedText(fields.quote);
+		const quote = typeof fields.quote === "string" ? fields.quote : "";
 		if (!sourceKind) throw new Error("evidence citation sourceKind is required");
 		if (!artifactPath) throw new Error("evidence citation artifactPath is required");
 		if (sourceKind === "scm.repository.tree" && !artifactPath.endsWith("/.git/HEAD"))
@@ -249,7 +249,7 @@ export function normalizeEvidence(
 			throw new Error("evidence citation startLine must be a positive integer");
 		if (!Number.isInteger(endLine) || endLine < startLine)
 			throw new Error("evidence citation endLine must be >= startLine");
-		if (!quote) throw new Error("evidence citation quote is required");
+		if (!quote.trim()) throw new Error("evidence citation quote is required");
 		// Only the two checks above can let a side through, so this is a re-reading of what they proved
 		// rather than a second rule: anything else already threw.
 		const side: DiffSide | null =
@@ -567,37 +567,6 @@ export function validateInapplicabilityScope(
 	}
 }
 
-/** ASCII-equivalent punctuation folded before citation comparison. */
-const CONFUSABLES = new Map(
-	Object.entries({
-		"‘": "'",
-		"’": "'",
-		"‚": "'",
-		"‛": "'",
-		"“": '"',
-		"”": '"',
-		"„": '"',
-		"‟": '"',
-		"‐": "-",
-		"‑": "-",
-		"‒": "-",
-		"–": "-",
-		"—": "-",
-		"―": "-",
-		" ": " ",
-		" ": " ",
-		" ": " ",
-		" ": " ",
-	}),
-);
-
-/** Fold the substitutions above; everything else is compared as written. */
-function foldConfusables(text: string): string {
-	let out = "";
-	for (const ch of text) out += CONFUSABLES.get(ch) ?? ch;
-	return out;
-}
-
 /** How much of a diff line a refusal quotes back; enough to see the difference, not the whole line. */
 const MISMATCH_EXCERPT_CHARS = 160;
 
@@ -617,10 +586,13 @@ export function describeCitationMismatch(
 	content: string,
 ): string | null {
 	if (citation.sourceKind !== "scm.pull-request.diff") {
-		const found =
-			content.includes(citation.quote) ||
-			foldConfusables(content).includes(foldConfusables(citation.quote));
-		return found ? null : "that text is not in the artifact";
+		const citedText = content
+			.split(/(?<=\n)/)
+			.slice(citation.startLine - 1, citation.endLine)
+			.join("");
+		return citedText.includes(citation.quote)
+			? null
+			: "that text is not in the artifact at the cited lines";
 	}
 	let oldPath: string | null = null;
 	let newPath: string | null = null;
@@ -663,32 +635,9 @@ export function describeCitationMismatch(
 	return null;
 }
 
-/**
- * Whether a quote is the diff line it claims — as displayed, without the +/- marker, or without the
- * indentation the diff shows in front of the code. What a citation proves is that the observer read
- * the line at that coordinate on that side, and the coordinate has already pinned which line is being
- * compared: two lines cannot be confused by trimming, because only one is ever a candidate. A quote
- * whose text differs, or that belongs to the other side of the change, still fails.
- */
+/** Diff markers are presentation; indentation and content are evidence. */
 function quotesDiffLine(diffLine: string, quoted: string): boolean {
-	if (diffLine === quoted || diffLine.slice(1) === quoted) {
-		return true;
-	}
-	const shown = diffLine.slice(1).trimStart();
-	if (shown.length === 0) {
-		return false;
-	}
-	// As written first, so a line of code that begins with a `-` or a `+` keeps it; only then as a
-	// quote that dropped the diff's own marker along with the indentation.
-	const trimmed = quoted.trimStart();
-	return shown === trimmed || shown === withoutMarker(trimmed).trimStart();
-}
-
-/** A quote that dropped the diff's own +/- or context marker along with the indentation. */
-function withoutMarker(quoted: string): string {
-	return quoted.startsWith("+") || quoted.startsWith("-") || quoted.startsWith(" ")
-		? quoted.slice(1)
-		: quoted;
+	return diffLine === quoted || diffLine.slice(1) === quoted;
 }
 
 /**
