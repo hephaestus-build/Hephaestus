@@ -87,4 +87,9 @@ public class GitHubScmTokenSource implements ScmTokenSource {
     public Optional<String> reviewHeadRef(long pullRequestNumber) {
         return pullRequestNumber > 0 ? Optional.of("refs/pull/" + pullRequestNumber + "/head") : Optional.empty();
     }
+
+    @Override
+    public boolean recordsReviewDiffBase() {
+        return false;
+    }
 }

@@ -178,14 +178,12 @@ public class PracticeStandingService {
      * A practice with nothing to report, carrying WHICH silence it is.
      *
      * <p>{@code NO_OPPORTUNITY} outranks {@code NOT_OBSERVED}: a review that ran and found nothing to say is a
-     * working instrument, not an unconfigured one. Suppressed strengths count for the same reason. A
-     * defect-detector's silence is no demonstrated behaviour, but it does prove the detector ran.
+     * working instrument, not an unconfigured one.
      *
      * <p>No trend either: a direction over evidence that produced no verdict would be a claim about nothing.
      */
     private static PracticeStandingDTO silentStanding(Practice practice, @Nullable PracticeEvidence evidence) {
-        boolean exercised =
-                evidence != null && (!evidence.withoutVerdict().isEmpty() || evidence.suppressedStrengths() > 0);
+        boolean exercised = evidence != null && !evidence.withoutVerdict().isEmpty();
         PracticeGroup group = practice.getGroup();
         return new PracticeStandingDTO(
                 practice.getSlug(),
@@ -272,35 +270,14 @@ public class PracticeStandingService {
             Practice practice,
             List<Observation> problems,
             List<Observation> strengths,
-            int suppressedStrengths,
             List<Observation> withoutVerdict) {
-        /**
-         * Sorts one practice's window into the buckets every downstream reader needs, reading
-         * {@link ObservationKind} exactly once per observation.
-         *
-         * <p>Grouping on the outcome rather than testing it per bucket is what makes the split visibly
-         * exhaustive: the five outcomes are the five keys, and every row lands under one of them. The earlier
-         * shape asked {@code isNegative} / {@code isPositive} / {@code isCoherentStrengthFor} in sequence, which
-         * evaluated the matrix two to four times per row and left "nothing falls through" as a claim in prose
-         * rather than something the code shows.
-         *
-         * <p>Every problem is kept, worst severity first. Nothing is withheld: an earlier confidence floor was
-         * dropped after validation found it carried no signal, and the per-locus corroboration meant to replace
-         * it cannot work, since {@code recurrenceKey} hashes the artifact and a locus is therefore
-         * single-artifact by construction.
-         *
-         * <p>A defect-detector's {@code DEMONSTRATED_STRENGTH} rows are counted, not discarded. What would be
-         * demonstrated is the defect, so they are no strength to show, but they do prove the detector ran. The
-         * rule is applied once to the bucket rather than once per row.
-         */
+        /** Partitions each observation by its own outcome; both positive shapes support the standing. */
         static PracticeEvidence classify(List<Observation> group) {
             Practice practice = group.get(0).getPractice();
             Map<ObservationKind, List<Observation>> byOutcome =
                     group.stream().collect(Collectors.groupingBy(ObservationKind::of));
             List<Observation> demonstrated = bucket(byOutcome, ObservationKind.DEMONSTRATED_STRENGTH);
             List<Observation> avoided = bucket(byOutcome, ObservationKind.SAFE_AVOIDANCE);
-            boolean detectorStrengthIsIncoherent =
-                    !ObservationKind.DEMONSTRATED_STRENGTH.isCoherentStrengthFor(practice.isDefectDetector());
             return new PracticeEvidence(
                     practice,
                     Stream.concat(
@@ -308,11 +285,7 @@ public class PracticeStandingService {
                                     bucket(byOutcome, ObservationKind.OMISSION_GAP).stream())
                             .sorted(Comparator.comparingInt(PracticeStandingService::severityOrdinal))
                             .toList(),
-                    detectorStrengthIsIncoherent
-                            ? avoided
-                            : Stream.concat(demonstrated.stream(), avoided.stream())
-                                    .toList(),
-                    detectorStrengthIsIncoherent ? demonstrated.size() : 0,
+                    Stream.concat(demonstrated.stream(), avoided.stream()).toList(),
                     Stream.concat(
                                     bucket(byOutcome, ObservationKind.NOT_APPLICABLE).stream(),
                                     bucket(byOutcome, ObservationKind.UNDETERMINED).stream())

@@ -86,7 +86,7 @@ export class ReviewTrace {
 
 	event(sessionId: string, event: AgentSessionEvent) {
 		if (event.type === "agent_start") this.activeSessions.add(sessionId);
-		if (event.type === "agent_end") this.activeSessions.delete(sessionId);
+		if (event.type === "agent_settled") this.activeSessions.delete(sessionId);
 		// Native Pi JSONL owns message bodies and tool results. This journal adds execution timing,
 		// retries and compaction, which are not reconstructed by guessing from the saved messages.
 		switch (event.type) {
@@ -200,7 +200,6 @@ export class ReviewTrace {
 					exitCode,
 					complete:
 						finished &&
-						exitCode === 0 &&
 						this.dropped === 0 &&
 						this.activeSessions.size === 0 &&
 						[...this.sessions.values()].every(

@@ -202,7 +202,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             ContextManifestBuilder manifests = mock(ContextManifestBuilder.class);
             when(manifests.stagedSources(any())).thenReturn(Set.of(new SourceKind("scm.pull-request.core")));
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.0.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.PULL_REQUEST);
 
             assertThatThrownBy(() -> builder.prepare(reviewRequest(), plan))
                     .isInstanceOf(IllegalStateException.class)
@@ -261,7 +261,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                     new PracticeSubjectEvaluator(mapper),
                     Clock.systemUTC());
             var builder = new WorkspaceContextBuilder(List.of(bad), new SimpleMeterRegistry(), manifestBuilder);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.0.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.PULL_REQUEST);
             ContextRequest.PracticeReviewRequest request = reviewRequest();
 
             PreparedEvidence prepared = builder.prepare(request, plan);
@@ -319,7 +319,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                     new PracticeSubjectEvaluator(mapper),
                     Clock.systemUTC());
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.0.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.PULL_REQUEST);
 
             var capture = builder.prepare(reviewRequest(), plan).manifest().sources().stream()
                     .filter(source -> source.kind().equals(diff))
@@ -366,7 +366,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             when(manifests.isSourceUsePermitted(any(), any())).thenReturn(true);
             when(manifests.stagedSources(any())).thenReturn(Set.of(comments, core));
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.0.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.PULL_REQUEST);
 
             assertThatThrownBy(() -> builder.prepare(reviewRequest(), plan))
                     .isInstanceOf(IllegalStateException.class)
@@ -411,7 +411,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             when(manifests.isSourceUsePermitted(any(), any())).thenReturn(true);
             when(manifests.stagedSources(any())).thenReturn(Set.of(comments, core));
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.0.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.PULL_REQUEST);
 
             assertThatThrownBy(() -> builder.prepare(reviewRequest(), plan))
                     .isInstanceOf(IllegalStateException.class)

@@ -143,7 +143,7 @@ class SourceContractValueTest {
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> new ArtifactSourceManifest(
-                        new SourceContractVersion("1.0.0"), "a".repeat(64), "scm.pull_request", now, List.of()));
+                        new SourceContractVersion("1.1.0"), "a".repeat(64), "scm.pull_request", now, List.of()));
         assertThatIllegalArgumentException()
                 .isThrownBy(
                         () -> new AutomatedReviewReadinessDecision("review-quality", now, true, List.of(), List.of()));
@@ -161,7 +161,7 @@ class SourceContractValueTest {
     void shouldEnforceAssessmentReasonCodeSemantics() {
         Instant now = Instant.parse("2026-08-03T10:00:00Z");
         SourceKind kind = new SourceKind("scm.pull-request.diff");
-        SourceContractVersion version = new SourceContractVersion("1.0.0");
+        SourceContractVersion version = new SourceContractVersion("1.1.0");
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> new SourceReadinessCheck(

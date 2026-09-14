@@ -25,7 +25,6 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -211,12 +210,10 @@ public class ConversationReviewHandler implements JobTypeHandler {
                     + ", discarded="
                     + parsed.discarded().size());
         }
-        // Coherence coercion: defect-detector GOOD → NOT_APPLICABLE + severity sentinel.
-        Set<String> defectDetectorSlugs = practiceCatalogInjector.defectDetectorSlugs(job);
-        List<PracticeDetectionResultParser.ValidatedObservation> coercedObservations =
-                PracticeDetectionResultParser.coerceCoherence(parsed.validObservations(), defectDetectorSlugs);
+        List<PracticeDetectionResultParser.ValidatedObservation> validatedObservations =
+                PracticeDetectionResultParser.validateCoherence(parsed.validObservations());
 
-        PracticeDetectionDeliveryService.DeliveryResult result = deliveryService.deliver(job, coercedObservations);
+        PracticeDetectionDeliveryService.DeliveryResult result = deliveryService.deliver(job, validatedObservations);
         log.info(
                 "Conversation delivery complete: inserted={}, duplicate={}, jobId={}",
                 result.inserted(),

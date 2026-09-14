@@ -2,8 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
 import static de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture.GIBIBYTE;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -24,6 +26,10 @@ import io.nats.client.api.StreamState;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -236,6 +242,48 @@ class WebhookStreamMonitorTest extends BaseUnitTest {
         monitor.poll();
 
         assertThat(pollAge()).isLessThan(5d);
+    }
+
+    @Test
+    void stopWaitsForTheActivePollToFinish() throws Exception {
+        WebhookStreamMonitor monitor = monitor();
+        give(1_000, 999);
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch blockUntilShutdown = new CountDownLatch(1);
+        CountDownLatch interrupted = new CountDownLatch(1);
+        CountDownLatch finishPoll = new CountDownLatch(1);
+        CountDownLatch pollFinished = new CountDownLatch(1);
+        doAnswer(invocation -> {
+                    entered.countDown();
+                    try {
+                        blockUntilShutdown.await();
+                    } catch (InterruptedException e) {
+                        interrupted.countDown();
+                        finishPoll.await();
+                    }
+                    pollFinished.countDown();
+                    return quiet();
+                })
+                .when(jsm)
+                .getStreamInfo(STREAM);
+        monitor.start();
+        try (var stopping = Executors.newSingleThreadExecutor()) {
+            try {
+                assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+                var stopped = stopping.submit(monitor::stop);
+                assertThat(interrupted.await(5, TimeUnit.SECONDS)).isTrue();
+                assertThatThrownBy(() -> stopped.get(100, TimeUnit.MILLISECONDS))
+                        .as("shutdown waits while the interrupted broker poll is still finishing")
+                        .isInstanceOf(TimeoutException.class);
+                finishPoll.countDown();
+                stopped.get(5, TimeUnit.SECONDS);
+                assertThat(pollFinished.getCount()).isZero();
+            } finally {
+                finishPoll.countDown();
+                blockUntilShutdown.countDown();
+                monitor.stop();
+            }
+        }
     }
 
     private WebhookStreamMonitor monitor() {

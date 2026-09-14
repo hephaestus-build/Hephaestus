@@ -28,10 +28,12 @@ import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 
 /** Unit tests for reaction-aware re-nag suppression (ADR 0021). */
@@ -50,8 +52,7 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
     private static final String SLUG = "commit-discipline";
     private static final long CONTRIBUTOR = 7L;
     private static final long TARGET = 100L;
-    // The canonical key the filter recomputes for a SLUG observation with no location — the SAME value deliver()
-    // persists.
+    // Both behaviors may share this location, but each reaction remains observation-scoped.
     private static final String CK =
             ObservationFingerprint.compute(SLUG, ArtifactKinds.PULL_REQUEST.value(), TARGET, CONTRIBUTOR, null);
 
@@ -60,7 +61,7 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
                 observationRepository,
                 reactionRepository,
                 feedbackLedgerRecorder,
-                new PracticeReviewProperties(false, 15, 5, false, enabled));
+                new PracticeReviewProperties(false, 15, 5, enabled));
     }
 
     private AgentJob job() {
@@ -114,7 +115,7 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
         var pf = pf(CK);
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(pf));
-        when(reactionRepository.findCurrentResolutionByRecurrenceKeys(any(), eq(CONTRIBUTOR), any()))
+        when(reactionRepository.findCurrentResolutionByObservationIds(any(), eq(CONTRIBUTOR), any()))
                 .thenReturn(List.of());
 
         var d = filter(true).evaluate(job(), List.of(vf(SLUG, Presence.ABSENT)));
@@ -124,20 +125,18 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
     }
 
     @Test
-    void addressedButStillBad_isKeptWithStifferOpener() {
+    void shouldPreserveEvidenceWithoutInventingRecurrenceWhenRecipientMarkedAddressed() {
         stubPersistedAndReaction(FeedbackResolution.ADDRESSED);
 
         var d = filter(true).evaluate(job(), List.of(vf(SLUG, Presence.ABSENT)));
 
         assertThat(d.deliverable()).hasSize(1);
         assertThat(d.suppressedCount()).isZero();
-        assertThat(d.deliverable().get(0).evidenceRationale()).startsWith("You previously marked this as fixed");
+        assertThat(d.deliverable().get(0).evidenceRationale()).isEqualTo("because reasons");
     }
 
     @Test
     void addressedAndNowGood_isDeliveredPlainNotEscalated() {
-        // ADDRESSED only escalates a STILL-failing locus; if the practice is now PRESENT/GOOD the observation passes
-        // through untouched (escalation is keyed on assessment == BAD, not on the reaction alone).
         stubPersistedAndReaction(FeedbackResolution.ADDRESSED);
 
         var d = filter(true).evaluate(job(), List.of(vf(SLUG, Presence.PRESENT)));
@@ -159,7 +158,7 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
         var reaction = locus(secretKey, FeedbackResolution.DISPUTED);
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(pf));
-        when(reactionRepository.findCurrentResolutionByRecurrenceKeys(any(), eq(CONTRIBUTOR), any()))
+        when(reactionRepository.findCurrentResolutionByObservationIds(any(), eq(CONTRIBUTOR), any()))
                 .thenReturn(List.of(reaction));
 
         var d = filter(true).evaluate(job(), List.of(secretScannerObservation(secretKey)));
@@ -186,18 +185,14 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
     }
 
     @Test
-    void persistedWithNullRecurrenceKey_shortCircuits_noReactionQuery() {
-        // A persisted observation may carry a null recurrence_key (a detector that emitted no locatable
-        // observations). With no keys to bind, the native IN (:recurrenceKeys) query is skipped entirely.
+    void shouldQueryExactObservationWhenLocationIsUnavailable() {
         var pf = pf(null);
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(pf));
-
         var d = filter(true).evaluate(job(), List.of(vf(SLUG, Presence.ABSENT)));
-
-        assertThat(d.deliverable()).hasSize(1);
         assertThat(d.suppressedCount()).isZero();
-        verify(reactionRepository, never()).findCurrentResolutionByRecurrenceKeys(any(), any(), any());
+        verify(reactionRepository)
+                .findCurrentResolutionByObservationIds(eq(Set.of(pf.getId())), eq(CONTRIBUTOR), any());
     }
 
     // --- helpers ---
@@ -207,44 +202,32 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
         var reaction = reaction(action);
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(pf));
-        when(reactionRepository.findCurrentResolutionByRecurrenceKeys(any(), eq(CONTRIBUTOR), any()))
+        when(reactionRepository.findCurrentResolutionByObservationIds(any(), eq(CONTRIBUTOR), any()))
                 .thenReturn(List.of(reaction));
     }
 
     @Test
-    void sameLocusSiblings_eachGetTheirOwnSuppressedRow() {
-        // Two observations of one practice on one file share a recurrence key by design, and one reaction on that
-        // locus withholds BOTH. Each must be ledgered against ITS OWN observation: indexing observations by
-        // locus would record the first one twice and leave the sibling withheld with no row — the recorder
-        // would then bind it PRIMARY to the DELIVERED unit, and it would read as feedback the developer saw.
-        // A shared recurrence key must be ledgered against EACH observation, not just the first one found —
-        // indexing by locus would leave the sibling withheld with no row, and the recorder would then bind it
-        // PRIMARY to the delivered unit, making it read as feedback the developer saw.
+    void shouldSuppressOnlyReactedObservationWhenDifferentBehaviorsShareLocation() {
         Observation first = pf(CK, "occ-first");
         Observation second = pf(CK, "occ-second");
-        List<Observation> persisted = List.of(first, second);
-        var disputed = List.of(reaction(FeedbackResolution.DISPUTED));
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
-                .thenReturn(persisted);
-        when(reactionRepository.findCurrentResolutionByRecurrenceKeys(any(), eq(CONTRIBUTOR), any()))
-                .thenReturn(disputed);
+                .thenReturn(List.of(first, second));
+        var disputed = org.mockito.Mockito.mock(ReactionRepository.ObservationResolutionProjection.class);
+        UUID reactedId = first.getId();
+        when(disputed.getObservationId()).thenReturn(reactedId);
+        when(disputed.getResolution()).thenReturn(FeedbackResolution.DISPUTED.name());
+        when(reactionRepository.findCurrentResolutionByObservationIds(any(), eq(CONTRIBUTOR), any()))
+                .thenReturn(List.of(disputed));
+        var otherBehavior = vf(SLUG, Presence.ABSENT, CK, "occ-second");
+        var decision = filter(true).evaluate(job(), List.of(vf(SLUG, Presence.ABSENT, CK, "occ-first"), otherBehavior));
+        assertThat(decision.deliverable()).containsExactly(otherBehavior);
+        assertThat(decision.suppressedCount()).isEqualTo(1);
+        verify(feedbackLedgerRecorder)
+                .recordSuppressed(any(), eq(first), eq(FeedbackSuppressionReason.REACTED_DISPUTED), anyInt());
+    }
 
-        var decision = filter(true)
-                .evaluate(
-                        job(),
-                        List.of(
-                                vf(SLUG, Presence.ABSENT, CK, "occ-first"),
-                                vf(SLUG, Presence.ABSENT, CK, "occ-second")));
-
-        assertThat(decision.deliverable()).isEmpty();
-        ArgumentCaptor<Observation> ledgered = ArgumentCaptor.forClass(Observation.class);
-        verify(feedbackLedgerRecorder, org.mockito.Mockito.times(2))
-                .recordSuppressed(
-                        any(),
-                        ledgered.capture(),
-                        eq(FeedbackSuppressionReason.REACTED_DISPUTED),
-                        org.mockito.ArgumentMatchers.anyInt());
-        assertThat(ledgered.getAllValues()).containsExactlyInAnyOrder(first, second);
+    private static UUID id(String occurrence) {
+        return UUID.nameUUIDFromBytes(occurrence.getBytes(StandardCharsets.UTF_8));
     }
 
     private static ValidatedObservation vf(String slug, @Nullable Presence presence) {
@@ -281,18 +264,19 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
         // aboutUserId is always populated; for author-side observations it equals the contributor.
         lenient().when(pf.getRecurrenceKey()).thenReturn(recurrenceKey);
         lenient().when(pf.getOccurrenceKey()).thenReturn(occurrenceKey);
+        when(pf.getId()).thenReturn(id(occurrenceKey));
         lenient().when(pf.getAboutUserId()).thenReturn(CONTRIBUTOR);
         return pf;
     }
 
-    private static ReactionRepository.LocusResolutionProjection reaction(FeedbackResolution resolution) {
+    private static ReactionRepository.ObservationResolutionProjection reaction(FeedbackResolution resolution) {
         return locus(CK, resolution);
     }
 
-    /** The repository answers with the resolution that CURRENTLY stands at a locus, not with a stored row. */
-    private static ReactionRepository.LocusResolutionProjection locus(String key, FeedbackResolution resolution) {
-        var row = org.mockito.Mockito.mock(ReactionRepository.LocusResolutionProjection.class);
-        when(row.getRecurrenceKey()).thenReturn(key);
+    /** The repository answers with the current response bound to this exact observation. */
+    private static ReactionRepository.ObservationResolutionProjection locus(String key, FeedbackResolution resolution) {
+        var row = org.mockito.Mockito.mock(ReactionRepository.ObservationResolutionProjection.class);
+        when(row.getObservationId()).thenReturn(id("occ-" + key));
         when(row.getResolution()).thenReturn(resolution.name());
         return row;
     }

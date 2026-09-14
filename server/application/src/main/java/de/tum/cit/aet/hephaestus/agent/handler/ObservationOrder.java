@@ -21,7 +21,7 @@ import tools.jackson.databind.JsonNode;
  * <p><b>The keys, in order.</b>
  *
  * <ol>
- *   <li><b>Severity</b>, where it applies. A {@code GOOD} strength carries none (ADR 0022), and a null
+ *   <li><b>Severity</b>, where it applies. A positive observation carries none (ADR 0022), and a null
  *       band sorts after every real one, so problems always precede strengths.</li>
  *   <li><b>Evidence breadth</b>, descending — {@link #evidenceBreadth(JsonNode)}, the number of distinct
  *       places the observation's citations point at. This is the in-run form of recurrence: a defect quoted at
@@ -104,7 +104,7 @@ public final class ObservationOrder {
     }
 
     /**
-     * Severity ordinal for sorting, treating a null band (a {@code GOOD} strength under ADR 0022) as the
+     * Severity ordinal for sorting, treating a null band (a positive strength under ADR 0022) as the
      * least severe so problems always sort ahead of strengths.
      */
     public static int severityOrdinal(@Nullable Severity severity) {

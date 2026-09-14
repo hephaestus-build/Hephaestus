@@ -1,7 +1,4 @@
-// Precompute HINTS for issue-closed-with-unmet-outcome: at close time, surface whether the issue's own
-// stated definition-of-done was met — unchecked acceptance boxes and open sub-issues at the moment of
-// closing. FACTS only (rollup + checkbox counts + close metadata); the LLM decides whether the outcome was
-// confirmed before closing (an unticked box may simply never have been ticked). No observation.
+// Current captured issue facts; closure timestamps do not date mutable body or sub-issue state.
 import type { Hint } from "../lib/types.ts";
 
 interface IssueMeta {
@@ -34,15 +31,15 @@ export default function issueClosedWithUnmetOutcome(
 		);
 	} else {
 		directions.push(
-			`Close-time outcome facts: state_reason=${reason ?? "none"}, uncheckedBoxes=${unchecked}, checkedBoxes=${checked}, subIssuesOpen=${subOpen}/${subTotal}, closed_at=${m.closed_at ?? "?"}.`,
+			`Current captured issue facts: state_reason=${reason ?? "none"}, uncheckedBoxes=${unchecked}, checkedBoxes=${checked}, subIssuesOpen=${subOpen}/${subTotal}, closed_at=${m.closed_at ?? "?"}.`,
 		);
 		if (unchecked > 0 || subOpen > 0) {
 			directions.push(
-				`Closed with ${unchecked} unchecked acceptance item(s) and ${subOpen} open sub-issue(s) — candidate for a "closed before its own DoD was confirmed" finding. Note: an unticked box may simply never have been ticked; frame as a lifecycle habit, not a claim the work is wrong.`,
+				`The current record has ${unchecked} unchecked item(s) and ${subOpen} open sub-issue(s). Establish their state at the relevant closure from dated evidence before judging a closure decision. A current unticked box is neither proof of unfinished work nor a developer-wide habit.`,
 			);
 		} else if (subTotal > 0 || checked > 0) {
 			directions.push(
-				`All ${checked} acceptance item(s) checked and ${subTotal} sub-issue(s) completed at close — outcome appears confirmed.`,
+				`The current record has ${checked} checked item(s) and ${subTotal} completed sub-issue(s). This does not establish their state at closure or prove the work was verified; inspect dated closure evidence before assessing that event.`,
 			);
 		}
 	}
@@ -54,7 +51,7 @@ export default function issueClosedWithUnmetOutcome(
 			stateClosed: state === "CLOSED" ? 1 : 0,
 			uncheckedBoxes: unchecked,
 			checkedBoxes: checked,
-			subIssuesOpenAtClose: subOpen,
+			currentSubIssuesOpen: subOpen,
 			subIssuesTotal: subTotal,
 		},
 		directions,

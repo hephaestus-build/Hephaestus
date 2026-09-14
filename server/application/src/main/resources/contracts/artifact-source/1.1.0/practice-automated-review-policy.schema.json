@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hephaestus.aet.cit.tum.de/contracts/artifact-source/1.1.0/practice-automated-review-policy.schema.json",
+  "title": "Practice automated-review policy",
+  "description": "How Hephaestus may review one practice revision, and what that review can never conclude. Which sources a review reads is declared per occasion on the practice's bindings, not here: the evidence a review needs is a function of what occasioned it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sourceContractVersion",
+    "automatedReview",
+    "whenEvidenceIsInsufficient",
+    "knownLimitations"
+  ],
+  "properties": {
+    "sourceContractVersion": {
+      "title": "Source contract version",
+      "description": "Exact version that defines the available evidence sources and their states.",
+      "const": "1.1.0"
+    },
+    "automatedReview": {
+      "title": "Automated review",
+      "description": "How Hephaestus may review the practice. This author declaration does not describe or validate review by a developer, peer, or human mentor.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "evidenceSufficiency"
+      ],
+      "properties": {
+        "mode": {
+          "title": "Review mode",
+          "description": "Implementation Hephaestus uses for automated review.",
+          "enum": [
+            "LANGUAGE_MODEL",
+            "NONE"
+          ]
+        },
+        "evidenceSufficiency": {
+          "title": "Evidence sufficiency",
+          "description": "Whether meeting every declared requirement is enough for Hephaestus to review the work.",
+          "enum": [
+            "SUFFICIENT_WHEN_REQUIREMENTS_MET",
+            "DECLARED_EVIDENCE_INSUFFICIENT",
+            "NONE"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "NONE"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "evidenceSufficiency": {
+                "const": "NONE"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "evidenceSufficiency": {
+                "enum": [
+                  "SUFFICIENT_WHEN_REQUIREMENTS_MET",
+                  "DECLARED_EVIDENCE_INSUFFICIENT"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "whenEvidenceIsInsufficient": {
+      "title": "Insufficient evidence action",
+      "description": "Conservative action when a required source is unavailable, incomplete, or not current.",
+      "const": "SKIP_AUTOMATED_REVIEW"
+    },
+    "knownLimitations": {
+      "title": "Known limitations",
+      "description": "Claims this evidence cannot support even when every requirement is met. A practice Hephaestus does not review declares none: there is no evidence for them to be about.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/limitation"
+      }
+    },
+    "insufficiencyReason": {
+      "title": "Insufficient evidence reason",
+      "description": "Why this practice needs a person rather than automated review. Present exactly when evidenceSufficiency is DECLARED_EVIDENCE_INSUFFICIENT: a refusal identified only by its position in the limitation list is a refusal nothing can query.",
+      "$ref": "#/$defs/limitation"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "automatedReview": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "const": "NONE"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          }
+        },
+        "required": [
+          "automatedReview"
+        ]
+      },
+      "then": {
+        "properties": {
+          "knownLimitations": {
+            "type": "array",
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "automatedReview": {
+            "type": "object",
+            "properties": {
+              "evidenceSufficiency": {
+                "const": "DECLARED_EVIDENCE_INSUFFICIENT"
+              }
+            },
+            "required": [
+              "evidenceSufficiency"
+            ]
+          }
+        },
+        "required": [
+          "automatedReview"
+        ]
+      },
+      "then": {
+        "required": [
+          "insufficiencyReason"
+        ],
+        "properties": {
+          "insufficiencyReason": {
+            "$ref": "#/$defs/limitation"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "insufficiencyReason": false
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "limitation": {
+      "title": "Known limitation",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "description"
+      ],
+      "properties": {
+        "code": {
+          "title": "Limitation code",
+          "description": "Stable machine-readable identifier.",
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+        },
+        "description": {
+          "title": "Limitation description",
+          "description": "Plain-language explanation of the unsupported claim.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "description": "A claim the selected evidence cannot support even when every requirement passes."
+    }
+  }
+}

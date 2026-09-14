@@ -136,19 +136,20 @@ class GitlabInlineFeedbackChannelTest extends BaseUnitTest {
 
         InlineResult result = channel.postInlineFeedback(
                 gitlabTarget(),
-                List.of(new InlineFeedback(new DiffAnchor("src/Foo.java", 10, null), "fix-this", MARKER, "ck-new")));
+                List.of(new InlineFeedback(
+                        new DiffAnchor("src/Foo.java", 10, null), "fix-this", MARKER, "observation:ck-new")));
 
         assertThat(result.posted()).isEqualTo(1);
         assertThat(result.failed()).isZero();
         assertThat(result.signals()).singleElement().satisfies(s -> {
-            assertThat(s.recurrenceKey()).isEqualTo("ck-new");
+            assertThat(s.deliveryKey()).isEqualTo("observation:ck-new");
             assertThat(s.disposition()).isEqualTo(Disposition.POSTED);
             assertThat(s.externalRef()).isEqualTo("gid://Note/NEW");
             assertThat(s.threadExternalRef()).isEqualTo("gid://Disc/NEW");
         });
         // The correlation key must be embedded in the posted body so the next run can match it.
         assertThat(bodyCaptor.getValue())
-                .contains("hephaestus-diff-note-ck=ck-new")
+                .contains("hephaestus-diff-note-ck=observation:ck-new")
                 .contains(MARKER);
     }
 
@@ -170,8 +171,8 @@ class GitlabInlineFeedbackChannelTest extends BaseUnitTest {
 
         assertThat(result.suppressed()).isTrue();
         assertThat(result.posted()).isEqualTo(1);
-        assertThat(result.signals()).extracting(DeliveredSignal::recurrenceKey).containsExactly("ck-1");
-        assertThat(result.suppressedRecurrenceKeys()).containsExactly("ck-2");
+        assertThat(result.signals()).extracting(DeliveredSignal::deliveryKey).containsExactly("ck-1");
+        assertThat(result.suppressedDeliveryKeys()).containsExactly("ck-2");
     }
 
     @Test
@@ -197,10 +198,10 @@ class GitlabInlineFeedbackChannelTest extends BaseUnitTest {
                                 new DiffAnchor("src/Two.java", 20, null), "second", MARKER, "ck-suppressed")));
 
         assertThat(result.signals()).singleElement().satisfies(signal -> {
-            assertThat(signal.recurrenceKey()).isEqualTo("ck-failed");
+            assertThat(signal.deliveryKey()).isEqualTo("ck-failed");
             assertThat(signal.disposition()).isEqualTo(Disposition.FAILED);
         });
-        assertThat(result.suppressedRecurrenceKeys()).containsExactly("ck-suppressed");
+        assertThat(result.suppressedDeliveryKeys()).containsExactly("ck-suppressed");
     }
 
     @Test
@@ -217,7 +218,7 @@ class GitlabInlineFeedbackChannelTest extends BaseUnitTest {
 
         assertThat(result.suppressed()).isTrue();
         assertThat(result.posted()).isZero();
-        assertThat(result.suppressedRecurrenceKeys()).containsExactly("ck-1");
+        assertThat(result.suppressedDeliveryKeys()).containsExactly("ck-1");
         verify(client, never()).documentName("CreateDiffNote");
     }
 
@@ -438,7 +439,7 @@ class GitlabInlineFeedbackChannelTest extends BaseUnitTest {
         assertThat(result.posted()).isEqualTo(1);
         assertThat(result.signals())
                 .singleElement()
-                .satisfies(s -> assertThat(s.recurrenceKey()).isEqualTo("ck-dup"));
+                .satisfies(s -> assertThat(s.deliveryKey()).isEqualTo("ck-dup"));
     }
 
     // --- stubbing helpers ----------------------------------------------------------------------------------

@@ -95,15 +95,15 @@ export const ASSESSMENT_STATUS_DESCRIPTIONS: Record<AssessmentStatus, string> = 
 };
 export const PRESENCE_DESCRIPTIONS: Record<Presence, string> = {
 	PRESENT:
-		"The practice’s fixed target criterion is satisfied. For a desirable target such as usable guidance, inadequate partial guidance does not satisfy it; explain what exists and what is missing.",
+		"The specific behavior named in the observation occurred. Cite it and assess its desirability in context. Partial or misleading guidance is present; name a missing component precisely if assessing its absence.",
 	ABSENT:
-		"The practice applies, the bounded corpus was searched, and the fixed target is absent. Record evidence.search. A missing GOOD target yields NEGATIVE; an absent BAD target yields POSITIVE. Assessment stays fixed.",
+		"The practice applies and the specified behavior is absent from the bounded searched corpus. Record that same behavior in evidence.search. Missing desirable behavior yields NEGATIVE; absent undesirable behavior yields POSITIVE only with an applicable opportunity and complete coverage.",
 };
 
-/** Desirability of the fixed target, independent of its presence. */
+/** Contextual desirability of the specified behavior, independent of its presence. */
 export const ASSESSMENT_DESCRIPTIONS: Record<Assessment, string> = {
-	GOOD: "The practice’s defined target is desirable. PRESENT yields POSITIVE; ABSENT yields NEGATIVE. Do not change this assessment when the criterion is missing.",
-	BAD: "The practice’s defined target is undesirable. PRESENT yields NEGATIVE; ABSENT yields POSITIVE. Do not mistake absent harmful behaviour for a negative outcome.",
+	GOOD: "The specified behavior is desirable in the evidenced context. PRESENT yields POSITIVE; ABSENT yields NEGATIVE. Explain why the behavior is desirable here.",
+	BAD: "The specified behavior is undesirable in the evidenced context. PRESENT yields NEGATIVE; ABSENT yields POSITIVE. Optional or unnecessary behavior is not automatically undesirable.",
 };
 
 /**
@@ -171,12 +171,7 @@ function trimmedStrings(value: unknown): string[] {
 		: [];
 }
 
-/**
- * The recorded scope of a search that came up empty. An ABSENT observation is a universal claim —
- * "it is not there" — and the one thing a fragment of a corpus can never support. Narrating the
- * search in `reasoning` is the honour-system version of this; a structured block is what a validator
- * can actually hold against the domain the practice declared.
- */
+/** Requires the source list, named behavior and boundary of an absence claim. */
 export function normalizeSearch(search: unknown): RecordedSearch {
 	if (!isRecord(search)) throw new Error("search is required");
 	const consulted = trimmedStrings(search.consulted);
@@ -221,24 +216,32 @@ export function normalizeEvidence(
 		// required-field checks below already reject by name.
 		const fields: Record<string, unknown> = isRecord(citation) ? citation : {};
 		const sourceKind = trimmedText(fields.sourceKind);
-		const artifactPath = trimmedText(fields.artifactPath);
-		const path = trimmedText(fields.path);
+		const artifactPath = typeof fields.artifactPath === "string" ? fields.artifactPath : "";
+		const path = typeof fields.path === "string" ? fields.path : "";
 		const declaredSide = fields.side == null ? null : trimmedText(fields.side).toUpperCase();
 		const startLine = Number(fields.startLine);
 		const endLine = fields.endLine == null ? startLine : Number(fields.endLine);
-		const quote = trimmedText(fields.quote);
+		const quote = typeof fields.quote === "string" ? fields.quote : "";
 		if (!sourceKind) throw new Error("evidence citation sourceKind is required");
-		if (!artifactPath) throw new Error("evidence citation artifactPath is required");
-		if (!path) throw new Error("evidence citation path is required");
+		if (!artifactPath.trim()) throw new Error("evidence citation artifactPath is required");
+		if (!path.trim()) throw new Error("evidence citation path is required");
 		if (sourceKind === "scm.pull-request.diff" && declaredSide !== "OLD" && declaredSide !== "NEW")
 			throw new Error("diff evidence citation side must be OLD or NEW");
 		if (sourceKind !== "scm.pull-request.diff" && declaredSide !== null)
 			throw new Error("non-diff evidence citation must not specify side");
-		if (!Number.isInteger(startLine) || startLine <= 0)
+		if (!Number.isSafeInteger(startLine) || startLine <= 0 || startLine > 2147483647)
 			throw new Error("evidence citation startLine must be a positive integer");
-		if (!Number.isInteger(endLine) || endLine < startLine)
+		if (!Number.isSafeInteger(endLine) || endLine < startLine || endLine > 2147483647)
 			throw new Error("evidence citation endLine must be >= startLine");
-		if (!quote) throw new Error("evidence citation quote is required");
+		if (
+			!quote
+				.replaceAll("\u001c", "")
+				.replaceAll("\u001d", "")
+				.replaceAll("\u001e", "")
+				.replaceAll("\u001f", "")
+				.trim()
+		)
+			throw new Error("evidence citation quote is required");
 		// Only the two checks above can let a side through, so this is a re-reading of what they proved
 		// rather than a second rule: anything else already threw.
 		const side: DiffSide | null =
@@ -432,15 +435,7 @@ export function dedupeKeyForObservation(observation: NormalizedObservation): str
 	return `${observation.practiceSlug}|${observation.summary}|${citations}`;
 }
 
-/**
- * Holds every citation to bytes this run actually staged, under the source that produced them.
- *
- * <p>The run stages every source that applies to the artifact, so the question is no longer whether
- * the practice predicted it would read this one — it is whether the source was there and the quote
- * really came out of it. A practice whose subject turns out to live in a source its author did not
- * name is exactly the case full context exists to catch, and rejecting its citation would have thrown
- * away the observation for being observant.
- */
+/** Requires each citation to name an artifact staged by its declared source. */
 export function validateEvidenceSources(
 	observation: NormalizedObservation,
 	availableSourceKinds: ReadonlySet<string>,
@@ -470,24 +465,9 @@ function describeAvailableSources(sourceKinds: ReadonlySet<string>): string {
 }
 
 /**
- * Holds a recorded search against the domain the practice declared it would search.
- *
- * <p>`EXHAUSTIVE` is the practice saying "this claim asserts something is NOT in this source", which
- * is the only stance under which absence is assertable at all. So the sources held that way ARE the
- * domain: an ABSENT observation that did not consult one of them is asserting a universal over a
- * corpus it never opened, and the honest answer is UNDETERMINED instead.
- *
- * <p>The two directions of an absence do not need the same proof, and the difference is what lets a
- * clean surface be recorded as a strength at all. An ABSENT/BAD says a good behaviour is missing from
- * the place the citation points at — the claim is anchored to that locus, so the search only has to
- * reach as far as the locus does. An ABSENT/BAD says a harmful behaviour is nowhere in the work, which
- * ranges over the WHOLE corpus and is provable only if that corpus is closed and was covered whole.
- * A practice that has not declared an exhaustive stance has not closed a corpus, so it cannot make that
- * claim, and UNDETERMINED is the honest answer; one that has, can. This is what the eight defect
- * detectors used to buy by refusing GOOD outright and paying for it in false NOT_APPLICABLEs.
- *
- * <p>Consulting something this run never staged is the same error the citation check already rejects —
- * the bytes were not there, so they cannot have been searched.
+ * Requires searched sources to be staged and every declared exhaustive source to be consulted.
+ * ABSENT/BAD additionally requires an exhaustive source policy: a positive absence claim needs a
+ * closed search boundary. These checks validate the declared search, not whether the model read it.
  */
 export function validateSearchScope(
 	observation: NormalizedObservation,
@@ -552,37 +532,6 @@ export function validateInapplicabilityScope(
 	}
 }
 
-/** ASCII-equivalent punctuation folded before citation comparison. */
-const CONFUSABLES = new Map(
-	Object.entries({
-		"‘": "'",
-		"’": "'",
-		"‚": "'",
-		"‛": "'",
-		"“": '"',
-		"”": '"',
-		"„": '"',
-		"‟": '"',
-		"‐": "-",
-		"‑": "-",
-		"‒": "-",
-		"–": "-",
-		"—": "-",
-		"―": "-",
-		" ": " ",
-		" ": " ",
-		" ": " ",
-		" ": " ",
-	}),
-);
-
-/** Fold the substitutions above; everything else is compared as written. */
-function foldConfusables(text: string): string {
-	let out = "";
-	for (const ch of text) out += CONFUSABLES.get(ch) ?? ch;
-	return out;
-}
-
 /** How much of a diff line a refusal quotes back; enough to see the difference, not the whole line. */
 const MISMATCH_EXCERPT_CHARS = 160;
 
@@ -602,9 +551,7 @@ export function describeCitationMismatch(
 	content: string,
 ): string | null {
 	if (citation.sourceKind !== "scm.pull-request.diff") {
-		const found =
-			content.includes(citation.quote) ||
-			foldConfusables(content).includes(foldConfusables(citation.quote));
+		const found = content.includes(citation.quote);
 		return found ? null : "that text is not in the artifact";
 	}
 	let oldPath: string | null = null;
@@ -613,24 +560,28 @@ export function describeCitationMismatch(
 	for (const storedLine of content.split("\n")) {
 		// Both groups are mandatory, so binding them here is what lets the annotated branch below turn
 		// on a value the compiler has seen rather than on the match object being non-null.
-		const [, annotatedLineNumber, annotatedText] = storedLine.match(/^\[L(\d+)] (.*)$/) ?? [];
+		const [, annotatedLineNumber, annotatedText] = storedLine.match(/^\[L(\d+)] ([\s\S]*)$/) ?? [];
 		const line = annotatedText ?? storedLine;
-		if (line.startsWith("--- ")) {
+		if (annotatedLineNumber === undefined && line.startsWith("--- ")) {
 			oldPath = diffPath(line.slice(4));
 			continue;
 		}
-		if (line.startsWith("+++ ")) {
+		if (annotatedLineNumber === undefined && line.startsWith("+++ ")) {
 			newPath = diffPath(line.slice(4));
 			continue;
 		}
 		if (annotatedLineNumber !== undefined) {
 			const lineNumber = Number(annotatedLineNumber);
+			if (!Number.isSafeInteger(lineNumber) || lineNumber > 2147483647)
+				return "invalid annotated line number";
 			const side: DiffSide = line.startsWith("-") ? "OLD" : "NEW";
 			const path = side === "OLD" ? oldPath : newPath;
 			if (side === citation.side && path === citation.path) citedLines.set(lineNumber, line);
 		}
 	}
-	const quoteLines = citation.quote.split("\n");
+	// Match Java String.lines(): CR/LF delimiters, without the final terminator's empty item.
+	const quoteLines = citation.quote.split(/\r\n|\r|\n/);
+	if (quoteLines.at(-1) === "") quoteLines.pop();
 	const citedLineCount = citation.endLine - citation.startLine + 1;
 	if (quoteLines.length !== citedLineCount) {
 		return `the quote is ${quoteLines.length} line(s) and the citation covers ${citedLineCount}`;
@@ -641,50 +592,16 @@ export function describeCitationMismatch(
 		if (diffLine === undefined) {
 			return `the diff has no [L${lineNumber}] on the ${citation.side ?? "NEW"} side of ${citation.path}`;
 		}
-		if (!quotesDiffLine(diffLine, withoutOwnCoordinate(quoteLine, lineNumber))) {
+		if (!quotesDiffLine(diffLine, quoteLine)) {
 			return `[L${lineNumber}] reads ${excerpt(diffLine)}, not ${excerpt(quoteLine)}`;
 		}
 	}
 	return null;
 }
 
-/**
- * Whether a quote is the diff line it claims — as displayed, without the +/- marker, or without the
- * indentation the diff shows in front of the code. What a citation proves is that the observer read
- * the line at that coordinate on that side, and the coordinate has already pinned which line is being
- * compared: two lines cannot be confused by trimming, because only one is ever a candidate. A quote
- * whose text differs, or that belongs to the other side of the change, still fails.
- */
+/** Match server admission: exact displayed diff text or its text without the single diff marker. */
 function quotesDiffLine(diffLine: string, quoted: string): boolean {
-	if (diffLine === quoted || diffLine.slice(1) === quoted) {
-		return true;
-	}
-	const shown = diffLine.slice(1).trimStart();
-	if (shown.length === 0) {
-		return false;
-	}
-	// As written first, so a line of code that begins with a `-` or a `+` keeps it; only then as a
-	// quote that dropped the diff's own marker along with the indentation.
-	const trimmed = quoted.trimStart();
-	return shown === trimmed || shown === withoutMarker(trimmed).trimStart();
-}
-
-/** A quote that dropped the diff's own +/- or context marker along with the indentation. */
-function withoutMarker(quoted: string): string {
-	return quoted.startsWith("+") || quoted.startsWith("-") || quoted.startsWith(" ")
-		? quoted.slice(1)
-		: quoted;
-}
-
-/**
- * The line as the artifact shows it, when the quote copied the coordinate the artifact prints in
- * front of it. Reading a diff line as `[L39] +public class Foo {` and quoting it back whole is the
- * commonest refusal there is, and it proves the same thing an unprefixed quote proves: the coordinate
- * has to be the one being matched, so a quote cannot claim a line it did not read.
- */
-function withoutOwnCoordinate(quoteLine: string, lineNumber: number): string {
-	const [, quotedNumber, quotedText] = quoteLine.match(/^\[L(\d+)] (.*)$/) ?? [];
-	return quotedText !== undefined && quotedNumber === String(lineNumber) ? quotedText : quoteLine;
+	return diffLine.length > 0 && (diffLine === quoted || diffLine.slice(1) === quoted);
 }
 
 /** One line as evidence in a refusal: quoted, and cut where a reader has already seen the difference. */
@@ -697,7 +614,7 @@ function excerpt(line: string): string {
 function diffPath(rawPath: string): string | null {
 	let value = rawPath.trim();
 	if (value === "/dev/null") return null;
-	if (value.startsWith('"') && value.endsWith('"'))
+	if (value.length >= 2 && value.startsWith('"') && value.endsWith('"'))
 		value = value.slice(1, -1).replaceAll('\\"', '"');
 	return value.startsWith("a/") || value.startsWith("b/") ? value.slice(2) : value;
 }

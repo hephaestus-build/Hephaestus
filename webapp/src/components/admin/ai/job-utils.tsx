@@ -50,7 +50,9 @@ export function isCancellable(status: AgentJob["status"]): boolean {
 	return status === "QUEUED" || status === "RUNNING";
 }
 
-export function isDeliveryRetryable(job: Pick<AgentJob, "status" | "deliveryStatus">): boolean {
+export function isResultProcessingRetryable(
+	job: Pick<AgentJob, "status" | "deliveryStatus">,
+): boolean {
 	return job.status === "COMPLETED" && job.deliveryStatus === "FAILED";
 }
 

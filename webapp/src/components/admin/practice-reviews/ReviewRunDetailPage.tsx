@@ -6,7 +6,7 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import {
 	REVIEW_STATUS_DEFS,
-	SUMMARY_POST_DEFS,
+	RESULT_PROCESSING_DEFS,
 } from "@/components/practice-vocabulary/review-status-defs";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import {
@@ -50,8 +50,8 @@ export interface ReviewRunDetailPageProps {
 	practices?: Practice[];
 	onCancel: () => void;
 	cancelPending: boolean;
-	onRetryDelivery: () => void;
-	retryDeliveryPending: boolean;
+	onRetryResultProcessing: () => void;
+	retryResultProcessingPending: boolean;
 }
 
 /** A section that has finished loading and holds nothing, as opposed to one still waiting. */
@@ -72,8 +72,8 @@ export function ReviewRunDetailPage({
 	practices,
 	onCancel,
 	cancelPending,
-	onRetryDelivery,
-	retryDeliveryPending,
+	onRetryResultProcessing,
+	retryResultProcessingPending,
 }: ReviewRunDetailPageProps) {
 	const breadcrumbs = (
 		<ReviewBreadcrumbs
@@ -134,7 +134,7 @@ export function ReviewRunDetailPage({
 				chips={
 					<>
 						<StatusBadge def={REVIEW_STATUS_DEFS[job.status]} />
-						{job.deliveryStatus && <StatusBadge def={SUMMARY_POST_DEFS[job.deliveryStatus]} />}
+						{job.deliveryStatus && <StatusBadge def={RESULT_PROCESSING_DEFS[job.deliveryStatus]} />}
 					</>
 				}
 				title={job.target.title}
@@ -151,9 +151,9 @@ export function ReviewRunDetailPage({
 					<ReviewRunActions
 						job={job}
 						isCancelling={cancelPending}
-						isRetrying={retryDeliveryPending}
+						isRetrying={retryResultProcessingPending}
 						onCancel={onCancel}
-						onRetry={onRetryDelivery}
+						onRetry={onRetryResultProcessing}
 					/>
 				}
 			/>

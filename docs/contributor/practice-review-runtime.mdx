@@ -74,7 +74,7 @@ The durable boundaries, which the implementation may reschedule freely behind:
 - **Workspace ABI** — the sandbox receives read-only `inputs/`, disposable `work/`, and returns only
   `out/`. [Agent workspace ABI](agent/workspace-abi.mdx) is the source of truth for paths and exit codes.
 - **Observations** — the agent reports through `report_observation`; server admission validates it, and
-  persistence assigns occurrence and recurrence identity.
+  persistence assigns an occurrence identity and a separate evidence-location grouping key.
 - **Feedback** — after admission, the same agent session reports through `report_feedback` in a closed
   intervention phase;
   server admission validates the result without invalidating completed measurement. Admitted feedback,

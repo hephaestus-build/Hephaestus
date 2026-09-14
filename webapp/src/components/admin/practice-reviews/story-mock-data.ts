@@ -1020,9 +1020,6 @@ export function reviewJob(runId: string): AgentJob {
 	if (!run) throw new Error(`No review ${runId} in the fixture`);
 	const started = new Date(run.startedAt);
 	const finished = run.status === "RUNNING" ? undefined : new Date(started.getTime() + 5 * 60_000);
-	const delivered = run.feedback.some(
-		(item) => item.outcome === "DELIVERED" && item.channel === "IN_CONTEXT",
-	);
 	return {
 		id: run.id,
 		jobType: JOB_TYPE_BY_ARTIFACT[run.work.type] ?? "PULL_REQUEST_REVIEW",
@@ -1035,7 +1032,7 @@ export function reviewJob(runId: string): AgentJob {
 		availableAt: started,
 		startedAt: started,
 		completedAt: finished,
-		deliveryStatus: run.status !== "COMPLETED" ? undefined : delivered ? "DELIVERED" : "PENDING",
+		deliveryStatus: run.status === "COMPLETED" ? "DELIVERED" : undefined,
 		llmModel: "openai/gpt-oss-120b",
 		llmTotalInputTokens: 24_000,
 		llmTotalOutputTokens: 914,

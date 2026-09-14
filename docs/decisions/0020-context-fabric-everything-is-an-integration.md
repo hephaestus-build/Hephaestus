@@ -144,8 +144,10 @@ reframe end-to-end before paying for the migration:
 - **Cross-context `ContentSource`s** under `agent.context.providers`, each best-effort
   (`required() == false`: a missing repo/branch/issue logs and skips, never aborts the
   job), each telescope-not-cage (capped, excerpted, every item carries a real `url`):
-  - `linked_work_items.json` — already shipped; resolves closing/branch/commit issue refs
-    to the issue row with an excerpted body (the acceptance criteria).
+  - `linked_work_items.json` — resolves candidate issue mentions from the description,
+    branch and commit subjects to issue summaries. Exact bounded mention context accompanies
+    each candidate; a closing-keyword match is text syntax, not an established relationship
+    or author adoption. The discovery source remains explicitly partial.
   - `branch_graph.json` — `looksBranchedOffFeatureBranch` + `commitsAhead` +
     `distinctAuthorsInRange`, computed from the local clone via
     `GitRepositoryManager.walkCommits` / `GitDiffOperations.resolveDiffRange`.
@@ -153,8 +155,9 @@ reframe end-to-end before paying for the migration:
     `Files.walk` of the clone (path strings only, capped).
 - **Consuming practices** that turn those files into formative feedback:
   - `honours-linked-issue-acceptance-criteria` (goal `review-ready-work`) — consumes
-    `linked_work_items.json` + `diff.patch`; asks which of `#N`'s criteria are done vs
-    deferred; **never asserts an AC is unmet** from code it cannot verify.
+    `linked_work_items.json` + `diff.patch`; establishes whether the author actually refers
+    to or adopts the candidate issue's criteria before evaluating them against the change;
+    **never asserts an AC is unmet** from code it cannot verify.
   - `branches-from-the-integration-branch` (goal `delivery-and-version-control-discipline`)
     — consumes `branch_graph.json`; nudges the branching habit, MINOR-only, heuristic.
   - `keeps-the-test-suite-honest` — **revised** to read `test_presence.json`: when

@@ -52,6 +52,19 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
             OutlineDocumentContentSource.REVIEW_PREFIX);
 
     @Test
+    void citationAndCandidateInstructionsDistinguishSourceTextFromPresentation() throws IOException {
+        String prompt = resolvedDocumentedPrompt();
+        assertThat(prompt)
+                .contains(
+                        "remove those display",
+                        "underlying file text",
+                        "quote `    render()`",
+                        "TEXT_MENTION",
+                        "not a provider-reported relationship or author adoption");
+        assertThat(prompt).doesNotContain("issues this PR closes or links", "the evidence — quote from here");
+    }
+
+    @Test
     @DisplayName("the workspace section documents the known collector outputs")
     void workspaceSectionDocumentsCollectorOutputs() throws IOException {
         String prompt = documentedWorkspaceSection();
@@ -86,6 +99,45 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
                                 STAGED_INPUT_PREFIXES.stream().anyMatch(prefix -> prefix.startsWith(path)))
                         .as("prompt path %s is staged", path)
                         .isTrue());
+    }
+
+    @Test
+    void shouldScopeChangedLineRequirementsToCodeObservations() throws IOException {
+        String prompt = resolvedDocumentedPrompt();
+        String rules = prompt.substring(prompt.indexOf("## Rules"), prompt.indexOf("## Context"));
+        assertThat(rules)
+                .contains("Changed-code observations", "Non-diff citations", "bounded search of the relevant")
+                .contains("description corpus", "conversation and documentation practices")
+                .doesNotContain("Before any negative observation, confirm the evidence is from changed lines")
+                .doesNotContain("Evidence snippets must be copied character-for-character from `+` or `-` lines");
+    }
+
+    @Test
+    void shouldDistinguishDirectInspectionFromReportedCoverage() throws IOException {
+        String prompt = resolvedDocumentedPrompt();
+        assertThat(prompt)
+                .contains("Attribute inspection and reported coverage separately")
+                .contains("cite and attribute those facts to that record")
+                .contains("A report of a check is not evidence that you personally executed it")
+                .contains("distinguish the supplied records you searched from the broader corpus");
+    }
+
+    @Test
+    void shouldKeepOutcomeRationaleSeverityAndOccasionCoherent() throws IOException {
+        String prompt = resolvedDocumentedPrompt();
+        assertThat(prompt)
+                .contains("derive the outcome from the matrix", "appropriate omission or no material deficiency")
+                .contains("diagnostic probes are not observations")
+                .contains("including stored history", "not whether that judgment was", "current captured sources")
+                .contains("do not flip assessment to BAD", "No fault found does not establish positive absence")
+                .contains("practice's severity criteria to the evidenced consequence")
+                .contains(
+                        "Use NOT_APPLICABLE with evidence.inapplicability",
+                        "Use UNDETERMINED with evidence.undecidability")
+                .contains("No changed test file does not establish", "existing tests or manual checks were omitted")
+                .contains("citation's artifactPath", "optional changed-code location")
+                .doesNotContain("COHERENCE RULE", "confident BAD", "the two honest states", "in `reasoning`")
+                .doesNotContain("the marked state is ahead of the work", "keyed off the countable fact");
     }
 
     private static String resolvedDocumentedPrompt() throws IOException {

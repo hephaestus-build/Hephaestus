@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
  */
 class PracticeAutomatedReviewPolicyTest extends BaseUnitTest {
 
-    private static final SourceContractVersion VERSION = new SourceContractVersion("1.0.0");
+    private static final SourceContractVersion VERSION = new SourceContractVersion("1.1.0");
 
     /**
      * A limitation is what the evidence cannot show. A practice with no automated review shows nothing,

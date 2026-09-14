@@ -38,7 +38,7 @@ For how the words fit together at runtime — the four stages, and the refusal v
 | **Source kind**                     | A stable identifier for one logical source, such as pull request details.                                                                                                                                                                  | file type                                                         |
 | **Artifact kind**                   | The family of reviewed work a practice is about, such as `scm.pull_request`. Derived from a binding's signals, never stated separately.                                                                                                    | work type, artifact type                                          |
 | **Known limitation**                | A claim the evidence cannot support even when every requirement passes.                                                                                                                                                                    | blind spot, caveat                                                |
-| **When evidence is insufficient**   | The required behavior when evidence requirements are not met. Contract `1.0.0` always skips automated review.                                                                                                                              | fallback, error handling                                          |
+| **When evidence is insufficient**   | The required behavior when evidence requirements are not met. Skip automated review when the required source conditions are not met.                                                                                                                              | fallback, error handling                                          |
 | **Skip automated review**           | Make no practice claim because the requirements are not met or the mode is unsupported.                                                                                                                                                    | not applicable, decline judgment, failure                         |
 | **Automated review validation**     | Who stands behind a practice's automated-review policy, bound to the exact review-rule fingerprint. Its only status is `AUTHOR_DECLARED`.                                                                                                  | certification, approval                                           |
 | **Source authorization**            | Instance governance permits a source for an explicit product use.                                                                                                                                                                          | enabled, available                                                |
@@ -338,14 +338,13 @@ already read: nothing received is ever un-said, and the newer row still records 
 when that visible text is replaced. Pull request reviews do not: every new review posts a new summary,
 while a retry of the same review reconciles its existing comment by marker.
 
-### How a locus moved
+### Recorded review history
 
-`ObservationDelta` classifies every locus in a person's window as `NEW`, `RECURRING` (still there, and
-the assessment or severity moved), `UNCHANGED` (still there, nothing moved) or `RESOLVED` (was a problem,
-absent from the newest run of its artifact). Use these words for how one measured locus moved between
-runs, and never as a claim about a person's work in general: the comparison is per artifact, so "this
-keeps happening across your work" is a claim about a *practice* over the window and not something the
-delta can say. A strength that simply was not re-observed is not `RESOLVED`.
+The history context contains each recorded observation and the feedback already delivered or prepared.
+A location groups observations about the same piece of work; it does not establish semantic equivalence
+between their behaviors. Comparing outcomes at a shared location or omitting a prior observation does
+not establish that a concern was resolved or regressed. Responses apply to the specific observations
+bound to the feedback the developer received.
 
 ## Machine names
 
@@ -401,7 +400,6 @@ delta can say. A strength that simply was not re-observed is not `RESOLVED`.
 | Conversation move            | not on the HTTP API                | `ConversationBriefBody`                    | JSON inside `feedback.body`                                                   |
 | Thread key                   | not on the HTTP API                | `FeedbackThreadKey`                        | `feedback.thread_key` (not unique)                                            |
 | What feedback follows        | not on the HTTP API                | —                                          | `feedback.replaces_id`                                                        |
-| Locus movement               | inside `inputs/history/delta.json` | `ObservationDelta.Status`                  | derived, never stored                                                         |
 | Signal refusal reason        | —                                  | `SignalStateReason`                        | `artifact_signal.state_reason`                                                |
 | Group dashboard visibility    | `visibleInPracticeDashboards`      | `PracticeGroup.visibleInPracticeDashboards` | `visible_in_practice_dashboards`                                              |
 | Claim currentness            | `claimCurrentness`                 | `ReviewClaimCurrentness`                   | derived API value                                                             |

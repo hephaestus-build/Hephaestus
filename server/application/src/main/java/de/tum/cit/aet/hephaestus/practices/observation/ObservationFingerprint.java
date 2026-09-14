@@ -4,64 +4,22 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
-import java.util.Locale;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Deterministic cross-run identity for a {@code Observation} (ADR 0021).
- *
- * <p>The recurrence key answers "is this the <em>same</em> observation we surfaced on an earlier agent
- * run?" so feedback can supersede rather than re-post, and a developer's reaction history can follow
- * one underlying problem across re-detections. It is therefore a stable hash of <em>what the observation is
- * about</em>, never of <em>when</em> it was produced:
- *
- * <ul>
- *   <li>{@code practiceSlug} — the practice's stable per-workspace slug (NOT its surrogate id, which is
- *       workspace-local and survives reseeds poorly); identity is per-practice.</li>
- *   <li>{@code artifactKind} + {@code artifactId} — the artifact under review (PR / ISSUE).</li>
- *   <li>{@code aboutUserId} — the person the observation is <em>about</em> (always populated). For
- *       author-side practices this equals the developer; for reviewer-side practices the subject differs,
- *       and two reviewers on one PR must not collapse to one key.</li>
- *   <li>a <em>locus anchor</em> = the file {@code path} of the observation's first evidence location (empty
- *       when the practice has no file location). The path stably locates the concern within the artifact.</li>
- * </ul>
- *
- * <p><strong>Deliberately excluded</strong> from the digest, because they are not stable across runs:
- * the agent job id (a new id every run); any line number / column / range (edits shift lines); and —
- * critically — the observation <em>summary</em>. The summary makes identity inert: the LLM re-words the same underlying concern every
- * run ("DoD ticks 'All tests pass' with zero tests" vs "'All tests pass' ticked but no tests
- * exist"), so a summary-anchored key does not correlate across re-detections. Identity is therefore at the <em>(practice, artifact, subject, file)</em> locus grain —
- * the right grain for the research question "did the practice-concern at this locus persist or resolve?",
- * not "did this exact prose recur". Two distinct observations of one practice in one file collapse to one
- * locus; that is intentional (they are the same practice concern there). Only the evidence <em>path</em>
- * participates — callers MUST pass the path of the first location and MUST NOT fold in a line.
- *
- * <p>Output is the lowercase SHA-256 hex digest: 64 chars, matching {@code observation
- * .recurrence_key VARCHAR(64)}. Pure and side-effect free; safe to call before persistence.
+ * Hash of a practice, reviewed artifact, developer and exact evidence path for location grouping.
+ * A shared location does not establish that two observations describe the same behavior.
+ * Feedback delivery and recipient reactions are bound to observation IDs.
  */
 public final class ObservationFingerprint {
 
-    /** Field separator chosen to never appear inside a slug, enum name, numeric id, or path segment. */
+    /** Separates the typed identity fields; the exact path is the final field. */
     private static final char SEP = '\u001F'; // ASCII unit separator
 
     private ObservationFingerprint() {}
 
-    /**
-     * Compute the stable 64-char recurrence key for an observation.
-     *
-     * @param practiceSlug the practice's stable slug (required)
-     * @param artifactKind the artifact-type discriminator, e.g. {@code scm.pull_request} / {@code scm.issue} (required)
-     * @param artifactId the artifact id under review (required)
-     * @param aboutUserId the user the observation is ABOUT — the always-populated {@code about_user_id} (the
-     *     subject for reviewer-side practices; equals the developer for author-side), so the same underlying
-     *     problem keeps one identity across re-detections
-     * @param firstLocationPath the file path of the observation's first evidence location, or {@code null}
-     *     when the practice has no file location (e.g. PR-description quality). PASS THE PATH ONLY —
-     *     never a line number. Normalised (locale-fixed lower-case + trim) so trivial path casing/spacing
-     *     does not split identity.
-     * @return the lowercase SHA-256 hex digest (exactly 64 characters)
-     */
+    /** Compute the 64-character location key, preserving case and whitespace in repository paths. */
     public static String compute(
             @Nullable String practiceSlug,
             @Nullable String artifactKind,
@@ -80,20 +38,10 @@ public final class ObservationFingerprint {
                 .append(SEP)
                 .append(aboutUserId)
                 .append(SEP)
-                .append(firstLocationPath == null ? "" : normalizeAnchorText(firstLocationPath))
+                .append(firstLocationPath == null ? "" : firstLocationPath)
                 .toString();
 
         return sha256Hex(canonical);
-    }
-
-    /**
-     * Locale-fixed (Locale.ROOT — LocaleSafetyArchTest) lower-case + whitespace collapse for the anchor.
-     * Control chars (incl. the {@link #SEP} separator byte) are stripped first: the path is the only
-     * LLM-influenced, last-positioned field, so although an embedded SEP cannot forge an earlier field it
-     * could collapse two genuinely distinct loci — stripping removes that one canonicalization ambiguity.
-     */
-    private static String normalizeAnchorText(String text) {
-        return text.trim().replaceAll("\\p{Cntrl}", "").replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 
     private static String sha256Hex(String canonical) {
