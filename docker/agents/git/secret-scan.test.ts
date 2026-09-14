@@ -49,6 +49,28 @@ void test("multiline scanner matches retain only added lines in each hunk", asyn
 	);
 });
 
+void test("added header-like source text remains content when assigning secret verdicts", async () => {
+	const lines = [
+		"++ b/not-a-file",
+		"diff --git a/fake b/fake",
+		"@@ -1 +999 @@",
+		"secret\u2028value",
+	];
+	const diff = `@@ -0,0 +1,4 @@\n${lines.map((line) => `+${line}\n`).join("")}`;
+	const result = await addedSecretVerdicts(
+		"config.txt",
+		[finding(1, 4)],
+		Readable.from([Buffer.from(diff)]),
+	);
+	assert.deepEqual(
+		result.map(({ line, lineHash }) => ({ line, lineHash })),
+		lines.map((text, index) => ({
+			line: index + 1,
+			lineHash: createHash("sha256").update(text).digest("hex"),
+		})),
+	);
+});
+
 void test("a scanner match outside final additions does not become an observation", async () => {
 	const result = await addedSecretVerdicts(
 		"config.txt",

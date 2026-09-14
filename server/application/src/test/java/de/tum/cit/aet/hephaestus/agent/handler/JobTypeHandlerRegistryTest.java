@@ -102,7 +102,6 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
         return new ConversationReviewHandler(
                 objectMapper,
                 preparation(practiceCatalogInjector),
-                practiceCatalogInjector,
                 parser,
                 deliveryService,
                 org.mockito.Mockito.mock(ApplicationEventPublisher.class),
@@ -112,8 +111,7 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
     private JobTypeHandler documentReviewHandler() {
         var parser = new PracticeDetectionResultParser(objectMapper);
         var practiceCatalogInjector = practiceCatalogInjector();
-        return new DocumentReviewHandler(
-                objectMapper, preparation(practiceCatalogInjector), practiceCatalogInjector, parser, deliveryService);
+        return new DocumentReviewHandler(objectMapper, preparation(practiceCatalogInjector), parser, deliveryService);
     }
 
     /** A registry with the full handler set (every {@link AgentJobType} mapped). */

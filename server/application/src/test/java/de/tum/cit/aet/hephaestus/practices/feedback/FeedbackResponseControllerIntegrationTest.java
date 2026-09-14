@@ -74,6 +74,7 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
     private Workspace workspace;
     private User adminUser;
     private Feedback feedbackUnit;
+    private UUID observationId;
 
     @BeforeEach
     void setUpTestData() {
@@ -114,6 +115,7 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .observedAt(Instant.now())
                 .build();
         finding = observationRepository.save(finding);
+        observationId = finding.getId();
 
         feedbackUnit = feedbackRepository.save(Feedback.builder()
                 .agentJobId(agentJob.getId())
@@ -233,10 +235,33 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .isOk()
                     .expectBody(Void.class);
 
-            var resolutions = reactionRepository.findCurrentResolutionByRecurrenceKeys(
-                    List.of(RECURRENCE_KEY), adminUser.getId(), workspace.getId());
+            Observation original = observationRepository.findById(observationId).orElseThrow();
+            Observation sibling = observationRepository.save(Observation.builder()
+                    .occurrenceKey("sibling-" + UUID.randomUUID())
+                    .recurrenceKey(RECURRENCE_KEY)
+                    .agentJobId(original.getAgentJobId())
+                    .workspaceId(workspace.getId())
+                    .practice(original.getPractice())
+                    .artifactKind(ArtifactKinds.PULL_REQUEST)
+                    .artifactId(42L)
+                    .aboutUserId(adminUser.getId())
+                    .summary("Different behavior at the same location")
+                    .assessmentStatus(AssessmentStatus.ASSESSED)
+                    .presence(Presence.PRESENT)
+                    .assessment(Assessment.BAD)
+                    .severity(Severity.MINOR)
+                    .observedAt(Instant.now())
+                    .build());
+            var resolutions = reactionRepository.findCurrentResolutionByObservationIds(
+                    List.of(observationId, sibling.getId()), adminUser.getId(), workspace.getId());
+            assertThat(feedbackRepository.existsDeliveredInContextForObservation(
+                            workspace.getId(), adminUser.getId(), observationId))
+                    .isTrue();
+            assertThat(feedbackRepository.existsDeliveredInContextForObservation(
+                            workspace.getId(), adminUser.getId(), sibling.getId()))
+                    .isFalse();
             assertThat(resolutions).singleElement().satisfies(resolution -> {
-                assertThat(resolution.getRecurrenceKey()).isEqualTo(RECURRENCE_KEY);
+                assertThat(resolution.getObservationId()).isEqualTo(observationId);
                 assertThat(resolution.getResolution()).isEqualTo(FeedbackResolution.DISPUTED.name());
             });
         }

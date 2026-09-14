@@ -1,6 +1,6 @@
 {
-  "contractVersion": "1.1.0",
-  "catalogDigest": "c311c488219b37728b50ba31051e069f788a7c85ac59c35d50dd3f512cf9c387",
+  "contractVersion": "1.2.0",
+  "catalogDigest": "28dd2608453a94ed4c0f269d3553763992155b22e0bd06346b6c1372b9bb67b6",
   "artifactKind": "scm.pull_request",
   "capturedAt": "2026-01-01T00:00:00Z",
   "sources": [

@@ -51,11 +51,17 @@ class FeedbackDispatchStateMachine {
 
     List<DeliveredSignal> mergeSignals(List<DeliveredSignal> persisted, List<DeliveredSignal> latest) {
         var merged = new LinkedHashMap<String, DeliveredSignal>();
-        for (DeliveredSignal signal : persisted) merged.put(signalKey(signal), signal);
-        for (DeliveredSignal signal : latest) {
-            merged.merge(signalKey(signal), signal, FeedbackDispatchStateMachine::strongerSignal);
+        var unkeyed = new java.util.ArrayList<DeliveredSignal>();
+        for (DeliveredSignal signal : persisted) {
+            if (signal.deliveryKey() == null) unkeyed.add(signal);
+            else merged.merge(signal.deliveryKey(), signal, FeedbackDispatchStateMachine::strongerSignal);
         }
-        return List.copyOf(merged.values());
+        for (DeliveredSignal signal : latest) {
+            if (signal.deliveryKey() == null) unkeyed.add(signal);
+            else merged.merge(signal.deliveryKey(), signal, FeedbackDispatchStateMachine::strongerSignal);
+        }
+        unkeyed.addAll(merged.values());
+        return List.copyOf(unkeyed);
     }
 
     PracticeFeedbackDispatchService.Result sent(
@@ -181,12 +187,6 @@ class FeedbackDispatchStateMachine {
         return latest;
     }
 
-    private static String signalKey(DeliveredSignal signal) {
-        if (signal.recurrenceKey() != null) return signal.recurrenceKey();
-        FeedbackAnchor.DiffAnchor anchor = (FeedbackAnchor.DiffAnchor) signal.anchor();
-        return anchor.filePath() + ":" + anchor.startLine() + ":" + anchor.newLineNumber();
-    }
-
     private static Duration backoff(int attempt) {
         long multiplier = 1L << Math.min(Math.max(attempt - 1, 0), 10);
         Duration candidate = BASE_BACKOFF.multipliedBy(multiplier);
@@ -201,7 +201,9 @@ class FeedbackDispatchStateMachine {
     }
 
     private record StoredPlacement(
-            @Nullable String recurrenceKey,
+            @com.fasterxml.jackson.annotation.JsonAlias("recurrenceKey") @Nullable
+            String deliveryKey,
+
             String path,
             int startLine,
             @Nullable Integer endLine,
@@ -212,7 +214,7 @@ class FeedbackDispatchStateMachine {
             FeedbackAnchor.DiffAnchor anchor = (FeedbackAnchor.DiffAnchor) signal.anchor();
             Integer rangeStart = anchor.startLine();
             return new StoredPlacement(
-                    signal.recurrenceKey(),
+                    signal.deliveryKey(),
                     anchor.filePath(),
                     rangeStart == null ? anchor.newLineNumber() : rangeStart,
                     rangeStart == null ? null : anchor.newLineNumber(),
@@ -225,7 +227,7 @@ class FeedbackDispatchStateMachine {
             FeedbackAnchor.DiffAnchor anchor = endLine == null
                     ? FeedbackAnchor.DiffAnchor.singleLine(path, startLine)
                     : FeedbackAnchor.DiffAnchor.range(path, startLine, endLine);
-            return new DeliveredSignal(recurrenceKey, anchor, disposition, externalRef, threadExternalRef);
+            return new DeliveredSignal(deliveryKey, anchor, disposition, externalRef, threadExternalRef);
         }
     }
 }

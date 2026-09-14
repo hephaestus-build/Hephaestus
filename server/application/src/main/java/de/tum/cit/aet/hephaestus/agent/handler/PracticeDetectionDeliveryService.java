@@ -181,14 +181,6 @@ public class PracticeDetectionDeliveryService {
                                 + ", jobId="
                                 + job.getId());
             }
-            var targetAssessment = Practice.declaredTargetAssessment(revision.getCriteria());
-            if (observation.assessmentStatus() == AssessmentStatus.ASSESSED
-                    && targetAssessment != null
-                    && observation.assessment() != targetAssessment) {
-                throw new JobDeliveryException(
-                        "Observation changes the fixed target assessment for practice " + observation.practiceSlug());
-            }
-
             enforceAttribution(observation, revision, job);
             try {
                 var verifiedEvidence = enforceEvidenceBoundary(observation, revision, captured, job, repositoryQuotes);
@@ -331,7 +323,7 @@ public class PracticeDetectionDeliveryService {
                 }
             }
 
-            // Recurrence identity is content-derived and stable across runs (ADR 0021).
+            // The location grouping can be shared by different behaviors; occurrence identity addresses this row.
             String recurrenceKey = ObservationFingerprint.compute(
                     observation.practiceSlug(),
                     artifactKind.value(),
@@ -343,7 +335,7 @@ public class PracticeDetectionDeliveryService {
             Long practiceRevisionId = Objects.requireNonNull(revision.getId(), "Practice revision must be persisted");
 
             // Enforced here because the native insertIfAbsent path bypasses Observation's @PrePersist
-            // (ADR-0022): severity is an impact band for a BAD observation only.
+            // (ADR-0022): severity is an impact band for a negative outcome only.
             String severityName = observation.outcome() == Outcome.NEGATIVE && observation.severity() != null
                     ? observation.severity().name()
                     : null;
@@ -586,9 +578,12 @@ public class PracticeDetectionDeliveryService {
                             && (!side.isString() || !("OLD".equals(side.asString()) || "NEW".equals(side.asString()))))
                     || (!diffSource.equals(sourceKind.asString()) && !side.isMissingNode())
                     || !startLine.isIntegralNumber()
+                    || !startLine.canConvertToInt()
                     || startLine.asInt() < 1
                     || (!endLine.isMissingNode()
-                            && (!endLine.isIntegralNumber() || endLine.asInt() < startLine.asInt()))
+                            && (!endLine.isIntegralNumber()
+                                    || !endLine.canConvertToInt()
+                                    || endLine.asInt() < startLine.asInt()))
                     || (!quote.isString() && !redactedSecretCitation)) {
                 throw new JobDeliveryException(
                         "Observation has an invalid evidence citation: slug=" + observation.practiceSlug()
@@ -837,7 +832,8 @@ public class PracticeDetectionDeliveryService {
             String quote,
             @Nullable String redactedDigest)
             throws IOException {
-        List<String> expected = List.of(quote.split("\n", -1));
+        List<String> expected = new ArrayList<>(List.of(quote.split("\r\n|\r|\n", -1)));
+        if (expected.size() == (long) end - start + 2 && expected.getLast().isEmpty()) expected.removeLast();
         if (redactedDigest == null && expected.size() != (long) end - start + 1) return false;
         @Nullable String[] paths = new String[2];
         Map<Integer, Boolean> matches = new HashMap<>();
@@ -866,6 +862,7 @@ public class PracticeDetectionDeliveryService {
                 return;
             }
             line = line.substring(annotationEnd + 2);
+            if (line.isEmpty()) return;
             boolean old = line.startsWith("-");
             if (number < start
                     || number > end

@@ -40,19 +40,16 @@ public class DocumentReviewHandler implements JobTypeHandler {
 
     private final JsonMapper objectMapper;
     private final PracticeReviewPreparation preparation;
-    private final PracticeCatalogInjector practiceCatalogInjector;
     private final PracticeDetectionResultParser resultParser;
     private final PracticeDetectionDeliveryService deliveryService;
 
     DocumentReviewHandler(
             JsonMapper objectMapper,
             PracticeReviewPreparation preparation,
-            PracticeCatalogInjector practiceCatalogInjector,
             PracticeDetectionResultParser resultParser,
             PracticeDetectionDeliveryService deliveryService) {
         this.objectMapper = objectMapper;
         this.preparation = preparation;
-        this.practiceCatalogInjector = practiceCatalogInjector;
         this.resultParser = resultParser;
         this.deliveryService = deliveryService;
     }
@@ -154,9 +151,7 @@ public class DocumentReviewHandler implements JobTypeHandler {
                             + parsed.discarded().size());
         }
         var admissible = deliveryService.prepare(
-                job,
-                PracticeDetectionResultParser.coerceCoherence(
-                        parsed.validObservations(), practiceCatalogInjector.defectDetectorSlugs(job)));
+                job, PracticeDetectionResultParser.validateCoherence(parsed.validObservations()));
         return admitted -> deliveryService.publish(admitted, admissible);
     }
 

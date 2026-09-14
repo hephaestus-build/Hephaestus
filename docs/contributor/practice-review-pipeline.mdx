@@ -204,9 +204,8 @@ An observation is one practice's answer about one piece of work, written once an
 the sandbox tool through server admission, persistence and read projections. Contradictory fields
 are rejected, never silently removed or converted to a different judgment.
 
-For a practice targeting harmful behaviour, PRESENT/GOOD is inconsistent and admission records an
-`incoherent_assessment` refusal. It does not rewrite this to NOT_APPLICABLE: inconsistency proves
-nothing about applicability. The callback answers a refusal with HTTP 422, not a retryable failure.
+Admission validates the observation’s axes and evidence warrants. Practice criteria supply the contextual
+expectation; each observation identifies the behavior whose presence and desirability it assesses.
 
 Status-specific warrants and citations are enforced both inside the sandbox and by the server.
 Capture failure remains a readiness decision and creates no observation. Unassessed statuses do not
@@ -218,8 +217,8 @@ receives its answer; a repeat carrying a different payload is refused as a confl
 was already admitted answers with the recorded result.
 
 Identity is assigned at persistence, not in the sandbox: an occurrence key dedupes within a run
-(`insertIfAbsent`, `ON CONFLICT DO NOTHING`), and a recurrence key hashes the locus so the same observation
-is recognisable across runs.
+(`insertIfAbsent`, `ON CONFLICT DO NOTHING`), and a recurrence key groups the evidence location across runs.
+Different behaviors can share a location; this key does not establish that a concern persisted or resolved.
 
 **An observation carries `evidenceRationale` and no advice.** `evidenceRationale` is the measurement's own
 justification — *"the change adds a tax-exempt branch, and no test file in this diff calls `total`"* —
@@ -227,6 +226,18 @@ and it is the only prose the observation carries anywhere. The measurement emits
 `guidance` field on the tool, on the parsed observation, or on the ledger. Advice is a property of a
 *delivery* (ADR 0021, ADR 0022), and the stage that decides deliveries is the subject of the next
 section.
+
+### Recorded-result coverage
+
+The runtime's per-practice execution ledger measures **recorded results**, not how thoroughly the
+sources were inspected. A practice with at least one recorded observation is counted as evaluated;
+a practice without one is counted as unevaluated and may be retried. This does not establish that
+all relevant behaviors were reviewed, or that a practice without a result was never inspected.
+
+The current runner cannot complete successfully with zero recorded observations. A supported
+`NOT_APPLICABLE` observation can record that no occasion exists; missing required sources remain
+readiness failures, and no verdict may be invented to satisfy execution coverage. Report this
+protocol limitation separately from source completeness, judgment quality and delivery.
 
 ## Measurement and intervention
 
@@ -298,17 +309,17 @@ measurement tool is closed, and feedback may bind only to the durable observatio
 The resumed session retains artifact context without weakening the server boundary.
 
 The composer receives the current admitted observations, bounded recent observation and feedback history,
-unread prepared feedback, per-locus deltas, practice definitions, and the enabled lanes with their limits.
+unread prepared feedback, practice definitions, and the enabled lanes with their limits.
 The exact files belong to the [agent workspace ABI](agent/workspace-abi.mdx), not this guide.
 
 Three constraints shape how that context may be used:
 
 - Only pull-request and issue handlers enable composition, and not for backfills. Document and conversation
   reviews record observations but compose no feedback.
-- History is bounded and therefore supports recurrence claims, never claims that something has *never*
-  happened before.
-- Deltas describe a locus on one artifact as `NEW`, `RECURRING`, `UNCHANGED`, or `RESOLVED`. Cross-artifact
-  habits require distinct-artifact evidence from history; an unobserved prior strength is not `RESOLVED`.
+- History is bounded. Claims about repeated behavior require the specific evidence from each reviewed
+  artifact; absence from the history does not establish that a behavior never occurred.
+- Shared practice or location keys do not establish semantic equivalence. A changed outcome or an
+  omitted observation does not establish that a concern was resolved or regressed.
 
 Accepted tool calls update the composition output incrementally. The server parses proposed units and applies
 all delivery gates; the model never writes the feedback ledger directly.

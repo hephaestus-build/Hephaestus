@@ -92,6 +92,21 @@ class GithubInlineFeedbackChannelTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldNotAttributeUntaggedCommentToAnotherBehaviorAtSameCoordinates() {
+        when(gitHubProvider.forScope(1L)).thenReturn(client);
+        when(prNodeIdResolver.resolve(1L, "owner", "repo", 42)).thenReturn("PR_node123");
+        stubReviewThreads(List.of());
+        stubAddReview("REVIEW_1", List.of(comment("unrelated", "src/Foo.java", 10)));
+        InlineResult result = channel.postInlineFeedback(
+                githubTarget(),
+                List.of(new InlineFeedback(
+                        new DiffAnchor("src/Foo.java", 10, null), "fix", "marker", "observation:exact")));
+        assertThat(result.signals())
+                .singleElement()
+                .satisfies(signal -> assertThat(signal.externalRef()).isNull());
+    }
+
+    @Test
     void postsDiffAnchorsAsBatchAndCapturesNodeIds() {
         FeedbackTarget target = githubTarget();
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
@@ -100,9 +115,12 @@ class GithubInlineFeedbackChannelTest extends BaseUnitTest {
 
         // No prior threads on the PR.
         stubReviewThreads(List.of());
-        // Mutation returns the two posted comment node ids keyed by path:line.
+        // Mutation returns the two exact delivery keys in the posted bodies.
         stubAddReview(
-                "REVIEW_1", List.of(comment("RC_foo", "src/Foo.java", 10), comment("RC_bar", "src/Bar.java", 20)));
+                "REVIEW_1",
+                List.of(
+                        commentWithCk("RC_foo", "src/Foo.java", 10, "ck-foo"),
+                        commentWithCk("RC_bar", "src/Bar.java", 20, "ck-bar")));
 
         InlineResult result = channel.postInlineFeedback(
                 target,
@@ -138,7 +156,7 @@ class GithubInlineFeedbackChannelTest extends BaseUnitTest {
 
         assertThat(result.suppressed()).isTrue();
         assertThat(result.posted()).isZero();
-        assertThat(result.suppressedRecurrenceKeys()).containsExactly("ck-1");
+        assertThat(result.suppressedDeliveryKeys()).containsExactly("ck-1");
         verify(client, never()).documentName("AddPullRequestReviewWithThreads");
     }
 
@@ -250,7 +268,7 @@ class GithubInlineFeedbackChannelTest extends BaseUnitTest {
 
         // Prior ck-foo thread is OUTDATED, so the finding still holds and must be re-posted fresh.
         stubReviewThreads(List.of(thread("THREAD_foo", "RC_old_foo", "stale\n" + ckTag("ck-foo"), true, false)));
-        stubAddReview("REVIEW_3", List.of(comment("RC_new_foo", "src/Foo.java", 10)));
+        stubAddReview("REVIEW_3", List.of(commentWithCk("RC_new_foo", "src/Foo.java", 10, "ck-foo")));
 
         InlineResult result = channel.postInlineFeedback(
                 target,
@@ -298,7 +316,7 @@ class GithubInlineFeedbackChannelTest extends BaseUnitTest {
         when(gitHubProvider.forScope(1L)).thenReturn(client);
         when(prNodeIdResolver.resolve(1L, "owner", "repo", 42)).thenReturn("PR_node123");
         stubReviewThreads(List.of(thread("THREAD_old", "RC_old", "old\n" + ckTag("ck-old"), false, false)));
-        stubAddReview("REVIEW_1", List.of(commentWithCk("RC_new", "src/New.java", 12, "ck-new")));
+        stubAddReview("REVIEW_1", List.of(commentWithCk("RC_new", "src/New.java", 12, "observation:ck-new")));
         stubMinimize();
         doNothing()
                 .doThrow(new OutboundEgressSuppressedException("github.minimize-inline-finding"))
@@ -307,12 +325,13 @@ class GithubInlineFeedbackChannelTest extends BaseUnitTest {
 
         InlineResult result = channel.postInlineFeedback(
                 target,
-                List.of(new InlineFeedback(new DiffAnchor("src/New.java", 12, null), "fix", "marker", "ck-new")));
+                List.of(new InlineFeedback(
+                        new DiffAnchor("src/New.java", 12, null), "fix", "marker", "observation:ck-new")));
 
         assertThat(result.suppressed()).isTrue();
         assertThat(result.posted()).isEqualTo(1);
-        assertThat(result.signals()).extracting(DeliveredSignal::recurrenceKey).containsExactly("ck-new");
-        assertThat(result.suppressedRecurrenceKeys()).isEmpty();
+        assertThat(result.signals()).extracting(DeliveredSignal::deliveryKey).containsExactly("observation:ck-new");
+        assertThat(result.suppressedDeliveryKeys()).isEmpty();
     }
 
     @Test
@@ -578,7 +597,7 @@ class GithubInlineFeedbackChannelTest extends BaseUnitTest {
 
     private static DeliveredSignal signalForKey(InlineResult result, String key) {
         return result.signals().stream()
-                .filter(s -> key.equals(s.recurrenceKey()))
+                .filter(s -> key.equals(s.deliveryKey()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("no signal for key " + key));
     }

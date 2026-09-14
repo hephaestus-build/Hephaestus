@@ -234,10 +234,10 @@
       "modelProcessor": "workspace-configured-llm",
       "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
       "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
-      "recordedAt": "2026-09-11T00:00:00Z",
-      "reviewer": "Hephaestus maintainers (PR #1950)",
-      "decidedAt": "2026-09-11T00:00:00Z",
-      "expiresAt": "2027-09-11T00:00:00Z"
+      "recordedAt": "2026-08-03T00:00:00Z",
+      "reviewer": "Hephaestus maintainers (PR #1444)",
+      "decidedAt": "2026-08-03T00:00:00Z",
+      "expiresAt": "2027-08-03T00:00:00Z"
     },
     {
       "id": "use-scm-repository-tree-feedback-delivery",
@@ -248,10 +248,10 @@
       "modelProcessor": null,
       "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
       "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
-      "recordedAt": "2026-09-11T00:00:00Z",
-      "reviewer": "Hephaestus maintainers (PR #1950)",
-      "decidedAt": "2026-09-11T00:00:00Z",
-      "expiresAt": "2027-09-11T00:00:00Z"
+      "recordedAt": "2026-08-03T00:00:00Z",
+      "reviewer": "Hephaestus maintainers (PR #1444)",
+      "decidedAt": "2026-08-03T00:00:00Z",
+      "expiresAt": "2027-08-03T00:00:00Z"
     },
     {
       "id": "use-scm-repository-tree-mentor-context",
@@ -262,10 +262,10 @@
       "modelProcessor": "workspace-configured-llm",
       "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
       "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
-      "recordedAt": "2026-09-11T00:00:00Z",
-      "reviewer": "Hephaestus maintainers (PR #1950)",
-      "decidedAt": "2026-09-11T00:00:00Z",
-      "expiresAt": "2027-09-11T00:00:00Z"
+      "recordedAt": "2026-08-03T00:00:00Z",
+      "reviewer": "Hephaestus maintainers (PR #1444)",
+      "decidedAt": "2026-08-03T00:00:00Z",
+      "expiresAt": "2027-08-03T00:00:00Z"
     },
     {
       "id": "use-scm-repository-tree-operator-review",
@@ -276,10 +276,10 @@
       "modelProcessor": null,
       "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
       "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
-      "recordedAt": "2026-09-11T00:00:00Z",
-      "reviewer": "Hephaestus maintainers (PR #1950)",
-      "decidedAt": "2026-09-11T00:00:00Z",
-      "expiresAt": "2027-09-11T00:00:00Z"
+      "recordedAt": "2026-08-03T00:00:00Z",
+      "reviewer": "Hephaestus maintainers (PR #1444)",
+      "decidedAt": "2026-08-03T00:00:00Z",
+      "expiresAt": "2027-08-03T00:00:00Z"
     },
     {
       "id": "use-scm-issue-core-automated-review",

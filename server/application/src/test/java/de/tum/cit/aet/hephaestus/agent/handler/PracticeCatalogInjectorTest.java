@@ -30,7 +30,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -297,21 +296,6 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
         assertThat(why)
                 .containsEntry("authoring", "Clear descriptions help reviewers.")
                 .doesNotContainKey("retrospective");
-    }
-
-    @Test
-    @DisplayName("defectDetectorSlugs uses the exact admitted practice snapshot")
-    void defectDetectorSlugsUsesSnapshot() {
-        AgentJob job = job(ScmSignals.PULL_REQUEST_OPENED);
-        var snapshot = objectMapper.createObjectNode();
-        var practices = snapshot.putArray("practices");
-        practices.addObject().put("slug", "authoring").put("defectDetector", true);
-        practices.addObject().put("slug", "retrospective").put("defectDetector", false);
-        job.setEvidenceSnapshot(snapshot);
-
-        Set<String> slugs = injector.defectDetectorSlugs(job);
-
-        assertThat(slugs).containsExactly("authoring");
     }
 
     /** Resolves every workspace to the unset defaults — AUTOMATIC autonomy, reach on the work. */

@@ -152,7 +152,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         }
         if (prepared != null) {
             var key = new RepositoryKey(job.getWorkspace().getId(), repositoryId);
-            String[] range = resolveChangeRange(key, prepared);
+            String[] range = {prepared.target(), prepared.head()};
             Map<String, Path> onDisk = new HashMap<>();
             List<Closeable> captures = new ArrayList<>();
             try {
@@ -291,10 +291,4 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
     }
 
     private record CommentCapture(List<PullRequestReviewComment> comments, boolean complete) {}
-
-    private String[] resolveChangeRange(RepositoryKey repository, ReviewRepositoryPreparer.PreparedReview prepared) {
-        String[] range = gitDiffOperations.resolveDiffRange(repository, prepared.target(), prepared.head());
-        if (range == null) throw new JobPreparationException("The pinned review diff range is unavailable");
-        return range;
-    }
 }

@@ -15,6 +15,7 @@ import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -23,12 +24,19 @@ import org.springframework.web.util.UriComponentsBuilder;
 @RequiredArgsConstructor
 public class ReviewRepositoryPreparer {
     private final GitRepositoryManager git;
+    private final GitDiffOperations diffs;
     private final PullRequestRepository pullRequests;
     private final RepositoryToMonitorRepository monitors;
     private final ConnectionService connections;
     private final List<ScmTokenSource> tokenSources;
 
-    private record AuthorizedRepository(RepositoryKey key, String cloneUrl, ScmTokenSource source, int number) {}
+    private record AuthorizedRepository(
+            RepositoryKey key,
+            String cloneUrl,
+            ScmTokenSource source,
+            int number,
+            @Nullable String head,
+            @Nullable String base) {}
 
     public RepositoryKey authorize(AgentJob job) {
         return authorizedRepository(job).key();
@@ -76,14 +84,15 @@ public class ReviewRepositoryPreparer {
                 .encode()
                 .toUriString();
         return new AuthorizedRepository(
-                new RepositoryKey(workspaceId, repositoryId), cloneUrl, source, pullRequest.getNumber());
+                new RepositoryKey(workspaceId, repositoryId),
+                cloneUrl,
+                source,
+                pullRequest.getNumber(),
+                pullRequest.getHeadRefOid(),
+                pullRequest.getBaseRefOid());
     }
 
-    /**
-     * The immutable change range one review reads. {@code target} is the base commit the provider pinned
-     * at submission when it gave one; a GitLab webhook carries no base SHA, so the mirror's target branch
-     * is resolved once here, after the fetch, and every source diffs against the same commit.
-     */
+    /** A pinned review range: target is the recorded diff base or the resolved merge base. */
     public record PreparedReview(RepositoryKey key, String head, String target) {}
 
     public PreparedReview prepare(AgentJob job) {
@@ -100,10 +109,22 @@ public class ReviewRepositoryPreparer {
         var reviewRef = source.reviewHeadRef(authorized.number());
         if (reviewRef.isPresent()) git.fetchRemoteCommit(key, cloneUrl, reviewRef.get(), head, token);
         if (!git.commitExists(key, head)) throw new JobPreparationException("Pinned review commit is unavailable");
-        String target = MetaJson.optString(metadata, "base_ref_oid");
+        String recordedBase = null;
+        if (source.recordsReviewDiffBase()) {
+            if (!head.equals(authorized.head())) {
+                throw new JobPreparationException("Recorded merge request revision does not match the queued head");
+            }
+            recordedBase = authorized.base();
+        }
+        String target = recordedBase != null ? recordedBase : MetaJson.optString(metadata, "base_ref_oid");
         if (target == null) target = git.resolveBranchHead(key, requireText(metadata, "target_branch"));
         if (target == null || !git.commitExists(key, target)) {
             throw new JobPreparationException("Review base commit is unavailable");
+        }
+        if (recordedBase == null) {
+            String[] range = diffs.resolveDiffRange(key, target, head);
+            if (range == null) throw new JobPreparationException("The pinned review diff range is unavailable");
+            target = range[0];
         }
         return new PreparedReview(key, head, target);
     }

@@ -112,7 +112,9 @@ task-level note wearing a costume — rewrite it or drop it.
   whole-artifact summary instead of inventing a line.
 - `<historyRoot>/observations.json` — what earlier reviews recorded about **this developer**, newest
   first, with the practice, the piece of work, and when it was observed. A **partial** window: the file
-  says so itself, and absence from it is not evidence that something never happened.
+  says so itself, and absence from it is not evidence that something never happened. Different observations at the same
+  practice or location can concern different behaviors. A missing record or changed outcome does not
+  establish resolution or regression; ground any comparison in the specific behavior and its evidence.
 
     The piece of work is the entry's `artifact` object: its `title`, its `container`, its `url`, and — when
     the provider gives work a number a person can type — its `number`. Those four are the only way you may
@@ -120,9 +122,6 @@ task-level note wearing a costume — rewrite it or drop it.
     and describe it by title. Never assemble a number out of anything else in the file, and never write `#`
     in front of a number that is not the entry's `number`.
 
-- `<historyRoot>/delta.json` — a **pre-run** comparison snapshot. It can help you find history worth
-  reading, but it cannot establish the state after this run's observations. Do not use its labels to
-  claim that a practice is new, recurring, unchanged, improving, or resolved.
 - `<historyRoot>/feedback.json` — what has already been **said** to this developer, and on which
   surface. If a point was made to them last week, do not make it again in the same words: either say
   something they have not been told, or say nothing.
@@ -142,7 +141,7 @@ but feedback. Compose only from the admitted observations.
 
 ## What makes a pattern (the practice pages and the conversation only)
 
-A pattern is **the same practice going wrong on several separate pieces of work**. Not the same problem
+A pattern is **the same evidenced behavioral concern under a practice on several separate pieces of work**. Not the same problem
 twice on one merge request — that is one occurrence. Not one striking problem on one merge request — that
 is a task-level note, and it belongs on the work.
 

@@ -334,7 +334,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
 
         CapturedEvidence captured = CapturedEvidence.of(job, objectMapper);
         Set<String> diffFiles = captured.diffPaths(job, evidenceFiles);
-        Set<String> defectDetectorSlugs = practiceCatalogInjector.defectDetectorSlugs(job);
         List<PracticeDetectionResultParser.ValidatedObservation> secretObservations =
                 practiceCatalogInjector.isAdmitted(job, SECRET_PRACTICE)
                         ? secretObservations(job, captured)
@@ -362,7 +361,8 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                             + job.getId());
         }
 
-        var scopedObservations = new ArrayList<>(filterByDiffScope(parsed.validObservations(), diffFiles));
+        List<PracticeDetectionResultParser.ValidatedObservation> scopedObservations =
+                new ArrayList<>(filterByDiffScope(parsed.validObservations(), diffFiles));
         if (scopedObservations.size() < parsed.validObservations().size()) {
             log.info(
                     "Diff scope filter removed {} out-of-scope observations: jobId={}, before={}, after={}",
@@ -409,10 +409,8 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                             + diffFiles.size());
         }
 
-        // Refuse inconsistent assessments without inventing an applicability claim, and normalize severity
-        // before observations are persisted or used to compose feedback.
-        var admissible = deliveryService.prepare(
-                job, PracticeDetectionResultParser.coerceCoherence(scopedObservations, defectDetectorSlugs));
+        var admissible =
+                deliveryService.prepare(job, PracticeDetectionResultParser.validateCoherence(scopedObservations));
         return admitted -> deliveryService.publish(admitted, admissible);
     }
 
@@ -486,21 +484,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 severity,
                 evidence,
                 reasoning);
-    }
-
-    /**
-     * Parse file paths from {@code git diff --name-only} output.
-     * Each non-blank line is a file path — no truncation or stat formatting.
-     */
-    static Set<String> parseDiffNameOnlyPaths(String nameOnlyOutput) {
-        Set<String> paths = new HashSet<>();
-        for (String line : nameOnlyOutput.split("\n")) {
-            String trimmed = line.trim();
-            if (!trimmed.isEmpty()) {
-                paths.add(trimmed);
-            }
-        }
-        return paths;
     }
 
     /**

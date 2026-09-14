@@ -255,12 +255,11 @@ void test("a quote from the other side of the change is refused, however it is w
 	assert.match(describeCitationMismatch(citation, diff) ?? "", /\[L47] reads/);
 });
 
-void test("a quote may carry the coordinate the diff printed in front of it", () => {
+void test("a quote may carry its exact displayed coordinate", () => {
 	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
 	const diff =
 		"diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] + insecure();\n";
 
-	// What the observer actually read, copied back whole. The commonest refusal on staging.
 	assert.equal(describeCitationMismatch({ ...citation, quote: "[L10] + insecure();" }, diff), null);
 	// The coordinate still has to be the one being matched, so a quote cannot claim a line it did
 	// not read — even when that line's text is in the diff somewhere else.
@@ -599,7 +598,7 @@ void test("removed measurement fields are rejected rather than silently accepted
 	);
 });
 
-void test("all assessed combinations preserve the fixed target and judgment", () => {
+void test("all assessed combinations preserve the specified behavior and judgment", () => {
 	for (const presence of PRESENCE_VALUES) {
 		for (const assessment of ASSESSMENT_VALUES) {
 			const severity = (presence === "PRESENT") !== (assessment === "GOOD") ? "MAJOR" : null;
@@ -809,4 +808,82 @@ void test("serialized-source citations must quote the specified lines, not elsew
 		),
 		true,
 	);
+});
+
+void test("normalization preserves raw quote bytes and local preflight matches server line semantics", () => {
+	const diff =
+		"--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10,2 +10,2 @@\n[L10] +  Trivio:  # TODO: Adjust Name\n[L11] +\n";
+	for (const quote of [
+		"  Trivio:  # TODO: Adjust Name",
+		"  Trivio:  # TODO: Adjust Name\n",
+		"+  Trivio:  # TODO: Adjust Name\r\n",
+	]) {
+		const raw = baseObservation();
+		onlyCitation(raw.evidence.citations).quote = quote;
+		const citation = onlyCitation(normalizeObservation(raw).evidence.citations);
+		assert.equal(citation.quote, quote);
+		assert.equal(describeCitationMismatch(citation, diff), null);
+	}
+	const raw = baseObservation();
+	onlyCitation(raw.evidence.citations).quote = "  Trivio:  # TODO: Adjust Name\r\n\r\n";
+	onlyCitation(raw.evidence.citations).endLine = 11;
+	const citation = onlyCitation(normalizeObservation(raw).evidence.citations);
+	assert.equal(citation.quote, "  Trivio:  # TODO: Adjust Name\r\n\r\n");
+	assert.equal(describeCitationMismatch(citation, diff), null);
+	onlyCitation(raw.evidence.citations).quote = " \t\n";
+	assert.throws(() => normalizeObservation(raw), /quote is required/);
+});
+
+void test("citation coordinates are bounded and control-only quotes are blank", () => {
+	for (const line of [2147483648, 4294967306, Number.MAX_SAFE_INTEGER + 1]) {
+		const raw = baseObservation();
+		onlyCitation(raw.evidence.citations).startLine = line;
+		assert.throws(() => normalizeObservation(raw), /startLine/);
+		onlyCitation(raw.evidence.citations).startLine = 10;
+		onlyCitation(raw.evidence.citations).endLine = line;
+		assert.throws(() => normalizeObservation(raw), /endLine/);
+	}
+	const raw = baseObservation();
+	onlyCitation(raw.evidence.citations).quote = "\u001c\u001d\u001e\u001f";
+	assert.throws(() => normalizeObservation(raw), /quote is required/);
+});
+
+void test("annotated source text is not parsed as a header and Unicode separators remain source text", () => {
+	const cite = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
+	const diff =
+		"--- a/src/Auth.java\n+++ b/src/Auth.java\n[L10] --- SQL comment\n[L10] +++ value\u2028tail\u2029end\n";
+	assert.equal(
+		describeCitationMismatch({ ...cite, side: "OLD", quote: "-- SQL comment" }, diff),
+		null,
+	);
+	assert.equal(
+		describeCitationMismatch({ ...cite, quote: "++ value\u2028tail\u2029end" }, diff),
+		null,
+	);
+	assert.notEqual(
+		describeCitationMismatch(
+			{ ...cite, endLine: 11, quote: "x\n\n" },
+			"--- a/src/Auth.java\n+++ b/src/Auth.java\n[L10] +x\n[L11] ",
+		),
+		null,
+	);
+	assert.equal(
+		describeCitationMismatch({ ...cite, path: '"', quote: "x" }, '--- "\n+++ "\n[L10] +x\n'),
+		null,
+	);
+});
+
+void test("normalization preserves nonblank citation path identifiers", () => {
+	const raw = baseObservation();
+	const supplied = onlyCitation(raw.evidence.citations);
+	supplied.path = " source file ";
+	supplied.artifactPath = "inputs/context/ captured file ";
+	const citation = onlyCitation(normalizeObservation(raw).evidence.citations);
+	assert.equal(citation.path, supplied.path);
+	assert.equal(citation.artifactPath, supplied.artifactPath);
+	for (const field of ["path", "artifactPath"]) {
+		const blank = baseObservation();
+		onlyCitation(blank.evidence.citations)[field] = " \t\n";
+		assert.throws(() => normalizeObservation(blank), new RegExp(`${field} is required`));
+	}
 });

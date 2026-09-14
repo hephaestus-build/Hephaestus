@@ -67,7 +67,6 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
                 objectMapper,
                 new PracticeReviewPreparation(
                         workspaceContextBuilder, practiceCatalogInjector, new TaskEnvelopeWriter(objectMapper)),
-                practiceCatalogInjector,
                 new PracticeDetectionResultParser(objectMapper),
                 deliveryService,
                 eventPublisher,

@@ -678,7 +678,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             Instant now = Instant.parse("2026-08-03T10:00:00Z");
-            SourceContractVersion version = new SourceContractVersion("1.1.0");
+            SourceContractVersion version = new SourceContractVersion("1.2.0");
             SourceKind source = new SourceKind("scm.pull-request.diff");
             ArtifactSourceManifest manifest = new ArtifactSourceManifest(
                     version,
@@ -775,7 +775,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
             JobTypeHandler handler = mock(JobTypeHandler.class);
             when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
             Instant now = Instant.parse("2026-08-03T10:00:00Z");
-            SourceContractVersion version = new SourceContractVersion("1.1.0");
+            SourceContractVersion version = new SourceContractVersion("1.2.0");
             String artifactKind = "scm.pull_request";
             SourceKind source = new SourceKind("scm.pull-request.diff");
             ArtifactSourceManifest manifest = new ArtifactSourceManifest(

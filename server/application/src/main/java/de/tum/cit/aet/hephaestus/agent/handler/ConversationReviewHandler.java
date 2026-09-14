@@ -42,7 +42,6 @@ public class ConversationReviewHandler implements JobTypeHandler {
 
     private final JsonMapper objectMapper;
     private final PracticeReviewPreparation preparation;
-    private final PracticeCatalogInjector practiceCatalogInjector;
     private final PracticeDetectionResultParser resultParser;
     private final PracticeDetectionDeliveryService deliveryService;
     private final ApplicationEventPublisher eventPublisher;
@@ -51,14 +50,12 @@ public class ConversationReviewHandler implements JobTypeHandler {
     ConversationReviewHandler(
             JsonMapper objectMapper,
             PracticeReviewPreparation preparation,
-            PracticeCatalogInjector practiceCatalogInjector,
             PracticeDetectionResultParser resultParser,
             PracticeDetectionDeliveryService deliveryService,
             ApplicationEventPublisher eventPublisher,
             TransactionTemplate transactionTemplate) {
         this.objectMapper = objectMapper;
         this.preparation = preparation;
-        this.practiceCatalogInjector = practiceCatalogInjector;
         this.resultParser = resultParser;
         this.deliveryService = deliveryService;
         this.eventPublisher = eventPublisher;
@@ -168,11 +165,8 @@ public class ConversationReviewHandler implements JobTypeHandler {
                             + ", discarded="
                             + parsed.discarded().size());
         }
-        // Coherence coercion: defect-detector GOOD → NOT_APPLICABLE + severity sentinel.
         var admissible = deliveryService.prepare(
-                job,
-                PracticeDetectionResultParser.coerceCoherence(
-                        parsed.validObservations(), practiceCatalogInjector.defectDetectorSlugs(job)));
+                job, PracticeDetectionResultParser.validateCoherence(parsed.validObservations()));
         return admitted -> deliveryService.publish(admitted, admissible);
     }
 

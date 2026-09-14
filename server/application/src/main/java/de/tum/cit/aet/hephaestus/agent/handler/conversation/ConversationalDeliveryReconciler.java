@@ -58,9 +58,8 @@ public class ConversationalDeliveryReconciler {
             if (feedbackIds.isEmpty()) {
                 continue;
             }
-            if (observation.getRecurrenceKey() != null
-                    && feedbackRepository.existsDeliveredInContextForRecurrenceKey(
-                            workspaceId, recipientUserId, observation.getRecurrenceKey())) {
+            if (feedbackRepository.existsDeliveredInContextForObservation(
+                    workspaceId, recipientUserId, observationId)) {
                 continue;
             }
             UUID feedbackId = feedbackIds.get(0);
@@ -135,7 +134,7 @@ public class ConversationalDeliveryReconciler {
      * the instance stopped it, which is a different answer to "why was nothing said" than "it is still
      * queued". Walks the same {@link #admitted} observations {@link #reconcile} may act on: a linked id that
      * subsystem is not allowed to raise is not one Silent Mode gets to claim it stopped. It does not repeat
-     * that method's recurrence-key rule — "already said inline" is about what to say next, and nothing is
+     * that method's exact-observation delivery check — "already said inline" is about what to say next, and nothing is
      * being said.
      */
     public int suppressForSilentMode(long workspaceId, long recipientUserId, List<UUID> linkedObservationIds) {

@@ -407,10 +407,12 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
             @Nullable JsonNode evidenceSnapshot,
             @Nullable JsonNode reviewReadiness) {}
 
+    // DELIVERED settles result processing here: no model output exists to process, and no recipient delivery is
+    // claimed.
     @WorkspaceAgnostic("ID-based evidence-refusal transition; job ID + owner from worker-local execution context")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE AgentJob j SET j.status = 'COMPLETED', j.completedAt = :now, j.output = :output, "
-            + "j.errorMessage = NULL WHERE j.id = :id AND j.status = 'RUNNING' "
+            + "j.deliveryStatus = 'DELIVERED', j.errorMessage = NULL WHERE j.id = :id AND j.status = 'RUNNING' "
             + "AND ((:workerId IS NULL AND j.workerId IS NULL) OR j.workerId = :workerId) "
             + "AND j.retryCount = :retryCount")
     int transitionToEvidenceRefused(

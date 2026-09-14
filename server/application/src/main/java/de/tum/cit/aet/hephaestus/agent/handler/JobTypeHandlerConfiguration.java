@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
-import de.tum.cit.aet.hephaestus.practices.observation.ObservationTrendService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import java.util.List;
@@ -77,16 +76,13 @@ public class JobTypeHandlerConfiguration {
             PullRequestCommentPoster commentPoster,
             PracticeFeedbackDeliveryPolicy deliveryPolicy,
             FeedbackLedgerRecorder feedbackLedgerRecorder,
-            ObservationTrendService observationTrendService,
             PracticeFeedbackCommentFormatter commentFormatter,
             PracticeFeedbackDispatchService dispatchService,
             AgentJobRepository agentJobRepository) {
         return new FeedbackDeliveryService(
                 commentPoster,
                 deliveryPolicy,
-                reviewProperties,
                 feedbackLedgerRecorder,
-                observationTrendService,
                 commentFormatter,
                 dispatchService,
                 agentJobRepository);
@@ -171,29 +167,20 @@ public class JobTypeHandlerConfiguration {
     @Bean
     JobTypeHandler conversationReviewHandler(
             PracticeReviewPreparation preparation,
-            PracticeCatalogInjector practiceCatalogInjector,
             PracticeDetectionResultParser resultParser,
             PracticeDetectionDeliveryService deliveryService,
             ApplicationEventPublisher eventPublisher,
             TransactionTemplate transactionTemplate) {
         return new ConversationReviewHandler(
-                objectMapper,
-                preparation,
-                practiceCatalogInjector,
-                resultParser,
-                deliveryService,
-                eventPublisher,
-                transactionTemplate);
+                objectMapper, preparation, resultParser, deliveryService, eventPublisher, transactionTemplate);
     }
 
     @Bean
     JobTypeHandler documentReviewHandler(
             PracticeReviewPreparation preparation,
-            PracticeCatalogInjector practiceCatalogInjector,
             PracticeDetectionResultParser resultParser,
             PracticeDetectionDeliveryService deliveryService) {
-        return new DocumentReviewHandler(
-                objectMapper, preparation, practiceCatalogInjector, resultParser, deliveryService);
+        return new DocumentReviewHandler(objectMapper, preparation, resultParser, deliveryService);
     }
 
     @Bean

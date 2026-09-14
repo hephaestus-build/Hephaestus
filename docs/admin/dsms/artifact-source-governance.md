@@ -53,7 +53,7 @@ missing or expired is never read, whatever the deployment sets. Disabling a use 
 contract version in which that decision no longer permits it.
 
 The runtime registry is
-[`source-use-decisions.json`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/artifact-source/1.1.0/source-use-decisions.json).
+[`source-use-decisions.json`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/artifact-source/1.2.0/source-use-decisions.json).
 It is an engineering gate and contains only releasable decision summaries. Each record governs exactly one source-use purpose; a source references separate records for automated review, feedback delivery, Mentor context, and operator evidence review:
 
 - `ENGINEERING_BASELINE` with `ENGINEERING_APPROVED` records maintainer approval of the shipped, minimized
@@ -93,7 +93,7 @@ the runtime as the absence of a permitting record rather than as a refusal the r
 decisionId: SRC-YYYY-NNN
 status: PROPOSED # APPROVED, REJECTED, WITHDRAWN, SUPERSEDED
 sourceKind: example.logical-source
-sourceContractVersion: 1.1.0
+sourceContractVersion: 1.2.0
 deploymentScope: tumaet-production
 
 sourceUse:
@@ -177,7 +177,7 @@ source/workspace/person erasure paths are implemented and tested.
 ## Approval renewal
 
 The shipped decisions expire on the date recorded in
-`server/application/src/main/resources/contracts/artifact-source/1.1.0/source-use-decisions.json`. Every governed use fails
+`server/application/src/main/resources/contracts/artifact-source/1.2.0/source-use-decisions.json`. Every governed use fails
 closed after expiry. Instance operators should alert when
 `artifact_source_governance_expiry_seconds` falls below 30 days and assign the alert to the instance
 privacy/governance owner. The server logs a warning at startup inside the same window.

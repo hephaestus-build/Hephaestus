@@ -12,7 +12,7 @@ import type { AgentJob } from "@/api/types.gen";
 import type { StatusDefs } from "./status-def";
 
 export type ReviewStatus = AgentJob["status"];
-export type SummaryPostStatus = NonNullable<AgentJob["deliveryStatus"]>;
+export type ResultProcessingStatus = NonNullable<AgentJob["deliveryStatus"]>;
 
 /**
  * Whether a review *ran*. Nothing here says anything about what it found or who heard about it —
@@ -58,27 +58,26 @@ export const REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 };
 
 /**
- * Whether the review's own summary comment made it onto the work — a different thing from a piece of
- * feedback being delivered, though the wire calls both "delivery". Every label here has to say
- * "summary", or a detail screen shows "Delivered" twice about two unrelated things.
+ * Processing the review's results is independent of publishing feedback. The job's wire field is
+ * `deliveryStatus`; individual feedback records establish whether anything reached a developer.
  */
-export const SUMMARY_POST_DEFS: StatusDefs<SummaryPostStatus> = {
+export const RESULT_PROCESSING_DEFS: StatusDefs<ResultProcessingStatus> = {
 	DELIVERED: {
-		label: "Summary posted",
+		label: "Results processed",
 		icon: CircleCheckIcon,
 		badgeVariant: "success",
-		description: "The review's own summary comment is on the work.",
+		description: "Result processing finished. Feedback may still await approval or be withheld.",
 	},
 	PENDING: {
-		label: "Summary not posted yet",
+		label: "Results awaiting processing",
 		icon: ClockIcon,
 		badgeVariant: "secondary",
-		description: "The summary comment is still waiting to be posted.",
+		description: "The review results are waiting to be processed.",
 	},
 	FAILED: {
-		label: "Summary failed to post",
+		label: "Result processing failed",
 		icon: CircleAlertIcon,
 		badgeVariant: "destructive",
-		description: "Posting the summary comment was attempted and did not succeed.",
+		description: "Processing the review results did not succeed.",
 	},
 };

@@ -106,16 +106,16 @@ class ConversationalDeliveryBatchAuthorizationTest extends BaseUnitTest {
             // No row for runWithoutRow — a run this workspace does not own, or one that recorded no
             // snapshot. The single-row form answered both with an empty Optional.
             return List.of(
-                    new ContractRow(deniedSource.getAgentJobId(), "1.1.0"),
-                    new ContractRow(deliverable.getAgentJobId(), "1.1.0"));
+                    new ContractRow(deniedSource.getAgentJobId(), "1.2.0"),
+                    new ContractRow(deliverable.getAgentJobId(), "1.2.0"));
         });
         when(catalogs.isSourceUsePermitted(
-                        new SourceContractVersion("1.1.0"),
+                        new SourceContractVersion("1.2.0"),
                         new SourceKind(PERMITTED_KIND),
                         SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(true);
         when(catalogs.isSourceUsePermitted(
-                        new SourceContractVersion("1.1.0"),
+                        new SourceContractVersion("1.2.0"),
                         new SourceKind(DENIED_KIND),
                         SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(false);

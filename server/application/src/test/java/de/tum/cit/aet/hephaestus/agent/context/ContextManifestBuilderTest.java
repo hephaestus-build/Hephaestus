@@ -49,6 +49,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -93,7 +95,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                         Set.of(DIFF)));
 
         JsonNode visible = mapper.readTree(files.get("inputs/manifest.json"));
-        assertThat(visible.path("contractVersion").asString()).isEqualTo("1.1.0");
+        assertThat(visible.path("contractVersion").asString()).isEqualTo("1.2.0");
         assertThat(visible.toString()).doesNotContain("job-42").doesNotContain("workspaceId");
         JsonNode diffSource = findSource(visible, DIFF.value());
         assertThat(diffSource.path("state").path("availability").asString()).isEqualTo("AVAILABLE");
@@ -123,12 +125,13 @@ class ContextManifestBuilderTest extends BaseUnitTest {
         assertThat(builder.stagedSources(plan())).contains(PROJECT_INVENTORY, OUTLINE, REPOSITORY_TREE);
     }
 
-    @Test
-    void shouldRefuseANewCaptureUnderARetiredContract() {
-        var retired = new EvidencePlan(new SourceContractVersion("1.0.0"), ArtifactKinds.PULL_REQUEST);
+    @ParameterizedTest
+    @ValueSource(strings = {"1.0.0", "1.1.0"})
+    void shouldRefuseANewCaptureUnderARetiredContract(String version) {
+        var retired = new EvidencePlan(new SourceContractVersion(version), ArtifactKinds.PULL_REQUEST);
         assertThatThrownBy(() -> builder.stagedSources(retired))
                 .isInstanceOf(de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException.class)
-                .hasMessageContaining("1.0.0");
+                .hasMessageContaining(version);
     }
 
     @Test
@@ -136,7 +139,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
         ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
         ContextManifestBuilder target =
                 new ContextManifestBuilder(mapper, catalogs, new PracticeSubjectEvaluator(mapper), Clock.systemUTC());
-        SourceContractVersion version = new SourceContractVersion("1.1.0");
+        SourceContractVersion version = new SourceContractVersion("1.2.0");
 
         target.isSourceUsePermitted(version, DIFF);
 
@@ -177,9 +180,8 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldDeclineWhenASourceThatMustHoldSomethingCapturedNothing() {
-        // An empty diff is valid (full revert, force-push, merge-only range); only the declared
-        // COMPLETE_AND_NON_EMPTY separates "nothing to judge" from "looked and it was fine".
+    void shouldAllowPracticeSpecificOccasionJudgmentForACompleteEmptyDiff() {
+        // Capture readiness qualifies the evidence, not the practice-specific occasion or outcome.
         Map<String, byte[]> files = new LinkedHashMap<>();
         String path = "inputs/context/diff.patch";
         files.put(path, new byte[0]);
@@ -197,14 +199,50 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                         Map.of(),
                         Set.of(DIFF)));
 
-        AutomatedReviewReadinessResult refused = builder.checkAutomatedReviewReadinessAsOfNow(
-                manifest, List.of(practiceRequiring(DIFF, "needs-substance")));
+        Practice practice = practiceRequiring(DIFF, "needs-diff");
+        AutomatedReviewReadinessResult accepted =
+                builder.checkAutomatedReviewReadinessAsOfNow(manifest, List.of(practice));
 
-        assertThat(refused.readyPractices()).isEmpty();
-        // Exactly one reason, not merely this one among others: an empty capture is a capture, so
-        // nothing may also call it absent.
-        assertThat(refused.decisions().getFirst().sourceChecks().getFirst().reasonCodes())
-                .containsExactly(SourceReadinessReason.SOURCE_EMPTY);
+        assertThat(accepted.readyPractices()).containsExactly(practice);
+        assertThat(accepted.decisions().getFirst().sourceChecks().getFirst().reasonCodes())
+                .isEmpty();
+    }
+
+    @Test
+    void shouldNotTreatFailedDiffCaptureAsVerifiedEmpty() {
+        var failed = new SourceCaptureState.CollectionError(SourceAbsenceReason.PROVIDER_FAILURE);
+        ArtifactSourceManifest manifest = builder.augment(
+                new LinkedHashMap<>(),
+                Map.of(),
+                "job-failed-diff",
+                plan(),
+                new ContextManifestBuilder.CaptureMetadata(
+                        Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(DIFF, failed), Set.of(DIFF)));
+        var readiness =
+                builder.checkAutomatedReviewReadinessAsOfNow(manifest, List.of(practiceRequiring(DIFF, "needs-diff")));
+        assertThat(readiness.readyPractices()).isEmpty();
+        assertThat(readiness.decisions().getFirst().sourceChecks().getFirst().reasonCodes())
+                .containsExactly(SourceReadinessReason.SOURCE_NOT_AVAILABLE);
+    }
+
+    @Test
+    void shouldRejectPartialDiffEvenWhenItsCapturedBytesAreEmpty() {
+        String path = "inputs/context/diff.patch";
+        assertThatThrownBy(() -> builder.augment(
+                        new LinkedHashMap<>(Map.of(path, new byte[0])),
+                        Map.of(path, DIFF),
+                        "job-partial-empty-diff",
+                        plan(),
+                        new ContextManifestBuilder.CaptureMetadata(
+                                Map.of(DIFF, SourceCompleteness.PARTIAL),
+                                Map.of(DIFF, SourceContentState.EMPTY),
+                                Map.of(DIFF, "abc123"),
+                                Map.of(),
+                                Map.of(),
+                                Map.of(),
+                                Set.of(DIFF))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("completeness forbidden");
     }
 
     /**
@@ -794,7 +832,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     }
 
     private static EvidencePlan plan() {
-        return new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.PULL_REQUEST);
+        return new EvidencePlan(new SourceContractVersion("1.2.0"), ArtifactKinds.PULL_REQUEST);
     }
 
     private ContextManifestBuilder builderAt(Instant instant) {
@@ -813,7 +851,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     }
 
     private static EvidencePlan conversationPlan() {
-        return new EvidencePlan(new SourceContractVersion("1.1.0"), ArtifactKinds.CONVERSATION_THREAD);
+        return new EvidencePlan(new SourceContractVersion("1.2.0"), ArtifactKinds.CONVERSATION_THREAD);
     }
 
     private static ContextManifestBuilder.CaptureMetadata metadata(SourceKind kind, Instant observedAt) {
@@ -966,7 +1004,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                         conversation ? ArtifactKinds.CONVERSATION_THREAD : ArtifactKinds.PULL_REQUEST),
                 List.of(new PracticeEvidenceRequirement(sourceKind, stance)))));
         practice.setAutomatedReviewPolicy(new PracticeAutomatedReviewPolicy(
-                new SourceContractVersion("1.1.0"),
+                new SourceContractVersion("1.2.0"),
                 new PracticeAutomatedReview(
                         PracticeAutomatedReviewMode.LANGUAGE_MODEL,
                         PracticeEvidenceSufficiency.SUFFICIENT_WHEN_REQUIREMENTS_MET),

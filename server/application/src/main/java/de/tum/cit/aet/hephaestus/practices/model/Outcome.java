@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.model;
 
 import org.jspecify.annotations.Nullable;
 
-/** The consequence of presence and the target behaviour's desirability; never independently assigned. */
+/** The consequence of presence and the specified behavior's contextual desirability; never independently assigned. */
 public enum Outcome {
     POSITIVE,
     NEGATIVE;

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
@@ -51,9 +52,6 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
     private GitRepositoryManager gitRepositoryManager;
 
     @Mock
-    private GitDiffOperations gitDiffOperations;
-
-    @Mock
     private ReviewRepositoryPreparer repositoryPreparer;
 
     private LinkedWorkItemContentSource provider;
@@ -61,12 +59,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         provider = new LinkedWorkItemContentSource(
-                objectMapper,
-                pullRequestRepository,
-                issueRepository,
-                gitRepositoryManager,
-                gitDiffOperations,
-                repositoryPreparer);
+                objectMapper, pullRequestRepository, issueRepository, gitRepositoryManager, repositoryPreparer);
         lenient()
                 .when(repositoryPreparer.prepare(any()))
                 .thenReturn(new ReviewRepositoryPreparer.PreparedReview(
@@ -107,6 +100,74 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void preservesTemplateExamplesAndAuthoredInlineReferencesAsTextCandidates() throws Exception {
+        String body =
+                "- [ ] Related issue is linked (e.g., `Closes #12`)\nImplemented the requested fix: `Closes #42`.";
+        var pr = new PullRequest();
+        pr.setBody(body);
+        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
+        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 12))
+                .thenReturn(Optional.of(issue(12, "Example", "")));
+        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42))
+                .thenReturn(Optional.of(issue(42, "Requested fix", "")));
+        var capture = provider.capture(request(sampleMetadata()), Set.of(new SourceKind("scm.linked-work-items")));
+        var items = objectMapper
+                .readTree(capture.files().get("inputs/context/linked_work_items.json"))
+                .get("workItems");
+        assertThat(items).hasSize(2);
+        for (var item : items) {
+            assertThat(item.get("referenceKind").asString()).isEqualTo("TEXT_MENTION");
+            assertThat(item.has("closingKeyword")).isFalse();
+            assertThat(item.has("authorAdopted")).isFalse();
+            assertThat(item.get("matchedClosingKeyword").asBoolean()).isTrue();
+        }
+        assertThat(items.get(0).get("mentions").get(0).get("excerpt").asString())
+                .isEqualTo(body.split("\n")[0]);
+        assertThat(items.get(1).get("mentions").get(0).get("excerpt").asString())
+                .isEqualTo(body.split("\n")[1]);
+    }
+
+    @Test
+    void templateClosingExampleDoesNotHideLaterAuthoredBareMention() throws Exception {
+        String example = "Example: `Closes #12`.";
+        String authored = "For the intended check, follow the acceptance criteria in #12.";
+        var pr = new PullRequest();
+        pr.setBody(example + "\n" + authored);
+        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
+        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 12)).thenReturn(Optional.of(issue(12, "Work", "")));
+        var capture = provider.capture(request(sampleMetadata()), provider.sourceKinds());
+        var item = objectMapper
+                .readTree(capture.files().get("inputs/context/linked_work_items.json"))
+                .get("workItems")
+                .get(0);
+        assertThat(item.get("matchedClosingKeyword").asBoolean()).isTrue();
+        assertThat(item.get("mentions")).hasSize(2);
+        assertThat(item.get("mentions").get(0).get("excerpt").asString()).isEqualTo(example);
+        assertThat(item.get("mentions").get(1).get("excerpt").asString()).isEqualTo(authored);
+    }
+
+    @Test
+    void candidateContextsHaveBoundedExactExcerpts() throws Exception {
+        var pr = new PullRequest();
+        String body = "prefix ".repeat(100) + "Closes #42" + " suffix".repeat(100);
+        pr.setBody(body);
+        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
+        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42)).thenReturn(Optional.of(issue(42, "Work", "")));
+        var capture = provider.capture(request(sampleMetadata()), Set.of(new SourceKind("scm.linked-work-items")));
+        var mention = objectMapper
+                .readTree(capture.files().get("inputs/context/linked_work_items.json"))
+                .get("workItems")
+                .get(0)
+                .get("mentions")
+                .get(0);
+        String excerpt = mention.get("excerpt").asString();
+        assertThat(excerpt.length()).isLessThanOrEqualTo(240);
+        assertThat(excerpt).contains("Closes #42");
+        assertThat(body).contains(excerpt);
+        assertThat(mention.get("excerptTruncated").asBoolean()).isTrue();
+    }
+
+    @Test
     void supportsPracticeReviewOnly() {
         assertThat(provider.supports(request(sampleMetadata()))).isTrue();
     }
@@ -143,7 +204,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         assertThat(item.get("title").asString()).isEqualTo("Add token refresh");
         assertThat(item.get("state").asString()).isEqualTo("OPEN");
         assertThat(item.get("url").asString()).isEqualTo("https://example.com/issues/42");
-        assertThat(item.get("closingKeyword").asBoolean()).isTrue();
+        assertThat(item.get("matchedClosingKeyword").asBoolean()).isTrue();
         assertThat(item.get("bodyExcerpt").asString()).contains("Acceptance criteria");
         assertThat(item.get("labels").get(0).asString()).isEqualTo("backend");
         assertThat(item.get("subIssuesTotal").asInt()).isEqualTo(3);
@@ -165,7 +226,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         provider.contribute(request(sampleMetadata()), files);
 
         JsonNode root = objectMapper.readTree(files.get("inputs/context/linked_work_items.json"));
-        assertThat(root.get("workItems").get(0).get("closingKeyword").asBoolean())
+        assertThat(root.get("workItems").get(0).get("matchedClosingKeyword").asBoolean())
                 .isFalse();
     }
 
@@ -188,7 +249,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         // Exactly #42 resolves; the version-looking #1.2 is rejected (and #1 was never looked up).
         assertThat(items).hasSize(1);
         assertThat(items.get(0).get("number").asInt()).isEqualTo(42);
-        assertThat(items.get(0).get("closingKeyword").asBoolean()).isFalse();
+        assertThat(items.get(0).get("matchedClosingKeyword").asBoolean()).isFalse();
     }
 
     @Test
@@ -325,15 +386,14 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
 
         when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitDiffOperations.resolveDiffRange(new RepositoryKey(99L, REPO_ID), "a".repeat(40), "abc123def456"))
-                .thenReturn(new String[] {"base", "head"});
         doAnswer(invocation -> {
                     java.util.function.Consumer<String> consumer = invocation.getArgument(3);
                     consumer.accept("fix: resolve crash, fixes #77");
                     return null;
                 })
                 .when(gitRepositoryManager)
-                .forEachCommitSubject(eq(new RepositoryKey(99L, REPO_ID)), eq("base"), eq("head"), any());
+                .forEachCommitSubject(
+                        eq(new RepositoryKey(99L, REPO_ID)), eq("a".repeat(40)), eq("abc123def456"), any());
         when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 77))
                 .thenReturn(Optional.of(issue(77, "Crash on launch", "criteria")));
 
@@ -345,7 +405,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
 
         JsonNode root = objectMapper.readTree(files.get("inputs/context/linked_work_items.json"));
         assertThat(root.get("workItems").get(0).get("number").asInt()).isEqualTo(77);
-        assertThat(root.get("workItems").get(0).get("closingKeyword").asBoolean())
+        assertThat(root.get("workItems").get(0).get("matchedClosingKeyword").asBoolean())
                 .isTrue();
         assertThat(root.get("resolvedFrom").toString()).contains("commits");
     }
@@ -357,8 +417,6 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         pr.setHeadRefName("feature/plain");
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
         when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitDiffOperations.resolveDiffRange(new RepositoryKey(99L, REPO_ID), "a".repeat(40), "abc123def456"))
-                .thenReturn(new String[] {"base", "head"});
 
         ObjectNode metadata = sampleMetadata();
         metadata.put("source_branch", "feature/plain");
@@ -381,8 +439,6 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         pr.setHeadRefName("feature/plain");
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
         when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitDiffOperations.resolveDiffRange(new RepositoryKey(99L, REPO_ID), "a".repeat(40), "abc123def456"))
-                .thenReturn(new String[] {"base", "head"});
         doAnswer(invocation -> {
                     java.util.function.Consumer<String> consumer = invocation.getArgument(3);
                     for (int index = 0; index < 501; index++) consumer.accept("ordinary change");
@@ -390,7 +446,8 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
                     return null;
                 })
                 .when(gitRepositoryManager)
-                .forEachCommitSubject(eq(new RepositoryKey(99L, REPO_ID)), eq("base"), eq("head"), any());
+                .forEachCommitSubject(
+                        eq(new RepositoryKey(99L, REPO_ID)), eq("a".repeat(40)), eq("abc123def456"), any());
         when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 77))
                 .thenReturn(Optional.of(issue(77, "Crash", "criteria")));
 
@@ -412,14 +469,16 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         when(repositoryPreparer.authorize(any())).thenThrow(new IllegalStateException("Unauthorized repository"));
         assertThatExceptionOfType(EvidenceCollectionException.class)
                 .isThrownBy(() -> provider.capture(request(sampleMetadata()), provider.sourceKinds()));
-        org.mockito.Mockito.verifyNoInteractions(pullRequestRepository, issueRepository, gitDiffOperations);
+        org.mockito.Mockito.verifyNoInteractions(pullRequestRepository, issueRepository);
     }
 
     @Test
     void shouldReportCommitScanFailureInsteadOfEmptyEvidence() {
         when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitDiffOperations.resolveDiffRange(new RepositoryKey(99L, REPO_ID), "a".repeat(40), "abc123def456"))
-                .thenThrow(new IllegalStateException("Native Git failed"));
+        org.mockito.Mockito.doThrow(new IllegalStateException("Native Git failed"))
+                .when(gitRepositoryManager)
+                .forEachCommitSubject(
+                        eq(new RepositoryKey(99L, REPO_ID)), eq("a".repeat(40)), eq("abc123def456"), any());
         assertThatExceptionOfType(EvidenceCollectionException.class)
                 .isThrownBy(() -> provider.capture(request(sampleMetadata()), provider.sourceKinds()));
     }

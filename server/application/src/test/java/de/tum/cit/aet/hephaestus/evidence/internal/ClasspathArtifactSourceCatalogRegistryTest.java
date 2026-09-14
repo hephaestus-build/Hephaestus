@@ -21,6 +21,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.JsonNode;
@@ -39,26 +41,27 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
 
         assertThat(registry.current().version()).isEqualTo(ClasspathArtifactSourceCatalogRegistry.CURRENT_VERSION);
         assertThat(registry.catalogDigest())
-                .isEqualTo(read("contracts/artifact-source/1.1.0/artifact-source-manifest.schema.json")
+                .isEqualTo(read("contracts/artifact-source/1.2.0/artifact-source-manifest.schema.json")
                         .path("properties")
                         .path("catalogDigest")
                         .path("const")
                         .asString());
         assertThat(registry.current().sources()).hasSize(15);
-        assertThat(registry.requireSourcesFor(new SourceContractVersion("1.1.0"), "scm.pull_request"))
+        assertThat(registry.requireSourcesFor(new SourceContractVersion("1.2.0"), "scm.pull_request"))
                 .contains(new SourceKind("scm.repository.tree"), new SourceKind("scm.pull-request.diff"));
         var repositoryTree =
-                registry.requireSource(new SourceContractVersion("1.1.0"), new SourceKind("scm.repository.tree"));
+                registry.requireSource(new SourceContractVersion("1.2.0"), new SourceKind("scm.repository.tree"));
         assertThat(repositoryTree.displayName()).isEqualTo("Repository files and history");
         assertThat(repositoryTree.completenessPolicy().supportsPartial()).isTrue();
         assertThat(repositoryTree.completenessPolicy().supportsEmpty()).isTrue();
     }
 
-    @Test
-    void shouldReadARetiredContractForTheFeedbackRecordedUnderIt() {
+    @ParameterizedTest
+    @ValueSource(strings = {"1.0.0", "1.1.0"})
+    void shouldReadARetiredContractForTheFeedbackRecordedUnderIt(String version) {
         var registry = new ClasspathArtifactSourceCatalogRegistry(
                 objectMapper, Clock.fixed(Instant.parse("2026-09-11T12:00:00Z"), java.time.ZoneOffset.UTC));
-        var previous = ClasspathArtifactSourceCatalogRegistry.PREVIOUS_VERSION;
+        var previous = new SourceContractVersion(version);
         var source = new SourceKind("scm.repository.tree");
 
         assertThat(registry.isSourceUsePermitted(previous, source, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
@@ -78,9 +81,9 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
                 .isThrownBy(() -> registry.requireSourcesFor(new SourceContractVersion("2.0.0"), "scm.pull_request"));
         assertThatIllegalArgumentException()
                 .isThrownBy(() ->
-                        registry.requireSource(new SourceContractVersion("1.1.0"), new SourceKind("scm.unknown")));
+                        registry.requireSource(new SourceContractVersion("1.2.0"), new SourceKind("scm.unknown")));
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> registry.requireSourcesFor(new SourceContractVersion("1.1.0"), "scm.deployment"));
+                .isThrownBy(() -> registry.requireSourcesFor(new SourceContractVersion("1.2.0"), "scm.deployment"));
     }
 
     @Test
@@ -132,7 +135,7 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
         when(clock.instant()).thenReturn(Instant.parse("2027-08-03T00:00:00Z"));
 
         assertThat(registry.isSourceUsePermitted(
-                        new SourceContractVersion("1.1.0"),
+                        new SourceContractVersion("1.2.0"),
                         new SourceKind("scm.pull-request.diff"),
                         SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                 .isFalse();
@@ -141,7 +144,7 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
     @Test
     void shouldPermitNonSensitiveSourcesWithoutOperatorConfiguration() {
         var registry = new ClasspathArtifactSourceCatalogRegistry(objectMapper, Clock.systemUTC());
-        var version = new SourceContractVersion("1.1.0");
+        var version = new SourceContractVersion("1.2.0");
 
         assertThat(registry.isSourceUsePermitted(
                         version, new SourceKind("scm.pull-request.diff"), SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
@@ -260,9 +263,9 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
             "automated-review-readiness-report.schema.json",
             "source-use-decisions.schema.json",
         }) {
-            JsonNode schema = read("contracts/artifact-source/1.1.0/" + name);
+            JsonNode schema = read("contracts/artifact-source/1.2.0/" + name);
             assertThat(schema.path("$schema").asString()).isEqualTo("https://json-schema.org/draft/2020-12/schema");
-            assertThat(schema.path("$id").asString()).contains("/1.1.0/");
+            assertThat(schema.path("$id").asString()).contains("/1.2.0/");
             assertThat(schema.path("additionalProperties").asBoolean()).isFalse();
         }
     }
@@ -271,7 +274,7 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
     void shouldPinTheAbsenceReasonVocabularyToTheJavaEnum() throws IOException {
         // The schema restates this "closed vocabulary" by hand; nothing validates a manifest against the
         // schema in production, so the restatement is held to the enum here instead.
-        JsonNode schema = read("contracts/artifact-source/1.1.0/artifact-source-manifest.schema.json");
+        JsonNode schema = read("contracts/artifact-source/1.2.0/artifact-source-manifest.schema.json");
         List<String> expected =
                 Stream.of(SourceAbsenceReason.values()).map(Enum::name).toList();
 
@@ -296,8 +299,8 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
     /** The same hand-restatement problem as the absence reasons, on the three governance vocabularies. */
     @Test
     void shouldPinTheGovernanceVocabulariesToTheirJavaEnums() throws IOException {
-        JsonNode catalogSchema = read("contracts/artifact-source/1.1.0/artifact-source-catalog.schema.json");
-        JsonNode decisionsSchema = read("contracts/artifact-source/1.1.0/source-use-decisions.schema.json");
+        JsonNode catalogSchema = read("contracts/artifact-source/1.2.0/artifact-source-catalog.schema.json");
+        JsonNode decisionsSchema = read("contracts/artifact-source/1.2.0/source-use-decisions.schema.json");
         JsonNode source = catalogSchema.path("$defs").path("source").path("properties");
         JsonNode decision = decisionsSchema
                 .path("properties")
@@ -330,7 +333,7 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
 
     @Test
     void shouldAllowCaptureFactsWithoutAWatermarkOrImmutableIdentity() throws IOException {
-        JsonNode factsSchema = read("contracts/artifact-source/1.1.0/artifact-source-manifest.schema.json")
+        JsonNode factsSchema = read("contracts/artifact-source/1.2.0/artifact-source-manifest.schema.json")
                 .path("$defs")
                 .path("facts");
 

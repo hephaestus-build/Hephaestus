@@ -1294,7 +1294,7 @@ class DeliveryComposerTest extends BaseUnitTest {
     }
 
     @Test
-    void compose_synthesizedDiffNote_carriesObservationFingerprint() {
+    void shouldCorrelateInlineNoteToExactObservationOccurrence() {
         ValidatedObservation stamped = negativeObservation(
                         "code-hygiene",
                         "Dead code in view",
@@ -1308,7 +1308,7 @@ class DeliveryComposerTest extends BaseUnitTest {
 
         assertThat(result).isNotNull();
         assertThat(result.diffNotes()).hasSize(1);
-        assertThat(result.diffNotes().get(0).recurrenceKey()).isEqualTo("corr-synth-123");
+        assertThat(result.diffNotes().get(0).deliveryKey()).isEqualTo("observation:occ-corr-synth-123");
     }
 
     @Test

@@ -8,16 +8,13 @@ import org.jspecify.annotations.Nullable;
 
 public interface ArtifactSourceCatalogRegistry {
     /** Constant form of {@link #CURRENT_VERSION}, for the annotations that need a compile-time value. */
-    String CURRENT_VERSION_VALUE = "1.1.0";
+    String CURRENT_VERSION_VALUE = "1.2.0";
 
     /** The contract this runtime ships: every new capture and every authored practice pins it. */
     SourceContractVersion CURRENT_VERSION = new SourceContractVersion(CURRENT_VERSION_VALUE);
 
-    /**
-     * The contract retired by {@link #CURRENT_VERSION}, still readable for the feedback recorded under it
-     * and upgraded from when an installed practice policy is found pinned to it.
-     */
-    SourceContractVersion PREVIOUS_VERSION = new SourceContractVersion("1.0.0");
+    List<SourceContractVersion> HISTORICAL_VERSIONS =
+            List.of(new SourceContractVersion("1.0.0"), new SourceContractVersion("1.1.0"));
 
     ArtifactSourceCatalog current();
 

@@ -118,7 +118,7 @@ class CapturedEvidenceTest extends BaseUnitTest {
     @Test
     void shouldRefuseASnapshotWhoseManifestThisRuntimeCannotRead() {
         ObjectNode snapshot = mapper.createObjectNode();
-        snapshot.putObject("manifest").put("contractVersion", "1.1.0").putArray("sources");
+        snapshot.putObject("manifest").put("contractVersion", "1.2.0").putArray("sources");
 
         assertThatThrownBy(() -> CapturedEvidence.of(jobWith(snapshot), mapper))
                 .isInstanceOf(JobDeliveryException.class)

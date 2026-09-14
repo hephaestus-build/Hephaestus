@@ -5,8 +5,9 @@ runtime contract 3, and native Git runs in the new `git-preparation` image rathe
 application image. The shipped Compose files hand every server and worker container that image's
 digest from the verified release lock as `HEPHAESTUS_IMAGE_GIT_PREPARATION`; a deployment manifest of
 your own must forward it too, digest-pinned wherever the agent image must be. Drain running reviews
-before upgrading. Installed practices receive a new policy revision on source contract `1.1.0`;
-historical practice revisions and observations remain unchanged.
+before upgrading. Review and explicitly update stored source policies to contract `1.2.0` using
+the source-policy upgrade instructions. Startup does not rewrite installed policies; historical
+practice revisions and observations remain unchanged.
 
 Remove `GIT_TREE_MAX_FILES`, `GIT_TREE_MAX_TOTAL_SIZE` and `GIT_TREE_MAX_FILE_SIZE`. A review now
 captures the whole repository at the reviewed commit together with the Git history reachable from it,

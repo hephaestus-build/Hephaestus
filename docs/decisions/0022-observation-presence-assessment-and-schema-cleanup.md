@@ -29,7 +29,7 @@ represent a practice with both good and bad aspects.
 
 The current contract is owned by
 [practice feedback language](../contributor/practice-feedback-language.md#observation-assessment-axes).
-The pre-1.0 amendment separates assessment status from presence and fixes assessment to the target's
+The pre-1.0 amendment separates assessment status from presence and assesses the specified behavior’s contextual
 desirability. POSITIVE/NEGATIVE is derived from presence × assessment. Severity is populated exactly
 for negative outcomes. Neither unassessed status is a verdict or a substitute for failed capture.
 
@@ -45,9 +45,8 @@ removed entirely — no backward compatibility. A developer reacts to the *deliv
 private observation. The action stays a closed enum (`ADDRESSED` / `DISPUTED` / `NOT_APPLICABLE`); an open
 verb / event log is rejected (no second producer; it turns the uptake metric into free-text). `DISPUTED`
 requires an explanation. The historical `reaction.recurrence_key` column remains for schema compatibility,
-but current re-nag suppression follows the response through `feedback_observation` and matches the bound
-observation's `recurrence_key`. That keeps the response anchored only to what the developer received while
-using the observation as the authoritative locus.
+but delivery suppression follows the response through `feedback_observation` to the exact bound
+observation. Location grouping does not transfer a reaction to another behavior or another review.
 
 ### 3. Identity collapses to the minimal correct set
 
@@ -85,12 +84,11 @@ profile and named a storage location rather than how the developer engages — s
 ## Consequences
 
 - The schema speaks plainly and stops conflating measurement with evaluation: omission vs commission is
-  recoverable from `(presence, assessment)`, with one fixed target per practice revision.
+  recoverable from `(presence, assessment)`, with a stable behavior referent within each observation.
 - Direction is no longer a rule column; every former reader of `Practice.kind` recomputes "is this a
   problem?" from the presence × assessment matrix.
 - A developer reacts to delivered feedback, never to a private observation: authorization derives the
-  recipient through `feedback`, and re-nag suppression follows its observation bindings to the recurrence
-  locus.
+  recipient through `feedback`, and suppression follows its exact observation bindings.
 
 ## Evidence
 

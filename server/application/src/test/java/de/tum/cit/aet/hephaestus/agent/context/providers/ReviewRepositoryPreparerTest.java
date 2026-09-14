@@ -44,6 +44,9 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
     @Mock
     ScmTokenSource tokens;
 
+    @Mock
+    GitDiffOperations diffs;
+
     private ReviewRepositoryPreparer preparer;
     private AgentJob job;
     private Repository repository;
@@ -52,7 +55,13 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        preparer = new ReviewRepositoryPreparer(git, pullRequests, monitors, connections, List.of(tokens));
+        org.mockito.Mockito.lenient()
+                .when(diffs.resolveDiffRange(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(invocation -> new String[] {invocation.getArgument(1), invocation.getArgument(2)});
+        preparer = new ReviewRepositoryPreparer(git, diffs, pullRequests, monitors, connections, List.of(tokens));
         var workspace = new Workspace();
         workspace.setId(1L);
         job = new AgentJob();
@@ -76,6 +85,7 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         var pr = new PullRequest();
         pr.setRepository(repository);
         pr.setNumber(42);
+        pr.setHeadRefOid(HEAD);
         when(pullRequests.findByIdWithAuthorAndRepository(3L)).thenReturn(Optional.of(pr));
     }
 
@@ -173,5 +183,46 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         repository.setId(999L);
         assertThatThrownBy(() -> preparer.authorize(job)).isInstanceOf(JobPreparationException.class);
         verifyNoInteractions(git, connections, tokens);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void shouldUseTheRecordedGitlabDiffBaseIncludingAnEmptyRange(boolean empty) {
+        authorize();
+        String base = empty ? HEAD : "c".repeat(40);
+        var mr = pullRequests.findByIdWithAuthorAndRepository(3L).orElseThrow();
+        mr.setBaseRefOid(base);
+        when(tokens.recordsReviewDiffBase()).thenReturn(true);
+        when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
+        when(git.commitExists(KEY, HEAD)).thenReturn(true);
+        when(git.commitExists(KEY, base)).thenReturn(true);
+        assertThat(preparer.prepare(job).target()).isEqualTo(base);
+        verifyNoInteractions(diffs);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void shouldRefuseAStaleRecordedRevisionOrMissingBase(boolean stale) {
+        authorize();
+        var mr = pullRequests.findByIdWithAuthorAndRepository(3L).orElseThrow();
+        mr.setBaseRefOid("c".repeat(40));
+        mr.setHeadRefOid(stale ? "d".repeat(40) : HEAD);
+        when(tokens.recordsReviewDiffBase()).thenReturn(true);
+        when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
+        when(git.commitExists(KEY, HEAD)).thenReturn(true);
+        assertThatThrownBy(() -> preparer.prepare(job))
+                .isInstanceOf(JobPreparationException.class)
+                .hasMessageContaining(stale ? "does not match" : "base commit is unavailable");
+        verifyNoInteractions(diffs);
+    }
+
+    @Test
+    void shouldResolveTheMergeBaseForAProviderThatRecordsTheTargetTip() {
+        authorize();
+        when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
+        when(git.commitExists(KEY, HEAD)).thenReturn(true);
+        when(git.commitExists(KEY, "b".repeat(40))).thenReturn(true);
+        when(diffs.resolveDiffRange(KEY, "b".repeat(40), HEAD)).thenReturn(new String[] {"c".repeat(40), HEAD});
+        assertThat(preparer.prepare(job).target()).isEqualTo("c".repeat(40));
     }
 }

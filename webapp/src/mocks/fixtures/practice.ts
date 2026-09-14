@@ -9,13 +9,13 @@ import type {
 
 export const mockAuthorDeclaredEvidenceValidation = {
 	status: "AUTHOR_DECLARED",
-	sourceContractVersion: "1.1.0",
+	sourceContractVersion: "1.2.0",
 	policyDigest: "0".repeat(64),
 	reviewRuleFingerprint: `v2:${"0".repeat(64)}`,
 } satisfies PracticeAutomatedReviewValidation;
 
 export const mockPullRequestPolicy = {
-	sourceContractVersion: "1.1.0",
+	sourceContractVersion: "1.2.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -30,7 +30,7 @@ export const mockPullRequestPolicy = {
 } satisfies PracticeAutomatedReviewPolicy;
 
 const mockIssuePolicy = {
-	sourceContractVersion: "1.1.0",
+	sourceContractVersion: "1.2.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -46,7 +46,7 @@ const mockIssuePolicy = {
 } satisfies PracticeAutomatedReviewPolicy;
 
 const mockConversationPolicy = {
-	sourceContractVersion: "1.1.0",
+	sourceContractVersion: "1.2.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -62,7 +62,7 @@ const mockConversationPolicy = {
 } satisfies PracticeAutomatedReviewPolicy;
 
 const mockDocumentPolicy = {
-	sourceContractVersion: "1.1.0",
+	sourceContractVersion: "1.2.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -117,7 +117,7 @@ export const mockDocumentBinding = {
  * observations about this person" on a pull request and something differently worded on an issue.
  *
  * The wire ids are the server's; the operator-facing strings are `displayName`, `description` and
- * `selectionScope`, all copied verbatim from `contracts/artifact-source/1.1.0/catalog.json`.
+ * `selectionScope`, all copied verbatim from `contracts/artifact-source/1.2.0/catalog.json`.
  */
 const relatedWorkSource = {
 	sourceKind: "workspace.project-inventory",
@@ -167,7 +167,7 @@ const feedbackHistorySource = {
 } satisfies PracticeEvidenceSourceOption;
 
 export const mockPracticeDefinitionOptions = {
-	sourceContractVersion: "1.1.0",
+	sourceContractVersion: "1.2.0",
 	workTypes: [
 		{
 			artifactKind: "scm.pull_request",

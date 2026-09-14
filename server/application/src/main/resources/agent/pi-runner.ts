@@ -344,7 +344,8 @@ const searchSchema = {
 		lookedFor: {
 			type: "string",
 			minLength: 1,
-			description: "The concrete thing whose absence you are reporting.",
+			description:
+				"The specific behavior whose absence you report, matching the behavior assessed in the summary and rationale.",
 		},
 		boundary: {
 			type: "string",
@@ -428,8 +429,8 @@ const evidenceSchema = {
 						description:
 							"For repository text: artifactPath names the captured .git/HEAD, path is repository-relative, and revision optionally selects a full commit SHA; omission means the captured HEAD.",
 					},
-					startLine: { type: "integer", minimum: 1 },
-					endLine: { type: "integer", minimum: 1 },
+					startLine: { type: "integer", minimum: 1, maximum: 2147483647 },
+					endLine: { type: "integer", minimum: 1, maximum: 2147483647 },
 					quote: { type: "string", minLength: 1 },
 				},
 			},
@@ -456,7 +457,7 @@ const observationSchema = {
 			minLength: 1,
 			maxLength: 120,
 			description:
-				"A short phrase naming what you observed, such as 'Debug print left in the request handler'. " +
+				"A short phrase identifying the specific behavior whose presence and contextual desirability you assess, such as 'Debug print left in the request handler'. " +
 				"Never a single word and never the practice's own name.",
 		},
 		assessmentStatus: {
@@ -679,7 +680,7 @@ function buildReportObservationTool(allowedPracticeSlugs?: readonly string[]) {
 		name: "report_observation",
 		label: "Report Observation",
 		description:
-			"Persist exactly one structured observation immediately so it survives retries and timeouts. Call this as soon as one observation is ready. Do not wait to batch observations.",
+			"Persist one evidenced practice claim in local review state so it survives retries and timeouts, for later server admission. Follow the prompt's durable-submission boundary; this is not a dry-run validator.",
 		parameters: scopedObservationSchema,
 		execute: (_toolCallId, params): Promise<AgentToolResult<ReportObservationDetails>> => {
 			// Every branch below that declines to record logs the same reason it hands to the session.
@@ -714,8 +715,8 @@ function buildReportObservationTool(allowedPracticeSlugs?: readonly string[]) {
 						text: `Stored ${inserted} observation${duplicates > 0 ? ` (${duplicates} duplicate skipped)` : ""}. Negative observations in this call: ${negatives}. ${
 							allowed
 								? remainingPractices.length > 0
-									? `Still required from this group: ${remainingPractices.join(", ")}.`
-									: "This group is complete."
+									? `No recorded result for these practices: ${remainingPractices.join(", ")}.`
+									: "Each practice in this group has a recorded result; this does not certify exhaustive review."
 								: ""
 						}`,
 					},
@@ -771,7 +772,7 @@ function logPracticeCoverage() {
 const PERSIST_DISCIPLINE =
 	`There is no target count and no quota. ` +
 	`Record what you saw; you are not asked for a next step, so do not write one. ` +
-	`Only keep GOOD observations that add real review value. ` +
+	`Only keep positive observations that add real review value. ` +
 	`Do not add derivative low-signal observations when a stronger observation already covers the problem. ` +
 	`Use tools only from this point onward. Do not write planning prose or plain-text commentary.`;
 
@@ -1708,7 +1709,7 @@ function scheduleTurnTimers(
 		const remainingTurns = turnCount - turnNumber;
 		const steerMessage =
 			`This turn is using its fair share of the review budget; ${remainingTurns} focused turn(s) still need time. ` +
-			`Stop exploring and persist an observation for every practice in this turn now, one report_observation call per practice. ${PERSIST_DISCIPLINE}`;
+			`Stop exploring and persist only the practice observations that the inspected evidence supports. Record no claim merely to fill a practice slot. ${PERSIST_DISCIPLINE}`;
 		session
 			.steer(steerMessage)
 			.catch((err) => console.error(`[pi-runner] steer failed: ${errorText(err)}`));
@@ -1852,9 +1853,9 @@ async function main() {
 					// Checkpoint nudges must not relax the evidence requirements.
 					trackedSession
 						.steer(
-							`You have spent ${Math.round(reached * 100)}% of your context. Record now every practice your ` +
-								`evidence already settles, one report_observation call per practice. Record nothing for a ` +
-								`practice you cannot yet quote the deciding evidence for. ${PERSIST_DISCIPLINE}`,
+							`You have spent ${Math.round(reached * 100)}% of your context. Record only distinct practice claims ` +
+								`your evidence already supports. There is no observation quota. Do not invent a claim ` +
+								`for a practice without deciding evidence. ${PERSIST_DISCIPLINE}`,
 						)
 						.catch((err) => console.error(`[pi-runner] steer failed: ${errorText(err)}`));
 				}
@@ -2284,11 +2285,9 @@ async function main() {
 		reviewState.observations.map((item) => item.practiceSlug),
 	);
 	logPracticeCoverage();
-	// A practice nobody reached is recorded as unevaluated and reported as such, not turned into a
-	// reason to throw away the practices that were reached. Every observation here was quoted and
-	// validated when it was recorded, and the coverage ledger already carries what is missing, so the
-	// honest outcome is a review that says what it looked at. A review that reached nothing at all has
-	// nothing to say and remains a failure.
+	// This ledger measures recorded results, not inspection: a practice without an observation is
+	// unevaluated in the ledger even if the session read its sources. Preserve supported results from
+	// other practices; zero recorded observations cannot complete this runner protocol.
 	if (missingAfterRetry.length > 0) {
 		console.error(
 			`[pi-runner] PARTIAL: ${missingAfterRetry.length} of ${allSlugs.length} practice(s) not reached: ${missingAfterRetry.join(", ")}`,

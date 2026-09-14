@@ -129,9 +129,6 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         lenient().when(gitRepositoryManager.isEnabled()).thenReturn(true);
         lenient().when(gitRepositoryManager.isRepositoryCloned(REPOSITORY)).thenReturn(true);
         lenient()
-                .when(gitDiffOperations.resolveDiffRange(REPOSITORY, "a".repeat(40), "abc123def456"))
-                .thenReturn(new String[] {"a".repeat(40), "abc123def456"});
-        lenient()
                 .when(gitDiffOperations.capture(REPOSITORY, "a".repeat(40), "abc123def456"))
                 .thenAnswer(invocation -> diffCapture(
                         "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -0,0 +1 @@\n[L1] +content\n",
@@ -356,8 +353,8 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         @Test
         void shouldRefuseCaptureWhenPinnedRangeCannotBeResolved() {
             stubGit();
-            when(gitDiffOperations.resolveDiffRange(REPOSITORY, "a".repeat(40), "abc123def456"))
-                    .thenReturn(null);
+            when(repositoryPreparer.prepare(any()))
+                    .thenThrow(new JobPreparationException("The pinned review diff range is unavailable"));
             assertThatThrownBy(() -> captureFiles(request(sampleMetadata()), new LinkedHashMap<>()))
                     .isInstanceOf(JobPreparationException.class)
                     .hasMessageContaining("pinned review diff range is unavailable");
@@ -486,7 +483,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         assertThat(commits).isRegularFile();
         assertThat(captured.immutableIdentities().get(CORE))
                 .isEqualTo(captured.immutableIdentities().get(DIFF));
-        org.mockito.Mockito.verify(gitDiffOperations).resolveDiffRange(REPOSITORY, "a".repeat(40), "abc123def456");
+        org.mockito.Mockito.verify(gitDiffOperations).captureCommits(REPOSITORY, "a".repeat(40), "abc123def456");
         java.util.Objects.requireNonNull(captured.cleanup()).close();
         assertThat(commits).doesNotExist();
     }
@@ -498,6 +495,6 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         metadata.remove("base_ref_oid");
         var captured = provider.capture(request(metadata), Set.of(CORE));
         assertThat(captured.immutableIdentities().get(CORE)).isEqualTo("a".repeat(40) + ":abc123def456");
-        org.mockito.Mockito.verify(gitDiffOperations).resolveDiffRange(REPOSITORY, "a".repeat(40), "abc123def456");
+        org.mockito.Mockito.verify(gitDiffOperations).captureCommits(REPOSITORY, "a".repeat(40), "abc123def456");
     }
 }

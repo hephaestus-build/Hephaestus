@@ -41,7 +41,10 @@ public record ObservationDetailDTO(
         @Nullable @Schema(description = "PRESENT or ABSENT only when ASSESSED")
         Presence presence,
 
-        @Nullable @Schema(description = "Target desirability: GOOD or BAD; null unless assessmentStatus is ASSESSED")
+        @Nullable
+        @Schema(
+                description =
+                        "Contextual desirability of the specified behavior: GOOD or BAD; null unless assessmentStatus is ASSESSED")
         Assessment assessment,
 
         @Nullable @Schema(description = "Severity level (null unless outcome is NEGATIVE)")
@@ -71,7 +74,7 @@ public record ObservationDetailDTO(
         Instant observedAt) {
     @com.fasterxml.jackson.annotation.JsonProperty("outcome")
     @Schema(
-            description = "Derived from presence and target assessment; null unless assessed",
+            description = "Derived from presence and contextual behavior assessment; null unless assessed",
             accessMode = Schema.AccessMode.READ_ONLY)
     public @Nullable Outcome getOutcome() {
         return Outcome.of(presence, assessment);

@@ -1,7 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, within } from "storybook/test";
 
-import { mockJobFailedDelivery, mockJobRunning } from "@/components/admin/ai/story-mock-data";
+import {
+	mockJobFailedResultProcessing,
+	mockJobRunning,
+} from "@/components/admin/ai/story-mock-data";
 
 import { ReviewRunActions } from "./ReviewRunActions";
 
@@ -35,13 +38,15 @@ export const CancelRunningReview: Story = {
 	},
 };
 
-export const RetryFailedDelivery: Story = {
-	args: { job: mockJobFailedDelivery },
+export const RetryFailedResultProcessing: Story = {
+	args: { job: mockJobFailedResultProcessing },
 	play: async ({ args, canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Retry feedback comment" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Retry result processing" }));
 		const dialog = within(await screen.findByRole("alertdialog"));
-		dialog.getByText("The failed comment will be posted again.");
-		await userEvent.click(dialog.getByRole("button", { name: "Retry feedback comment" }));
+		dialog.getByText(
+			"Process the review results again. This may retry failed publication; approval requirements still apply.",
+		);
+		await userEvent.click(dialog.getByRole("button", { name: "Retry result processing" }));
 		await expect(args.onRetry).toHaveBeenCalledOnce();
 	},
 };

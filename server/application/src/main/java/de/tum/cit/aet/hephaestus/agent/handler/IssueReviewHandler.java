@@ -263,9 +263,7 @@ public class IssueReviewHandler implements JobTypeHandler {
                     "no_valid_observations", "No valid observations in agent output: jobId=" + job.getId());
         }
         var admissible = deliveryService.prepare(
-                job,
-                PracticeDetectionResultParser.coerceCoherence(
-                        parsed.validObservations(), practiceCatalogInjector.defectDetectorSlugs(job)));
+                job, PracticeDetectionResultParser.validateCoherence(parsed.validObservations()));
         return admitted -> deliveryService.publish(admitted, admissible);
     }
 

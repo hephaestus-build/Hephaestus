@@ -132,8 +132,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
         @Test
         void observationHistoryAloneAnswersForObservationHistoryOnly() {
             var captured = provider.capture(prRequest(), Set.of(ReviewHistoryContentSource.OBSERVATION_HISTORY));
-            assertThat(captured.files())
-                    .containsOnlyKeys("inputs/history/observations.json", "inputs/history/delta.json");
+            assertThat(captured.files()).containsOnlyKeys("inputs/history/observations.json");
             assertThat(captured.completeness()).containsOnlyKeys(ReviewHistoryContentSource.OBSERVATION_HISTORY);
             assertThat(captured.contentStates()).containsOnlyKeys(ReviewHistoryContentSource.OBSERVATION_HISTORY);
         }
@@ -229,28 +228,18 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void stagesHowEachLocusMovedWithoutStagingTheKeyItMovedAt() {
+    void shouldPreserveSeparateBehaviorRecordsAtTheSameLocation() {
         when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
-                .thenReturn(List.of(observation("swallows-errors", "rec-1", "Caught and ignored")));
+                .thenReturn(List.of(
+                        observation("verification-guidance", "same-location", "Missing restart check"),
+                        observation("verification-guidance", "same-location", "Misleading setup instruction")));
 
-        JsonNode delta = read(captureObservationHistory().files().get("inputs/history/delta.json"));
-
-        assertThat(delta.get("loci")).hasSize(1);
-        JsonNode locus = delta.get("loci").get(0);
-        assertThat(locus.get("practiceSlug").asString()).isEqualTo("swallows-errors");
-        assertThat(locus.get("status").asString()).isEqualTo("NEW");
-        assertThat(locus.has("recurrenceKey")).isFalse();
-    }
-
-    @Test
-    void theDeltaHoldsNothingTheVisibilityPolicyRefused() {
-        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
-                .thenReturn(List.of(observation("swallows-errors", "rec-1", "Caught and ignored")));
-        doReturn(Set.of()).when(visibilityPolicy).permitsAll(anyLong(), any(), any());
-
-        assertThat(read(captureObservationHistory().files().get("inputs/history/delta.json"))
-                        .get("loci"))
-                .isEmpty();
+        var files = captureObservationHistory().files();
+        assertThat(files).containsOnlyKeys("inputs/history/observations.json");
+        JsonNode records = read(files.get("inputs/history/observations.json")).get("observations");
+        assertThat(records).hasSize(2);
+        assertThat(records.get(0).get("summary").asString()).isEqualTo("Missing restart check");
+        assertThat(records.get(1).get("summary").asString()).isEqualTo("Misleading setup instruction");
     }
 
     @Test
@@ -362,7 +351,6 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
             var feedbackCapture = captureFeedbackHistory();
             assertCarriesNoRowId(
                     read(observationCapture.files().get("inputs/history/observations.json")), "observations.json");
-            assertCarriesNoRowId(read(observationCapture.files().get("inputs/history/delta.json")), "delta.json");
             assertCarriesNoRowId(read(feedbackCapture.files().get("inputs/history/feedback.json")), "feedback.json");
             assertCarriesNoRowId(read(feedbackCapture.files().get("inputs/history/prepared.json")), "prepared.json");
         }
