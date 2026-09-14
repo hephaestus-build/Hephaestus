@@ -263,7 +263,7 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						<LandingSignInCta
 							onSignIn={onSignIn}
 							size="lg"
-							className="h-11 w-full px-5 shadow-lg shadow-primary/10 sm:w-auto"
+							className="h-11 w-full shadow-lg shadow-primary/10 sm:w-auto"
 						/>
 						<a
 							href="https://github.com/hephaestus-build/Hephaestus"
@@ -271,10 +271,10 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 							rel="noopener noreferrer"
 							className={cn(
 								buttonVariants({ variant: "outline", size: "lg" }),
-								"h-11 w-full gap-2 px-5 sm:w-auto",
+								"h-11 w-full sm:w-auto",
 							)}
 						>
-							<GithubIcon className="size-4" aria-hidden="true" />
+							<GithubIcon data-icon="inline-start" className="size-4" aria-hidden="true" />
 							View on GitHub
 							<span className="sr-only">(opens in a new tab)</span>
 						</a>

@@ -421,7 +421,8 @@ export function PracticeGroupDetailPage({
 							<Button
 								type="button"
 								variant="link"
-								className="w-fit px-0"
+								size="inline"
+								className="w-fit text-sm"
 								onClick={feed.onLoadMore}
 								disabled={feed.isLoadingMore}
 							>

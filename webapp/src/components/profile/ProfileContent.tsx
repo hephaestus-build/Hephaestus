@@ -150,7 +150,13 @@ export function ProfileContent({
 						)}
 					</div>
 					{canViewAllReviewActivity && (
-						<Button type="button" variant="link" className="w-fit px-0" onClick={expandMonitor}>
+						<Button
+							type="button"
+							variant="link"
+							size="inline"
+							className="w-fit text-sm"
+							onClick={expandMonitor}
+						>
 							View all review activity
 							<ArrowRightIcon data-icon="inline-end" />
 						</Button>
@@ -195,7 +201,13 @@ export function ProfileContent({
 						)}
 					</div>
 					{canViewAllPullRequests && (
-						<Button type="button" variant="link" className="w-fit px-0" onClick={expandMonitor}>
+						<Button
+							type="button"
+							variant="link"
+							size="inline"
+							className="w-fit text-sm"
+							onClick={expandMonitor}
+						>
 							View all {terms.pullRequests.toLowerCase()}
 							<ArrowRightIcon data-icon="inline-end" />
 						</Button>

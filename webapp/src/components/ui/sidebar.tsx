@@ -458,8 +458,10 @@ const sidebarMenuButtonVariants = cva(
 		variants: {
 			variant: {
 				default: "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+				// Theme variables contain complete colors, not HSL channels. Native rings also retain
+				// the keyboard focus width instead of hiding it behind a separate arbitrary shadow.
 				outline:
-					"bg-background hover:bg-sidebar-accent hover:text-sidebar-accent-foreground shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]",
+					"bg-background hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ring-1 ring-sidebar-border hover:ring-sidebar-accent focus-visible:ring-sidebar-ring",
 			},
 			size: {
 				default: "h-8 text-sm",

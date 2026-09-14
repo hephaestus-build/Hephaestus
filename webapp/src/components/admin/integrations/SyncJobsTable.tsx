@@ -222,7 +222,7 @@ function JobRow({ job }: { job: SyncJob }) {
 								<button
 									type="button"
 									aria-label={`Error for job ${job.id}`}
-									className="inline-flex cursor-help rounded-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+									className="inline-flex cursor-help rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
 								/>
 							}
 						>

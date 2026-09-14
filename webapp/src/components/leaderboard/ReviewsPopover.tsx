@@ -67,14 +67,13 @@ export function ReviewsPopover({
 						disabled={!hasReviews}
 						aria-label={`Show ${reviewedPullRequests.length} reviewed ${(reviewedPullRequests.length === 1 ? terms.pullRequest : terms.pullRequests).toLowerCase()}`}
 						className={cn(
-							"flex items-center gap-1",
 							!highlight
 								? "text-provider-muted-foreground"
 								: "border-primary bg-accent hover:bg-foreground hover:text-background",
 						)}
 						onClick={(e) => e.stopPropagation()}
 					>
-						<PrIcon size={16} />
+						<PrIcon size={16} data-icon="inline-start" />
 						{reviewedPullRequests.length}
 					</Button>
 				}

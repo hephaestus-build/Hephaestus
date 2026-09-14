@@ -166,8 +166,8 @@ export function AddChannelDialog({
 							<Button
 								type="button"
 								variant="link"
-								size="sm"
-								className="h-auto w-fit p-0"
+								size="inline"
+								className="w-fit text-sm"
 								onClick={() => setPasteOpen(true)}
 							>
 								Paste a channel link or ID instead

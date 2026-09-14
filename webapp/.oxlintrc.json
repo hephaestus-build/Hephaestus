@@ -41,11 +41,20 @@
 		"shadcn/no-unknown-classes": "error",
 		"shadcn/no-raw-colors": "error",
 		"shadcn/no-inline-styles": "error",
-		// Padding and gaps use the spacing scale. Layout constraints, typography and motion have
-		// legitimate one-off values; arbitrary selectors are not arbitrary values at all.
-		"shadcn/no-arbitrary-values": ["error", { "deny": ["spacing"] }],
-		// no-restyle conflicts with intentional Base UI slot composition; require-static-classes
-		// cannot resolve imported vocabulary maps and CVA results without duplicating their owners.
+		// Padding/gaps and ring widths use native scales; shadows use theme utilities. Layout,
+		// typography and motion retain measured values and formulas where their APIs need them.
+		"shadcn/no-arbitrary-values": [
+			"error",
+			{ "deny": ["spacing", "ring-w", "ring-offset-w", "inset-ring-w", "shadow", "inset-shadow"] }
+		],
+		// Consumers choose Button sizes rather than overriding their padding and icon gaps.
+		// Other primitives deliberately expose composition; registry internals own their controls.
+		"shadcn/no-restyle": [
+			"error",
+			{ "deny": [], "contracts": [{ "pattern": "^Button$", "deny": ["spacing"] }] }
+		],
+		// require-static-classes cannot resolve imported vocabulary maps and CVA results without
+		// duplicating their owners.
 		// -- On, despite their category being off ---------------------------------------------------
 		"no-else-return": "error",
 		"prefer-const": "error",
@@ -532,6 +541,7 @@
 		{
 			"files": ["src/components/ui/**"],
 			"rules": {
+				"shadcn/no-restyle": "off",
 				"no-restricted-imports": [
 					"error",
 					{

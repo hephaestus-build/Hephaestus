@@ -15,9 +15,10 @@ export function FilterLink({
 		<Button
 			type="button"
 			variant="link"
+			size="inline"
 			title={title}
 			onClick={onSelect}
-			className="h-auto min-w-0 max-w-full justify-start p-0 font-normal"
+			className="min-w-0 max-w-full justify-start"
 		>
 			<span className="truncate">{label}</span>
 		</Button>

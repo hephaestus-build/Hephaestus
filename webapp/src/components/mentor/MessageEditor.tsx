@@ -64,7 +64,7 @@ export function MessageEditor({
 	return (
 		<div
 			className={cn(
-				"border-input placeholder:text-muted-foreground focus-within:border-ring focus-within:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input flex field-sizing-content min-h-16 w-full rounded-xl border bg-white px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+				"border-input placeholder:text-muted-foreground focus-within:border-ring focus-within:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input flex field-sizing-content min-h-16 w-full rounded-xl border bg-white px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-3 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
 				"flex-col gap-1",
 				className,
 			)}
@@ -87,7 +87,7 @@ export function MessageEditor({
 			<div className="flex gap-2 justify-end">
 				<Button
 					variant="outline"
-					className="rounded-full h-8 px-3"
+					className="rounded-full h-8"
 					onClick={onCancel}
 					disabled={isSubmitting}
 					size="sm"
@@ -96,7 +96,7 @@ export function MessageEditor({
 				</Button>
 				<Button
 					variant="default"
-					className="rounded-full h-8 px-3"
+					className="rounded-full h-8"
 					disabled={!canSend}
 					onClick={handleSend}
 					size="sm"

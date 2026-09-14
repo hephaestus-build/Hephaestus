@@ -237,7 +237,7 @@ export function UsersTable({
 							variant="ghost"
 							size="sm"
 							onClick={() => onViewChange({ q: "", page: 0 })}
-							className="h-8 px-2 lg:px-3"
+							className="h-8"
 						>
 							Clear search
 						</Button>

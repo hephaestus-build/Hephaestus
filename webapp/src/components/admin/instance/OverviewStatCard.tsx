@@ -27,7 +27,7 @@ export function OverviewStatCard({
 	return (
 		<Link
 			to={to}
-			className="group block rounded-xl outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+			className="group block rounded-xl outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
 		>
 			<Card className="h-full transition-colors group-hover:border-primary/40">
 				<CardContent className="flex items-start justify-between gap-3">

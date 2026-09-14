@@ -653,7 +653,8 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									<Button
 										type="button"
 										variant="ghost"
-										className="group -ml-3 h-auto items-start py-2 text-left disabled:opacity-100"
+										size="inline"
+										className="group items-start text-left disabled:opacity-100"
 									/>
 								}
 							>

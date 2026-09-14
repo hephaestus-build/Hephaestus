@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { ReactElement, ReactNode } from "react";
-import { screen, userEvent } from "storybook/test";
+import { expect, screen, userEvent } from "storybook/test";
 
 import {
 	Combobox,
@@ -314,5 +314,26 @@ export const FollowsTriggerInScrollArea: Story = {
 		await expectOverlayFollowsTrigger(trigger, popup, () => {
 			viewport.scrollTop += 40;
 		});
+	},
+};
+
+export const OversizedDropdownMenu: Story = {
+	render: () => (
+		<Page>
+			<DropdownMenu>
+				<DropdownMenuTrigger>Open wide menu</DropdownMenuTrigger>
+				<DropdownMenuContent className="w-[200vw]" align="end">
+					<DropdownMenuItem>View workspace settings</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
+		</Page>
+	),
+	play: async () => {
+		await userEvent.click(screen.getByRole("button", { name: "Open wide menu" }));
+		const popup = await settledPopup();
+		const bounds = popup.getBoundingClientRect();
+		await expect(bounds.left).toBeGreaterThanOrEqual(0);
+		await expect(bounds.right).toBeLessThanOrEqual(window.innerWidth);
+		await expectNoPageOverflow();
 	},
 };

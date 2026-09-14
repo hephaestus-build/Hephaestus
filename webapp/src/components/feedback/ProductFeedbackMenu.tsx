@@ -67,13 +67,14 @@ export function ProductFeedbackMenu({
 						variant="outline"
 						className={cn(
 							// A 32px square on a phone, where the header is already full; a labelled pill from `sm`.
-							"group relative rounded-full px-2 sm:px-3",
+							"group relative w-8 rounded-full sm:w-auto",
 							count > 0 && "border-primary/40 bg-primary/5 hover:bg-primary/10",
 						)}
 					/>
 				}
 			>
 				<MessageSquarePlus
+					data-icon="inline-start"
 					aria-hidden
 					className="transition-transform duration-200 group-hover:-rotate-12 group-hover:scale-110 motion-reduce:transition-none motion-reduce:group-hover:transform-none"
 				/>

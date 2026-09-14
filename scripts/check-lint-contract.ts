@@ -28,6 +28,47 @@ const story = (name: string) => `src/components/ui/LintContract-${name}.stories.
 const preferPath = story("prefer-title");
 const fixtures: Fixture[] = [
 	{
+		path: "src/lint-contract-button-padding.tsx",
+		code: "shadcn(no-restyle)",
+		source:
+			'import { Button as Action } from "@/components/ui/button"; export const bad = <Action className="md:px-4!">Save</Action>;',
+	},
+	{
+		path: "src/lint-contract-button-gap.tsx",
+		code: "shadcn(no-restyle)",
+		source:
+			'import { Button } from "@/components/ui/button"; import { cn } from "cn"; export const bad = <Button className={cn("gap-4")}>Save</Button>;',
+	},
+	{
+		path: "src/lint-contract-button-size.tsx",
+		code: null,
+		source:
+			'import { Button } from "@/components/ui/button"; export const good = <Button size="sm" className="w-full mt-2">Save</Button>;',
+	},
+	{
+		path: "src/components/ui/lint-contract-owned-padding.tsx",
+		code: null,
+		source:
+			'import { Button } from "@/components/ui/button"; export const good = <Button className="gap-2">Calendar day</Button>;',
+	},
+	{
+		path: "src/lint-contract-ring.tsx",
+		code: "shadcn(no-arbitrary-values)",
+		source: 'export const bad = <button className="focus-visible:ring-[3px]">Save</button>;',
+	},
+	{
+		path: "src/components/ui/lint-contract-shadow.tsx",
+		code: "shadcn(no-arbitrary-values)",
+		source:
+			'export const bad = <button className="shadow-[0_0_0_1px_hsl(var(--sidebar-border))]">Save</button>;',
+	},
+	{
+		path: "src/lint-contract-ring-scale.tsx",
+		code: null,
+		source:
+			'export const good = <button className="ring-1 ring-sidebar-border focus-visible:ring-3 shadow-sm">Save</button>;',
+	},
+	{
 		path: "src/lint-contract-inline.tsx",
 		code: "shadcn(no-inline-styles)",
 		source: "export const bad = <div style={{ padding: 13 }} />;",
@@ -272,6 +313,11 @@ function writeScratchProject(project: string) {
 		join(WEBAPP, "node_modules"),
 		join(project, "src", "node_modules"),
 		process.platform === "win32" ? "junction" : "dir",
+	);
+	mkdirSync(join(project, "src/components/ui"), { recursive: true });
+	writeFileSync(
+		join(project, "src/components/ui/button.tsx"),
+		readFileSync(join(WEBAPP, "src/components/ui/button.tsx")),
 	);
 	for (const fixture of fixtures) {
 		mkdirSync(join(project, dirname(fixture.path)), { recursive: true });

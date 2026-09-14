@@ -387,8 +387,8 @@ function InheritedSettingHint({
 		<div className="text-left">
 			<Button
 				variant="link"
-				size="sm"
-				className="h-auto p-0 text-xs"
+				size="inline"
+				className="text-xs"
 				aria-label={`Use default for ${label}`}
 				disabled={policy.isSaving}
 				onClick={() => policy.onReset(field)}

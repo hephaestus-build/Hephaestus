@@ -174,7 +174,7 @@ export function MultimodalInput({
 
 			<div
 				className={cn(
-					"border-input placeholder:text-muted-foreground focus-within:border-ring focus-within:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-xl border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+					"border-input placeholder:text-muted-foreground focus-within:border-ring focus-within:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-xl border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-3 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
 					"flex-col gap-1",
 					readonly && "cursor-not-allowed opacity-60",
 					className,
@@ -239,7 +239,7 @@ function AttachmentsButton({
 	return (
 		<Button
 			aria-label="Attach a file"
-			className="rounded-md rounded-bl-lg p-1.75"
+			className="rounded-md rounded-bl-lg"
 			onClick={(event) => {
 				event.preventDefault();
 				fileInputRef.current?.click();
@@ -257,7 +257,7 @@ function StopButton({ onStop }: { onStop: () => void }) {
 	return (
 		<Button
 			aria-label="Stop generating"
-			className="rounded-full p-1.5 border border-border"
+			className="rounded-full border border-border"
 			onClick={(event) => {
 				event.preventDefault();
 				onStop();
@@ -273,7 +273,7 @@ function SendButton({ onSubmit, disabled }: { onSubmit: () => void; disabled: bo
 	return (
 		<Button
 			aria-label="Send message"
-			className="rounded-full p-1.5 border border-border"
+			className="rounded-full border border-border"
 			onClick={(event) => {
 				event.preventDefault();
 				onSubmit();

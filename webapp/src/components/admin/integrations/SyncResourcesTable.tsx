@@ -316,7 +316,7 @@ function ResourceNameCell({
 					render={
 						<button
 							type="button"
-							className="block min-w-0 cursor-help rounded-sm text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+							className="block min-w-0 cursor-help rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
 						/>
 					}
 				>
@@ -436,7 +436,7 @@ function LastSyncedCell({
 					render={
 						<button
 							type="button"
-							className="inline-flex cursor-help items-center gap-1 rounded-sm text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+							className="inline-flex cursor-help items-center gap-1 rounded-sm text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
 						/>
 					}
 				>
@@ -539,7 +539,7 @@ function ResourceErrorCell({ resource }: { resource: SyncResourceState }) {
 							<button
 								type="button"
 								aria-label={`Error for ${resource.name}`}
-								className="inline-flex cursor-help rounded-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+								className="inline-flex cursor-help rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
 							/>
 						}
 					>

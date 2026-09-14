@@ -1,7 +1,6 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type { ComponentProps, ReactElement, ReactNode } from "react";
 
-import { cn } from "cn";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
 	Pagination,
@@ -58,7 +57,6 @@ interface PageControlProps {
 	label: string;
 	current?: boolean;
 	size?: "default" | "icon";
-	className?: string;
 	children: ReactNode;
 	onPageChange?: (page: number) => void;
 	renderPageLink?: (page: number, props: ComponentProps<"a">) => ReactElement;
@@ -69,7 +67,6 @@ function PageControl({
 	label,
 	current,
 	size = "icon",
-	className,
 	children,
 	onPageChange,
 	renderPageLink,
@@ -78,7 +75,7 @@ function PageControl({
 		return renderPageLink(page, {
 			"aria-current": current ? "page" : undefined,
 			"aria-label": label,
-			className: cn(buttonVariants({ variant: current ? "outline" : "ghost", size }), className),
+			className: buttonVariants({ variant: current ? "outline" : "ghost", size }),
 			children,
 		});
 	}
@@ -88,7 +85,6 @@ function PageControl({
 			size={size}
 			aria-label={label}
 			aria-current={current ? "page" : undefined}
-			className={className}
 			onClick={() => onPageChange?.(page)}
 		>
 			{children}
@@ -110,7 +106,7 @@ export function TablePagination({
 			<PaginationContent className="flex-wrap justify-center gap-y-1">
 				<PaginationItem>
 					{page <= 0 ? (
-						<Button variant="ghost" className="pl-1.5!" aria-label="Go to previous page" disabled>
+						<Button variant="ghost" aria-label="Go to previous page" disabled>
 							<ChevronLeftIcon data-icon="inline-start" />
 							<span className="hidden sm:block">Previous</span>
 						</Button>
@@ -119,7 +115,6 @@ export function TablePagination({
 							page={page - 1}
 							label="Go to previous page"
 							size="default"
-							className="pl-1.5!"
 							onPageChange={onPageChange}
 							renderPageLink={renderPageLink}
 						>
@@ -149,7 +144,7 @@ export function TablePagination({
 				)}
 				<PaginationItem>
 					{page >= totalPages - 1 ? (
-						<Button variant="ghost" className="pr-1.5!" aria-label="Go to next page" disabled>
+						<Button variant="ghost" aria-label="Go to next page" disabled>
 							<span className="hidden sm:block">Next</span>
 							<ChevronRightIcon data-icon="inline-end" />
 						</Button>
@@ -158,7 +153,6 @@ export function TablePagination({
 							page={page + 1}
 							label="Go to next page"
 							size="default"
-							className="pr-1.5!"
 							onPageChange={onPageChange}
 							renderPageLink={renderPageLink}
 						>

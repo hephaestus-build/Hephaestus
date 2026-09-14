@@ -170,7 +170,7 @@ export function ConfigAuditDetailSheet({
 											type="button"
 											variant="ghost"
 											size="sm"
-											className="px-0 text-xs text-muted-foreground"
+											className="text-xs text-muted-foreground"
 										/>
 									}
 								>

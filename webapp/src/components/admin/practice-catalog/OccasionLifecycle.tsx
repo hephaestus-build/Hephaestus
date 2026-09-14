@@ -177,7 +177,7 @@ function MomentNode({
 				// one. Hidden on the first node of a band, so the line never dangles.
 				railed &&
 					"before:absolute before:top-5 before:-left-1/2 before:right-1/2 before:mr-4 before:ml-4 before:h-px before:bg-border first:before:hidden",
-				"rounded-md has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50",
+				"rounded-md has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50",
 				disabled ? "cursor-not-allowed" : "cursor-pointer",
 			)}
 		>
