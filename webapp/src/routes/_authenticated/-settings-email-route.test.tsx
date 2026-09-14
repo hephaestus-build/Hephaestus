@@ -58,8 +58,15 @@ describe("account email choices", () => {
 		expect(product.getAttribute("aria-checked")).toBe("false");
 		expect(product.getAttribute("aria-disabled")).toBe("true");
 
+		expect(screen.queryByText("Saving email choices…")).toBeNull();
+		const saving = await screen.findByText("Saving email choices…", {}, { timeout: 2000 });
+		expect(saving.getAttribute("role")).toBe("status");
+		expect(saving.querySelector("svg")).not.toBeNull();
+
 		release?.();
 		await waitFor(() => expect(product.getAttribute("aria-checked")).toBe("true"));
+		await waitFor(() => expect(screen.queryByText("Saving email choices…")).toBeNull());
+		expect(product.getAttribute("aria-disabled")).not.toBe("true");
 		expect(
 			screen
 				.getByRole("switch", { name: "Research survey invitations" })

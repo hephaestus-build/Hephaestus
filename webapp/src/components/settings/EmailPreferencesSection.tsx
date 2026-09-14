@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { useSpinDelay } from "spin-delay";
 
 import type { NotificationPreferences, UpdateNotificationPreferences } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -17,6 +18,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 
 export type EmailNotificationChoices = UpdateNotificationPreferences;
@@ -74,6 +76,11 @@ const choices = [
 
 export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesSectionProps) {
 	const id = useId();
+	const showSpinner = useSpinDelay(state.status === "ready" && state.isPending, {
+		delay: 1000,
+		minDuration: 500,
+	});
+	const busy = state.status === "ready" && (state.isPending || showSpinner);
 	const visibleChoices = choices.filter(
 		(choice) =>
 			(choice.key !== "productFeedback" && choice.key !== "surveySummaries") ||
@@ -82,7 +89,7 @@ export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesS
 	);
 
 	const change = (patch: Partial<EmailNotificationChoices>) => {
-		if (state.status !== "ready" || state.isPending) return;
+		if (state.status !== "ready" || busy) return;
 		state.onChange({
 			productFeedback: state.preferences.productFeedback,
 			workspaceAlerts: state.preferences.workspaceAlerts,
@@ -97,9 +104,19 @@ export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesS
 	return (
 		<section className="space-y-4" aria-labelledby={`${id}-heading`}>
 			<div className="space-y-1">
-				<h2 id={`${id}-heading`} className="text-xl font-semibold">
-					Email notifications
-				</h2>
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+					<h2 id={`${id}-heading`} className="text-xl font-semibold">
+						Email notifications
+					</h2>
+					<p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+						{showSpinner && state.status === "ready" && (
+							<>
+								<Spinner />
+								Saving email choices…
+							</>
+						)}
+					</p>
+				</div>
 				<p className="text-sm text-muted-foreground">
 					Optional emails are off until you choose to receive them. You can turn each kind off at
 					any time. Essential account emails, such as account-deletion confirmations, are separate.
@@ -160,8 +177,7 @@ export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesS
 									aria-describedby={`${id}-${choice.key}-description`}
 									checked={state.preferences[choice.key]}
 									disabled={
-										state.isPending ||
-										(!state.preferences.emailAvailable && !state.preferences[choice.key])
+										busy || (!state.preferences.emailAvailable && !state.preferences[choice.key])
 									}
 									aria-busy={state.isPending}
 									onCheckedChange={(checked) => change({ [choice.key]: checked })}
@@ -182,7 +198,7 @@ export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesS
 								<Select
 									items={frequencyItems}
 									value={state.preferences.productFeedbackFrequency}
-									disabled={state.isPending}
+									disabled={busy}
 									onValueChange={(value) => {
 										if (value) change({ productFeedbackFrequency: value });
 									}}

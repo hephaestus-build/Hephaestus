@@ -22,6 +22,8 @@ class SurveyEmailRendererTest extends BaseUnitTest {
                                 surveyId,
                                 "research",
                                 false,
+                                "reminder",
+                                false,
                                 "unsubscribeUrl",
                                 unsubscribeUrl));
 

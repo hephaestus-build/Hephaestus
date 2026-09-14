@@ -139,6 +139,9 @@ export const Saving: Story = {
 	args: { state: { ...ready, isPending: true } },
 	play: async ({ canvas }) => {
 		await expectUnavailable(canvas.getByRole("switch", { name: "Product survey invitations" }));
+		await expect(
+			await canvas.findByText("Saving email choices…", {}, { timeout: 2000 }),
+		).toHaveAttribute("role", "status");
 	},
 };
 
