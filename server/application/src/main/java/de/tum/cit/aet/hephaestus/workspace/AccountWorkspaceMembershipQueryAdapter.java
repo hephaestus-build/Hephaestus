@@ -1,75 +1,57 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
+import java.util.Objects;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * In-{@code workspace}-module implementation of {@link AccountWorkspaceMembershipQuery}: the
- * interface is owned by {@code core.auth}, the implementation lives with the data owner so it can
- * touch {@link WorkspaceMembership} / {@link Workspace} directly.
- */
 @Service
 public class AccountWorkspaceMembershipQueryAdapter implements AccountWorkspaceMembershipQuery {
 
-    private static final Logger log = LoggerFactory.getLogger(AccountWorkspaceMembershipQueryAdapter.class);
-
     private final WorkspaceMembershipRepository workspaceMembershipRepository;
+    private final CurrentAccountUsers accountUsers;
 
-    public AccountWorkspaceMembershipQueryAdapter(WorkspaceMembershipRepository workspaceMembershipRepository) {
+    public AccountWorkspaceMembershipQueryAdapter(
+            WorkspaceMembershipRepository workspaceMembershipRepository, CurrentAccountUsers accountUsers) {
         this.workspaceMembershipRepository = workspaceMembershipRepository;
+        this.accountUsers = accountUsers;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<WorkspaceMembershipView> membershipsForLogins(Set<String> logins) {
-        if (logins == null || logins.isEmpty()) {
+    public List<WorkspaceMembershipView> membershipsForAccount(Long accountId) {
+        List<Long> userIds = accountUsers.resolve(accountId).stream()
+                .map(user -> Objects.requireNonNull(user.getId()))
+                .toList();
+        if (userIds.isEmpty()) {
             return List.of();
         }
-        Set<String> normalized = logins.stream()
-                .filter(l -> l != null && !l.isBlank())
-                .map(l -> l.toLowerCase(Locale.ROOT))
-                .collect(Collectors.toSet());
-        if (normalized.isEmpty()) {
-            return List.of();
-        }
-        try {
-            // Deduplicate by workspace: a principal may resolve to multiple logins that both map
-            // to the same workspace membership graph; the export should list each workspace once.
-            Map<Long, WorkspaceMembershipView> byWorkspace = new LinkedHashMap<>();
-            for (WorkspaceMembership membership :
-                    workspaceMembershipRepository.findAllWithWorkspaceByUserLoginInLowercase(normalized)) {
-                Workspace workspace = membership.getWorkspace();
-                if (workspace == null || workspace.getId() == null) {
-                    continue;
-                }
-                byWorkspace.putIfAbsent(
-                        workspace.getId(),
-                        new WorkspaceMembershipView(
-                                workspace.getId(),
-                                workspace.getWorkspaceSlug(),
-                                workspace.getDisplayName(),
-                                membership.getRole() != null
-                                        ? membership.getRole().name()
-                                        : null,
-                                membership.getUser() != null
-                                        ? membership.getUser().getId()
-                                        : null));
-            }
-            return List.copyOf(byWorkspace.values());
-        } catch (RuntimeException e) {
-            // Fail-soft: a partial export is preferable to a failed one for a self-service GDPR
-            // request. The empty section is visible in the bundle, and the error is logged.
-            log.error("auth.export: workspace-membership lookup failed for {} login(s)", normalized.size(), e);
-            return List.of();
-        }
+        var byWorkspace = workspaceMembershipRepository.findAllWithWorkspaceByUserIdIn(userIds).stream()
+                .collect(Collectors.groupingBy(
+                        membership -> membership.getWorkspace().getId(), LinkedHashMap::new, Collectors.toList()));
+        return byWorkspace.values().stream()
+                .map(memberships -> {
+                    // Keep attribution stable across role changes; authorization unions all linked roles.
+                    var representative = memberships.stream()
+                            .min(Comparator.comparingInt(membership ->
+                                    userIds.indexOf(membership.getUser().getId())))
+                            .orElseThrow();
+                    var role = memberships.stream()
+                            .map(WorkspaceMembership::getRole)
+                            .reduce((first, next) -> first.isAtLeast(next) ? first : next)
+                            .orElseThrow();
+                    var workspace = representative.getWorkspace();
+                    return new WorkspaceMembershipView(
+                            workspace.getId(),
+                            workspace.getWorkspaceSlug(),
+                            workspace.getDisplayName(),
+                            role.name(),
+                            Objects.requireNonNull(representative.getUser().getId()));
+                })
+                .toList();
     }
 }

@@ -5,6 +5,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
@@ -40,11 +42,15 @@ class WorkspaceAdminServiceTest extends BaseUnitTest {
         User owner = new User();
         owner.setId(34L);
         owner.setLogin("octocat");
+        var provider = new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com");
+        provider.setId(9L);
+        owner.setProvider(provider);
+        owner.setNativeId(123L);
 
         when(workspaceRepository.findAll()).thenReturn(List.of(workspace));
         when(membershipRepository.findUsersByWorkspaceIdAndRole(12L, WorkspaceRole.OWNER))
                 .thenReturn(List.of(owner));
-        when(accountIdentityQuery.resolveAccountIdForActor(34L)).thenReturn(Optional.of(56L));
+        when(accountIdentityQuery.resolveAccountId(9L, "123", null)).thenReturn(Optional.of(56L));
         when(membershipRepository.countByWorkspace_Id(12L)).thenReturn(3L);
 
         WorkspaceAdminService service = new WorkspaceAdminService(

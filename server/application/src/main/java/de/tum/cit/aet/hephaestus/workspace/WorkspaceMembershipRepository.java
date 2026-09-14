@@ -15,11 +15,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Repository for {@link WorkspaceMembership} entities.
- * Manages the relationship between users and workspaces, including role
- * assignments.
- */
 @WorkspaceAgnostic("Queried by explicit workspace ID - membership queries always workspace-scoped")
 public interface WorkspaceMembershipRepository extends JpaRepository<WorkspaceMembership, WorkspaceMembership.Id> {
     List<WorkspaceMembership> findByWorkspace_Id(Long workspaceId);
@@ -65,35 +60,26 @@ public interface WorkspaceMembershipRepository extends JpaRepository<WorkspaceMe
 
     List<WorkspaceMembership> findByUser_Id(Long userId);
 
-    /**
-     * Memberships for ANY of the given SCM users — the multi-identity form of {@link #findByUser_Id}.
-     * A single Hephaestus account can mirror several SCM users (one per linked provider identity), so
-     * workspace visibility unions their memberships. Empty input yields an empty list.
-     */
+    /** Account visibility unions memberships across its linked SCM actors. */
     List<WorkspaceMembership> findByUser_IdIn(Collection<Long> userIds);
 
-    /** This workspace's membership rows for ANY of the given SCM users (multi-identity role resolution). */
     List<WorkspaceMembership> findByWorkspace_IdAndUser_IdIn(Long workspaceId, Collection<Long> userIds);
 
-    /**
-     * All memberships for the given SCM logins, with the workspace eagerly fetched. Used by the
-     * {@code core.auth} GDPR data-export to flatten a principal's workspace memberships without
-     * the auth module importing workspace domain types. Login match is case-insensitive.
-     */
+    /** Account-owned actor memberships, with workspace data loaded for cross-module projections. */
     @Query("""
             SELECT wm FROM WorkspaceMembership wm
             JOIN FETCH wm.workspace
-            JOIN wm.user u
-            WHERE LOWER(u.login) IN :logins
+            JOIN FETCH wm.user u
+            WHERE u.id IN :userIds
+            ORDER BY wm.workspace.id, u.id
         """)
-    List<WorkspaceMembership> findAllWithWorkspaceByUserLoginInLowercase(@Param("logins") Collection<String> logins);
+    List<WorkspaceMembership> findAllWithWorkspaceByUserIdIn(@Param("userIds") Collection<Long> userIds);
 
     long countByWorkspace_IdAndRole(Long workspaceId, WorkspaceRole role);
 
-    /** Total member count for a workspace (all roles). Backs the instance-admin workspaces overview. */
     long countByWorkspace_Id(Long workspaceId);
 
-    /** Members in the given role, oldest membership first — for the instance-admin overview/support entry. */
+    /** Oldest membership first for the instance-admin support overview. */
     @Query("""
             SELECT wm.user FROM WorkspaceMembership wm
             WHERE wm.workspace.id = :workspaceId AND wm.role = :role
@@ -104,9 +90,7 @@ public interface WorkspaceMembershipRepository extends JpaRepository<WorkspaceMe
     @Query("SELECT wm.user.id FROM WorkspaceMembership wm WHERE wm.workspace.id = :workspaceId AND wm.hidden = true")
     Set<Long> findHiddenUserIdsByWorkspaceId(@Param("workspaceId") Long workspaceId);
 
-    /**
-     * Atomically inserts a membership if absent (race-condition safe).
-     */
+    /** Does not replace an existing membership or its role under concurrent insertion. */
     @Modifying
     @Transactional
     @Query(value = """
@@ -120,12 +104,6 @@ public interface WorkspaceMembershipRepository extends JpaRepository<WorkspaceMe
             @Param("role") String role,
             @Param("leaguePoints") int leaguePoints);
 
-    /**
-     * Deletes all memberships for a workspace.
-     * Used during workspace purge to clean up membership data.
-     *
-     * @param workspaceId the workspace ID
-     */
     @Modifying
     @Transactional
     @Query("DELETE FROM WorkspaceMembership wm WHERE wm.workspace.id = :workspaceId")

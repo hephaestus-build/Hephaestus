@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.dto.AdminWorkspaceViewDTO;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,7 +52,12 @@ public class WorkspaceAdminService {
                 .findFirst()
                 .orElse(null);
         Long ownerAccountId = owner != null
-                ? accountIdentityQuery.resolveAccountIdForActor(owner.getId()).orElse(null)
+                ? accountIdentityQuery
+                        .resolveAccountId(
+                                Objects.requireNonNull(owner.getProvider().getId()),
+                                owner.getNativeId().toString(),
+                                null)
+                        .orElse(null)
                 : null;
         return new AdminWorkspaceViewDTO(
                 ws.getId(),

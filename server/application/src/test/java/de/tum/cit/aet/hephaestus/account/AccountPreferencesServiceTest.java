@@ -39,11 +39,11 @@ class AccountPreferencesServiceTest extends BaseUnitTest {
     void shouldPersistAndAuditResearchOptOut() {
         User user = user();
         UserPreferences preferences = preferences(user, true);
-        when(userRepository.findByLogin("octocat")).thenReturn(Optional.of(user));
+        when(userRepository.findById(42L)).thenReturn(Optional.of(user));
         when(preferencesRepository.findByUserId(42L)).thenReturn(Optional.of(preferences));
         when(auditProvider.getIfAvailable()).thenReturn(audit);
 
-        service.setForLogin("octocat", false, ConsentSource.SLACK_APP_HOME);
+        service.setForUserId(42L, false, ConsentSource.SLACK_APP_HOME);
 
         assertThat(preferences.isParticipateInResearch()).isFalse();
         verify(preferencesRepository).save(preferences);
@@ -54,25 +54,19 @@ class AccountPreferencesServiceTest extends BaseUnitTest {
     void shouldNotAuditResearchOptIn() {
         User user = user();
         UserPreferences preferences = preferences(user, false);
-        when(userRepository.findByLogin("octocat")).thenReturn(Optional.of(user));
+        when(userRepository.findById(42L)).thenReturn(Optional.of(user));
         when(preferencesRepository.findByUserId(42L)).thenReturn(Optional.of(preferences));
 
-        service.setForLogin("octocat", true, ConsentSource.SETTINGS_UI);
+        service.setForUserId(42L, true, ConsentSource.SETTINGS_UI);
 
         assertThat(preferences.isParticipateInResearch()).isTrue();
         verifyNoInteractions(auditProvider);
     }
 
     @Test
-    void shouldIgnoreBlankLogin() {
-        service.setForLogin("   ", false, ConsentSource.SLACK_APP_HOME);
-        verifyNoInteractions(userRepository, preferencesRepository, auditProvider);
-    }
-
-    @Test
-    void shouldIgnoreUnknownLogin() {
-        when(userRepository.findByLogin("ghost")).thenReturn(Optional.empty());
-        service.setForLogin("ghost", false, ConsentSource.SLACK_APP_HOME);
+    void shouldIgnoreUnknownActor() {
+        when(userRepository.findById(404L)).thenReturn(Optional.empty());
+        service.setForUserId(404L, false, ConsentSource.SLACK_APP_HOME);
         verify(preferencesRepository, never()).save(any());
         verifyNoInteractions(auditProvider);
     }

@@ -5,8 +5,13 @@ import static de.tum.cit.aet.hephaestus.leaderboard.LeaguePointsConstants.POINTS
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
+import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.audit.WorkspaceAuditSnapshots;
+import de.tum.cit.aet.hephaestus.workspace.authorization.WorkspaceAccessService;
+import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
+import de.tum.cit.aet.hephaestus.workspace.exception.InsufficientWorkspacePermissionsException;
+import de.tum.cit.aet.hephaestus.workspace.exception.LastOwnerRemovalException;
 import jakarta.persistence.EntityManager;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -49,16 +54,19 @@ public class WorkspaceMembershipService {
     private final EntityManager entityManager;
 
     private final ConfigAuditPort configAudit;
+    private final WorkspaceAccessService accessService;
 
     public WorkspaceMembershipService(
             WorkspaceMembershipRepository workspaceMembershipRepository,
             WorkspaceRepository workspaceRepository,
             EntityManager entityManager,
-            ConfigAuditPort configAudit) {
+            ConfigAuditPort configAudit,
+            WorkspaceAccessService accessService) {
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.workspaceRepository = workspaceRepository;
         this.entityManager = entityManager;
         this.configAudit = configAudit;
+        this.accessService = accessService;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -357,26 +365,19 @@ public class WorkspaceMembershipService {
         return workspaceMembershipRepository.save(membership);
     }
 
-    /**
-     * Assign or update a role for a workspace member.
-     * Creates a new membership if the user is not yet a member.
-     *
-     * @param workspaceId Workspace ID
-     * @param userId      User ID
-     * @param role        Role to assign
-     * @return Updated or created membership
-     */
     @Transactional
     public WorkspaceMembership assignRole(Long workspaceId, Long userId, WorkspaceMembership.WorkspaceRole role) {
-        Workspace workspace = workspaceRepository
-                .findById(workspaceId)
-                .orElseThrow(() -> new IllegalArgumentException("Workspace not found"));
+        Workspace workspace = lockForMembershipChange(workspaceId);
+        requireCanManageRole(workspace, role);
 
         var membershipOpt = workspaceMembershipRepository.findByWorkspace_IdAndUser_Id(workspaceId, userId);
 
         if (membershipOpt.isPresent()) {
-            // Update existing membership
             WorkspaceMembership membership = membershipOpt.get();
+            requireCanManageRole(workspace, membership.getRole());
+            if (role != WorkspaceMembership.WorkspaceRole.OWNER) {
+                requireNotLastOwner(workspace, membership);
+            }
             var beforeRole = new WorkspaceAuditSnapshots.RoleSnapshot(
                     membership.getRole() == null ? null : membership.getRole().name(), membership.isHidden());
             membership.setRole(role);
@@ -389,7 +390,6 @@ public class WorkspaceMembershipService {
             log.info("Updated membership role: userId={}, workspaceId={}, role={}", userId, workspaceId, role);
             return workspaceMembershipRepository.save(membership);
         } else {
-            // Create new membership
             User user = entityManager.find(User.class, userId);
             if (user == null) {
                 throw new IllegalArgumentException("User not found with ID: " + userId);
@@ -407,17 +407,14 @@ public class WorkspaceMembershipService {
         }
     }
 
-    /**
-     * Remove a user's membership from a workspace.
-     *
-     * @param workspaceId Workspace ID
-     * @param userId      User ID
-     */
     @Transactional
     public void removeMembership(Long workspaceId, Long userId) {
+        Workspace workspace = lockForMembershipChange(workspaceId);
         var membership = workspaceMembershipRepository
                 .findByWorkspace_IdAndUser_Id(workspaceId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("Workspace membership not found"));
+                .orElseThrow(() -> new EntityNotFoundException("WorkspaceMembership", userId));
+        requireCanManageRole(workspace, membership.getRole());
+        requireNotLastOwner(workspace, membership);
 
         var beforeRole = new WorkspaceAuditSnapshots.RoleSnapshot(
                 membership.getRole() == null ? null : membership.getRole().name(), membership.isHidden());
@@ -526,20 +523,27 @@ public class WorkspaceMembershipService {
         return workspaceMembershipRepository.findAllByWorkspace_Id(workspaceId, pageable);
     }
 
-    /**
-     * Checks if removing a member would leave the workspace without owners.
-     *
-     * @param workspaceId Workspace ID
-     * @param membership The membership to check
-     * @return true if the membership is the last owner
-     */
-    @Transactional(readOnly = true)
-    public boolean isLastOwner(Long workspaceId, WorkspaceMembership membership) {
-        if (membership.getRole() != WorkspaceMembership.WorkspaceRole.OWNER) {
-            return false;
+    private Workspace lockForMembershipChange(Long workspaceId) {
+        // Serialize manual ownership changes so competing requests cannot remove the final owners.
+        return workspaceRepository
+                .findByIdForUpdate(workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
+    }
+
+    private void requireCanManageRole(Workspace workspace, WorkspaceMembership.WorkspaceRole role) {
+        var context = WorkspaceContextHolder.getContext();
+        if (context == null || !workspace.getId().equals(context.id()) || !accessService.canManageRole(role)) {
+            throw new InsufficientWorkspacePermissionsException(
+                    workspace.getWorkspaceSlug(), "You cannot manage the " + role + " role");
         }
-        long ownerCount = workspaceMembershipRepository.countByWorkspace_IdAndRole(
-                workspaceId, WorkspaceMembership.WorkspaceRole.OWNER);
-        return ownerCount <= 1;
+    }
+
+    private void requireNotLastOwner(Workspace workspace, WorkspaceMembership membership) {
+        if (membership.getRole() == WorkspaceMembership.WorkspaceRole.OWNER
+                && workspaceMembershipRepository.countByWorkspace_IdAndRole(
+                                workspace.getId(), WorkspaceMembership.WorkspaceRole.OWNER)
+                        <= 1) {
+            throw new LastOwnerRemovalException(workspace.getWorkspaceSlug());
+        }
     }
 }

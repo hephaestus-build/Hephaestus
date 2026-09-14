@@ -74,19 +74,13 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
     /** A seeded GitLab caller plus its resolved SCM {@link User} mirror (for owner/membership setup). */
     private record GitLabCaller(Consumer<HttpHeaders> headers, User scmUser) {}
 
-    /**
-     * Like {@link #gitLabCaller}, but also provisions the SCM {@link User} mirror the auth layer would
-     * lazily create (same {@code (nativeId, provider)}) and wires it as the identity's external actor, so
-     * the caller resolves to a stable User that can own workspaces and appear in their listings.
-     */
+    /** Adds the SCM mirror belonging to the caller's verified provider subject. */
     private GitLabCaller gitLabCallerWithMirror(String login) {
         Account account = accountRepository.save(new Account(login));
         IdentityProvider gitlab = ensureGitLabProvider();
         long nativeId = 70_000 + persistedId(account.getId());
-        // The SCM mirror's login MUST equal the token's preferred_username, because the current user is
-        // resolved by login (SecurityUtils.getCurrentUserLogin → UserRepository.findByLogin). The
-        // mock-jwt-sub-<id> token sets preferred_username = "account-<id>".
-        String scmLogin = "account-" + persistedId(account.getId());
+        // Deliberately differs from the mock token's display login; the provider subject owns the actor.
+        String scmLogin = login;
         User scmUser = TestUserFactory.ensureUser(userRepository, scmLogin, nativeId, gitlab);
         IdentityLink link = new IdentityLink();
         link.setAccount(account);
@@ -256,16 +250,16 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
-    void createGitLabWorkspaceAssignsOwnerMembership() {
-        User owner = persistUser("mentor");
-        Consumer<HttpHeaders> auth = gitLabCaller("mentor");
+    void shouldAssignOwnershipToTheVerifiedGitLabCallerInsteadOfTheSubmittedNamesake() {
+        User namesake = persistUser("mentor");
+        GitLabCaller caller = gitLabCallerWithMirror("mentor");
 
         var request = new CreateWorkspaceRequestDTO(
                 "gitlab-ownership",
                 "Owner Test",
                 "owner-group",
                 AccountType.ORG,
-                persistedId(owner.getId()),
+                persistedId(namesake.getId()),
                 IntegrationKind.GITLAB,
                 "glpat-owner-token",
                 null);
@@ -273,7 +267,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
         WorkspaceDTO created = webTestClient
                 .post()
                 .uri("/workspaces")
-                .headers(auth)
+                .headers(caller.headers())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .exchange()
@@ -286,9 +280,12 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
         WorkspaceDTO workspace = Objects.requireNonNull(created);
 
         var membership = workspaceMembershipRepository
-                .findByWorkspace_IdAndUser_Id(workspace.id(), persistedId(owner.getId()))
+                .findByWorkspace_IdAndUser_Id(
+                        workspace.id(), persistedId(caller.scmUser().getId()))
                 .orElseThrow(() -> new AssertionError("Owner membership not created"));
         assertThat(membership.getRole()).isEqualTo(WorkspaceMembership.WorkspaceRole.OWNER);
+        assertThat(workspaceMembershipRepository.findByWorkspace_IdAndUser_Id(workspace.id(), namesake.getId()))
+                .isEmpty();
     }
 
     @Test
@@ -328,8 +325,6 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
     @Test
     @WithMentorUser
     void gitLabWorkspaceAppearsInListWithCorrectProviderType() {
-        // The caller owns the workspace (listing is by the current user's memberships, resolved via the
-        // identity's external-actor SCM mirror), so the GitLab workspace surfaces in their list.
         GitLabCaller caller = gitLabCallerWithMirror("mentor");
 
         var gitlabRequest = new CreateWorkspaceRequestDTO(

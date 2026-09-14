@@ -15,23 +15,14 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import java.time.Instant;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-/**
- * Verifies that {@code GET /user/settings} provisions the SCM {@code User} for a GitLab login-only
- * principal from the account's federated identities — the production path after the Keycloak →
- * native cookie-JWT cutover.
- *
- * <p>Deliberately uses the <b>real</b> {@code RevocationAwareJwtDecoder} (it does NOT import
- * {@code TestSecurityConfig}'s mock decoder, which used to inject a synthetic {@code gitlab_id}
- * claim that masked the bug) and mints a genuine ES256 cookie-JWT through {@link HephaestusJwtIssuer}
- * whose only identity claim is {@code sub = Account.id}. Resolution is therefore
- * {@code sub → Account → active GitLab IdentityLink → User} end-to-end.
- */
+/** Uses the real issuer and decoder: the JWT identifies an account, not an SCM actor. */
 class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
 
     private static final long GITLAB_NATIVE_ID = 18024L;
@@ -42,6 +33,9 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private UserPreferencesRepository preferencesRepository;
 
     @Autowired
     private GitLabProperties gitLabProperties;
@@ -61,16 +55,11 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
     @Autowired
     private JwtPrincipalFactory principalFactory;
 
-    /**
-     * A GitLab login-only user with no pre-existing SCM {@code User} row must get one provisioned
-     * (no 404). If production resolution regresses to reading the absent {@code gitlab_id} claim,
-     * no user is provisioned and {@code GET /user/settings} returns 404 — failing this test.
-     */
     @Test
     void getUserSettingsProvisionsGitLabUserWhenMissing() {
         assertThat(userRepository.findByLogin(GITLAB_LOGIN)).isEmpty();
 
-        SeededIdentity seeded = seedGitLabLoginAccount();
+        SeededIdentity seeded = seedGitLabLoginAccount(GITLAB_LOGIN);
 
         webTestClient
                 .get()
@@ -94,15 +83,116 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
         assertThat(provider.getType()).isEqualTo(IdentityProviderType.GITLAB);
         assertThat(provider.getServerUrl()).isEqualTo(gitLabProperties.defaultServerUrl());
 
-        // The IdentityLink → ExternalActor wiring gap is closed: the link now points at the mirror.
         IdentityLink link =
                 identityLinkRepository.findById(seeded.identityLinkId()).orElseThrow();
         assertThat(link.getExternalActorId()).isEqualTo(provisionedUser.getId());
     }
 
+    @Test
+    void shouldReadAndUpdateVerifiedActorsSettingsWhenSignupLoginBelongsToAnotherProvider() {
+        SeededIdentity seeded = seedGitLabLoginAccount(GITLAB_LOGIN);
+        var github = gitProviderRepository.save(
+                new IdentityProvider(IdentityProviderType.GITHUB, "https://settings-github.example.com"));
+        var namesake = userRepository.save(TestUserFactory.createUser(99L, GITLAB_LOGIN, github));
+        var gitlab = gitProviderRepository.findById(seeded.gitProviderId()).orElseThrow();
+        var actor = userRepository.save(TestUserFactory.createUser(GITLAB_NATIVE_ID, "renamed-settings-user", gitlab));
+        var actorId = Objects.requireNonNull(actor.getId());
+        var namesakeId = Objects.requireNonNull(namesake.getId());
+        var namesakePreferences = new UserPreferences(namesake);
+        namesakePreferences.setParticipateInResearch(true);
+        namesakePreferences.setPracticeFeedbackDeliveryEnabled(false);
+        preferencesRepository.save(namesakePreferences);
+        preferencesRepository.save(new UserPreferences(actor));
+
+        webTestClient
+                .get()
+                .uri("/user/settings")
+                .headers(headers -> headers.setBearerAuth(seeded.token()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.participateInResearch")
+                .isEqualTo(false)
+                .jsonPath("$.practiceFeedbackDeliveryEnabled")
+                .isEqualTo(true);
+
+        webTestClient
+                .post()
+                .uri("/user/settings")
+                .headers(headers -> headers.setBearerAuth(seeded.token()))
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .bodyValue(new UserSettingsDTO(true, true))
+                .exchange()
+                .expectStatus()
+                .isOk();
+
+        assertThat(preferencesRepository.findByUserId(actorId)).get().satisfies(preferences -> {
+            assertThat(preferences.isParticipateInResearch()).isTrue();
+            assertThat(preferences.isPracticeFeedbackDeliveryEnabled()).isTrue();
+        });
+        assertThat(preferencesRepository.findByUserId(namesakeId)).get().satisfies(preferences -> {
+            assertThat(preferences.isParticipateInResearch()).isTrue();
+            assertThat(preferences.isPracticeFeedbackDeliveryEnabled()).isFalse();
+        });
+        assertThat(userRepository.findById(actorId))
+                .get()
+                .extracting(user -> user.getLogin())
+                .isEqualTo("renamed-settings-user");
+    }
+
+    @Test
+    void shouldRejectStaleSignupLoginWithoutRenamingItsNewOwnerWhenActorIsMissing() {
+        SeededIdentity seeded = seedGitLabLoginAccount(GITLAB_LOGIN);
+        var provider = gitProviderRepository.findById(seeded.gitProviderId()).orElseThrow();
+        var namesake = userRepository.save(TestUserFactory.createUser(999L, GITLAB_LOGIN, provider));
+        var namesakeId = Objects.requireNonNull(namesake.getId());
+
+        webTestClient
+                .get()
+                .uri("/user/settings")
+                .headers(headers -> headers.setBearerAuth(seeded.token()))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(409);
+
+        assertThat(userRepository.findById(namesakeId))
+                .get()
+                .extracting(user -> user.getLogin())
+                .isEqualTo(GITLAB_LOGIN);
+        assertThat(userRepository.findByNativeIdAndProviderId(GITLAB_NATIVE_ID, seeded.gitProviderId()))
+                .isEmpty();
+        assertThat(preferencesRepository.findByUserId(namesakeId)).isEmpty();
+    }
+
+    @Test
+    void shouldTreatUnderscoresLiterallyWhenCheckingSignupLoginConflicts() {
+        SeededIdentity seeded = seedGitLabLoginAccount("gitlab_user");
+        var provider = gitProviderRepository.findById(seeded.gitProviderId()).orElseThrow();
+        var other = userRepository.save(TestUserFactory.createUser(999L, "gitlabXuser", provider));
+        var otherId = Objects.requireNonNull(other.getId());
+
+        webTestClient
+                .get()
+                .uri("/user/settings")
+                .headers(headers -> headers.setBearerAuth(seeded.token()))
+                .exchange()
+                .expectStatus()
+                .isOk();
+
+        assertThat(userRepository.findByNativeIdAndProviderId(GITLAB_NATIVE_ID, seeded.gitProviderId()))
+                .get()
+                .extracting(user -> user.getLogin())
+                .isEqualTo("gitlab_user");
+        assertThat(userRepository.findById(otherId))
+                .get()
+                .extracting(user -> user.getLogin())
+                .isEqualTo("gitlabXuser");
+    }
+
     private record SeededIdentity(String token, long identityLinkId, long gitProviderId) {}
 
-    private SeededIdentity seedGitLabLoginAccount() {
+    private SeededIdentity seedGitLabLoginAccount(String signupLogin) {
         IdentityProvider provider = gitProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl())
                 .orElseGet(() -> gitProviderRepository.save(
@@ -115,7 +205,7 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
         link.setAccount(account);
         link.setProviderId(providerId);
         link.setSubject(String.valueOf(GITLAB_NATIVE_ID));
-        link.setUsernameAtSignup(GITLAB_LOGIN);
+        link.setUsernameAtSignup(signupLogin);
         link.setDisplayName("GitLab User");
         link = identityLinkRepository.save(link);
 

@@ -1505,24 +1505,12 @@ export const getLlmUsageReport = <ThrowOnError extends boolean = false>(options:
   ...options
 });
 
-/**
- * List all members of the workspace with pagination.
- *
- * List all members of the workspace with pagination.
- *  Accessible to all workspace members (MEMBER role and above).
- */
 export const listMembers = <ThrowOnError extends boolean = false>(options: Options<ListMembersData, ThrowOnError>): RequestResult<ListMembersResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListMembersResponses, unknown, ThrowOnError>({
   responseTransformer: listMembersResponseTransformer,
   url: '/workspaces/{workspaceSlug}/members',
   ...options
 });
 
-/**
- * Assign or update a role for a workspace member.
- *
- * Assign or update a role for a workspace member.
- *  OWNER can assign any role. ADMIN can assign ADMIN or MEMBER roles.
- */
 export const assignRole = <ThrowOnError extends boolean = false>(options: Options<AssignRoleData, ThrowOnError>): RequestResult<AssignRoleResponses, unknown, ThrowOnError> => (options.client ?? client).post<AssignRoleResponses, unknown, ThrowOnError>({
   responseTransformer: assignRoleResponseTransformer,
   security: [{ scheme: 'bearer', type: 'http' }],
@@ -1535,12 +1523,9 @@ export const assignRole = <ThrowOnError extends boolean = false>(options: Option
 });
 
 /**
- * Get the current user's membership in this workspace.
+ * One representative membership, with the account's effective workspace role.
  *
- * Get the current user's membership in this workspace.
- *  Super admins (the <code>admin</code> app role, APP_ADMIN) have their effective role elevated to ADMIN
- *  if their database role is lower, matching the runtime authorization behaviour in
- *  {@link WorkspaceAccessService WorkspaceAccessService}.
+ * One representative membership, with the account's effective workspace role.
  */
 export const getCurrentUserMembership = <ThrowOnError extends boolean = false>(options: Options<GetCurrentUserMembershipData, ThrowOnError>): RequestResult<GetCurrentUserMembershipResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetCurrentUserMembershipResponses, unknown, ThrowOnError>({
   responseTransformer: getCurrentUserMembershipResponseTransformer,
@@ -1548,37 +1533,18 @@ export const getCurrentUserMembership = <ThrowOnError extends boolean = false>(o
   ...options
 });
 
-/**
- * Revoke a user's membership (remove them from workspace).
- *
- * Revoke a user's membership (remove them from workspace).
- *  OWNER can remove anyone except themselves if they are the last OWNER.
- *  ADMIN can remove MEMBER and ADMIN roles.
- */
 export const removeMember = <ThrowOnError extends boolean = false>(options: Options<RemoveMemberData, ThrowOnError>): RequestResult<RemoveMemberResponses, unknown, ThrowOnError> => (options.client ?? client).delete<RemoveMemberResponses, unknown, ThrowOnError>({
   security: [{ scheme: 'bearer', type: 'http' }],
   url: '/workspaces/{workspaceSlug}/members/{userId}',
   ...options
 });
 
-/**
- * Get a specific member's details.
- *
- * Get a specific member's details.
- *  Accessible to all workspace members.
- */
 export const getMember = <ThrowOnError extends boolean = false>(options: Options<GetMemberData, ThrowOnError>): RequestResult<GetMemberResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetMemberResponses, unknown, ThrowOnError>({
   responseTransformer: getMemberResponseTransformer,
   url: '/workspaces/{workspaceSlug}/members/{userId}',
   ...options
 });
 
-/**
- * Toggle the hidden flag for a workspace member.
- *
- * Toggle the hidden flag for a workspace member.
- *  Hidden members are excluded from the leaderboard.
- */
 export const updateMemberVisibility = <ThrowOnError extends boolean = false>(options: Options<UpdateMemberVisibilityData, ThrowOnError>): RequestResult<UpdateMemberVisibilityResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateMemberVisibilityResponses, unknown, ThrowOnError>({
   responseTransformer: updateMemberVisibilityResponseTransformer,
   security: [{ scheme: 'bearer', type: 'http' }],

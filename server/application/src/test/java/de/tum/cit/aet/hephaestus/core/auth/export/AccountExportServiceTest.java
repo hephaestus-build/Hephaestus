@@ -33,23 +33,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
-/**
- * Focused unit tests for the GDPR Art. 20 export service + bundle assembler:
- * <ul>
- *   <li>the assembled bundle contains the principal's own data and structurally <b>excludes</b>
- *       tokens / credentials / signing keys;</li>
- *   <li>the ownership-scoped reads return empty for a foreign export id (controller → 404),
- *       and the download is gated on READY + non-expired.</li>
- * </ul>
- */
 class AccountExportServiceTest extends BaseUnitTest {
 
     private static final Long ACCOUNT_ID = 42L;
     private static final Long OTHER_ACCOUNT_ID = 99L;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-05-29T12:00:00Z"), ZoneOffset.UTC);
-
-    // ── Bundle assembly ────────────────────────────────────────────────────────────────────
 
     @Test
     void assemble_includesOwnData_andExcludesTokensAndOtherUsers() {
@@ -79,9 +68,9 @@ class AccountExportServiceTest extends BaseUnitTest {
         when(accountService.activeIdentities(ACCOUNT_ID)).thenReturn(List.of(link));
         when(featureRepo.findFlagsByAccountId(ACCOUNT_ID)).thenReturn(List.of("mentor_access"));
         when(authEventRepo.findByAccountSince(eq(ACCOUNT_ID), any())).thenReturn(List.of());
-        when(membershipQuery.membershipsForLogins(any()))
+        when(membershipQuery.membershipsForAccount(ACCOUNT_ID))
                 .thenReturn(List.of(new WorkspaceMembershipView(7L, "tum-ase", "TUM ASE", "MEMBER", 314L)));
-        when(preferencesQuery.preferencesForLogin("ada"))
+        when(preferencesQuery.preferencesForAccount(ACCOUNT_ID))
                 .thenReturn(Optional.of(new AccountPreferencesQuery.PreferencesView(true, false)));
 
         ExportBundleAssembler assembler = new ExportBundleAssembler(
@@ -110,9 +99,6 @@ class AccountExportServiceTest extends BaseUnitTest {
         assertNotNull(bundle.preferences());
         assertThat(bundle.preferences().participateInResearch()).isTrue();
         assertThat(bundle.preferences().practiceFeedbackDeliveryEnabled()).isFalse();
-        // The preferences could only carry these values if the bundle resolved the login "ada" from
-        // this account's identity link and looked it up via preferencesForLogin("ada") — so the
-        // returned-state assertions above already prove the Account → login bridge; no verify needed.
 
         String json = new ObjectMapper().writeValueAsString(bundle);
         assertThat(json).contains("\"ada@example.com\"", "tum-ase", "mentor_access");
@@ -124,8 +110,6 @@ class AccountExportServiceTest extends BaseUnitTest {
                 .doesNotContain("client_secret")
                 .doesNotContain("password");
     }
-
-    // ── Ownership / enumeration defense ────────────────────────────────────────────────────
 
     @Test
     void status_foreignId_returnsEmpty_soControllerAnswers404() {

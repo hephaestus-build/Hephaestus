@@ -14,11 +14,6 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Default {@link MentorSlackThreadService}: creates the {@code SLACK_DM} {@code chat_thread} inside the mentor
- * module so thread creation never happens through a cross-module raw insert. The subsequent turn's
- * {@code MentorTurnPersistence#ensureThread} finds this pre-created, correctly-owned thread.
- */
 @Service
 @RequiredArgsConstructor
 class DefaultMentorSlackThreadService implements MentorSlackThreadService {
@@ -29,7 +24,7 @@ class DefaultMentorSlackThreadService implements MentorSlackThreadService {
 
     @Override
     @Transactional
-    public UUID ensureSlackThread(long workspaceId, @Nullable UUID chatThreadId, String developerLogin) {
+    public UUID ensureSlackThread(long workspaceId, @Nullable UUID chatThreadId, long developerId) {
         if (chatThreadId != null) {
             var existing = chatThreadRepository.findByIdAndWorkspaceId(chatThreadId, workspaceId);
             if (existing.isPresent()) {
@@ -37,8 +32,8 @@ class DefaultMentorSlackThreadService implements MentorSlackThreadService {
             }
         }
         User user = userRepository
-                .findByLogin(developerLogin)
-                .orElseThrow(() -> new EntityNotFoundException("User", developerLogin));
+                .findById(developerId)
+                .orElseThrow(() -> new EntityNotFoundException("User", String.valueOf(developerId)));
         Workspace workspace = workspaceRepository
                 .findById(workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", String.valueOf(workspaceId)));
@@ -53,8 +48,7 @@ class DefaultMentorSlackThreadService implements MentorSlackThreadService {
     @Override
     @Transactional
     public int purgeSlackThreads(long workspaceId) {
-        // Bulk DELETE of the SLACK_DM chat_thread rows; DB cascades drop linked chat_message rows. The Slack
-        // integration deletes its mentor_slack_thread mappings before calling this on uninstall.
+        // Slack deletes its mapping rows first; deleting a chat thread cascades to its messages.
         return chatThreadRepository.deleteByWorkspaceIdAndSurface(workspaceId, ThreadSurface.SLACK_DM);
     }
 }
