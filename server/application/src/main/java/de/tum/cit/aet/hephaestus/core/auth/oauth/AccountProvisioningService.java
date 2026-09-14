@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.util.Map;
@@ -15,6 +16,7 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
@@ -43,6 +45,7 @@ public class AccountProvisioningService {
     private final AccountJitCreator accountJitCreator;
     private final AdminBootstrapPolicy adminBootstrapPolicy;
     private final Clock clock;
+    private final ApplicationEventPublisher eventPublisher;
 
     public AccountProvisioningService(
             AccountRepository accountRepository,
@@ -52,7 +55,8 @@ public class AccountProvisioningService {
             VerifiedEmailResolver verifiedEmailResolver,
             AccountJitCreator accountJitCreator,
             AdminBootstrapPolicy adminBootstrapPolicy,
-            Clock clock) {
+            Clock clock,
+            ApplicationEventPublisher eventPublisher) {
         this.accountRepository = accountRepository;
         this.identityLinkRepository = identityLinkRepository;
         this.gitProviderRegistry = gitProviderRegistry;
@@ -61,6 +65,7 @@ public class AccountProvisioningService {
         this.accountJitCreator = accountJitCreator;
         this.adminBootstrapPolicy = adminBootstrapPolicy;
         this.clock = clock;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -134,6 +139,10 @@ public class AccountProvisioningService {
             IdentityLink linked = newIdentityLink(account, providerId, subject, teamId, principal);
             linked.setLinkedVia(IdentityLink.LinkedVia.MANUAL_LINK);
             identityLinkRepository.save(linked);
+            eventPublisher.publishEvent(new AccountSecurityChangedEvent(
+                    Objects.requireNonNull(account.getId()),
+                    AccountSecurityChangedEvent.Kind.IDENTITY_LINKED,
+                    clock.instant()));
             log.info("auth.success: linked provider={} to existing accountId={}", registrationId, account.getId());
             return new ProvisionResult(account, true);
         }
@@ -221,6 +230,10 @@ public class AccountProvisioningService {
                 && adminBootstrapPolicy.shouldPromote(registrationId, subject, login)) {
             account.setAppRole(Account.AppRole.APP_ADMIN);
             accountRepository.save(account);
+            eventPublisher.publishEvent(new AccountSecurityChangedEvent(
+                    Objects.requireNonNull(account.getId()),
+                    AccountSecurityChangedEvent.Kind.APP_ROLE_CHANGED,
+                    clock.instant()));
             log.info(
                     "auth.bootstrap: promoted accountId={} to APP_ADMIN via bootstrap-admins allowlist (provider={})",
                     account.getId(),

@@ -47,6 +47,9 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     private SurveyParticipationRepository participations;
 
     @Autowired
+    private SurveyEmailInvitationRepository emailInvitations;
+
+    @Autowired
     private ProductFeedbackRepository feedback;
 
     @Autowired
@@ -65,6 +68,37 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         String path(String suffix) {
             return "/workspaces/" + workspace.getWorkspaceSlug() + "/product-feedback" + suffix;
         }
+    }
+
+    @Test
+    void shouldExposeMissingEmailConfigurationWithoutConsumingAnInvitationRequest() {
+        Member admin = member("email-unconfigured");
+        SurveyDTO survey = publish(admin, admin.workspace().getId(), textQuestion());
+        String path = "/admin/product-feedback/surveys/" + survey.id() + "/email-invitations";
+
+        webTestClient
+                .get()
+                .uri(path)
+                .headers(admin.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.deliveryConfigured")
+                .isEqualTo(false);
+        webTestClient
+                .post()
+                .uri(path)
+                .headers(admin.headers())
+                .bodyValue(new SurveyEmailInvitationRequestDTO(false))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
+                .expectBody(Void.class);
+
+        assertThat(emailInvitations.requestedAccountIds(survey.id())).isEmpty();
+        assertThat(participations.findBySurveyIdAndAccountId(survey.id(), admin.accountId()))
+                .isEmpty();
     }
 
     @Test

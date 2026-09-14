@@ -277,6 +277,7 @@ public class SecurityConfig {
             // gets overwritten by a 401 when the anonymous /error forward is denied. Permit it so the
             // ORIGINAL status is preserved. The error view carries no sensitive data.
             requests.requestMatchers("/error").permitAll();
+            requests.requestMatchers(EMAIL_UNSUBSCRIBE_MATCHER).permitAll();
             // NOTE: /webhooks/**, /oauth/callback/**, /api/workers/** and /actuator/health|info are
             // claimed by higher-precedence chains and NEVER reach this fallback chain:
             //   - /webhooks/** + /oauth/callback/**  → workerHubSecurityFilterChain (the
@@ -361,9 +362,13 @@ public class SecurityConfig {
     static final RequestMatcher DEV_LOGIN_MATCHER =
             PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/dev-login");
 
+    // This capability only disables one subscription; RFC 8058 receivers have no session or CSRF token.
+    static final RequestMatcher EMAIL_UNSUBSCRIBE_MATCHER =
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/notifications/unsubscribe/{token}");
+
     /** Unsafe requests require CSRF unless they use only bearer auth or an enabled dev endpoint. */
     private boolean requiresCsrf(jakarta.servlet.http.HttpServletRequest request) {
-        if (SAFE_METHODS.contains(request.getMethod())) {
+        if (EMAIL_UNSUBSCRIBE_MATCHER.matches(request) || SAFE_METHODS.contains(request.getMethod())) {
             return false;
         }
         // The resolver prefers cookies, so adding a bearer header must not bypass their CSRF check.

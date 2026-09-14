@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "storybook/test";
+import { expect, fn } from "storybook/test";
 
 import { AuthProvider } from "@/integrations/auth/AuthContext";
 import { withStandardPage } from "@/stories/decorators";
@@ -9,6 +9,26 @@ import { SettingsPage } from "./SettingsPage";
 
 const meta = {
 	component: SettingsPage,
+	args: {
+		emailPreferencesProps: {
+			researchAvailable: true,
+			isAppAdmin: false,
+			state: {
+				status: "ready",
+				preferences: {
+					productFeedback: false,
+					workspaceAlerts: false,
+					surveySummaries: false,
+					productSurveys: false,
+					researchSurveys: false,
+					emailAvailable: true,
+					deliveryConfigured: true,
+				},
+				isPending: false,
+				onChange: fn(),
+			},
+		},
+	},
 	parameters: {
 		layout: "fullscreen",
 	},
@@ -83,6 +103,25 @@ export const Default: Story = {
 	},
 };
 
+export const EmailNotConfigured: Story = {
+	args: {
+		...Default.args,
+		emailPreferencesProps: {
+			...meta.args.emailPreferencesProps,
+			state: {
+				...meta.args.emailPreferencesProps.state,
+				preferences: {
+					...meta.args.emailPreferencesProps.state.preferences,
+					deliveryConfigured: false,
+				},
+			},
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("region", { name: "Email notifications" })).toBeNull();
+	},
+};
+
 export const AllTogglesDisabled: Story = {
 	args: {
 		practiceFeedbackProps: {
@@ -123,6 +162,7 @@ export const Loading: Story = {
 
 export const ResearchHidden: Story = {
 	args: {
+		emailPreferencesProps: { ...meta.args.emailPreferencesProps, researchAvailable: false },
 		practiceFeedbackProps: {
 			practiceFeedbackDeliveryEnabled: true,
 			onTogglePracticeFeedback: fn(),

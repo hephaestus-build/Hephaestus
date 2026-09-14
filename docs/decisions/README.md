@@ -82,5 +82,6 @@ do, its home is the Admin Guide (`docs/admin/`) and the runbook links to it.
 | [0041](0041-compose-1x-kubernetes-2.md) | Compose for 1.x; Kubernetes only for 2.0 | Accepted |
 | [0042](0042-hosts-pull-their-own-releases.md) | Hosts pull their own releases | Accepted |
 | [0043](0043-gradle-java-build.md) | Gradle owns the Java build | Accepted |
+| [0044](0044-email-is-a-notification-transport.md) | Email is a notification transport, delivered through the event publication registry | Accepted |
 
 Template: [0000-template.md](0000-template.md).

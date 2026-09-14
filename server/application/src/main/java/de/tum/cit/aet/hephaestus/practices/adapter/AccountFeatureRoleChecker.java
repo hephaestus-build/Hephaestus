@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.notification;
+package de.tum.cit.aet.hephaestus.practices.adapter;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountRoleQuery;

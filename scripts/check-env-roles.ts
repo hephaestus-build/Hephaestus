@@ -115,6 +115,16 @@ const ROLE_SCOPES: readonly RoleScope[] = [
 		role: "server",
 		why: "IntegrationNatsConsumer and IntegrationConsumerHealthIndicator are gated on hephaestus.runtime.server.enabled",
 	},
+	{
+		path: "spring.mail",
+		role: "server",
+		why: "EmailGateway and every notification listener are @ConditionalOnServerRole; the worker and webhook roles never open the relay",
+	},
+	{
+		path: "hephaestus.email",
+		role: "server",
+		why: "the sender identity is read by EmailGateway, which is @ConditionalOnServerRole",
+	},
 ];
 
 /** Every role has a flag, so a new role cannot be scoped without saying which variable turns it off. */
@@ -234,6 +244,17 @@ interface ApplicationConfig {
 	readonly placeholders: ReadonlyMap<string, string>;
 }
 
+/**
+ * Only the `local` profile is developer-only. Production and role-specific overlays still describe
+ * the shipped deployment and must keep their environment forwarding checks.
+ */
+function activatesOnlyLocally(document: unknown): boolean {
+	if (!isRecord(document) || !isRecord(document.spring) || !isRecord(document.spring.config))
+		return false;
+	const activate = document.spring.config.activate;
+	return isRecord(activate) && activate["on-profile"] === "local";
+}
+
 /** Every key path in `application.yml`, and the `${VAR}` placeholders the paths carry. */
 export function readApplicationConfig(text: string): ApplicationConfig {
 	const paths = new Set<string>();
@@ -252,6 +273,7 @@ export function readApplicationConfig(text: string): ApplicationConfig {
 		}
 	};
 	for (const document of yamlDocuments(text)) {
+		if (activatesOnlyLocally(document)) continue;
 		visit(document, []);
 	}
 	return { paths, placeholders };

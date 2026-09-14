@@ -1,14 +1,21 @@
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import {
 	adminGetProductSurveyOptions,
+	adminPreviewSurveyEmailInvitationsOptions,
+	adminPreviewSurveyEmailInvitationsQueryKey,
+	adminSendSurveyEmailInvitationsMutation,
 	adminGetProductSurveySummaryOptions,
 	adminListProductSurveyResponsesOptions,
 } from "@/api/@tanstack/react-query.gen";
 import { adminExportProductSurveyResponses } from "@/api/sdk.gen";
 import type { Survey } from "@/api/types.gen";
+import {
+	AdminSurveyEmailInvitations,
+	type SurveyEmailInvitationsState,
+} from "@/components/admin/feedback/AdminSurveyEmailInvitations";
 import {
 	AdminSurveyResults,
 	type AdminSurveyResultsState,
@@ -37,7 +44,40 @@ export function AdminSurveyResultsLevel({
 	onDelete,
 }: AdminSurveyResultsLevelProps) {
 	const [page, setPage] = useState(0);
+	const queryClient = useQueryClient();
 	const path = { surveyId };
+	const emailQuery = useQuery(adminPreviewSurveyEmailInvitationsOptions({ path }));
+	const queueEmails = useMutation({
+		...adminSendSurveyEmailInvitationsMutation(),
+		onSuccess: (summary) => {
+			queryClient.setQueryData(adminPreviewSurveyEmailInvitationsQueryKey({ path }), summary);
+			void queryClient.invalidateQueries({
+				queryKey: adminPreviewSurveyEmailInvitationsQueryKey({ path }),
+			});
+			toast.success(
+				`${summary.queued} invitations queued in this batch. Relay acceptance appears separately.`,
+			);
+		},
+		onError: () => {
+			void queryClient.invalidateQueries({
+				queryKey: adminPreviewSurveyEmailInvitationsQueryKey({ path }),
+			});
+			toast.error("Could not confirm the invitation request. Refresh counts before trying again.");
+		},
+	});
+	const emailState: SurveyEmailInvitationsState = emailQuery.isError
+		? { status: "error", error: emailQuery.error, onRetry: () => void emailQuery.refetch() }
+		: emailQuery.data
+			? {
+					status: "ready",
+					summary: emailQuery.data,
+					isPending: queueEmails.isPending,
+					onRefresh: () => void emailQuery.refetch(),
+					onQueue: (sendReminder) => {
+						if (!queueEmails.isPending) queueEmails.mutate({ path, body: { sendReminder } });
+					},
+				}
+			: { status: "loading" };
 	const surveyQuery = useQuery(adminGetProductSurveyOptions({ path }));
 	const summaryQuery = useQuery(adminGetProductSurveySummaryOptions({ path }));
 	const responsesQuery = useQuery({
@@ -81,6 +121,7 @@ export function AdminSurveyResultsLevel({
 
 	return (
 		<AdminSurveyResults
+			emailInvitations={<AdminSurveyEmailInvitations state={emailState} />}
 			state={state}
 			now={now}
 			nested={nested}

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
+import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
@@ -110,6 +111,27 @@ public class Connection {
     @Column(nullable = false)
     @ColumnDefault("0")
     private Long version = 0L;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "attention_problem", length = 32)
+    private @Nullable Problem attentionProblem;
+
+    @Column(name = "attention_revision", nullable = false)
+    @ColumnDefault("0")
+    private long attentionRevision;
+
+    public @Nullable Problem getAttentionProblem() {
+        return attentionProblem;
+    }
+
+    public long getAttentionRevision() {
+        return attentionRevision;
+    }
+
+    void changeAttention(@Nullable Problem problem) {
+        attentionProblem = problem;
+        attentionRevision++;
+    }
 
     protected Connection() {}
 

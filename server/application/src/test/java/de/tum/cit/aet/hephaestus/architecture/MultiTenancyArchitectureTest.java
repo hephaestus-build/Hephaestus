@@ -510,6 +510,10 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "LeaderboardDigestReadyEvent", // Carries workspaceId for the vendor-publish
                                         // fan-out
                                         "WorkspaceCreatedEvent", // Carries workspaceId + kind
+                                        "IntegrationAttentionChangedEvent", // Carries an explicit workspaceId and
+                                        // connectionId
+                                        "ProductFeedbackSubmittedEvent", // Instance-admin fan-out; submission UUID
+                                        // covers instance or workspace feedback
                                         // ConnectionLifecycleEvent.Activated / .Deactivated carry workspaceId directly
                                         // (published from ConnectionService.transition; consumed by vendor adapters).
                                         "Activated",

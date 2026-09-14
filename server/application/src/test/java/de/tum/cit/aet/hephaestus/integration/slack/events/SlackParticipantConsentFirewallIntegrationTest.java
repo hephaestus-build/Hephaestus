@@ -110,7 +110,7 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
     @DisplayName("an opted-out author is not stored; a non-opted-out author on the same ACTIVE channel is")
     void personFirewall_dropsOptedOutAuthor_keepsAllowedAuthor() {
         // OPTED_OUT_USER has explicitly opted out of ingestion; ALLOWED_USER has no consent row.
-        participantConsentRepository.upsert(workspaceId, OPTED_OUT_USER, true, true, "SLACK_APP_HOME");
+        participantConsentRepository.optOutOfIngestion(workspaceId, OPTED_OUT_USER, "SLACK_APP_HOME");
 
         ingestService.ingestChannelMessage(TEAM, CHANNEL, "100.1", null, OPTED_OUT_USER, "opted-out says hi");
         ingestService.ingestChannelMessage(TEAM, CHANNEL, "200.1", null, ALLOWED_USER, "allowed says hi");
@@ -127,13 +127,13 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
     @Test
     @DisplayName("opting back in re-allows a previously opted-out author's ingest")
     void personFirewall_optBackIn_reallowsIngest() {
-        participantConsentRepository.upsert(workspaceId, OPTED_OUT_USER, true, true, "SLACK_APP_HOME");
+        participantConsentRepository.optOutOfIngestion(workspaceId, OPTED_OUT_USER, "SLACK_APP_HOME");
         ingestService.ingestChannelMessage(TEAM, CHANNEL, "100.1", null, OPTED_OUT_USER, "while opted out");
         assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, CHANNEL, "100.1"))
                 .isFalse();
 
         // Opt back in (ingestion_opted_out → false), then a fresh message from the same author is now stored.
-        participantConsentRepository.upsert(workspaceId, OPTED_OUT_USER, false, false, "SLACK_APP_HOME");
+        participantConsentRepository.optInToIngestion(workspaceId, OPTED_OUT_USER, "SLACK_APP_HOME");
         ingestService.ingestChannelMessage(TEAM, CHANNEL, "300.1", null, OPTED_OUT_USER, "after opting back in");
 
         assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, CHANNEL, "300.1"))
@@ -145,9 +145,13 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
     }
 
     @Test
-    @DisplayName("channel-message opt-out preserves any existing research decision")
-    void channelMessageOptOut_preservesResearchDecision() {
-        participantConsentRepository.upsert(workspaceId, OPTED_OUT_USER, false, true, "SLACK_APP_HOME");
+    @DisplayName("channel-message opt-out preserves the historical research column")
+    void channelMessageOptOut_preservesHistoricalResearchValue() {
+        participantConsentRepository.optInToIngestion(workspaceId, OPTED_OUT_USER, "SLACK_APP_HOME");
+        jdbcTemplate.update(
+                "UPDATE slack_participant_consent SET research_opted_out = true WHERE workspace_id = ? AND slack_user_id = ?",
+                workspaceId,
+                OPTED_OUT_USER);
 
         participantConsentRepository.optOutOfIngestion(
                 workspaceId, OPTED_OUT_USER, SlackParticipantConsentService.SOURCE_SLACK_CHANNEL_NOTICE);

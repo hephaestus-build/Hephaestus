@@ -57,11 +57,12 @@ Both the setup screen and the settings switch send back the organisation they di
 submission naming one this instance no longer runs is refused with `409`. A tab left open across a
 change cannot record a decision about an organisation its reader never saw.
 
-Hephaestus records the answer; it does not enforce it. No server code reads the decision to exclude a
-refusing or withdrawn account from processing, so an operator running a study must apply the current
-decision in their own exports and analyses. Note also that the Slack app home reads the separate
-`user_preferences.participate_in_research` flag, which this screen does not write. The recorded answer
-is evidence of what was asked, not a technical control.
+Research-purpose surveys and their email invitations require a current grant for the configured
+organisation. Withdrawal stops new research survey participation and invitation delivery; it does not
+stop ordinary practice reviews or automatically erase already stored study data. The Slack App Home
+links to account settings rather than maintaining a separate research decision. Operators must also
+apply the authoritative consent record to research exports and analyses, and handle withdrawal and
+erasure requests for data already shared with the study.
 
 `ConsentService.WORDING_VERSION` identifies the wording an account accepted; the wording itself
 is the first-login screen, published in a signed release and immutable in git. The webapp holds the
@@ -157,7 +158,7 @@ Use Art. 13 GDPR as the outline. Hephaestus processes personal data in at least 
 
 - **Identity and authentication** — Hephaestus-native auth federating to GitHub / LRZ GitLab; per federated identity we store the provider, stable subject id, login, email-at-signup, and display name (ADR 0017).
 - **Repository synchronisation** — for every configured repository: pull/merge requests, issues, reviews, review comments, commit metadata, profile information of the authors. State the retention triggers: this mirrored copy is erased when the last workspace stops monitoring the source repository, when the workspace's integration is disconnected, or when the workspace is purged — see the erasure triggers in the [record of processing](./dsms/record-of-processing.md).
-- **Account settings and notification email** — user preferences, notification subscriptions, optional self-provided notification email.
+- **Account settings and email notifications** — user preferences, and the provider-verified primary email address used for account-security and deletion email, and optional notification subscriptions, survey invitation records and unsubscribe capabilities when the operator has configured a relay; name the relay operator as a recipient.
 - **AI-assisted features** — if enabled: messages sent to the configured LLM provider, persisted conversations, generated observations.
 - **Server logs** — IP address and request metadata.
 - **Error telemetry** — if you run a Sentry (or equivalent) instance, state so explicitly and link its retention policy.
@@ -195,3 +196,12 @@ Finally, open `/imprint` and `/privacy` in a browser. If the red "not configured
 ## Changing the texts over time
 
 Markdown files are static resources. Overrides under `/legal-overrides/` are served with `Cache-Control: no-cache, must-revalidate`, so an edit on the host takes effect on the next page load (browsers revalidate every time). The bundled `/legal/` layer is served with `max-age=300`, so edits to a bundled profile require a rebuild and up to five minutes for caches to clear. When you ship a new bundled profile that replaces a previous one, update the text in place under `webapp/public/legal/profiles/<profile>/` and rebuild the image; there is no extra registry to maintain.
+
+### Email activation and the TUM profile
+
+The bundled TUM privacy profile describes TUM/LRZ mail services, not an arbitrary SMTP provider.
+Leave email disabled until the deployment record confirms the actual service, institutional
+arrangement and relay retention terms. If a different relay is used, update the public notice's
+recipient and transfer information before enabling it. Configuration and a successful test email
+are technical checks, not institutional approval. Self-hosters must publish their own applicable
+recipient information rather than adopting TUM's notice.

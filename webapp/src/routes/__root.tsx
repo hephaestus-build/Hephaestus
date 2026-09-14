@@ -17,6 +17,7 @@ import { getIntegrationCatalogOptions, listThreadsOptions } from "@/api/@tanstac
 import type { SurveyInvitation } from "@/api/types.gen";
 import { ImpersonationBanner } from "@/components/auth/ImpersonationBanner";
 import { LoginDialog } from "@/components/auth/LoginDialog";
+import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { CookieConsentBanner } from "@/components/consent/CookieConsentBanner";
 import Footer from "@/components/core/Footer";
 import Header from "@/components/core/Header";
@@ -36,6 +37,13 @@ import {
 	type SurveyResponseDraft,
 	surveyEstimate,
 } from "@/components/feedback/survey-questions";
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogDescription,
+} from "@/components/ui/dialog";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import environment from "@/environment";
@@ -50,6 +58,7 @@ import { safeReturnTo } from "@/integrations/auth/guard";
 import { FeatureFlagDevTools, useFeatureFlag } from "@/integrations/feature-flags";
 import { isCopilotExcludedRoute } from "@/lib/copilot-route";
 import { getProviderSlug } from "@/lib/provider";
+import { useSearchState } from "@/lib/search-params";
 
 const GlobalCopilot = lazy(() => import("./-GlobalCopilot"));
 
@@ -152,20 +161,20 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 	const surveys = useProductSurveys(workspaceSlug);
 	const [feedbackOpen, setFeedbackOpen] = useState(false);
 	const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>("FEEDBACK");
-	const [survey, setSurvey] = useState<SurveyInvitation>();
-	const [surveyOpen, setSurveyOpen] = useState(false);
+	const { survey: selectedSurveyId } = Route.useSearch();
+	const updateSearch = useSearchState();
 	const [drafts, setDrafts] = useState<Record<string, SurveyResponseDraft>>({});
 	const nudged = useRef(false);
 	const invitations = surveys.query.data ?? [];
+	const survey = invitations.find((candidate) => candidate.id === selectedSurveyId);
 	const openSurvey = (surveyId: string) => {
-		const next = invitations.find((candidate) => candidate.id === surveyId);
-		if (!next) return;
-		setSurvey(next);
-		setSurveyOpen(true);
+		if (invitations.some((candidate) => candidate.id === surveyId)) {
+			void updateSearch((previous) => ({ ...previous, survey: surveyId }));
+		}
 	};
 	const closeSurvey = () => {
 		surveys.reset();
-		setSurveyOpen(false);
+		void updateSearch((previous) => ({ ...previous, survey: undefined }));
 	};
 	// The server remembers the acknowledgement, so a reload never nudges twice for one survey; the
 	// ref keeps a second unseen invitation from nudging in the same visit.
@@ -184,10 +193,14 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 		);
 	});
 	useEffect(() => {
+		if (selectedSurveyId) {
+			nudged.current = true;
+			return;
+		}
 		if (!unseen || nudged.current) return;
 		nudged.current = true;
 		nudge(unseen);
-	}, [unseen]);
+	}, [unseen, selectedSurveyId]);
 	return (
 		<>
 			<ProductFeedbackMenu
@@ -214,10 +227,38 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 				error={feedback.error}
 				onSubmit={feedback.submit}
 			/>
+			{selectedSurveyId && (surveys.query.isError || (surveys.query.isSuccess && !survey)) && (
+				<Dialog
+					open
+					onOpenChange={(open) => {
+						if (!open) closeSurvey();
+					}}
+				>
+					<DialogContent>
+						<DialogHeader>
+							<DialogTitle>
+								{surveys.query.isError ? "Could not load survey" : "Survey unavailable"}
+							</DialogTitle>
+							<DialogDescription>
+								{surveys.query.isError
+									? "Your invitation could not be checked. Try again when the connection is available."
+									: "This survey is no longer offered to your account. It may have ended or already been answered or declined."}
+							</DialogDescription>
+						</DialogHeader>
+						{surveys.query.isError && (
+							<QueryErrorAlert
+								title="Invitation unavailable"
+								error={surveys.query.error}
+								onRetry={() => void surveys.query.refetch()}
+							/>
+						)}
+					</DialogContent>
+				</Dialog>
+			)}
 			{survey && (
 				<ProductSurveyDialog
 					survey={survey}
-					open={surveyOpen}
+					open={true}
 					onOpenChange={(open) => {
 						if (!open) closeSurvey();
 					}}
@@ -241,7 +282,9 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 }
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
-	validateSearch: (search): { login?: boolean } => ({
+	validateSearch: (search): { login?: boolean; survey?: string } => ({
+		survey:
+			typeof search.survey === "string" && search.survey.length > 0 ? search.survey : undefined,
 		login: search.login === true || search.login === "true" ? true : undefined,
 	}),
 	// Fallback tab title; the deepest match that sets its own `head` wins.

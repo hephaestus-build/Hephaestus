@@ -21,8 +21,11 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent;
+import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -30,6 +33,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -46,6 +50,7 @@ class AccountServiceTest extends BaseUnitTest {
     private final IdentityLinkRepository identityLinkRepository = mock(IdentityLinkRepository.class);
     private final IssuedJwtRepository issuedJwtRepository = mock(IssuedJwtRepository.class);
     private final AuthEventWriter auditWriter = mock(AuthEventWriter.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     private AccountService service;
@@ -57,6 +62,8 @@ class AccountServiceTest extends BaseUnitTest {
                 identityLinkRepository,
                 issuedJwtRepository,
                 new AuthEventLogger(auditWriter),
+                AuthPropertiesFixture.defaults(),
+                eventPublisher,
                 clock);
     }
 
@@ -78,6 +85,9 @@ class AccountServiceTest extends BaseUnitTest {
         service.unlinkIdentity(1L, 10L, /* actingAccountId */ null);
 
         verify(identityLinkRepository).deleteByIdAndAccountId(10L, 1L);
+        verify(eventPublisher)
+                .publishEvent(new AccountSecurityChangedEvent(
+                        1L, AccountSecurityChangedEvent.Kind.IDENTITY_UNLINKED, clock.instant()));
         ArgumentCaptor<AuthEventData> event = ArgumentCaptor.forClass(AuthEventData.class);
         verify(auditWriter).write(event.capture());
         assertThat(event.getValue().type()).isEqualTo(AuthEvent.EventType.IDENTITY_UNLINKED);
@@ -157,6 +167,9 @@ class AccountServiceTest extends BaseUnitTest {
         service.adminSetRole(2L, "APP_ADMIN", 1L);
 
         assertThat(account.getAppRole()).isEqualTo(Account.AppRole.APP_ADMIN);
+        verify(eventPublisher)
+                .publishEvent(new AccountSecurityChangedEvent(
+                        2L, AccountSecurityChangedEvent.Kind.APP_ROLE_CHANGED, clock.instant()));
         verify(accountRepository).save(account);
         // Dedicated APP_ROLE_CHANGED type so the most security-sensitive mutation stays queryable on
         // the indexed event_type column.
@@ -184,6 +197,14 @@ class AccountServiceTest extends BaseUnitTest {
         // Demotion revokes the stripped admin's live sessions so app_admin authority can't outlive the
         // role change for the token's TTL.
         verify(issuedJwtRepository).revokeAllForAccount(eq(2L), any(), eq(IssuedJwt.RevokedReason.ADMIN_REVOKE));
+    }
+
+    @Test
+    void shouldNotPublishSecurityChangeWhenRoleIsUnchanged() {
+        accountWithRole(2L, Account.AppRole.USER);
+        service.adminSetRole(2L, "USER", 1L);
+        verifyNoInteractions(eventPublisher, auditWriter);
+        verify(accountRepository, never()).save(any());
     }
 
     @Test
@@ -243,6 +264,10 @@ class AccountServiceTest extends BaseUnitTest {
         assertThat(event.getValue().accountId()).isEqualTo(2L);
         // Self-service deletion: the victim acted, so no separate operator is attributed.
         assertThat(event.getValue().actingAccountId()).isNull();
+        // The confirmation email is owed once the cooldown started: purge date = now + cooldown.
+        verify(eventPublisher)
+                .publishEvent(
+                        new AccountDeletionScheduledEvent(2L, clock.instant().plus(Duration.ofHours(48))));
     }
 
     @Test
@@ -257,7 +282,7 @@ class AccountServiceTest extends BaseUnitTest {
         assertThat(account.getDeletedAt()).isEqualTo(cooldownStart);
         verify(accountRepository, never()).save(any());
         verify(issuedJwtRepository, never()).revokeAllForAccount(anyLong(), any(), any());
-        verifyNoInteractions(auditWriter);
+        verifyNoInteractions(auditWriter, eventPublisher);
     }
 
     @Test

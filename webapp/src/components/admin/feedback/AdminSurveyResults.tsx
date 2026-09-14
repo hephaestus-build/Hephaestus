@@ -1,5 +1,5 @@
 import { Download, FlaskConical } from "lucide-react";
-import { useId } from "react";
+import { type ReactNode, useId } from "react";
 
 import type {
 	Question,
@@ -49,6 +49,7 @@ export type AdminSurveyResultsState =
 	  };
 
 export interface AdminSurveyResultsProps {
+	emailInvitations?: ReactNode;
 	state: AdminSurveyResultsState;
 	now: number;
 	nested?: boolean;
@@ -66,6 +67,7 @@ export interface AdminSurveyResultsProps {
  * the bars still gets the numbers.
  */
 export function AdminSurveyResults({
+	emailInvitations,
 	state,
 	now,
 	nested,
@@ -175,6 +177,7 @@ export function AdminSurveyResults({
 						</AlertDescription>
 					</Alert>
 				)}
+				{emailInvitations}
 				<dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
 					{stats.map((stat) => (
 						<div key={stat.label} className="rounded-lg border p-3">

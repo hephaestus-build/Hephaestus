@@ -43,7 +43,7 @@ const KINDS: { kind: FeedbackKind; icon: typeof Bug }[] = [
 ];
 
 /**
- * The one place to talk to the Hephaestus team. The trigger is a labelled pill rather than a bare
+ * The one place to contact your instance administrators. The trigger is a labelled pill rather than a bare
  * icon so the door is visible; survey invitations wait behind it, counted on the trigger, and
  * nothing opens until the member chooses.
  */

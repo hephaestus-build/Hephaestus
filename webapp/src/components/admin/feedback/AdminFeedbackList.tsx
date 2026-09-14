@@ -142,9 +142,15 @@ function FeedbackCard({ item, pending, onTriage }: FeedbackCardProps) {
 		<Card>
 			<CardHeader className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
 				<StatusBadge def={FEEDBACK_KIND_DEFS[item.kind]} />
-				<span className="font-medium" title={item.account?.email}>
-					{item.account?.displayName ?? "Deleted account"}
-				</span>
+				<span className="font-medium">{item.account?.displayName ?? "Deleted account"}</span>
+				{item.account?.email && (
+					<a
+						href={`mailto:${item.account.email}`}
+						className="break-all underline underline-offset-4"
+					>
+						{item.account.email}
+					</a>
+				)}
 				<span className="text-muted-foreground">
 					{item.workspace?.displayName ?? "No workspace"}
 				</span>
