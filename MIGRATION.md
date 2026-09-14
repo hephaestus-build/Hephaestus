@@ -65,6 +65,84 @@ Entries exist only for releases that need operator action. Everything else is in
 
 ### Next release
 
+### v0.81.0
+
+#### 🔴 Observation status, behavior assessment and outcome are distinct
+
+Upgrade the server, sandbox runtime and webapp together. Drain running practice reviews before the
+upgrade: old runtimes emit a combined outcome contract that the new server deliberately rejects.
+Before resuming reviews, use the existing catalogue adoption flow to apply the updated bundled
+practice definitions to installed workspace practices. Review instance-level overrides and custom
+criteria for obsolete combined outcome labels and missing-capture instructions. Each observation must identify the specific behavior it assesses and explain that behavior’s desirability in context. Keep the behavior referent stable within the observation; different behaviors under one practice can receive different assessments. Adoption creates
+new practice revisions; historical revisions are deliberately not rewritten, and workspace
+customizations are not silently overwritten.
+
+Custom API consumers and custom runtime integrations must use:
+
+- `assessmentStatus`: `ASSESSED`, `NOT_APPLICABLE` or `UNDETERMINED`.
+- `presence`: `PRESENT` or `ABSENT` only for assessed observations, otherwise null.
+- `assessment`: contextual desirability of the specified behavior, `GOOD` or `BAD` only for assessed observations, otherwise null.
+- `outcome`: read-only `POSITIVE` for PRESENT/GOOD or ABSENT/BAD, `NEGATIVE` for PRESENT/BAD or ABSENT/GOOD, null when unassessed. Never annotate it independently.
+- `severity`: required exactly for negative outcomes, null otherwise.
+
+Use outcome—not assessment alone—for severity, feedback eligibility, counts and trends. Developer summaries expose `positiveCount` and `negativeCount`; standing observations expose their descriptive `kind` separately from outcome.
+
+Observation filters now have an independent assessment-status facet. Review observation counts use
+`undetermined`, not `inconclusive`. Raw historical review outputs remain historical artifacts; they
+are not rewritten to pretend that old runtimes emitted the new contract.
+
+Back up and verify restoration before upgrading. Liquibase maps existing PRESENT/ABSENT rows to
+ASSESSED, NOT_APPLICABLE rows to NOT_APPLICABLE and INCONCLUSIVE rows to UNDETERMINED. It clears
+presence for the two unassessed statuses and clears non-judgmental legacy severity values on non-BAD
+rows under the old assessment-as-verdict convention. It swaps GOOD/BAD on historical ABSENT rows to preserve their original outcome; it does not reinterpret their evidence against new criteria. Historical negative severity values and all evidence are retained. A historical BAD row without severity halts
+the migration: inspect its recorded evidence and repair through an audited operator procedure rather
+than assigning a fabricated default. Do not bypass this precondition.
+
+Downgrading in place is unsupported because the runtime and wire contracts also changed. Recover by
+restoring the verified pre-upgrade backup and the matching application/runtime versions together.
+
+#### 🔴 Review and update stored source policies before resuming reviews
+
+Pause new practice reviews and let in-flight reviews finish before upgrading. This runtime uses source
+contract `1.1.0`; it does not evaluate new reviews under `1.0.0`. A complete, verified empty diff now
+qualifies as captured evidence, while each practice still establishes its own occasion and observation.
+
+Review custom practices and instance catalogue overrides through their normal administration endpoints.
+Read the stored definition and replace `automatedReviewPolicy.sourceContractVersion` with `1.1.0` in an
+explicit policy update, preserving the remaining policy fields, bindings and criteria unless the review
+calls for a deliberate change. Merely updating criteria preserves the old policy and is not sufficient.
+Use the catalogue adoption flow for updated bundled definitions and for reviewed instance overrides in
+workspaces. Confirm the effective definition reports `1.1.0` before resuming reviews.
+
+Stored definitions remain readable and editable. Historical review evidence and its original contract
+and catalogue digest remain unchanged; historical readiness reports are not re-derived under the new
+policy. Do not edit stored evidence or rewrite released migrations to change their version.
+
+#### 🔴 Upgrade contextual practice assessment and delivery together
+
+Pause new practice reviews and let in-flight reviews and feedback dispatches finish before upgrading.
+Deploy the matching server and review runtime versions together; deploy the matching webapp for the
+updated assessment explanations. Resume reviews after the updated components are healthy.
+
+Use the existing catalogue adoption flow to apply the updated bundled definitions to workspace
+practices. Review instance overrides and customized criteria as well: each observation identifies a
+specific behavior, records whether it occurred, and assesses whether that behavior is desirable or
+undesirable in its evidenced context. Keep the behavior referent stable within the observation.
+Different behaviors under one practice can have different assessments. Outcomes remain derived from
+presence and assessment; unassessed statuses remain outside the outcome matrix. Catalogue adoption
+creates new revisions and does not rewrite historical judgments or silently replace customizations.
+
+Remove `PRACTICE_REVIEW_PROGRESS_FOOTER` and any
+`hephaestus.practice-review.progress-footer` override. Automatic cross-review progress footers and
+inferred resolved/regressed history summaries are no longer produced. Recorded observations,
+delivered feedback and prepared feedback remain available. Matching a location or omitting a prior
+observation does not establish that a concern was resolved.
+
+Reactions and delivery receipts apply to their exact bound observations. They do not suppress a new
+observation merely because its practice and file match an earlier one. Custom inline-delivery
+integrations must preserve the supplied `deliveryKey` unchanged as an opaque receipt-correlation key;
+newly composed placements use the observation occurrence identity rather than location grouping.
+
 ### v0.80.0
 
 #### 🔴 Name your research organisation, and check your legal pages, before upgrading
