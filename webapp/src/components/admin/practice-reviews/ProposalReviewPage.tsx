@@ -168,7 +168,7 @@ export function ProposalReviewPage({
 					</p>
 				</div>
 				{feedback.observations.length === 0 ? (
-					<Empty className="border">
+					<Empty variant="outlined">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<ScanSearchIcon />

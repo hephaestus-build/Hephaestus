@@ -12,7 +12,7 @@ export function LandingCtaSection({ onSignIn }: LandingCtaSectionProps) {
 	return (
 		<section
 			aria-labelledby="landing-cta-heading"
-			className="w-full border-t border-border bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-mentor)_9%,transparent)_0%,transparent_38%)] py-12 [background-size:100%_24rem] [background-repeat:no-repeat] md:py-20"
+			className="w-full border-t border-border bg-linear-to-b from-mentor/9 from-0% to-transparent to-38% bg-size-[100%_24rem] bg-no-repeat py-12 md:py-20"
 		>
 			<div className="mx-auto grid w-full max-w-6xl items-center gap-8 px-4 md:px-6 lg:grid-cols-[0.85fr_1.15fr] lg:gap-12">
 				<div className="mx-auto lg:mx-0">

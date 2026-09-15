@@ -147,9 +147,9 @@ export function ReviewRunCard({
 						<div className="border-t px-4 py-2">
 							<Button
 								type="button"
-								variant="ghost"
+								variant="quiet"
 								size="sm"
-								className="h-8 text-muted-foreground"
+								className="h-8"
 								onClick={() => setShowAllObservations((current) => !current)}
 							>
 								{showAllObservations ? "Show less" : `Show more (${hiddenCount})`}

@@ -231,7 +231,7 @@ export function AdminLlmUsagePage({
 					</div>
 
 					{!hasUsage ? (
-						<Empty className="border">
+						<Empty variant="outlined">
 							<EmptyHeader>
 								<EmptyMedia variant="icon">
 									<CircleDollarSign />
@@ -265,7 +265,7 @@ export function AdminLlmUsagePage({
 								</CardHeader>
 								<CardContent>
 									{report.byDay.length === 0 ? (
-										<Empty className="border">
+										<Empty variant="outlined">
 											<EmptyHeader>
 												<EmptyMedia variant="icon">
 													<CircleDollarSign />

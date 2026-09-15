@@ -116,7 +116,8 @@ export function Copilot({
 					render={
 						<Button
 							onClick={handleTriggerClick}
-							className="size-16 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95"
+							shape="pill"
+							className="size-16 shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95"
 							size="icon"
 							aria-label="Open Heph, AI mentor"
 						>

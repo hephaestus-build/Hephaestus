@@ -50,7 +50,7 @@ function Diffstat({ added, removed }: { added: number; removed: number }) {
 					<span
 						key={index}
 						className={cn(
-							"size-2 rounded-[2px]",
+							"size-2 rounded-xs",
 							index < greenSquares ? "bg-success" : "bg-destructive",
 						)}
 					/>
@@ -71,9 +71,9 @@ function ReviewComment({
 }) {
 	return (
 		<div className="flex flex-col gap-1.5 px-3 pb-3">
-			<span className="flex items-center gap-1.5 text-[0.6875rem] text-muted-foreground">
+			<span className="flex items-center gap-1.5 text-2xs text-muted-foreground">
 				<span
-					className="flex size-4 items-center justify-center rounded-full bg-muted text-[0.5rem] font-semibold text-foreground"
+					className="flex size-4 items-center justify-center rounded-full bg-muted text-2xs font-semibold text-foreground"
 					aria-hidden="true"
 				>
 					{initials}
@@ -84,7 +84,7 @@ function ReviewComment({
 			<p
 				className={cn(
 					styles.commentBubble,
-					"rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-[0.8125rem] leading-relaxed text-foreground",
+					"rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs leading-relaxed text-foreground",
 				)}
 			>
 				{children}
@@ -119,7 +119,7 @@ export function HeroScene() {
 					>
 						<ul className="flex flex-col gap-1">
 							{["Which columns?", "How many rows?", "Who may export?"].map((item) => (
-								<li key={item} className="flex items-center gap-1.5 text-[0.8125rem]">
+								<li key={item} className="flex items-center gap-1.5 text-xs">
 									<Square className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
 									{item}
 								</li>
@@ -133,10 +133,7 @@ export function HeroScene() {
 						<ul className="flex flex-col gap-0.5 border-t border-border/70 px-3 py-2">
 							{["export/CsvWriter.ts", "billing/InvoiceService.ts", "config/application.yaml"].map(
 								(path) => (
-									<li
-										key={path}
-										className="truncate font-mono text-[0.6875rem] text-muted-foreground"
-									>
+									<li key={path} className="truncate font-mono text-2xs text-muted-foreground">
 										{path}
 									</li>
 								),
@@ -231,7 +228,7 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 					<motion.h1
 						variants={itemVariants}
 						id="landing-hero-heading"
-						className="relative z-10 mt-5 max-w-3xl text-4xl font-bold tracking-[-0.04em] text-balance sm:text-5xl md:text-6xl"
+						className="relative z-10 mt-5 max-w-3xl text-4xl font-bold tracking-display text-balance sm:text-5xl md:text-6xl"
 					>
 						Learn from the work you're{" "}
 						<span className="relative inline-block whitespace-nowrap">

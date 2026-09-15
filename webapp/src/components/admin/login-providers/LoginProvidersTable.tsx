@@ -96,7 +96,7 @@ export function LoginProvidersTable({
 
 	if (providers.length === 0) {
 		return (
-			<Empty className="border">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<KeyRound aria-hidden />

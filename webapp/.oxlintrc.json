@@ -41,17 +41,44 @@
 		"shadcn/no-unknown-classes": "error",
 		"shadcn/no-raw-colors": "error",
 		"shadcn/no-inline-styles": "error",
-		// Padding/gaps and ring widths use native scales; shadows use theme utilities. Layout,
-		// typography and motion retain measured values and formulas where their APIs need them.
+		// Default-deny: every arbitrary value is reported unless it is listed here. A deny list would
+		// invert that and exempt everything it forgets, which is how hardcoded hex colours and nine
+		// hand-written font sizes survived. Layout keeps measured tracks, viewport maths and the
+		// component sizes a library asks for; the rest are formulas over theme variables, CSS
+		// keywords, property lists rather than values, and the drawer's swipe physics.
 		"shadcn/no-arbitrary-values": [
 			"error",
-			{ "deny": ["spacing", "ring-w", "ring-offset-w", "inset-ring-w", "shadow", "inset-shadow"] }
+			{
+				"allow": [
+					"layout",
+					"transition-*",
+					"rounded-[inherit]",
+					"rounded-[min(var(--radius-md),10px)]",
+					"rounded-[min(var(--radius-md),12px)]",
+					"rounded-[calc(var(--radius)-3px)]",
+					"rounded-[calc(var(--radius)-5px)]",
+					"rounded-[22%]",
+					"text-[length:inherit]",
+					"bg-size-[100%_24rem]",
+					"opacity-[0.9999]",
+					"opacity-[max(var(--drawer-overlay-min-opacity,0),calc(1-var(--drawer-swipe-progress)))]",
+					"duration-[calc(var(--drawer-swipe-strength)*400ms)]"
+				]
+			}
 		],
-		// Consumers choose Button sizes rather than overriding their padding and icon gaps.
+		// Deny on Button exactly what Button gives an API for: `size` owns the padding box and `shape`
+		// owns the radius scale, so a caller that writes either is working around the component. The
+		// `rounded` group is the scale itself; squaring one corner to join an adjacent edge is
+		// composition and stays legal. The rest is deliberately the caller's — tone comes from
+		// vocabularies Button does not own (status tones, the provider palette, a placeholder state),
+		// `size="inline"` takes its type from the prose around it, and Button has no elevation axis.
 		// Other primitives deliberately expose composition; registry internals own their controls.
 		"shadcn/no-restyle": [
 			"error",
-			{ "deny": [], "contracts": [{ "pattern": "^Button$", "deny": ["spacing"] }] }
+			{
+				"deny": [],
+				"contracts": [{ "pattern": "^Button$", "deny": ["spacing", "rounded"] }]
+			}
 		],
 		// require-static-classes cannot resolve imported vocabulary maps and CVA results without
 		// duplicating their owners.

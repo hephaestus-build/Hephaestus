@@ -47,11 +47,8 @@ export function MessageActions({
 	const isUserMessage = messageRole === "user";
 	const isAssistantMessage = messageRole === "assistant";
 
-	// Different button styling for artifact context
-	const buttonClasses =
-		variant === "artifact"
-			? "pointer-coarse:w-10 text-muted-foreground hover:text-foreground hover:bg-primary/5"
-			: "text-muted-foreground hover:text-foreground";
+	// An artifact's actions sit over its content, so they take the wider touch target.
+	const buttonClasses = variant === "artifact" ? "pointer-coarse:w-10" : undefined;
 
 	// For user messages, align actions to the right
 	const containerClassName = cn(
@@ -73,7 +70,7 @@ export function MessageActions({
 							<Button
 								aria-label="Copy message"
 								className={buttonClasses}
-								variant="ghost"
+								variant="quiet"
 								size="icon"
 								onClick={() => onCopy(messageContentToCopy)}
 							/>
@@ -92,7 +89,7 @@ export function MessageActions({
 								<Button
 									aria-label="Edit message"
 									className={buttonClasses}
-									variant="ghost"
+									variant="quiet"
 									size="icon"
 									onClick={onEdit}
 								/>

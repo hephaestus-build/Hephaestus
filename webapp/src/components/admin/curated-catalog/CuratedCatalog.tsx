@@ -189,7 +189,7 @@ export function CuratedCatalog({
 				)}
 
 				{catalogIsEmpty ? (
-					<Empty className="min-h-56 border">
+					<Empty variant="outlined" className="min-h-56">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<Shapes aria-hidden />
@@ -207,7 +207,7 @@ export function CuratedCatalog({
 						</EmptyContent>
 					</Empty>
 				) : nothingMatches ? (
-					<Empty className="min-h-56 border">
+					<Empty variant="outlined" className="min-h-56">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<Shapes aria-hidden />

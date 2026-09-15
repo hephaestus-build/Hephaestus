@@ -88,7 +88,7 @@ export function AdminFeedbackList({ state, pendingIds, onTriage }: AdminFeedback
 	if (state.items.length === 0) {
 		const copy = EMPTY_COPY[state.filter];
 		return (
-			<Empty className="rounded-md border">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<Inbox />

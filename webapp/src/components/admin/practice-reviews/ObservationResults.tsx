@@ -44,7 +44,7 @@ export function ObservationResults({ workspaceSlug, state, practices }: Observat
 		return <ReviewResultsSkeleton label="Loading observations" rows={REVIEW_PAGE_SIZE} />;
 	if (state.status === "empty") {
 		return (
-			<Empty className="border">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<ScanSearchIcon />

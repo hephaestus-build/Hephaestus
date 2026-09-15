@@ -126,7 +126,8 @@ export function MultimodalInput({
 					>
 						<Button
 							aria-label="Scroll to latest message"
-							className="rounded-full bg-background/80 dark:bg-background/80 border-border/50 shadow-lg hover:bg-background/90 dark:hover:bg-background/90"
+							shape="pill"
+							className="bg-background/80 dark:bg-background/80 border-border/50 shadow-lg hover:bg-background/90 dark:hover:bg-background/90"
 							size="icon"
 							variant="outline"
 							onClick={(event) => {
@@ -239,7 +240,6 @@ function AttachmentsButton({
 	return (
 		<Button
 			aria-label="Attach a file"
-			className="rounded-md rounded-bl-lg"
 			onClick={(event) => {
 				event.preventDefault();
 				fileInputRef.current?.click();
@@ -257,7 +257,8 @@ function StopButton({ onStop }: { onStop: () => void }) {
 	return (
 		<Button
 			aria-label="Stop generating"
-			className="rounded-full border border-border"
+			shape="pill"
+			className="border border-border"
 			onClick={(event) => {
 				event.preventDefault();
 				onStop();
@@ -273,7 +274,8 @@ function SendButton({ onSubmit, disabled }: { onSubmit: () => void; disabled: bo
 	return (
 		<Button
 			aria-label="Send message"
-			className="rounded-full border border-border"
+			shape="pill"
+			className="border border-border"
 			onClick={(event) => {
 				event.preventDefault();
 				onSubmit();

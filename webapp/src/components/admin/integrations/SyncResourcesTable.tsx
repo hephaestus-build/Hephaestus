@@ -525,7 +525,11 @@ function ClassCountCell({
 		);
 	}
 
-	return <TableCell className="text-right tabular-nums">{total.toLocaleString()}</TableCell>;
+	return (
+		<TableCell numeric className="text-right">
+			{total.toLocaleString()}
+		</TableCell>
+	);
 }
 
 /** The last error, as a read-only peek: it reveals, it does not act, and it traps no focus. */
@@ -606,7 +610,7 @@ function TotalsFooter({
 						);
 					}
 					return (
-						<TableCell key={column.key} className="text-right tabular-nums">
+						<TableCell key={column.key} numeric className="text-right">
 							{sum.toLocaleString()}
 						</TableCell>
 					);
@@ -689,7 +693,7 @@ export function SyncResourcesTable({
 
 	if (resources.length === 0) {
 		return (
-			<Empty className="border border-dashed">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<DatabaseIcon />

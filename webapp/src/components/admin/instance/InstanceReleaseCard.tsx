@@ -238,16 +238,7 @@ export function InstanceReleaseCard({ state }: InstanceReleaseCardProps) {
 						)}
 
 						<Collapsible>
-							<CollapsibleTrigger
-								render={
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										className="text-xs text-muted-foreground"
-									/>
-								}
-							>
+							<CollapsibleTrigger render={<Button type="button" variant="quiet" size="sm" />}>
 								Show deployment identity
 							</CollapsibleTrigger>
 							<CollapsibleContent className="mt-2">

@@ -60,7 +60,7 @@ function ResponseChoice<TValue extends string>({
 						size="sm"
 						aria-pressed={isChosen}
 						disabled={isPending}
-						className={cn(isChosen && "bg-muted", isChosen && statusToneClass(def.badgeVariant))}
+						className={cn(isChosen && statusToneClass(def.badgeVariant))}
 						onClick={() => onChoose(value)}
 					>
 						<Icon aria-hidden />

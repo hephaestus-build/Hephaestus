@@ -48,7 +48,7 @@ export function FeatureFlagDevToolsPanel({ flags, isLoading }: FeatureFlagDevToo
 										>
 											<span className="font-mono text-foreground">{name}</span>
 											<span
-												className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+												className={`rounded-full px-1.5 py-0.5 text-2xs font-medium ${
 													enabled
 														? "bg-success/10 text-success"
 														: "bg-destructive/10 text-destructive"

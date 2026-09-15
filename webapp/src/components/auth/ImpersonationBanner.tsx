@@ -86,13 +86,7 @@ export function ImpersonationBanner() {
 			) : (
 				<AlertDialog>
 					<AlertDialogTrigger
-						render={
-							<Button
-								variant="outline"
-								size="sm"
-								className="h-7 border-warning/50 bg-transparent text-warning hover:bg-warning/20 hover:text-warning"
-							/>
-						}
+						render={<Button variant="warning-outline" size="sm" className="h-7" />}
 					>
 						Enable writes
 					</AlertDialogTrigger>
@@ -116,16 +110,18 @@ export function ImpersonationBanner() {
 			)}
 
 			<Button
-				variant="outline"
+				variant={writesEnabled ? "outline" : "warning-outline"}
 				size="sm"
 				disabled={exit.isPending}
 				onClick={() => exit.mutate({})}
 				aria-label="Stop impersonating and restore your account"
+				// The strip is already tinted, so the opaque `destructive-outline` would read as a pale
+				// chip on it; the warning half of the pair is a variant because it needs no override.
 				className={cn(
-					"h-7 bg-transparent",
+					"h-7",
 					writesEnabled
-						? "border-destructive/50 text-destructive hover:bg-destructive/20 hover:text-destructive"
-						: "border-warning/50 text-warning hover:bg-warning/20 hover:text-warning",
+						? "bg-transparent border-destructive/50 text-destructive hover:bg-destructive/20 hover:text-destructive"
+						: "",
 				)}
 			>
 				{exit.isPending ? <Spinner className="mr-2 size-3.5" /> : null}

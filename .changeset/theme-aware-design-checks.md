@@ -11,3 +11,5 @@ Report review-link copying as successful only after it completes, show pending a
 Keep action spacing consistent across forms, tables and mentor controls using shared button sizes. Restore the outlined sidebar action’s theme-colored border and preserve its visible keyboard focus ring.
 
 Keep dropdown menus within the available screen width, including the feedback menu on narrow screens.
+
+Set small labels, counters and badges on one shared type size instead of nine slightly different ones, so the smallest text — avatar initials and count badges among it — is legible everywhere it appears. Round small controls on one shared corner scale. Give the message editor the same surface as the composer below it in dark mode.

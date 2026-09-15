@@ -83,7 +83,7 @@ export function AdminSurveysTable({
 	}
 	if (state.status === "ready" && state.surveys.length === 0) {
 		return (
-			<Empty className="rounded-md border">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<ClipboardList />
@@ -157,7 +157,7 @@ export function AdminSurveysTable({
 												)}
 											</span>
 										</TableCell>
-										<TableCell className="text-sm tabular-nums">
+										<TableCell numeric className="text-sm">
 											{responded} of {invited}
 											{completion !== undefined && (
 												<span className="text-muted-foreground"> · {completion}</span>

@@ -71,7 +71,7 @@ export function AdminAuditTable({
 
 	if (isError) {
 		return (
-			<Empty className="border border-dashed">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<ScrollText />
@@ -91,7 +91,7 @@ export function AdminAuditTable({
 
 	if (events.length === 0 && !isLoading) {
 		return (
-			<Empty className="border border-dashed">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<ScrollText />

@@ -65,9 +65,10 @@ export function ProductFeedbackMenu({
 				render={
 					<Button
 						variant="outline"
+						shape="pill"
 						className={cn(
 							// A 32px square on a phone, where the header is already full; a labelled pill from `sm`.
-							"group relative w-8 rounded-full sm:w-auto",
+							"group relative w-8 sm:w-auto",
 							count > 0 && "border-primary/40 bg-primary/5 hover:bg-primary/10",
 						)}
 					/>
@@ -82,7 +83,7 @@ export function ProductFeedbackMenu({
 				{count > 0 && (
 					<span
 						aria-hidden
-						className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold tabular-nums text-primary-foreground sm:static"
+						className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-primary px-1.5 text-2xs font-semibold tabular-nums text-primary-foreground sm:static"
 					>
 						{count}
 					</span>

@@ -133,7 +133,7 @@ function FeedbackSection({
 					Feedback will appear when the review finishes.
 				</p>
 			) : items.length === 0 ? (
-				<Empty className="border">
+				<Empty variant="outlined">
 					<EmptyHeader>
 						<EmptyMedia variant="icon">
 							<MessageSquareTextIcon />
@@ -201,7 +201,7 @@ function ObservationsSection({
 					Observations will appear when the review finishes.
 				</p>
 			) : items.length === 0 ? (
-				<Empty className="border">
+				<Empty variant="outlined">
 					<EmptyHeader>
 						<EmptyMedia variant="icon">
 							<ScanSearchIcon />

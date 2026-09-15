@@ -43,7 +43,7 @@ export function AvailablePracticeList({
 	if (offered.length === 0) {
 		const allAdded = practices.length > 0;
 		return (
-			<Empty className="border">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<Library />

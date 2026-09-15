@@ -242,7 +242,7 @@ function SourceRow({ source, role, idPrefix, disabled, onRoleChange }: SourceRow
 						key={option.value}
 						htmlFor={`${controlId}-${option.value}`}
 						className={cn(
-							"cursor-pointer border-l px-2.5 py-1 text-[0.8rem] font-medium text-muted-foreground transition-colors first:border-l-0",
+							"cursor-pointer border-l px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors first:border-l-0",
 							"hover:bg-muted",
 							"has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-ring",
 							selectedRole(role) === option.value && option.selected,

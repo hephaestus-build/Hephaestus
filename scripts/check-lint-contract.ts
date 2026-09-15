@@ -52,9 +52,45 @@ const fixtures: Fixture[] = [
 			'import { Button } from "@/components/ui/button"; export const good = <Button className="gap-2">Calendar day</Button>;',
 	},
 	{
+		path: "src/lint-contract-button-radius.tsx",
+		code: "shadcn(no-restyle)",
+		source:
+			'import { Button } from "@/components/ui/button"; export const bad = <Button className="rounded-full">Send</Button>;',
+	},
+	{
+		path: "src/lint-contract-button-shape.tsx",
+		code: null,
+		source:
+			'import { Button } from "@/components/ui/button"; export const good = <Button shape="pill" className="rounded-bl-lg">Send</Button>;',
+	},
+	{
 		path: "src/lint-contract-ring.tsx",
 		code: "shadcn(no-arbitrary-values)",
 		source: 'export const bad = <button className="focus-visible:ring-[3px]">Save</button>;',
+	},
+	// The arbitrary-value policy is an allow list. A deny list exempts everything it forgets, which is
+	// how a hardcoded hex and nine hand-written font sizes went unreported.
+	{
+		path: "src/lint-contract-hex.tsx",
+		code: "shadcn(no-arbitrary-values)",
+		source: 'export const bad = <div className="bg-[#111318]" />;',
+	},
+	{
+		path: "src/lint-contract-font-size.tsx",
+		code: "shadcn(no-arbitrary-values)",
+		source: 'export const bad = <span className="text-[11px]" />;',
+	},
+	{
+		path: "src/components/ui/lint-contract-radius.tsx",
+		code: "shadcn(no-arbitrary-values)",
+		source: 'export const bad = <div className="rounded-[4px]" />;',
+	},
+	{
+		path: "src/lint-contract-scale-steps.tsx",
+		code: null,
+		// Every step these replace is a declaration in the real theme, not a Tailwind default.
+		source:
+			'export const good = <span className="text-2xs rounded-xs tracking-display ease-drawer" />;',
 	},
 	{
 		path: "src/components/ui/lint-contract-shadow.tsx",

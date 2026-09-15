@@ -27,7 +27,7 @@ export function ReviewPerson({ person, prefix, className }: ReviewPersonProps) {
 		>
 			<Avatar className="size-4 shrink-0">
 				<AvatarImage src={person?.avatarUrl} alt="" />
-				<AvatarFallback className="text-[0.625rem]">
+				<AvatarFallback className="text-2xs">
 					{getInitials(person?.name, person?.login)}
 				</AvatarFallback>
 			</Avatar>

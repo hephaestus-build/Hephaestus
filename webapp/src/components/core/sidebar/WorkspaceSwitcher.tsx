@@ -193,9 +193,7 @@ export function WorkspaceSwitcher({
 								</div>
 								<div className="flex flex-col leading-tight">
 									<span className="font-medium">{workspace.displayName}</span>
-									<span className="text-[11px] text-muted-foreground">
-										{workspace.accountLogin}
-									</span>
+									<span className="text-2xs text-muted-foreground">{workspace.accountLogin}</span>
 								</div>
 								<DropdownMenuShortcut>
 									{navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl"}

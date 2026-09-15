@@ -35,7 +35,7 @@ export function TraceSignalTimeline({
 				</p>
 			</div>
 			{signals.length === 0 ? (
-				<Empty className="border">
+				<Empty variant="outlined">
 					<EmptyHeader>
 						<EmptyTitle>Nothing was recorded about this work</EmptyTitle>
 						<EmptyDescription>

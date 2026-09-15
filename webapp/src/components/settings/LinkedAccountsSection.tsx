@@ -206,7 +206,7 @@ export function LinkedAccountsSection({
 			) : (
 				<>
 					{identities.length === 0 ? (
-						<Empty className="border">
+						<Empty variant="outlined">
 							<EmptyHeader>
 								<EmptyMedia variant="icon">
 									<LinkIcon aria-hidden="true" />
@@ -387,12 +387,12 @@ function UnlinkControl({
 			<AlertDialogTrigger
 				render={
 					<Button
-						variant="ghost"
+						variant="quiet"
 						size="sm"
 						aria-busy={isUnlinking}
 						aria-disabled={isUnlinking}
 						aria-label={isUnlinking ? `Disconnecting ${name}` : `Disconnect ${name}`}
-						className="shrink-0 text-muted-foreground hover:text-destructive"
+						className="shrink-0 hover:text-destructive"
 					>
 						{isUnlinking ? (
 							<Spinner className="size-3.5 mr-1.5" aria-hidden="true" />

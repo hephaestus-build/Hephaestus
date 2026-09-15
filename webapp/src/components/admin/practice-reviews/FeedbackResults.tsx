@@ -41,7 +41,7 @@ export function FeedbackResults({ workspaceSlug, state }: FeedbackResultsProps) 
 		return <ReviewResultsSkeleton label="Loading feedback" rows={REVIEW_PAGE_SIZE} />;
 	if (state.status === "empty") {
 		return (
-			<Empty className="border">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<MessageSquareTextIcon />

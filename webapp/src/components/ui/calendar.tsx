@@ -80,15 +80,12 @@ function Calendar({
 				years_dropdown: cn(defaultClassNames.years_dropdown),
 				weekdays: cn("flex", defaultClassNames.weekdays),
 				weekday: cn(
-					"text-muted-foreground rounded-(--cell-radius) flex-1 font-normal text-[0.8rem] select-none",
+					"text-muted-foreground rounded-(--cell-radius) flex-1 font-normal text-xs select-none",
 					defaultClassNames.weekday,
 				),
 				week: cn("flex w-full mt-2", defaultClassNames.week),
 				week_number_header: cn("select-none w-(--cell-size)", defaultClassNames.week_number_header),
-				week_number: cn(
-					"text-[0.8rem] select-none text-muted-foreground",
-					defaultClassNames.week_number,
-				),
+				week_number: cn("text-xs select-none text-muted-foreground", defaultClassNames.week_number),
 				day: cn(
 					"relative w-full rounded-(--cell-radius) h-full p-0 text-center [&:last-child[data-selected=true]_button]:rounded-r-(--cell-radius) group/day aspect-square select-none",
 					props.showWeekNumber

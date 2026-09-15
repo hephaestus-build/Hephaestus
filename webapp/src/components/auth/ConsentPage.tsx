@@ -418,10 +418,10 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 						</div>
 						<Button
 							type="button"
-							variant="ghost"
+							variant="quiet"
 							disabled={submitting}
 							onClick={onSignOut}
-							className="self-start text-muted-foreground sm:-ml-3"
+							className="self-start sm:-ml-3"
 						>
 							Sign out
 						</Button>

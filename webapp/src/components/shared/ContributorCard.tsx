@@ -41,13 +41,13 @@ export function ContributorCard({ contributor, size = "md", className }: Contrib
 			<div className="flex flex-col items-center min-w-0 w-full space-y-0.5">
 				<div
 					className={cn(
-						"font-medium text-center w-full px-1 wrap-anywhere leading-[1.2]",
+						"font-medium text-center w-full px-1 wrap-anywhere leading-tight",
 						isSmall ? "text-xs" : "text-sm",
 					)}
 				>
 					{contributor.name}
 				</div>
-				<div className="text-muted-foreground text-center w-full px-1 text-xs wrap-anywhere leading-[1.2]">
+				<div className="text-muted-foreground text-center w-full px-1 text-xs wrap-anywhere leading-tight">
 					@{contributor.login}
 				</div>
 			</div>

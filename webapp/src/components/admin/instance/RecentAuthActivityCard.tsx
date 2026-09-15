@@ -69,7 +69,7 @@ export function RecentAuthActivityCard({
 						))}
 					</div>
 				) : events.length === 0 ? (
-					<Empty className="py-8">
+					<Empty>
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<ScrollText aria-hidden />

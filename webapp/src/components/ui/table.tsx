@@ -2,6 +2,14 @@ import type * as React from "react";
 
 import { cn } from "cn";
 
+/**
+ * ⚠️ Diverges from the shadcn registry — `shadcn add table` drops the following; re-apply it.
+ *
+ * `TableHead` and `TableCell` take `numeric`, which gives figures one advance width so digits line up
+ * down a column and a changing value does not shift the ones beside it. Upstream leaves that to each
+ * call site, which is how 39 cells came to spell it out by hand.
+ */
+
 function Table({
 	className,
 	containerClassName,
@@ -62,12 +70,20 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
 	);
 }
 
-function TableHead({ className, ...props }: React.ComponentProps<"th">) {
+/**
+ * `numeric` marks a cell that holds a number. Figures then share one advance width, so digits line
+ * up down the column and a changing value does not shift the ones beside it. Which numeral variant
+ * that takes is the table's decision, not each call site's; alignment stays the caller's layout.
+ */
+type NumericCell = { numeric?: boolean };
+
+function TableHead({ className, numeric, ...props }: React.ComponentProps<"th"> & NumericCell) {
 	return (
 		<th
 			data-slot="table-head"
 			className={cn(
 				"text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+				numeric && "tabular-nums",
 				className,
 			)}
 			{...props}
@@ -75,11 +91,15 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
 	);
 }
 
-function TableCell({ className, ...props }: React.ComponentProps<"td">) {
+function TableCell({ className, numeric, ...props }: React.ComponentProps<"td"> & NumericCell) {
 	return (
 		<td
 			data-slot="table-cell"
-			className={cn("p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0", className)}
+			className={cn(
+				"p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+				numeric && "tabular-nums",
+				className,
+			)}
 			{...props}
 		/>
 	);

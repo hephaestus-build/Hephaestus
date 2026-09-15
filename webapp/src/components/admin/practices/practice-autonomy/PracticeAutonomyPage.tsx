@@ -210,7 +210,7 @@ export function PracticeAutonomyPage({
 			</div>
 
 			{groups.length === 0 ? (
-				<Empty className="border">
+				<Empty variant="outlined">
 					<EmptyHeader>
 						<EmptyTitle>
 							{overridesOnly ? "Nothing was set by hand" : "No practices yet"}

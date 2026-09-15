@@ -165,7 +165,7 @@ export function ReviewRunDetailPage({
 			</div>
 
 			{endedWithoutOutput ? (
-				<Empty className="border">
+				<Empty variant="outlined">
 					<EmptyHeader>
 						<EmptyMedia variant="icon">
 							<WorkflowIcon />

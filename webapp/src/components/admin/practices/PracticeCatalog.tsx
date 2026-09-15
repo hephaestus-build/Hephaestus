@@ -272,7 +272,7 @@ export function PracticeCatalog({
 			/>
 
 			{groups.length === 0 && practices.length === 0 ? (
-				<Empty className="min-h-56 border">
+				<Empty variant="outlined" className="min-h-56">
 					<EmptyHeader>
 						<EmptyMedia variant="icon">
 							<ListChecks aria-hidden />
@@ -294,7 +294,7 @@ export function PracticeCatalog({
 				visiblePracticeSlugs.size === 0 && (
 					// Without a way out, the reader is left with per-group "No matching practices." strings
 					// and a banner telling them to clear a filter, and no control that clears it.
-					<Empty className="min-h-56 border">
+					<Empty variant="outlined" className="min-h-56">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<ListChecks aria-hidden />

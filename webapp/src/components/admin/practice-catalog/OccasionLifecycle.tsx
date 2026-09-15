@@ -104,7 +104,7 @@ export function OccasionLifecycle({
 						<div key={band.phase} role="group" aria-labelledby={headingId}>
 							<p
 								id={headingId}
-								className="mb-1.5 pl-1 text-[0.7rem] font-medium uppercase tracking-wide text-muted-foreground"
+								className="mb-1.5 pl-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground"
 							>
 								{PHASE_LABEL[band.phase]}
 							</p>
@@ -214,7 +214,7 @@ function MomentNode({
 				{moment.displayName}
 			</span>
 			{def.repeats && (
-				<span className="text-[0.65rem] leading-none text-muted-foreground">every time</span>
+				<span className="text-2xs leading-none text-muted-foreground">every time</span>
 			)}
 		</label>
 	);

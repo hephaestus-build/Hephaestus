@@ -251,7 +251,7 @@ export function WorkspaceLlmProviderPanel({
 			)}
 
 			{connections.length === 0 ? (
-				<Empty className="border border-dashed">
+				<Empty variant="outlined">
 					<EmptyHeader>
 						<EmptyMedia variant="icon">
 							<Plug />

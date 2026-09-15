@@ -109,7 +109,7 @@ export function AdminLlmConnectionsTable({
 
 	if (connections.length === 0) {
 		return (
-			<Empty className="border">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<Plug aria-hidden />
@@ -151,7 +151,7 @@ export function AdminLlmConnectionsTable({
 										{PROVIDER_PRESET_LABELS[presetForConnection(connection)]}
 									</Badge>
 								</TableCell>
-								<TableCell className="tabular-nums">
+								<TableCell numeric>
 									{modelCountsAvailable ? (modelCounts[connection.id] ?? 0) : "—"}
 								</TableCell>
 								<TableCell>

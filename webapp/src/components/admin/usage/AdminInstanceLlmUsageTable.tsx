@@ -111,7 +111,7 @@ export function AdminInstanceLlmUsageTable({
 	}
 	if (rows.length === 0 && !isLoading) {
 		return (
-			<Empty className="border">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<CircleDollarSign />
@@ -194,12 +194,12 @@ export function AdminInstanceLlmUsageTable({
 											{row.workspaceSlug}
 										</div>
 									</TableCell>
-									<TableCell className="text-right tabular-nums">
+									<TableCell numeric className="text-right">
 										<MoneyCell>{formatCostUsd(row.instanceTotalCostUsd)}</MoneyCell>
 										<FxSpendLine usd={row.instanceTotalCostUsd} fx={fx} />
 									</TableCell>
 									<CapCell usage={shared} label="Shared-model budget" workspace={row.displayName} />
-									<TableCell className="text-right tabular-nums">
+									<TableCell numeric className="text-right">
 										<MoneyCell>{formatCostUsd(row.ownProviderTotalCostUsd)}</MoneyCell>
 										<FxSpendLine usd={row.ownProviderTotalCostUsd} fx={fx} />
 									</TableCell>
@@ -211,7 +211,7 @@ export function AdminInstanceLlmUsageTable({
 											isCurrentMonth={isCurrentMonth}
 										/>
 									</TableCell>
-									<TableCell className="text-right tabular-nums">
+									<TableCell numeric className="text-right">
 										{row.events.toLocaleString()}
 									</TableCell>
 									<TableCell>

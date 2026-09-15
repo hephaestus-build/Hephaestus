@@ -105,7 +105,9 @@ export function AdminWorkspacesTable({
 								)}
 							</TableCell>
 							<TableCell className="text-muted-foreground">{ws.ownerLogin ?? "—"}</TableCell>
-							<TableCell className="text-right tabular-nums">{ws.memberCount}</TableCell>
+							<TableCell numeric className="text-right">
+								{ws.memberCount}
+							</TableCell>
 							<TableCell className="whitespace-nowrap text-sm text-muted-foreground">
 								{formatDate(ws.createdAt)}
 							</TableCell>

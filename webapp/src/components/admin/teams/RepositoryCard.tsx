@@ -65,7 +65,7 @@ export function RepositoryCard({
 						</div>
 						{repository.hiddenFromContributions && (
 							<div className="flex items-center gap-1 flex-wrap mt-1">
-								<span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
+								<span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
 									Hidden in contributions
 								</span>
 							</div>

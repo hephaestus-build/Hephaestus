@@ -89,7 +89,7 @@ function GroupItem({ group, isSelected }: { group: GitLabGroup; isSelected: bool
 				<span className="text-xs text-muted-foreground truncate">{group.fullPath}</span>
 			</div>
 			{group.visibility && (
-				<Badge variant="outline" className="text-[10px] shrink-0">
+				<Badge variant="outline" className="text-2xs shrink-0">
 					{group.visibility}
 				</Badge>
 			)}

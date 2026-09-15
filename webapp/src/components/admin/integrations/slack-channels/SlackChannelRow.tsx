@@ -65,7 +65,7 @@ export function SlackChannelRow({
 				<ConsentStateBadge state={channel.consentState} />
 			</TableCell>
 
-			<TableCell className="text-right tabular-nums">
+			<TableCell numeric className="text-right">
 				{channel.optedOutMemberCount > 0 ? (
 					<Tooltip>
 						{/* Default TooltipTrigger renders a real <button>, so it's reachable by keyboard

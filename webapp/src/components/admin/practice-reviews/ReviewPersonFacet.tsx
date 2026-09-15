@@ -101,9 +101,7 @@ export function ReviewPersonFacet({
 						<ComboboxItem key={option.userId} value={option}>
 							<ComboboxItemIndicator />
 							<Avatar className="size-5 shrink-0">
-								<AvatarFallback className="text-[0.625rem]">
-									{getInitials(option.label)}
-								</AvatarFallback>
+								<AvatarFallback className="text-2xs">{getInitials(option.label)}</AvatarFallback>
 							</Avatar>
 							<span className="min-w-0 truncate">
 								{option.label}

@@ -152,7 +152,7 @@ export default function Header({
 							<DropdownMenu>
 								<DropdownMenuTrigger
 									aria-label="Account"
-									render={<Button variant="ghost" size="icon" className="rounded-full" />}
+									render={<Button variant="ghost" size="icon" shape="pill" />}
 								>
 									<Avatar className="hover:brightness-90">
 										<AvatarImage src={firstNonBlank(avatarUrl)} alt={`${username}'s avatar`} />

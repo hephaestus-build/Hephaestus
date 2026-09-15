@@ -606,9 +606,9 @@ function SortableGroupSection<
 				<Button
 					ref={setActivatorNodeRef}
 					type="button"
-					variant="ghost"
+					variant="quiet"
 					size="icon"
-					className="touch-none shrink-0 cursor-grab text-muted-foreground active:cursor-grabbing disabled:cursor-default"
+					className="touch-none shrink-0 cursor-grab active:cursor-grabbing disabled:cursor-default"
 					aria-label={`Reorder ${group.name}`}
 					disabled={reorderDisabled}
 					{...attributes}
@@ -780,9 +780,9 @@ function SortableEntryRow<TEntry extends SortableCatalogEntry>({
 				<Button
 					ref={setActivatorNodeRef}
 					type="button"
-					variant="ghost"
+					variant="quiet"
 					size="icon-sm"
-					className="touch-none shrink-0 cursor-grab text-muted-foreground active:cursor-grabbing disabled:cursor-default"
+					className="touch-none shrink-0 cursor-grab active:cursor-grabbing disabled:cursor-default"
 					aria-label={`Reorder ${entry.name}`}
 					disabled={reorderDisabled}
 					{...attributes}

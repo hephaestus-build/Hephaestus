@@ -14,10 +14,11 @@ type Story = StoryObj<typeof meta>;
 export const LightAndDark: Story = {
 	render: () => (
 		<div className="grid overflow-hidden rounded-2xl border sm:grid-cols-2">
-			<div className="flex min-h-48 items-center bg-white p-10 text-[#17191f]">
+			<div className="flex min-h-48 items-center bg-background p-10 text-foreground">
 				<HephaestusLogo markClassName="size-12" wordmarkClassName="text-3xl" />
 			</div>
-			<div className="dark flex min-h-48 items-center bg-[#111318] p-10 text-white">
+			{/* The palette comes from a wrapper, not the theme global, so one page shows both. */}
+			<div className="dark flex min-h-48 items-center bg-background p-10 text-foreground">
 				<HephaestusLogo markClassName="size-12" wordmarkClassName="text-3xl" />
 			</div>
 		</div>
