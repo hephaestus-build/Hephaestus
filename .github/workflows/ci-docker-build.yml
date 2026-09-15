@@ -124,6 +124,35 @@ jobs:
         org.opencontainers.image.licenses=MIT
         hephaestus.component=agent-pi
 
+  git-preparation-build:
+    name: "Git preparation"
+    if: inputs.should_skip != 'true' && inputs.agent_images_changed == 'true'
+    uses: ./.github/workflows/reusable-docker-build.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    with:
+      database-artifact: ${{ inputs.database-artifact }}
+      image-name: "hephaestus-build/git-preparation"
+      docker-file: "./docker/agents/git/Dockerfile"
+      docker-context: "./docker/agents"
+      registry: "ghcr.io"
+      # Cache-busts the OS-package upgrade layer; this build imports the `cache-main` registry cache.
+      build-args: |
+        SOURCE_COMMIT=${{ github.sha }}
+      publish: ${{ inputs.publish }}
+      single-arch: ${{ inputs.single_arch == 'true' }}
+      scan-images: ${{ inputs.scan-images }}
+      labels: |
+        org.opencontainers.image.title=Hephaestus Git preparation
+        org.opencontainers.image.description=Isolated native Git preparation for repository capture and synchronization
+        org.opencontainers.image.vendor=AET TUM
+        org.opencontainers.image.licenses=MIT
+        hephaestus.component=git-preparation
+
   postgres-build:
     name: "Postgres (pg_partman)"
     if: inputs.should_skip != 'true' && inputs.postgres_image_changed == 'true'
@@ -236,5 +265,5 @@ jobs:
 
           [ "$WEBAPP_CHANGED" = "true" ] || tag_image webapp
           [ "$APPLICATION_SERVER_CHANGED" = "true" ] || tag_image application-server
-          [ "$AGENT_IMAGES_CHANGED" = "true" ] || tag_image agent-pi
+          [ "$AGENT_IMAGES_CHANGED" = "true" ] || { tag_image agent-pi; tag_image git-preparation; }
           [ "$POSTGRES_IMAGE_CHANGED" = "true" ] || tag_image postgres

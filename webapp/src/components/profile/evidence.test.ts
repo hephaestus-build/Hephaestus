@@ -25,6 +25,7 @@ describe("toEvidenceLocations", () => {
 				endLine: 44,
 				sourceKind: "scm.pull-request.diff",
 				side: "NEW",
+				revision: undefined,
 				snippet: "a();\nb();",
 				redacted: false,
 			},
@@ -49,6 +50,12 @@ describe("toEvidenceLocations", () => {
 		expect(location?.redacted).toBe(true);
 
 		expect(location?.path).toBe("src/Main.java");
+	});
+
+	it("preserves the commit that a historical quote was verified against", () => {
+		const revision = "a".repeat(40);
+		const [location] = toEvidenceLocations({ citations: [citation({ revision })] });
+		expect(location?.revision).toBe(revision);
 	});
 
 	it("preserves the order the reviewer recorded", () => {

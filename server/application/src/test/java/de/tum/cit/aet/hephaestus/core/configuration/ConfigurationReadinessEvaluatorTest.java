@@ -157,14 +157,19 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         worker.put("hephaestus.sync.nats.enabled", true);
         worker.put("hephaestus.llm.egress.allow-loopback", true);
         worker.put("hephaestus.agent.image.reference", "moving-tag");
+        worker.put("hephaestus.git.image", "moving-tag");
         List<ConfigurationFactDTO> facts = evaluateReadiness(worker, true);
         assertStatus(facts, "nats.role-contract", ConfigurationStatus.ACTION_REQUIRED);
         assertStatus(facts, "llm.proxy-egress", ConfigurationStatus.ACTION_REQUIRED);
         assertStatus(facts, "agent.image-contract", ConfigurationStatus.ACTION_REQUIRED);
+        assertStatus(facts, "git.image-contract", ConfigurationStatus.ACTION_REQUIRED);
 
         worker.put("hephaestus.agent.image.reference", "ghcr.io/example/agent@sha256:" + "a".repeat(64));
+        worker.put("hephaestus.git.image", "ghcr.io/example/git-preparation@sha256:" + "b".repeat(64));
         worker.put("hephaestus.agent.image.require-digest", false);
-        assertStatus(evaluateReadiness(worker, true), "agent.image-contract", ConfigurationStatus.ACTION_REQUIRED);
+        facts = evaluateReadiness(worker, true);
+        assertStatus(facts, "agent.image-contract", ConfigurationStatus.ACTION_REQUIRED);
+        assertStatus(facts, "git.image-contract", ConfigurationStatus.ACTION_REQUIRED);
     }
 
     @Test
@@ -300,6 +305,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         properties.put("hephaestus.llm.egress.allow-loopback", false);
         properties.put("hephaestus.agent.image.require-digest", true);
         properties.put("hephaestus.agent.image.reference", "ghcr.io/example/agent@sha256:" + "a".repeat(64));
+        properties.put("hephaestus.git.image", "ghcr.io/example/git-preparation@sha256:" + "b".repeat(64));
         properties.put("hephaestus.sandbox.docker.container-runtime", "runsc");
         return properties;
     }

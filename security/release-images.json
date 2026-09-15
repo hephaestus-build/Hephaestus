@@ -4,6 +4,7 @@
 		"webapp",
 		"application-server",
 		"agent-pi",
+		"git-preparation",
 		"postgres"
 	],
 	"upstream": [

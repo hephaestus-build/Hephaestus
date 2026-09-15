@@ -5,11 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
@@ -28,6 +30,7 @@ import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -82,12 +85,13 @@ class IssueReviewHandlerTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         silentModeEngaged = false;
+        var practiceCatalogInjector = new PracticeCatalogInjector(
+                objectMapper, practiceRepository, InContextDeliveryGateFixtures.workspaceDefaults());
         handler = new IssueReviewHandler(
                 objectMapper,
-                workspaceContextBuilder,
-                new TaskEnvelopeWriter(objectMapper),
-                new PracticeCatalogInjector(
-                        objectMapper, practiceRepository, InContextDeliveryGateFixtures.workspaceDefaults()),
+                new PracticeReviewPreparation(
+                        workspaceContextBuilder, practiceCatalogInjector, new TaskEnvelopeWriter(objectMapper)),
+                practiceCatalogInjector,
                 new PracticeDetectionResultParser(objectMapper),
                 new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
                 deliveryService,
@@ -223,4 +227,51 @@ class IssueReviewHandlerTest extends BaseUnitTest {
     private record WrongRequest() implements de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest {}
 
     /** Resolves every workspace to the unset defaults — HUMAN_APPROVAL autonomy, reach on the work. */
+    @Nested
+    class PrepareObservations {
+
+        private static final String OBSERVATION = """
+            [{
+              "practiceSlug": "explains-why",
+              "summary": "States the motivation",
+              "assessmentStatus": "ASSESSED", "presence": "PRESENT",
+              "assessment": "GOOD",
+              "severity": null,
+              "evidenceRationale": "The text says why.",
+              "evidence": {}
+            }]
+            """;
+
+        @Test
+        void shouldRefuseRatherThanFailWhenNothingSubmittedIsAnObservation() {
+            var job = new AgentJob();
+            job.setId(UUID.randomUUID());
+
+            assertThatThrownBy(
+                            () -> handler.prepareObservations(job, objectMapper.readTree("[{\"practiceSlug\": \"\"}]")))
+                    .isInstanceOfSatisfying(
+                            de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException.class,
+                            e -> assertThat(e.reasonCode()).isEqualTo("no_valid_observations"));
+            org.mockito.Mockito.verifyNoInteractions(deliveryService);
+        }
+
+        @Test
+        void shouldRecordThroughTheDeliveryServiceOnlyWhenAsked() {
+            var job = new AgentJob();
+            job.setId(UUID.randomUUID());
+            var snapshot = EvidenceSnapshotFixtures.snapshot(objectMapper, ArtifactKinds.ISSUE.value());
+            EvidenceSnapshotFixtures.admittedPractice(snapshot, "explains-why", 1);
+            job.setEvidenceSnapshot(snapshot);
+            var admissible = mock(PracticeDetectionDeliveryService.PreparedObservations.class);
+            when(deliveryService.prepare(org.mockito.ArgumentMatchers.eq(job), any()))
+                    .thenReturn(admissible);
+
+            var prepared = handler.prepareObservations(job, objectMapper.readTree(OBSERVATION));
+            org.mockito.Mockito.verify(deliveryService, org.mockito.Mockito.never())
+                    .publish(any(), any());
+
+            prepared.record(job);
+            org.mockito.Mockito.verify(deliveryService).publish(job, admissible);
+        }
+    }
 }

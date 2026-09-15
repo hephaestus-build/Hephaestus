@@ -80,7 +80,7 @@ dependencies {
     implementation(libs.spring.boot.starter.graphql)
     implementation(libs.resilience4j.spring.boot4)
     implementation(libs.resilience4j.micrometer)
-    implementation(libs.org.eclipse.jgit)
+    testImplementation(libs.org.eclipse.jgit)
     implementation(libs.bucket4j.jdk17.core)
     implementation(libs.bucket4j.jdk17.postgresql)
     annotationProcessor(libs.lombok)

@@ -21,9 +21,14 @@ public sealed interface ContextRequest
                 ContextRequest.DocumentReviewRequest {
     /**
      * Build the materialised PR-review context: metadata, comments, diff, developer history.
-     * Carries the {@link AgentJob} the practice runner will execute.
+     * Carries the {@link AgentJob} the practice runner will execute and the one Git preparation the
+     * clone-reading sources share.
      */
-    record PracticeReviewRequest(AgentJob job) implements ContextRequest {
+    record PracticeReviewRequest(AgentJob job, ReviewPreparation preparation) implements ContextRequest {
+        public PracticeReviewRequest(AgentJob job) {
+            this(job, new ReviewPreparation());
+        }
+
         public PracticeReviewRequest {
             Objects.requireNonNull(job, "job must not be null");
         }

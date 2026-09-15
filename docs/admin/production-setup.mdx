@@ -333,7 +333,7 @@ The sync scheduler fetches recent GitHub activity (issues, PRs, reviews) for mon
 
 **Backfill behavior:** After recent sync completes, backfill works backwards from the highest issue number, syncing in small batches. It pauses when rate limits drop below the threshold and resumes on the next cycle. Progress is checkpointed per repository.
 
-**Disconnecting erases the active mirror.** Disconnecting a workspace's GitHub, GitLab, Slack, or Outline connection — and purging a workspace — hard-deletes its active PostgreSQL mirror. Materialized diagnostic output, replay/CAS artifacts, and broker messages expire under their documented bounded retention windows. The operation is irreversible, and reconnecting performs a fresh initial sync. See the erasure triggers in the [record of processing](./dsms/record-of-processing.md).
+**Disconnecting erases the active mirror.** Disconnecting a workspace's GitHub, GitLab, Slack, or Outline connection — and purging a workspace — hard-deletes its active PostgreSQL mirror. Materialized diagnostic output, worker-input copies, and broker messages expire under their documented bounded retention windows. The operation is irreversible, and reconnecting performs a fresh initial sync. See the erasure triggers in the [record of processing](./dsms/record-of-processing.md).
 
 ## Deployment steps (reference stack)
 

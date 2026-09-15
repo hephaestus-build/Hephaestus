@@ -4,8 +4,9 @@ title: Backup & Restore
 description: What to back up on a self-hosted instance, and how to restore it.
 ---
 
-For the [self-host compose stack](./install). PostgreSQL holds application state. The Context Fabric
-holds bounded evidence copies that may become irreproducible after upstream content changes or erasure.
+For the [self-host compose stack](./install). PostgreSQL holds application state. What a worker keeps
+on disk — repository mirrors and the inputs of attempts in flight — is disposable and is rebuilt
+from PostgreSQL and the upstream provider.
 
 ## What to back up
 
@@ -15,7 +16,7 @@ holds bounded evidence copies that may become irreproducible after upstream cont
 | `.env` | `/opt/hephaestus/docker/self-host/.env` | **Equal priority.** Its encryption keys protect values inside the database backup. Without them, provider credentials and signing material are unreadable. |
 | Signed release lock and deployment overrides | `release-lock.env` and any operator-owned Compose/configuration files | Restore the exact release and configuration associated with the database, not the latest release. |
 | TLS certificates | `letsencrypt` volume mounted by `reverse-proxy` | Optional — Let's Encrypt re-issues when permitted to connect (rate limits permitting). |
-| Context Fabric | `git-repos` volume | Back up when replayable evidence is required. Skipping it discards repository clones and bounded replay/CAS content; durable job provenance remains in PostgreSQL, but the exact source bytes may be unrecoverable. |
+| Worker preparation storage | Docker volumes named `hephaestus-git-*` (repository mirrors) and the `git-repos` volume (attempt folders) | Disposable; do not back up as review evidence. Restoring PostgreSQL preserves admitted observations and citation verdicts. In-flight reviews must be retried, not resumed from copied folders. |
 | NATS JetStream | `nats-data` volume | Preserve broker snapshots or cold copies when event-gap recovery/forensics requires them. Never replay a store divergent from PostgreSQL without the runbook recovery checks. |
 
 For production backup automation and recovery gates, start with the

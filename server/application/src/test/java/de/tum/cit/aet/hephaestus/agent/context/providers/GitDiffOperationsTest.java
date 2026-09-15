@@ -1,113 +1,85 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import org.junit.jupiter.api.DisplayName;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.Map;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
 
 class GitDiffOperationsTest extends BaseUnitTest {
+    private static final RepositoryKey REPOSITORY = new RepositoryKey(1, 2);
+    private static final String BASE = "a".repeat(40);
+    private static final String HEAD = "b".repeat(40);
+
+    @Mock
+    private NativeGitExecutor git;
 
     @Test
-    @DisplayName("annotates + and context lines with [L<n>] source line numbers")
-    void annotatesDiff() {
-        String diff = "diff --git a/Foo.swift b/Foo.swift\n" + "--- a/Foo.swift\n"
-                + "+++ b/Foo.swift\n"
-                + "@@ -1,3 +1,4 @@\n"
-                + " import SwiftUI\n"
-                + "+import Foundation\n"
-                + " \n"
-                + " struct Foo {\n";
-        String annotated = GitDiffOperations.annotateDiffWithLineNumbers(diff);
-        assertThat(annotated).contains("[L1]  import SwiftUI");
-        assertThat(annotated).contains("[L2] +import Foundation");
-        assertThat(annotated).contains("[L3]  ");
-        assertThat(annotated).contains("[L4]  struct Foo {");
+    void shouldStageCompleteDiffFilesAndReleaseThemWhenClosed() throws Exception {
+        archive(Map.of(
+                "diff.patch",
+                "[L1] +source\n",
+                "diff_stat.txt",
+                "stat",
+                "diff_summary.md",
+                "summary",
+                "diff_paths.nul",
+                "a.txt\0"));
+        var capture = new GitDiffOperations(git).capture(REPOSITORY, BASE, HEAD);
+        try (capture) {
+            assertThat(capture.files())
+                    .containsOnlyKeys("diff.patch", "diff_stat.txt", "diff_summary.md", "diff_paths.nul");
+            assertThat(Files.readString(capture.directory().resolve("diff.patch")))
+                    .isEqualTo("[L1] +source\n");
+            assertThat(capture.isEmpty()).isFalse();
+        }
+        assertThat(capture.directory()).doesNotExist();
     }
 
     @Test
-    @DisplayName("annotates deleted lines with old-side positions")
-    void annotatesDeletions() {
-        String diff = "diff --git a/Bar.swift b/Bar.swift\n" + "--- a/Bar.swift\n"
-                + "+++ b/Bar.swift\n"
-                + "@@ -5,4 +5,3 @@\n"
-                + " context\n"
-                + "-deleted line\n"
-                + "+added line\n"
-                + " more context\n";
-        String annotated = GitDiffOperations.annotateDiffWithLineNumbers(diff);
-        assertThat(annotated).contains("[L5]  context");
-        assertThat(annotated).contains("[L6] +added line");
-        assertThat(annotated).contains("[L7]  more context");
-        assertThat(annotated).contains("[L6] -deleted line");
+    void shouldRejectIncompleteDiffRatherThanReportEmpty() {
+        archive(Map.of("diff_stat.txt", "stat"));
+        assertThatThrownBy(() -> new GitDiffOperations(git).capture(REPOSITORY, BASE, HEAD))
+                .isInstanceOf(JobPreparationException.class)
+                .hasRootCauseMessage("Incomplete diff archive");
     }
 
     @Test
-    @DisplayName("resets line numbers for each file")
-    void multiFileDiff_resetsLineCounterPerFile() {
-        String diff = "diff --git a/First.swift b/First.swift\n" + "--- a/First.swift\n"
-                + "+++ b/First.swift\n"
-                + "@@ -1,2 +1,2 @@\n"
-                + " line one\n"
-                + "+line two\n"
-                + "diff --git a/Second.swift b/Second.swift\n"
-                + "--- a/Second.swift\n"
-                + "+++ b/Second.swift\n"
-                + "@@ -100,1 +100,2 @@\n"
-                + " hundred\n"
-                + "+hundred one\n";
-        String annotated = GitDiffOperations.annotateDiffWithLineNumbers(diff);
-
-        assertThat(annotated).contains("[L1]  line one");
-        assertThat(annotated).contains("[L2] +line two");
-        assertThat(annotated).contains("diff --git a/Second.swift b/Second.swift\n");
-        assertThat(annotated).contains("[L100]  hundred");
-        assertThat(annotated).contains("[L101] +hundred one");
-        assertThat(annotated).doesNotContain("[L3]  hundred");
+    void shouldRejectUnexpectedArchivePaths() {
+        archive(Map.of("../escape", "payload"));
+        assertThatThrownBy(() -> new GitDiffOperations(git).capture(REPOSITORY, BASE, HEAD))
+                .isInstanceOf(JobPreparationException.class)
+                .hasRootCauseMessage("Unexpected diff archive entry");
     }
 
-    @Test
-    @DisplayName("preserves the no-newline marker without advancing the counter")
-    void noNewlineMarker_emittedVerbatim_doesNotAdvanceCounter() {
-        String diff = "diff --git a/Foo.swift b/Foo.swift\n" + "--- a/Foo.swift\n"
-                + "+++ b/Foo.swift\n"
-                + "@@ -1,1 +1,2 @@\n"
-                + " first\n"
-                + "+second\n"
-                + "\\ No newline at end of file\n";
-        String annotated = GitDiffOperations.annotateDiffWithLineNumbers(diff);
-
-        assertThat(annotated).contains("[L1]  first");
-        assertThat(annotated).contains("[L2] +second");
-        assertThat(annotated).containsPattern("(?m)^\\\\ No newline at end of file$");
-        assertThat(annotated).doesNotContain("[L3] \\ No newline");
-    }
-
-    @Test
-    @DisplayName("does not emit a spurious [L<n>] for the trailing empty element of a diff ending in a newline")
-    void trailingNewline_doesNotEmitSpuriousMarker() {
-        String diff = "diff --git a/Foo.swift b/Foo.swift\n" + "--- a/Foo.swift\n"
-                + "+++ b/Foo.swift\n"
-                + "@@ -1,1 +1,2 @@\n"
-                + " first\n"
-                + "+second\n";
-        String annotated = GitDiffOperations.annotateDiffWithLineNumbers(diff);
-
-        assertThat(annotated).contains("[L1]  first");
-        assertThat(annotated).contains("[L2] +second");
-        assertThat(annotated).doesNotContain("[L3] ");
-    }
-
-    @Test
-    @DisplayName("leaves diff metadata lines unmodified (before first hunk header)")
-    void preservesMetadata() {
-        String diff = "diff --git a/Foo.swift b/Foo.swift\n" + "--- a/Foo.swift\n"
-                + "+++ b/Foo.swift\n"
-                + "@@ -1 +1 @@\n"
-                + "+added\n";
-        String annotated = GitDiffOperations.annotateDiffWithLineNumbers(diff);
-        assertThat(annotated).contains("diff --git a/Foo.swift b/Foo.swift\n");
-        assertThat(annotated).contains("--- a/Foo.swift\n");
-        assertThat(annotated).contains("+++ b/Foo.swift\n");
+    private void archive(Map<String, String> files) {
+        doAnswer(invocation -> {
+                    OutputStream output = invocation.getArgument(3);
+                    try (var tar = new TarArchiveOutputStream(output)) {
+                        for (var file : files.entrySet()) {
+                            byte[] bytes = file.getValue().getBytes(StandardCharsets.UTF_8);
+                            var entry = new TarArchiveEntry(file.getKey());
+                            entry.setSize(bytes.length);
+                            tar.putArchiveEntry(entry);
+                            tar.write(bytes);
+                            tar.closeArchiveEntry();
+                        }
+                    }
+                    return null;
+                })
+                .when(git)
+                .execute(any(), any(), any(), any());
     }
 }

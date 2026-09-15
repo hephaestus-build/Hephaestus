@@ -187,6 +187,16 @@ public final class ConfigurationReadinessEvaluator {
                 "agent-image");
         add(
                 facts,
+                "git.image-contract",
+                "hephaestus.git.image",
+                roles(RuntimeRole.WORKER),
+                ConfigurationRequirement.REQUIRED,
+                worker,
+                this::validAgentImage,
+                "The worker image contract requires digest enforcement and a digest-pinned Git preparation image.",
+                "agent-image");
+        add(
+                facts,
                 "sandbox.isolation-runtime",
                 "hephaestus.sandbox.docker.container-runtime",
                 roles(RuntimeRole.WORKER),

@@ -1,15 +1,17 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;
@@ -30,19 +32,22 @@ import tools.jackson.databind.json.JsonMapper;
 public class JobTypeHandlerConfiguration {
 
     private final JsonMapper objectMapper;
-    private final ContentAddressedStore contentAddressedStore;
+    private final JobEvidenceFiles jobEvidenceFiles;
+    private final PracticeReviewProperties reviewProperties;
     private final WorkspaceContextBuilder workspaceContextBuilder;
     private final TaskEnvelopeWriter taskEnvelopeWriter;
     private final FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter;
 
     JobTypeHandlerConfiguration(
             JsonMapper objectMapper,
-            ContentAddressedStore contentAddressedStore,
+            JobEvidenceFiles jobEvidenceFiles,
+            PracticeReviewProperties reviewProperties,
             WorkspaceContextBuilder workspaceContextBuilder,
             TaskEnvelopeWriter taskEnvelopeWriter,
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter) {
         this.objectMapper = objectMapper;
-        this.contentAddressedStore = contentAddressedStore;
+        this.jobEvidenceFiles = jobEvidenceFiles;
+        this.reviewProperties = reviewProperties;
         this.workspaceContextBuilder = workspaceContextBuilder;
         this.taskEnvelopeWriter = taskEnvelopeWriter;
         this.feedbackResponseSuppressionFilter = feedbackResponseSuppressionFilter;
@@ -90,12 +95,18 @@ public class JobTypeHandlerConfiguration {
     }
 
     @Bean
-    SecretDiffScanner secretDiffScanner() {
-        return new SecretDiffScanner();
+    SecretDiffScanner secretDiffScanner(NativeGitExecutor git) {
+        return new SecretDiffScanner(git, objectMapper);
+    }
+
+    @Bean
+    PracticeReviewPreparation practiceReviewPreparation(PracticeCatalogInjector practiceCatalogInjector) {
+        return new PracticeReviewPreparation(workspaceContextBuilder, practiceCatalogInjector, taskEnvelopeWriter);
     }
 
     @Bean
     PullRequestReviewHandler pullRequestReviewHandler(
+            PracticeReviewPreparation preparation,
             PracticeCatalogInjector practiceCatalogInjector,
             PracticeDetectionResultParser resultParser,
             FeedbackCompositionResultParser compositionResultParser,
@@ -106,10 +117,9 @@ public class JobTypeHandlerConfiguration {
             ObservationRepository observationRepository) {
         return new PullRequestReviewHandler(
                 objectMapper,
-                contentAddressedStore,
+                jobEvidenceFiles,
                 practiceCatalogInjector,
-                workspaceContextBuilder,
-                taskEnvelopeWriter,
+                preparation,
                 resultParser,
                 compositionResultParser,
                 deliveryService,
@@ -122,6 +132,7 @@ public class JobTypeHandlerConfiguration {
 
     @Bean
     IssueReviewHandler issueReviewHandler(
+            PracticeReviewPreparation preparation,
             PracticeCatalogInjector practiceCatalogInjector,
             PracticeDetectionResultParser resultParser,
             FeedbackCompositionResultParser compositionResultParser,
@@ -137,8 +148,7 @@ public class JobTypeHandlerConfiguration {
             FeedbackDeliveryService feedbackDeliveryService) {
         return new IssueReviewHandler(
                 objectMapper,
-                workspaceContextBuilder,
-                taskEnvelopeWriter,
+                preparation,
                 practiceCatalogInjector,
                 resultParser,
                 compositionResultParser,
@@ -156,34 +166,21 @@ public class JobTypeHandlerConfiguration {
 
     @Bean
     JobTypeHandler conversationReviewHandler(
-            PracticeCatalogInjector practiceCatalogInjector,
+            PracticeReviewPreparation preparation,
             PracticeDetectionResultParser resultParser,
             PracticeDetectionDeliveryService deliveryService,
             ApplicationEventPublisher eventPublisher,
             TransactionTemplate transactionTemplate) {
         return new ConversationReviewHandler(
-                objectMapper,
-                workspaceContextBuilder,
-                taskEnvelopeWriter,
-                practiceCatalogInjector,
-                resultParser,
-                deliveryService,
-                eventPublisher,
-                transactionTemplate);
+                objectMapper, preparation, resultParser, deliveryService, eventPublisher, transactionTemplate);
     }
 
     @Bean
     JobTypeHandler documentReviewHandler(
-            PracticeCatalogInjector practiceCatalogInjector,
+            PracticeReviewPreparation preparation,
             PracticeDetectionResultParser resultParser,
             PracticeDetectionDeliveryService deliveryService) {
-        return new DocumentReviewHandler(
-                objectMapper,
-                workspaceContextBuilder,
-                taskEnvelopeWriter,
-                practiceCatalogInjector,
-                resultParser,
-                deliveryService);
+        return new DocumentReviewHandler(objectMapper, preparation, resultParser, deliveryService);
     }
 
     @Bean

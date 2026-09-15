@@ -210,7 +210,6 @@ for (const result of practiceResults) {
 	if (inDiffHints.length > 0 && inDiffHints.length <= 10) {
 		lines.push("**Key locations (on changed lines):**");
 		for (const h of inDiffHints) {
-			// Render ALL flag types (boolean, number, string), not just boolean=true
 			const flagEntries = Object.entries(h.flags).filter(
 				([, v]) => v !== false && v !== 0 && v !== "",
 			);

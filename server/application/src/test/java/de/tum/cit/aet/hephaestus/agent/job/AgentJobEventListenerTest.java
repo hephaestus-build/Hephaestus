@@ -144,6 +144,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             @Nullable String headRefOid, @Nullable String headRefName, @Nullable String baseRefName) {
         PullRequest pr = new PullRequest();
         pr.setId(PR_ID);
+        pr.setBaseRefOid("a".repeat(40));
         org.springframework.test.util.ReflectionTestUtils.setField(pr, "headRefOid", headRefOid);
         org.springframework.test.util.ReflectionTestUtils.setField(pr, "headRefName", headRefName);
         org.springframework.test.util.ReflectionTestUtils.setField(pr, "baseRefName", baseRefName);
@@ -182,6 +183,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
         var captor = ArgumentCaptor.forClass(PullRequestReviewSubmissionRequest.class);
         verify(agentJobService)
                 .submit(eq(workspaceId), eq(AgentJobType.PULL_REQUEST_REVIEW), captor.capture(), any(), any());
+        assertThat(captor.getValue().baseRefOid()).isEqualTo("a".repeat(40));
         return captor.getValue();
     }
 
@@ -333,6 +335,21 @@ class AgentJobEventListenerTest extends BaseUnitTest {
 
             verify(practiceReviewDetectionGate, never()).evaluate(any(), any(), any());
             verify(agentJobService, never()).submit(any(), any(), any(), any());
+        }
+
+        @Test
+        void shouldSubmitWithoutAPinnedBaseWhenTheProviderGaveNone() {
+            // A GitLab webhook carries no base SHA; preparation resolves the target branch instead.
+            var event = new ScmDomainEvent.PullRequestCreated(
+                    createPrData(Issue.State.OPEN, false, false), webhookContext(1L));
+            PullRequest pr = setupHappyPath();
+            org.springframework.test.util.ReflectionTestUtils.setField(pr, "baseRefOid", null);
+            listener.onPullRequestCreated(event);
+            var captor = ArgumentCaptor.forClass(PullRequestReviewSubmissionRequest.class);
+            verify(agentJobService)
+                    .submit(eq(WORKSPACE_ID), eq(AgentJobType.PULL_REQUEST_REVIEW), captor.capture(), any(), any());
+            assertThat(captor.getValue().baseRefOid()).isNull();
+            assertThat(captor.getValue().baseRefName()).isEqualTo("main");
         }
 
         @Test
@@ -885,6 +902,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             pr.setHeadRefOid("abc123");
             pr.setHeadRefName("feature/test");
             pr.setBaseRefName("main");
+            pr.setBaseRefOid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
             pr.setState(Issue.State.OPEN);
             pr.setDraft(false);
 

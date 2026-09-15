@@ -22,7 +22,7 @@ The training run boots under the `cds-training` profile (`application-cds-traini
 
 The [build-only profile boundary](./runtime-roles.mdx#build-only-profiles) keeps runtime bootstrap out of training and rejects a production/build-profile combination. Authentication types remain available for class loading without configured deployment secrets.
 
-The run image is used unmodified; the server needs no `git` binary (`GitDiffOperations` uses JGit).
+The run image is used unmodified; native Git runs in the isolated preparation image, not the application image.
 
 ## Why not Spring AOT processing (`spring.aot.enabled=true`)
 

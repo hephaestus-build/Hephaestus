@@ -32,12 +32,13 @@ void describe("planSubjects", () => {
 	void test("covers the committed release image inventory", async () => {
 		const inventory: unknown = JSON.parse(await readFile("security/release-images.json", "utf8"));
 		const subjects = planSubjects(inventory, "ghcr.io/hephaestus-build", "main");
-		// The four first-party images the release promotes. The upstream images in the same file are
+		// The first-party images the release promotes. The upstream images in the same file are
 		// not built here and have no `:main` tag, so they are scanned by their pinned digest in
 		// scan-upstream-images.ts instead.
 		assert.deepEqual(subjects.map((subject) => subject.image).toSorted(), [
 			"agent-pi",
 			"application-server",
+			"git-preparation",
 			"postgres",
 			"webapp",
 		]);

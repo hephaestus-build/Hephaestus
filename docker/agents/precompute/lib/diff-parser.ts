@@ -7,7 +7,6 @@ import type { DiffFile, DiffHunk } from "./types.ts";
 export function parseDiff(diffContent: string): Map<string, DiffFile> {
 	const files = new Map<string, DiffFile>();
 
-	// Split on "diff --git" boundaries
 	const fileDiffs = diffContent.split(/^diff --git /m).filter(Boolean);
 
 	for (const fileDiff of fileDiffs) {
@@ -59,14 +58,12 @@ export function parseDiff(diffContent: string): Map<string, DiffFile> {
 				currentHunk.lines.push(stripped);
 				oldLineNum++;
 			} else if (!stripped.startsWith("\\")) {
-				// Context line
 				currentHunk.lines.push(stripped);
 				newLineNum++;
 				oldLineNum++;
 			}
 		}
 
-		// Normalize path: strip leading ./
 		const normalizedPath = filePath.replace(/^\.\//, "");
 		files.set(normalizedPath, { path: normalizedPath, addedLines, removedLines, hunks });
 	}
@@ -80,7 +77,6 @@ export function isInDiff(
 	filePath: string,
 	lineNum: number,
 ): boolean {
-	// Try exact match first, then suffix match
 	const df =
 		diffFiles.get(filePath) ??
 		[...diffFiles.values()].find((f) => filePath.endsWith(f.path) || f.path.endsWith(filePath));

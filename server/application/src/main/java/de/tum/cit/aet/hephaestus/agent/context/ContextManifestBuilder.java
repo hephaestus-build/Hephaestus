@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
+import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceContract;
@@ -22,15 +24,13 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -48,9 +49,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Component
 public class ContextManifestBuilder {
-
-    static final String INTERNAL_MANIFEST_FILE = "artifact-source-manifest.json";
-    static final String AUTOMATED_REVIEW_READINESS_REPORT_FILE = "automated-review-readiness-report.json";
 
     public record PreparedAutomatedReviewReadiness(
             List<Practice> readyPractices, AutomatedReviewReadinessReport report) {
@@ -108,22 +106,16 @@ public class ContextManifestBuilder {
         }
     }
 
-    private final ContentAddressedStore cas;
-    private final FabricLayout layout;
     private final JsonMapper objectMapper;
     private final ArtifactSourceCatalogRegistry catalogs;
     private final PracticeSubjectEvaluator subjectEvaluator;
     private final Clock clock;
 
     public ContextManifestBuilder(
-            ContentAddressedStore cas,
-            FabricLayout layout,
             JsonMapper objectMapper,
             ArtifactSourceCatalogRegistry catalogs,
             PracticeSubjectEvaluator subjectEvaluator,
             Clock clock) {
-        this.cas = cas;
-        this.layout = layout;
         this.objectMapper = objectMapper;
         this.catalogs = catalogs;
         this.subjectEvaluator = subjectEvaluator;
@@ -143,7 +135,7 @@ public class ContextManifestBuilder {
         }
     }
 
-    /** For captures held entirely in memory, which is every source but the repository tree. */
+    /** For captures held entirely in memory. */
     public ArtifactSourceManifest augment(
             Map<String, byte[]> files,
             Map<String, SourceKind> pathKinds,
@@ -155,7 +147,7 @@ public class ContextManifestBuilder {
 
     public ArtifactSourceManifest augment(
             Map<String, byte[]> files,
-            Map<String, java.nio.file.Path> filesOnDisk,
+            Map<String, Path> filesOnDisk,
             Map<String, SourceKind> pathKinds,
             String jobId,
             EvidencePlan plan,
@@ -204,7 +196,6 @@ public class ContextManifestBuilder {
                 captures);
         try {
             byte[] internalBytes = objectMapper.writeValueAsBytes(manifest);
-            persistInternalManifest(jobId, internalBytes);
             files.put(SandboxLayout.MANIFEST_PATH, internalBytes);
             return manifest;
         } catch (RuntimeException e) {
@@ -225,6 +216,12 @@ public class ContextManifestBuilder {
      * read. No source is dropped because no practice asked for it.
      */
     Set<SourceKind> stagedSources(EvidencePlan plan) {
+        // A retired contract stays readable for the feedback recorded under it; a new capture runs only
+        // under the contract this runtime ships, so a practice left behind by a migration fails here.
+        if (!catalogs.current().version().equals(plan.contractVersion())) {
+            throw new JobPreparationException("Practices pin source contract " + plan.contractVersion()
+                    + "; this runtime captures under " + catalogs.current().version());
+        }
         return catalogs.requireSourcesFor(
                 plan.contractVersion(), plan.artifactKind().value());
     }
@@ -249,7 +246,6 @@ public class ContextManifestBuilder {
                 manifest.capturedAt(),
                 decidedAt,
                 result.decisions());
-        persistInternalJson(jobId, AUTOMATED_REVIEW_READINESS_REPORT_FILE, objectMapper.writeValueAsBytes(report));
         return new PreparedAutomatedReviewReadiness(result.readyPractices(), report);
     }
 
@@ -303,7 +299,7 @@ public class ContextManifestBuilder {
         }
         Set<SourceKind> expectedKinds = catalogs.requireSourcesFor(manifest.contractVersion(), manifest.artifactKind());
         Set<SourceKind> capturedKinds =
-                manifest.sources().stream().map(SourceCapture::kind).collect(java.util.stream.Collectors.toSet());
+                manifest.sources().stream().map(SourceCapture::kind).collect(Collectors.toSet());
         if (!capturedKinds.equals(expectedKinds)) {
             throw new IllegalArgumentException(
                     "Manifest source captures do not match the sources its artifact kind applies to");
@@ -407,7 +403,7 @@ public class ContextManifestBuilder {
     private SourceCapture capture(
             SourceKind kind,
             Map<String, byte[]> files,
-            Map<String, java.nio.file.Path> filesOnDisk,
+            Map<String, Path> filesOnDisk,
             Map<String, SourceKind> pathKinds,
             EvidencePlan plan,
             Instant capturedAt,
@@ -510,18 +506,19 @@ public class ContextManifestBuilder {
         }
     }
 
-    private SourceArtifact artifact(String path, byte @Nullable [] bytes, java.nio.file.@Nullable Path onDisk) {
+    private SourceArtifact artifact(String path, byte @Nullable [] bytes, @Nullable Path onDisk) {
         if (onDisk != null) {
-            try {
-                return new SourceArtifact(path, mediaType(path), cas.put(onDisk), java.nio.file.Files.size(onDisk));
-            } catch (java.io.IOException e) {
-                throw new java.io.UncheckedIOException("Evidence artifact unreadable: " + path, e);
+            try (var stream = Files.newInputStream(onDisk)) {
+                return new SourceArtifact(
+                        path, mediaType(path), ProvenanceDigest.sha256Hex(stream), Files.size(onDisk));
+            } catch (IOException e) {
+                throw new UncheckedIOException("Evidence artifact unreadable: " + path, e);
             }
         }
         if (bytes == null) {
             throw new IllegalStateException("Evidence artifact has null bytes: " + path);
         }
-        return new SourceArtifact(path, mediaType(path), cas.put(bytes), bytes.length);
+        return new SourceArtifact(path, mediaType(path), ProvenanceDigest.sha256Hex(bytes), bytes.length);
     }
 
     private static SourceAbsenceState absenceState(SourceCaptureState state) {
@@ -530,40 +527,6 @@ public class ContextManifestBuilder {
         if (state instanceof SourceCaptureState.Redacted) return SourceAbsenceState.REDACTED;
         if (state instanceof SourceCaptureState.CollectionError) return SourceAbsenceState.COLLECTION_ERROR;
         throw new IllegalArgumentException("AVAILABLE is not an absence state");
-    }
-
-    private void persistInternalManifest(String jobId, byte[] bytes) {
-        try {
-            Path dir = layout.jobDir(jobId);
-            Files.createDirectories(dir);
-            writeAtomically(dir, INTERNAL_MANIFEST_FILE, bytes);
-        } catch (IOException e) {
-            throw new IllegalStateException("Could not persist artifact-source manifest for job " + jobId, e);
-        }
-    }
-
-    private void persistInternalJson(String jobId, String fileName, byte[] bytes) {
-        try {
-            Path dir = layout.jobDir(jobId);
-            Files.createDirectories(dir);
-            writeAtomically(dir, fileName, bytes);
-        } catch (IOException e) {
-            throw new IllegalStateException("Could not persist " + fileName + " for job " + jobId, e);
-        }
-    }
-
-    private static void writeAtomically(Path dir, String fileName, byte[] bytes) throws IOException {
-        Path temporary = Files.createTempFile(dir, fileName, ".tmp");
-        try {
-            Files.write(temporary, bytes);
-            Files.move(
-                    temporary,
-                    dir.resolve(fileName),
-                    StandardCopyOption.ATOMIC_MOVE,
-                    StandardCopyOption.REPLACE_EXISTING);
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
     }
 
     private static String mediaType(String path) {

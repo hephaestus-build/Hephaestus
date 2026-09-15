@@ -2,9 +2,10 @@
 //
 // The worker reads `out/` back as a USTAR tar and refuses a member that a producer had to encode as a
 // PAX or GNU name-extension record, because resolving those records is what lets a sparse entry expand
-// past the size its header declares. Docker emits one for any member name over 100 bytes or outside
-// ASCII, so such a name fails the whole review with a message about the archive. Naming the rule here
-// fails the one file instead, in the runner, while it is still identifiable.
+// past the size its header declares. gateway-run.ts packages `out/` with `tar --format=ustar`, which
+// refuses a name it cannot hold, so such a name fails the whole review with a message about the
+// archive. Naming the rule here fails the one file instead, in the runner, while it is still
+// identifiable.
 
 /** Archive members are `out/<name>`, and USTAR stores a member name in 100 bytes. */
 const MAX_MEMBER_BYTES = 100;

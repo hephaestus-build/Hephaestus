@@ -2,951 +2,497 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.workdir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.ChangeType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Operation;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Request;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.NativeGitTestExecutor;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
-import java.net.URISyntaxException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Comparator;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.IntStream;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import org.apache.commons.compress.archivers.tar.TarConstants;
 import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.errors.GitAPIException;
-import org.eclipse.jgit.api.errors.InvalidRemoteException;
-import org.eclipse.jgit.errors.NoRemoteRepositoryException;
+import org.eclipse.jgit.lib.CommitBuilder;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.PersonIdent;
-import org.eclipse.jgit.util.FileUtils;
-import org.junit.jupiter.api.AfterEach;
+import org.eclipse.jgit.revwalk.RevWalk;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.util.unit.DataSize;
 
 class GitRepositoryManagerTest extends BaseUnitTest {
+    private static final String IMAGE = "ghcr.io/hephaestus-build/git-preparation:test";
+    private static final long LIMIT = 8L * 1024 * 1024 * 1024;
+    private static final RepositoryKey KEY = new RepositoryKey(100L, 1L);
 
     @TempDir
-    private Path tempDir;
+    private Path temporary;
 
-    private Path storagePath;
-    private Path sourceRepoPath;
-
-    private GitRepositoryManager manager = mock(GitRepositoryManager.class);
-    private GitRepositoryLockManager lockManager = mock(GitRepositoryLockManager.class);
+    private NativeGitTestExecutor executor;
+    private GitRepositoryManager manager;
+    private Path source;
 
     @BeforeEach
     void setUp() throws Exception {
-        storagePath = tempDir.resolve("storage");
-        sourceRepoPath = tempDir.resolve("source-repo");
-
-        lockManager = new GitRepositoryLockManager();
-
-        Files.createDirectories(sourceRepoPath);
+        source = Files.createDirectory(temporary.resolve("source"));
+        executor = new NativeGitTestExecutor(Files.createDirectory(temporary.resolve("native")));
+        manager = new GitRepositoryManager(
+                new GitRepositoryProperties(true, 2, IMAGE, LIMIT),
+                java.util.Optional.of(executor),
+                new FabricLayout(temporary.resolve("outputs").toString()));
     }
 
-    @AfterEach
-    void tearDown() throws IOException {
-        if (Files.exists(storagePath)) {
-            Files.walk(storagePath).sorted(Comparator.reverseOrder()).forEach(path -> {
-                try {
-                    Files.deleteIfExists(path);
-                } catch (IOException ignored) {
-                }
+    @Test
+    void shouldNotReportWorkerFailureAsMissingRepositoryOrCommit() {
+        var failed = mock(NativeGitExecutor.class);
+        org.mockito.Mockito.doThrow(new IllegalStateException("Worker disconnected"))
+                .when(failed)
+                .execute(
+                        org.mockito.ArgumentMatchers.eq(KEY),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any());
+        var unavailable = new GitRepositoryManager(
+                new GitRepositoryProperties(true, 2, IMAGE, LIMIT),
+                java.util.Optional.of(failed),
+                new FabricLayout(temporary.toString()));
+        assertThatThrownBy(() -> unavailable.isRepositoryCloned(KEY))
+                .isInstanceOf(GitRepositoryManager.GitOperationException.class);
+        assertThatThrownBy(() -> unavailable.commitExists(KEY, "a".repeat(40)))
+                .isInstanceOf(GitRepositoryManager.GitOperationException.class);
+        assertThatThrownBy(() -> unavailable.resolveBranchHead(KEY, "main"))
+                .isInstanceOf(GitRepositoryManager.GitOperationException.class);
+    }
+
+    @Test
+    void shouldRejectOversizedCommitDetailsBeforeMaterializingFileChanges() {
+        var nativeGit = mock(NativeGitExecutor.class);
+        String sha = "a".repeat(40);
+        org.mockito.Mockito.doAnswer(invocation -> {
+                    NativeGitExecutor.Request request = invocation.getArgument(1);
+                    java.io.OutputStream output = invocation.getArgument(3);
+                    if (request.operation() == NativeGitExecutor.Operation.COMMIT_IDS) {
+                        output.write((sha + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    } else {
+                        var frames = new java.io.DataOutputStream(output);
+                        frames.writeLong(1);
+                        frames.writeByte('x');
+                        frames.writeLong(16 * 1024 * 1024);
+                    }
+                    return null;
+                })
+                .when(nativeGit)
+                .execute(
+                        org.mockito.ArgumentMatchers.eq(KEY),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any());
+        var bounded = new GitRepositoryManager(
+                new GitRepositoryProperties(true, 2, IMAGE, LIMIT),
+                java.util.Optional.of(nativeGit),
+                new FabricLayout(temporary.toString()));
+        List<String> captured = new ArrayList<>();
+        assertThatThrownBy(() ->
+                        bounded.forEachMissingCommit(KEY, page -> Set.of(), details -> captured.add(details.sha())))
+                .isInstanceOf(GitRepositoryManager.GitOperationException.class)
+                .hasRootCauseMessage("Git commit details exceed the ingestion frame budget");
+        assertThat(captured).isEmpty();
+    }
+
+    private Git repository() throws Exception {
+        Git git = Git.init()
+                .setInitialBranch("main")
+                .setDirectory(source.toFile())
+                .call();
+        GitTestFixtures.disableSigning(git.getRepository());
+        Files.writeString(source.resolve("README.md"), "Repository\n");
+        commit(git, "Initial commit");
+        return git;
+    }
+
+    private String commit(Git git, String message) throws Exception {
+        git.add().addFilepattern(".").call();
+        return git.commit()
+                .setSign(false)
+                .setAllowEmpty(true)
+                .setMessage(message)
+                .setAuthor("Test", "test@example.com")
+                .setCommitter("Test", "test@example.com")
+                .call()
+                .name();
+    }
+
+    private void prepare() {
+        manager.ensureRepository(KEY, source.toUri().toString(), null);
+    }
+
+    @Test
+    void shouldFetchAPinnedCommitFromItsRefAndRefuseARefThatDoesNotCarryIt() throws Exception {
+        try (Git git = repository()) {
+            prepare();
+            git.checkout().setCreateBranch(true).setName("feature").call();
+            Files.writeString(source.resolve("feature.txt"), "feature\n");
+            String head = commit(git, "Feature");
+
+            assertThat(manager.fetchRemoteCommit(KEY, source.toUri().toString(), "refs/heads/feature", head, null))
+                    .isTrue();
+            assertThatThrownBy(() -> manager.fetchRemoteCommit(
+                            KEY, source.toUri().toString(), "refs/heads/main", "b".repeat(40), null))
+                    .isInstanceOf(GitRepositoryManager.GitOperationException.class);
+        }
+    }
+
+    @Test
+    void shouldNotReadRepositoryWhenDisabled() {
+        var disabled = new GitRepositoryManager(
+                new GitRepositoryProperties(false, 2, IMAGE, LIMIT),
+                java.util.Optional.of(mock(NativeGitExecutor.class)),
+                new FabricLayout(temporary.toString()));
+        assertThat(disabled.isEnabled()).isFalse();
+        assertThat(disabled.isRepositoryCloned(KEY)).isFalse();
+        List<CommitDetails> commits = new ArrayList<>();
+        disabled.forEachCommitInRange(KEY, null, "a".repeat(40), shas -> Set.of(), commits::add);
+        assertThat(commits).isEmpty();
+    }
+
+    @Test
+    void shouldStageFullSourceHistoryAndBinariesWhenReadingASnapshot() throws Exception {
+        try (Git git = repository()) {
+            Files.writeString(source.resolve("large.txt"), "source\n".repeat(300_000));
+            Files.write(source.resolve("image.bin"), new byte[64 * 1024]);
+            String sha = commit(git, "Add full source");
+            prepare();
+            Path staging;
+            try (var snapshot = manager.readTreeSnapshot(KEY, sha)) {
+                staging = snapshot.stagingDir();
+                assertThat(snapshot.complete()).isTrue();
+                assertThat(snapshot.commitSha()).isEqualTo(sha);
+                assertThat(snapshot.totalBytes())
+                        .isGreaterThanOrEqualTo(
+                                Files.size(source.resolve("large.txt")) + Files.size(source.resolve("image.bin")));
+                assertThat(staging.resolve(".git/HEAD")).isRegularFile();
+                assertThat(staging.resolve(".git/hephaestus-captured-refs")).isRegularFile();
+                assertThat(staging.resolve(".git/index")).isRegularFile();
+                assertThat(Files.mismatch(source.resolve("large.txt"), staging.resolve("large.txt")))
+                        .isEqualTo(-1);
+                assertThat(Files.mismatch(source.resolve("image.bin"), staging.resolve("image.bin")))
+                        .isEqualTo(-1);
+                assertThat(Files.readString(staging.resolve(".git/config")))
+                        .doesNotContain("remote", "credential", "http.extraHeader");
+                assertThat(staging.resolve(".git/objects/info/alternates")).doesNotExist();
+                Process log =
+                        new ProcessBuilder("git", "-C", staging.toString(), "rev-list", "--count", "HEAD").start();
+                assertThat(new String(log.getInputStream().readAllBytes()).trim())
+                        .isEqualTo("2");
+                assertThat(log.waitFor()).isZero();
+            }
+            assertThat(staging).doesNotExist();
+        }
+    }
+
+    @Test
+    void shouldRepresentGitSymlinksAsTextWithoutReadingTheirTargets() throws Exception {
+        try (Git git = repository()) {
+            Files.writeString(temporary.resolve("secret"), "outside");
+            Files.createSymbolicLink(source.resolve("link"), Path.of("../../secret"));
+            String sha = commit(git, "Add link");
+            prepare();
+            try (var snapshot = manager.readTreeSnapshot(KEY, sha)) {
+                assertThat(snapshot.stagingDir().resolve("link")).isRegularFile();
+                assertThat(Files.isSymbolicLink(snapshot.stagingDir().resolve("link")))
+                        .isFalse();
+                assertThat(Files.readString(snapshot.stagingDir().resolve("link")))
+                        .isEqualTo("../../secret");
+                assertThat(snapshot.limitations()).isEmpty();
+            }
+        }
+    }
+
+    @Test
+    void shouldStopRangeConsumptionWhenCommitPersistenceFails() throws Exception {
+        try (Git git = repository()) {
+            commit(git, "Second");
+            String head = commit(git, "Third");
+            prepare();
+            List<String> received = new ArrayList<>();
+            assertThatThrownBy(() -> manager.forEachCommitInRange(KEY, null, head, shas -> Set.of(), details -> {
+                        received.add(details.sha());
+                        throw new IllegalStateException("Persistence failed");
+                    }))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessage("Persistence failed");
+            assertThat(received).hasSize(1);
+            received.clear();
+            manager.forEachCommitInRange(KEY, null, head, shas -> Set.of(), details -> received.add(details.sha()));
+            assertThat(received).hasSize(3).contains(head);
+        }
+    }
+
+    @Test
+    void shouldCaptureNativeRenameStatisticsAndParentIdentity() throws Exception {
+        try (Git git = repository()) {
+            var parentId = git.getRepository().resolve("HEAD");
+            assertThat(parentId).isNotNull();
+            String parent = parentId.name();
+            Files.move(source.resolve("README.md"), source.resolve("renamed.md"));
+            git.add().addFilepattern(".").setUpdate(true).call();
+            String head = commit(git, "Rename\n\nBody");
+            prepare();
+            List<CommitDetails> commits = new ArrayList<>();
+            manager.forEachCommitInRange(KEY, parent, head, shas -> Set.of(), commits::add);
+            assertThat(commits).hasSize(1);
+            var captured = commits.getFirst();
+            assertThat(captured.sha()).isEqualTo(head);
+            assertThat(captured.parentShas()).containsExactly(parent);
+            assertThat(captured.message()).isEqualTo("Rename");
+            assertThat(captured.messageBody()).isEqualTo("Body");
+            assertThat(captured.fileChanges()).singleElement().satisfies(change -> {
+                assertThat(change.changeType()).isEqualTo(ChangeType.RENAMED);
+                assertThat(change.filename()).isEqualTo("renamed.md");
+                assertThat(change.previousFilename()).isEqualTo("README.md");
+                assertThat(change.changes()).isZero();
             });
         }
     }
 
-    private GitRepositoryManager createManager(boolean enabled) {
-        return createManager(enabled, 20_000, DataSize.ofMegabytes(32), DataSize.ofMegabytes(10));
-    }
-
-    private GitRepositoryManager createManager(
-            boolean enabled, int maxFiles, DataSize maxTotalSize, DataSize maxFileSize) {
-        GitRepositoryProperties properties = new GitRepositoryProperties(enabled, maxFiles, maxTotalSize, maxFileSize);
-        return new GitRepositoryManager(properties, lockManager, new FabricLayout(storagePath.toString()));
-    }
-
-    private String commit(Git git, String message) throws GitAPIException {
-        return git.commit()
-                .setSign(false)
-                .setMessage(message)
-                .setAuthor(new PersonIdent("Test Author", "author@test.com"))
-                .setCommitter(new PersonIdent("Test Committer", "committer@test.com"))
-                .call()
-                .getName();
-    }
-
-    private Git createSourceRepo() throws GitAPIException, IOException {
-        Git git = Git.init().setDirectory(sourceRepoPath.toFile()).call();
-        GitTestFixtures.disableSigning(git.getRepository());
-        Path file = sourceRepoPath.resolve("README.md");
-        Files.writeString(file, "# Test Repository\n");
-        git.add().addFilepattern("README.md").call();
-        git.commit()
-                .setSign(false)
-                .setMessage("Initial commit")
-                .setAuthor(new PersonIdent("Test Author", "author@test.com"))
-                .setCommitter(new PersonIdent("Test Committer", "committer@test.com"))
-                .call();
-        return git;
-    }
-
-    @Nested
-    class IsEnabled {
-
-        @Test
-        void shouldReturnTrueWhenEnabled() {
-            manager = createManager(true);
-            assertThat(manager.isEnabled()).isTrue();
-        }
-
-        @Test
-        void shouldReturnFalseWhenDisabled() {
-            manager = createManager(false);
-            assertThat(manager.isEnabled()).isFalse();
-        }
-    }
-
-    @Nested
-    class GetRepositoryPath {
-
-        @Test
-        void shouldReturnPathWithRepositoryId() {
-            manager = createManager(false);
-            Path path = manager.getRepositoryPath(42L);
-
-            assertThat(path)
-                    .isEqualTo(storagePath.resolve("sources").resolve("scm").resolve("42"));
-        }
-    }
-
-    @Nested
-    class IsRepositoryCloned {
-
-        @Test
-        void shouldReturnFalseForNonExistentRepository() {
-            manager = createManager(false);
-            assertThat(manager.isRepositoryCloned(999L)).isFalse();
-        }
-
-        // Closing the scope is the operation; its binding is intentionally unread.
-        @SuppressWarnings("try")
-        @Test
-        void shouldReturnTrueForClonedRepository() throws Exception {
-            manager = createManager(true);
-
-            try (Git sourceGit = createSourceRepo()) {
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-                assertThat(manager.isRepositoryCloned(1L)).isTrue();
-            }
-        }
-    }
-
-    @Nested
-    class EnsureRepository {
-
-        @Test
-        void shouldThrowWhenNotEnabled() {
-            manager = createManager(false);
-
-            assertThatThrownBy(() -> manager.ensureRepository(1L, "https://example.com/repo.git", null))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("not enabled");
-        }
-
-        // Closing the scope is the operation; its binding is intentionally unread.
-        @SuppressWarnings("try")
-        @Test
-        void shouldCloneRepositoryOnFirstCall() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                Path result =
-                        manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                assertThat(result)
-                        .isEqualTo(storagePath.resolve("sources").resolve("scm").resolve("1"));
-                assertThat(Files.exists(result.resolve(".git").resolve("HEAD"))).isTrue();
-            }
-        }
-
-        @Test
-        void shouldFetchOnSubsequentCalls() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                Path file = sourceRepoPath.resolve("file2.txt");
-                Files.writeString(file, "content");
-                sourceGit.add().addFilepattern("file2.txt").call();
-                String newSha = sourceGit
-                        .commit()
-                        .setSign(false)
-                        .setMessage("Second commit")
-                        .setAuthor(new PersonIdent("Test Author", "author@test.com"))
-                        .setCommitter(new PersonIdent("Test Committer", "committer@test.com"))
-                        .call()
-                        .getName();
-
-                Path result =
-                        manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                assertThat(result)
-                        .isEqualTo(storagePath.resolve("sources").resolve("scm").resolve("1"));
-                List<GitRepositoryManager.CommitInfo> commits = manager.walkCommits(1L, null, newSha);
-                assertThat(commits).hasSize(2);
-            }
-        }
-
-        @Test
-        void shouldRecloneWhenRepositoryIdPointsToDifferentOrigin() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String oldHead = sourceGit.log().call().iterator().next().getName();
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                Path replacementPath = tempDir.resolve("replacement-repo");
-                Files.createDirectories(replacementPath);
-                String replacementHead;
-                try (Git replacement =
-                        Git.init().setDirectory(replacementPath.toFile()).call()) {
-                    GitTestFixtures.disableSigning(replacement.getRepository());
-                    Files.writeString(replacementPath.resolve("replacement.txt"), "replacement\n");
-                    replacement.add().addFilepattern("replacement.txt").call();
-                    replacementHead = replacement
-                            .commit()
-                            .setSign(false)
-                            .setMessage("Replacement repository")
-                            .setAuthor(new PersonIdent("Test Author", "author@test.com"))
-                            .setCommitter(new PersonIdent("Test Committer", "committer@test.com"))
-                            .call()
-                            .getName();
+    @Test
+    void shouldResumeFromCapturedShasAfterAFailedWalk() throws Exception {
+        try (Git git = repository()) {
+            ObjectId tip = git.getRepository().resolve("HEAD");
+            try (var inserter = git.getRepository().newObjectInserter();
+                    var walk = new RevWalk(git.getRepository())) {
+                ObjectId tree = walk.parseCommit(tip).getTree().getId();
+                PersonIdent author = new PersonIdent("Test", "test@example.com");
+                for (int i = 0; i < 601; i++) {
+                    CommitBuilder commit = new CommitBuilder();
+                    commit.setTreeId(tree);
+                    commit.setParentId(tip);
+                    commit.setAuthor(author);
+                    commit.setCommitter(author);
+                    commit.setMessage("Commit " + i);
+                    tip = inserter.insert(commit);
                 }
-
-                Path result =
-                        manager.ensureRepository(1L, replacementPath.toUri().toString(), null);
-
-                assertThat(manager.commitExists(1L, replacementHead)).isTrue();
-                assertThat(manager.commitExists(1L, oldHead)).isFalse();
-                try (Git clone = Git.open(result.toFile())) {
-                    assertThat(clone.getRepository().getConfig().getString("remote", "origin", "url"))
-                            .isEqualTo(replacementPath.toUri().toString());
-                }
+                inserter.flush();
             }
-        }
-
-        @Test
-        void shouldRebuildCheckoutWhenStaleOriginUrlPrecedesCurrentOne() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String cloneUrl = sourceRepoPath.toUri().toString();
-                Path repoPath = manager.ensureRepository(1L, cloneUrl, null);
-
-                // JGit reads the last value back as the configured URL but fetches from the first,
-                // which is not a repository. Dropping the fetch refspec instead only yields "Nothing
-                // to fetch".
-                try (Git clone = Git.open(repoPath.toFile())) {
-                    var config = clone.getRepository().getConfig();
-                    config.setStringList(
-                            "remote",
-                            "origin",
-                            "url",
-                            List.of(tempDir.resolve("missing").toUri().toString(), cloneUrl));
-                    config.save();
-                    assertThatThrownBy(() -> clone.fetch().setRemote("origin").call())
-                            .isInstanceOf(InvalidRemoteException.class);
-                }
-
-                Path result = manager.ensureRepository(1L, cloneUrl, null);
-
-                assertThat(result).isEqualTo(repoPath);
-                try (Git clone = Git.open(result.toFile())) {
-                    assertThat(clone.getRepository().getConfig().getStringList("remote", "origin", "url"))
-                            .containsExactly(cloneUrl);
-                }
-
-                Files.writeString(sourceRepoPath.resolve("file2.txt"), "content");
-                sourceGit.add().addFilepattern("file2.txt").call();
-                String newSha = commit(sourceGit, "Second commit");
-
-                manager.ensureRepository(1L, cloneUrl, null);
-
-                assertThat(manager.commitExists(1L, newSha)).isTrue();
-            }
-        }
-
-        @Test
-        void shouldRebuildCheckoutWhenRemoteConfigurationDoesNotParse() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String cloneUrl = sourceRepoPath.toUri().toString();
-                Path repoPath = manager.ensureRepository(1L, cloneUrl, null);
-
-                // An empty pushurl, as a partially written config leaves behind: JGit parses every URL
-                // of the remote before fetching and rejects the empty one.
-                try (Git clone = Git.open(repoPath.toFile())) {
-                    var config = clone.getRepository().getConfig();
-                    config.setString("remote", "origin", "pushurl", "");
-                    config.save();
-                    assertThatThrownBy(() -> clone.fetch().setRemote("origin").call())
-                            .isInstanceOf(InvalidRemoteException.class)
-                            .hasRootCauseInstanceOf(URISyntaxException.class);
-                }
-
-                Path result = manager.ensureRepository(1L, cloneUrl, null);
-
-                assertThat(result).isEqualTo(repoPath);
-                try (Git clone = Git.open(result.toFile())) {
-                    assertThat(clone.getRepository().getConfig().getString("remote", "origin", "pushurl"))
-                            .isNull();
-                }
-
-                Files.writeString(sourceRepoPath.resolve("file2.txt"), "content");
-                sourceGit.add().addFilepattern("file2.txt").call();
-                String newSha = commit(sourceGit, "Second commit");
-
-                manager.ensureRepository(1L, cloneUrl, null);
-
-                assertThat(manager.commitExists(1L, newSha)).isTrue();
-            }
-        }
-
-        @Test
-        void shouldKeepCheckoutWhenRepositoryIsGoneUpstream() throws Exception {
-            manager = createManager(true);
-            String cloneUrl = sourceRepoPath.toUri().toString();
-            String head;
-            try (Git sourceGit = createSourceRepo()) {
-                head = sourceGit.log().call().iterator().next().getName();
-            }
-            manager.ensureRepository(1L, cloneUrl, null);
-            FileUtils.delete(sourceRepoPath.toFile(), FileUtils.RECURSIVE);
-
-            assertThatThrownBy(() -> manager.ensureRepository(1L, cloneUrl, null))
-                    .isInstanceOf(GitRepositoryManager.GitOperationException.class)
-                    .hasMessageContaining("not found upstream")
-                    .hasRootCauseInstanceOf(NoRemoteRepositoryException.class);
-
-            assertThat(manager.isRepositoryCloned(1L)).isTrue();
-            assertThat(manager.commitExists(1L, head)).isTrue();
+            var update = git.getRepository().updateRef("HEAD");
+            update.setNewObjectId(tip);
+            update.update();
+            assertThat(tip).isNotNull();
+            String mainTip = tip.name();
+            git.checkout().setCreateBranch(true).setName("feature").call();
+            String featureTip = commit(git, "Feature");
+            prepare();
+            Set<String> persisted = new HashSet<>(Set.of(mainTip));
+            List<Integer> pageSizes = new ArrayList<>();
+            Function<List<String>, Set<String>> existing = shas -> {
+                pageSizes.add(shas.size());
+                Set<String> found = new HashSet<>(shas);
+                found.retainAll(persisted);
+                return found;
+            };
+            assertThatThrownBy(() -> manager.forEachMissingCommit(KEY, existing, info -> {
+                        if (persisted.size() == 5) throw new IllegalStateException("Persistence unavailable");
+                        persisted.add(info.sha());
+                    }))
+                    .isInstanceOf(IllegalStateException.class);
+            Set<String> resumed = new HashSet<>();
+            manager.forEachMissingCommit(KEY, existing, info -> {
+                assertThat(persisted.add(info.sha())).isTrue();
+                resumed.add(info.sha());
+            });
+            assertThat(persisted).hasSize(603).contains(mainTip, featureTip);
+            assertThat(resumed).hasSize(598).doesNotContain(mainTip);
+            assertThat(pageSizes).contains(256).allMatch(size -> size <= 256);
+            manager.forEachMissingCommit(KEY, existing, info -> {
+                throw new AssertionError("Reprocessed captured commit");
+            });
         }
     }
 
-    @Nested
-    class CommitExists {
+    @Test
+    void shouldPauseTheWalkAtItsPageBudgetWhenMoreCommitsAreMissing() {
+        // GitRepositoryManager.PAGE_SIZE is 256 and MAX_DETAIL_PAGES_PER_WALK is 32.
+        List<String> ids = IntStream.range(0, 33 * 256)
+                .mapToObj(i -> String.format("%040x", i))
+                .toList();
+        var nativeGit = mock(NativeGitExecutor.class);
+        doAnswer(invocation -> {
+                    Request request = invocation.getArgument(1);
+                    OutputStream output = invocation.getArgument(3);
+                    if (request.operation() == Operation.COMMIT_IDS)
+                        output.write(String.join("\n", ids).concat("\n").getBytes(StandardCharsets.UTF_8));
+                    else writeDetails(output, request.revisions());
+                    return null;
+                })
+                .when(nativeGit)
+                .execute(eq(KEY), any(), any(), any());
+        var paged = new GitRepositoryManager(
+                new GitRepositoryProperties(true, 2, IMAGE, LIMIT),
+                java.util.Optional.of(nativeGit),
+                new FabricLayout(temporary.toString()));
+        List<String> seen = new ArrayList<>();
+        paged.forEachMissingCommit(KEY, page -> Set.of(), details -> seen.add(details.sha()));
+        assertThat(seen).hasSize(32 * 256).isEqualTo(ids.subList(0, 32 * 256));
+    }
 
-        // Closing the scope is the operation; its binding is intentionally unread.
-        @SuppressWarnings("try")
-        @Test
-        void shouldReturnFalseWhenValidObjectIdIsAbsent() throws Exception {
-            manager = createManager(true);
-            try (Git ignored = createSourceRepo()) {
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                assertThat(manager.commitExists(1L, "0000000000000000000000000000000000000001"))
-                        .isFalse();
-            }
+    private static void writeDetails(OutputStream output, List<String> shas) throws IOException {
+        var frames = new DataOutputStream(output);
+        for (String sha : shas) {
+            byte[] metadata = String.join(
+                            "\0",
+                            sha,
+                            "Test",
+                            "test@example.com",
+                            "2024-01-01T00:00:00Z",
+                            "Test",
+                            "test@example.com",
+                            "2024-01-01T00:00:00Z",
+                            "",
+                            "Commit")
+                    .getBytes(StandardCharsets.UTF_8);
+            frames.writeLong(metadata.length);
+            frames.write(metadata);
+            frames.writeLong(0);
         }
     }
 
-    @Nested
-    class FetchRemoteCommit {
+    @Test
+    void shouldRefuseTheSnapshotWhenAnArchivePathEscapesTheStagingDirectory() throws Exception {
+        var guarded = snapshotManager(archive(file("../x", 1)), LIMIT);
+        assertThatThrownBy(() -> guarded.readTreeSnapshot(KEY, "a".repeat(40)))
+                .isInstanceOf(GitRepositoryManager.GitOperationException.class)
+                .hasRootCauseMessage("Native snapshot contains an unsafe archive path");
+        assertThat(stagingDirectories()).isEmpty();
+    }
 
-        @Test
-        void shouldFetchSyntheticReviewRefAndVerifyPinnedCommit() throws Exception {
-            manager = createManager(true);
-            try (Git source = createSourceRepo()) {
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
+    @Test
+    void shouldRefuseTheSnapshotWhenTheArchiveCarriesALink() throws Exception {
+        var link = new TarArchiveEntry("link", TarConstants.LF_SYMLINK);
+        link.setLinkName("README.md");
+        var guarded = snapshotManager(archive(link), LIMIT);
+        assertThatThrownBy(() -> guarded.readTreeSnapshot(KEY, "a".repeat(40)))
+                .isInstanceOf(GitRepositoryManager.GitOperationException.class)
+                .hasRootCauseMessage("Native snapshot contains an unexpected filesystem link");
+        assertThat(stagingDirectories()).isEmpty();
+    }
 
-                Files.writeString(sourceRepoPath.resolve("review.txt"), "review\n");
-                source.add().addFilepattern("review.txt").call();
-                String reviewHead = source.commit()
-                        .setSign(false)
-                        .setMessage("Review head")
-                        .setAuthor(new PersonIdent("Test Author", "author@test.com"))
-                        .setCommitter(new PersonIdent("Test Committer", "committer@test.com"))
-                        .call()
-                        .getName();
-                var update = source.getRepository().updateRef("refs/merge-requests/7/head");
-                update.setNewObjectId(ObjectId.fromString(reviewHead));
-                update.update();
+    @Test
+    void shouldRefuseTheSnapshotWhenTheArchiveCarriesADeviceOrFifo() throws Exception {
+        var guarded = snapshotManager(archive(new TarArchiveEntry("pipe", TarConstants.LF_FIFO)), LIMIT);
+        assertThatThrownBy(() -> guarded.readTreeSnapshot(KEY, "a".repeat(40)))
+                .isInstanceOf(GitRepositoryManager.GitOperationException.class)
+                .hasRootCauseMessage("Native snapshot contains an unsupported archive entry");
+        assertThat(stagingDirectories()).isEmpty();
+    }
 
-                assertThat(manager.commitExists(1L, reviewHead)).isFalse();
+    @Test
+    void shouldRefuseTheSnapshotWhenItExceedsMaxSnapshotBytes() throws Exception {
+        var guarded = snapshotManager(archive(file("README.md", 64)), 63);
+        assertThatThrownBy(() -> guarded.readTreeSnapshot(KEY, "a".repeat(40)))
+                .isInstanceOf(GitRepositoryManager.GitOperationException.class)
+                .hasRootCauseMessage("Repository snapshot exceeds hephaestus.git.max-snapshot-bytes");
+        assertThat(stagingDirectories()).isEmpty();
+    }
 
-                assertThat(manager.fetchRemoteCommit(1L, "refs/merge-requests/7/head", reviewHead, null))
-                        .isTrue();
-                assertThat(manager.commitExists(1L, reviewHead)).isTrue();
-            }
+    private GitRepositoryManager snapshotManager(byte[] archive, long maxSnapshotBytes) {
+        var nativeGit = mock(NativeGitExecutor.class);
+        doAnswer(invocation -> {
+                    Request request = invocation.getArgument(1);
+                    OutputStream output = invocation.getArgument(3);
+                    switch (request.operation()) {
+                        case RESOLVE -> output.write("a".repeat(40).getBytes(StandardCharsets.UTF_8));
+                        case TREE_ID -> output.write("b".repeat(40).getBytes(StandardCharsets.UTF_8));
+                        case SNAPSHOT -> output.write(archive);
+                        default -> {}
+                    }
+                    return null;
+                })
+                .when(nativeGit)
+                .execute(eq(KEY), any(), any(), any());
+        return new GitRepositoryManager(
+                new GitRepositoryProperties(true, 2, IMAGE, maxSnapshotBytes),
+                java.util.Optional.of(nativeGit),
+                new FabricLayout(temporary.resolve("outputs").toString()));
+    }
+
+    private List<Path> stagingDirectories() throws IOException {
+        try (var paths = Files.list(temporary.resolve("outputs"))) {
+            return paths.filter(path -> path.getFileName().toString().startsWith("git-snapshot-"))
+                    .toList();
         }
     }
 
-    @Nested
-    class WalkCommits {
-
-        @Test
-        void shouldReturnEmptyListWhenNotEnabled() {
-            manager = createManager(false);
-
-            List<GitRepositoryManager.CommitInfo> result = manager.walkCommits(1L, null, "abc123");
-
-            assertThat(result).isEmpty();
-        }
-
-        @Test
-        void shouldWalkAllCommitsWhenFromShaIsNull() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String headSha = sourceGit.log().call().iterator().next().getName();
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-                List<GitRepositoryManager.CommitInfo> commits = manager.walkCommits(1L, null, headSha);
-
-                assertThat(commits).hasSize(1);
-                assertThat(commits.get(0).message()).isEqualTo("Initial commit");
-            }
-        }
-
-        @Test
-        void shouldWalkCommitsBetweenShas() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String firstSha = sourceGit.log().call().iterator().next().getName();
-
-                Path file2 = sourceRepoPath.resolve("file2.txt");
-                Files.writeString(file2, "content2");
-                sourceGit.add().addFilepattern("file2.txt").call();
-                sourceGit
-                        .commit()
-                        .setSign(false)
-                        .setMessage("Second commit")
-                        .setAuthor(new PersonIdent("Test Author", "author@test.com"))
-                        .setCommitter(new PersonIdent("Test Committer", "committer@test.com"))
-                        .call();
-
-                Path file3 = sourceRepoPath.resolve("file3.txt");
-                Files.writeString(file3, "content3");
-                sourceGit.add().addFilepattern("file3.txt").call();
-                String thirdSha = sourceGit
-                        .commit()
-                        .setSign(false)
-                        .setMessage("Third commit")
-                        .setAuthor(new PersonIdent("Test Author", "author@test.com"))
-                        .setCommitter(new PersonIdent("Test Committer", "committer@test.com"))
-                        .call()
-                        .getName();
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-                List<GitRepositoryManager.CommitInfo> commits = manager.walkCommits(1L, firstSha, thirdSha);
-
-                assertThat(commits).hasSize(2);
-                assertThat(commits)
-                        .extracting(GitRepositoryManager.CommitInfo::message)
-                        .containsExactly("Third commit", "Second commit");
-            }
-        }
-
-        // Closing the scope is the operation; its binding is intentionally unread.
-        @SuppressWarnings("try")
-        @Test
-        void shouldThrowForUnresolvableToSha() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                assertThatThrownBy(() -> manager.walkCommits(1L, null, "0000000000000000000000000000000000000000"))
-                        .isInstanceOf(GitRepositoryManager.GitOperationException.class)
-                        .hasMessageContaining("Failed to walk commits");
-            }
-        }
-
-        @Test
-        void shouldExtractFileChangesForCommits() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String headSha = sourceGit.log().call().iterator().next().getName();
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-                List<GitRepositoryManager.CommitInfo> commits = manager.walkCommits(1L, null, headSha);
-
-                assertThat(commits).hasSize(1);
-                GitRepositoryManager.CommitInfo commit = commits.get(0);
-
-                assertThat(commit.fileChanges()).hasSize(1);
-                GitRepositoryManager.FileChange fileChange =
-                        commit.fileChanges().get(0);
-                assertThat(fileChange.filename()).isEqualTo("README.md");
-                assertThat(fileChange.changeType()).isEqualTo(GitRepositoryManager.ChangeType.ADDED);
-                assertThat(fileChange.additions()).isPositive();
-            }
-        }
-
-        @Test
-        void shouldExtractAuthorAndCommitterInfo() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String headSha = sourceGit.log().call().iterator().next().getName();
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-                List<GitRepositoryManager.CommitInfo> commits = manager.walkCommits(1L, null, headSha);
-
-                GitRepositoryManager.CommitInfo commit = commits.get(0);
-                assertThat(commit.authorName()).isEqualTo("Test Author");
-                assertThat(commit.authorEmail()).isEqualTo("author@test.com");
-                assertThat(commit.committerName()).isEqualTo("Test Committer");
-                assertThat(commit.committerEmail()).isEqualTo("committer@test.com");
-                assertThat(commit.authoredAt()).isNotNull();
-                assertThat(commit.committedAt()).isNotNull();
-            }
-        }
-
-        @Test
-        void shouldDetectFileModifications() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String firstSha = sourceGit.log().call().iterator().next().getName();
-
-                Path readme = sourceRepoPath.resolve("README.md");
-                Files.writeString(readme, "# Updated\nNew content\n");
-                sourceGit.add().addFilepattern("README.md").call();
-                String secondSha = sourceGit
-                        .commit()
-                        .setSign(false)
-                        .setMessage("Update README")
-                        .setAuthor(new PersonIdent("Test Author", "author@test.com"))
-                        .setCommitter(new PersonIdent("Test Committer", "committer@test.com"))
-                        .call()
-                        .getName();
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-                List<GitRepositoryManager.CommitInfo> commits = manager.walkCommits(1L, firstSha, secondSha);
-
-                assertThat(commits).hasSize(1);
-                GitRepositoryManager.FileChange change =
-                        commits.get(0).fileChanges().get(0);
-                assertThat(change.filename()).isEqualTo("README.md");
-                assertThat(change.changeType()).isEqualTo(GitRepositoryManager.ChangeType.MODIFIED);
-            }
-        }
-
-        @Test
-        void shouldDetectFileDeletions() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String firstSha = sourceGit.log().call().iterator().next().getName();
-
-                Files.delete(sourceRepoPath.resolve("README.md"));
-                sourceGit.rm().addFilepattern("README.md").call();
-                String secondSha = sourceGit
-                        .commit()
-                        .setSign(false)
-                        .setMessage("Remove README")
-                        .setAuthor(new PersonIdent("Test Author", "author@test.com"))
-                        .setCommitter(new PersonIdent("Test Committer", "committer@test.com"))
-                        .call()
-                        .getName();
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-                List<GitRepositoryManager.CommitInfo> commits = manager.walkCommits(1L, firstSha, secondSha);
-
-                assertThat(commits).hasSize(1);
-                GitRepositoryManager.FileChange change =
-                        commits.get(0).fileChanges().get(0);
-                assertThat(change.filename()).isEqualTo("README.md");
-                assertThat(change.changeType()).isEqualTo(GitRepositoryManager.ChangeType.REMOVED);
-            }
-        }
-
-        @Test
-        void shouldComputeAdditionsAndDeletionsCorrectly() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String headSha = sourceGit.log().call().iterator().next().getName();
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-                List<GitRepositoryManager.CommitInfo> commits = manager.walkCommits(1L, null, headSha);
-
-                GitRepositoryManager.CommitInfo commit = commits.get(0);
-                assertThat(commit.additions()).isPositive();
-                assertThat(commit.deletions()).isZero();
-                assertThat(commit.changedFiles()).isEqualTo(1);
-            }
-        }
+    private static TarArchiveEntry file(String name, long size) {
+        var entry = new TarArchiveEntry(name, TarConstants.LF_NORMAL, true);
+        entry.setSize(size);
+        return entry;
     }
 
-    @Nested
-    class ResolveDefaultBranchHead {
-
-        @Test
-        void shouldReturnNullWhenNotEnabled() {
-            manager = createManager(false);
-
-            String result = manager.resolveDefaultBranchHead(1L, "main");
-
-            assertThat(result).isNull();
-        }
-
-        @Test
-        void shouldResolveHeadShaForDefaultBranch() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String expectedSha = sourceGit.log().call().iterator().next().getName();
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-                String result = manager.resolveDefaultBranchHead(1L, "master");
-
-                assertThat(result).isEqualTo(expectedSha);
+    private static byte[] archive(TarArchiveEntry... entries) throws IOException {
+        var bytes = new ByteArrayOutputStream();
+        try (var tar = new TarArchiveOutputStream(bytes)) {
+            for (var entry : entries) {
+                tar.putArchiveEntry(entry);
+                tar.write(new byte[(int) entry.getSize()]);
+                tar.closeArchiveEntry();
             }
         }
-
-        @Test
-        void shouldResolveHeadAfterFetchUpdates() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                Path file = sourceRepoPath.resolve("file2.txt");
-                Files.writeString(file, "content");
-                sourceGit.add().addFilepattern("file2.txt").call();
-                String newSha = sourceGit
-                        .commit()
-                        .setSign(false)
-                        .setMessage("Second commit")
-                        .setAuthor(new PersonIdent("Test Author", "author@test.com"))
-                        .setCommitter(new PersonIdent("Test Committer", "committer@test.com"))
-                        .call()
-                        .getName();
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-                String result = manager.resolveDefaultBranchHead(1L, "master");
-
-                assertThat(result).isEqualTo(newSha);
-            }
-        }
-
-        // Closing the scope is the operation; its binding is intentionally unread.
-        @SuppressWarnings("try")
-        @Test
-        void shouldReturnNullForNonExistentBranch() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                String result = manager.resolveDefaultBranchHead(1L, "nonexistent-branch");
-
-                assertThat(result).isNull();
-            }
-        }
-
-        @Test
-        void shouldReturnNullForNonExistentRepository() {
-            manager = createManager(true);
-
-            String result = manager.resolveDefaultBranchHead(999L, "main");
-
-            assertThat(result).isNull();
-        }
+        return bytes.toByteArray();
     }
 
-    @Nested
-    class ReadTreeSnapshot {
-
-        @Test
-        void shouldRefuseToReadATreeWhenCheckoutIsDisabled() {
-            manager = createManager(false);
-
-            assertThatThrownBy(() -> manager.readTreeSnapshot(1L, "abc123"))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("checkout is disabled");
-        }
-
-        @Test
-        void shouldReadAllFilesAtCommit() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String headSha = sourceGit.log().call().iterator().next().getName();
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-                try (var snapshot = manager.readTreeSnapshot(1L, headSha)) {
-                    Map<String, Path> files = snapshot.files();
-
-                    assertThat(files).containsKey("README.md");
-                    assertThat(Files.readString(files.get("README.md"), StandardCharsets.UTF_8))
-                            .isEqualTo("# Test Repository\n");
-                }
-            }
-        }
-
-        @Test
-        void shouldRecordTheResolvedCommitIdentity() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String headSha = sourceGit.log().call().iterator().next().getName();
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                try (var snapshot = manager.readTreeSnapshot(1L, headSha.substring(0, 8))) {
-                    assertThat(snapshot.commitSha()).isEqualTo(headSha);
-                }
-            }
-        }
-
-        @Test
-        void shouldReadFromSpecificCommit() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String firstSha = sourceGit.log().call().iterator().next().getName();
-
-                Path file2 = sourceRepoPath.resolve("file2.txt");
-                Files.writeString(file2, "second file content");
-                sourceGit.add().addFilepattern("file2.txt").call();
-                sourceGit
-                        .commit()
-                        .setSign(false)
-                        .setMessage("Add file2")
-                        .setAuthor(new PersonIdent("Test Author", "author@test.com"))
-                        .setCommitter(new PersonIdent("Test Committer", "committer@test.com"))
-                        .call();
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                try (var snapshot = manager.readTreeSnapshot(1L, firstSha)) {
-                    assertThat(snapshot.files()).containsKey("README.md");
-                    assertThat(snapshot.files()).doesNotContainKey("file2.txt");
-                }
-            }
-        }
-
-        @Test
-        @DisplayName("excludes a symlink instead of following it out of the tree")
-        void shouldExcludeSymlinksAndSaySo() throws Exception {
-            manager = createManager(true);
-            Path escapingLink = sourceRepoPath.resolve("escape.txt");
-            try (Git sourceGit = createSourceRepo()) {
-                Files.createSymbolicLink(escapingLink, Path.of("../../../etc/passwd"));
-                sourceGit.add().addFilepattern("escape.txt").call();
-                String sha = sourceGit
-                        .commit()
-                        .setSign(false)
-                        .setMessage("Add a symlink pointing out of the repository")
-                        .setAuthor(new PersonIdent("Test Author", "author@test.com"))
-                        .setCommitter(new PersonIdent("Test Committer", "committer@test.com"))
-                        .call()
-                        .getName();
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                try (var snapshot = manager.readTreeSnapshot(1L, sha)) {
-                    assertThat(snapshot.files()).doesNotContainKey("escape.txt");
-                    assertThat(snapshot.stagingDir().resolve("escape.txt")).doesNotExist();
-                    assertThat(snapshot.limitations()).contains("SYMLINK_EXCLUDED");
-                    assertThat(snapshot.complete()).isFalse();
-                }
+    @Test
+    void shouldResumeAfterThreadInterruption() throws Exception {
+        try (Git git = repository()) {
+            commit(git, "Second");
+            prepare();
+            Set<String> persisted = new HashSet<>();
+            try {
+                assertThatThrownBy(() -> manager.forEachMissingCommit(KEY, shas -> Set.copyOf(persisted), info -> {
+                            persisted.add(info.sha());
+                            Thread.currentThread().interrupt();
+                        }))
+                        .isInstanceOf(GitRepositoryManager.GitOperationException.class);
+                assertThat(Thread.currentThread().isInterrupted()).isTrue();
             } finally {
-                // Unlink the fixture without following its target during temporary-directory cleanup.
-                Files.deleteIfExists(escapingLink);
+                Thread.interrupted();
             }
-        }
-
-        @Test
-        @DisplayName("deletes its staging directory when closed")
-        void shouldReleaseStagingOnClose() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String headSha = sourceGit.log().call().iterator().next().getName();
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                Path stagingDir;
-                try (var snapshot = manager.readTreeSnapshot(1L, headSha)) {
-                    stagingDir = snapshot.stagingDir();
-                    assertThat(stagingDir).exists();
-                }
-                assertThat(stagingDir).doesNotExist();
-            }
-        }
-
-        @Test
-        @DisplayName("skips one oversized blob, keeps the rest of the tree, and says which bound it hit")
-        void shouldSkipABlobOverThePerFileBoundWithoutLosingTheTree() throws Exception {
-            manager = createManager(true, 20_000, DataSize.ofMegabytes(32), DataSize.ofKilobytes(4));
-            try (Git sourceGit = createSourceRepo()) {
-                Files.write(sourceRepoPath.resolve("asset.bin"), new byte[16 * 1024]);
-                Files.writeString(sourceRepoPath.resolve("src.java"), "class A {}\n");
-                sourceGit.add().addFilepattern(".").call();
-                String sha = commit(sourceGit, "Add an oversized asset beside a source file");
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                try (var snapshot = manager.readTreeSnapshot(1L, sha)) {
-                    assertThat(snapshot.files()).doesNotContainKey("asset.bin");
-                    assertThat(snapshot.files()).containsKeys("src.java", "README.md");
-                    assertThat(snapshot.limitations()).contains(GitRepositoryManager.TREE_LIMITATION_FILE_TOO_LARGE);
-                    assertThat(snapshot.complete()).isFalse();
-                }
-            }
-        }
-
-        @Test
-        @DisplayName("stops at the file-count bound and reports itself incomplete")
-        void shouldStopAtTheFileCountBound() throws Exception {
-            manager = createManager(true, 3, DataSize.ofMegabytes(32), DataSize.ofMegabytes(10));
-            try (Git sourceGit = createSourceRepo()) {
-                for (int i = 0; i < 10; i++) {
-                    Files.writeString(sourceRepoPath.resolve("file" + i + ".txt"), "content " + i + "\n");
-                }
-                sourceGit.add().addFilepattern(".").call();
-                String sha = commit(sourceGit, "Add more files than the bound admits");
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                try (var snapshot = manager.readTreeSnapshot(1L, sha)) {
-                    assertThat(snapshot.files()).hasSize(3);
-                    assertThat(snapshot.limitations()).contains(GitRepositoryManager.TREE_LIMITATION_FILE_COUNT);
-                    assertThat(snapshot.complete()).isFalse();
-                }
-            }
-        }
-
-        @Test
-        @DisplayName("stops at the total-size bound and reports itself incomplete")
-        void shouldStopAtTheTotalSizeBound() throws Exception {
-            manager = createManager(true, 20_000, DataSize.ofKilobytes(6), DataSize.ofKilobytes(4));
-            try (Git sourceGit = createSourceRepo()) {
-                for (int i = 0; i < 8; i++) {
-                    Files.write(sourceRepoPath.resolve("file" + i + ".bin"), new byte[2 * 1024]);
-                }
-                sourceGit.add().addFilepattern(".").call();
-                String sha = commit(sourceGit, "Add more bytes than the bound admits");
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                try (var snapshot = manager.readTreeSnapshot(1L, sha)) {
-                    assertThat(snapshot.totalBytes()).isLessThanOrEqualTo(6 * 1024);
-                    assertThat(snapshot.files()).hasSizeLessThan(9);
-                    assertThat(snapshot.limitations()).contains(GitRepositoryManager.TREE_LIMITATION_TOTAL_SIZE);
-                    assertThat(snapshot.complete()).isFalse();
-                }
-            }
-        }
-
-        @Test
-        @DisplayName("never writes a blob it is going to reject")
-        void shouldNotStageAnOversizedBlobBeforeRejectingIt() throws Exception {
-            manager = createManager(true, 20_000, DataSize.ofMegabytes(32), DataSize.ofKilobytes(4));
-            try (Git sourceGit = createSourceRepo()) {
-                Files.write(sourceRepoPath.resolve("asset.bin"), new byte[64 * 1024]);
-                sourceGit.add().addFilepattern(".").call();
-                String sha = commit(sourceGit, "Add an oversized asset");
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                try (var snapshot = manager.readTreeSnapshot(1L, sha)) {
-                    // The bound has to protect the disk too: measuring the blob after writing it would
-                    // let a repository full of huge files fill the staging volume before being rejected.
-                    assertThat(snapshot.stagingDir().resolve("asset.bin")).doesNotExist();
-                    assertThat(snapshot.totalBytes()).isLessThan(64 * 1024);
-                }
-            }
-        }
-
-        // Closing the scope is the operation; its binding is intentionally unread.
-        @SuppressWarnings("try")
-        @Test
-        void shouldThrowForUnresolvableCommit() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                assertThatThrownBy(() -> manager.readTreeSnapshot(1L, "0000000000000000000000000000000000000000"))
-                        .isInstanceOf(GitRepositoryManager.GitOperationException.class)
-                        .hasMessageContaining("Failed to read files at commit");
-            }
+            assertThat(persisted).hasSize(1);
+            manager.forEachMissingCommit(
+                    KEY,
+                    shas -> Set.copyOf(persisted),
+                    info -> assertThat(persisted.add(info.sha())).isTrue());
+            assertThat(persisted).hasSize(2);
         }
     }
 
-    @Nested
-    class GenerateUnifiedDiff {
-
-        @Test
-        void shouldReturnEmptyStringWhenNotEnabled() {
-            manager = createManager(false);
-
-            String result = manager.generateUnifiedDiff(1L, "main", "feature");
-
-            assertThat(result).isEmpty();
-        }
-
-        @Test
-        void shouldGenerateUnifiedDiff() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String baseSha = sourceGit.log().call().iterator().next().getName();
-
-                sourceGit.branchCreate().setName("feature").call();
-                sourceGit.checkout().setName("feature").call();
-
-                Path file = sourceRepoPath.resolve("new-file.java");
-                Files.writeString(file, "public class NewFile {}\n");
-                sourceGit.add().addFilepattern("new-file.java").call();
-                sourceGit
-                        .commit()
-                        .setSign(false)
-                        .setMessage("Add new file on feature branch")
-                        .setAuthor(new PersonIdent("Test Author", "author@test.com"))
-                        .setCommitter(new PersonIdent("Test Committer", "committer@test.com"))
-                        .call();
-
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                String featureSha = sourceGit.log().call().iterator().next().getName();
-                String diff = manager.generateUnifiedDiff(1L, baseSha, featureSha);
-
-                assertThat(diff).contains("new-file.java");
-                assertThat(diff).contains("public class NewFile {}");
-            }
-        }
-
-        @Test
-        void shouldReturnEmptyForUnresolvableBaseRef() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String headSha = sourceGit.log().call().iterator().next().getName();
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                String diff = manager.generateUnifiedDiff(1L, "nonexistent-ref-xyz", headSha);
-
-                assertThat(diff).isEmpty();
-            }
-        }
-
-        @Test
-        void shouldReturnEmptyForUnresolvableHeadRef() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String headSha = sourceGit.log().call().iterator().next().getName();
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                String diff = manager.generateUnifiedDiff(1L, headSha, "nonexistent-ref-xyz");
-
-                assertThat(diff).isEmpty();
-            }
-        }
-
-        @Test
-        void shouldReturnEmptyDiffWhenSameRef() throws Exception {
-            manager = createManager(true);
-            try (Git sourceGit = createSourceRepo()) {
-                String headSha = sourceGit.log().call().iterator().next().getName();
-                manager.ensureRepository(1L, sourceRepoPath.toUri().toString(), null);
-
-                String diff = manager.generateUnifiedDiff(1L, headSha, headSha);
-
-                assertThat(diff).isEmpty();
-            }
-        }
+    @Test
+    void shouldNotShareWorkspaceMirrors() throws Exception {
+        repository().close();
+        prepare();
+        assertThat(manager.isRepositoryCloned(KEY)).isTrue();
+        assertThat(manager.isRepositoryCloned(new RepositoryKey(200L, 1L))).isFalse();
+        manager.deleteOrphanedRepository(1L);
+        assertThat(manager.isRepositoryCloned(KEY)).isFalse();
     }
 }

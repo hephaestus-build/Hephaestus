@@ -14,9 +14,8 @@ import { join } from "node:path";
 import { mock, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-const imageRoot = fileURLToPath(
-	new URL("../../../../../../docker/agents/precompute", import.meta.url),
-);
+const repositoryRoot = fileURLToPath(new URL("../../../../../../", import.meta.url));
+const imageRoot = join(repositoryRoot, "docker/agents/precompute");
 
 const scenarioRoot = process.env.PRECOMPUTE_SCENARIO_ROOT;
 if (scenarioRoot) {
@@ -25,9 +24,19 @@ if (scenarioRoot) {
 			spawnSync(command: string, args: string[]) {
 				assert.equal(command, process.execPath);
 				// Substitute only the image installation prefix; execute the real runner and permissions.
+				// The library's dependencies are the toolchain's here, where the image installs its own
+				// under its prefix, and resolution probes every ancestor's node_modules on the way up.
+				const toolchain = [
+					join(repositoryRoot, "docker/agents/node_modules"),
+					join(repositoryRoot, "docker/node_modules"),
+					realpathSync(join(repositoryRoot, "node_modules")),
+				].map((path) => `--allow-fs-read=${path}`);
+				const index = args.indexOf("--permission") + 1;
 				return spawnSync(
 					command,
-					args.map((arg) => arg.replace("/opt/precompute", imageRoot)),
+					args
+						.map((arg) => arg.replace("/opt/precompute", imageRoot))
+						.toSpliced(index, 0, ...toolchain),
 					{ stdio: "inherit" },
 				);
 			},

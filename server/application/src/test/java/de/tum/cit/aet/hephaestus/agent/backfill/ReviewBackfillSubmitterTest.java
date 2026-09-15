@@ -179,6 +179,7 @@ class ReviewBackfillSubmitterTest extends BaseUnitTest {
         pr.setHtmlUrl("https://example.test/acme/widgets/pull/7");
         pr.setHeadRefName("feature/thing");
         pr.setBaseRefName("main");
+        pr.setBaseRefOid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         pr.setHeadRefOid("0123456789abcdef0123456789abcdef01234567");
         pr.setRepository(repository);
         pr.setCreatedAt(Instant.parse("2026-07-02T00:00:00Z"));

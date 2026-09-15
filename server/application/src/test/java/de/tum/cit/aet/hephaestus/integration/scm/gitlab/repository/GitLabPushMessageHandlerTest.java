@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -17,6 +18,9 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister.Outcome;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
@@ -24,14 +28,19 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitMergeRequestLinker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabPushEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.PassThroughTransactionTemplate;
+import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import io.nats.client.Message;
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,8 +50,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.TransactionTemplate;
 
 @Tag("unit")
 class GitLabPushMessageHandlerTest extends BaseUnitTest {
@@ -61,6 +68,9 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
 
     @Mock
     private CommitRepository commitRepository;
+
+    @Mock
+    private CommitDetailsPersister persister;
 
     @Mock
     private IdentityProviderRepository gitProviderRepository;
@@ -89,24 +99,11 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
     @Mock
     private NatsMessageDeserializer deserializer;
 
-    private TransactionTemplate transactionTemplate;
     private GitLabPushMessageHandler handler;
     private IdentityProvider gitLabProvider;
 
     @BeforeEach
     void setUp() {
-        transactionTemplate = mock(TransactionTemplate.class);
-        // Lenient: not all tests trigger transactional execution (e.g., getEventType, nonPushSubject)
-        lenient()
-                .doAnswer(invocation -> {
-                    @SuppressWarnings("unchecked")
-                    Consumer<TransactionStatus> callback = invocation.getArgument(0);
-                    callback.accept(null);
-                    return null;
-                })
-                .when(transactionTemplate)
-                .executeWithoutResult(any());
-
         GitLabProperties properties = new GitLabProperties(
                 DEFAULT_SERVER_URL,
                 Duration.ofSeconds(30),
@@ -129,6 +126,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
                 organizationRepository,
                 repositoryRepository,
                 commitRepository,
+                persister,
                 gitProviderRepository,
                 properties,
                 gitRepositoryManager,
@@ -139,7 +137,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
                 eventPublisher,
                 commitMergeRequestLinker,
                 deserializer,
-                transactionTemplate);
+                new PassThroughTransactionTemplate());
     }
 
     @Test
@@ -172,6 +170,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
         Repository repo = new Repository();
         repo.setId(246765L);
         when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
+        when(repositoryRepository.findByIdWithOrganization(repo.getId())).thenReturn(Optional.of(repo));
 
         // Org lookup — simulate existing org in DB
         Organization org = new Organization();
@@ -252,6 +251,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
         repo.setId(42L);
         repo.setNameWithOwner("org/proj");
         when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
+        when(repositoryRepository.findByIdWithOrganization(repo.getId())).thenReturn(Optional.of(repo));
         when(scopeIdResolver.findScopeIdByRepositoryName("org/proj")).thenReturn(Optional.of(7L));
 
         var pushEvent = new GitLabPushEventDTO(
@@ -270,6 +270,88 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
 
         // ONE batched GraphQL call, not one per commit.
         verify(commitMergeRequestLinker, times(1)).linkCommits(eq(7L), eq(repo), any());
+    }
+
+    @Test
+    void shouldFallBackToWebhookWithNullStatsWhenOneCommitCaptureFails() throws IOException {
+        var projectInfo = createProjectInfo(42L, "org/proj");
+        Repository repo = activeLocalGitRepository(projectInfo);
+        when(tokenService.resolveServerUrl(7L)).thenReturn(DEFAULT_SERVER_URL);
+        when(tokenService.getAccessToken(7L)).thenReturn("glpat-token");
+        doAnswer(invocation -> {
+                    Consumer<CommitDetails> consumer = invocation.getArgument(4);
+                    consumer.accept(capturedCommit("fine"));
+                    consumer.accept(capturedCommit("broken"));
+                    return null;
+                })
+                .when(gitRepositoryManager)
+                .forEachCommitInRange(eq(new RepositoryKey(7L, 42L)), eq("before"), eq("after"), any(), any());
+        when(persister.persist(any(), eq(repo), any()))
+                .thenAnswer(invocation ->
+                        "broken".equals(invocation.<CommitDetails>getArgument(0).sha())
+                                ? Outcome.FAILED
+                                : Outcome.CAPTURED);
+        var pushEvent = new GitLabPushEventDTO(
+                "push",
+                "refs/heads/main",
+                "before",
+                "after",
+                "after",
+                42L,
+                projectInfo,
+                1,
+                List.of(webhookCommit("broken")));
+
+        handler.onMessage(mockMessage("gitlab.org.proj.push", pushEvent));
+
+        verify(commitRepository)
+                .upsertCommit(
+                        eq("broken"),
+                        anyString(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        eq(null),
+                        eq(null),
+                        eq(null),
+                        any(),
+                        eq(42L),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any());
+    }
+
+    @Test
+    void shouldPersistWebhookCommitsWhenLocalGitHasNoAfterSha() throws IOException {
+        var projectInfo = createProjectInfo(42L, "org/proj");
+        activeLocalGitRepository(projectInfo);
+        var pushEvent = new GitLabPushEventDTO(
+                "push", "refs/heads/main", "before", null, null, 42L, projectInfo, 1, List.of(webhookCommit("sha1")));
+
+        handler.onMessage(mockMessage("gitlab.org.proj.push", pushEvent));
+
+        verify(gitRepositoryManager, never()).forEachCommitInRange(any(), any(), any(), any(), any());
+        verify(commitRepository)
+                .upsertCommit(
+                        eq("sha1"),
+                        anyString(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        eq(null),
+                        eq(null),
+                        eq(null),
+                        any(),
+                        eq(42L),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any());
     }
 
     @Test
@@ -299,6 +381,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
 
             var projectInfo = createProjectInfo(1L, "org/proj");
             when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
+            when(repositoryRepository.findByIdWithOrganization(repo.getId())).thenReturn(Optional.of(repo));
 
             Message msg = mockMessage("gitlab.org.proj.push", createPushEvent(projectInfo));
             handler.onMessage(msg);
@@ -314,6 +397,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
 
             var projectInfo = createProjectInfo(1L, "org/proj");
             when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
+            when(repositoryRepository.findByIdWithOrganization(repo.getId())).thenReturn(Optional.of(repo));
 
             Organization org = new Organization();
             org.setId(42L);
@@ -334,6 +418,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
 
             var projectInfo = createProjectInfo(1L, "org/proj");
             when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
+            when(repositoryRepository.findByIdWithOrganization(repo.getId())).thenReturn(Optional.of(repo));
             when(organizationRepository.findByLoginIgnoreCaseAndProviderId("org", PROVIDER_ID))
                     .thenReturn(Optional.empty());
 
@@ -353,6 +438,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
             // Project in nested group: org/team/subteam/project
             var projectInfo = createProjectInfo(1L, "org/team/subteam/project");
             when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
+            when(repositoryRepository.findByIdWithOrganization(repo.getId())).thenReturn(Optional.of(repo));
 
             Organization org = new Organization();
             org.setId(42L);
@@ -374,6 +460,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
             // User-owned project has no slash in path
             var projectInfo = createProjectInfo(1L, "myproject");
             when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
+            when(repositoryRepository.findByIdWithOrganization(repo.getId())).thenReturn(Optional.of(repo));
 
             Message msg = mockMessage("gitlab.myproject.push", createPushEvent(projectInfo));
             handler.onMessage(msg);
@@ -436,6 +523,49 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
     private GitLabPushEventDTO createPushEvent(GitLabPushEventDTO.ProjectInfo projectInfo) {
         return new GitLabPushEventDTO(
                 "push", "refs/heads/main", "before", "after", "after", projectInfo.id(), projectInfo, 1, null);
+    }
+
+    /** A repository in an active scope with local git enabled: the handler walks default-branch pushes. */
+    private Repository activeLocalGitRepository(GitLabPushEventDTO.ProjectInfo projectInfo) {
+        Repository repo = TestEntities.repository(42L, "org/proj", "main");
+        repo.setProvider(gitLabProvider);
+        when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
+        when(repositoryRepository.findByIdWithOrganization(42L)).thenReturn(Optional.of(repo));
+        when(scopeIdResolver.findScopeIdByRepositoryName("org/proj")).thenReturn(Optional.of(7L));
+        when(syncTargetProvider.isScopeActiveForSync(7L)).thenReturn(true);
+        when(gitRepositoryManager.isEnabled()).thenReturn(true);
+        return repo;
+    }
+
+    private static CommitDetails capturedCommit(String sha) {
+        return new CommitDetails(
+                sha,
+                "msg",
+                null,
+                "Author",
+                "author@test.com",
+                Instant.parse("2024-01-15T10:30:00Z"),
+                "Committer",
+                "committer@test.com",
+                Instant.parse("2024-01-15T10:30:00Z"),
+                0,
+                0,
+                0,
+                List.of(),
+                List.of());
+    }
+
+    private static GitLabPushEventDTO.CommitInfo webhookCommit(String sha) {
+        return new GitLabPushEventDTO.CommitInfo(
+                sha,
+                "msg",
+                "msg",
+                "2024-01-15T10:30:00Z",
+                "https://gitlab.lrz.de/org/proj/-/commit/" + sha,
+                new GitLabPushEventDTO.AuthorInfo("Author", "author@test.com"),
+                List.of("file.txt"),
+                List.of(),
+                List.of());
     }
 
     private Message mockMessage(String subject, GitLabPushEventDTO event) throws IOException {

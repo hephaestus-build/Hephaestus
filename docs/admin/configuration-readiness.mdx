@@ -156,7 +156,11 @@ configuration are database-backed runtime configuration and are not deployment s
 
 ## Agent image
 
-Worker roles require digest enforcement and a SHA-256-pinned `hephaestus.agent.image.reference`. See
+Worker roles require digest enforcement and a SHA-256-pinned `hephaestus.agent.image.reference`
+(readiness fact `agent.image-contract`). The same enforcement covers `hephaestus.git.image`
+(`HEPHAESTUS_IMAGE_GIT_PREPARATION`, readiness fact `git.image-contract`), the `git-preparation`
+image every native Git operation runs in: it is pinned, pulled and verified against its digest
+exactly as the agent image is. The shipped Compose files take both from the release lock. See
 [Release image lock](./release-image-lock).
 
 ## Sandbox isolation
@@ -179,7 +183,6 @@ and workspace transfer limits remain under `hephaestus.sandbox.*`.
 | `cert-path`                                | `SANDBOX_DOCKER_CERT_PATH`               | unset                         |
 | `container-runtime`                        | `SANDBOX_DOCKER_CONTAINER_RUNTIME`       | Docker daemon default         |
 | `app-server-container-id`                  | `SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID` | container `HOSTNAME`          |
-| `cli`                                      | `SANDBOX_DOCKER_CLI`                     | `docker`                      |
 | `owner`                                    | `SANDBOX_DOCKER_OWNER`                   | `default`                     |
 
 Compose forwards these variables to `application-server` and `application-worker`. Leave the
@@ -189,7 +192,9 @@ Use a distinct `owner` for each installation that shares a Docker daemon but use
 database. All worker-capable roles of the same installation must use the same stable value.
 It accepts 1–63 lowercase letters, digits and hyphens, starting with a letter or digit.
 Container inventory, capacity accounting and cleanup select the `hephaestus.sandbox-owner` label;
-job and interactive-session networks use `hephaestus-sandbox-<owner>--<UUID>`.
+job and interactive-session networks use `hephaestus-sandbox-<owner>--<UUID>`. Git preparation
+containers and their mirror volumes carry `hephaestus.git-owner` with the same value instead, so the
+sandbox reconciler never sees them and the Git reconciler sees nothing else.
 This prevents accidental cross-installation cleanup; it is not an authorization boundary against
 a process with Docker daemon access.
 

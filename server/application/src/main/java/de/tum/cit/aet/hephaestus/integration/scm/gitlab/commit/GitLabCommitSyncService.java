@@ -43,8 +43,8 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
  * <p>
  * Uses {@code GET /api/v4/projects/:id/repository/commits} to fetch commits
  * on the default branch. The list endpoint returns commit metadata (SHA, message,
- * author/committer info, timestamps) but not diff statistics. Statistics are
- * enriched separately via push webhooks or the enrichment service.
+ * author/committer info, timestamps) but not diff statistics; those come from the
+ * native Git walk in {@link GitLabCommitBackfillService} and the push handler.
  * <p>
  * Supports incremental sync via the {@code since} parameter (ISO 8601 date),
  * which maps to the repository's {@code lastSyncAt} timestamp.
@@ -206,13 +206,14 @@ public class GitLabCommitSyncService {
                 committedAt,
                 null,
                 null,
-                null, // additions, deletions, changedFiles — not in REST list response
+                null,
                 Instant.now(),
                 repository.getId(),
                 authorId,
                 committerId,
                 authorEmail,
-                committerEmail);
+                committerEmail,
+                null);
 
         // Persist parent metadata when the REST payload includes parent_ids.
         // Matches GitHub's CommitMetadataEnrichmentService which backfills the

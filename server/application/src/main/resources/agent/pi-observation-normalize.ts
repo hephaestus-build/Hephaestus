@@ -29,6 +29,7 @@ export interface NormalizedCitation {
 	artifactPath: string;
 	path: string;
 	side?: DiffSide;
+	revision?: string;
 	startLine: number;
 	endLine: number;
 	quote: string;
@@ -219,11 +220,21 @@ export function normalizeEvidence(
 		const artifactPath = typeof fields.artifactPath === "string" ? fields.artifactPath : "";
 		const path = typeof fields.path === "string" ? fields.path : "";
 		const declaredSide = fields.side == null ? null : trimmedText(fields.side).toUpperCase();
+		const revision = fields.revision == null ? null : trimmedText(fields.revision);
+		if (
+			revision !== null &&
+			(sourceKind !== "scm.repository.tree" || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(revision))
+		)
+			throw new Error("historical citations require scm.repository.tree and a full commit SHA");
 		const startLine = Number(fields.startLine);
 		const endLine = fields.endLine == null ? startLine : Number(fields.endLine);
 		const quote = typeof fields.quote === "string" ? fields.quote : "";
 		if (!sourceKind) throw new Error("evidence citation sourceKind is required");
 		if (!artifactPath.trim()) throw new Error("evidence citation artifactPath is required");
+		if (sourceKind === "scm.repository.tree" && !artifactPath.endsWith("/.git/HEAD"))
+			throw new Error(
+				"repository citations must use the captured .git/HEAD artifact and a repository-relative path",
+			);
 		if (!path.trim()) throw new Error("evidence citation path is required");
 		if (sourceKind === "scm.pull-request.diff" && declaredSide !== "OLD" && declaredSide !== "NEW")
 			throw new Error("diff evidence citation side must be OLD or NEW");
@@ -251,6 +262,7 @@ export function normalizeEvidence(
 			artifactPath,
 			path,
 			...(side == null ? {} : { side }),
+			...(revision == null ? {} : { revision }),
 			startLine,
 			endLine,
 			quote,
@@ -430,7 +442,10 @@ export function normalizeObservation(observation: unknown): NormalizedObservatio
 
 export function dedupeKeyForObservation(observation: NormalizedObservation): string {
 	const citations = observation.evidence.citations
-		.map((citation) => `${citation.path}:${citation.startLine}-${citation.endLine}`)
+		.map(
+			(citation) =>
+				`${citation.revision ?? ""}:${citation.path}:${citation.startLine}-${citation.endLine}`,
+		)
 		.join(",");
 	return `${observation.practiceSlug}|${observation.summary}|${citations}`;
 }
@@ -551,8 +566,13 @@ export function describeCitationMismatch(
 	content: string,
 ): string | null {
 	if (citation.sourceKind !== "scm.pull-request.diff") {
-		const found = content.includes(citation.quote);
-		return found ? null : "that text is not in the artifact";
+		const citedText = content
+			.split(/(?<=\n)/)
+			.slice(citation.startLine - 1, citation.endLine)
+			.join("");
+		return citedText.includes(citation.quote)
+			? null
+			: "that text is not in the artifact at the cited lines";
 	}
 	let oldPath: string | null = null;
 	let newPath: string | null = null;
@@ -579,10 +599,9 @@ export function describeCitationMismatch(
 			if (side === citation.side && path === citation.path) citedLines.set(lineNumber, line);
 		}
 	}
-	// Match Java String.lines(): CR/LF delimiters, without the final terminator's empty item.
-	const quoteLines = citation.quote.split(/\r\n|\r|\n/);
-	if (quoteLines.at(-1) === "") quoteLines.pop();
 	const citedLineCount = citation.endLine - citation.startLine + 1;
+	const quoteLines = citation.quote.split(/\r\n|\r|\n/);
+	if (quoteLines.length === citedLineCount + 1 && quoteLines.at(-1) === "") quoteLines.pop();
 	if (quoteLines.length !== citedLineCount) {
 		return `the quote is ${quoteLines.length} line(s) and the citation covers ${citedLineCount}`;
 	}
@@ -592,16 +611,22 @@ export function describeCitationMismatch(
 		if (diffLine === undefined) {
 			return `the diff has no [L${lineNumber}] on the ${citation.side ?? "NEW"} side of ${citation.path}`;
 		}
-		if (!quotesDiffLine(diffLine, quoteLine)) {
+		if (!quotesDiffLine(diffLine, withoutOwnCoordinate(quoteLine, lineNumber))) {
 			return `[L${lineNumber}] reads ${excerpt(diffLine)}, not ${excerpt(quoteLine)}`;
 		}
 	}
 	return null;
 }
 
-/** Match server admission: exact displayed diff text or its text without the single diff marker. */
+/** Diff markers are presentation; indentation and content are evidence. */
 function quotesDiffLine(diffLine: string, quoted: string): boolean {
 	return diffLine.length > 0 && (diffLine === quoted || diffLine.slice(1) === quoted);
+}
+
+/** A copied annotation must agree with the cited coordinate. */
+function withoutOwnCoordinate(quoteLine: string, lineNumber: number): string {
+	const [, quotedNumber, quotedText] = quoteLine.match(/^\[L(\d+)] ([\s\S]*)$/) ?? [];
+	return quotedText !== undefined && quotedNumber === String(lineNumber) ? quotedText : quoteLine;
 }
 
 /** One line as evidence in a refusal: quoted, and cut where a reader has already seen the difference. */

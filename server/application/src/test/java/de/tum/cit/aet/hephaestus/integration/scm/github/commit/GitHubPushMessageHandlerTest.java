@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -16,7 +17,11 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister.Outcome;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -25,11 +30,14 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenServic
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryRefDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.PassThroughTransactionTemplate;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
-import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +46,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.transaction.support.TransactionTemplate;
 
 class GitHubPushMessageHandlerTest extends BaseUnitTest {
 
@@ -70,7 +77,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
     private NatsMessageDeserializer deserializer;
 
     @Mock
-    private TransactionTemplate transactionTemplate;
+    private CommitDetailsPersister persister;
 
     private GitHubPushMessageHandler handler;
 
@@ -81,21 +88,26 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                 tokenService,
                 repositoryRepository,
                 commitRepository,
+                persister,
                 authorResolver,
                 eventPublisher,
                 scopeIdResolver,
                 syncTargetProvider,
                 deserializer,
-                transactionTemplate);
+                new PassThroughTransactionTemplate());
     }
 
-    /**
-     * Invokes the protected handleEvent method via reflection.
-     */
-    private void invokeHandleEvent(GitHubPushEventDTO event) throws Exception {
-        Method handleEvent = GitHubPushMessageHandler.class.getDeclaredMethod("handleEvent", GitHubPushEventDTO.class);
-        handleEvent.setAccessible(true);
-        handleEvent.invoke(handler, event);
+    /** Feeds the walk the way native Git does: ask which shas are captured, then hand over each commit. */
+    private void stubCommitRange(List<CommitDetails> commits) {
+        doAnswer(invocation -> {
+                    Function<List<String>, Set<String>> captured = invocation.getArgument(3);
+                    captured.apply(commits.stream().map(CommitDetails::sha).toList());
+                    Consumer<CommitDetails> consumer = invocation.getArgument(4);
+                    commits.forEach(consumer);
+                    return null;
+                })
+                .when(gitRepositoryManager)
+                .forEachCommitInRange(any(), any(), any(), any(), any());
     }
 
     // Test Data Builders
@@ -139,6 +151,24 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                 new GitHubPushEventDTO.InstallationRef(42L, "node123"));
     }
 
+    private static CommitDetails createCommitInfo(String sha) {
+        return new CommitDetails(
+                sha,
+                "msg",
+                null,
+                "Author",
+                "author@test.com",
+                Instant.parse("2024-01-15T10:30:00Z"),
+                "Committer",
+                "committer@test.com",
+                Instant.parse("2024-01-15T10:30:00Z"),
+                0,
+                0,
+                0,
+                List.of(),
+                List.of());
+    }
+
     private Repository createMockRepository(Long id, String nameWithOwner, String defaultBranch) {
         Repository repo = TestEntities.repository(id, nameWithOwner, defaultBranch);
         repo.setOrganization(null);
@@ -170,10 +200,10 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
     class SkipConditions {
 
         @Test
-        void shouldSkipBranchDeletionEvents() throws Exception {
+        void shouldSkipBranchDeletionEvents() {
             var event = createBasicPushEvent("refs/heads/feature", true, List.of());
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             verify(repositoryRepository, never()).findByIdWithOrganization(anyLong());
             verify(commitRepository, never())
@@ -192,11 +222,12 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
         }
 
         @Test
-        void shouldSkipEventsWithNullCommits() throws Exception {
+        void shouldSkipEventsWithNullCommits() {
             var event = new GitHubPushEventDTO(
                     "refs/heads/main",
                     "abc123",
@@ -212,28 +243,28 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                     null,
                     null);
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             verify(repositoryRepository, never()).findByIdWithOrganization(anyLong());
         }
 
         @Test
-        void shouldSkipEventsWithEmptyCommitsList() throws Exception {
+        void shouldSkipEventsWithEmptyCommitsList() {
             var event = createBasicPushEvent("refs/heads/main", false, List.of());
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             verify(repositoryRepository, never()).findByIdWithOrganization(anyLong());
         }
 
         @Test
-        void shouldSkipWhenRepositoryNotFoundInDatabase() throws Exception {
+        void shouldSkipWhenRepositoryNotFoundInDatabase() {
             var commit = createPushCommit("sha1", "message", List.of("file.txt"), List.of(), List.of());
             var event = createBasicPushEvent("refs/heads/main", false, List.of(commit));
 
             when(repositoryRepository.findByIdWithOrganization(100L)).thenReturn(Optional.empty());
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             verify(commitRepository, never())
                     .upsertCommit(
@@ -251,11 +282,12 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
         }
 
         @Test
-        void shouldSkipWhenRepositoryRefHasNullId() throws Exception {
+        void shouldSkipWhenRepositoryRefHasNullId() {
             var commit = createPushCommit("sha1", "message", List.of("file.txt"), List.of(), List.of());
             var event = new GitHubPushEventDTO(
                     "refs/heads/main",
@@ -272,20 +304,20 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                     null,
                     null);
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             verify(repositoryRepository, never()).findByIdWithOrganization(anyLong());
         }
 
         @Test
-        void shouldSkipWhenPushIsNotToDefaultBranch() throws Exception {
+        void shouldSkipWhenPushIsNotToDefaultBranch() {
             var commit = createPushCommit("sha1", "message", List.of("file.txt"), List.of(), List.of());
             var event = createBasicPushEvent("refs/heads/feature-branch", false, List.of(commit));
 
             Repository repo = createMockRepository(100L, "owner/repo", "main");
             when(repositoryRepository.findByIdWithOrganization(100L)).thenReturn(Optional.of(repo));
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             verify(commitRepository, never())
                     .upsertCommit(
@@ -303,6 +335,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
         }
     }
@@ -311,7 +344,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
     class WebhookProcessing {
 
         @Test
-        void shouldProcessCommitsViaWebhookWhenGitIsDisabled() throws Exception {
+        void shouldProcessCommitsViaWebhookWhenGitIsDisabled() {
             var commit = createPushCommit(
                     "abc123def456789012345678901234567890abcd",
                     "feat: add feature",
@@ -324,7 +357,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(repositoryRepository.findByIdWithOrganization(100L)).thenReturn(Optional.of(repo));
             when(gitRepositoryManager.isEnabled()).thenReturn(false);
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             verify(commitRepository)
                     .upsertCommit(
@@ -343,11 +376,12 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(), // committerId
                             any(), // authorEmail
                             any() // committerEmail
-                            );
+                            ,
+                            any());
         }
 
         @Test
-        void shouldProcessMultipleCommits() throws Exception {
+        void shouldProcessMultipleCommits() {
             var commit1 = createPushCommit(
                     "sha1aabbccdd112233445566778899aabbccddeeff", "first", List.of("f1.txt"), List.of(), List.of());
             var commit2 = createPushCommit(
@@ -358,7 +392,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(repositoryRepository.findByIdWithOrganization(100L)).thenReturn(Optional.of(repo));
             when(gitRepositoryManager.isEnabled()).thenReturn(false);
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             verify(commitRepository, times(2))
                     .upsertCommit(
@@ -376,11 +410,12 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
         }
 
         @Test
-        void shouldResolveAuthorByUsername() throws Exception {
+        void shouldResolveAuthorByUsername() {
             var commit = createPushCommit(
                     "sha1aabbccdd112233445566778899aabbccddeeff", "msg", List.of(), List.of(), List.of());
             var event = createBasicPushEvent("refs/heads/main", false, List.of(commit));
@@ -392,7 +427,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(authorResolver.resolveByLogin(eq("authoruser"), any())).thenReturn(42L);
             when(authorResolver.resolveByLogin(eq("committeruser"), any())).thenReturn(43L);
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             verify(commitRepository)
                     .upsertCommit(
@@ -410,11 +445,12 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             eq(42L),
                             eq(43L),
                             any(),
+                            any(),
                             any());
         }
 
         @Test
-        void shouldHandleCommitsWithNullAuthorUsername() throws Exception {
+        void shouldHandleCommitsWithNullAuthorUsername() {
             var commit = new GitHubPushEventDTO.PushCommit(
                     "sha1aabbccdd112233445566778899aabbccddeeff",
                     "tree123",
@@ -434,7 +470,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(gitRepositoryManager.isEnabled()).thenReturn(false);
             when(authorResolver.resolveByLogin(eq(null), any())).thenReturn(null);
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             verify(commitRepository)
                     .upsertCommit(
@@ -452,11 +488,12 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             eq(null),
                             eq(null),
                             any(),
+                            any(),
                             any());
         }
 
         @Test
-        void shouldCountChangedFilesCorrectly() throws Exception {
+        void shouldCountChangedFilesCorrectly() {
             var commit = createPushCommit(
                     "sha1aabbccdd112233445566778899aabbccddeeff",
                     "changes",
@@ -470,7 +507,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(repositoryRepository.findByIdWithOrganization(100L)).thenReturn(Optional.of(repo));
             when(gitRepositoryManager.isEnabled()).thenReturn(false);
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             verify(commitRepository)
                     .upsertCommit(
@@ -488,11 +525,12 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
         }
 
         @Test
-        void shouldExtractMessageHeadlineAndBodyCorrectly() throws Exception {
+        void shouldExtractMessageHeadlineAndBodyCorrectly() {
             var commit = createPushCommit(
                     "sha1aabbccdd112233445566778899aabbccddeeff",
                     "feat: add feature\n\nThis is the body.\nWith multiple lines.",
@@ -505,7 +543,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(repositoryRepository.findByIdWithOrganization(100L)).thenReturn(Optional.of(repo));
             when(gitRepositoryManager.isEnabled()).thenReturn(false);
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             verify(commitRepository)
                     .upsertCommit(
@@ -523,6 +561,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
         }
     }
@@ -531,7 +570,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
     class LocalGitProcessing {
 
         @Test
-        void shouldUseLocalGitWhenEnabled() throws Exception {
+        void shouldUseLocalGitWhenEnabled() {
             var commit = createPushCommit(
                     "sha1aabbccdd112233445566778899aabbccddeeff", "msg", List.of(), List.of(), List.of());
             var event = createBasicPushEvent("refs/heads/main", false, List.of(commit));
@@ -542,17 +581,17 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(gitRepositoryManager.isEnabled()).thenReturn(true);
             when(tokenService.isConfigured()).thenReturn(true);
             when(tokenService.getInstallationToken(42L)).thenReturn("test-token");
-            when(gitRepositoryManager.walkCommits(eq(100L), any(), any())).thenReturn(List.of());
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
-            verify(gitRepositoryManager)
-                    .ensureRepository(eq(100L), eq("https://github.com/owner/repo.git"), eq("test-token"));
-            verify(gitRepositoryManager).walkCommits(eq(100L), eq("abc123"), eq("def456"));
+            var key = new de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey(
+                    1, 100);
+            verify(gitRepositoryManager).ensureRepository(key, "https://github.com/owner/repo.git", "test-token");
+            verify(gitRepositoryManager).forEachCommitInRange(eq(key), eq("abc123"), eq("def456"), any(), any());
         }
 
         @Test
-        void shouldFallBackToWebhookOnGitFailure() throws Exception {
+        void shouldFallBackToWebhookOnGitFailure() {
             var commit = createPushCommit(
                     "sha1aabbccdd112233445566778899aabbccddeeff", "msg", List.of("file.txt"), List.of(), List.of());
             var event = createBasicPushEvent("refs/heads/main", false, List.of(commit));
@@ -562,10 +601,16 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             mockActiveScopeForRepo("owner/repo");
             when(gitRepositoryManager.isEnabled()).thenReturn(true);
             when(tokenService.isConfigured()).thenReturn(false);
-            when(gitRepositoryManager.ensureRepository(eq(100L), any(), any()))
-                    .thenThrow(new RuntimeException("Git clone failed"));
+            org.mockito.Mockito.doThrow(new RuntimeException("Git clone failed"))
+                    .when(gitRepositoryManager)
+                    .ensureRepository(
+                            any(
+                                    de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor
+                                            .RepositoryKey.class),
+                            any(),
+                            any());
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             // Should fall back to webhook processing with null stats (preserves existing data)
             verify(commitRepository)
@@ -584,11 +629,12 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
         }
 
         @Test
-        void shouldProcessCommitInfoFromLocalGitWithFileChanges() throws Exception {
+        void shouldHandEachCapturedCommitToThePersisterWithoutTouchingTheWebhookPath() {
             var commit = createPushCommit(
                     "sha1aabbccdd112233445566778899aabbccddeeff", "msg", List.of(), List.of(), List.of());
             var event = createBasicPushEvent("refs/heads/main", false, List.of(commit));
@@ -598,96 +644,13 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             mockActiveScopeForRepo("owner/repo");
             when(gitRepositoryManager.isEnabled()).thenReturn(true);
             when(tokenService.isConfigured()).thenReturn(false);
+            when(persister.persist(any(), any(), any())).thenReturn(Outcome.CAPTURED);
+            CommitDetails commitInfo = createCommitInfo("sha1aabbccdd112233445566778899aabbccddeeff");
+            stubCommitRange(List.of(commitInfo));
 
-            var fileChange = new GitRepositoryManager.FileChange(
-                    "src/main.java", GitRepositoryManager.ChangeType.ADDED, 10, 0, 10, null);
-            var commitInfo = new GitRepositoryManager.CommitInfo(
-                    "sha1aabbccdd112233445566778899aabbccddeeff",
-                    "msg",
-                    null,
-                    "Author",
-                    "author@test.com",
-                    Instant.parse("2024-01-15T10:30:00Z"),
-                    "Committer",
-                    "committer@test.com",
-                    Instant.parse("2024-01-15T10:30:00Z"),
-                    10,
-                    0,
-                    1,
-                    List.of(fileChange),
-                    List.of());
-            when(gitRepositoryManager.walkCommits(eq(100L), any(), any())).thenReturn(List.of(commitInfo));
-            when(commitRepository.existsByShaAndRepositoryId("sha1aabbccdd112233445566778899aabbccddeeff", 100L))
-                    .thenReturn(false);
+            handler.handleEvent(event);
 
-            // After upsertCommit, findByShaAndRepositoryId must return a Commit entity for file changes
-            // and for publishCommitCreated (which calls CommitData.from(commit))
-            var persistedCommit = TestEntities.commit(1L, "sha1aabbccdd112233445566778899aabbccddeeff");
-            persistedCommit.setMessage("msg");
-            persistedCommit.setAuthoredAt(Instant.parse("2024-01-15T10:30:00Z"));
-            persistedCommit.setRepository(repo);
-            when(commitRepository.findByShaAndRepositoryId("sha1aabbccdd112233445566778899aabbccddeeff", 100L))
-                    .thenReturn(Optional.of(persistedCommit));
-
-            invokeHandleEvent(event);
-
-            // Should upsert the commit via native SQL
-            verify(commitRepository)
-                    .upsertCommit(
-                            eq("sha1aabbccdd112233445566778899aabbccddeeff"),
-                            eq("msg"),
-                            any(),
-                            anyString(),
-                            any(),
-                            any(),
-                            eq(10),
-                            eq(0),
-                            eq(1),
-                            any(),
-                            eq(100L),
-                            any(),
-                            any(),
-                            any(),
-                            any());
-            // Should fetch the persisted commit: once for file changes, once for publishCommitCreated
-            verify(commitRepository, times(2))
-                    .findByShaAndRepositoryId("sha1aabbccdd112233445566778899aabbccddeeff", 100L);
-            verify(commitRepository).save(persistedCommit);
-        }
-
-        @Test
-        void shouldSkipExistingCommitsInLocalGitMode() throws Exception {
-            var commit = createPushCommit(
-                    "sha1aabbccdd112233445566778899aabbccddeeff", "msg", List.of(), List.of(), List.of());
-            var event = createBasicPushEvent("refs/heads/main", false, List.of(commit));
-
-            Repository repo = createMockRepository(100L, "owner/repo", "main");
-            when(repositoryRepository.findByIdWithOrganization(100L)).thenReturn(Optional.of(repo));
-            mockActiveScopeForRepo("owner/repo");
-            when(gitRepositoryManager.isEnabled()).thenReturn(true);
-            when(tokenService.isConfigured()).thenReturn(false);
-
-            var commitInfo = new GitRepositoryManager.CommitInfo(
-                    "sha1aabbccdd112233445566778899aabbccddeeff",
-                    "msg",
-                    null,
-                    "Author",
-                    "author@test.com",
-                    Instant.now(),
-                    "Committer",
-                    "committer@test.com",
-                    Instant.now(),
-                    0,
-                    0,
-                    0,
-                    List.of(),
-                    List.of());
-            when(gitRepositoryManager.walkCommits(eq(100L), any(), any())).thenReturn(List.of(commitInfo));
-            when(commitRepository.existsByShaAndRepositoryId("sha1aabbccdd112233445566778899aabbccddeeff", 100L))
-                    .thenReturn(true);
-
-            invokeHandleEvent(event);
-
+            verify(persister).persist(eq(commitInfo), eq(repo), any());
             verify(commitRepository, never())
                     .upsertCommit(
                             anyString(),
@@ -704,12 +667,103 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
-            verify(commitRepository, never()).save(any());
+            verify(eventPublisher, never()).publishEvent(any(Object.class));
         }
 
         @Test
-        void shouldFallBackToWebhookWhenScopeNotActive() throws Exception {
+        void shouldAskTheRepositoryWhichShasAreCapturedWhenWalking() {
+            var commit = createPushCommit(
+                    "sha1aabbccdd112233445566778899aabbccddeeff", "msg", List.of(), List.of(), List.of());
+            var event = createBasicPushEvent("refs/heads/main", false, List.of(commit));
+
+            Repository repo = createMockRepository(100L, "owner/repo", "main");
+            when(repositoryRepository.findByIdWithOrganization(100L)).thenReturn(Optional.of(repo));
+            mockActiveScopeForRepo("owner/repo");
+            when(gitRepositoryManager.isEnabled()).thenReturn(true);
+            when(tokenService.isConfigured()).thenReturn(false);
+            when(persister.persist(any(), any(), any())).thenReturn(Outcome.CAPTURED);
+            stubCommitRange(List.of(createCommitInfo("first"), createCommitInfo("second")));
+
+            handler.handleEvent(event);
+
+            verify(commitRepository).findGitDetailsCapturedShas(100L, List.of("first", "second"));
+        }
+
+        @Test
+        void shouldHandAWebhookOriginToThePersisterWhenWalking() {
+            when(persister.persist(any(), any(), any())).thenReturn(Outcome.CAPTURED);
+            var commit = createPushCommit(
+                    "sha1aabbccdd112233445566778899aabbccddeeff", "msg", List.of(), List.of(), List.of());
+            var event = createBasicPushEvent("refs/heads/main", false, List.of(commit));
+
+            Repository repo = createMockRepository(100L, "owner/repo", "main");
+            when(repositoryRepository.findByIdWithOrganization(100L)).thenReturn(Optional.of(repo));
+            mockActiveScopeForRepo("owner/repo");
+            when(gitRepositoryManager.isEnabled()).thenReturn(true);
+            when(tokenService.isConfigured()).thenReturn(false);
+            when(authorResolver.resolveByEmail("author@test.com", 1L)).thenReturn(42L);
+            CommitDetails commitInfo = createCommitInfo("sha1aabbccdd112233445566778899aabbccddeeff");
+            stubCommitRange(List.of(commitInfo));
+
+            handler.handleEvent(event);
+
+            ArgumentCaptor<CommitDetailsPersister.Origin> origin =
+                    ArgumentCaptor.forClass(CommitDetailsPersister.Origin.class);
+            verify(persister).persist(eq(commitInfo), eq(repo), origin.capture());
+            assertThat(origin.getValue().scopeId()).isEqualTo(1L);
+            assertThat(origin.getValue().dataSource()).isEqualTo(DataSource.WEBHOOK);
+            assertThat(origin.getValue().provider()).isEqualTo(IdentityProviderType.GITHUB);
+            assertThat(origin.getValue().commitUrl().apply("abc"))
+                    .isEqualTo("https://github.com/owner/repo/commit/abc");
+            assertThat(origin.getValue().userIdByEmail().apply("author@test.com"))
+                    .isEqualTo(42L);
+        }
+
+        @Test
+        void shouldFallBackToWebhookWithNullStatsWhenOneCommitCaptureFails() {
+            when(persister.persist(any(), any(), any()))
+                    .thenAnswer(invocation -> "broken"
+                                    .equals(invocation
+                                            .<CommitDetails>getArgument(0)
+                                            .sha())
+                            ? Outcome.FAILED
+                            : Outcome.CAPTURED);
+            var commit = createPushCommit("broken", "msg", List.of("file.txt"), List.of(), List.of());
+            var event = createBasicPushEvent("refs/heads/main", false, List.of(commit));
+
+            Repository repo = createMockRepository(100L, "owner/repo", "main");
+            when(repositoryRepository.findByIdWithOrganization(100L)).thenReturn(Optional.of(repo));
+            mockActiveScopeForRepo("owner/repo");
+            when(gitRepositoryManager.isEnabled()).thenReturn(true);
+            when(tokenService.isConfigured()).thenReturn(false);
+            stubCommitRange(List.of(createCommitInfo("fine"), createCommitInfo("broken")));
+
+            handler.handleEvent(event);
+
+            verify(commitRepository)
+                    .upsertCommit(
+                            eq("broken"),
+                            anyString(),
+                            any(),
+                            any(),
+                            any(),
+                            any(),
+                            eq(null),
+                            eq(null),
+                            eq(null),
+                            any(),
+                            eq(100L),
+                            any(),
+                            any(),
+                            any(),
+                            any(),
+                            any());
+        }
+
+        @Test
+        void shouldFallBackToWebhookWhenScopeNotActive() {
             var commit = createPushCommit(
                     "sha1aabbccdd112233445566778899aabbccddeeff", "msg", List.of("file.txt"), List.of(), List.of());
             var event = createBasicPushEvent("refs/heads/main", false, List.of(commit));
@@ -721,11 +775,25 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(scopeIdResolver.findScopeIdByRepositoryName("owner/repo")).thenReturn(Optional.of(99L));
             when(syncTargetProvider.isScopeActiveForSync(99L)).thenReturn(false);
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             // Should NOT use local git
-            verify(gitRepositoryManager, never()).ensureRepository(anyLong(), anyString(), any());
-            verify(gitRepositoryManager, never()).walkCommits(anyLong(), any(), any());
+            verify(gitRepositoryManager, never())
+                    .ensureRepository(
+                            any(
+                                    de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor
+                                            .RepositoryKey.class),
+                            anyString(),
+                            any());
+            verify(gitRepositoryManager, never())
+                    .forEachCommitInRange(
+                            any(
+                                    de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor
+                                            .RepositoryKey.class),
+                            any(),
+                            any(),
+                            any(),
+                            any());
 
             // Should process via webhook instead (non-fallback: additions=0, not null)
             verify(commitRepository)
@@ -744,6 +812,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
         }
     }
@@ -752,7 +821,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
     class BranchHandling {
 
         @Test
-        void shouldProcessPushesToDefaultBranch() throws Exception {
+        void shouldProcessPushesToDefaultBranch() {
             var commit = createPushCommit(
                     "sha1aabbccdd112233445566778899aabbccddeeff", "msg", List.of("f.txt"), List.of(), List.of());
             var event = createBasicPushEvent("refs/heads/develop", false, List.of(commit));
@@ -761,7 +830,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(repositoryRepository.findByIdWithOrganization(100L)).thenReturn(Optional.of(repo));
             when(gitRepositoryManager.isEnabled()).thenReturn(false);
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             verify(commitRepository)
                     .upsertCommit(
@@ -779,11 +848,12 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
                             any());
         }
 
         @Test
-        void shouldHandleRefsWithoutPrefix() throws Exception {
+        void shouldHandleRefsWithoutPrefix() {
             // Edge case: ref doesn't start with "refs/heads/"
             var commit = createPushCommit(
                     "sha1aabbccdd112233445566778899aabbccddeeff", "msg", List.of("f.txt"), List.of(), List.of());
@@ -793,7 +863,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(repositoryRepository.findByIdWithOrganization(100L)).thenReturn(Optional.of(repo));
             when(gitRepositoryManager.isEnabled()).thenReturn(false);
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             verify(commitRepository)
                     .upsertCommit(
@@ -808,6 +878,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(Integer.class),
                             any(),
                             eq(100L),
+                            any(),
                             any(),
                             any(),
                             any(),
@@ -835,7 +906,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
     class EventPublishing {
 
         @Test
-        void shouldPublishCommitCreatedEventAfterWebhookProcessing() throws Exception {
+        void shouldPublishCommitCreatedEventAfterWebhookProcessing() {
             var commit = createPushCommit(
                     "abc123def456789012345678901234567890abcd",
                     "feat: publish test",
@@ -856,7 +927,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(commitRepository.findByShaAndRepositoryId("abc123def456789012345678901234567890abcd", 100L))
                     .thenReturn(Optional.of(persistedCommit));
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             // Verify event was published
             ArgumentCaptor<ScmDomainEvent.CommitCreated> captor =
@@ -870,7 +941,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldNotPublishEventWhenCommitNotFoundAfterUpsert() throws Exception {
+        void shouldNotPublishEventWhenCommitNotFoundAfterUpsert() {
             var commit = createPushCommit(
                     "abc123def456789012345678901234567890abcd", "msg", List.of("file.txt"), List.of(), List.of());
             var event = createBasicPushEvent("refs/heads/main", false, List.of(commit));
@@ -883,7 +954,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             when(commitRepository.findByShaAndRepositoryId("abc123def456789012345678901234567890abcd", 100L))
                     .thenReturn(Optional.empty());
 
-            invokeHandleEvent(event);
+            handler.handleEvent(event);
 
             // Verify event was NOT published
             verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.CommitCreated.class));

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -10,6 +11,7 @@ import {
 	describeVocabulary,
 	type NormalizedCitation,
 	normalizeObservation as normalizeFinalObservation,
+	normalizeEvidence,
 	PRESENCE_DESCRIPTIONS,
 	PRESENCE_VALUES,
 	type RecordedInapplicability,
@@ -211,12 +213,11 @@ void test("diff citations bind the quote to the claimed file and line", () => {
 	assert.equal(citationMatchesArtifact({ ...citation, endLine: 12 }, diff), false);
 });
 
-void test("a diff quote may omit its marker but must preserve source indentation", () => {
+void test("a quote may drop the diff marker but must preserve indentation", () => {
 	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
 	const diff =
 		"diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] +    insecure();\n";
 
-	// Preserve the source indentation whether or not the diff marker is included.
 	assert.notEqual(describeCitationMismatch({ ...citation, quote: "insecure();" }, diff), null);
 	assert.equal(describeCitationMismatch({ ...citation, quote: "    insecure();" }, diff), null);
 	assert.equal(describeCitationMismatch({ ...citation, quote: "+    insecure();" }, diff), null);
@@ -254,16 +255,12 @@ void test("a quote from the other side of the change is refused, however it is w
 	assert.match(describeCitationMismatch(citation, diff) ?? "", /\[L47] reads/);
 });
 
-void test("a quote cannot carry display coordinates absent from the source line", () => {
+void test("a quote may carry its exact displayed coordinate", () => {
 	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
 	const diff =
 		"diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] + insecure();\n";
 
-	// Display coordinates locate the source; they are not part of its quoted text.
-	assert.notEqual(
-		describeCitationMismatch({ ...citation, quote: "[L10] + insecure();" }, diff),
-		null,
-	);
+	assert.equal(describeCitationMismatch({ ...citation, quote: "[L10] + insecure();" }, diff), null);
 	// The coordinate still has to be the one being matched, so a quote cannot claim a line it did
 	// not read — even when that line's text is in the diff somewhere else.
 	assert.match(
@@ -654,7 +651,7 @@ void test("describeVocabulary refuses a value it cannot describe", () => {
 	);
 });
 
-void test("non-diff citations preserve exact punctuation", () => {
+void test("a citation rejects typographic substitutions not present in the artifact", () => {
 	const content = 'Resolve "Connect data between screens" — see the plan';
 	const cite = (quote: string): NormalizedCitation => ({
 		sourceKind: "scm.pull-request.core",
@@ -676,7 +673,7 @@ void test("non-diff citations preserve exact punctuation", () => {
 	assert.equal(citationMatchesArtifact(cite("see the plan"), content), true);
 });
 
-void test("non-diff citations reject text absent from the artifact", () => {
+void test("a citation rejects invented artifact text", () => {
 	const content = 'Resolve "Connect data between screens"';
 	const cite = (quote: string): NormalizedCitation => ({
 		sourceKind: "scm.pull-request.core",
@@ -731,6 +728,86 @@ void test("an UNDETERMINED observation must say what it could not settle", () =>
 	assert.equal(ok.assessmentStatus, "UNDETERMINED");
 	assert.equal(ok.assessment, null);
 	assert.equal(ok.evidence.undecidability?.wouldSettleIt, "The linked issue's body");
+});
+
+void test("historical citations preserve a full revision for trusted admission", () => {
+	const citation = {
+		sourceKind: "scm.repository.tree",
+		artifactPath: "inputs/scm/repo/.git/HEAD",
+		path: "deleted.ts",
+		revision: "a".repeat(40),
+		startLine: 3,
+		quote: "historical text",
+	};
+	assert.equal(
+		normalizeEvidence({ citations: [citation] }, "ASSESSED", "PRESENT").citations[0]?.revision,
+		citation.revision,
+	);
+	assert.throws(
+		() =>
+			normalizeEvidence(
+				{ citations: [{ ...citation, revision: "HEAD~1" }] },
+				"ASSESSED",
+				"PRESENT",
+			),
+		/full commit SHA/,
+	);
+	assert.throws(
+		() =>
+			normalizeEvidence(
+				{ citations: [{ ...citation, sourceKind: "scm.issue.core" }] },
+				"ASSESSED",
+				"PRESENT",
+			),
+		/scm.repository.tree/,
+	);
+});
+
+void test("live practice fixture permits a citation of its planted credential", () => {
+	const diff = readFileSync(new URL("./live-practice/diff.patch", import.meta.url), "utf8");
+	assert.equal(
+		describeCitationMismatch(
+			{
+				sourceKind: "scm.pull-request.diff",
+				artifactPath: "inputs/context/diff.patch",
+				path: "LoginService.swift",
+				side: "NEW",
+				startLine: 4,
+				endLine: 4,
+				quote: '    private let apiKey = "sk-live-AKIAIOSFODNN7EXAMPLE-prod-2026"',
+			},
+			diff,
+		),
+		null,
+	);
+});
+
+void test("normalization preserves the quoted source indentation and trailing spaces", () => {
+	const raw = baseObservation();
+	const quote = "    insecure();  ";
+	onlyCitation(raw.evidence.citations).quote = quote;
+	assert.equal(onlyCitation(normalizeObservation(raw).evidence.citations).quote, quote);
+});
+
+void test("serialized-source citations must quote the specified lines, not elsewhere in the artifact", () => {
+	const citation: NormalizedCitation = {
+		sourceKind: "scm.pull-request.core",
+		artifactPath: "inputs/context/metadata.json",
+		path: "inputs/context/metadata.json",
+		startLine: 1,
+		endLine: 1,
+		quote: '"changed_files" : 1',
+	};
+	const content = '{\n  "changed_files" : 1\n}\n';
+	assert.equal(citationMatchesArtifact(citation, content), false);
+	assert.equal(citationMatchesArtifact({ ...citation, startLine: 2, endLine: 2 }, content), true);
+	assert.equal(
+		citationMatchesArtifact(
+			{ ...citation, startLine: 2, endLine: 2, quote: '  "changed_files" : 1\n' },
+			content,
+		),
+		true,
+	);
 });
 
 void test("normalization preserves raw quote bytes and local preflight matches server line semantics", () => {

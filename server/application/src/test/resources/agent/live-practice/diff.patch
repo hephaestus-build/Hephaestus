@@ -4,13 +4,13 @@ index 0000000..1111111
 --- /dev/null
 +++ b/LoginService.swift
 @@ -0,0 +1,10 @@
-+[L1] +import Foundation
-+[L2] +
-+[L3] +final class LoginService {
-+[L4] +    private let apiKey = "sk-live-AKIAIOSFODNN7EXAMPLE-prod-2026"
-+[L5] +    private let dbPassword = "admin123!"
-+[L6] +
-+[L7] +    func authenticate(user: String) -> Bool {
-+[L8] +        return user == "root"
-+[L9] +    }
-+[L10] +}
+[L1] +import Foundation
+[L2] +
+[L3] +final class LoginService {
+[L4] +    private let apiKey = "sk-live-AKIAIOSFODNN7EXAMPLE-prod-2026"
+[L5] +    private let dbPassword = "admin123!"
+[L6] +
+[L7] +    func authenticate(user: String) -> Bool {
+[L8] +        return user == "root"
+[L9] +    }
+[L10] +}

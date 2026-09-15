@@ -239,6 +239,8 @@ function AgentPurposeCard({
 	);
 	const [allowInternet, setAllowInternet] = useState(binding?.allowInternet ?? false);
 	const [showAdvanced, setShowAdvanced] = useState(false);
+	// A practice review always runs on an internal network; the server rejects the flag for it.
+	const internetConfigurable = meta.purpose === "MENTOR";
 	const [submitAttempt, setSubmitAttempt] = useState(0);
 
 	const noModels = availableModels.length === 0;
@@ -276,7 +278,7 @@ function AgentPurposeCard({
 			workspaceModelId: selection.scope === "WORKSPACE" ? selection.id : undefined,
 			timeoutSeconds: timeout.value,
 			maxConcurrentJobs: concurrency.value,
-			allowInternet,
+			allowInternet: internetConfigurable && allowInternet,
 			enabled,
 		});
 	};
@@ -413,15 +415,17 @@ function AgentPurposeCard({
 											<FieldError id={concurrencyErrorId}>{concurrencyError}</FieldError>
 										)}
 									</Field>
-									<Field orientation="horizontal">
-										<FieldLabel htmlFor={`${meta.purpose}-internet`}>Internet access</FieldLabel>
-										<Switch
-											id={`${meta.purpose}-internet`}
-											checked={allowInternet}
-											onCheckedChange={setAllowInternet}
-											disabled={pending}
-										/>
-									</Field>
+									{internetConfigurable && (
+										<Field orientation="horizontal">
+											<FieldLabel htmlFor={`${meta.purpose}-internet`}>Internet access</FieldLabel>
+											<Switch
+												id={`${meta.purpose}-internet`}
+												checked={allowInternet}
+												onCheckedChange={setAllowInternet}
+												disabled={pending}
+											/>
+										</Field>
+									)}
 								</FieldGroup>
 							</FieldSet>
 						</CollapsibleContent>

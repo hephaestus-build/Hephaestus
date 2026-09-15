@@ -6,7 +6,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -38,6 +38,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
+import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
 import java.util.Collection;
@@ -51,14 +52,13 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-@Tag("unit")
-class ReviewHistoryContentSourceTest {
+class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
     private static final long WORKSPACE_ID = 7L;
     private static final long PR_ID = 42L;
@@ -73,20 +73,26 @@ class ReviewHistoryContentSourceTest {
             Set.of(OBSERVED_ARTIFACT_ROW_ID, DELIVERED_ARTIFACT_ROW_ID, UNNAMEABLE_ARTIFACT_ROW_ID);
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Mock
     private ObservationRepository observationRepository;
+
+    @Mock
     private FeedbackRepository feedbackRepository;
+
+    @Mock
     private ObservationVisibilityPolicy visibilityPolicy;
+
+    @Mock
     private PullRequestRepository pullRequestRepository;
+
+    @Mock
     private IssueRepository issueRepository;
+
     private ReviewHistoryContentSource provider;
 
     @BeforeEach
     void setUp() {
-        observationRepository = mock(ObservationRepository.class);
-        feedbackRepository = mock(FeedbackRepository.class);
-        visibilityPolicy = mock(ObservationVisibilityPolicy.class);
-        pullRequestRepository = mock(PullRequestRepository.class);
-        issueRepository = mock(IssueRepository.class);
         provider = new ReviewHistoryContentSource(
                 observationRepository,
                 feedbackRepository,
@@ -95,16 +101,21 @@ class ReviewHistoryContentSourceTest {
                 issueRepository,
                 new StagedArtifactNames(ReviewHistoryContentSourceTest::identitiesOf),
                 objectMapper);
-        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
+        lenient()
+                .when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
                 .thenReturn(List.of());
-        when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
+        lenient()
+                .when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
                 .thenReturn(List.of());
-        when(feedbackRepository.findPreparedForRecipient(any(), any(), any())).thenReturn(List.of());
-        when(visibilityPolicy.permitsAll(anyLong(), any(), any())).thenAnswer(invocation -> {
+        lenient()
+                .when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
+                .thenReturn(List.of());
+        lenient().when(visibilityPolicy.permitsAll(anyLong(), any(), any())).thenAnswer(invocation -> {
             Collection<Observation> batch = invocation.getArgument(1);
             return batch.stream().map(Observation::getId).collect(Collectors.toSet());
         });
-        when(pullRequestRepository.findByIdWithAuthorAndRepository(eq(PR_ID)))
+        lenient()
+                .when(pullRequestRepository.findByIdWithAuthorAndRepository(eq(PR_ID)))
                 .thenReturn(Optional.of(pullRequestBy(AUTHOR_ID)));
     }
 

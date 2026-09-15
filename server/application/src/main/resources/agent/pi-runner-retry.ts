@@ -24,6 +24,18 @@ export function isRetryableStatus(status: number): boolean {
 	return status >= 500 || status === 429;
 }
 
+/**
+ * Whether a failed `fetch` was ended by its own `AbortSignal.timeout` rather than by the transport.
+ * A reset connection or a refused socket clears in place and is worth asking again; an attempt that
+ * ran out its own clock is an answer still being computed, and asking again only queues the same
+ * work behind it.
+ */
+export function isTimeoutAbort(error: unknown): boolean {
+	return (
+		typeof error === "object" && error !== null && "name" in error && error.name === "TimeoutError"
+	);
+}
+
 export interface RetryPolicy {
 	readonly attempts: number;
 	readonly baseMs?: number;
