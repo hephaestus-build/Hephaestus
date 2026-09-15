@@ -29,15 +29,25 @@ void test("citation batches are odd-length pairs under a fixed ceiling", () => {
 	);
 });
 
-void test("fetch accepts only credential-free HTTPS URLs and keeps token out of argv", () => {
+void test("fetch accepts credential-free HTTPS or plaintext loopback URLs and keeps token out of argv", () => {
 	for (const cloneUrl of [
 		"file:///etc",
 		"ext::evil",
 		"https://token@example.com/repo",
 		"https://example.com/repo?secret=x",
+		"http://example.com/repo.git",
+		"http://localhost:8929/group/repo.git",
 	]) {
 		assert.throws(() => parseRequest({ operation: "FETCH", revisions: [], cloneUrl }));
 	}
+	assert.equal(
+		parseRequest({
+			operation: "FETCH",
+			revisions: [],
+			cloneUrl: "http://127.0.0.1:8929/group/repo.git",
+		}).cloneUrl,
+		"http://127.0.0.1:8929/group/repo.git",
+	);
 	const request = parseRequest({
 		operation: "FETCH",
 		revisions: [],

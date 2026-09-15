@@ -106,9 +106,13 @@ public class ReviewRepositoryPreparer {
         if (metadata == null) throw new JobPreparationException("Review job has no metadata");
         String head = requireText(metadata, "commit_sha");
         git.ensureRepository(key, cloneUrl, token);
-        var reviewRef = source.reviewHeadRef(authorized.number());
-        if (reviewRef.isPresent()) git.fetchRemoteCommit(key, cloneUrl, reviewRef.get(), head, token);
-        if (!git.commitExists(key, head)) throw new JobPreparationException("Pinned review commit is unavailable");
+        // The branch fetch usually carries the head already; the provider's review ref is for one it
+        // does not reach, such as a fork's or a force-pushed branch's.
+        if (!git.commitExists(key, head)) {
+            var reviewRef = source.reviewHeadRef(authorized.number());
+            if (reviewRef.isPresent()) git.fetchRemoteCommit(key, cloneUrl, reviewRef.get(), head, token);
+            if (!git.commitExists(key, head)) throw new JobPreparationException("Pinned review commit is unavailable");
+        }
         String recordedBase = null;
         if (source.recordsReviewDiffBase()) {
             if (!head.equals(authorized.head())) {

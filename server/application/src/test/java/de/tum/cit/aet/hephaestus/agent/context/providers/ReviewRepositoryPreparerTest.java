@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -107,7 +109,8 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         authorize();
         when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
         when(tokens.reviewHeadRef(42)).thenReturn(Optional.of("refs/merge-requests/42/head"));
-        when(git.commitExists(KEY, HEAD)).thenReturn(true);
+        // The branch fetch did not carry the head; the review ref does.
+        when(git.commitExists(KEY, HEAD)).thenReturn(false, true);
         when(git.commitExists(KEY, "b".repeat(40))).thenReturn(true);
         assertThat(preparer.prepare(job))
                 .isEqualTo(new ReviewRepositoryPreparer.PreparedReview(KEY, HEAD, "b".repeat(40)));
@@ -119,6 +122,17 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
                         "refs/merge-requests/42/head",
                         HEAD,
                         "private-token");
+    }
+
+    @Test
+    void shouldNotFetchTheReviewRefWhenTheBranchFetchCarriedTheHead() {
+        authorize();
+        when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
+        when(git.commitExists(KEY, HEAD)).thenReturn(true);
+        when(git.commitExists(KEY, "b".repeat(40))).thenReturn(true);
+        assertThat(preparer.prepare(job))
+                .isEqualTo(new ReviewRepositoryPreparer.PreparedReview(KEY, HEAD, "b".repeat(40)));
+        verify(git, never()).fetchRemoteCommit(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -150,7 +164,6 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         pinNoBase("main");
         authorize();
         when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
-        when(tokens.reviewHeadRef(42)).thenReturn(Optional.empty());
         when(git.commitExists(KEY, HEAD)).thenReturn(true);
         when(git.resolveBranchHead(KEY, "main")).thenReturn("c".repeat(40));
         when(git.commitExists(KEY, "c".repeat(40))).thenReturn(true);
@@ -163,7 +176,6 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         pinNoBase("gone");
         authorize();
         when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
-        when(tokens.reviewHeadRef(42)).thenReturn(Optional.empty());
         when(git.commitExists(KEY, HEAD)).thenReturn(true);
         assertThatThrownBy(() -> preparer.prepare(job))
                 .isInstanceOf(JobPreparationException.class)

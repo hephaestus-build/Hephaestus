@@ -33,8 +33,11 @@ For an isolated simulator, set `hephaestus.e2e.scm-origin` (environment variable
 slash. Startup rejects this setting unless `e2e` is active and `prod` is absent. Workspace
 validation and GitLab preflight allow only that origin; other destinations retain the normal
 HTTPS and private-address restrictions. Preflight clients do not follow redirects and cannot
-send requests to a different origin. This does not enable a GitHub simulator or supply missing
-provider APIs, Git transport, or historical replay.
+send requests to a different origin. A Git fetch to that origin runs in the worker's own network
+namespace — its container's, or the host's when the server runs there — so the simulator has to
+serve Git smart HTTP on the same loopback origin, and `SANDBOX_DOCKER_CONTAINER_RUNTIME` must stay
+unset: gVisor takes over the interfaces of a namespace it joins. This does not enable a GitHub
+simulator or supply missing provider APIs or historical replay.
 
 ## Setup
 

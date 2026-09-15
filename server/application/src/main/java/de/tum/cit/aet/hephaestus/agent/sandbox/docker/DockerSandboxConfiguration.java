@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -404,23 +405,33 @@ public class DockerSandboxConfiguration {
             GitRepositoryProperties git,
             WorkerProperties worker,
             SandboxProperties sandbox,
-            DockerSandboxProperties docker) {
+            DockerSandboxProperties docker,
+            ScmServerEndpointPolicy scmEndpoints) {
+        boolean simulation = scmEndpoints.simulationConfigured();
+        String runtime = docker.containerRuntime();
+        // gVisor takes over the interfaces of the namespace it is given; joined to the worker's, it would
+        // take the worker's addresses with it.
+        if (simulation && runtime != null && !runtime.isBlank()) {
+            throw new IllegalStateException("An SCM simulation fetches from the worker's own network namespace,"
+                    + " which only the default container runtime can join; unset SANDBOX_DOCKER_CONTAINER_RUNTIME");
+        }
         return new DockerNativeGitExecutor.Settings(
                 git.image(),
                 worker.resolvedWorkerId(),
                 sandbox.maxConcurrentContainers(),
                 git.maxSnapshotBytes(),
-                docker.owner());
+                docker.owner(),
+                simulation);
     }
 
     @Bean
     public DockerNativeGitExecutor dockerNativeGitExecutor(
             DockerClientOperations docker,
             SandboxContainerManager containers,
-            SandboxImageGuard images,
+            SandboxNetworkManager networks,
             ContainerSecurityPolicy policy,
             ObjectMapper mapper,
             DockerNativeGitExecutor.Settings settings) {
-        return new DockerNativeGitExecutor(docker, containers, images, policy, mapper, settings);
+        return new DockerNativeGitExecutor(docker, containers, networks, policy, mapper, settings);
     }
 }

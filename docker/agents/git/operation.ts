@@ -95,7 +95,17 @@ export function parseRequest(value: unknown): Request {
 	if (fetches) {
 		if (cloneUrl === null) throw new Error("Missing clone URL");
 		const url = new URL(cloneUrl);
-		if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash)
+		// Which origins the worker may fetch from is ScmServerEndpointPolicy's decision; this is the
+		// helper's own floor for the credential it puts on the wire: plaintext never leaves loopback,
+		// which is where an SCM simulation lives when the fetch shares the worker's network namespace.
+		const plaintextLoopback = url.protocol === "http:" && url.hostname === "127.0.0.1";
+		if (
+			(url.protocol !== "https:" && !plaintextLoopback) ||
+			url.username ||
+			url.password ||
+			url.search ||
+			url.hash
+		)
 			throw new Error("Invalid clone URL");
 	}
 	if (

@@ -45,8 +45,17 @@ import tools.jackson.databind.ObjectMapper;
  * the review sandboxes' own bound.
  */
 public final class DockerNativeGitExecutor implements NativeGitExecutor {
+    /**
+     * @param fetchFromWorkerNetwork a fetch joins the worker's own network namespace instead of the
+     *     Docker bridge; only an SCM simulation on the worker's loopback asks for that
+     */
     public record Settings(
-            String image, String workerId, int maxConcurrentOperations, long maxSnapshotBytes, String owner) {}
+            String image,
+            String workerId,
+            int maxConcurrentOperations,
+            long maxSnapshotBytes,
+            String owner,
+            boolean fetchFromWorkerNetwork) {}
 
     private static final Logger log = LoggerFactory.getLogger(DockerNativeGitExecutor.class);
 
@@ -61,7 +70,7 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
     private final DockerClient streaming;
     private final DockerClientOperations operations;
     private final SandboxContainerManager containers;
-    private final SandboxImageGuard images;
+    private final SandboxNetworkManager networks;
     private final ContainerSecurityPolicy policy;
     private final ObjectMapper mapper;
     private final Settings settings;
@@ -70,7 +79,7 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
     public DockerNativeGitExecutor(
             DockerClientOperations docker,
             SandboxContainerManager containers,
-            SandboxImageGuard images,
+            SandboxNetworkManager networks,
             ContainerSecurityPolicy policy,
             ObjectMapper mapper,
             Settings settings) {
@@ -79,7 +88,7 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
         this.streaming = docker.streamingClient();
         this.operations = docker;
         this.containers = containers;
-        this.images = images;
+        this.networks = networks;
         this.policy = policy;
         this.mapper = mapper;
         this.settings = settings;
@@ -135,7 +144,7 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
         byte[] input = Arrays.copyOf(json, json.length + 1);
         input[json.length] = '\n';
         boolean fetch = request.operation() == Operation.FETCH || request.operation() == Operation.FETCH_COMMIT;
-        images.ensurePresent(settings.image());
+        containers.ensureImagePresent(settings.image());
         Map<String, String> labels = new HashMap<>();
         labels.put(SandboxLabels.GIT_OWNER, settings.owner());
         labels.put(SandboxLabels.GIT_COMPONENT, SandboxLabels.GIT_COMPONENT_PREPARATION);
@@ -181,7 +190,7 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
         HostConfig host = operations
                 .hostConfig(
                         policy.buildHostConfig(SecurityProfile.DEFAULT, LIMITS, new NetworkPolicy(fetch, null, null)))
-                .withNetworkMode(fetch ? "bridge" : "none")
+                .withNetworkMode(fetch ? fetchNetwork() : "none")
                 .withMounts(mounts)
                 .withLogConfig(new LogConfig(LogConfig.LoggingType.NONE));
         labels.put(SandboxLabels.GIT_DEADLINE, deadlineLabel);
@@ -293,6 +302,16 @@ public final class DockerNativeGitExecutor implements NativeGitExecutor {
             if (trustedRepository != null) steps.add(() -> operations.removeVolume(verificationVolume));
             release(container, primary, steps);
         }
+    }
+
+    /**
+     * The worker's own network namespace is the only place its loopback exists, so a fetch to an SCM
+     * simulation joins it: the worker's container, or the host when the worker runs there.
+     */
+    private String fetchNetwork() {
+        if (!settings.fetchFromWorkerNetwork()) return "bridge";
+        String worker = networks.appServerContainerId();
+        return worker == null ? "host" : "container:" + worker;
     }
 
     /** Runs every cleanup without masking the operation's failure. */

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
+import com.sun.net.httpserver.HttpServer;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Operation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
@@ -14,9 +15,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecuto
 import de.tum.cit.aet.hephaestus.testconfig.LiveDockerTest;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -25,6 +30,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -56,17 +62,24 @@ class DockerNativeGitExecutorLiveTest {
                         .build()));
         dockerOps = new DockerClientOperations(dockerClient, dockerClient);
         dockerWaitExecutor = Executors.newCachedThreadPool();
+        executor = executor(false);
+    }
+
+    private DockerNativeGitExecutor executor(boolean fetchFromWorkerNetwork) {
+        var properties =
+                new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "live-git");
         var containers = new SandboxContainerManager(
                 dockerOps, image -> {}, new SandboxProperties(5, 10, 60, null), "live-git", dockerWaitExecutor);
-        executor = new DockerNativeGitExecutor(
+        // The test JVM runs on the host, which is where a fetch that joins the worker's network lands.
+        var networks = new SandboxNetworkManager(dockerOps, properties, () -> null);
+        return new DockerNativeGitExecutor(
                 dockerOps,
                 containers,
-                image -> {},
-                new ContainerSecurityPolicy(
-                        new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "live-git"),
-                        null),
+                networks,
+                new ContainerSecurityPolicy(properties, null),
                 new JsonMapper(),
-                new DockerNativeGitExecutor.Settings(IMAGE, "live-worker", 2, 1L << 33, "live-git"));
+                new DockerNativeGitExecutor.Settings(
+                        IMAGE, "live-worker", 2, 1L << 33, "live-git", fetchFromWorkerNetwork));
     }
 
     @AfterEach
@@ -102,6 +115,63 @@ class DockerNativeGitExecutorLiveTest {
                 .matches("[0-9a-f]{40}");
         assertThat(answer(OTHER_WORKSPACE, new Request(Operation.STATUS, List.of(), null, null)))
                 .isEqualTo("false");
+    }
+
+    /**
+     * An SCM simulation lives on the worker's loopback, which the Docker bridge cannot see. Git's dumb
+     * HTTP transport needs only the files {@code update-server-info} writes, so a static server is a
+     * complete simulated provider here.
+     */
+    @Test
+    void shouldFetchAnScmSimulationFromTheWorkersOwnNetwork(@TempDir Path directory) throws Exception {
+        Path work = directory.resolve("work");
+        git(directory, "init", "-q", "-b", "main", work.toString());
+        git(work, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "one");
+        Path bare = directory.resolve("team/repo.git");
+        git(directory, "clone", "-q", "--bare", work.toString(), bare.toString());
+        git(bare, "update-server-info");
+        String head = git(work, "rev-parse", "HEAD").strip();
+
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            Path file = directory.resolve(exchange.getRequestURI().getPath().substring(1));
+            if (!Files.isRegularFile(file)) {
+                exchange.sendResponseHeaders(404, -1);
+                return;
+            }
+            exchange.sendResponseHeaders(200, Files.size(file));
+            try (var body = exchange.getResponseBody()) {
+                Files.copy(file, body);
+            }
+        });
+        server.start();
+        try {
+            String cloneUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/team/repo.git";
+            var fetch = new Request(Operation.FETCH, List.of(), cloneUrl, null);
+            assertThatThrownBy(
+                            () -> executor.execute(KEY, fetch, Duration.ofSeconds(60), OutputStream.nullOutputStream()))
+                    .hasMessageContaining("Git operation failed: ");
+
+            var simulation = executor(true);
+            simulation.execute(KEY, fetch, Duration.ofSeconds(60), OutputStream.nullOutputStream());
+            assertThat(answer(KEY, new Request(Operation.RESOLVE, List.of("refs/remotes/origin/main"), null, null)))
+                    .isEqualTo(head);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    private static String git(Path directory, String... arguments) throws Exception {
+        var command = new ArrayList<>(List.of("git"));
+        command.addAll(List.of(arguments));
+        var process = new ProcessBuilder(command)
+                .directory(directory.toFile())
+                .redirectErrorStream(true)
+                .start();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        if (process.waitFor() != 0)
+            throw new IllegalStateException("git " + String.join(" ", arguments) + ": " + output);
+        return output;
     }
 
     private String answer(RepositoryKey key, Request request) {
