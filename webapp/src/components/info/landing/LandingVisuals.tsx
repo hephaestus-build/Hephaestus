@@ -67,21 +67,13 @@ export function LandingGlow({ className }: { className?: string }) {
 	return <span className={cn(styles.glow, className)} aria-hidden="true" />;
 }
 
-function rotation(degrees: number): StyleWithCustomProperties {
-	return { "--rot": `${degrees}deg` };
-}
-
-/**
- * Merged is violet by GitHub's convention rather than by a token, the same way `group-visuals.ts`
- * spells its palette out: these are borrowed states, not part of our own colour system.
- */
 const WORK_STATES = {
 	open: { label: "Open", icon: CircleDot, className: "bg-success text-success-foreground" },
 	ready: { label: "Open", icon: GitPullRequest, className: "bg-success text-success-foreground" },
 	merged: {
 		label: "Merged",
 		icon: GitMerge,
-		className: "bg-violet-600 text-white dark:bg-violet-500",
+		className: "bg-provider-done text-provider-done-foreground",
 	},
 } as const;
 
@@ -90,7 +82,7 @@ export type LandingWorkState = keyof typeof WORK_STATES;
 export function LandingStatePill({ state }: { state: LandingWorkState }) {
 	const { label, icon: Icon, className } = WORK_STATES[state];
 	return (
-		<Badge className={cn("text-[0.6875rem] font-semibold", className)}>
+		<Badge size="xs" className={className}>
 			<Icon aria-hidden="true" />
 			{label}
 		</Badge>
@@ -113,12 +105,15 @@ export function LandingWorkCard({
 	rotate = 0,
 }: LandingWorkCardProps) {
 	return (
-		<div className={styles.atom} style={rotation(rotate)}>
+		<div
+			className={styles.atom}
+			style={{ "--rot": `${rotate}deg` } satisfies StyleWithCustomProperties}
+		>
 			<div className="flex flex-col gap-1.5 p-3">
 				<div className="flex items-center gap-1.5">
 					{state ? <LandingStatePill state={state} /> : undefined}
 					{reference ? (
-						<span className="font-mono text-[0.6875rem] text-muted-foreground">{reference}</span>
+						<span className="font-mono text-2xs text-muted-foreground">{reference}</span>
 					) : undefined}
 				</div>
 				<p className="text-sm leading-snug font-semibold text-foreground">{title}</p>
@@ -131,7 +126,7 @@ export function LandingWorkCard({
 /** A line lifted from the work itself: an issue body, a review comment, a status update. */
 export function LandingQuote({ children }: { children: ReactNode }) {
 	return (
-		<p className="border-t border-border/70 bg-muted/45 px-3 py-2 text-[0.8125rem] leading-relaxed text-muted-foreground">
+		<p className="border-t border-border/70 bg-muted/45 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
 			{children}
 		</p>
 	);
@@ -140,7 +135,7 @@ export function LandingQuote({ children }: { children: ReactNode }) {
 /** The strip of small facts a provider prints under a change: checks, threads, file counts. */
 export function LandingMetaRow({ children }: { children: ReactNode }) {
 	return (
-		<div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-border/70 px-3 py-2 text-[0.6875rem]">
+		<div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-border/70 px-3 py-2 text-2xs">
 			{children}
 		</div>
 	);
@@ -190,10 +185,13 @@ export function LandingFeedbackCard({
 	const assessment = OUTCOME_DEFS[stance === "strength" ? "POSITIVE" : "NEGATIVE"];
 	const StanceIcon = assessment.icon;
 	return (
-		<div className={cn(styles.atom, styles.slip)} style={rotation(rotate)}>
+		<div
+			className={cn(styles.atom, styles.slip)}
+			style={{ "--rot": `${rotate}deg` } satisfies StyleWithCustomProperties}
+		>
 			<p
 				className={cn(
-					"flex items-start gap-1.5 rounded-t-[0.9rem] px-3 py-1.5 text-[0.6875rem] font-medium",
+					"flex items-start gap-1.5 rounded-t-xl px-3 py-1.5 text-2xs font-medium",
 					pill,
 				)}
 			>
@@ -234,8 +232,8 @@ export function LandingHephFigure({ className, lead, body }: LandingHephFigurePr
 			</span>
 			<div className={cn(styles.speechBubble, "text-left text-sm")}>
 				<p className="sr-only">Hephaestus says:</p>
-				<p className="font-bold tracking-[-0.01em] leading-snug">{lead}</p>
-				<p className="mt-1 text-[0.8125rem] leading-relaxed text-muted-foreground">{body}</p>
+				<p className="font-bold tracking-tight leading-snug">{lead}</p>
+				<p className="mt-1 text-xs leading-relaxed text-muted-foreground">{body}</p>
 			</div>
 		</div>
 	);

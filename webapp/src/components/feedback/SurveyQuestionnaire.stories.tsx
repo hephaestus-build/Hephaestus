@@ -38,7 +38,7 @@ const meta = {
 						args.onDraftChange(next);
 						setDraft(next);
 					}}
-					className="max-w-lg gap-5"
+					className="max-w-lg"
 				>
 					<SurveyQuestionnaire.Progress />
 					<SurveyQuestionnaire.Items />

@@ -86,7 +86,7 @@ export function AdminLlmModelsSection({
 			</div>
 
 			{models.length === 0 ? (
-				<Empty className="border border-dashed">
+				<Empty variant="outlined">
 					<EmptyHeader>
 						<EmptyMedia variant="icon">
 							<Bot aria-hidden />
@@ -102,7 +102,7 @@ export function AdminLlmModelsSection({
 					</EmptyContent>
 				</Empty>
 			) : (
-				<Table containerClassName="rounded-md border">
+				<Table bordered>
 					<TableCaption className="sr-only">Models on {connectionDisplayName}</TableCaption>
 					<TableHeader>
 						<TableRow>
@@ -124,9 +124,7 @@ export function AdminLlmModelsSection({
 									<TableCell className="font-medium">{model.displayName}</TableCell>
 									{/* Left-aligned: `priceLabel` is a sentence, not a figure; `tabular-nums` only
 									    aligns the digits inside it. */}
-									<TableCell className="tabular-nums">
-										{priceLabel(priceFieldsOf(model), "instance")}
-									</TableCell>
+									<TableCell numeric>{priceLabel(priceFieldsOf(model), "instance")}</TableCell>
 									<TableCell>{shareLabel(model, workspaceOptions)}</TableCell>
 									<TableCell>
 										<Badge variant={status === "Ready" ? "default" : "secondary"}>{status}</Badge>

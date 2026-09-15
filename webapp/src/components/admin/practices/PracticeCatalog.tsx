@@ -272,7 +272,7 @@ export function PracticeCatalog({
 			/>
 
 			{groups.length === 0 && practices.length === 0 ? (
-				<Empty className="min-h-56 border">
+				<Empty variant="outlined" className="min-h-56">
 					<EmptyHeader>
 						<EmptyMedia variant="icon">
 							<ListChecks aria-hidden />
@@ -294,7 +294,7 @@ export function PracticeCatalog({
 				visiblePracticeSlugs.size === 0 && (
 					// Without a way out, the reader is left with per-group "No matching practices." strings
 					// and a banner telling them to clear a filter, and no control that clears it.
-					<Empty className="min-h-56 border">
+					<Empty variant="outlined" className="min-h-56">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<ListChecks aria-hidden />
@@ -607,12 +607,7 @@ function PracticeDragPreview({
 	inheritedFrom: string | null;
 }) {
 	return (
-		<Item
-			aria-hidden="true"
-			variant="outline"
-			size="xs"
-			className="flex-nowrap bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/10"
-		>
+		<Item aria-hidden="true" variant="overlay" size="xs" className="flex-nowrap">
 			<div className="flex size-8 shrink-0 items-center justify-center text-muted-foreground">
 				<GripVertical className="size-4" />
 			</div>

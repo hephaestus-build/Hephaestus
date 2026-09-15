@@ -30,10 +30,11 @@ const fmt = {
 const lintConfig = parse(
 	fs.readFileSync(new URL(".oxlintrc.json", import.meta.url), "utf8"),
 ) as OxlintConfig;
-const lint = {
-	...lintConfig,
-	options: { ...lintConfig.options, typeAware: true, typeCheck: true },
-};
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion
+const rootLintConfig = parse(
+	fs.readFileSync(new URL("../.oxlintrc.json", import.meta.url), "utf8"),
+) as OxlintConfig;
+const lint = { ...lintConfig, options: rootLintConfig.options };
 
 const sentryUploadValues = [
 	process.env.SENTRY_AUTH_TOKEN,

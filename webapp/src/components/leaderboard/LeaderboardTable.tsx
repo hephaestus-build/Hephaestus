@@ -2,7 +2,6 @@ import { NoEntryIcon } from "@primer/octicons-react";
 import { AwardIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { cn } from "cn";
 import type { LeaderboardEntry, UserInfo } from "@/api/types.gen";
 import { ActivityBadges } from "@/components/leaderboard/ActivityBadges";
 import type { LeaderboardVariant } from "@/components/leaderboard/LeaderboardPage";
@@ -147,7 +146,7 @@ export function LeaderboardTable({
 						<TableRow
 							key={user.login}
 							id={`rank-${entry.rank}`}
-							className={cn(isCurrentUser && "bg-accent dark:bg-accent/30 dark:hover:bg-accent/50")}
+							variant={isCurrentUser ? "highlighted" : "default"}
 						>
 							<TableCell className="text-center">{entry.rank}</TableCell>
 							{leaguesEnabled && (
@@ -199,10 +198,10 @@ function LeaderboardTableSkeleton() {
 				</TableRow>
 			</TableHeader>
 			<TableBody>
-				{Array.from({ length: 10 }, (_, idx) => `skeleton-${idx}`).map((key, idx) => (
+				{Array.from({ length: 10 }, (_, idx) => `skeleton-${idx}`).map((key) => (
 					<TableRow key={key}>
 						<TableCell>
-							<Skeleton className="h-5 w-7" style={{ width: `${20 + 1 * idx}px` }} />
+							<Skeleton className="h-5 w-7" />
 						</TableCell>
 						<TableCell>
 							<Skeleton className="h-8 w-8 mx-auto" />
@@ -210,20 +209,14 @@ function LeaderboardTableSkeleton() {
 						<TableCell className="py-2">
 							<div className="flex items-center gap-2">
 								<Skeleton className="w-10 h-10 rounded-full" />
-								<Skeleton className="h-5" style={{ width: `${100 + (idx % 3) * 75}px` }} />
+								<Skeleton className="h-5 w-40" />
 							</div>
 						</TableCell>
 						<TableCell className="text-center">
-							<Skeleton
-								className="h-5 mx-auto"
-								style={{ width: `${20 + (10 - idx) + (idx % 3) * 4}px` }}
-							/>
+							<Skeleton className="h-5 w-8 mx-auto" />
 						</TableCell>
 						<TableCell className="py-2">
-							<Skeleton
-								className="h-5"
-								style={{ width: `${30 + ((idx % 4) * 20) / (idx + 1)}px` }}
-							/>
+							<Skeleton className="h-5 w-10" />
 						</TableCell>
 					</TableRow>
 				))}

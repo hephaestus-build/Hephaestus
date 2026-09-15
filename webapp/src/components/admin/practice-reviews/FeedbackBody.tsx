@@ -1,4 +1,3 @@
-import { cn } from "cn";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import {
 	type DeliveryFacts,
@@ -21,16 +20,16 @@ export function FeedbackBody({ feedback, className }: FeedbackBodyProps) {
 
 	if (!body) {
 		return (
-			<Card className={cn("gap-0 border py-0", className)}>
-				<CardContent className="py-4 text-sm text-muted-foreground">
-					No feedback text was composed for this record.
+			<Card flush className={className}>
+				<CardContent className="py-4">
+					<p className="text-muted-foreground">No feedback text was composed for this record.</p>
 				</CardContent>
 			</Card>
 		);
 	}
 
 	return (
-		<Card className={cn("gap-0 border py-0", className)}>
+		<Card flush className={className}>
 			<Tabs defaultValue="rendered" className="gap-0">
 				<CardHeader className="flex flex-wrap items-center justify-between gap-2 pt-3 pb-2">
 					<TabsList aria-label="How to show the feedback">

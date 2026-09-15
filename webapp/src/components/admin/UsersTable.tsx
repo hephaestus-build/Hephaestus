@@ -22,7 +22,7 @@ import {
 	DropdownMenuGroup,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import {
 	Select,
@@ -192,15 +192,17 @@ export function UsersTable({
 		<div className="w-full space-y-4">
 			<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
 				<div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
-					<div className="relative w-full sm:w-auto">
-						<Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-						<Input
+					<InputGroup className="w-full sm:w-auto">
+						<InputGroupAddon>
+							<Search />
+						</InputGroupAddon>
+						<InputGroupInput
 							placeholder="Search by name or username..."
 							value={view.q}
 							onChange={(event) => onViewChange({ q: event.target.value, page: 0 })}
-							className="pl-9 w-full sm:w-[300px]"
+							className="w-full sm:w-[300px]"
 						/>
-					</div>
+					</InputGroup>
 					<Select
 						value={view.team}
 						onValueChange={(value) => value && onViewChange({ team: value, page: 0 })}
@@ -237,7 +239,7 @@ export function UsersTable({
 							variant="ghost"
 							size="sm"
 							onClick={() => onViewChange({ q: "", page: 0 })}
-							className="h-8 px-2 lg:px-3"
+							className="h-8"
 						>
 							Clear search
 						</Button>
@@ -271,53 +273,51 @@ export function UsersTable({
 				</div>
 			</div>
 
-			<div className="rounded-md border">
-				<Table>
-					<DataTableHeader table={table} />
-					<TableBody>
-						{isLoading ? (
-							<TableRow>
-								<TableCell
-									colSpan={table.getVisibleLeafColumns().length}
-									className="h-32 text-center"
-								>
-									<div className="flex flex-col items-center justify-center space-y-2">
-										<Spinner />
-										<p className="text-sm text-muted-foreground">Loading users...</p>
-									</div>
-								</TableCell>
+			<Table bordered>
+				<DataTableHeader table={table} />
+				<TableBody>
+					{isLoading ? (
+						<TableRow>
+							<TableCell
+								colSpan={table.getVisibleLeafColumns().length}
+								className="h-32 text-center"
+							>
+								<div className="flex flex-col items-center justify-center space-y-2">
+									<Spinner />
+									<p className="text-sm text-muted-foreground">Loading users...</p>
+								</div>
+							</TableCell>
+						</TableRow>
+					) : table.getRowModel().rows.length > 0 ? (
+						table.getRowModel().rows.map((row) => (
+							<TableRow key={row.id}>
+								{row.getVisibleCells().map((cell) => (
+									<TableCell key={cell.id}>
+										<FlexRender cell={cell} />
+									</TableCell>
+								))}
 							</TableRow>
-						) : table.getRowModel().rows.length > 0 ? (
-							table.getRowModel().rows.map((row) => (
-								<TableRow key={row.id} className="hover:bg-muted/50 transition-colors">
-									{row.getVisibleCells().map((cell) => (
-										<TableCell key={cell.id}>
-											<FlexRender cell={cell} />
-										</TableCell>
-									))}
-								</TableRow>
-							))
-						) : (
-							<TableRow>
-								<TableCell
-									colSpan={table.getVisibleLeafColumns().length}
-									className="h-32 text-center"
-								>
-									<div className="flex flex-col items-center justify-center space-y-2">
-										<Users className="h-8 w-8 text-muted-foreground" />
-										<p className="text-sm font-medium">No users found</p>
-										<p className="text-xs text-muted-foreground">
-											{view.q || view.team !== "all"
-												? "Try adjusting your search or filter criteria"
-												: "No users have been added to the workspace yet"}
-										</p>
-									</div>
-								</TableCell>
-							</TableRow>
-						)}
-					</TableBody>
-				</Table>
-			</div>
+						))
+					) : (
+						<TableRow>
+							<TableCell
+								colSpan={table.getVisibleLeafColumns().length}
+								className="h-32 text-center"
+							>
+								<div className="flex flex-col items-center justify-center space-y-2">
+									<Users className="h-8 w-8 text-muted-foreground" />
+									<p className="text-sm font-medium">No users found</p>
+									<p className="text-xs text-muted-foreground">
+										{view.q || view.team !== "all"
+											? "Try adjusting your search or filter criteria"
+											: "No users have been added to the workspace yet"}
+									</p>
+								</div>
+							</TableCell>
+						</TableRow>
+					)}
+				</TableBody>
+			</Table>
 
 			<div className="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0 sm:space-x-2 py-4">
 				<div className="flex-1 text-sm text-muted-foreground order-2 sm:order-1">

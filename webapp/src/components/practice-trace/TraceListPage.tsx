@@ -92,7 +92,7 @@ export function TraceListPage({
 				) : isLoading ? (
 					<ReviewResultsSkeleton label="Loading review activity" rows={TRACE_PAGE_SIZE} />
 				) : rows.length === 0 ? (
-					<Empty className="border">
+					<Empty variant="outlined">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<RadarIcon />

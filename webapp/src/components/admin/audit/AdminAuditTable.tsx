@@ -71,7 +71,7 @@ export function AdminAuditTable({
 
 	if (isError) {
 		return (
-			<Empty className="border border-dashed">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<ScrollText />
@@ -91,7 +91,7 @@ export function AdminAuditTable({
 
 	if (events.length === 0 && !isLoading) {
 		return (
-			<Empty className="border border-dashed">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<ScrollText />
@@ -116,7 +116,7 @@ export function AdminAuditTable({
 
 	return (
 		<div className="space-y-4">
-			<Table containerClassName="rounded-md border">
+			<Table bordered>
 				<TableCaption className="sr-only">Sign-in and account events, newest first</TableCaption>
 				<TableHeader>
 					<TableRow>

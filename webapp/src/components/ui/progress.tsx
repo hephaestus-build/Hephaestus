@@ -2,6 +2,13 @@ import { Progress as ProgressPrimitive } from "@base-ui/react/progress";
 
 import { cn } from "cn";
 
+/**
+ * ⚠️ Diverges from the shadcn registry — `shadcn add progress` drops the following; re-apply it.
+ *
+ * The default track renders only when the caller gives no children. Upstream appends it after
+ * whatever is passed, so a meter that needs its own fill tone could not compose a `ProgressTrack`
+ * without getting two, and reached for the Base UI primitive or a descendant selector instead.
+ */
 function Progress({ className, children, value, ...props }: ProgressPrimitive.Root.Props) {
 	return (
 		<ProgressPrimitive.Root
@@ -10,10 +17,11 @@ function Progress({ className, children, value, ...props }: ProgressPrimitive.Ro
 			className={cn("flex flex-wrap gap-3", className)}
 			{...props}
 		>
-			{children}
-			<ProgressTrack>
-				<ProgressIndicator />
-			</ProgressTrack>
+			{children ?? (
+				<ProgressTrack>
+					<ProgressIndicator />
+				</ProgressTrack>
+			)}
 		</ProgressPrimitive.Root>
 	);
 }

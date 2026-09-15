@@ -4,6 +4,13 @@ import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
 
 import { cn } from "cn";
+
+/**
+ * ⚠️ Diverges from the shadcn registry — `shadcn add item` drops the following; re-apply them.
+ *
+ * `Item` gains `interactive`, `overlay` and `row` variants: a sortable row that answers hover, the
+ * row while dragged, and one row of a divided list.
+ */
 import { Separator } from "@/components/ui/separator";
 
 function ItemGroup({ className, ...props }: React.ComponentProps<"div">) {
@@ -32,13 +39,20 @@ function ItemSeparator({ className, ...props }: React.ComponentProps<typeof Sepa
 }
 
 const itemVariants = cva(
-	"[a]:hover:bg-muted rounded-lg border text-sm w-full group/item focus-visible:border-ring focus-visible:ring-ring/50 flex items-center flex-wrap outline-none transition-colors duration-100 focus-visible:ring-[3px] [a]:transition-colors",
+	"[a]:hover:bg-muted rounded-lg border text-sm w-full group/item focus-visible:border-ring focus-visible:ring-ring/50 flex items-center flex-wrap outline-none transition-colors duration-100 focus-visible:ring-3 [a]:transition-colors",
 	{
 		variants: {
 			variant: {
 				default: "border-transparent",
 				outline: "border-border",
 				muted: "bg-muted/50 border-transparent",
+				// A row that answers the pointer without being a link: sortable rows take this.
+				interactive: "border-transparent hover:bg-muted/60",
+				// The row while it is being dragged: lifted off the list on the popover surface.
+				overlay:
+					"border-transparent bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/10",
+				// One row of a divided list — no radius, an edge only below, none on the last.
+				row: "rounded-none border-x-0 border-t-0 border-b border-border last:border-b-0",
 			},
 			size: {
 				default: "gap-2.5 px-3 py-2.5",

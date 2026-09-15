@@ -70,7 +70,7 @@ export function ConfigAuditTable({
 
 	if (isError) {
 		return (
-			<Empty className="border border-dashed">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<History />
@@ -90,7 +90,7 @@ export function ConfigAuditTable({
 
 	if (entries.length === 0 && !isLoading) {
 		return (
-			<Empty className="border border-dashed">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<History />
@@ -118,7 +118,7 @@ export function ConfigAuditTable({
 
 	return (
 		<div className="space-y-4">
-			<Table containerClassName="rounded-md border">
+			<Table bordered>
 				<TableCaption className="sr-only">Settings changes, newest first</TableCaption>
 				<TableHeader>
 					<TableRow>

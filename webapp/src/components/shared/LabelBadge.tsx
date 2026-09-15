@@ -35,10 +35,8 @@ export function LabelBadge({ label, color, className, style, ...props }: LabelBa
 	return (
 		<Badge
 			variant="outline"
-			className={cn(
-				"h-5 max-w-full rounded-full border-solid px-2 text-xs font-medium no-underline",
-				className,
-			)}
+			className={cn("max-w-full", className)}
+			// oxlint-disable-next-line shadcn/no-inline-styles -- Provider label colors and their contrast foreground are computed at runtime.
 			style={{ ...labelColors(color), ...style }}
 			{...props}
 		>

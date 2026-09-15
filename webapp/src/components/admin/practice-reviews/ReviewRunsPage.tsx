@@ -68,7 +68,7 @@ export function ReviewRunsPage({
 			) : isLoading ? (
 				<ReviewResultsSkeleton label="Loading reviews" rows={REVIEW_PAGE_SIZE} />
 			) : rows.length === 0 ? (
-				<Empty className="border">
+				<Empty variant="outlined">
 					<EmptyHeader>
 						<EmptyMedia variant="icon">
 							<WorkflowIcon />

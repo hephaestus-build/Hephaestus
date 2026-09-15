@@ -126,7 +126,8 @@ export function MultimodalInput({
 					>
 						<Button
 							aria-label="Scroll to latest message"
-							className="rounded-full bg-background/80 dark:bg-background/80 border-border/50 shadow-lg hover:bg-background/90 dark:hover:bg-background/90"
+							shape="pill"
+							className="bg-background/80 dark:bg-background/80 border-border/50 shadow-lg hover:bg-background/90 dark:hover:bg-background/90"
 							size="icon"
 							variant="outline"
 							onClick={(event) => {
@@ -174,7 +175,7 @@ export function MultimodalInput({
 
 			<div
 				className={cn(
-					"border-input placeholder:text-muted-foreground focus-within:border-ring focus-within:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-xl border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+					"border-input placeholder:text-muted-foreground focus-within:border-ring focus-within:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-xl border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-3 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
 					"flex-col gap-1",
 					readonly && "cursor-not-allowed opacity-60",
 					className,
@@ -188,7 +189,8 @@ export function MultimodalInput({
 						value={input}
 						onChange={handleInput}
 						readOnly={readonly}
-						className="border-0 bg-transparent outline-none overflow-hidden resize-none !text-base w-full p-0 shadow-none focus-visible:ring-0 min-h-0"
+						variant="bare"
+						className="min-h-0 w-full resize-none overflow-hidden"
 						rows={2}
 						// oxlint-disable-next-line jsx-a11y/no-autofocus -- The composer is the only writable control on every surface that mounts it, each reached in order to type. A read-only replay takes no focus.
 						autoFocus={!readonly}
@@ -239,7 +241,6 @@ function AttachmentsButton({
 	return (
 		<Button
 			aria-label="Attach a file"
-			className="rounded-md rounded-bl-lg p-[7px] dark:border-zinc-700 hover:dark:bg-zinc-900 hover:bg-zinc-200"
 			onClick={(event) => {
 				event.preventDefault();
 				fileInputRef.current?.click();
@@ -257,7 +258,8 @@ function StopButton({ onStop }: { onStop: () => void }) {
 	return (
 		<Button
 			aria-label="Stop generating"
-			className="rounded-full p-1.5 border dark:border-zinc-600"
+			shape="pill"
+			className="border border-border"
 			onClick={(event) => {
 				event.preventDefault();
 				onStop();
@@ -273,7 +275,8 @@ function SendButton({ onSubmit, disabled }: { onSubmit: () => void; disabled: bo
 	return (
 		<Button
 			aria-label="Send message"
-			className="rounded-full p-1.5 border dark:border-zinc-600"
+			shape="pill"
+			className="border border-border"
 			onClick={(event) => {
 				event.preventDefault();
 				onSubmit();

@@ -13,11 +13,23 @@ function Accordion({ className, ...props }: AccordionPrimitive.Root.Props) {
 	);
 }
 
-function AccordionItem({ className, ...props }: AccordionPrimitive.Item.Props) {
+/**
+ * ⚠️ Diverges from the shadcn registry: `AccordionItem` takes `variant="card"`, each item its own
+ * bounded card rather than a row divided from the next — the shape a sortable catalogue takes.
+ */
+function AccordionItem({
+	className,
+	variant = "default",
+	...props
+}: AccordionPrimitive.Item.Props & { variant?: "default" | "card" }) {
 	return (
 		<AccordionPrimitive.Item
 			data-slot="accordion-item"
-			className={cn("not-last:border-b", className)}
+			data-variant={variant}
+			className={cn(
+				variant === "card" ? "rounded-lg border bg-card" : "not-last:border-b",
+				className,
+			)}
 			{...props}
 		/>
 	);
@@ -37,7 +49,7 @@ function AccordionTrigger({ className, children, ...props }: AccordionPrimitive.
 				// sets `aria-disabled` and omits the native attribute — a `disabled:` rule compiles to
 				// `&:disabled` and matches nothing, leaving a disabled item looking entirely live.
 				className={cn(
-					"focus-visible:ring-ring/50 focus-visible:border-ring focus-visible:after:border-ring **:data-[slot=accordion-trigger-icon]:text-muted-foreground rounded-lg py-2.5 text-left text-sm font-medium hover:underline focus-visible:ring-[3px] **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 group/accordion-trigger relative flex min-w-0 flex-1 items-start justify-between border border-transparent transition-all outline-none aria-disabled:pointer-events-none aria-disabled:opacity-50",
+					"focus-visible:ring-ring/50 focus-visible:border-ring focus-visible:after:border-ring **:data-[slot=accordion-trigger-icon]:text-muted-foreground rounded-lg py-2.5 text-left text-sm font-medium hover:underline focus-visible:ring-3 **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 group/accordion-trigger relative flex min-w-0 flex-1 items-start justify-between border border-transparent transition-all outline-none aria-disabled:pointer-events-none aria-disabled:opacity-50",
 					className,
 				)}
 				{...props}

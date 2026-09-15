@@ -154,7 +154,7 @@ export function AddCollectionDialog({
 							}}
 						/>
 					) : all.length === 0 ? (
-						<Empty className="border">
+						<Empty variant="outlined">
 							<EmptyHeader>
 								<EmptyMedia variant="icon">
 									<LockIcon />
@@ -168,7 +168,7 @@ export function AddCollectionDialog({
 							</EmptyHeader>
 						</Empty>
 					) : selectable.length === 0 ? (
-						<Empty className="border">
+						<Empty variant="outlined">
 							<EmptyHeader>
 								<EmptyMedia variant="icon">
 									<LibraryIcon />
@@ -214,7 +214,7 @@ export function AddCollectionDialog({
 											>
 												<span
 													aria-hidden="true"
-													className="border-input flex size-4 shrink-0 items-center justify-center rounded-[4px] border"
+													className="border-input flex size-4 shrink-0 items-center justify-center rounded-xs border"
 												>
 													{checked && <CheckIcon className="size-3.5" />}
 												</span>

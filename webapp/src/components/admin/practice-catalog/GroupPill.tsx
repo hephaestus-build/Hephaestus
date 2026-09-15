@@ -35,7 +35,8 @@ export function GroupPill({
 }: GroupPillProps) {
 	const visual = slug
 		? getGroupVisual(icon, color)
-		: { Icon: CircleDashed, pill: "bg-muted text-muted-foreground" };
+		: // oxlint-disable-next-line shadcn/no-unknown-classes -- The plugin mistakes this destructured record for a cn class map.
+			{ Icon: CircleDashed, pill: "bg-muted text-muted-foreground" };
 	const { Icon, pill } = visual;
 	const label = name ?? "Unassigned";
 

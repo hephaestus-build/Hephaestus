@@ -5,7 +5,7 @@ import { cn } from "cn";
 import type { GitLabGroup } from "@/api/types.gen";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 import { useWizard } from "./wizard-context";
@@ -30,16 +30,17 @@ export function SelectGroupStep() {
 
 	return (
 		<div className="flex flex-col gap-3">
-			<div className="relative">
-				<SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
-				<Input
+			<InputGroup>
+				<InputGroupAddon>
+					<SearchIcon />
+				</InputGroupAddon>
+				<InputGroupInput
 					placeholder="Search groups..."
 					value={search}
 					onChange={(e) => setSearch(e.target.value)}
-					className="pl-8"
 					aria-label="Search groups"
 				/>
-			</div>
+			</InputGroup>
 
 			<RadioGroup
 				value={state.selectedGroup?.fullPath ?? ""}
@@ -89,7 +90,7 @@ function GroupItem({ group, isSelected }: { group: GitLabGroup; isSelected: bool
 				<span className="text-xs text-muted-foreground truncate">{group.fullPath}</span>
 			</div>
 			{group.visibility && (
-				<Badge variant="outline" className="text-[10px] shrink-0">
+				<Badge variant="outline" size="xs" className="shrink-0">
 					{group.visibility}
 				</Badge>
 			)}

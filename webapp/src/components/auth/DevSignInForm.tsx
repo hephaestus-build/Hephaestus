@@ -28,7 +28,7 @@ export function DevSignInForm({ returnTo }: { returnTo?: string }) {
 	};
 
 	return (
-		<div className="flex flex-col gap-2 rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 p-3">
+		<div className="flex flex-col gap-2 rounded-md border border-dashed border-warning/50 bg-warning/5 p-3">
 			<p className="text-xs font-medium text-muted-foreground">Dev sign-in (non-production)</p>
 			{/* aria-live: the error arrives after the button is pressed, so nothing announces it. */}
 			<div aria-live="assertive" aria-atomic="true">

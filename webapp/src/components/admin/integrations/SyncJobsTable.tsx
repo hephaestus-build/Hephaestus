@@ -211,7 +211,7 @@ function JobRow({ job }: { job: SyncJob }) {
 				<RelativeTime value={started} />
 			</TableCell>
 			<TableCell className="text-muted-foreground">{formatDuration(job)}</TableCell>
-			<TableCell className="text-right tabular-nums text-muted-foreground">
+			<TableCell numeric className="text-right text-muted-foreground">
 				{formatItems(job)}
 			</TableCell>
 			<TableCell className="text-right">
@@ -222,7 +222,7 @@ function JobRow({ job }: { job: SyncJob }) {
 								<button
 									type="button"
 									aria-label={`Error for job ${job.id}`}
-									className="inline-flex cursor-help rounded-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+									className="inline-flex cursor-help rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
 								/>
 							}
 						>
@@ -278,7 +278,7 @@ export function SyncJobsTable({
 
 	if (jobs.length === 0) {
 		return (
-			<Empty className="border border-dashed">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<HistoryIcon />

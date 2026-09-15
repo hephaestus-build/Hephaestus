@@ -1,9 +1,8 @@
-import { Progress as ProgressRoot } from "@base-ui/react/progress";
 import { Info, Star } from "lucide-react";
 
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
-import { ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
+import { Progress, ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
 
 import { LeagueIcon } from "./LeagueIcon";
 import { getLeagueFromPoints } from "./utils";
@@ -49,7 +48,7 @@ export function LeagueProgressCard({ leaguePoints, onInfoClick }: LeagueProgress
 				</div>
 				{currentLeague.maxPoints !== Number.POSITIVE_INFINITY && (
 					<div className="flex items-center gap-2 mt-1">
-						<ProgressRoot.Root
+						<Progress
 							value={progressValue}
 							aria-label={`${Math.round(progressValue)}% progress to next league`}
 							className="w-full"
@@ -64,7 +63,7 @@ export function LeagueProgressCard({ leaguePoints, onInfoClick }: LeagueProgress
 									})}
 								/>
 							</ProgressTrack>
-						</ProgressRoot.Root>
+						</Progress>
 						<LeagueIcon
 							leaguePoints={currentLeague.maxPoints + 1}
 							size="sm"

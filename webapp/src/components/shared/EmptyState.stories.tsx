@@ -1,53 +1,73 @@
+import { CodeReviewIcon } from "@primer/octicons-react";
 import type { Meta, StoryObj } from "@storybook/react";
 import { FileQuestion, GitPullRequest } from "lucide-react";
+import { expect } from "storybook/test";
 
 import { Button } from "@/components/ui/button";
 
 import { EmptyState } from "./EmptyState";
 
-const meta: Meta<typeof EmptyState> = {
+const meta = {
 	title: "Shared/Empty state",
 	component: EmptyState,
 	parameters: {
 		layout: "centered",
 	},
 	tags: ["autodocs"],
-};
+	args: {
+		icon: <FileQuestion className="size-6" />,
+		title: "No content found",
+		description: "There is no content to display at the moment.",
+	},
+} satisfies Meta<typeof EmptyState>;
 
 export default meta;
-type Story = StoryObj<typeof EmptyState>;
+type Story = StoryObj<typeof meta>;
 
-/**
- * Default empty state with icon, title and description
- */
 export const Default: Story = {
-	args: {
-		icon: FileQuestion,
-		title: "No content found",
-		description: "There is no content to display at the moment.",
+	play: async ({ canvasElement }) => {
+		// The icon is decorative, so it deliberately has no accessible role to query.
+		const icon = canvasElement.querySelector("svg");
+		if (!icon) throw new Error("Empty state icon is missing");
+		await expect(icon.getBoundingClientRect().width).toBe(24);
+		await expect(icon.getBoundingClientRect().height).toBe(24);
 	},
 };
 
-/**
- * Empty state with an action button
- */
 export const WithAction: Story = {
 	args: {
-		icon: GitPullRequest,
+		icon: <GitPullRequest className="size-6" />,
 		title: "No pull requests",
 		description: "There are no pull requests to display.",
-		action: <Button>Create Pull Request</Button>,
+		action: <Button>Create pull request</Button>,
+	},
+	play: async ({ canvas, userEvent }) => {
+		await userEvent.tab();
+		await expect(canvas.getByRole("button", { name: "Create pull request" })).toHaveFocus();
 	},
 };
 
-/**
- * Custom height empty state
- */
-export const CustomHeight: Story = {
+export const WithoutDescription: Story = {
 	args: {
-		icon: FileQuestion,
-		title: "No content found",
-		description: "There is no content to display at the moment.",
-		height: "h-80",
+		icon: <CodeReviewIcon className="size-6" size={24} />,
+		title: "No review activity",
+		description: undefined,
+	},
+};
+
+export const LongDescription: Story = {
+	args: {
+		className: "w-64",
+		description:
+			"There is no review activity that counts in this timeframe. Try a wider timeframe to see earlier reviews, or come back after reviewing an open pull request in one of your workspace’s connected repositories.",
+		action: <Button>View repositories</Button>,
+	},
+	play: async ({ canvas }) => {
+		const action = canvas.getByRole("button", { name: "View repositories" });
+		const card = action.closest('[data-slot="card"]');
+		if (!card) throw new Error("Empty state card is missing");
+		await expect(action.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+			card.getBoundingClientRect().bottom,
+		);
 	},
 };

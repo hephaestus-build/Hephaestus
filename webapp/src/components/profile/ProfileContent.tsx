@@ -139,7 +139,7 @@ export function ProfileContent({
 							))
 						) : (
 							<EmptyState
-								icon={CodeReviewIcon}
+								icon={<CodeReviewIcon className="size-6" size={24} />}
 								title="No review activity"
 								description={
 									currUserIsDashboardUser
@@ -153,7 +153,8 @@ export function ProfileContent({
 						<Button
 							type="button"
 							variant="link"
-							className="w-fit px-0 text-primary"
+							size="inline"
+							className="w-fit text-sm"
 							onClick={expandMonitor}
 						>
 							View all review activity
@@ -189,7 +190,7 @@ export function ProfileContent({
 							))
 						) : (
 							<EmptyState
-								icon={PrIcon}
+								icon={<PrIcon className="size-6" size={24} />}
 								title={`No open ${terms.pullRequests.toLowerCase()}`}
 								description={
 									currUserIsDashboardUser
@@ -203,7 +204,8 @@ export function ProfileContent({
 						<Button
 							type="button"
 							variant="link"
-							className="w-fit px-0 text-primary"
+							size="inline"
+							className="w-fit text-sm"
 							onClick={expandMonitor}
 						>
 							View all {terms.pullRequests.toLowerCase()}

@@ -73,8 +73,8 @@ export function ActivityBadges({
 	if (isLoading) {
 		return (
 			<div className={cn("flex items-center gap-2", className)}>
-				{[40, 15, 25, 35, 30, 30, 30].map((width, index) => (
-					<Skeleton key={`activity-badge-skeleton-${index}`} className="h-4" style={{ width }} />
+				{["w-10", "w-4", "w-6", "w-9", "w-8", "w-8", "w-8"].map((width, index) => (
+					<Skeleton key={`activity-badge-skeleton-${index}`} className={cn("h-4", width)} />
 				))}
 			</div>
 		);

@@ -40,11 +40,8 @@ export function RepositoryCard({
 
 	return (
 		<Card
-			className={cn(
-				"flex flex-col border-border/50 gap-0 transition-colors",
-				team.hidden ? "bg-muted/40" : "",
-				repository.hiddenFromContributions ? "bg-muted/40 border-dashed" : "",
-			)}
+			variant={repository.hiddenFromContributions ? "dashed" : team.hidden ? "muted" : "default"}
+			className="flex flex-col"
 		>
 			<CardHeader>
 				<div className="flex items-start justify-between">
@@ -65,7 +62,7 @@ export function RepositoryCard({
 						</div>
 						{repository.hiddenFromContributions && (
 							<div className="flex items-center gap-1 flex-wrap mt-1">
-								<span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
+								<span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
 									Hidden in contributions
 								</span>
 							</div>
@@ -80,8 +77,7 @@ export function RepositoryCard({
 						{onToggleVisibility && (
 							<Button
 								variant="ghost"
-								size="sm"
-								className="h-7 w-7 p-0"
+								size="icon-sm"
 								onClick={() => void onToggleVisibility(!repository.hiddenFromContributions)}
 								title={
 									repository.hiddenFromContributions
@@ -90,9 +86,9 @@ export function RepositoryCard({
 								}
 							>
 								{repository.hiddenFromContributions ? (
-									<EyeOff className="h-3 w-3" />
+									<EyeOff className="size-3.5" />
 								) : (
-									<Eye className="h-3 w-3" />
+									<Eye className="size-3.5" />
 								)}
 							</Button>
 						)}
@@ -101,11 +97,10 @@ export function RepositoryCard({
 								render={
 									<Button
 										variant="ghost"
-										size="sm"
-										className="h-7 w-7 p-0"
+										size="icon-sm"
 										aria-label={`Configure labels for ${repository.nameWithOwner}`}
 									>
-										<Settings className="h-3 w-3" />
+										<Settings className="size-3.5" />
 									</Button>
 								}
 							/>
@@ -125,20 +120,17 @@ export function RepositoryCard({
 					</div>
 				</div>
 			</CardHeader>
-			<CardContent className="flex flex-col">
-				{filteredRepoLabels.length > 0 && (
-					<div className="flex flex-wrap gap-1 mt-2">
-						{filteredRepoLabels.map((label) => (
-							<LabelBadge
-								key={`${label.name}-${label.repository?.id ?? ""}`}
-								label={label.name}
-								color={label.color}
-								className="text-xs"
-							/>
-						))}
-					</div>
-				)}
-			</CardContent>
+			{filteredRepoLabels.length > 0 && (
+				<CardContent className="flex flex-wrap gap-1">
+					{filteredRepoLabels.map((label) => (
+						<LabelBadge
+							key={`${label.name}-${label.repository?.id ?? ""}`}
+							label={label.name}
+							color={label.color}
+						/>
+					))}
+				</CardContent>
+			)}
 		</Card>
 	);
 }

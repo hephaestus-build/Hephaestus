@@ -1,5 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, render, renderHook, screen, waitFor } from "@testing-library/react";
+import {
+	act,
+	cleanup,
+	render,
+	renderHook,
+	screen,
+	waitFor,
+	waitForElementToBeRemoved,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
@@ -222,7 +230,9 @@ describe("product feedback wire contract", () => {
 		await act(async () => {
 			expect(await result.current.decline(surveyInvitation.id)).toBe(true);
 		});
-		await userEvent.click(await screen.findByRole("button", { name: "Undo" }));
+		const undo = await screen.findByRole("button", { name: "Undo" });
+		await userEvent.click(undo);
+		await waitForElementToBeRemoved(undo);
 		await waitFor(() => expect(result.current.query.data).toHaveLength(1));
 		expect(undoneId).toBe(surveyInvitation.id);
 	});

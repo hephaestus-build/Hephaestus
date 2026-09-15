@@ -218,7 +218,7 @@ export function FeedbackDetailPage({
 					What it was based on
 				</h3>
 				{feedback.observations.length === 0 ? (
-					<Empty className="border">
+					<Empty variant="outlined">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<ScanSearchIcon />

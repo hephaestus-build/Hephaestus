@@ -28,7 +28,7 @@ export function SortButton({ sorted, onToggle, reverse = false, children }: Sort
 			type="button"
 			onClick={onToggle}
 			className={cn(
-				"group inline-flex items-center gap-1 rounded-sm outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50",
+				"group inline-flex items-center gap-1 rounded-sm outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
 				sorted ? "text-foreground" : "text-muted-foreground",
 				reverse && "flex-row-reverse",
 			)}

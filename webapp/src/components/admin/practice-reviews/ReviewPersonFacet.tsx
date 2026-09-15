@@ -77,7 +77,7 @@ export function ReviewPersonFacet({
 				{selectedOption && (
 					<>
 						<Separator orientation="vertical" className="mx-0.5 data-[orientation=vertical]:h-4" />
-						<Badge variant="secondary" className="max-w-36 rounded-sm px-1 font-normal">
+						<Badge variant="secondary" size="sm" className="max-w-36">
 							<span className="truncate">{selectedOption.label}</span>
 						</Badge>
 					</>
@@ -101,9 +101,7 @@ export function ReviewPersonFacet({
 						<ComboboxItem key={option.userId} value={option}>
 							<ComboboxItemIndicator />
 							<Avatar className="size-5 shrink-0">
-								<AvatarFallback className="text-[0.625rem]">
-									{getInitials(option.label)}
-								</AvatarFallback>
+								<AvatarFallback className="text-2xs">{getInitials(option.label)}</AvatarFallback>
 							</Avatar>
 							<span className="min-w-0 truncate">
 								{option.label}

@@ -31,7 +31,7 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import {
 	Select,
 	SelectContent,
@@ -189,7 +189,7 @@ export function CuratedCatalog({
 				)}
 
 				{catalogIsEmpty ? (
-					<Empty className="min-h-56 border">
+					<Empty variant="outlined" className="min-h-56">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<Shapes aria-hidden />
@@ -207,7 +207,7 @@ export function CuratedCatalog({
 						</EmptyContent>
 					</Empty>
 				) : nothingMatches ? (
-					<Empty className="min-h-56 border">
+					<Empty variant="outlined" className="min-h-56">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<Shapes aria-hidden />
@@ -360,20 +360,18 @@ function CatalogFilters({
 					Show all entries
 				</Button>
 			)}
-			<div className="relative sm:col-span-2 lg:w-64">
-				<Search
-					className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-					aria-hidden
-				/>
-				<Input
+			<InputGroup className="sm:col-span-2 lg:w-64">
+				<InputGroupAddon>
+					<Search aria-hidden />
+				</InputGroupAddon>
+				<InputGroupInput
 					type="search"
 					value={search.q ?? ""}
 					onChange={(event) => onSearchChange({ ...search, q: event.target.value || undefined })}
 					placeholder="Search the catalog"
 					aria-label="Search the catalog"
-					className="pl-9"
 				/>
-			</div>
+			</InputGroup>
 			<Select
 				items={STATUS_FILTERS}
 				value={status}

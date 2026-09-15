@@ -1,16 +1,11 @@
 /**
- * `vp lint` must keep firing every house rule and the type-aware diagnostics after a Vite+ or
- * oxlint bump; a rule that stops firing fails nothing. This gate lints one known-bad fixture per
- * rule through the pinned `vite-plus` and expects each diagnostic.
- *
- * The fixtures live in a scratch project outside the repository, so no gate that fingerprints the
- * webapp tree ever sees them. `vp lint` reads its options from the `lint` field of the project's
- * `vite.config.ts`, so the webapp's rules go there, with the house-rule plugin addressed by its
- * absolute path; the `src/components/ui` layout is what the story rules derive their titles from.
+ * Exercise the configured rules through the pinned Vite+ with known-good and known-bad fixtures.
+ * The scratch project stays outside the repo so it cannot invalidate webapp task fingerprints.
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { test } from "node:test";
@@ -25,13 +20,201 @@ const WEBAPP = join(REPO_ROOT, "webapp");
 
 interface Fixture {
 	path: string;
-	code: string;
+	code: string | null;
 	source: string;
 }
 
 const story = (name: string) => `src/components/ui/LintContract-${name}.stories.tsx`;
 const preferPath = story("prefer-title");
 const fixtures: Fixture[] = [
+	{
+		path: "src/lint-contract-button-padding.tsx",
+		code: "shadcn(no-restyle)",
+		source:
+			'import { Button as Action } from "@/components/ui/button"; export const bad = <Action className="md:px-4!">Save</Action>;',
+	},
+	{
+		path: "src/lint-contract-button-gap.tsx",
+		code: "shadcn(no-restyle)",
+		source:
+			'import { Button } from "@/components/ui/button"; import { cn } from "cn"; export const bad = <Button className={cn("gap-4")}>Save</Button>;',
+	},
+	{
+		path: "src/lint-contract-button-size.tsx",
+		code: null,
+		source:
+			'import { Button } from "@/components/ui/button"; export const good = <Button size="sm" className="w-full mt-2">Save</Button>;',
+	},
+	{
+		path: "src/components/ui/lint-contract-owned-padding.tsx",
+		code: null,
+		source:
+			'import { Button } from "@/components/ui/button"; export const good = <Button className="gap-2">Calendar day</Button>;',
+	},
+	{
+		path: "src/lint-contract-button-radius.tsx",
+		code: "shadcn(no-restyle)",
+		source:
+			'import { Button } from "@/components/ui/button"; export const bad = <Button className="rounded-full">Send</Button>;',
+	},
+	{
+		path: "src/lint-contract-button-shape.tsx",
+		code: null,
+		source:
+			'import { Button } from "@/components/ui/button"; export const good = <Button shape="pill" className="rounded-bl-lg">Send</Button>;',
+	},
+	// no-restyle is on for every registry component, with contracts only where a role makes a
+	// property the caller's. A repainted Card is the plain case; a padded CardContent is a contract.
+	{
+		path: "src/lint-contract-card-paint.tsx",
+		code: "shadcn(no-restyle)",
+		source:
+			'import { Card } from "@/components/ui/card"; export const bad = <Card className="bg-muted rounded-none">Plan</Card>;',
+	},
+	{
+		path: "src/lint-contract-card-variant.tsx",
+		code: null,
+		source:
+			'import { Card, CardContent } from "@/components/ui/card"; export const good = <Card variant="dashed" flush className="mt-4"><CardContent className="p-0">Plan</CardContent></Card>;',
+	},
+	{
+		path: "src/lint-contract-ring.tsx",
+		code: "shadcn(no-arbitrary-values)",
+		source: 'export const bad = <button className="focus-visible:ring-[3px]">Save</button>;',
+	},
+	// The arbitrary-value policy is an allow list. A deny list exempts everything it forgets, which is
+	// how a hardcoded hex and nine hand-written font sizes went unreported.
+	{
+		path: "src/lint-contract-hex.tsx",
+		code: "shadcn(no-arbitrary-values)",
+		source: 'export const bad = <div className="bg-[#111318]" />;',
+	},
+	{
+		path: "src/lint-contract-font-size.tsx",
+		code: "shadcn(no-arbitrary-values)",
+		source: 'export const bad = <span className="text-[11px]" />;',
+	},
+	{
+		path: "src/components/ui/lint-contract-radius.tsx",
+		code: "shadcn(no-arbitrary-values)",
+		source: 'export const bad = <div className="rounded-[4px]" />;',
+	},
+	{
+		path: "src/lint-contract-scale-steps.tsx",
+		code: null,
+		// Every step these replace is a declaration in the real theme, not a Tailwind default.
+		source:
+			'export const good = <span className="text-2xs rounded-xs tracking-display ease-drawer" />;',
+	},
+	{
+		path: "src/components/ui/lint-contract-shadow.tsx",
+		code: "shadcn(no-arbitrary-values)",
+		source:
+			'export const bad = <button className="shadow-[0_0_0_1px_hsl(var(--sidebar-border))]">Save</button>;',
+	},
+	{
+		path: "src/lint-contract-ring-scale.tsx",
+		code: null,
+		source:
+			'export const good = <button className="ring-1 ring-sidebar-border focus-visible:ring-3 shadow-sm">Save</button>;',
+	},
+	{
+		path: "src/lint-contract-inline.tsx",
+		code: "shadcn(no-inline-styles)",
+		source: "export const bad = <div style={{ padding: 13 }} />;",
+	},
+	{
+		path: "src/components/ui/lint-contract-inline.tsx",
+		code: "shadcn(no-inline-styles)",
+		source: 'export const bad = <div style={{ color: "var(--color-primary)" }} />;',
+	},
+	{
+		path: "src/lint-contract-style-element.tsx",
+		code: "shadcn(no-inline-styles)",
+		source: 'export const bad = <style>{".escape { padding: 13px }"}</style>;',
+	},
+	{
+		path: "src/lint-contract-spacing.tsx",
+		code: "shadcn(no-arbitrary-values)",
+		source: 'export const bad = <div className="md:p-[13px]" />;',
+	},
+	{
+		path: "src/components/ui/lint-contract-spacing.tsx",
+		code: "shadcn(no-arbitrary-values)",
+		source:
+			'import { cva } from "class-variance-authority"; export const bad = cva("flex", { variants: { space: { bad: "gap-[7px]" } } });',
+	},
+	{
+		path: "src/lib/lint-contract-palette.ts",
+		code: "shadcn(no-raw-colors)",
+		source: 'export const states = { merged: { className: "bg-violet-600" } };',
+	},
+	{
+		path: "src/lib/lint-contract-theme-map.ts",
+		code: null,
+		source:
+			'export const states = { merged: { className: "bg-provider-done text-provider-done-foreground" } };',
+	},
+	{
+		path: "src/lint-contract-layout.tsx",
+		code: null,
+		source:
+			'export const good = <div className="p-0.75 gap-2 w-[calc(100vw-2rem)] [&>svg]:size-4" />;',
+	},
+	{
+		path: "src/lint-contract-custom-property.tsx",
+		code: null,
+		source: `import type { CSSProperties } from "react"; export function Good({ width, style }: { width: number; style?: CSSProperties }) { const panelStyle = { ...style, "--panel-width": \`\${width}px\` } satisfies CSSProperties & Record<"--panel-width", string>; return <div className="w-(--panel-width)" style={panelStyle} />; }`,
+	},
+	{
+		path: "src/lint-contract-unused-disable.ts",
+		code: "Unused oxlint-disable directive (no problems were reported).",
+		source: "// oxlint-disable-next-line no-debugger\nexport const value = true;",
+	},
+	{
+		path: "src/lint-contract-tailwind.tsx",
+		code: "shadcn(no-unknown-classes)",
+		source: 'export const bad = <div className="hovr:flex" />;',
+	},
+	{
+		path: "src/components/ui/lint-contract-tailwind.tsx",
+		code: "shadcn(no-unknown-classes)",
+		source: 'export const bad = <div className="rounded-huge" />;',
+	},
+	{
+		path: "src/lint-contract-color.tsx",
+		code: "shadcn(no-raw-colors)",
+		source: 'export const bad = <div className="bg-primry" />;',
+	},
+	{
+		path: "src/components/ui/lint-contract-color.tsx",
+		code: "shadcn(no-raw-colors)",
+		source: 'export const bad = <div className="dark:bg-pink-500/50" />;',
+	},
+	{
+		path: "src/lint-contract-svg-color.tsx",
+		code: "shadcn(no-raw-colors)",
+		source: 'export const bad = <svg aria-hidden="true"><path fill="#ec4899" /></svg>;',
+	},
+	{
+		path: "src/lint-contract-cva.tsx",
+		code: "shadcn(no-raw-colors)",
+		source:
+			'import { cva } from "class-variance-authority"; export const variants = cva("flex", { variants: { tone: { bad: "text-pink-500" } } });',
+	},
+	{
+		path: "src/lint-contract-theme.tsx",
+		code: null,
+		// Loads the actual theme and its imports, typography plugin and native variants.
+		source:
+			'import { cn } from "cn"; export const good = <div className={cn("prose text-primary bg-background text-provider-open-foreground pointer-coarse:w-10", "dark:hover:bg-success/10")} />;',
+	},
+	{
+		path: "src/components/ui/lint-contract-theme.tsx",
+		code: null,
+		source:
+			'export const good = <div className="text-muted-foreground bg-warning/10 data-[state=open]:flex" />;',
+	},
 	{
 		path: "src/lint-contract-query.ts",
 		code: "hephaestus(no-manual-query-key)",
@@ -120,13 +303,36 @@ const fixtures: Fixture[] = [
 	},
 ];
 
-function scratchProject(): string {
-	const project = mkdtempSync(join(tmpdir(), "lint-contract-"));
+function effectiveLintOptions(scope: string) {
+	const result = spawnSync("vp", ["-C", join(REPO_ROOT, scope), "lint", "--print-config"], {
+		encoding: "utf8",
+		maxBuffer: CAPTURE_LIMIT_BYTES,
+	});
+	assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+	return asRecord(JSON.parse(result.stdout), `${scope} effective lint config`).options;
+}
+
+function writeScratchProject(project: string) {
 	const lint = asRecord(
 		parse(readFileSync(join(WEBAPP, ".oxlintrc.json"), "utf8")),
 		"webapp/.oxlintrc.json",
 	);
-	lint.jsPlugins = [join(WEBAPP, "tools", "oxlint", "index.ts")];
+	// Test the options Vite+ actually uses, not a reconstruction of the root policy.
+	lint.options = effectiveLintOptions("webapp");
+	// Preserve every configured plugin; replacing this list would silently drop third-party checks.
+	assert.ok(Array.isArray(lint.jsPlugins), "jsPlugins must list the webapp plugins");
+	const require = createRequire(join(WEBAPP, "package.json"));
+	lint.jsPlugins = lint.jsPlugins.map((plugin: unknown) => {
+		assert.equal(typeof plugin, "string");
+		return require.resolve(String(plugin));
+	});
+	const components = asRecord(
+		JSON.parse(readFileSync(join(WEBAPP, "components.json"), "utf8")),
+		"components.json",
+	);
+	const tailwind = asRecord(components.tailwind, "components.tailwind");
+	components.tailwind = { ...tailwind, css: join(WEBAPP, String(tailwind.css)) };
+	writeFileSync(join(project, "components.json"), JSON.stringify(components));
 	writeFileSync(
 		join(project, "package.json"),
 		`${JSON.stringify({ name: "lint-contract", private: true, type: "module" }, null, "\t")}\n`,
@@ -151,31 +357,39 @@ function scratchProject(): string {
 		join(project, "node_modules"),
 		process.platform === "win32" ? "junction" : "dir",
 	);
+	// Fixture imports resolve as app source, while the config still resolves root-owned Vite+.
+	mkdirSync(join(project, "src"), { recursive: true });
+	symlinkSync(
+		join(WEBAPP, "node_modules"),
+		join(project, "src", "node_modules"),
+		process.platform === "win32" ? "junction" : "dir",
+	);
+	// The rules read a component's variants from its source, so the fixtures see the real files.
+	mkdirSync(join(project, "src/components/ui"), { recursive: true });
+	for (const primitive of ["button.tsx", "card.tsx"]) {
+		writeFileSync(
+			join(project, "src/components/ui", primitive),
+			readFileSync(join(WEBAPP, "src/components/ui", primitive)),
+		);
+	}
 	for (const fixture of fixtures) {
 		mkdirSync(join(project, dirname(fixture.path)), { recursive: true });
 		writeFileSync(join(project, fixture.path), `${fixture.source}\n`);
 	}
-	return project;
 }
 
-void test("vp lint preserves house rules and type-aware diagnostics", () => {
-	const project = scratchProject();
+void test("vp lint preserves house rules, design-system checks and type-aware diagnostics", () => {
+	const project = mkdtempSync(join(tmpdir(), "lint-contract-"));
 	try {
+		writeScratchProject(project);
 		const result = spawnSync(
 			"vp",
-			[
-				"-C",
-				project,
-				"lint",
-				"--type-aware",
-				"--format",
-				"json",
-				...fixtures.map((fixture) => fixture.path),
-			],
+			["-C", project, "lint", "--format", "json", ...fixtures.map((fixture) => fixture.path)],
 			{ encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES },
 		);
 		assert.equal(result.error, undefined, `vp could not be spawned: ${String(result.error)}`);
 		const output = `${result.stdout}${result.stderr}`;
+		assert.doesNotMatch(result.stderr, /\[@shadcn\/lint\]/i, output);
 		assert.equal(result.status, 1, output);
 		const report = asRecord(JSON.parse(result.stdout), "vp lint --format json");
 		assert.ok(Array.isArray(report.diagnostics), output);
@@ -184,15 +398,27 @@ void test("vp lint preserves house rules and type-aware diagnostics", () => {
 				.filter(isRecord)
 				.map(
 					(diagnostic) =>
-						`${String(diagnostic.filename).replaceAll("\\", "/")} ${String(diagnostic.code)}`,
+						`${String(diagnostic.filename).replaceAll("\\", "/")} ${String(diagnostic.code ?? diagnostic.message)} ${String(diagnostic.severity)}`,
 				),
 		);
-		for (const fixture of fixtures)
+		for (const fixture of fixtures) {
+			if (fixture.code === null) {
+				assert.ok(
+					![...reported].some((entry) => entry.startsWith(`${fixture.path} `)),
+					`Valid theme usage was rejected: ${fixture.path}\n${output}`,
+				);
+				continue;
+			}
 			assert.ok(
-				reported.has(`${fixture.path} ${fixture.code}`),
+				reported.has(`${fixture.path} ${fixture.code} error`),
 				`${fixture.code} did not fire:\n${output}`,
 			);
+		}
 	} finally {
 		rmSync(project, { recursive: true, force: true });
 	}
+});
+
+void test("webapp and docs use the same global lint policy", () => {
+	assert.deepEqual(effectiveLintOptions("docs"), effectiveLintOptions("webapp"));
 });

@@ -26,7 +26,7 @@ export function TeamCard({
 	const Heading = `h${headingLevel}` as const;
 
 	return (
-		<Card className={cn("flex flex-col gap-3", team.hidden ? "bg-muted/40" : "")}>
+		<Card variant={team.hidden ? "muted" : "default"} className="flex flex-col">
 			<CardHeader className="pb-4">
 				<div className="flex flex-wrap items-start justify-between gap-2">
 					<div className="min-w-0 flex-1">
@@ -41,7 +41,7 @@ export function TeamCard({
 								{team.name}
 							</Heading>
 							{team.hidden && (
-								<span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
+								<span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
 									Hidden
 								</span>
 							)}
@@ -61,7 +61,6 @@ export function TeamCard({
 							variant="ghost"
 							size="icon"
 							onClick={() => onToggleVisibility(!team.hidden)}
-							className="h-8 w-8"
 							title={team.hidden ? "Show team" : "Hide team"}
 						>
 							{team.hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

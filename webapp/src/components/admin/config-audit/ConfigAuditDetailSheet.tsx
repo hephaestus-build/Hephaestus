@@ -164,16 +164,7 @@ export function ConfigAuditDetailSheet({
 
 						{(hasText(oldRaw) || hasText(newRaw)) && (
 							<Collapsible key={entry.id}>
-								<CollapsibleTrigger
-									render={
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											className="px-0 text-xs text-muted-foreground"
-										/>
-									}
-								>
+								<CollapsibleTrigger render={<Button type="button" variant="quiet" size="sm" />}>
 									Show raw snapshots
 								</CollapsibleTrigger>
 								<CollapsibleContent className="mt-2 space-y-2">

@@ -118,8 +118,7 @@ export function ProductSurveyDialog({
 					<DialogFooter className="sm:justify-between">
 						<Button
 							type="button"
-							variant="ghost"
-							className="text-muted-foreground"
+							variant="quiet"
 							disabled={isSubmitting}
 							onClick={() => void onDecline()}
 						>

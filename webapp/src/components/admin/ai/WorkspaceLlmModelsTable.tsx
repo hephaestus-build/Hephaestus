@@ -35,7 +35,7 @@ export function WorkspaceLlmModelsTable({
 
 	if (models.length === 0) {
 		return (
-			<Empty className="border">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<Bot />
@@ -48,7 +48,7 @@ export function WorkspaceLlmModelsTable({
 
 	return (
 		<>
-			<Table containerClassName="rounded-md border">
+			<Table bordered>
 				<TableCaption className="sr-only">Models on your own connected providers</TableCaption>
 				<TableHeader>
 					<TableRow>
@@ -70,7 +70,7 @@ export function WorkspaceLlmModelsTable({
 								</TableCell>
 								{/* Left-aligned: `priceLabel` is a sentence, not a figure; `tabular-nums` only
 								    aligns the digits inside it. */}
-								<TableCell className="tabular-nums">{priceLabel(model, "workspace")}</TableCell>
+								<TableCell numeric>{priceLabel(model, "workspace")}</TableCell>
 								<TableCell>
 									<Badge variant={model.enabled ? "default" : "secondary"}>
 										{model.enabled ? "Active" : "Off"}

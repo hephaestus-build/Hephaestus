@@ -4,7 +4,7 @@ import type { LabelInfo, TeamInfo } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/core/PageHeader";
 import { PageLayout } from "@/components/core/PageLayout";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { TeamTree } from "./teams/TeamTree";
@@ -156,16 +156,17 @@ export function AdminTeamsTable({
 		<PageLayout>
 			{header}
 			<div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
-				<div className="relative w-full sm:max-w-md">
-					<Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
-					<Input
+				<InputGroup className="w-full sm:max-w-md">
+					<InputGroupAddon>
+						<Search />
+					</InputGroupAddon>
+					<InputGroupInput
 						aria-label="Search teams"
 						placeholder="Search teams..."
 						value={search}
 						onChange={(e) => onSearchChange(e.target.value)}
-						className="pl-10"
 					/>
-				</div>
+				</InputGroup>
 			</div>
 
 			{rootsAll.filter((t) => displaySet.has(t.id)).length === 0 ? (

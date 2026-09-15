@@ -88,7 +88,7 @@ export function AdminFeedbackList({ state, pendingIds, onTriage }: AdminFeedback
 	if (state.items.length === 0) {
 		const copy = EMPTY_COPY[state.filter];
 		return (
-			<Empty className="rounded-md border">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<Inbox />
@@ -140,7 +140,7 @@ function FeedbackCard({ item, pending, onTriage }: FeedbackCardProps) {
 	].filter(Boolean);
 	return (
 		<Card>
-			<CardHeader className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+			<CardHeader className="flex flex-wrap items-center gap-x-3 gap-y-1">
 				<StatusBadge def={FEEDBACK_KIND_DEFS[item.kind]} />
 				<span className="font-medium" title={item.account?.email}>
 					{item.account?.displayName ?? "Deleted account"}
@@ -156,7 +156,7 @@ function FeedbackCard({ item, pending, onTriage }: FeedbackCardProps) {
 					<p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">{context}</p>
 				)}
 			</CardContent>
-			<CardFooter className="flex flex-wrap items-center justify-between gap-2 text-sm">
+			<CardFooter className="flex flex-wrap items-center justify-between gap-2">
 				{resolved ? (
 					<span className="text-muted-foreground">
 						Resolved by {item.resolvedBy?.displayName ?? "a deleted account"} ·{" "}

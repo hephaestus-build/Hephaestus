@@ -23,8 +23,8 @@ import { firstNonBlank } from "@/lib/text";
 import { type EnvironmentTone, resolveHeaderBadge } from "@/lib/version";
 
 const ENV_DOT: Record<EnvironmentTone, string> = {
-	staging: "bg-amber-500 dark:bg-amber-400",
-	preview: "bg-violet-500 dark:bg-violet-400",
+	staging: "bg-warning",
+	preview: "bg-mentor",
 	local: "bg-muted-foreground/50",
 };
 
@@ -121,8 +121,8 @@ export default function Header({
 							<TooltipTrigger
 								render={
 									<Badge
-										variant="outline"
-										className="hidden gap-1.5 font-normal text-muted-foreground sm:inline-flex"
+										variant="muted"
+										className="hidden sm:inline-flex"
 										render={
 											badge.href ? (
 												<a href={badge.href} target="_blank" rel="noopener noreferrer" />
@@ -152,7 +152,7 @@ export default function Header({
 							<DropdownMenu>
 								<DropdownMenuTrigger
 									aria-label="Account"
-									render={<Button variant="ghost" size="icon" className="rounded-full" />}
+									render={<Button variant="ghost" size="icon" shape="pill" />}
 								>
 									<Avatar className="hover:brightness-90">
 										<AvatarImage src={firstNonBlank(avatarUrl)} alt={`${username}'s avatar`} />

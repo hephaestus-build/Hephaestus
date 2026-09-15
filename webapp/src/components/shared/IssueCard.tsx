@@ -67,13 +67,9 @@ export function IssueCard({
 
 	const cardContent = (
 		<Card
-			className={cn(
-				"rounded-lg border border-border bg-card text-card-foreground shadow-sm py-0 gap-0",
-				{
-					"hover:bg-accent/50 cursor-pointer": !noLinkWrapper || onClick,
-				},
-				className,
-			)}
+			flush
+			variant={!noLinkWrapper || onClick ? "interactive" : "default"}
+			className={cn({ "cursor-pointer": !noLinkWrapper || onClick }, className)}
 			onClick={onClick}
 		>
 			<div

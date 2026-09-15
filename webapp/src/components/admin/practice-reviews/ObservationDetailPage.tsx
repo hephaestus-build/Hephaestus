@@ -180,7 +180,7 @@ export function ObservationDetailPage({
 					Feedback from this observation
 				</h3>
 				{observation.feedback.length === 0 ? (
-					<Empty className="border">
+					<Empty variant="outlined">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<MessageSquareTextIcon />

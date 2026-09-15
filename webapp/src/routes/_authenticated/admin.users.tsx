@@ -30,7 +30,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useAuth } from "@/integrations/auth/AuthContext";
@@ -171,12 +171,14 @@ function AdminUsersPage() {
 				description="Manage application accounts, roles, sessions, and support access."
 			/>
 
-			<div className="relative w-full sm:max-w-sm">
+			<InputGroup className="w-full sm:max-w-sm">
 				<Label htmlFor="admin-users-search" className="sr-only">
 					Search users
 				</Label>
-				<Users className="absolute left-3 top-2.5 size-4 text-muted-foreground" aria-hidden />
-				<Input
+				<InputGroupAddon>
+					<Users aria-hidden />
+				</InputGroupAddon>
+				<InputGroupInput
 					id="admin-users-search"
 					type="search"
 					placeholder="Search by name, email, role, or status…"
@@ -187,9 +189,8 @@ function AdminUsersPage() {
 							replace: true,
 						})
 					}
-					className="pl-9"
 				/>
-			</div>
+			</InputGroup>
 
 			<AdminUsersTable
 				users={filteredUsers}

@@ -42,7 +42,7 @@ export function TracePracticeList({ practices, signals, artifactKind }: TracePra
 				</p>
 			</div>
 			{practices.length === 0 ? (
-				<Empty className="border">
+				<Empty variant="outlined">
 					<EmptyHeader>
 						<EmptyTitle>No practice covers this kind of work</EmptyTitle>
 						<EmptyDescription>

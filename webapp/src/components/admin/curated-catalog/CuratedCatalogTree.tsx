@@ -393,12 +393,7 @@ function PracticeActions({
 
 function PracticeDragPreview({ practice }: { practice: TreePractice }) {
 	return (
-		<Item
-			aria-hidden="true"
-			variant="outline"
-			size="xs"
-			className="flex-nowrap bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/10"
-		>
+		<Item aria-hidden="true" variant="overlay" size="xs" className="flex-nowrap">
 			<div className="flex size-8 shrink-0 items-center justify-center text-muted-foreground">
 				<GripVertical className="size-4" />
 			</div>

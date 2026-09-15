@@ -101,10 +101,9 @@ export function ReviewActivityCard({
 
 	const card = (
 		<Card
-			className={cn(
-				"rounded-lg border border-border bg-card text-card-foreground shadow-sm py-0 gap-0",
-				htmlUrl && !isLoading && "cursor-pointer hover:bg-accent/50",
-			)}
+			flush
+			variant={htmlUrl && !isLoading ? "interactive" : "default"}
+			className={cn(htmlUrl && !isLoading && "cursor-pointer")}
 		>
 			<div className="flex flex-col gap-1 p-4">
 				<div className="flex justify-between gap-2 items-center text-sm text-provider-muted-foreground">

@@ -104,7 +104,7 @@ export function OccasionLifecycle({
 						<div key={band.phase} role="group" aria-labelledby={headingId}>
 							<p
 								id={headingId}
-								className="mb-1.5 pl-1 text-[0.7rem] font-medium uppercase tracking-wide text-muted-foreground"
+								className="mb-1.5 pl-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground"
 							>
 								{PHASE_LABEL[band.phase]}
 							</p>
@@ -177,7 +177,7 @@ function MomentNode({
 				// one. Hidden on the first node of a band, so the line never dangles.
 				railed &&
 					"before:absolute before:top-5 before:-left-1/2 before:right-1/2 before:mr-4 before:ml-4 before:h-px before:bg-border first:before:hidden",
-				"rounded-md has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50",
+				"rounded-md has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50",
 				disabled ? "cursor-not-allowed" : "cursor-pointer",
 			)}
 		>
@@ -214,7 +214,7 @@ function MomentNode({
 				{moment.displayName}
 			</span>
 			{def.repeats && (
-				<span className="text-[0.65rem] leading-none text-muted-foreground">every time</span>
+				<span className="text-2xs leading-none text-muted-foreground">every time</span>
 			)}
 		</label>
 	);

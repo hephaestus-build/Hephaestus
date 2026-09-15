@@ -162,10 +162,24 @@ code {
 	--color-chart-3: var(--chart-3);
 	--color-chart-4: var(--chart-4);
 	--color-chart-5: var(--chart-5);
+	/* One 2px step per size, all derived from --radius, so the scale has no gap a control has to
+	   fill with an arbitrary radius. Tailwind's own --radius-xs is a flat 2px and breaks that step. */
+	--radius-xs: calc(var(--radius) - 6px);
 	--radius-sm: calc(var(--radius) - 4px);
 	--radius-md: calc(var(--radius) - 2px);
 	--radius-lg: var(--radius);
 	--radius-xl: calc(var(--radius) + 4px);
+	/* The scale stops at 12px, and the UI needs one step below it for counters, meta lines and
+	   shortcut hints. Nine different hand-written sizes between 8px and 13px collapse onto this. */
+	--text-2xs: 0.6875rem;
+	--text-2xs--line-height: calc(1 / 0.6875);
+	/* Display type is set optically: at hero sizes the native `tracking-tighter` reads loose, and
+	   the two hero headings had drifted to two values a third of a pixel apart. */
+	--tracking-display: -0.04em;
+	/* The drawer's two curves. Both overshoot slightly, which no native easing does, and the panel
+	   leads the backdrop — so they are a pair, and neither is a one-off number. */
+	--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+	--ease-drawer-panel: cubic-bezier(0.45, 1.005, 0, 1.005);
 	--color-sidebar: var(--sidebar);
 	--color-sidebar-foreground: var(--sidebar-foreground);
 	--color-sidebar-primary: var(--sidebar-primary);

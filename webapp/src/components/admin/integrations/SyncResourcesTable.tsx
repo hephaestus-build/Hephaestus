@@ -16,7 +16,7 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Progress } from "@/components/ui/progress";
 import {
 	Table,
@@ -258,7 +258,7 @@ function ResourcesTableHeader({
 	onSort?: (key: SortKey) => void;
 }) {
 	return (
-		<TableHeader className="sticky top-0 z-10 bg-card">
+		<TableHeader sticky>
 			<TableRow>
 				<SortableHeadCell
 					label={resourceNoun}
@@ -316,7 +316,7 @@ function ResourceNameCell({
 					render={
 						<button
 							type="button"
-							className="block min-w-0 cursor-help rounded-sm text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+							className="block min-w-0 cursor-help rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
 						/>
 					}
 				>
@@ -436,7 +436,7 @@ function LastSyncedCell({
 					render={
 						<button
 							type="button"
-							className="inline-flex cursor-help items-center gap-1 rounded-sm text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+							className="inline-flex cursor-help items-center gap-1 rounded-sm text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
 						/>
 					}
 				>
@@ -525,7 +525,11 @@ function ClassCountCell({
 		);
 	}
 
-	return <TableCell className="text-right tabular-nums">{total.toLocaleString()}</TableCell>;
+	return (
+		<TableCell numeric className="text-right">
+			{total.toLocaleString()}
+		</TableCell>
+	);
 }
 
 /** The last error, as a read-only peek: it reveals, it does not act, and it traps no focus. */
@@ -539,7 +543,7 @@ function ResourceErrorCell({ resource }: { resource: SyncResourceState }) {
 							<button
 								type="button"
 								aria-label={`Error for ${resource.name}`}
-								className="inline-flex cursor-help rounded-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+								className="inline-flex cursor-help rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
 							/>
 						}
 					>
@@ -578,8 +582,8 @@ function TotalsFooter({
 	// as a summary rather than one more data row, while staying opaque enough that scrolling rows don't
 	// bleed through the sticky footer (the `bg-muted/50` default would). `border-t-2` sets it apart.
 	return (
-		<TableFooter className="sticky bottom-0 z-10 border-t-2 bg-muted">
-			<TableRow className="hover:bg-transparent">
+		<TableFooter sticky>
+			<TableRow variant="static">
 				<TableCell className="font-medium capitalize">All {resourceNounPlural}</TableCell>
 				<TableCell />
 				{sums.map(({ column, sum }) => {
@@ -606,7 +610,7 @@ function TotalsFooter({
 						);
 					}
 					return (
-						<TableCell key={column.key} className="text-right tabular-nums">
+						<TableCell key={column.key} numeric className="text-right">
 							{sum.toLocaleString()}
 						</TableCell>
 					);
@@ -689,7 +693,7 @@ export function SyncResourcesTable({
 
 	if (resources.length === 0) {
 		return (
-			<Empty className="border border-dashed">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<DatabaseIcon />
@@ -750,20 +754,18 @@ export function SyncResourcesTable({
 	return (
 		<div className="space-y-3">
 			<div className="flex flex-wrap items-center gap-3">
-				<div className="relative min-w-56 max-w-xs flex-1">
-					<SearchIcon
-						className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-						aria-hidden
-					/>
-					<Input
+				<InputGroup className="min-w-56 max-w-xs flex-1">
+					<InputGroupAddon>
+						<SearchIcon aria-hidden />
+					</InputGroupAddon>
+					<InputGroupInput
 						type="search"
 						value={query}
 						onChange={(event) => setQuery(event.target.value)}
 						placeholder={`Search ${resourceNounPlural}…`}
 						aria-label={`Search ${resourceNounPlural}`}
-						className="pl-8"
 					/>
-				</div>
+				</InputGroup>
 
 				{attentionCount > 0 && (
 					<ToggleGroup
@@ -804,7 +806,7 @@ export function SyncResourcesTable({
 
 			{/* The cap and vertical scroll go on the table's own scroll container (see Table's
 			    containerClassName), so the sticky header and totals footer clip and stick against it. */}
-			<Table containerClassName="max-h-[70vh] overflow-y-auto rounded-md border">
+			<Table bordered containerClassName="max-h-[70vh] overflow-y-auto">
 				<ResourcesTableHeader
 					columns={columns}
 					resourceNoun={resourceNoun}
@@ -813,7 +815,7 @@ export function SyncResourcesTable({
 				/>
 				<TableBody>
 					{visible.length === 0 ? (
-						<TableRow className="hover:bg-transparent">
+						<TableRow variant="static">
 							<TableCell colSpan={colSpan} className="h-24 text-center text-muted-foreground">
 								{normalizedQuery ? (
 									<>

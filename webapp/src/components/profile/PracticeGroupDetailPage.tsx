@@ -225,14 +225,10 @@ export function PracticeGroupDetailPage({
 					<div className="flex w-full flex-col items-start gap-2">
 						<Button
 							type="button"
-							variant="ghost"
+							variant="quiet"
 							size="sm"
 							aria-expanded={isGroupDescriptionOpen}
 							aria-controls="practice-group-description"
-							className={cn(
-								"text-muted-foreground hover:text-foreground",
-								isGroupDescriptionOpen && "bg-muted text-foreground",
-							)}
 							onClick={() => setIsGroupDescriptionOpen((open) => !open)}
 						>
 							<InfoIcon className="size-3.5" aria-hidden />
@@ -329,7 +325,7 @@ export function PracticeGroupDetailPage({
 												aria-label={`About ${practice.name}`}
 												aria-expanded={isInfoOpen}
 												aria-controls={infoId}
-												className={cn("relative z-20", isInfoOpen && "bg-muted")}
+												className="relative z-20"
 												onClick={() =>
 													setOpenPracticeInfoSlug(isInfoOpen ? undefined : practice.slug)
 												}
@@ -424,7 +420,8 @@ export function PracticeGroupDetailPage({
 							<Button
 								type="button"
 								variant="link"
-								className="w-fit px-0 text-primary"
+								size="inline"
+								className="w-fit text-sm"
 								onClick={feed.onLoadMore}
 								disabled={feed.isLoadingMore}
 							>

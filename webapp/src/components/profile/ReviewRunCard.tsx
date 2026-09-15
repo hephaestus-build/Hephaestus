@@ -92,7 +92,10 @@ export function ReviewRunCard({
 					aria-hidden
 				/>
 			</div>
-			<Card className="col-start-2 mb-3 min-w-0 gap-0 overflow-hidden py-0 shadow-none sm:col-start-3 sm:row-start-1">
+			<Card
+				flush
+				className="col-start-2 mb-3 min-w-0 overflow-hidden sm:col-start-3 sm:row-start-1"
+			>
 				<CardContent className="min-w-0 p-0">
 					<div className="flex min-w-0 items-start gap-2 border-b bg-muted/50 px-4 py-3">
 						{provider && (
@@ -147,9 +150,9 @@ export function ReviewRunCard({
 						<div className="border-t px-4 py-2">
 							<Button
 								type="button"
-								variant="ghost"
+								variant="quiet"
 								size="sm"
-								className="h-8 px-2 text-muted-foreground hover:text-foreground"
+								className="h-8"
 								onClick={() => setShowAllObservations((current) => !current)}
 							>
 								{showAllObservations ? "Show less" : `Show more (${hiddenCount})`}

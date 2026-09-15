@@ -263,7 +263,7 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 						<AlertDialogAction
 							onClick={handleConfirm}
 							disabled={!confirmed || !getUserId() || deleteAccount.isPending}
-							className="bg-destructive hover:bg-destructive/90"
+							variant="destructive"
 						>
 							{deleteAccount.isPending ? "Deleting…" : "Delete account"}
 						</AlertDialogAction>

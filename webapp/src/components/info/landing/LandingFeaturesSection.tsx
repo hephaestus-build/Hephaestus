@@ -33,7 +33,7 @@ const practiceGroups = [
 
 function DiffLines({ removed, added }: { removed: string[]; added: string[] }) {
 	return (
-		<div className="flex flex-col border-t border-border/70 font-mono text-[0.6875rem] leading-relaxed">
+		<div className="flex flex-col border-t border-border/70 font-mono text-2xs leading-relaxed">
 			{removed.map((line) => (
 				<span key={line} className="bg-destructive/10 px-3 text-foreground">
 					<span className="text-muted-foreground">−</span> {line}
