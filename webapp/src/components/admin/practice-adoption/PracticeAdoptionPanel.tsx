@@ -187,7 +187,7 @@ function PracticeAdoptionPlaceholder({
 function GroupOutcome({ preview }: { preview: CatalogPracticePreview }) {
 	return (
 		<Item variant="muted" size="sm" role="listitem">
-			<ItemMedia variant="icon" className="bg-transparent">
+			<ItemMedia variant="icon">
 				<GroupPill
 					size="sm"
 					slug={preview.group.slug}

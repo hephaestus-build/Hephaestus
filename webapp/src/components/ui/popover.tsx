@@ -11,15 +11,22 @@ function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
 	return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />;
 }
 
+/**
+ * ⚠️ Diverges from the shadcn registry: `PopoverContent` takes `variant="panel"`, the large floating
+ * surface the mentor opens in — a bigger radius and a deeper shadow than a menu-sized popover.
+ */
 function PopoverContent({
 	className,
+	variant = "default",
 	align = "center",
 	alignOffset = 0,
 	side = "bottom",
 	sideOffset = 4,
 	...props
 }: PopoverPrimitive.Popup.Props &
-	Pick<PopoverPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset">) {
+	Pick<PopoverPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset"> & {
+		variant?: "default" | "panel";
+	}) {
 	return (
 		<PopoverPrimitive.Portal>
 			{/* Viewport-relative, not `absolute` — see `overlay-reflow.stories.tsx`. */}
@@ -33,7 +40,9 @@ function PopoverContent({
 			>
 				<PopoverPrimitive.Popup
 					data-slot="popover-content"
+					data-variant={variant}
 					className={cn(
+						variant === "panel" && "rounded-2xl shadow-2xl",
 						"bg-popover text-popover-foreground data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/10 flex flex-col gap-2.5 rounded-lg p-2.5 text-sm shadow-md ring-1 duration-100 data-[side=inline-start]:slide-in-from-right-2 data-[side=inline-end]:slide-in-from-left-2 z-50 w-72 origin-(--transform-origin) outline-hidden",
 						className,
 					)}

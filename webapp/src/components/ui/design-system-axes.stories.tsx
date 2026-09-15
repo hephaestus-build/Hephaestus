@@ -2,8 +2,11 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Progress, ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 
 /**
  * The axes the design system added to the registry primitives, each pinned on what it does rather
@@ -122,5 +125,98 @@ export const QuietRestsBelowFullContrast: Story = {
 		const ghost = getComputedStyle(canvas.getByRole("button", { name: "Ghost" })).color;
 		const quiet = getComputedStyle(canvas.getByRole("button", { name: "Quiet" })).color;
 		await expect(quiet).not.toBe(ghost);
+	},
+};
+
+/** A dashed Card draws its edge. The edge is a ring, so a caller's `border-dashed` never did. */
+export const DashedCardDrawsItsEdge: Story = {
+	render: () => (
+		<Card variant="dashed">
+			<CardContent>Drop a repository here</CardContent>
+		</Card>
+	),
+	play: async ({ canvas }) => {
+		const card = canvas.getByText("Drop a repository here").closest('[data-slot="card"]');
+		if (!card) throw new Error("No card");
+		await expect(getComputedStyle(card).borderStyle).toBe("dashed");
+		await expect(Number.parseFloat(getComputedStyle(card).borderTopWidth)).toBeGreaterThan(0);
+	},
+};
+
+/** A banded header sits flush to the card's top edge: the card gives up its own top padding. */
+export const BandedHeaderIsFlush: Story = {
+	render: () => (
+		<Card>
+			<CardHeader band>
+				<CardTitle>Reviewing</CardTitle>
+			</CardHeader>
+			<CardContent>Body</CardContent>
+		</Card>
+	),
+	play: async ({ canvas }) => {
+		const header = canvas.getByText("Reviewing").closest('[data-slot="card-header"]');
+		const card = header?.closest('[data-slot="card"]');
+		if (!header || !card) throw new Error("No card");
+		await expect(header.getBoundingClientRect().top).toBeCloseTo(
+			card.getBoundingClientRect().top,
+			0,
+		);
+	},
+};
+
+/** Composing a track renders that track and no default one behind it. */
+export const ComposedProgressHasOneTrack: Story = {
+	render: () => (
+		<Progress value={40} aria-label="Budget used">
+			<ProgressTrack>
+				<ProgressIndicator className="bg-warning" />
+			</ProgressTrack>
+		</Progress>
+	),
+	play: async ({ canvas }) => {
+		const meter = canvas.getByRole("progressbar", { name: "Budget used" });
+		await expect(meter.querySelectorAll('[data-slot="progress-track"]')).toHaveLength(1);
+	},
+};
+
+/** A bordered table's edge belongs to the scroll container, so it rounds with the table. */
+export const BorderedTableHasOneEdge: Story = {
+	render: () => (
+		<Table bordered aria-label="Spend">
+			<TableBody>
+				<TableRow variant="highlighted">
+					<TableCell>You</TableCell>
+					<TableCell numeric>1,204</TableCell>
+				</TableRow>
+				<TableRow>
+					<TableCell>Team</TableCell>
+					<TableCell numeric>980</TableCell>
+				</TableRow>
+			</TableBody>
+		</Table>
+	),
+	play: async ({ canvas }) => {
+		const container = canvas.getByRole("table", { name: "Spend" }).parentElement;
+		if (!container) throw new Error("No container");
+		await expect(Number.parseFloat(getComputedStyle(container).borderTopWidth)).toBeGreaterThan(0);
+		const own = canvas.getByText("You").closest("tr");
+		const other = canvas.getByText("Team").closest("tr");
+		if (!own || !other) throw new Error("No rows");
+		await expect(getComputedStyle(own).backgroundColor).not.toBe(
+			getComputedStyle(other).backgroundColor,
+		);
+	},
+};
+
+/** A bare textarea has no edge of its own; the frame around it draws one. */
+export const BareTextareaHasNoEdge: Story = {
+	render: () => (
+		<div className="rounded-xl border p-3">
+			<Textarea variant="bare" aria-label="Message" defaultValue="Hello" />
+		</div>
+	),
+	play: async ({ canvas }) => {
+		const field = canvas.getByRole("textbox", { name: "Message" });
+		await expect(Number.parseFloat(getComputedStyle(field).borderTopWidth)).toBe(0);
 	},
 };

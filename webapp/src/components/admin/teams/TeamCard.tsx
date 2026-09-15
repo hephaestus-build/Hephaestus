@@ -26,7 +26,7 @@ export function TeamCard({
 	const Heading = `h${headingLevel}` as const;
 
 	return (
-		<Card className={cn("flex flex-col gap-3", team.hidden ? "bg-muted/40" : "")}>
+		<Card variant={team.hidden ? "muted" : "default"} className="flex flex-col">
 			<CardHeader className="pb-4">
 				<div className="flex flex-wrap items-start justify-between gap-2">
 					<div className="min-w-0 flex-1">

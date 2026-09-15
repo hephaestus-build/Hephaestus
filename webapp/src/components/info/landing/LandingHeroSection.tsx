@@ -219,8 +219,9 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 				<motion.div className={cn(styles.heroCopy, "flex flex-col items-center")}>
 					<Badge
 						render={<motion.p variants={itemVariants} />}
-						variant="outline"
-						className="relative z-10 h-auto border-mentor/20 bg-mentor/5 px-3 py-1.5 text-sm whitespace-normal text-mentor"
+						variant="mentor"
+						size="lg"
+						className="relative z-10"
 					>
 						Open-source AI mentoring for software teams
 					</Badge>
@@ -282,11 +283,11 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						className="relative z-10 mt-5 flex flex-wrap items-center justify-center gap-2 text-sm text-muted-foreground"
 					>
 						<span>Works with</span>
-						<Badge variant="outline" className="h-auto gap-1.5 bg-muted/40 px-2.5 py-1 text-sm">
+						<Badge variant="secondary" size="lg">
 							<GithubIcon aria-hidden="true" />
 							GitHub
 						</Badge>
-						<Badge variant="outline" className="h-auto gap-1.5 bg-muted/40 px-2.5 py-1 text-sm">
+						<Badge variant="secondary" size="lg">
 							<GitlabIcon aria-hidden="true" />
 							GitLab
 						</Badge>

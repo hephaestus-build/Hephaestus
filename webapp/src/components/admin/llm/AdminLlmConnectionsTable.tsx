@@ -99,7 +99,7 @@ export function AdminLlmConnectionsTable({
 
 	if (isLoading) {
 		return (
-			<Table containerClassName="rounded-md border">
+			<Table bordered>
 				<TableCaption className="sr-only">Provider connections on this instance</TableCaption>
 				<ConnectionsTableHeader />
 				<TableRowsSkeleton columns={SKELETON_COLUMNS} rows={3} />
@@ -131,7 +131,7 @@ export function AdminLlmConnectionsTable({
 
 	return (
 		<>
-			<Table containerClassName="rounded-md border">
+			<Table bordered>
 				<TableCaption className="sr-only">Provider connections on this instance</TableCaption>
 				<ConnectionsTableHeader />
 				<TableBody>

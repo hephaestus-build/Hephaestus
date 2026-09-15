@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
-import { cn } from "cn";
-import { Progress } from "@/components/ui/progress";
+import { Progress, ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
 import { formatCapUsd, formatCostUsd } from "@/lib/money";
 
 import { BUDGET_WARN_PERCENT } from "./usage-utils";
@@ -54,17 +53,21 @@ export function CapMeter({ spendUsd, capUsd, percent, paused, label }: CapMeterP
 	const valueText = `${rounded}% used, ${formatCostUsd(spendUsd)} of ${formatCapUsd(capUsd)}`;
 	const tone =
 		paused || percent >= 100
-			? "**:data-[slot=progress-indicator]:bg-destructive"
+			? "bg-destructive"
 			: percent >= BUDGET_WARN_PERCENT
-				? "**:data-[slot=progress-indicator]:bg-warning"
-				: "**:data-[slot=progress-indicator]:bg-primary";
+				? "bg-warning"
+				: "bg-primary";
 
 	return (
 		<Progress
 			value={value}
 			aria-label={label}
 			getAriaValueText={() => valueText}
-			className={cn("w-full *:data-[slot=progress-track]:h-1.5", tone)}
-		/>
+			className="w-full"
+		>
+			<ProgressTrack className="h-1.5">
+				<ProgressIndicator className={tone} />
+			</ProgressTrack>
+		</Progress>
 	);
 }

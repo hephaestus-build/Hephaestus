@@ -76,8 +76,88 @@
 		"shadcn/no-restyle": [
 			"error",
 			{
-				"deny": [],
-				"contracts": [{ "pattern": "^Button$", "deny": ["spacing", "rounded"] }]
+				// A caller styles a component only where the component's role makes that property the
+				// caller's; everywhere else it picks a variant. Each contract below names that role.
+				"allow": ["layout"],
+				"contracts": [
+					// Button: `size` owns the padding box and `shape` the radius scale; tone, type and
+					// elevation come from the context, and squaring one corner to meet an edge is composition.
+					{
+						"pattern": "^Button$",
+						"allow": ["layout", "typography", "color", "shape", "effects", "motion"],
+						"deny": ["rounded"]
+					},
+					// Badge and the two components that forward to it: monospace is a content decision
+					// for an identifier, not a restyle.
+					{ "pattern": "^(Badge|LabelBadge|RemovableToken)$", "allow": ["layout", "font-mono"] },
+					// Card: elevation and its transition depend on where the card sits; `outline-none` is
+					// for a region focused by script, which must not ring.
+					{ "pattern": "^Card$", "allow": ["layout", "effects", "motion", "outline-none"] },
+					// A box the caller fills: its padding, gap and inset are the caller's.
+					{
+						"pattern": "^(AlertDescription|CardContent|CardHeader|CardFooter|DialogBody|DialogHeader|DrawerBody|DrawerHeader|DropdownMenuContent|FieldGroup|HoverCardContent|ItemActions|ItemContent|ItemGroup|PaginationContent|PopoverContent|QuestionnaireChoices|SidebarGroup|Tabs|TabsList|ToggleGroup)$",
+						"allow": ["layout", "spacing"]
+					},
+					// A layout root with no look of its own — a grid, a flex column, a bare trigger — cannot
+					// be restyled; whatever edge, surface or type is written on it is the caller composing.
+					{
+						"pattern": "^(Accordion|CollapsibleContent|CollapsibleTrigger|Field|FieldSet|RadioGroup)$",
+						"allow": ["layout", "spacing", "shape", "color", "typography", "effects", "motion"]
+					},
+					// A text container: what it holds is typeset and toned by the caller.
+					{
+						"pattern": "^(AccordionContent|TooltipContent)$",
+						"allow": ["layout", "spacing", "typography", "color"]
+					},
+					// A text slot: its type, tone and the gap to an icon inside it follow the text around it.
+					{
+						"pattern": "^(ButtonGroupText|CardDescription|CardTitle|DialogTitle|DropdownMenuLabel|FieldDescription|FieldLegend|ItemDescription|ItemTitle|Label|PopoverTitle|TableCell|TableHead)$",
+						"allow": ["layout", "typography", "color", "spacing"]
+					},
+					// A label that wraps its control follows that control's state, dimming and easing with it.
+					{
+						"pattern": "^FieldLabel$",
+						"allow": ["layout", "typography", "color", "spacing", "effects", "motion"]
+					},
+					// A trigger that renders the caller's content: what is inside it is typeset by the caller.
+					{
+						"pattern": "^(AlertDialogAction|ComboboxItem|DropdownMenuCheckboxItem|DropdownMenuItem|TabsTrigger|TooltipTrigger)$",
+						"allow": ["layout", "typography", "spacing"]
+					},
+					// An accordion trigger that is disabled to pin an item open is not unavailable, and
+					// must not look it.
+					{
+						"pattern": "^AccordionTrigger$",
+						"allow": ["layout", "typography", "spacing", "effects"]
+					},
+					// The faceted-filter idiom: a dashed edge says the filter is not yet set.
+					{
+						"pattern": "^ComboboxTrigger$",
+						"allow": ["layout", "typography", "spacing", "border-dashed"]
+					},
+					// A row or item being dragged fades; that state is the drag's, not the component's.
+					{ "pattern": "^(AccordionItem|Item)$", "allow": ["layout", "spacing", "effects"] },
+					// The leading icon's tone follows the row's meaning.
+					{ "pattern": "^ItemMedia$", "allow": ["layout", "color"] },
+					// A stand-in takes the shape of what it stands for.
+					{ "pattern": "^Skeleton$", "allow": ["layout", "shape", "color"] },
+					{
+						"pattern": "^(Avatar|AvatarFallback)$",
+						"allow": ["layout", "shape", "typography", "color", "effects"]
+					},
+					// A scroll region clips to the radius of whatever it sits in.
+					{ "pattern": "^ScrollArea$", "allow": ["layout", "spacing", "shape"] },
+					// A meter's fill carries the meter's meaning — severity, league, level — in its tone,
+					// shape and pace; the primitive draws it and does not decide it.
+					{
+						"pattern": "^(ProgressTrack|ProgressIndicator)$",
+						"allow": ["layout", "color", "shape", "motion", "effects"]
+					},
+					// A spinner inherits `currentColor`; where it sits decides its tone.
+					{ "pattern": "^Spinner$", "allow": ["layout", "color"] },
+					// A swatch is painted by the group-colour vocabulary; the cell itself is a variant.
+					{ "pattern": "^ToggleGroupItem$", "allow": ["layout", "color"] }
+				]
 			}
 		],
 		// require-static-classes cannot resolve imported vocabulary maps and CVA results without

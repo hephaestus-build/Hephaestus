@@ -134,7 +134,7 @@ export function AdminInstanceLlmUsageTable({
 	return (
 		<div className="space-y-4">
 			{!isCurrentMonth && <CapIsNotMonthScoped subject="budget" />}
-			<Table containerClassName="rounded-md border">
+			<Table bordered>
 				<TableCaption className="sr-only">
 					Per-workspace AI spend for the selected month, most expensive first
 				</TableCaption>

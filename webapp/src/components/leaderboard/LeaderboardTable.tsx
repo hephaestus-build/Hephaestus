@@ -2,7 +2,6 @@ import { NoEntryIcon } from "@primer/octicons-react";
 import { AwardIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { cn } from "cn";
 import type { LeaderboardEntry, UserInfo } from "@/api/types.gen";
 import { ActivityBadges } from "@/components/leaderboard/ActivityBadges";
 import type { LeaderboardVariant } from "@/components/leaderboard/LeaderboardPage";
@@ -147,7 +146,7 @@ export function LeaderboardTable({
 						<TableRow
 							key={user.login}
 							id={`rank-${entry.rank}`}
-							className={cn(isCurrentUser && "bg-accent dark:bg-accent/30 dark:hover:bg-accent/50")}
+							variant={isCurrentUser ? "highlighted" : "default"}
 						>
 							<TableCell className="text-center">{entry.rank}</TableCell>
 							{leaguesEnabled && (

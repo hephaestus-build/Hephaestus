@@ -126,7 +126,8 @@ export function Copilot({
 					}
 				/>
 				<PopoverContent
-					className="p-0 h-[calc(100dvh-10rem)] rounded-2xl overflow-hidden shadow-2xl border-1 overscroll-contain w-[calc(100vw-3rem)] sm:w-[28rem] md:w-[32rem] max-w-[32rem]"
+					variant="panel"
+					className="p-0 h-[calc(100dvh-10rem)] overflow-hidden overscroll-contain w-[calc(100vw-3rem)] sm:w-[28rem] md:w-[32rem] max-w-[32rem]"
 					side="top"
 					align="end"
 					alignOffset={0}
@@ -144,7 +145,7 @@ export function Copilot({
 							<h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
 								<HephIcon className="-mx-1.5" size={32} pad={4} />
 								Heph{" "}
-								<Badge variant="outline" className="text-muted-foreground">
+								<Badge variant="muted">
 									<Sparkles /> AI Mentor
 								</Badge>
 							</h3>

@@ -240,7 +240,7 @@ function AdminLlmConnectionFormDialogContent({
 									{probeResult.models.length > 0 && (
 										<div className="mt-1.5 flex flex-wrap gap-1">
 											{probeResult.models.slice(0, 12).map((modelId) => (
-												<Badge key={modelId} variant="outline" className="font-mono text-2xs">
+												<Badge key={modelId} variant="outline" size="xs" className="font-mono">
 													{modelId}
 												</Badge>
 											))}

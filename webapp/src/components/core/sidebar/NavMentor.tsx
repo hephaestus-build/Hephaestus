@@ -34,7 +34,7 @@ export function NavMentor({ workspaceSlug }: { workspaceSlug: string }) {
 						<HephIcon className="-mx-1.5" size={30} pad={5} strokeWidth={1.5} />
 						<span className="flex items-center gap-2">
 							Heph
-							<Badge variant="outline" className="text-muted-foreground">
+							<Badge variant="muted">
 								<Sparkles className="h-3.5 w-3.5" /> AI mentor
 							</Badge>
 						</span>

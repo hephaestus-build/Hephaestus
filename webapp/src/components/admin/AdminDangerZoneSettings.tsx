@@ -51,7 +51,7 @@ export function AdminDangerZoneSettings({ workspaceSlug }: AdminDangerZoneSettin
 			<h2 id="workspace-danger-zone-heading" className="text-lg font-semibold mb-4">
 				Danger Zone
 			</h2>
-			<Card className="border-destructive/50">
+			<Card variant="destructive">
 				<CardContent>
 					<div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:gap-6">
 						<div className="space-y-2 flex-1">

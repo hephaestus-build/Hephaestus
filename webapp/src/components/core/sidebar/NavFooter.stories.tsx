@@ -1,8 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 
-import { SidebarProvider } from "@/components/ui/sidebar";
-
 import { NavFooter } from "./NavFooter";
+import { withSidebarFrame } from "./sidebar-story-frame";
 
 const meta = {
 	component: NavFooter,
@@ -10,13 +9,7 @@ const meta = {
 		layout: "centered",
 	},
 	tags: ["autodocs"],
-	decorators: [
-		(Story) => (
-			<SidebarProvider className="min-h-0 w-[16rem] border border-border rounded-lg p-2 bg-sidebar">
-				<Story />
-			</SidebarProvider>
-		),
-	],
+	decorators: [withSidebarFrame],
 } satisfies Meta<typeof NavFooter>;
 
 export default meta;

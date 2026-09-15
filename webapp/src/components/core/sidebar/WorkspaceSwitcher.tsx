@@ -117,14 +117,7 @@ export function WorkspaceSwitcher({
 		<SidebarMenu>
 			<SidebarMenuItem>
 				<DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
-					<DropdownMenuTrigger
-						render={
-							<SidebarMenuButton
-								size="lg"
-								className="data-popup-open:bg-sidebar-accent data-popup-open:text-sidebar-accent-foreground"
-							/>
-						}
-					>
+					<DropdownMenuTrigger render={<SidebarMenuButton size="lg" className="" />}>
 						<div className="flex aspect-square size-8 items-center justify-center rounded-lg text-sidebar-primary-foreground">
 							<Avatar className="size-8 rounded-lg">
 								<AvatarImage
@@ -159,7 +152,7 @@ export function WorkspaceSwitcher({
 						<ChevronsUpDown className="ml-auto group-data-[collapsible=icon]:hidden" />
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
-						className="w-(--anchor-width) min-w-56 rounded-lg"
+						className="w-(--anchor-width) min-w-56"
 						align="start"
 						side={isMobile ? "bottom" : "right"}
 						sideOffset={4}

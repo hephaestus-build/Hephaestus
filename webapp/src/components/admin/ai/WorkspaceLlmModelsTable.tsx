@@ -48,7 +48,7 @@ export function WorkspaceLlmModelsTable({
 
 	return (
 		<>
-			<Table containerClassName="rounded-md border">
+			<Table bordered>
 				<TableCaption className="sr-only">Models on your own connected providers</TableCaption>
 				<TableHeader>
 					<TableRow>

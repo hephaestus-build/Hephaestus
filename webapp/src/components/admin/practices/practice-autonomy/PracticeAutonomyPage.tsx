@@ -496,7 +496,7 @@ function GroupGroup({
 		selectableSlugs.length > 0 && selectableSlugs.every((slug) => selected.has(slug));
 
 	return (
-		<AccordionItem value={group.key} className="scroll-mt-24 rounded-lg border bg-card px-3">
+		<AccordionItem value={group.key} variant="card" className="scroll-mt-24 px-3">
 			<div className={cn("grid gap-2 py-1 sm:items-center sm:gap-4", GROUP_GRID)}>
 				<AccordionTrigger>
 					<span className="flex min-w-0 flex-col gap-1">
@@ -553,7 +553,7 @@ function GroupGroup({
 								{allSelected ? "Deselect" : "Select"} all {selectableSlugs.length}
 							</Button>
 						)}
-						<ul className="mt-2 divide-y border-t">
+						<ul className="mt-2 border-t">
 							{group.practices.map((practice) => (
 								<PracticeAutonomyRow
 									key={practice.slug}
@@ -600,8 +600,8 @@ function PracticeAutonomyRow({
 	return (
 		<Item
 			render={<li />}
-			variant="default"
-			className={cn("grid items-start gap-2 rounded-none px-0 py-3 sm:gap-4", ROW_GRID)}
+			variant="row"
+			className={cn("grid items-start gap-2 px-0 py-3 sm:gap-4", ROW_GRID)}
 		>
 			<ItemMedia>
 				<Checkbox

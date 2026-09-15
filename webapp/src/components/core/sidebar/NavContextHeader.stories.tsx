@@ -2,9 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { Link } from "@tanstack/react-router";
 import { expect } from "storybook/test";
 
-import { SidebarProvider } from "@/components/ui/sidebar";
-
 import { NavContextHeader } from "./NavContextHeader";
+import { withSidebarFrame } from "./sidebar-story-frame";
 
 const meta = {
 	component: NavContextHeader,
@@ -14,13 +13,7 @@ const meta = {
 		title: "Mentor",
 		backLink: <Link to="/" />,
 	},
-	decorators: [
-		(Story) => (
-			<SidebarProvider className="min-h-0 w-[16rem] rounded-lg border border-border bg-sidebar p-2">
-				<Story />
-			</SidebarProvider>
-		),
-	],
+	decorators: [withSidebarFrame],
 } satisfies Meta<typeof NavContextHeader>;
 
 export default meta;

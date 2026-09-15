@@ -103,8 +103,8 @@ export function PracticeGroupStandingCard({
 					const breakdown = summarizePracticeStandings(practices);
 					const { Icon, pill } = getGroupVisual(group.icon, group.color);
 					return (
-						<Card key={group.slug} className="relative flex h-full flex-col overflow-hidden pt-0">
-							<CardHeader className="gap-2 border-b bg-muted/40 pt-4">
+						<Card key={group.slug} className="relative flex h-full flex-col overflow-hidden">
+							<CardHeader band className="gap-2">
 								<div className="flex items-center gap-3">
 									<span
 										className={cn(

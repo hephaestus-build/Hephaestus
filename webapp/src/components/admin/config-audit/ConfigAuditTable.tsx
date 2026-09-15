@@ -118,7 +118,7 @@ export function ConfigAuditTable({
 
 	return (
 		<div className="space-y-4">
-			<Table containerClassName="rounded-md border">
+			<Table bordered>
 				<TableCaption className="sr-only">Settings changes, newest first</TableCaption>
 				<TableHeader>
 					<TableRow>

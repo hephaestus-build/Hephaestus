@@ -1,9 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect } from "storybook/test";
 
-import { SidebarProvider } from "@/components/ui/sidebar";
-
 import { NavAdmin } from "./NavAdmin";
+import { withSidebarFrame } from "./sidebar-story-frame";
 
 const meta = {
 	component: NavAdmin,
@@ -15,13 +14,7 @@ const meta = {
 		workspaceSlug: "aet",
 		integrationKinds: ["GITHUB", "SLACK", "OUTLINE"],
 	},
-	decorators: [
-		(Story) => (
-			<SidebarProvider className="min-h-0 w-[16rem] border border-border rounded-lg p-2 bg-sidebar">
-				<Story />
-			</SidebarProvider>
-		),
-	],
+	decorators: [withSidebarFrame],
 } satisfies Meta<typeof NavAdmin>;
 
 export default meta;

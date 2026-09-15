@@ -121,8 +121,8 @@ export default function Header({
 							<TooltipTrigger
 								render={
 									<Badge
-										variant="outline"
-										className="hidden gap-1.5 font-normal text-muted-foreground sm:inline-flex"
+										variant="muted"
+										className="hidden sm:inline-flex"
 										render={
 											badge.href ? (
 												<a href={badge.href} target="_blank" rel="noopener noreferrer" />

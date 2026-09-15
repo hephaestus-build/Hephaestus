@@ -57,7 +57,7 @@ export function LlmUsageByJobTypeTable({ report, fx }: LlmUsageByJobTypeTablePro
 					events: sumBy(rows, (row) => row.events),
 				};
 	return (
-		<Table containerClassName="rounded-md border">
+		<Table bordered>
 			<TableCaption className="sr-only">AI spend by run type</TableCaption>
 			<TableHeader>
 				<TableRow>
@@ -219,7 +219,7 @@ export function LlmUsageByDayTable({ report, fx }: LlmUsageByDayTableProps) {
 					events: sumBy(rows, (row) => row.events),
 				};
 	return (
-		<Table containerClassName="rounded-md border">
+		<Table bordered>
 			<TableCaption className="sr-only">AI spend by day</TableCaption>
 			<TableHeader>
 				<TableRow>

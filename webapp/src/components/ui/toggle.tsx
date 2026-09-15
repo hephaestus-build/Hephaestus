@@ -17,6 +17,16 @@ const toggleVariants = cva(
 			variant: {
 				default: "bg-transparent",
 				outline: "border-input bg-transparent",
+				// ⚠️ Diverges from the shadcn registry: the two picker cells. A `swatch` is a round chip
+				// painted by its caller, with a hairline that holds against any colour and a ring for
+				// the chosen one; `filled` is an icon cell that takes the primary fill when chosen. Both
+				// are icon-only, so the fill does not collide with hover the way it would on a label.
+				swatch:
+					"rounded-full border-black/10 p-0 transition-transform hover:scale-110 aria-pressed:ring-2 aria-pressed:ring-ring aria-pressed:ring-offset-1 dark:border-white/15",
+				filled:
+					"p-0 text-muted-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary aria-pressed:hover:text-primary-foreground",
+				// A chip that wraps content with its own edge — a label badge — and rings when chosen.
+				chip: "h-auto min-w-0 rounded-full p-0 aria-pressed:ring-2 aria-pressed:ring-primary aria-pressed:ring-offset-1",
 			},
 			size: {
 				default: "h-8 min-w-8 px-2",

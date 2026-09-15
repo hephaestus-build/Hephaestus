@@ -99,94 +99,90 @@ export function AdminSurveysTable({
 	}
 	return (
 		<div className="space-y-4">
-			<div className="rounded-md border">
-				<Table aria-label="Surveys" aria-busy={state.status === "loading"}>
-					<TableHeader>
-						<TableRow>
-							<TableHead scope="col">Title</TableHead>
-							<TableHead scope="col">Status</TableHead>
-							<TableHead scope="col">Schedule</TableHead>
-							<TableHead scope="col">Responses</TableHead>
-							<TableHead scope="col" className="text-right">
-								<span className="sr-only">Actions</span>
-							</TableHead>
-						</TableRow>
-					</TableHeader>
-					{state.status === "loading" ? (
-						<TableRowsSkeleton columns={SKELETON_COLUMNS} rows={3} />
-					) : (
-						<TableBody>
-							{state.surveys.map((survey) => {
-								const availability = surveyAvailability(survey, now);
-								const { invited, responded } = survey.participation;
-								const completion = percentOf(responded, invited);
-								return (
-									<TableRow key={survey.id}>
-										<TableCell className="max-w-xs">
-											<DetailStackLink
-												entry={surveyLevel(survey.id)}
-												className="block truncate font-medium hover:underline"
-											>
-												{survey.title}
-											</DetailStackLink>
-											<span className="block truncate text-xs text-muted-foreground">
-												{surveyAudience(survey)}
-											</span>
-										</TableCell>
-										<TableCell>
-											<span className="flex flex-wrap gap-1">
-												<StatusBadge def={SURVEY_AVAILABILITY_DEFS[availability]} />
-												{survey.purpose === "RESEARCH" && (
-													<StatusBadge def={SURVEY_PURPOSE_DEFS.RESEARCH} />
-												)}
-											</span>
-										</TableCell>
-										<TableCell className="text-sm text-muted-foreground">
-											<span className="block">
-												{availability === "SCHEDULED" ? "Starts " : "Started "}
-												<RelativeTime value={survey.startsAt} />
-											</span>
-											<span className="block">
-												{survey.endsAt ? (
-													<>
-														{availability === "ENDED" ? "Ended " : "Ends "}
-														<RelativeTime value={survey.endsAt} />
-													</>
-												) : (
-													"No end"
-												)}
-											</span>
-										</TableCell>
-										<TableCell numeric className="text-sm">
-											{responded} of {invited}
-											{completion !== undefined && (
-												<span className="text-muted-foreground"> · {completion}</span>
+			<Table bordered aria-label="Surveys" aria-busy={state.status === "loading"}>
+				<TableHeader>
+					<TableRow>
+						<TableHead scope="col">Title</TableHead>
+						<TableHead scope="col">Status</TableHead>
+						<TableHead scope="col">Schedule</TableHead>
+						<TableHead scope="col">Responses</TableHead>
+						<TableHead scope="col" className="text-right">
+							<span className="sr-only">Actions</span>
+						</TableHead>
+					</TableRow>
+				</TableHeader>
+				{state.status === "loading" ? (
+					<TableRowsSkeleton columns={SKELETON_COLUMNS} rows={3} />
+				) : (
+					<TableBody>
+						{state.surveys.map((survey) => {
+							const availability = surveyAvailability(survey, now);
+							const { invited, responded } = survey.participation;
+							const completion = percentOf(responded, invited);
+							return (
+								<TableRow key={survey.id}>
+									<TableCell className="max-w-xs">
+										<DetailStackLink
+											entry={surveyLevel(survey.id)}
+											className="block truncate font-medium hover:underline"
+										>
+											{survey.title}
+										</DetailStackLink>
+										<span className="block truncate text-xs text-muted-foreground">
+											{surveyAudience(survey)}
+										</span>
+									</TableCell>
+									<TableCell>
+										<span className="flex flex-wrap gap-1">
+											<StatusBadge def={SURVEY_AVAILABILITY_DEFS[availability]} />
+											{survey.purpose === "RESEARCH" && (
+												<StatusBadge def={SURVEY_PURPOSE_DEFS.RESEARCH} />
 											)}
-										</TableCell>
-										<TableCell className="text-right">
-											<SurveyActions
-												survey={survey}
-												now={now}
-												pending={pendingIds.has(survey.id)}
-												onToggleActive={onToggleActive}
-												onEnd={onEnd}
-												onDelete={onDelete}
-											>
-												<DropdownMenuItem
-													render={<DetailStackLink entry={surveyLevel(survey.id)} />}
-												>
-													<BarChart3 className="size-4" />
-													View results
-												</DropdownMenuItem>
-											</SurveyActions>
-										</TableCell>
-									</TableRow>
-								);
-							})}
-						</TableBody>
-					)}
-				</Table>
-			</div>
+										</span>
+									</TableCell>
+									<TableCell className="text-sm text-muted-foreground">
+										<span className="block">
+											{availability === "SCHEDULED" ? "Starts " : "Started "}
+											<RelativeTime value={survey.startsAt} />
+										</span>
+										<span className="block">
+											{survey.endsAt ? (
+												<>
+													{availability === "ENDED" ? "Ended " : "Ends "}
+													<RelativeTime value={survey.endsAt} />
+												</>
+											) : (
+												"No end"
+											)}
+										</span>
+									</TableCell>
+									<TableCell numeric className="text-sm">
+										{responded} of {invited}
+										{completion !== undefined && (
+											<span className="text-muted-foreground"> · {completion}</span>
+										)}
+									</TableCell>
+									<TableCell className="text-right">
+										<SurveyActions
+											survey={survey}
+											now={now}
+											pending={pendingIds.has(survey.id)}
+											onToggleActive={onToggleActive}
+											onEnd={onEnd}
+											onDelete={onDelete}
+										>
+											<DropdownMenuItem render={<DetailStackLink entry={surveyLevel(survey.id)} />}>
+												<BarChart3 className="size-4" />
+												View results
+											</DropdownMenuItem>
+										</SurveyActions>
+									</TableCell>
+								</TableRow>
+							);
+						})}
+					</TableBody>
+				)}
+			</Table>
 			{state.status === "ready" && (
 				<TablePagination
 					page={state.page}

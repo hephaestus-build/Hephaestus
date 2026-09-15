@@ -112,7 +112,7 @@ function ProviderSelectionPage() {
 							to={provider.to}
 							aria-label={`Set up workspace with ${provider.name}`}
 						>
-							<Card className="h-full cursor-pointer transition-colors hover:bg-muted/50 hover:border-foreground/20">
+							<Card variant="interactive" className="h-full cursor-pointer">
 								<CardHeader>
 									<div className="flex items-center gap-3 mb-1">
 										<provider.icon className="size-6" />

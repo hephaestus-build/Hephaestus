@@ -82,7 +82,7 @@ export type LandingWorkState = keyof typeof WORK_STATES;
 export function LandingStatePill({ state }: { state: LandingWorkState }) {
 	const { label, icon: Icon, className } = WORK_STATES[state];
 	return (
-		<Badge className={cn("text-2xs font-semibold", className)}>
+		<Badge size="xs" className={className}>
 			<Icon aria-hidden="true" />
 			{label}
 		</Badge>

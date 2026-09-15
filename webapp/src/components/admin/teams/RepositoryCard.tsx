@@ -40,11 +40,8 @@ export function RepositoryCard({
 
 	return (
 		<Card
-			className={cn(
-				"flex flex-col border-border/50 gap-0 transition-colors",
-				team.hidden ? "bg-muted/40" : "",
-				repository.hiddenFromContributions ? "bg-muted/40 border-dashed" : "",
-			)}
+			variant={repository.hiddenFromContributions ? "dashed" : team.hidden ? "muted" : "default"}
+			className="flex flex-col"
 		>
 			<CardHeader>
 				<div className="flex items-start justify-between">
@@ -123,20 +120,17 @@ export function RepositoryCard({
 					</div>
 				</div>
 			</CardHeader>
-			<CardContent className="flex flex-col">
-				{filteredRepoLabels.length > 0 && (
-					<div className="flex flex-wrap gap-1 mt-2">
-						{filteredRepoLabels.map((label) => (
-							<LabelBadge
-								key={`${label.name}-${label.repository?.id ?? ""}`}
-								label={label.name}
-								color={label.color}
-								className="text-xs"
-							/>
-						))}
-					</div>
-				)}
-			</CardContent>
+			{filteredRepoLabels.length > 0 && (
+				<CardContent className="flex flex-wrap gap-1">
+					{filteredRepoLabels.map((label) => (
+						<LabelBadge
+							key={`${label.name}-${label.repository?.id ?? ""}`}
+							label={label.name}
+							color={label.color}
+						/>
+					))}
+				</CardContent>
+			)}
 		</Card>
 	);
 }

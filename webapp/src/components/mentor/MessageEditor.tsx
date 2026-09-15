@@ -73,7 +73,8 @@ export function MessageEditor({
 				<Textarea
 					ref={textareaRef}
 					aria-label="Edit message"
-					className="border-0 bg-transparent outline-none overflow-hidden resize-none !text-base w-full p-0 shadow-none focus-visible:ring-0 min-h-0"
+					variant="bare"
+					className="min-h-0 w-full resize-none overflow-hidden"
 					placeholder={placeholder}
 					value={draftContent}
 					onChange={handleInput}

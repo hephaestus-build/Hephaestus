@@ -13,7 +13,7 @@ export interface EmptyStateProps {
 
 export function EmptyState({ icon, title, description, action, className }: EmptyStateProps) {
 	return (
-		<Card className={cn("min-h-60 border-dashed", className)}>
+		<Card variant="dashed" className={cn("min-h-60", className)}>
 			<CardContent className="flex flex-1 flex-col items-center justify-center py-8 px-4 text-center">
 				<div aria-hidden="true" className="rounded-full bg-muted text-muted-foreground p-3 mb-3">
 					{icon}

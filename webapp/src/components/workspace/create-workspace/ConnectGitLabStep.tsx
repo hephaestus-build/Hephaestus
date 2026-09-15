@@ -8,6 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
+	InputGroup,
+	InputGroupAddon,
+	InputGroupButton,
+	InputGroupInput,
+} from "@/components/ui/input-group";
+import {
 	Select,
 	SelectContent,
 	SelectItem,
@@ -136,15 +142,14 @@ export function ConnectGitLabStep({ instances = [] }: { instances?: GitLabInstan
 
 			<Field data-invalid={fieldErrors.personalAccessToken ? "true" : undefined}>
 				<FieldLabel htmlFor="gitlab-pat">Access Token</FieldLabel>
-				<div className="relative">
-					<Input
+				<InputGroup>
+					<InputGroupInput
 						id="gitlab-pat"
 						type={showToken ? "text" : "password"}
 						placeholder="glpat-... or glgat-..."
 						value={state.personalAccessToken}
 						onChange={(e) => dispatch({ type: "SET_PAT", value: e.target.value })}
 						autoComplete="off"
-						className="pr-9"
 						aria-required="true"
 						aria-invalid={!!fieldErrors.personalAccessToken}
 						aria-describedby={
@@ -157,18 +162,18 @@ export function ConnectGitLabStep({ instances = [] }: { instances?: GitLabInstan
 							}
 						}}
 					/>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-xs"
-						className="absolute right-1.5 top-1/2 -translate-y-1/2"
-						onClick={() => setShowToken(!showToken)}
-						aria-label={showToken ? "Hide token" : "Show token"}
-						aria-pressed={showToken}
-					>
-						{showToken ? <EyeOffIcon className="size-3.5" /> : <EyeIcon className="size-3.5" />}
-					</Button>
-				</div>
+					<InputGroupAddon align="inline-end">
+						<InputGroupButton
+							type="button"
+							size="icon-xs"
+							onClick={() => setShowToken(!showToken)}
+							aria-label={showToken ? "Hide token" : "Show token"}
+							aria-pressed={showToken}
+						>
+							{showToken ? <EyeOffIcon /> : <EyeIcon />}
+						</InputGroupButton>
+					</InputGroupAddon>
+				</InputGroup>
 				<FieldDescription id="gitlab-pat-description">
 					Use a{" "}
 					<a

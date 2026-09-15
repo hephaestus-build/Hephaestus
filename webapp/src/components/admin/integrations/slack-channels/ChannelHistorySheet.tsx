@@ -108,11 +108,7 @@ function HistoryEntry({ event }: { event: SlackChannelConsentEvent }) {
 	// `null` drops the date and keeps the transition: a stand-in instant would read as a recorded one.
 	const createdAt = asDate(event.createdAt);
 	return (
-		<Item
-			render={<li />}
-			size="sm"
-			className="items-start rounded-none border-x-0 border-t-0 border-b border-border last:border-b-0"
-		>
+		<Item render={<li />} size="sm" variant="row" className="items-start">
 			<ItemContent>
 				<ItemTitle className="gap-1.5">
 					{event.fromState && (

@@ -16,7 +16,7 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Progress } from "@/components/ui/progress";
 import {
 	Table,
@@ -258,7 +258,7 @@ function ResourcesTableHeader({
 	onSort?: (key: SortKey) => void;
 }) {
 	return (
-		<TableHeader className="sticky top-0 z-10 bg-card">
+		<TableHeader sticky>
 			<TableRow>
 				<SortableHeadCell
 					label={resourceNoun}
@@ -582,8 +582,8 @@ function TotalsFooter({
 	// as a summary rather than one more data row, while staying opaque enough that scrolling rows don't
 	// bleed through the sticky footer (the `bg-muted/50` default would). `border-t-2` sets it apart.
 	return (
-		<TableFooter className="sticky bottom-0 z-10 border-t-2 bg-muted">
-			<TableRow className="hover:bg-transparent">
+		<TableFooter sticky>
+			<TableRow variant="static">
 				<TableCell className="font-medium capitalize">All {resourceNounPlural}</TableCell>
 				<TableCell />
 				{sums.map(({ column, sum }) => {
@@ -754,20 +754,18 @@ export function SyncResourcesTable({
 	return (
 		<div className="space-y-3">
 			<div className="flex flex-wrap items-center gap-3">
-				<div className="relative min-w-56 max-w-xs flex-1">
-					<SearchIcon
-						className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-						aria-hidden
-					/>
-					<Input
+				<InputGroup className="min-w-56 max-w-xs flex-1">
+					<InputGroupAddon>
+						<SearchIcon aria-hidden />
+					</InputGroupAddon>
+					<InputGroupInput
 						type="search"
 						value={query}
 						onChange={(event) => setQuery(event.target.value)}
 						placeholder={`Search ${resourceNounPlural}…`}
 						aria-label={`Search ${resourceNounPlural}`}
-						className="pl-8"
 					/>
-				</div>
+				</InputGroup>
 
 				{attentionCount > 0 && (
 					<ToggleGroup
@@ -808,7 +806,7 @@ export function SyncResourcesTable({
 
 			{/* The cap and vertical scroll go on the table's own scroll container (see Table's
 			    containerClassName), so the sticky header and totals footer clip and stick against it. */}
-			<Table containerClassName="max-h-[70vh] overflow-y-auto rounded-md border">
+			<Table bordered containerClassName="max-h-[70vh] overflow-y-auto">
 				<ResourcesTableHeader
 					columns={columns}
 					resourceNoun={resourceNoun}
@@ -817,7 +815,7 @@ export function SyncResourcesTable({
 				/>
 				<TableBody>
 					{visible.length === 0 ? (
-						<TableRow className="hover:bg-transparent">
+						<TableRow variant="static">
 							<TableCell colSpan={colSpan} className="h-24 text-center text-muted-foreground">
 								{normalizedQuery ? (
 									<>

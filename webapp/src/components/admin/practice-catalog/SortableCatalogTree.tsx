@@ -594,7 +594,8 @@ function SortableGroupSection<
 			value={group.slug}
 			// oxlint-disable-next-line shadcn/no-inline-styles -- dnd-kit owns the live drag displacement and transition.
 			style={{ transform: CSS.Transform.toString(transform), transition }}
-			className={cn("rounded-lg border bg-card", isDragging && "z-10 opacity-40")}
+			variant="card"
+			className={cn(isDragging && "z-10 opacity-40")}
 		>
 			<div
 				ref={setDroppableNodeRef}
@@ -773,8 +774,9 @@ function SortableEntryRow<TEntry extends SortableCatalogEntry>({
 			role="listitem"
 			// oxlint-disable-next-line shadcn/no-inline-styles -- dnd-kit owns the live drag displacement and transition.
 			style={{ transform: CSS.Transform.toString(transform), transition }}
+			variant="interactive"
 			size="xs"
-			className={cn("flex-nowrap hover:bg-muted/60", isDragging && "opacity-30")}
+			className={cn("flex-nowrap", isDragging && "opacity-30")}
 		>
 			{showReorderHandle && (
 				<Button

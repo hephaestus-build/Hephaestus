@@ -3,7 +3,7 @@ import { useId, useState } from "react";
 
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
@@ -74,6 +74,7 @@ export function GroupVisualPicker({
 							Color
 						</p>
 						<ToggleGroup
+							variant="swatch"
 							disabled={disabled}
 							value={[activeColor]}
 							onValueChange={(value) => value[0] && onChange({ color: value[0] })}
@@ -88,11 +89,7 @@ export function GroupVisualPicker({
 									value={key}
 									aria-label={key}
 									disabled={disabled}
-									className={cn(
-										"size-7 min-w-0 rounded-full border border-black/10 p-0 transition-transform hover:scale-110 dark:border-white/15",
-										PILL[key],
-										activeColor === key && "ring-2 ring-ring ring-offset-1",
-									)}
+									className={cn("size-7 min-w-0", PILL[key])}
 								>
 									{activeColor === key && <Check className="size-3.5" aria-hidden="true" />}
 								</ToggleGroupItem>
@@ -104,27 +101,26 @@ export function GroupVisualPicker({
 						<p id={iconLabelId} className="text-xs text-muted-foreground">
 							Icon
 						</p>
-						<div className="relative">
-							<Search
-								className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-								aria-hidden
-							/>
-							<Input
+						<InputGroup>
+							<InputGroupAddon>
+								<Search aria-hidden />
+							</InputGroupAddon>
+							<InputGroupInput
 								value={query}
 								onChange={(e) => setQuery(e.target.value)}
 								placeholder="Search icons…"
 								aria-label="Search icons"
 								autoComplete="off"
 								disabled={disabled}
-								className="h-8 pl-7 text-sm"
 							/>
-						</div>
+						</InputGroup>
 						{filteredIcons.length === 0 ? (
 							<p className="py-6 text-center text-xs text-muted-foreground">
 								No icons match “{query}”.
 							</p>
 						) : (
 							<ToggleGroup
+								variant="filled"
 								disabled={disabled}
 								value={[activeIcon]}
 								onValueChange={(value) => value[0] && onChange({ icon: value[0] })}
@@ -141,7 +137,7 @@ export function GroupVisualPicker({
 											value={iconName}
 											aria-label={iconLabel(iconName)}
 											disabled={disabled}
-											className="size-8 min-w-0 p-0 text-muted-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary aria-pressed:hover:text-primary-foreground"
+											className="size-8 min-w-0"
 										>
 											<Icon className="size-4" aria-hidden="true" />
 										</ToggleGroupItem>

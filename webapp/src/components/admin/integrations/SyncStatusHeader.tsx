@@ -50,7 +50,7 @@ function DiagnosticItem({
 	children: ReactNode;
 }) {
 	return (
-		<Item size="sm" role="listitem" className="w-auto gap-2 border-0 p-0">
+		<Item size="sm" role="listitem" className="w-auto gap-2 p-0">
 			<ItemMedia variant="icon" className="text-muted-foreground">
 				{icon}
 			</ItemMedia>

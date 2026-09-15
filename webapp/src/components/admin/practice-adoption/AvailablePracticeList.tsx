@@ -135,7 +135,7 @@ function PracticeRow({ practice }: { practice: CatalogPracticeSummary }) {
 		// No `aria-label`: it would replace the work type and group below it for a screen reader. The
 		// visible text is the name; the registry's verb phrase stands in for the chevron.
 		<Item variant="outline" render={link}>
-			<ItemMedia variant="icon" className="bg-transparent">
+			<ItemMedia variant="icon">
 				<GroupPill size="md" slug={practice.groupSlug} name={practice.groupName} />
 			</ItemMedia>
 			<ItemContent className="min-w-0">

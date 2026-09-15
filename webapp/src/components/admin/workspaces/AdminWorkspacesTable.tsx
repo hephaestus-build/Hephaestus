@@ -67,70 +67,66 @@ export function AdminWorkspacesTable({
 	}
 
 	return (
-		<div className="rounded-md border">
-			<Table>
-				<TableHeader>
-					<TableRow>
-						<TableHead scope="col">Name</TableHead>
-						<TableHead scope="col">Slug</TableHead>
-						<TableHead scope="col">Status</TableHead>
-						<TableHead scope="col">Provider</TableHead>
-						<TableHead scope="col">Owner</TableHead>
-						<TableHead scope="col" className="text-right">
-							Members
-						</TableHead>
-						<TableHead scope="col">Created</TableHead>
-						<TableHead scope="col" className="text-right">
-							<span className="sr-only">Support access</span>
-						</TableHead>
+		<Table bordered>
+			<TableHeader>
+				<TableRow>
+					<TableHead scope="col">Name</TableHead>
+					<TableHead scope="col">Slug</TableHead>
+					<TableHead scope="col">Status</TableHead>
+					<TableHead scope="col">Provider</TableHead>
+					<TableHead scope="col">Owner</TableHead>
+					<TableHead scope="col" className="text-right">
+						Members
+					</TableHead>
+					<TableHead scope="col">Created</TableHead>
+					<TableHead scope="col" className="text-right">
+						<span className="sr-only">Support access</span>
+					</TableHead>
+				</TableRow>
+			</TableHeader>
+			<TableBody>
+				{workspaces.map((ws) => (
+					<TableRow key={ws.id}>
+						<TableCell className="font-medium">{ws.displayName}</TableCell>
+						<TableCell className="font-mono text-xs text-muted-foreground">
+							{ws.workspaceSlug}
+						</TableCell>
+						<TableCell>
+							<Badge variant={statusVariant(ws.status)}>{ws.status}</Badge>
+						</TableCell>
+						<TableCell>
+							{ws.providerType ? (
+								<Badge variant="outline">{ws.providerType}</Badge>
+							) : (
+								<span className="text-muted-foreground">—</span>
+							)}
+						</TableCell>
+						<TableCell className="text-muted-foreground">{ws.ownerLogin ?? "—"}</TableCell>
+						<TableCell numeric className="text-right">
+							{ws.memberCount}
+						</TableCell>
+						<TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+							{formatDate(ws.createdAt)}
+						</TableCell>
+						<TableCell className="text-right">
+							<Button
+								variant="outline"
+								size="sm"
+								disabled={ws.ownerAccountId == null}
+								title={
+									ws.ownerAccountId == null
+										? "The workspace owner has not signed in, so there is no account to impersonate."
+										: `View ${ws.displayName} as ${ws.ownerLogin ?? "its owner"}`
+								}
+								onClick={() => onImpersonateOwner(ws)}
+							>
+								<LogInIcon aria-hidden />
+								View as owner
+							</Button>
+						</TableCell>
 					</TableRow>
-				</TableHeader>
-				<TableBody>
-					{workspaces.map((ws) => (
-						<TableRow key={ws.id}>
-							<TableCell className="font-medium">{ws.displayName}</TableCell>
-							<TableCell className="font-mono text-xs text-muted-foreground">
-								{ws.workspaceSlug}
-							</TableCell>
-							<TableCell>
-								<Badge variant={statusVariant(ws.status)}>{ws.status}</Badge>
-							</TableCell>
-							<TableCell>
-								{ws.providerType ? (
-									<Badge variant="outline" className="text-xs">
-										{ws.providerType}
-									</Badge>
-								) : (
-									<span className="text-muted-foreground">—</span>
-								)}
-							</TableCell>
-							<TableCell className="text-muted-foreground">{ws.ownerLogin ?? "—"}</TableCell>
-							<TableCell numeric className="text-right">
-								{ws.memberCount}
-							</TableCell>
-							<TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-								{formatDate(ws.createdAt)}
-							</TableCell>
-							<TableCell className="text-right">
-								<Button
-									variant="outline"
-									size="sm"
-									disabled={ws.ownerAccountId == null}
-									title={
-										ws.ownerAccountId == null
-											? "The workspace owner has not signed in, so there is no account to impersonate."
-											: `View ${ws.displayName} as ${ws.ownerLogin ?? "its owner"}`
-									}
-									onClick={() => onImpersonateOwner(ws)}
-								>
-									<LogInIcon aria-hidden />
-									View as owner
-								</Button>
-							</TableCell>
-						</TableRow>
-					))}
-				</TableBody>
-			</Table>
-		</div>
+				))}
+			</TableBody>
+		</Table>
 	);
 }

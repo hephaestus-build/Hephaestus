@@ -1,9 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect } from "storybook/test";
 
-import { SidebarProvider } from "@/components/ui/sidebar";
-
 import { NavDashboards } from "./NavDashboards";
+import { withSidebarFrame } from "./sidebar-story-frame";
 
 const meta = {
 	component: NavDashboards,
@@ -17,13 +16,7 @@ const meta = {
 		leaderboardEnabled: true,
 		practicesEnabled: true,
 	},
-	decorators: [
-		(Story) => (
-			<SidebarProvider className="min-h-0 w-[16rem] border border-border rounded-lg p-2 bg-sidebar">
-				<Story />
-			</SidebarProvider>
-		),
-	],
+	decorators: [withSidebarFrame],
 } satisfies Meta<typeof NavDashboards>;
 
 export default meta;

@@ -201,11 +201,7 @@ export function SessionsSection() {
 											>
 												{deviceLabel}
 											</span>
-											{session.current && (
-												<Badge variant="secondary" className="text-xs">
-													This device
-												</Badge>
-											)}
+											{session.current && <Badge variant="secondary">This device</Badge>}
 										</div>
 										<p className="text-xs text-muted-foreground truncate">
 											{[

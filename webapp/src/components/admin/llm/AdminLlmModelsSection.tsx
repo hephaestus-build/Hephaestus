@@ -102,7 +102,7 @@ export function AdminLlmModelsSection({
 					</EmptyContent>
 				</Empty>
 			) : (
-				<Table containerClassName="rounded-md border">
+				<Table bordered>
 					<TableCaption className="sr-only">Models on {connectionDisplayName}</TableCaption>
 					<TableHeader>
 						<TableRow>

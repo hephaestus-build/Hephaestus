@@ -80,12 +80,12 @@ export function OutlineCollectionRow({
 			<TableCell>
 				{/* Word + icon for every state (never color-only) so the status survives WCAG 1.4.1. */}
 				{paused ? (
-					<Badge variant="outline" className="gap-1">
+					<Badge variant="outline">
 						<PauseIcon className="size-3 text-muted-foreground" aria-hidden />
 						Paused
 					</Badge>
 				) : (
-					<Badge variant="success" className="gap-1">
+					<Badge variant="success">
 						<CheckIcon className="size-3" aria-hidden />
 						Mirroring
 					</Badge>
@@ -95,14 +95,14 @@ export function OutlineCollectionRow({
 			<TableCell>
 				<div className="flex items-center gap-2">
 					{collection.syncStatus === "PENDING" ? (
-						<Badge variant="secondary" className="gap-1">
+						<Badge variant="secondary">
 							{/* The visible "Syncing…" text carries the meaning; hide the spinner from AT so the
 							row doesn't double-announce a generic "Loading" live region per collection. */}
 							<Spinner className="size-3" role="presentation" aria-hidden />
 							Syncing…
 						</Badge>
 					) : (
-						<Badge variant="outline" className="gap-1">
+						<Badge variant="outline">
 							<CheckIcon className="size-3 text-muted-foreground" aria-hidden />
 							Up to date
 						</Badge>

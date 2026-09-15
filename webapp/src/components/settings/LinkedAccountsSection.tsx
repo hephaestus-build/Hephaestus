@@ -241,7 +241,7 @@ export function LinkedAccountsSection({
 											<ItemTitle>
 												<span className="truncate">{name}</span>
 												{identity.providerType && (
-													<Badge variant="secondary" className="text-xs">
+													<Badge variant="secondary">
 														{getProviderLabel(identity.providerType)}
 													</Badge>
 												)}

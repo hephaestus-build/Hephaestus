@@ -74,141 +74,137 @@ export function AdminUsersTable({
 }: AdminUsersTableProps) {
 	return (
 		<div className="space-y-4">
-			<div className="rounded-md border">
-				<Table aria-label="Application users">
-					<TableHeader>
+			<Table bordered aria-label="Application users">
+				<TableHeader>
+					<TableRow>
+						<TableHead scope="col">ID</TableHead>
+						<TableHead scope="col">Name</TableHead>
+						<TableHead scope="col">Email</TableHead>
+						<TableHead scope="col">Role</TableHead>
+						<TableHead scope="col">Status</TableHead>
+						<TableHead scope="col" className="text-right">
+							<span className="sr-only">Actions</span>
+						</TableHead>
+					</TableRow>
+				</TableHeader>
+				<TableBody>
+					{isLoading ? (
 						<TableRow>
-							<TableHead scope="col">ID</TableHead>
-							<TableHead scope="col">Name</TableHead>
-							<TableHead scope="col">Email</TableHead>
-							<TableHead scope="col">Role</TableHead>
-							<TableHead scope="col">Status</TableHead>
-							<TableHead scope="col" className="text-right">
-								<span className="sr-only">Actions</span>
-							</TableHead>
+							<TableCell colSpan={COLUMN_COUNT} className="h-32 text-center">
+								<div className="flex flex-col items-center justify-center gap-2">
+									<Spinner />
+									<p className="text-sm text-muted-foreground">Loading users…</p>
+								</div>
+							</TableCell>
 						</TableRow>
-					</TableHeader>
-					<TableBody>
-						{isLoading ? (
-							<TableRow>
-								<TableCell colSpan={COLUMN_COUNT} className="h-32 text-center">
+					) : isError ? (
+						<TableRow>
+							<TableCell colSpan={COLUMN_COUNT} className="h-32 text-center">
+								<p className="text-sm text-destructive">
+									Failed to load users. Please try again later.
+								</p>
+							</TableCell>
+						</TableRow>
+					) : users.length === 0 ? (
+						<TableRow>
+							<TableCell colSpan={COLUMN_COUNT} className="h-32 text-center">
+								{hasSearch && (hasNextPage || isFetchingNextPage) ? (
+									// Search filters loaded rows client-side, and the page is still loading more —
+									// don't claim "no users" before every page is in (avoids a false negative).
 									<div className="flex flex-col items-center justify-center gap-2">
-										<Spinner />
-										<p className="text-sm text-muted-foreground">Loading users…</p>
+										<Spinner aria-hidden />
+										<p className="text-sm text-muted-foreground">Searching all users…</p>
 									</div>
-								</TableCell>
-							</TableRow>
-						) : isError ? (
-							<TableRow>
-								<TableCell colSpan={COLUMN_COUNT} className="h-32 text-center">
-									<p className="text-sm text-destructive">
-										Failed to load users. Please try again later.
-									</p>
-								</TableCell>
-							</TableRow>
-						) : users.length === 0 ? (
-							<TableRow>
-								<TableCell colSpan={COLUMN_COUNT} className="h-32 text-center">
-									{hasSearch && (hasNextPage || isFetchingNextPage) ? (
-										// Search filters loaded rows client-side, and the page is still loading more —
-										// don't claim "no users" before every page is in (avoids a false negative).
-										<div className="flex flex-col items-center justify-center gap-2">
-											<Spinner aria-hidden />
-											<p className="text-sm text-muted-foreground">Searching all users…</p>
-										</div>
-									) : (
-										<div className="flex flex-col items-center justify-center gap-2">
-											<Users className="size-8 text-muted-foreground" aria-hidden />
-											<p className="text-sm font-medium">No users found</p>
-											<p className="text-xs text-muted-foreground">
-												{hasSearch ? "Try adjusting your search." : "No accounts exist yet."}
-											</p>
-										</div>
-									)}
-								</TableCell>
-							</TableRow>
-						) : (
-							users.map((user) => {
-								const isSelf = user.id != null && user.id === currentUserId;
-								// You can't revoke your own admin — it would lock you out of /admin with no
-								// in-app recovery (the server rejects it too; this just hides the footgun).
-								const isSelfAdmin = isSelf && user.appRole === "APP_ADMIN";
-								const name = user.displayName ?? "—";
-								return (
-									<TableRow key={user.id ?? user.primaryEmail}>
-										<TableCell className="font-mono text-xs text-muted-foreground">
-											{user.id ?? "—"}
-										</TableCell>
-										<TableCell className="font-medium">{name}</TableCell>
-										<TableCell className="text-muted-foreground">
-											{user.primaryEmail ?? "—"}
-										</TableCell>
-										<TableCell>
-											<Badge variant={roleBadgeVariant(user.appRole)}>
-												{user.appRole ?? "USER"}
-											</Badge>
-										</TableCell>
-										<TableCell>
-											{user.status ? (
-												<Badge variant={statusBadgeVariant(user.status)}>{user.status}</Badge>
-											) : (
-												<span className="text-muted-foreground">—</span>
-											)}
-										</TableCell>
-										<TableCell className="text-right">
-											<DropdownMenu>
-												<DropdownMenuTrigger
-													render={
-														<Button
-															variant="ghost"
-															size="icon-xs"
-															aria-label={`Actions for ${name}`}
-														/>
-													}
-												>
-													<MoreHorizontal className="size-4" />
-												</DropdownMenuTrigger>
-												<DropdownMenuContent align="end">
-													<DropdownMenuGroup>
-														<DropdownMenuLabel>Account actions</DropdownMenuLabel>
-														<DropdownMenuItem
-															disabled={isSelfAdmin}
-															onClick={() => !isSelfAdmin && onChangeRole(user)}
-														>
-															<UserCog className="size-4" />
-															{isSelfAdmin
-																? "Can't revoke your own admin"
-																: user.appRole === "APP_ADMIN"
-																	? "Revoke admin"
-																	: "Change role"}
-														</DropdownMenuItem>
-														<DropdownMenuSeparator />
-														<DropdownMenuItem
-															disabled={isSelf}
-															onClick={() => !isSelf && onImpersonate(user)}
-														>
-															<Users className="size-4" />
-															{isSelf ? "Cannot impersonate self" : "Impersonate"}
-														</DropdownMenuItem>
-														<DropdownMenuSeparator />
-														<DropdownMenuItem
-															variant="destructive"
-															onClick={() => onForceSignOut(user)}
-														>
-															<LogOut className="size-4" />
-															Force sign-out
-														</DropdownMenuItem>
-													</DropdownMenuGroup>
-												</DropdownMenuContent>
-											</DropdownMenu>
-										</TableCell>
-									</TableRow>
-								);
-							})
-						)}
-					</TableBody>
-				</Table>
-			</div>
+								) : (
+									<div className="flex flex-col items-center justify-center gap-2">
+										<Users className="size-8 text-muted-foreground" aria-hidden />
+										<p className="text-sm font-medium">No users found</p>
+										<p className="text-xs text-muted-foreground">
+											{hasSearch ? "Try adjusting your search." : "No accounts exist yet."}
+										</p>
+									</div>
+								)}
+							</TableCell>
+						</TableRow>
+					) : (
+						users.map((user) => {
+							const isSelf = user.id != null && user.id === currentUserId;
+							// You can't revoke your own admin — it would lock you out of /admin with no
+							// in-app recovery (the server rejects it too; this just hides the footgun).
+							const isSelfAdmin = isSelf && user.appRole === "APP_ADMIN";
+							const name = user.displayName ?? "—";
+							return (
+								<TableRow key={user.id ?? user.primaryEmail}>
+									<TableCell className="font-mono text-xs text-muted-foreground">
+										{user.id ?? "—"}
+									</TableCell>
+									<TableCell className="font-medium">{name}</TableCell>
+									<TableCell className="text-muted-foreground">
+										{user.primaryEmail ?? "—"}
+									</TableCell>
+									<TableCell>
+										<Badge variant={roleBadgeVariant(user.appRole)}>{user.appRole ?? "USER"}</Badge>
+									</TableCell>
+									<TableCell>
+										{user.status ? (
+											<Badge variant={statusBadgeVariant(user.status)}>{user.status}</Badge>
+										) : (
+											<span className="text-muted-foreground">—</span>
+										)}
+									</TableCell>
+									<TableCell className="text-right">
+										<DropdownMenu>
+											<DropdownMenuTrigger
+												render={
+													<Button
+														variant="ghost"
+														size="icon-xs"
+														aria-label={`Actions for ${name}`}
+													/>
+												}
+											>
+												<MoreHorizontal className="size-4" />
+											</DropdownMenuTrigger>
+											<DropdownMenuContent align="end">
+												<DropdownMenuGroup>
+													<DropdownMenuLabel>Account actions</DropdownMenuLabel>
+													<DropdownMenuItem
+														disabled={isSelfAdmin}
+														onClick={() => !isSelfAdmin && onChangeRole(user)}
+													>
+														<UserCog className="size-4" />
+														{isSelfAdmin
+															? "Can't revoke your own admin"
+															: user.appRole === "APP_ADMIN"
+																? "Revoke admin"
+																: "Change role"}
+													</DropdownMenuItem>
+													<DropdownMenuSeparator />
+													<DropdownMenuItem
+														disabled={isSelf}
+														onClick={() => !isSelf && onImpersonate(user)}
+													>
+														<Users className="size-4" />
+														{isSelf ? "Cannot impersonate self" : "Impersonate"}
+													</DropdownMenuItem>
+													<DropdownMenuSeparator />
+													<DropdownMenuItem
+														variant="destructive"
+														onClick={() => onForceSignOut(user)}
+													>
+														<LogOut className="size-4" />
+														Force sign-out
+													</DropdownMenuItem>
+												</DropdownMenuGroup>
+											</DropdownMenuContent>
+										</DropdownMenu>
+									</TableCell>
+								</TableRow>
+							);
+						})
+					)}
+				</TableBody>
+			</Table>
 
 			<div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
 				<p className="text-sm text-muted-foreground" aria-live="polite">

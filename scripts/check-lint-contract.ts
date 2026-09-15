@@ -63,6 +63,20 @@ const fixtures: Fixture[] = [
 		source:
 			'import { Button } from "@/components/ui/button"; export const good = <Button shape="pill" className="rounded-bl-lg">Send</Button>;',
 	},
+	// no-restyle is on for every registry component, with contracts only where a role makes a
+	// property the caller's. A repainted Card is the plain case; a padded CardContent is a contract.
+	{
+		path: "src/lint-contract-card-paint.tsx",
+		code: "shadcn(no-restyle)",
+		source:
+			'import { Card } from "@/components/ui/card"; export const bad = <Card className="bg-muted rounded-none">Plan</Card>;',
+	},
+	{
+		path: "src/lint-contract-card-variant.tsx",
+		code: null,
+		source:
+			'import { Card, CardContent } from "@/components/ui/card"; export const good = <Card variant="dashed" flush className="mt-4"><CardContent className="p-0">Plan</CardContent></Card>;',
+	},
 	{
 		path: "src/lint-contract-ring.tsx",
 		code: "shadcn(no-arbitrary-values)",
@@ -350,11 +364,14 @@ function writeScratchProject(project: string) {
 		join(project, "src", "node_modules"),
 		process.platform === "win32" ? "junction" : "dir",
 	);
+	// The rules read a component's variants from its source, so the fixtures see the real files.
 	mkdirSync(join(project, "src/components/ui"), { recursive: true });
-	writeFileSync(
-		join(project, "src/components/ui/button.tsx"),
-		readFileSync(join(WEBAPP, "src/components/ui/button.tsx")),
-	);
+	for (const primitive of ["button.tsx", "card.tsx"]) {
+		writeFileSync(
+			join(project, "src/components/ui", primitive),
+			readFileSync(join(WEBAPP, "src/components/ui", primitive)),
+		);
+	}
 	for (const fixture of fixtures) {
 		mkdirSync(join(project, dirname(fixture.path)), { recursive: true });
 		writeFileSync(join(project, fixture.path), `${fixture.source}\n`);

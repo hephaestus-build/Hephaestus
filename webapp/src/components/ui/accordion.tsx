@@ -13,11 +13,23 @@ function Accordion({ className, ...props }: AccordionPrimitive.Root.Props) {
 	);
 }
 
-function AccordionItem({ className, ...props }: AccordionPrimitive.Item.Props) {
+/**
+ * ⚠️ Diverges from the shadcn registry: `AccordionItem` takes `variant="card"`, each item its own
+ * bounded card rather than a row divided from the next — the shape a sortable catalogue takes.
+ */
+function AccordionItem({
+	className,
+	variant = "default",
+	...props
+}: AccordionPrimitive.Item.Props & { variant?: "default" | "card" }) {
 	return (
 		<AccordionPrimitive.Item
 			data-slot="accordion-item"
-			className={cn("not-last:border-b", className)}
+			data-variant={variant}
+			className={cn(
+				variant === "card" ? "rounded-lg border bg-card" : "not-last:border-b",
+				className,
+			)}
 			{...props}
 		/>
 	);
