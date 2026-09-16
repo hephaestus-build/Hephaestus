@@ -110,7 +110,7 @@
 					},
 					// A text slot: its type, tone and the gap to an icon inside it follow the text around it.
 					{
-						"pattern": "^(ButtonGroupText|CardDescription|CardTitle|DialogTitle|DropdownMenuLabel|FieldDescription|FieldLegend|ItemDescription|ItemTitle|Label|PopoverTitle|TableCell|TableHead)$",
+						"pattern": "^(ButtonGroupText|CardDescription|CardTitle|DialogTitle|DrawerDescription|DrawerTitle|DropdownMenuLabel|FieldDescription|FieldLegend|ItemDescription|ItemTitle|Label|PopoverTitle|TableCell|TableHead)$",
 						"allow": ["layout", "typography", "color", "spacing"]
 					},
 					// A label that wraps its control follows that control's state, dimming and easing with it.

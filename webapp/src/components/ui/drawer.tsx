@@ -104,6 +104,9 @@ const drawerContentVariants = cva("", {
 			 */
 			detail:
 				"[--peek:6rem] data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:min(44rem,92vw)] data-[swipe-axis=x]:xl:[--drawer-content-width:min(62rem,75vw)]",
+			/** A tool beside the page — the mentor. Full width on a phone, one column from `sm`. */
+			panel:
+				"[--peek:1rem] data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:28rem]",
 		},
 	},
 	defaultVariants: { size: "default" },
